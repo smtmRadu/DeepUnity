@@ -1,0 +1,29 @@
+#pragma kernel MatMul
+
+RWStructuredBuffer<float> leftArr;
+RWStructuredBuffer<float> rightArr;
+RWStructuredBuffer<float> resultArr;
+
+int leftWidth;
+int leftHeight;
+int rightWidth;
+int rightHeight;
+
+[numthreads(32, 32, 1)]
+void MatMul(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < leftWidth && id.y < rightHeight)
+    {
+        float sum = 0;
+        for (uint i = 0; i < leftHeight; i++)
+        {
+            uint leftIndex = id.z * leftWidth * leftHeight + i * leftWidth + id.x;
+            uint rightIndex = id.z * rightWidth * rightHeight + id.y * rightWidth + i;
+                    
+            sum += leftArr[leftIndex] * rightArr[rightIndex];
+        }
+        
+        uint resultIndex = id.z * leftWidth * rightHeight + id.y * rightHeight + id.x;
+        resultArr[resultIndex] = sum;
+    }
+}

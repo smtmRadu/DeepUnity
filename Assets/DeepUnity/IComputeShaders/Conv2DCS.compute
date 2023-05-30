@@ -1,0 +1,73 @@
+#pragma kernel Conv2D
+
+RWStructuredBuffer<float> inputArr;
+RWStructuredBuffer<float> filterArr;
+RWStructuredBuffer<float> outputArr;
+
+int inputWidth;
+int inputHeight;
+int inputChannels;
+int batchSize;
+int kernelSize;
+int outputWidth;
+int outputHeight;
+
+[numthreads(8, 8, 8)]
+void Conv2D(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < outputWidth && id.y < outputHeight)
+    {
+        float sum = 0;
+
+        for (int b = 0; b < batchSize; b++)
+        {
+            for (int c = 0; c < inputChannels; c++)
+            {
+                for (int i = 0; i < kernelSize; i++)
+                {
+                    int inputX = id.x + i - kernelSize / 2;
+                    
+                    // Apply mirror padding to handle out-of-bounds indices
+                    if (inputX < 0)
+                        inputX = -inputX;
+                    else if (inputX >= inputWidth)
+                        inputX = 2 * inputWidth - inputX - 1;
+
+                    for (int j = 0; j < kernelSize; j++)
+                    {
+                        int inputY = id.y + j - kernelSize / 2;
+                        
+                        // Apply mirror padding to handle out-of-bounds indices
+                        if (inputY < 0)
+                            inputY = -inputY;
+                        else if (inputY >= inputHeight)
+                            inputY = 2 * inputHeight - inputY - 1;
+                        
+                        int inputIndex = b * (inputWidth * inputHeight * inputChannels) +
+                                         c * (inputWidth * inputHeight) +
+                                         inputY * inputWidth + inputX;
+                                         
+                        int filterIndex = c * (kernelSize * kernelSize) +
+                                          i * kernelSize + j;
+                                          
+                        sum += inputArr[inputIndex] * filterArr[filterIndex];
+                    }
+                }
+            }
+        }
+        
+        int padWidth = (kernelSize - 1) / 2;
+        int padHeight = (kernelSize - 1) / 2;
+        int outputX = id.x - padWidth;
+        int outputY = id.y - padHeight;
+        
+        if (outputX >= 0 && outputX < outputWidth && outputY >= 0 && outputY < outputHeight)
+        {
+            int outputIndex = id.z * (outputWidth * outputHeight * inputChannels) +
+                              id.y * outputWidth * inputChannels +
+                              id.x * inputChannels;
+                              
+            outputArr[outputIndex] = sum;
+        }
+    }
+}
