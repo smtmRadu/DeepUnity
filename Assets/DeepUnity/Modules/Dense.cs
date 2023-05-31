@@ -9,7 +9,7 @@ namespace DeepUnity
         HE,
         Xavier,
         Normal,
-        Random01,
+        Random,
         Ones
     }
     public enum Device
@@ -20,23 +20,23 @@ namespace DeepUnity
     public class Dense : IModule
     {
         public ComputeShader MatMulCS;
-        public Tensor<float> InputCache { get; set; }
-        
+        public Tensor InputCache { get; set; }
+
         // Parameters
-        public Tensor<float> Weights;
-        public Tensor<float> Biases;
+        public Tensor Weights;
+        public Tensor Biases;
 
         // Gradients
-        public Tensor<float> gWeights;
-        public Tensor<float> gBiases;
+        public Tensor gWeights;
+        public Tensor gBiases;
 
         // Momentums
-        public Tensor<float> mWeights;
-        public Tensor<float> mBiases;
+        public Tensor mWeights;
+        public Tensor mBiases;
 
         // Velocities
-        public Tensor<float> vWeights;
-        public Tensor<float> vBiases;
+        public Tensor vWeights;
+        public Tensor vBiases;
 
         public Dense(int inputs, int outputs, WeightInit init = WeightInit.HE, Device device = Device.GPU)
         {
@@ -48,33 +48,33 @@ namespace DeepUnity
             }
             else
                 this.MatMulCS = null;
-                        
-            this.Weights = Tensor<float>.Zeros(outputs, inputs);
-            this.Biases = Tensor<float>.Zeros(outputs);
 
-            this.gWeights = Tensor<float>.Zeros(outputs, inputs);
-            this.gBiases = Tensor<float>.Zeros(outputs);
+            this.Weights = Tensor.Zeros(outputs, inputs);
+            this.Biases = Tensor.Zeros(outputs);
 
-            this.mWeights = Tensor<float>.Zeros(outputs, inputs);
-            this.mBiases = Tensor<float>.Zeros(outputs);
+            this.gWeights = Tensor.Zeros(outputs, inputs);
+            this.gBiases = Tensor.Zeros(outputs);
 
-            this.vWeights = Tensor<float>.Zeros(outputs, inputs);
-            this.vBiases = Tensor<float>.Zeros(outputs);
+            this.mWeights = Tensor.Zeros(outputs, inputs);
+            this.mBiases = Tensor.Zeros(outputs);
+
+            this.vWeights = Tensor.Zeros(outputs, inputs);
+            this.vBiases = Tensor.Zeros(outputs);
 
             switch (init)
             {
                 case WeightInit.HE:
-                    float sigmaHE = MathF.Sqrt(2f / Weights.FullShape[1]);
+                    float sigmaHE = MathF.Sqrt(2f / Weights.Shape[1]);
                     Weights.ForEach(x => Utils.Random.Gaussian(0f, sigmaHE, out _));
                     break;
                 case WeightInit.Xavier:
-                    float sigmaXA = MathF.Sqrt(2f / (Weights.FullShape[0] + Weights.FullShape[1]));
+                    float sigmaXA = MathF.Sqrt(2f / (Weights.Shape[0] + Weights.Shape[1]));
                     Weights.ForEach(x => Utils.Random.Gaussian(0f, sigmaXA, out _));
                     break;
                 case WeightInit.Normal:
                     Weights.ForEach(x => Utils.Random.Gaussian(0f, 1f, out _));
                     break;
-                case WeightInit.Random01:
+                case WeightInit.Random:
                     Weights.ForEach(x => Utils.Random.Value * 2f - 1f);
                     break;
                 case WeightInit.Ones:
@@ -85,30 +85,29 @@ namespace DeepUnity
             }
         }
 
-        public Tensor<float> Forward(Tensor<float> input)
+        public Tensor Forward(Tensor input)
         {
-            InputCache = input.Clone() as Tensor<float>;
-            return Tensor<float>.MatMul(Weights, input, MatMulCS) + Biases;
+            InputCache = input.Clone() as Tensor;
+            return Tensor.MatMul(Weights, input, MatMulCS) + Biases;
         }
-        public Tensor<float> Backward(Tensor<float> loss)
+        public Tensor Backward(Tensor loss)
         {
-            var transposedInput = Tensor<float>.MatTranspose(InputCache);
-            Tensor<float> gradW = Tensor<float>.MatMul(loss, transposedInput, MatMulCS);
-            Tensor<float> gradB = Tensor<float>.MatMul(loss, transposedInput.Select(x => 1f), MatMulCS);
+            var transposedInput = Tensor.MatTranspose(InputCache);
+            Tensor gradW = Tensor.MatMul(loss, transposedInput, MatMulCS);
+            Tensor gradB = Tensor.MatMul(loss, Tensor.Ones(transposedInput.Shape), MatMulCS);
 
             // Average the gradients
-            float batch = loss.FullShape[1];
+            float batch = loss.Shape[1];
 
             // Update the gradients
             gWeights += gradW / batch;
             gBiases += gradB / batch;
 
             // Backpropagate the loss
-            Tensor<float> dLossdInput = Tensor<float>.MatMul(Tensor<float>.MatTranspose(Weights), loss, MatMulCS);
+            Tensor dLossdActivation = Tensor.MatMul(Tensor.MatTranspose(Weights), loss, MatMulCS);
 
-            return dLossdInput;
+            return dLossdActivation;
         }
     }
 
 }
-

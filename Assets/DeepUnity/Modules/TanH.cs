@@ -4,11 +4,11 @@ namespace DeepUnity
 {
     public class TanH : IModule
     {
-        public Tensor<float> InputCache { get; set; }
+        public Tensor InputCache { get; set; }
 
-        public Tensor<float> Forward(Tensor<float> input)
+        public Tensor Forward(Tensor input)
         {
-            InputCache = input.Clone() as Tensor<float>;
+            InputCache = input.Clone() as Tensor;
             return InputCache.Select(x =>
             {
                 float e2x = Mathf.Exp(2 * x);
@@ -18,7 +18,7 @@ namespace DeepUnity
 
         }
 
-        public Tensor<float> Backward(Tensor<float> loss)
+        public Tensor Backward(Tensor loss)
         {
             var dTanHdInput = InputCache.Select(x =>
             {

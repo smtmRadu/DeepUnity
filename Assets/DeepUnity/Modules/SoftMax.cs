@@ -4,12 +4,12 @@ namespace DeepUnity
 {
     public class SoftMax : IModule
     {
-        public Tensor<float> InputCache { get; set; }
-        public Tensor<float> Forward(Tensor<float> input)
+        public Tensor InputCache { get; set; }
+        public Tensor Forward(Tensor input)
         {
-            InputCache = input.Clone() as Tensor<float>;
-            var shape = input.FullShape;
-            Tensor<float> output = Tensor<float>.Zeros(shape);
+            InputCache = input.Clone() as Tensor;
+            var shape = input.Shape;
+            Tensor output = Tensor.Zeros(shape);
             for (int j = 0; j < shape[1]; j++)
             {
                 float exp_sum = 0f;
@@ -28,10 +28,10 @@ namespace DeepUnity
 
             return output;
         }
-        public Tensor<float> Backward(Tensor<float> loss)
+        public Tensor Backward(Tensor loss)
         {
-            var shape = loss.FullShape;
-            Tensor<float> back = Tensor<float>.Zeros(shape);
+            var shape = loss.Shape;
+            Tensor back = Tensor.Zeros(shape);
             for (int j = 0; j < shape[1]; j++)
             {
                 float exp_sum = 0f;

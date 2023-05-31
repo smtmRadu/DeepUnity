@@ -1,66 +1,61 @@
 using DeepUnity;
 using System;
-using System.Collections.Generic;
 using System.Linq;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class Test1 : MonoBehaviour
 {
+    public int Runs = 10;
+    public int MatrixSize = 64;
     public ComputeShader matmulCS;
     public void Start()
     {
-        // var t1 = Tensor<float>.Normal(2, 2);
-        // var t2 = Tensor<float>.Normal(2, 2);
-        // var dif = t1.Zip(t2, (x, y) => x - y);
-        // 
-        // Debug.Log(t1);
-        // Debug.Log(t2);
-        // Debug.Log(dif);
         //MatmulBenchmark();
+        //TensorTest();
         //ForwardTest();
-        //SimpleBackwardTest();
-        LearningTest();
+        //BackwardTest();
+         LearningTest();
     }
     public void MatmulBenchmark()
     {
-        int size = 256;
+        var t1 = Tensor.Normal(MatrixSize, MatrixSize);
+        // Debug.Log("T1: " + t1.ToString());
 
-        var t1 = Tensor<float>.Normal(size, size);
-        //Debug.Log("T1: " + t1.ToString());
+        var t2 = Tensor.Normal(MatrixSize, MatrixSize);
+        // Debug.Log("T2: " + t2.ToString());
 
-        var t2 = Tensor<float>.Normal(size, size);
-        //Debug.Log("T2: " + t2.ToString());
 
-        //float[] tarr = t1.ToArray();
-        //Debug.Log("Arr: " + string.Join(", ", tarr));
+        DateTime start;
+        TimeSpan end;
 
-        int runs = 100;
+         //   start = DateTime.Now;
+         //   
+         //   for (int i = 0; i < Runs; i++)
+         //   {
+         //       Tensor.MatMul(t1, t2);
+         //   }
+         //   
+         //   end = DateTime.Now - start;
+         //   
+         //   Debug.Log("Matmul on CPU: " + end);
+        
+        
+        start = DateTime.Now;
 
-        var start = DateTime.Now;
-
-        // for (int i = 0; i < runs; i++)
-        // {
-        //     Tensor<float>.MatMul(t1, t2);
-        // }
-        // 
-        // Debug.Log("Matmul on CPU: " + (DateTime.Now - start));
-        // 
-        // 
-        // start = DateTime.Now;
-
-        for (int i = 0; i < runs; i++)
+        for (int i = 0; i < Runs; i++)
         {
-            Tensor<float>.MatMul(t1, t2, matmulCS);
+            Tensor.MatMul(t1, t2, matmulCS);
         }
 
-        Debug.Log("Matmul on GPU: " + (DateTime.Now - start));
+        end = DateTime.Now - start;
 
-
-        // var mul = Tensor<float>.MatMul(t1, t2);
-        // Debug.Log("Mul: \n" + mul.ToString());
-        // 
-        // var mulCS = Tensor<float>.MatMul(t1, t2, matmulCS);
-        // Debug.Log("MulCS: \n" + mulCS.ToString());
+        Debug.Log("Matmul on GPU: " + end);
+    }
+    public void TensorTest()
+    {
+        var t1 = Tensor.Fill(3, 2, 2);
+        print(t1);
 
     }
     public void ForwardTest()
@@ -78,14 +73,14 @@ public class Test1 : MonoBehaviour
 
         for (int i = 0; i < 100; i++)
         {
-            var input = Tensor<float>.Random(1);
+            var input = Tensor.Random(1);
             var output = net.Forward(input);
 
             Debug.Log(input);
             Debug.Log(output);
         }
     }
-    public void Backward()
+    public void BackwardTest()
     {
         var net = new NeuralNetwork(
             new Dense(1, 5, WeightInit.Ones, Device.CPU),
@@ -95,7 +90,7 @@ public class Test1 : MonoBehaviour
         net.Compile(new Adam(), "somenet");
 
 
-        var value = Tensor<float>.Constant(1f);
+        var value = Tensor.Constant(1f);
         var outs = net.Forward(value);
         var back = net.Backward(value);
 
@@ -112,41 +107,34 @@ public class Test1 : MonoBehaviour
             new Dense(5, 1)
             );
 
-        net.Compile(new Adam(), "somenet");
+        net.Compile(new SGD(), "somenet");
 
         int datasize = 10;
-        int epochs = 10;
+        int epochs = 100;
 
         // Generate inputs
-        Tensor<float>[] inputs = Enumerable.Range(0, datasize).ToList().Select(x => Tensor<float>.Constant(Utils.Random.Gaussian(0f, 3f, out _))).ToArray();
-        Tensor<float>[] targets = inputs.Select(x => Tensor<float>.Constant(Mathf.Cos(x[0]))).ToArray();
+        Tensor[] inputs = Enumerable.Range(0, datasize).ToList().
+                          Select(x => Tensor.Constant(Utils.Random.Gaussian(0f, 3f, out _))).ToArray();
+        Tensor[] targets = inputs.Select(x => Tensor.Constant(Mathf.Cos(x[0]))).ToArray();
 
         for (int ep = 0; ep < epochs; ep++)
         {
+            List<float> accs = new List<float>();
+
             for (int i = 0; i < datasize; i++)
             {
                 var prediction = net.Forward(inputs[i]);
                 var loss = Loss.MSE(prediction, targets[i]);
 
-                var lastloss = net.Backward(loss);
-
+                net.Backward(loss);
                 net.Step();
+
+                // Compute accuracy
+                float acc = Metrics.Accuracy(prediction, targets[i]);
+                accs.Add(acc);
             }
 
-            // List<float> accs = new List<float>();
-            // // Check accuracy
-            // for (int i = 0; i < datasize; i++)
-            // {
-            //     var prediction = net.Forward(inputs[i]);
-            // 
-            //     Debug.Log(inputs[i].ToString());
-            //     Debug.Log(prediction.ToString());
-            //     Debug.Log(targets[i].ToString());
-            // 
-            //     float acc = Metrics.Accuracy(prediction, targets[i]);
-            //     accs.Add(acc);
-            // }
-            // Debug.Log($"Epoch {ep + 1} | Accuracy {accs.Average() * 100}%");
+            Debug.Log($"Epoch {ep + 1} | Accuracy {accs.Average() * 100}%");
         }
     }
     public void ConvolutionTest()

@@ -6,9 +6,9 @@ namespace DeepUnity
     {
         public readonly partial struct Mean
         {
-            internal static Tensor<float> AsTensor
+            internal static Tensor AsTensor
             {
-                get => Tensor<float>.Constant(AsMatrix);
+                get => Tensor.Constant(AsMatrix);
             }
             internal static float[,] AsMatrix
             {
@@ -33,10 +33,8 @@ namespace DeepUnity
                 0.11111111f,
                 0.11111111f
                 };
-            }         
+            }
 
         }
     }
 }
-
-

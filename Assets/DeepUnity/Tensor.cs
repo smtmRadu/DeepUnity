@@ -3,128 +3,105 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity
 {
-    public class Tensor<T> : IEnumerable, ICloneable where T : struct
+    public class Tensor : IEnumerable, ICloneable, IEquatable<Tensor>
     {
-        private static Vector3Int numthreads = new Vector3Int(32, 32, 1);
-        private T[,,,] data;
-        public T this[int x]
+        private readonly static int[] numthreads = new int[] { 32, 32, 1 };
+
+        public readonly int[] Shape;
+        public readonly int Rank;
+        private float[] Data;
+        public float this[int x]
         {
-            get => data[x, 0, 0, 0];
-            set => data[x, 0, 0, 0] = value;
+            get => Data[x];
+            set => Data[x] = value;
         }
-        public T this[int x, int y]
+        public float this[int x, int y]
         {
-            get => data[x, y, 0, 0];
-            set => data[x, y, 0, 0] = value;
+            get => Data[y * Shape[0] + x];
+            set => Data[y * Shape[0] + x] = value;
         }
-        public T this[int x, int y, int z]
+        public float this[int x, int y, int z]
         {
-            get => data[x, y, z, 0];
-            set => data[x, y, z, 0] = value;
+            get => Data[z * Shape[1] + y * Shape[0] + x];
+            set => Data[z * Shape[1] + y * Shape[0] + x] = value;
         }
-        public T this[int x, int y, int z, int w]
+        public float this[int x, int y, int z, int w]
         {
-            get => data[x, y, z, w];
-            set => data[x, y, z, w] = value;
-        }
-
-        public int Rank
-        {
-            get
-            {
-                var shape = FullShape;
-                for (int i = 3; i >= 0; i--)
-                {
-                    if (shape[i] > 1)
-                        return i + 1;
-                }
-                return 0;
-            }
-        }
-        public int[] Shape
-        {
-            get
-            {
-                int r = Rank;
-                
-                if (r == 0)
-                    return new int[] { 1 };
-
-                if (r == 1)
-                    return new int[] { data.GetLength(0) };
-
-                if (r == 2)
-                    return new int[] { data.GetLength(0), data.GetLength(1) };
-
-                if (r == 3)
-                    return new int[] { data.GetLength(0), data.GetLength(1), data.GetLength(2) };
-
-                if (r == 4)
-                    return new int[] { data.GetLength(0), data.GetLength(1), data.GetLength(2), data.GetLength(3) };
-
-                throw new Exception("Rank too large?");
-            }
-        }         
-        public int[] FullShape
-        {
-            get
-            {
-                return new int[] { data.GetLength(0), data.GetLength(1), data.GetLength(2), data.GetLength(3) };
-            }
+            get => Data[w * Shape[2] + z * Shape[1] + y * Shape[0] + x];
+            set => Data[w * Shape[2] + z * Shape[1] + y * Shape[0] + x] = value;
         }
 
-        protected Tensor(params int[] shape)
+
+        private Tensor(params int[] shape)
         {
             if (shape.Length > 4)
                 throw new Exception("Tensor cannot be instantiated with more than 4 dimensions.");
 
-            int[] Tshape = Enumerable.Repeat(1, 4).ToArray();
-            for (int i = 0; i < shape.Length; i++)
-            {
-                if (shape[i] < 1)
-                    throw new Exception("Tensor cannot have a dimension size less than 1.");
-                Tshape[i] = shape[i];
-            }
-            data = new T[Tshape[0], Tshape[1], Tshape[2], Tshape[3]];
+            Shape = new int[] { 1, 1, 1, 1 };
+            Rank = 0;
 
+            if (shape.Length > 0)
+            {
+                Shape[0] = shape[0];
+                Rank = 1;
+            }
+            if (shape.Length > 1)
+            {
+                Shape[1] = shape[1];
+                Rank = 2;
+            }
+            if (shape.Length > 2)
+            {
+                Shape[2] = shape[2];
+                Rank = 3;
+            }
+            if (shape.Length > 3)
+            {
+                Shape[3] = shape[3];
+                Rank = 4;
+            }
+            Data = new float[Shape[0] * Shape[1] * Shape[2] * Shape[3]];
         }
-        public static Tensor<T> Constant(T scalar)
+        public static Tensor Constant(float scalar)
         {
-            Tensor<T> tensor = new Tensor<T>(1, 1, 1, 1);
-            tensor[0] = scalar;
+            Tensor tensor = new Tensor();
+            tensor.Data[0] = scalar;
             return tensor;
         }
-        public static Tensor<T> Constant(T[] vector)
+        public static Tensor Constant(float[] vector)
         {
-            Tensor<T> tensor = new Tensor<T>(vector.GetLength(0), 1, 1, 1);
-            var shape = tensor.FullShape;
+            Tensor tensor = new Tensor(vector.GetLength(0));
+            var shape = tensor.Shape;
             for (int i = 0; i < shape[0]; i++)
             {
-                tensor[i] = vector[i];
+                tensor.Data[i] = vector[i];
             }
             return tensor;
         }
-        public static Tensor<T> Constant(T[,] matrix)
+        public static Tensor Constant(float[,] matrix)
         {
-            Tensor<T> tensor = new Tensor<T>(matrix.GetLength(0), matrix.GetLength(1), 1, 1);
-            var shape = tensor.FullShape;
-            for (int i = 0; i < shape[0]; i++)
+            Tensor tensor = new Tensor(matrix.GetLength(0), matrix.GetLength(1));
+            var shape = tensor.Shape;
+            for (int j = 0; j < shape[1]; j++)
             {
-                for (int j = 0; j < shape[1]; j++)
+                for (int i = 0; i < shape[0]; i++)
                 {
+                    
                     tensor[i, j] = matrix[i, j];
+                    
                 }
             }
             return tensor;
         }
-        public static Tensor<T> Constant(T[,,] cuboid)
+        public static Tensor Constant(float[,,] cuboid)
         {
-            Tensor<T> tensor = new Tensor<T>(cuboid.GetLength(0), cuboid.GetLength(1), cuboid.GetLength(2), 1);
-            var shape = tensor.FullShape;
+            Tensor tensor = new Tensor(cuboid.GetLength(0), cuboid.GetLength(1), cuboid.GetLength(2));
+            var shape = tensor.Shape;
 
 
             for (int k = 0; k < shape[2]; k++)
@@ -137,13 +114,13 @@ namespace DeepUnity
                     }
                 }
             }
-            
+
             return tensor;
         }
-        public static Tensor<T> Constant(T[,,,] tesseract)
+        public static Tensor Constant(float[,,,] tesseract)
         {
-            Tensor<T> tensor = new Tensor<T>(tesseract.GetLength(0), tesseract.GetLength(1), tesseract.GetLength(2), tesseract.GetLength(3));
-            var shape = tensor.FullShape;
+            Tensor tensor = new Tensor(tesseract.GetLength(0), tesseract.GetLength(1), tesseract.GetLength(2), tesseract.GetLength(3));
+            var shape = tensor.Shape;
 
             for (int l = 0; l < shape[3]; l++)
             {
@@ -161,448 +138,244 @@ namespace DeepUnity
 
             return tensor;
         }
-        public static Tensor<T> Zeros(params int[] shape)
+        public static Tensor Zeros(params int[] shape) => new Tensor(shape);
+        public static Tensor Ones(params int[] shape)
         {
-            Tensor<T> tensor = new Tensor<T>(shape);
-            shape = tensor.FullShape;
+            Tensor tensor = new Tensor(shape);
 
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < tensor.Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            tensor[i, j, k, l] = default;
-                        }
-                    }
-                }
+                tensor.Data[i] = 1;
             }
 
             return tensor;
         }
-        public static Tensor<T> Ones(params int[] shape)
+        public static Tensor Random(params int[] shape)
         {
-            Tensor<T> tensor = new Tensor<T>(shape);
-            T one = (T)Convert.ChangeType(1, typeof(T));
-            shape = tensor.FullShape;
+            Tensor tensor = new Tensor(shape);
 
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < tensor.Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            tensor[i, j, k, l] = one;
-                        }
-                    }
-                }
+                tensor.Data[i] = Utils.Random.Value;
             }
 
             return tensor;
         }
-        public static Tensor<T> Random(params int[] shape)
+        public static Tensor Normal(params int[] shape)
         {
-            Tensor<T> tensor = new Tensor<T>(shape);
-            T one = (T)Convert.ChangeType(1, typeof(T));
-            shape = tensor.FullShape;
+            Tensor tensor = new Tensor(shape);
 
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < tensor.Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            tensor[i, j, k, l] = (dynamic)Utils.Random.Value;
-                        }
-                    }
-                }
+                tensor.Data[i] = Utils.Random.Gaussian(0f, 1f, out _);
             }
 
             return tensor;
         }
-        public static Tensor<T> Normal(params int[] shape)
+        public static Tensor Fill(float value, params int[] shape)
         {
-            Tensor<T> tensor = new Tensor<T>(shape);
-            T one = (T)Convert.ChangeType(1, typeof(T));
-            shape = tensor.FullShape;
+            Tensor tensor = new Tensor(shape);
 
-
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < tensor.Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            tensor[i, j, k, l] = (dynamic)Utils.Random.Gaussian(0f, 1f, out _);
-                        }
-                    }
-                }
-            }
-
-            return tensor;
-        }
-        public static Tensor<T> Fill(T value, params int[] shape)
-        {
-            Tensor<T> tensor = new Tensor<T>(shape);
-            shape = tensor.FullShape;
-            for (int l = 0; l < shape[3]; l++)
-            {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            tensor[i, j, k, l] = value;
-                        }
-                    }
-                }
+                tensor.Data[i] = value;
             }
 
             return tensor;
         }
 
 
-        public static Tensor<T> operator +(Tensor<T> left, T right)
+        public static Tensor operator +(Tensor left, float right)
         {
-            var shape = left.FullShape;
-            Tensor<T> result = new Tensor<T>(shape[0], shape[1], shape[2], shape[3]);
+            Tensor result = left.Clone() as Tensor;
 
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < result.Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            result[i, j, k, l] += (dynamic)right;
-                        }
-                    }
-                }
+                result.Data[i] += right;
             }
 
             return result;
         }
-        public static Tensor<T> operator -(Tensor<T> left, T right)
+        public static Tensor operator -(Tensor left, float right)
         {
-            var shape = left.FullShape;
-            Tensor<T> result = new Tensor<T>(shape[0], shape[1], shape[2], shape[3]);
+            Tensor result = left.Clone() as Tensor;
 
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < result.Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            result[i, j, k, l] -= (dynamic)right;
-                        }
-                    }
-                }
+                result.Data[i] -= right;
             }
 
             return result;
         }
-        public static Tensor<T> operator *(Tensor<T> left, T right)
+        public static Tensor operator *(Tensor left, float right)
         {
-            var shape = left.FullShape;
-            Tensor<T> result = new Tensor<T>(shape[0], shape[1], shape[2], shape[3]);
+            Tensor result = left.Clone() as Tensor;
 
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < result.Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            result[i, j, k, l] *= (dynamic)right;
-                        }
-                    }
-                }
+                result.Data[i] *= right;
             }
 
             return result;
         }
-        public static Tensor<T> operator /(Tensor<T> left, T right)
+        public static Tensor operator /(Tensor left, float right)
         {
-            var shape = left.FullShape;
-            Tensor<T> result = new Tensor<T>(shape[0], shape[1], shape[2], shape[3]);
+            Tensor result = left.Clone() as Tensor;
 
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < result.Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            result[i, j, k, l] /= (dynamic)right;
-                        }
-                    }
-                }
+                result.Data[i] /= right;
             }
 
             return result;
         }
-        public static Tensor<T> operator ^(Tensor<T> @base, T power)
+        public static Tensor operator +(float left, Tensor right) => right + left;
+        public static Tensor operator *(float left, Tensor right) => right * left;
+        public static Tensor operator +(Tensor left, Tensor right)
         {
-            var shape = @base.FullShape;
-            Tensor<T> result = new Tensor<T>(shape[0], shape[1], shape[2], shape[3]);
+            Tensor result = new Tensor(left.Shape);
 
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < result.Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            result[i, j, k, l] = (T)Math.Pow((dynamic)@base[i, j, k, l], (dynamic)power);
-                        }
-                    }
-                }
+                result.Data[i] = left.Data[i] + right.Data[i];
             }
 
             return result;
         }
-        public static Tensor<T> operator +(T left, Tensor<T> right) => right + left;
-        public static Tensor<T> operator *(T left, Tensor<T> right) => right * left;
-        public static Tensor<T> operator +(Tensor<T> left, Tensor<T> right)
+        public static Tensor operator -(Tensor left, Tensor right)
         {
-            var shape = left.FullShape;
-            Tensor<T> result = new Tensor<T>(shape[0], shape[1], shape[2], shape[3]);
-
-            for (int l = 0; l < shape[3]; l++)
+            Tensor result = new Tensor(left.Shape);
+            for (int i = 0; i < result.Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            result[i, j, k, l] = (dynamic)left[i, j, k, l] + (dynamic)right[i, j, k, l];
-                        }
-                    }
-                }
+                result.Data[i] = left.Data[i] - right.Data[i];
+            }
+            return result;
+        }
+        public static Tensor operator *(Tensor left, Tensor right)
+        {
+            Tensor result = new Tensor(left.Shape);
+
+            for (int i = 0; i < result.Data.Length; i++)
+            {
+                result.Data[i] = left.Data[i] * right.Data[i];
             }
 
             return result;
         }
-        public static Tensor<T> operator -(Tensor<T> left, Tensor<T> right)
+        public static Tensor operator /(Tensor left, Tensor right)
         {
-            var shape = left.FullShape;
-            Tensor<T> result = new Tensor<T>(shape[0], shape[1], shape[2], shape[3]);
-            for (int l = 0; l < shape[3]; l++)
-            {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            result[i, j, k, l] = (dynamic)left[i, j, k, l] - right[i, j, k, l];
-                        }
-                    }
-                }
-            }
-            return result;
-        }
-        public static Tensor<T> operator *(Tensor<T> left, Tensor<T> right)
-        {
-            var shape = left.FullShape;
-            Tensor<T> result = new Tensor<T>(shape[0], shape[1], shape[2], shape[3]);
+            Tensor result = new Tensor(left.Shape);
 
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < result.Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            result[i, j, k, l] = (dynamic)left[i, j, k, l] * right[i, j, k, l];
-                        }
-                    }
-                }
-            }
-
-            return result;
-        }
-        public static Tensor<T> operator /(Tensor<T> left, Tensor<T> right)
-        {
-            var shape = left.FullShape;
-            Tensor<T> result = new Tensor<T>(shape[0], shape[1], shape[2], shape[3]);
-
-            for (int l = 0; l < shape[3]; l++)
-            {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            result[i, j, k, l] = (dynamic)left[i, j, k, l] / right[i, j, k, l];
-                        }
-                    }
-                }
+                result.Data[i] = left.Data[i] / right.Data[i];
             }
 
             return result;
         }
 
-        public static Tensor<T> MatMul(Tensor<T> left, Tensor<T> right, ComputeShader matmulCS = null)
+      
+        public static Tensor MatMul(Tensor left, Tensor right, ComputeShader MatMulCS = null)
         {
-            int[] shape1 = left.FullShape;
-            int[] shape2 = right.FullShape;
-
-            int w1 = shape1[0];
-            int h1 = shape1[1];
-            int w2 = shape2[0];
-            int h2 = shape2[1];
-            int batch = shape1[2];
+            int w1 = left.Shape[0];
+            int h1 = left.Shape[1];
+            int w2 = right.Shape[0];
+            int h2 = right.Shape[1];
+            int batch = left.Shape[2];
 
             if (h1 != w2)
                 throw new ArgumentException("Tensors must have compatible shapes for matrix multiplication (height of left tensor is not matching the width of the right tensor).");
 
-            Tensor<T> resultTensor = new Tensor<T>(w1, h2, batch);
+            Tensor resultTensor = new Tensor(w1, h2, batch);
 
-            
-            if (matmulCS == null)
-            {            
+
+            if (MatMulCS == null)
+            {
                 System.Threading.Tasks.Parallel.For(0, w1, i =>
                 {
                     for (int k = 0; k < batch; k++)
                     {
                         for (int j = 0; j < h2; j++)
                         {
-                            dynamic sum = 0.0;
+                            float sum = 0.0f;
 
                             for (int l = 0; l < h1; l++)
                             {
-                                sum += (dynamic)left[i, l, k] * right[l, j, k];
+                                sum += left[i, l, k] * right[l, j, k];
                             }
 
                             lock (resultTensor)
-                                resultTensor[i, j, k] = (T) sum;                      
+                                resultTensor[i, j, k] = sum;
                         }
-                    }             
+                    }
                 });
             }
             else
             {
-                // Setup CS
-                int kernelIndex = matmulCS.FindKernel("MatMul");
-
-                float[] leftArr = left.ToArray<float>();
-                float[] rightArr = right.ToArray<float>();
-
-                ComputeBuffer leftBuffer = new ComputeBuffer(leftArr.Length, sizeof(float));
-                ComputeBuffer rightBuffer = new ComputeBuffer(rightArr.Length, sizeof(float));
+                ComputeBuffer leftBuffer = new ComputeBuffer(left.Data.Length, sizeof(float));
+                ComputeBuffer rightBuffer = new ComputeBuffer(right.Data.Length, sizeof(float));
                 ComputeBuffer resultBuffer = new ComputeBuffer(w1 * h2 * batch, sizeof(float));
-                leftBuffer.SetData(leftArr);
-                rightBuffer.SetData(rightArr);
-                
+                leftBuffer.SetData(left.Data);
+                rightBuffer.SetData(right.Data);
 
-                matmulCS.SetBuffer(kernelIndex, "leftArr", leftBuffer);
-                matmulCS.SetBuffer(kernelIndex, "rightArr", rightBuffer);
-                matmulCS.SetBuffer(kernelIndex, "resultArr", resultBuffer);
-                matmulCS.SetInt("leftWidth", w1);
-                matmulCS.SetInt("leftHeight", h1);
-                matmulCS.SetInt("rightWidth", w2);
-                matmulCS.SetInt("rightHeight", h2);
 
-                matmulCS.Dispatch(kernelIndex, (w1 + numthreads.x - 1) / numthreads.x, (h2 + numthreads.y - 1) / numthreads.y, (batch + numthreads.z - 1) / numthreads.z);
+                MatMulCS.SetBuffer(0, "leftArr", leftBuffer);
+                MatMulCS.SetBuffer(0, "rightArr", rightBuffer);
+                MatMulCS.SetBuffer(0, "resultArr", resultBuffer);
+                MatMulCS.SetInt("leftWidth", w1);
+                MatMulCS.SetInt("leftHeight", h1);
+                MatMulCS.SetInt("rightWidth", w2);
+                MatMulCS.SetInt("rightHeight", h2);
+
+                MatMulCS.Dispatch(0, 
+                                 (w1 + numthreads[0] - 1) / numthreads[0], 
+                                 (h2 + numthreads[1] - 1) / numthreads[1], 
+                                 (batch + numthreads[2] - 1) / numthreads[2]);
 
                 // Get result[]
-                float[] resultArr = new float[w1 * h2 * batch];
-                resultBuffer.GetData(resultArr);
+                resultBuffer.GetData(resultTensor.Data);
+                
                 leftBuffer.Dispose();
                 rightBuffer.Dispose();
                 resultBuffer.Dispose();
-
-                // Convert result[] to Tensor<T>
-                int index = 0;
-
-                for (int k = 0; k < batch; k++)
-                {
-                    for (int j = 0; j < h2; j++)
-                    {
-                        for (int i = 0; i < w1; i++)
-                        {
-                            resultTensor[i, j, k] = (dynamic)resultArr[index++];
-                        }
-                    }
-                }               
             }
 
             return resultTensor;
         }
-        public static Tensor<T> MatTranspose(Tensor<T> tensor)
+        public static Tensor MatTranspose(Tensor tensor)
         {
-            var shape = tensor.FullShape;
-            Tensor<T> result = new Tensor<T>(shape[1], shape[0], shape[2], shape[3]);
+            var shape = tensor.Shape;
+            Tensor result = new Tensor(shape[1], shape[0], shape[2]);
 
+            
             for (int k = 0; k < shape[2]; k++)
             {
                 for (int j = 0; j < shape[1]; j++)
                 {
                     for (int i = 0; i < shape[0]; i++)
                     {
-                        result[j, i, k] = tensor[i, j, k];
+                        result[j, i] = tensor[i, j];
                     }
                 }
             }
 
             return result;
         }
-        public static Tensor<T> MatReduceSum(Tensor<T> tensor)
+        public static Tensor[] Slice(Tensor tensor, int axis)
         {
-            var shape = tensor.FullShape;
-            Tensor<T> result = Tensor<T>.Zeros(shape[0]);
-
-            for (int k = 0; k < shape[2]; k++)
-            {
-                for (int i = 0; i < shape[0]; i++)
-                {
-                    dynamic sum = 0.0;
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        sum += tensor[i, j, k];
-                    }
-                    result[i, 1, k] = sum;
-                }
-            }
-
-            
-
-            return result;
-        }
-        public static Tensor<T>[] Slice(Tensor<T> tensor, int axis)
-        {
-            if (axis < 0 || axis >= tensor.FullShape.Length)
+            if (axis < 0 || axis >= tensor.Shape.Length)
                 throw new ArgumentException("Invalid axis.");
 
-            int[] shape = tensor.FullShape;
+            int[] shape = tensor.Shape;
             int sliceSize = shape[axis];
             int[] slicedShape = shape.Clone() as int[];
             slicedShape[axis] = 1;
 
-            Tensor<T>[] slices = new Tensor<T>[sliceSize];
+            Tensor[] slices = new Tensor[sliceSize];
 
             for (int i = 0; i < sliceSize; i++)
             {
-                slices[i] = new Tensor<T>(slicedShape);
+                slices[i] = new Tensor(slicedShape);
 
                 int[] indices = Enumerable.Repeat(0, shape.Length).ToArray();
                 indices[axis] = i;
@@ -627,281 +400,141 @@ namespace DeepUnity
             return slices;
         }
 
-        public T Mean()
+
+        public static Tensor Pow(Tensor @base, float power)
         {
-            dynamic sum = 0;
-            int count = 0;
+            Tensor result = new Tensor(@base.Shape);
 
-            var shape = FullShape;
-
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < result.Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            sum += (dynamic)this[i, j, k, l];
-                            count++;
-                        }
-                    }
-                }
+                result.Data[i] = MathF.Pow(@base.Data[i], power);
+            }
+            return result;
+        }
+        public static Tensor Sqrt(Tensor @base)
+        {
+            Tensor result = new Tensor(@base.Shape);
+
+            for (int i = 0; i < result.Data.Length; i++)
+            {
+                result.Data[i] = MathF.Sqrt(@base.Data[i]);
+            }
+            return result;
+        }
+        public static float Mean(Tensor tensor) => tensor.Data.Average();
+        public static float StdDev(Tensor tensor) => MathF.Sqrt(Var(tensor));
+        public static float Var(Tensor tensor)
+        {
+            float sum = 0;
+            float sumSqr = 0;
+
+            for (int i = 0; i < tensor.Data.Length; i++)
+            {
+                sum += tensor.Data[i];
+                sumSqr += tensor.Data[i] * tensor.Data[i];
             }
 
-            return (T)(sum / count);
-        }
-        public T StdDev()
-        {
-            return (T)Math.Sqrt((dynamic)Var());
-        }
-        public T Var()
-        {
-            dynamic sum = 0;
-            dynamic sumSqr = 0;
-            int count = 0;
-
-            var shape = FullShape;
-
-            for (int l = 0; l < shape[3]; l++)
-            {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            sum += this[i, j, k, l];
-                            sumSqr += (dynamic)this[i, j, k, l] * this[i, j, k, l];
-                            count++;
-                        }
-                    }
-                }
-            }
-
-            dynamic mean = sum / count;
-            dynamic meanSqr = sumSqr / count;
-            return (T)meanSqr - (mean * mean);
+            float mean = sum / tensor.Data.Length;
+            float meanSquares = sumSqr / tensor.Data.Length;
+            return meanSquares - (mean * mean);
         }
 
-        public int Count(Func<T, bool> selector = null)
-        {
-            if(selector == null)
-                return data.GetLength(0) * data.GetLength(1) * data.GetLength(2) * data.GetLength(3);
-
-            int count = 0;
-            var shape = FullShape;
-
-            for (int l = 0; l < shape[3]; l++)
-            {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            count += Convert.ToInt32(selector(this[i, j, k, l]));
-
-                        }   
-                    }
-                }
-            }
-
-            return count;
-        }
-        public T[] ToArray()
-        {
-            T[] arr = new T[Count()];
-
-            var shape = FullShape;
-            int index = 0;
-
-
-            for (int l = 0; l < shape[3]; l++)
-            {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            arr[index++] = this[i, j, k, l];
-                        }
-                    }   
-                }
-            }
-
-            return arr;
-        }
-        public TResult[] ToArray<TResult>()
-        {
-            TResult[] arr = new TResult[Count()];
-
-            var shape = FullShape;
-            int index = 0;
-
-
-            for (int l = 0; l < shape[3]; l++)
-            {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            arr[index++] = (dynamic)this[i, j, k, l];
-                        }
-                    }
-                }
-            }
-
-            return arr;
-        }
-        public T Sum(Func<T, T> selector = null)
+        public int Count(Func<float, bool> selector = null)
         {
             if (selector == null)
-                selector = x => x;
+                return Shape[0] * Shape[1] * Shape[2] * Shape[3];
 
-            dynamic sum = 0.0;
+            int count = 0;
 
-
-            var shape = FullShape;
-
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            sum += selector(this[i, j, k, l]);
-                        }
-                    }
-                }
+                count += selector(Data[i]) ? 1 : 0;
             }
 
-            return (T) sum;
+            
+            return count;
         }
-        public Tensor<TResult> Select<TResult>(Func<T, TResult> selector) where TResult : struct
+        public float[] ToArray() => Data.ToArray();
+        public float Sum(Func<float, float> selector = null) 
         {
-            var shape = FullShape;
-            Tensor<TResult> result = new Tensor<TResult>(shape[0], shape[1], shape[2], shape[3]);
+            if (selector == null)
+                return Data.Sum();
 
+            float sum = 0.0f;
 
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            result[i, j, k, l] = selector(this[i, j, k, l]);
-                        }
-                    }
-                }
+                sum += selector(Data[i]);
+            }
+
+            return sum;
+        }
+        public void ForEach(Func<float, float> action)
+        {
+            for (int i = 0; i < Data.Length; i++)
+            {
+                Data[i] = action(Data[i]);
+            }
+        }
+        public Tensor Select(Func<float, float> selector)
+        {
+            Tensor result = new Tensor(Shape);
+
+            for (int i = 0; i < Data.Length; i++)
+            {
+                result.Data[i] = selector(Data[i]);
             }
 
             return result;
         }
-        public Tensor<TResult> Zip<TSecond, TResult>(Tensor<TSecond> second, Func<T, TSecond, TResult> resultSelector) where TResult : struct where TSecond : struct
+        public Tensor Zip(Tensor second, Func<float, float, float> resultSelector)
         {
-            var shape = FullShape;
-            Tensor<TResult> result = new Tensor<TResult>(shape[0], shape[1], shape[2], shape[3]);
+            Tensor result = new Tensor(Shape);
 
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            result[i, j, k, l] = resultSelector(this[i, j, k, l], second[i, j, k, l]);
-                        }
-                    }
-                }
+                result.Data[i] = resultSelector(Data[i], second.Data[i]);
             }
+
             return result;
         }
-        public void ForEach(Func<T,T> action)
-        {
-            var shape = FullShape;
-
-            for (int l = 0; l < shape[3]; l++)
-            {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            this[i, j, k, l] = action(this[i, j, k, l]);
-                        }
-                    }
-                }
-            }
-        }
+        
 
         IEnumerator IEnumerable.GetEnumerator()
         {
             return this.GetEnumerator();
         }
-        public IEnumerator<T> GetEnumerator()
+        public IEnumerator<float> GetEnumerator()
         {
-            var shape = FullShape;
-
-            for (int l = 0; l < shape[3]; l++)
+            for (int i = 0; i < Data.Length; i++)
             {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            yield return this[i, j, k, l];
-                        }
-                    }
-                }
+                yield return Data[i];
             }
+        }
+        public bool Equals(Tensor other)
+        {
+            if (!Shape.SequenceEqual(other.Shape))
+                return false;
+
+            for (int i = 0; i < Data.Length; i++)
+                if (Data[i].Equals(other.Data[i]))
+                    return false;
+            
+            return true;
         }
         public override bool Equals(object obj)
         {
             if (obj == null || GetType() != obj.GetType())
                 return false;
 
-            Tensor<T> other = (Tensor<T>)obj;
-
-            if (!FullShape.SequenceEqual(other.FullShape))
-                return false;
-
-
-            for (int i = 0; i < data.GetLength(0); i++)
-            {
-                for (int j = 0; j < data.GetLength(1); j++)
-                {
-                    for (int k = 0; k < data.GetLength(2); k++)
-                    {
-                        for (int l = 0; l < data.GetLength(3); l++)
-                        {
-                            if (!this[i, j, k, l].Equals(other[i, j, k, l]))
-                            {
-                                return false;
-                            }
-                        }
-                    }
-                }
-            }
-
-            return true;
+            return Equals(obj as Tensor);
         }
         public override string ToString()
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("[");
 
-            int[] shape = FullShape;
+            int[] shape = Shape;
             int rank = Rank;
 
             for (int l = 0; l < shape[3]; l++)
@@ -958,24 +591,31 @@ namespace DeepUnity
         }
         public object Clone()
         {
-            var _shape = this.FullShape;
-            var clone = new Tensor<T>(_shape[0], _shape[1], _shape[2], _shape[3]);
-            Array.Copy(data, clone.data, data.Length);
+            var clone = new Tensor(Shape);
+            Array.Copy(Data, clone.Data, Data.Length);
             return clone;
         }
-        
+
     }
 }
 
 
-// Matmul benchmark
-/* For matrices [100,1000] x [1000,500]
- * One matmul : CPU: 36.48s, GPU: 00.09s
+// Matmul benchmark on generic Tensor<T>
+/*
  * 
- * For matrices [10,5] * [5,3]
- * 100 matmul : CPU: 00.04s  , GPU: 00.10s 
+ * Matmul benchmark on base Tensor (float type)
  * 
- * Benchmark conclusion
- * For batched matmul or large dimensions matrices it is **neccesary to use GPU device**.
- * For non-batched matmul and small sized matrices CPU matmul scores a better runtime (x2 times better), but still GPU based matmul is a viable option.
+ * (1024, 1024) * (1024, 1024)  X  1 Times
+ * CPU: 03.28s | GPU: 00.12s
+ * 
+ * (32, 32) * (32, 32)          X  1K Times
+ * CPU: 01.05s | GPU: 00.53s   
+ * 
+ * (8, 8) * (8, 8)              X  10K Times
+ * CPU: 00.38s | GPU: 02.79
+ * 
+ * (4096, 4096) * (4096, 4096)  X 100 Times (uses 50-95% of GPU)
+ * GPU: 01:01.63 (above 1 minute)
+ * Conclusion: On SMALL tensors the CPU is faster. 
+ *             On MEDIUM and LARGE tensor the GPU is faster.
  *///

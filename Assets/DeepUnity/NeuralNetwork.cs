@@ -7,7 +7,7 @@ namespace DeepUnity
         private string Name;
         private IModule[] Modules;
         private IOptimizer Optimizer;
-        public Tensor<float> InputCache { get; set; }
+        public Tensor InputCache { get; set; }
 
         public NeuralNetwork(params IModule[] modules) => this.Modules = modules;
         public void Compile(IOptimizer optimizer, string name)
@@ -16,7 +16,7 @@ namespace DeepUnity
             this.Name = name;
         }
 
-        public Tensor<float> Forward(Tensor<float> input)
+        public Tensor Forward(Tensor input)
         {
             foreach (var module in Modules)
             {
@@ -24,7 +24,7 @@ namespace DeepUnity
             }
             return input;
         }
-        public Tensor<float> Backward(Tensor<float> loss)
+        public Tensor Backward(Tensor loss)
         {
             for (int i = Modules.Length - 1; i >= 0; i--)
             {
@@ -47,6 +47,6 @@ namespace DeepUnity
             }
         }
         public void Step() => Optimizer.Step(Modules.Where(x => x.GetType() == typeof(Dense)).Select(x => (Dense)x).ToArray());
-        
+
     }
 }
