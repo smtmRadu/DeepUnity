@@ -1,10 +1,13 @@
+using System;
+using UnityEngine;
 namespace DeepUnity
 {
+    [Serializable]
     public sealed class SGD : IOptimizer
     {
-        private float learningRate;
-        private float momentum;
-        private float weightDecay;
+        [SerializeField] private float learningRate;
+        [SerializeField] private float momentum;
+        [SerializeField] private float weightDecay;
 
         public SGD(float learningRate = 0.01f, float momentum = 0.9f, float weightDecay = 1e-5f)
         {

@@ -8,85 +8,59 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    [Serializable]
     public class Tensor : IEnumerable, ICloneable, IEquatable<Tensor>
     {
         private readonly static int[] numthreads = new int[] { 32, 32, 1 };
-
-        public readonly int[] Shape;
-        public readonly int Rank;
-        private float[] Data;
-        public float this[int x]
+        [SerializeField] private int[] shape; 
+        [SerializeField] private float[] data;
+       
+        // Create
+        private Tensor(params int[] _shape)
         {
-            get => Data[x];
-            set => Data[x] = value;
-        }
-        public float this[int x, int y]
-        {
-            get => Data[y * Shape[0] + x];
-            set => Data[y * Shape[0] + x] = value;
-        }
-        public float this[int x, int y, int z]
-        {
-            get => Data[z * Shape[1] + y * Shape[0] + x];
-            set => Data[z * Shape[1] + y * Shape[0] + x] = value;
-        }
-        public float this[int x, int y, int z, int w]
-        {
-            get => Data[w * Shape[2] + z * Shape[1] + y * Shape[0] + x];
-            set => Data[w * Shape[2] + z * Shape[1] + y * Shape[0] + x] = value;
-        }
-
-
-        private Tensor(params int[] shape)
-        {
-            if (shape.Length > 4)
+            if (_shape.Length > 4)
                 throw new Exception("Tensor cannot be instantiated with more than 4 dimensions.");
 
-            Shape = new int[] { 1, 1, 1, 1 };
-            Rank = 0;
+            this.shape = new int[] { 1, 1, 1, 1 };
 
-            if (shape.Length > 0)
+            if (_shape.Length > 0)
             {
-                Shape[0] = shape[0];
-                Rank = 1;
+                this.shape[0] = _shape[0];
             }
-            if (shape.Length > 1)
+            if (_shape.Length > 1)
             {
-                Shape[1] = shape[1];
-                Rank = 2;
+                this.shape[1] = _shape[1];
             }
-            if (shape.Length > 2)
+            if (_shape.Length > 2)
             {
-                Shape[2] = shape[2];
-                Rank = 3;
+                this.shape[2] = _shape[2];
             }
-            if (shape.Length > 3)
+            if (_shape.Length > 3)
             {
-                Shape[3] = shape[3];
-                Rank = 4;
+                this.shape[3] = _shape[3];
             }
-            Data = new float[Shape[0] * Shape[1] * Shape[2] * Shape[3]];
+            data = new float[this.shape[0] * this.shape[1] * this.shape[2] * this.shape[3]];
         }
         public static Tensor Constant(float scalar)
         {
             Tensor tensor = new Tensor();
-            tensor.Data[0] = scalar;
+            tensor.data[0] = scalar;
             return tensor;
         }
         public static Tensor Constant(float[] vector)
         {
             Tensor tensor = new Tensor(vector.GetLength(0));
-            var shape = tensor.Shape;
+            var shape = tensor.shape;
             for (int i = 0; i < shape[0]; i++)
             {
-                tensor.Data[i] = vector[i];
+                tensor.data[i] = vector[i];
             }
             return tensor;
         }
         public static Tensor Constant(float[,] matrix)
         {
             Tensor tensor = new Tensor(matrix.GetLength(0), matrix.GetLength(1));
-            var shape = tensor.Shape;
+            var shape = tensor.shape;
             for (int j = 0; j < shape[1]; j++)
             {
                 for (int i = 0; i < shape[0]; i++)
@@ -101,7 +75,7 @@ namespace DeepUnity
         public static Tensor Constant(float[,,] cuboid)
         {
             Tensor tensor = new Tensor(cuboid.GetLength(0), cuboid.GetLength(1), cuboid.GetLength(2));
-            var shape = tensor.Shape;
+            var shape = tensor.shape;
 
 
             for (int k = 0; k < shape[2]; k++)
@@ -120,7 +94,7 @@ namespace DeepUnity
         public static Tensor Constant(float[,,,] tesseract)
         {
             Tensor tensor = new Tensor(tesseract.GetLength(0), tesseract.GetLength(1), tesseract.GetLength(2), tesseract.GetLength(3));
-            var shape = tensor.Shape;
+            var shape = tensor.shape;
 
             for (int l = 0; l < shape[3]; l++)
             {
@@ -143,9 +117,9 @@ namespace DeepUnity
         {
             Tensor tensor = new Tensor(shape);
 
-            for (int i = 0; i < tensor.Data.Length; i++)
+            for (int i = 0; i < tensor.data.Length; i++)
             {
-                tensor.Data[i] = 1;
+                tensor.data[i] = 1;
             }
 
             return tensor;
@@ -154,9 +128,9 @@ namespace DeepUnity
         {
             Tensor tensor = new Tensor(shape);
 
-            for (int i = 0; i < tensor.Data.Length; i++)
+            for (int i = 0; i < tensor.data.Length; i++)
             {
-                tensor.Data[i] = Utils.Random.Value;
+                tensor.data[i] = Utils.Random.Value;
             }
 
             return tensor;
@@ -165,9 +139,9 @@ namespace DeepUnity
         {
             Tensor tensor = new Tensor(shape);
 
-            for (int i = 0; i < tensor.Data.Length; i++)
+            for (int i = 0; i < tensor.data.Length; i++)
             {
-                tensor.Data[i] = Utils.Random.Gaussian(0f, 1f, out _);
+                tensor.data[i] = Utils.Random.Gaussian(0f, 1f, out _);
             }
 
             return tensor;
@@ -176,22 +150,58 @@ namespace DeepUnity
         {
             Tensor tensor = new Tensor(shape);
 
-            for (int i = 0; i < tensor.Data.Length; i++)
+            for (int i = 0; i < tensor.data.Length; i++)
             {
-                tensor.Data[i] = value;
+                tensor.data[i] = value;
             }
 
             return tensor;
         }
 
-
+        // Operator overloading
+        public int Rank
+        {
+            get
+            {
+                for (int i = shape.Length - 1; i >= 0; i--)
+                {
+                    if (shape[i] > 1)
+                        return i + 1;
+                }
+                return 0;
+            }
+        }
+        public int[] Shape
+        {
+            get => shape;
+        }
+        public float this[int x]
+        {
+            get => data[x];
+            set => data[x] = value;
+        }
+        public float this[int x, int y]
+        {
+            get => data[y * shape[0] + x];
+            set => data[y * shape[0] + x] = value;
+        }
+        public float this[int x, int y, int z]
+        {
+            get => data[z * shape[1] * shape[0] + y * shape[0] + x];
+            set => data[z * shape[1] * shape[0] + y * shape[0] + x] = value;
+        }
+        public float this[int x, int y, int z, int w]
+        {
+            get => data[w * shape[2] * shape[1] * shape[0] + z * shape[1] * shape[0] + y * shape[0] + x];
+            set => data[w * shape[2] * shape[1] * shape[0] + z * shape[1] * shape[0] + y * shape[0] + x] = value;
+        }
         public static Tensor operator +(Tensor left, float right)
         {
             Tensor result = left.Clone() as Tensor;
 
-            for (int i = 0; i < result.Data.Length; i++)
+            for (int i = 0; i < result.data.Length; i++)
             {
-                result.Data[i] += right;
+                result.data[i] += right;
             }
 
             return result;
@@ -200,9 +210,9 @@ namespace DeepUnity
         {
             Tensor result = left.Clone() as Tensor;
 
-            for (int i = 0; i < result.Data.Length; i++)
+            for (int i = 0; i < result.data.Length; i++)
             {
-                result.Data[i] -= right;
+                result.data[i] -= right;
             }
 
             return result;
@@ -211,9 +221,9 @@ namespace DeepUnity
         {
             Tensor result = left.Clone() as Tensor;
 
-            for (int i = 0; i < result.Data.Length; i++)
+            for (int i = 0; i < result.data.Length; i++)
             {
-                result.Data[i] *= right;
+                result.data[i] *= right;
             }
 
             return result;
@@ -222,9 +232,9 @@ namespace DeepUnity
         {
             Tensor result = left.Clone() as Tensor;
 
-            for (int i = 0; i < result.Data.Length; i++)
+            for (int i = 0; i < result.data.Length; i++)
             {
-                result.Data[i] /= right;
+                result.data[i] /= right;
             }
 
             return result;
@@ -233,55 +243,55 @@ namespace DeepUnity
         public static Tensor operator *(float left, Tensor right) => right * left;
         public static Tensor operator +(Tensor left, Tensor right)
         {
-            Tensor result = new Tensor(left.Shape);
+            Tensor result = new Tensor(left.shape);
 
-            for (int i = 0; i < result.Data.Length; i++)
+            for (int i = 0; i < result.data.Length; i++)
             {
-                result.Data[i] = left.Data[i] + right.Data[i];
+                result.data[i] = left.data[i] + right.data[i];
             }
 
             return result;
         }
         public static Tensor operator -(Tensor left, Tensor right)
         {
-            Tensor result = new Tensor(left.Shape);
-            for (int i = 0; i < result.Data.Length; i++)
+            Tensor result = new Tensor(left.shape);
+            for (int i = 0; i < result.data.Length; i++)
             {
-                result.Data[i] = left.Data[i] - right.Data[i];
+                result.data[i] = left.data[i] - right.data[i];
             }
             return result;
         }
         public static Tensor operator *(Tensor left, Tensor right)
         {
-            Tensor result = new Tensor(left.Shape);
+            Tensor result = new Tensor(left.shape);
 
-            for (int i = 0; i < result.Data.Length; i++)
+            for (int i = 0; i < result.data.Length; i++)
             {
-                result.Data[i] = left.Data[i] * right.Data[i];
+                result.data[i] = left.data[i] * right.data[i];
             }
 
             return result;
         }
         public static Tensor operator /(Tensor left, Tensor right)
         {
-            Tensor result = new Tensor(left.Shape);
+            Tensor result = new Tensor(left.shape);
 
-            for (int i = 0; i < result.Data.Length; i++)
+            for (int i = 0; i < result.data.Length; i++)
             {
-                result.Data[i] = left.Data[i] / right.Data[i];
+                result.data[i] = left.data[i] / right.data[i];
             }
 
             return result;
         }
 
-      
+        // Refactoring operations
         public static Tensor MatMul(Tensor left, Tensor right, ComputeShader MatMulCS = null)
         {
-            int w1 = left.Shape[0];
-            int h1 = left.Shape[1];
-            int w2 = right.Shape[0];
-            int h2 = right.Shape[1];
-            int batch = left.Shape[2];
+            int w1 = left.shape[0];
+            int h1 = left.shape[1];
+            int w2 = right.shape[0];
+            int h2 = right.shape[1];
+            int batch = left.shape[2];
 
             if (h1 != w2)
                 throw new ArgumentException("Tensors must have compatible shapes for matrix multiplication (height of left tensor is not matching the width of the right tensor).");
@@ -312,19 +322,18 @@ namespace DeepUnity
             }
             else
             {
-                ComputeBuffer leftBuffer = new ComputeBuffer(left.Data.Length, sizeof(float));
-                ComputeBuffer rightBuffer = new ComputeBuffer(right.Data.Length, sizeof(float));
+                ComputeBuffer leftBuffer = new ComputeBuffer(left.data.Length, sizeof(float));
+                ComputeBuffer rightBuffer = new ComputeBuffer(right.data.Length, sizeof(float));
                 ComputeBuffer resultBuffer = new ComputeBuffer(w1 * h2 * batch, sizeof(float));
-                leftBuffer.SetData(left.Data);
-                rightBuffer.SetData(right.Data);
+                leftBuffer.SetData(left.data);
+                rightBuffer.SetData(right.data);
 
 
                 MatMulCS.SetBuffer(0, "leftArr", leftBuffer);
                 MatMulCS.SetBuffer(0, "rightArr", rightBuffer);
                 MatMulCS.SetBuffer(0, "resultArr", resultBuffer);
                 MatMulCS.SetInt("leftWidth", w1);
-                MatMulCS.SetInt("leftHeight", h1);
-                MatMulCS.SetInt("rightWidth", w2);
+                MatMulCS.SetInt("leftHeightRightWidth", h1); // or w2 same thing
                 MatMulCS.SetInt("rightHeight", h2);
 
                 MatMulCS.Dispatch(0, 
@@ -333,7 +342,7 @@ namespace DeepUnity
                                  (batch + numthreads[2] - 1) / numthreads[2]);
 
                 // Get result[]
-                resultBuffer.GetData(resultTensor.Data);
+                resultBuffer.GetData(resultTensor.data);
                 
                 leftBuffer.Dispose();
                 rightBuffer.Dispose();
@@ -344,7 +353,7 @@ namespace DeepUnity
         }
         public static Tensor MatTranspose(Tensor tensor)
         {
-            var shape = tensor.Shape;
+            var shape = tensor.shape;
             Tensor result = new Tensor(shape[1], shape[0], shape[2]);
 
             
@@ -363,10 +372,10 @@ namespace DeepUnity
         }
         public static Tensor[] Slice(Tensor tensor, int axis)
         {
-            if (axis < 0 || axis >= tensor.Shape.Length)
+            if (axis < 0 || axis >= tensor.shape.Length)
                 throw new ArgumentException("Invalid axis.");
 
-            int[] shape = tensor.Shape;
+            int[] shape = tensor.shape;
             int sliceSize = shape[axis];
             int[] slicedShape = shape.Clone() as int[];
             slicedShape[axis] = 1;
@@ -400,124 +409,125 @@ namespace DeepUnity
             return slices;
         }
 
-
+        // Math functions
         public static Tensor Pow(Tensor @base, float power)
         {
-            Tensor result = new Tensor(@base.Shape);
+            Tensor result = new Tensor(@base.shape);
 
-            for (int i = 0; i < result.Data.Length; i++)
+            for (int i = 0; i < result.data.Length; i++)
             {
-                result.Data[i] = MathF.Pow(@base.Data[i], power);
+                result.data[i] = MathF.Pow(@base.data[i], power);
             }
             return result;
         }
         public static Tensor Sqrt(Tensor @base)
         {
-            Tensor result = new Tensor(@base.Shape);
+            Tensor result = new Tensor(@base.shape);
 
-            for (int i = 0; i < result.Data.Length; i++)
+            for (int i = 0; i < result.data.Length; i++)
             {
-                result.Data[i] = MathF.Sqrt(@base.Data[i]);
+                result.data[i] = MathF.Sqrt(@base.data[i]);
             }
             return result;
         }
-        public static float Mean(Tensor tensor) => tensor.Data.Average();
+        public static float Mean(Tensor tensor) => tensor.data.Average();
         public static float StdDev(Tensor tensor) => MathF.Sqrt(Var(tensor));
         public static float Var(Tensor tensor)
         {
             float sum = 0;
             float sumSqr = 0;
 
-            for (int i = 0; i < tensor.Data.Length; i++)
+            for (int i = 0; i < tensor.data.Length; i++)
             {
-                sum += tensor.Data[i];
-                sumSqr += tensor.Data[i] * tensor.Data[i];
+                sum += tensor.data[i];
+                sumSqr += tensor.data[i] * tensor.data[i];
             }
 
-            float mean = sum / tensor.Data.Length;
-            float meanSquares = sumSqr / tensor.Data.Length;
+            float mean = sum / tensor.data.Length;
+            float meanSquares = sumSqr / tensor.data.Length;
             return meanSquares - (mean * mean);
         }
 
+        // LINQ
         public int Count(Func<float, bool> selector = null)
         {
             if (selector == null)
-                return Shape[0] * Shape[1] * Shape[2] * Shape[3];
+                return shape[0] * shape[1] * shape[2] * shape[3];
 
             int count = 0;
 
-            for (int i = 0; i < Data.Length; i++)
+            for (int i = 0; i < data.Length; i++)
             {
-                count += selector(Data[i]) ? 1 : 0;
+                count += selector(data[i]) ? 1 : 0;
             }
 
             
             return count;
         }
-        public float[] ToArray() => Data.ToArray();
+        public float[] ToArray() => data.ToArray();
         public float Sum(Func<float, float> selector = null) 
         {
             if (selector == null)
-                return Data.Sum();
+                return data.Sum();
 
             float sum = 0.0f;
 
-            for (int i = 0; i < Data.Length; i++)
+            for (int i = 0; i < data.Length; i++)
             {
-                sum += selector(Data[i]);
+                sum += selector(data[i]);
             }
 
             return sum;
         }
         public void ForEach(Func<float, float> action)
         {
-            for (int i = 0; i < Data.Length; i++)
+            for (int i = 0; i < data.Length; i++)
             {
-                Data[i] = action(Data[i]);
+                data[i] = action(data[i]);
             }
         }
         public Tensor Select(Func<float, float> selector)
         {
-            Tensor result = new Tensor(Shape);
+            Tensor result = new Tensor(shape);
 
-            for (int i = 0; i < Data.Length; i++)
+            for (int i = 0; i < data.Length; i++)
             {
-                result.Data[i] = selector(Data[i]);
+                result.data[i] = selector(data[i]);
             }
 
             return result;
         }
         public Tensor Zip(Tensor second, Func<float, float, float> resultSelector)
         {
-            Tensor result = new Tensor(Shape);
+            Tensor result = new Tensor(shape);
 
-            for (int i = 0; i < Data.Length; i++)
+            for (int i = 0; i < data.Length; i++)
             {
-                result.Data[i] = resultSelector(Data[i], second.Data[i]);
+                result.data[i] = resultSelector(data[i], second.data[i]);
             }
 
             return result;
         }
         
-
+        // System.Object/Collection
         IEnumerator IEnumerable.GetEnumerator()
         {
             return this.GetEnumerator();
         }
         public IEnumerator<float> GetEnumerator()
         {
-            for (int i = 0; i < Data.Length; i++)
+            for (int i = 0; i < data.Length; i++)
             {
-                yield return Data[i];
+                yield return data[i];
             }
         }
         public bool Equals(Tensor other)
         {
-            if (!Shape.SequenceEqual(other.Shape))
+            if (!shape.SequenceEqual(other.shape))
                 return false;
 
-            for (int i = 0; i < Data.Length; i++)
-                if (Data[i].Equals(other.Data[i]))
+            for (int i = 0; i < data.Length; i++)
+                if (!data[i].Equals(other.data[i]))
                     return false;
             
             return true;
@@ -534,7 +544,7 @@ namespace DeepUnity
             StringBuilder sb = new StringBuilder();
             sb.Append("[");
 
-            int[] shape = Shape;
+            int[] shape = this.shape;
             int rank = Rank;
 
             for (int l = 0; l < shape[3]; l++)
@@ -585,14 +595,15 @@ namespace DeepUnity
 
             return sb.ToString();
         }
+        public string ShapeToString { get => "[" + string.Join(", ", Shape) + "]"; }
         public override int GetHashCode()
         {
             return base.GetHashCode();
         }
         public object Clone()
         {
-            var clone = new Tensor(Shape);
-            Array.Copy(Data, clone.Data, Data.Length);
+            var clone = new Tensor(shape);
+            Array.Copy(data, clone.data, data.Length);
             return clone;
         }
 

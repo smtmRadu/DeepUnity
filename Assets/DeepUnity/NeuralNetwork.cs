@@ -1,13 +1,23 @@
+using System;
 using System.Linq;
+using UnityEditor;
+using UnityEngine;
 
 namespace DeepUnity
 {
-    public class NeuralNetwork : IModule
+    [Serializable]
+    public class NeuralNetwork : ScriptableObject, ISerializationCallbackReceiver, IModule 
     {
-        private string Name;
-        private IModule[] Modules;
-        private IOptimizer Optimizer;
+        [SerializeField] private string Name;
+        [SerializeField] private OptimizerWrapper serializedOptimizer;
+        [SerializeField] private ModuleWrapper[] serializedModules;
+        
+
         public Tensor InputCache { get; set; }
+        private IOptimizer Optimizer;
+        private IModule[] Modules;
+        
+        
 
         public NeuralNetwork(params IModule[] modules) => this.Modules = modules;
         public void Compile(IOptimizer optimizer, string name)
@@ -46,7 +56,37 @@ namespace DeepUnity
                 dense.gBiases.ForEach(x => 0f);
             }
         }
-        public void Step() => Optimizer.Step(Modules.Where(x => x.GetType() == typeof(Dense)).Select(x => (Dense)x).ToArray());
+        public void Step()
+        {
+            Optimizer.Step(Modules.Where(x => x.GetType() == typeof(Dense)).Select(x => (Dense)x).ToArray());
+        }
+  
+        public void Save()
+        {
+            if (Name == null)
+                throw new Exception("Cannot save a non-compiled Neural Network.");
 
+            var instance = AssetDatabase.LoadAssetAtPath<NeuralNetwork>("Assets/" + Name + ".asset");
+            if (instance == null)
+                AssetDatabase.CreateAsset(this, "Assets/" + Name + ".asset");
+            
+            EditorUtility.SetDirty(this);
+            AssetDatabase.SaveAssetIfDirty(this);
+        }
+        public void OnBeforeSerialize()
+        {
+            serializedModules = Modules.Select(x => new ModuleWrapper(x)).ToArray();
+            serializedOptimizer = new OptimizerWrapper(Optimizer);
+        }
+        public void OnAfterDeserialize()
+        {
+            Modules = serializedModules.Select(x => ModuleWrapper.Get(x)).ToArray();
+            Optimizer = OptimizerWrapper.Get(serializedOptimizer);
+
+        }
     }
+
+   
+    
+
 }

@@ -17,26 +17,28 @@ namespace DeepUnity
         CPU,
         GPU
     }
-    public class Dense : IModule
+    
+    [Serializable]
+    public class Dense : IModule, ISerializationCallbackReceiver
     {
-        public ComputeShader MatMulCS;
         public Tensor InputCache { get; set; }
-
+        [SerializeField] public ComputeShader MatMulCS;
+        
         // Parameters
-        public Tensor Weights;
-        public Tensor Biases;
+        [SerializeField] public Tensor Weights;
+        [SerializeField] public Tensor Biases;
 
         // Gradients
-        public Tensor gWeights;
-        public Tensor gBiases;
+        [NonSerialized] public Tensor gWeights;
+        [NonSerialized] public Tensor gBiases;
 
         // Momentums
-        public Tensor mWeights;
-        public Tensor mBiases;
+        [NonSerialized] public Tensor mWeights;
+        [NonSerialized] public Tensor mBiases;
 
         // Velocities
-        public Tensor vWeights;
-        public Tensor vBiases;
+        [NonSerialized] public Tensor vWeights;
+        [NonSerialized] public Tensor vBiases;
 
         public Dense(int inputs, int outputs, WeightInit init = WeightInit.HE, Device device = Device.GPU)
         {
@@ -64,11 +66,11 @@ namespace DeepUnity
             switch (init)
             {
                 case WeightInit.HE:
-                    float sigmaHE = MathF.Sqrt(2f / Weights.Shape[1]);
+                    float sigmaHE = MathF.Sqrt(2f / Weights.Shape[1]); //fanIn
                     Weights.ForEach(x => Utils.Random.Gaussian(0f, sigmaHE, out _));
                     break;
                 case WeightInit.Xavier:
-                    float sigmaXA = MathF.Sqrt(2f / (Weights.Shape[0] + Weights.Shape[1]));
+                    float sigmaXA = MathF.Sqrt(2f / (Weights.Shape[0] + Weights.Shape[1])); // fanIn + fanOut
                     Weights.ForEach(x => Utils.Random.Gaussian(0f, sigmaXA, out _));
                     break;
                 case WeightInit.Normal:
@@ -107,6 +109,30 @@ namespace DeepUnity
             Tensor dLossdActivation = Tensor.MatMul(Tensor.MatTranspose(Weights), loss, MatMulCS);
 
             return dLossdActivation;
+        }
+
+
+        public void OnBeforeSerialize()
+        {
+
+        }
+        public void OnAfterDeserialize()
+        {
+            // This function is actually have 2 workers of serialization, and one on them is called when weights.shape.length == 0.
+            if (Weights.Shape.Length == 0)
+                return;
+
+            int outputs = Weights.Shape[0];
+            int inputs = Weights.Shape[1];
+
+            this.gWeights = Tensor.Zeros(outputs, inputs);
+            this.gBiases = Tensor.Zeros(outputs);
+
+            this.mWeights = Tensor.Zeros(outputs, inputs);
+            this.mBiases = Tensor.Zeros(outputs);
+
+            this.vWeights = Tensor.Zeros(outputs, inputs);
+            this.vBiases = Tensor.Zeros(outputs);
         }
     }
 

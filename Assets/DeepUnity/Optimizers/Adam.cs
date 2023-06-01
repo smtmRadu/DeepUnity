@@ -1,15 +1,18 @@
 using System;
+using UnityEngine;
 
 namespace DeepUnity
 {
-    public sealed class Adam : IOptimizer
+    [Serializable]
+    public class Adam : IOptimizer
     {
-        private int timestep;
-        private float alpha;
-        private float beta1;
-        private float beta2;
-        private float weightDecay;
+        [SerializeField] private int timestep;
+        [SerializeField] private float alpha;
+        [SerializeField] private float beta1;
+        [SerializeField] private float beta2;
+        [SerializeField] private float weightDecay;
 
+        
         public Adam(float learningRate = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float weightDecay = 1e-5f)
         {
             this.timestep = 0;

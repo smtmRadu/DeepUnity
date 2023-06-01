@@ -6,6 +6,7 @@ namespace DeepUnity
         public static readonly float EPSILON = 1e-8f;
         private static System.Random RNG = new System.Random(DateTime.Now.Millisecond);
 
+        public static string AssemblyName { get => typeof(System.Data.DataSet).Assembly.FullName.ToString(); }
         public static float LogDensity(float x, float mu, float sigma)
         {
             //* https://stats.stackexchange.com/questions/404191/what-is-the-log-of-the-pdf-for-a-normal-distribution *//

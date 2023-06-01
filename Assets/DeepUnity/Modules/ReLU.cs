@@ -2,21 +2,22 @@ using System;
 
 namespace DeepUnity
 {
-    public sealed class ReLU : IModule, IActivation
+    [Serializable]
+    public class ReLU : ActivationBase, IModule 
     {
         public Tensor InputCache { get; set; }
-        public Tensor Activation { get => InputCache.Select(x => Math.Max(0, x)); }
-        public Tensor Derivative { get => InputCache.Select(x => x > 0f ? 1f : 0f); }
+        protected override Tensor Activation(Tensor x) => x.Select(k => Math.Max(0, k));
+        protected override Tensor Derivative(Tensor x) => x.Select(k => k > 0f ? 1f : 0f); 
 
 
         public Tensor Forward(Tensor input)
         {
             InputCache = input.Clone() as Tensor;
-            return Activation;
+            return Activation(InputCache);
         }
         public Tensor Backward(Tensor loss)
         {
-            return Derivative * loss;
+            return Derivative(InputCache) * loss;
         }
     }
 }
