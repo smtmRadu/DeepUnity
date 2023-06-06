@@ -7,16 +7,96 @@ public class UnitTests : MonoBehaviour
 {
     public NeuralNetwork blablabla;
     public int Runs = 10;
+    public Device device;
     public int MatrixSize = 64;
     public ComputeShader matmulCS;
     public void Start()
     {
+        BenchmarkFoward();
+        BenchmarkBackward();
+        BenchmarkStep();
+
+        // var t = Tensor.Random(10,10);
+        // print(t);
+        // t.ForEach(x => x / 2f);
+        // print(t);
         //MatMulCompare();
         //MatmulBenchmark();
         //TensorTest();
         //ForwardTest();
         //BackwardTest();
         //SaveTest();
+    }
+    public void BenchmarkFoward()
+    { 
+        NeuralNetwork net = new NeuralNetwork(
+            new Dense(10, MatrixSize, device: device),
+            new ReLU(),
+            new Dense(MatrixSize, MatrixSize, device: device),
+            new ReLU(), 
+            new Dense(MatrixSize, 10, device: device));
+
+        Tensor input = Tensor.Random(10);
+
+        var start = DateTime.Now;
+
+        for (int i = 0; i < Runs; i++)
+        {
+            net.Forward(input);
+        }
+
+        var end = DateTime.Now - start;
+
+        Debug.Log($"Forward {Runs} runs in {end}");
+    }
+    public void BenchmarkBackward()
+    {
+        NeuralNetwork net = new NeuralNetwork(
+            new Dense(10, MatrixSize, device: device),
+            new ReLU(),
+            new Dense(MatrixSize, MatrixSize, device: device),
+            new ReLU(),
+            new Dense(MatrixSize, 10, device: device));
+
+        Tensor loss = Tensor.Random(10);
+        
+        var start = DateTime.Now;
+
+        for (int i = 0; i < Runs; i++)
+        {
+            net.Forward(loss);
+            net.Backward(loss);
+        }
+
+        var end = DateTime.Now - start;
+
+        Debug.Log($"Backward {Runs} runs in {end}");
+    }
+    public void BenchmarkStep()
+    {
+        NeuralNetwork net = new NeuralNetwork(
+           new Dense(10, MatrixSize, device: device),
+           new ReLU(),
+           new Dense(MatrixSize, MatrixSize, device: device),
+           new ReLU(),
+           new Dense(MatrixSize, 10, device: device));
+
+        net.Compile(new Adam(), "non");
+
+        Tensor loss = Tensor.Zeros(10);
+
+        var start = DateTime.Now;
+
+        for (int i = 0; i < Runs; i++)
+        {
+            net.Forward(loss);
+            net.Backward(loss);
+            net.Step();
+        }
+
+        var end = DateTime.Now - start;
+
+        Debug.Log($"Step {Runs} runs in {end}");
     }
     public void MatMulCompare()
     {

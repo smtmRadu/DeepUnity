@@ -3,17 +3,17 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity
 {
     [Serializable]
-    public class Tensor : IEnumerable, ICloneable, IEquatable<Tensor>
+    public class Tensor : IEnumerable, IEquatable<Tensor>
     {
         private readonly static int[] numthreads = new int[] { 32, 32, 1 };
-        [SerializeField] private int[] shape; 
+        [SerializeField] private int[] shape;
         [SerializeField] private float[] data;
+        
        
         // Create
         private Tensor(params int[] _shape)
@@ -40,6 +40,15 @@ namespace DeepUnity
                 this.shape[3] = _shape[3];
             }
             data = new float[this.shape[0] * this.shape[1] * this.shape[2] * this.shape[3]];
+
+            gradients = AutoGrad ? new float[this.shape[0] * this.shape[1] * this.shape[2] * this.shape[3]] : null;
+        }
+        public static Tensor Identity(Tensor other)
+        {
+            Tensor clone = new Tensor(other.shape);
+            Array.Copy(other.data, clone.data, other.data.Length);
+            Array.Copy(other.shape, clone.shape, other.shape.Length);
+            return clone;
         }
         public static Tensor Constant(float scalar)
         {
@@ -65,9 +74,9 @@ namespace DeepUnity
             {
                 for (int i = 0; i < shape[0]; i++)
                 {
-                    
+
                     tensor[i, j] = matrix[i, j];
-                    
+
                 }
             }
             return tensor;
@@ -175,6 +184,10 @@ namespace DeepUnity
         {
             get => shape;
         }
+        public string ShapeToString
+        {
+            get => "[" + string.Join(", ", Shape) + "]";
+        }
         public float this[int x]
         {
             get => data[x];
@@ -195,46 +208,127 @@ namespace DeepUnity
             get => data[w * shape[2] * shape[1] * shape[0] + z * shape[1] * shape[0] + y * shape[0] + x];
             set => data[w * shape[2] * shape[1] * shape[0] + z * shape[1] * shape[0] + y * shape[0] + x] = value;
         }
+
+
+        public static Tensor operator +(Tensor tensor)
+        {
+            Tensor result = new Tensor(tensor.shape);
+            for (int i = 0; i < tensor.data.Length; i++)
+            {
+                result.data[i] = tensor.data[i];
+            }
+
+            if (AutoGrad)
+            {
+                for (int i = 0; i < tensor.data.Length; i++)
+                {
+                    if (AutoGrad)
+                        result.gradients[i] = tensor.gradients[i];
+                }            
+            }
+                
+                
+            return result;
+        }
+        public static Tensor operator -(Tensor tensor)
+        {
+            Tensor result = new Tensor(tensor.shape);
+            for (int i = 0; i < tensor.data.Length; i++)
+            {
+                result.data[i] = -tensor.data[i];
+            }
+
+            if(AutoGrad)
+            {
+                for (int i = 0; i < tensor.data.Length; i++)
+                {
+                    if (AutoGrad)
+                        result.gradients[i] = tensor.gradients[i];
+                }
+            }
+
+            return result;
+        }
         public static Tensor operator +(Tensor left, float right)
         {
-            Tensor result = left.Clone() as Tensor;
+            Tensor result = Identity(left);
 
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] += right;
             }
 
+            if(AutoGrad)
+            {
+                for (int i = 0; i < result.data.Length; i++)
+                {
+
+                    if (AutoGrad)
+                        result.gradients[i] = left.gradients[i];
+                }
+
+            }
+
             return result;
         }
         public static Tensor operator -(Tensor left, float right)
         {
-            Tensor result = left.Clone() as Tensor;
+            Tensor result = Identity(left);
 
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] -= right;
             }
 
+            if(AutoGrad)
+            {
+                for (int i = 0; i < result.data.Length; i++)
+                {
+                    if (AutoGrad)
+                        result.gradients[i] = left.gradients[i];
+                }
+            }
+
             return result;
         }
         public static Tensor operator *(Tensor left, float right)
         {
-            Tensor result = left.Clone() as Tensor;
+            Tensor result = Identity(left);
 
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] *= right;
             }
 
+            if(AutoGrad)
+            {
+                for (int i = 0; i < result.data.Length; i++)
+                {
+                    if (AutoGrad)
+                        result.gradients[i] = left.gradients[i] * right;
+
+                }
+            }
+
             return result;
         }
         public static Tensor operator /(Tensor left, float right)
         {
-            Tensor result = left.Clone() as Tensor;
+            Tensor result = Identity(left);
 
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] /= right;
+            }
+
+            if (AutoGrad)
+            {
+                for (int i = 0; i < result.data.Length; i++)
+                {
+                    if (AutoGrad)
+                        result.gradients[i] = left.gradients[i] / right;
+
+                }
             }
 
             return result;
@@ -250,6 +344,15 @@ namespace DeepUnity
                 result.data[i] = left.data[i] + right.data[i];
             }
 
+            if (AutoGrad)
+            {
+                for (int i = 0; i < result.data.Length; i++)
+                {
+                    if (AutoGrad)
+                        result.gradients[i] = left.gradients[i] + right.gradients[i];
+                }
+            }
+
             return result;
         }
         public static Tensor operator -(Tensor left, Tensor right)
@@ -259,6 +362,16 @@ namespace DeepUnity
             {
                 result.data[i] = left.data[i] - right.data[i];
             }
+
+            if (AutoGrad)
+            {
+                for (int i = 0; i < result.data.Length; i++)
+                {
+                    if (AutoGrad)
+                        result.gradients[i] = left.gradients[i] - right.gradients[i];
+                }
+            }
+
             return result;
         }
         public static Tensor operator *(Tensor left, Tensor right)
@@ -270,6 +383,17 @@ namespace DeepUnity
                 result.data[i] = left.data[i] * right.data[i];
             }
 
+
+            if (AutoGrad)
+            {
+                for (int i = 0; i < result.data.Length; i++)
+                {
+                    if (AutoGrad)
+                        result.gradients[i] = left.gradients[i] * right.data[i] + right.gradients[i] * right.data[i];
+                }
+            }
+
+
             return result;
         }
         public static Tensor operator /(Tensor left, Tensor right)
@@ -279,6 +403,15 @@ namespace DeepUnity
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] = left.data[i] / right.data[i];
+            }
+
+            if (AutoGrad)
+            {
+                for (int i = 0; i < result.data.Length; i++)
+                {
+                    if (AutoGrad)
+                        result.gradients[i] = (left.gradients[i] * right.data[i] - right.gradients[i] * left.data[i]) / (right.data[i] * right.data[i]);
+                }
             }
 
             return result;
@@ -316,6 +449,7 @@ namespace DeepUnity
 
                             lock (resultTensor)
                                 resultTensor[i, j, k] = sum;
+
                         }
                     }
                 });
@@ -329,6 +463,7 @@ namespace DeepUnity
                 rightBuffer.SetData(right.data);
 
 
+
                 MatMulCS.SetBuffer(0, "leftArr", leftBuffer);
                 MatMulCS.SetBuffer(0, "rightArr", rightBuffer);
                 MatMulCS.SetBuffer(0, "resultArr", resultBuffer);
@@ -336,22 +471,30 @@ namespace DeepUnity
                 MatMulCS.SetInt("leftHeightRightWidth", h1); // or w2 same thing
                 MatMulCS.SetInt("rightHeight", h2);
 
-                MatMulCS.Dispatch(0, 
-                                 (w1 + numthreads[0] - 1) / numthreads[0], 
-                                 (h2 + numthreads[1] - 1) / numthreads[1], 
+                MatMulCS.Dispatch(0,
+                                 (w1 + numthreads[0] - 1) / numthreads[0],
+                                 (h2 + numthreads[1] - 1) / numthreads[1],
                                  (batch + numthreads[2] - 1) / numthreads[2]);
 
                 // Get result[]
                 resultBuffer.GetData(resultTensor.data);
-                
+
                 leftBuffer.Dispose();
                 rightBuffer.Dispose();
                 resultBuffer.Dispose();
             }
 
+            if (AutoGrad)
+            {
+                for (int i = 0; i < resultTensor.gradients.Length; i++)
+                {
+                    resultTensor.gradients[i] = 1f;
+                }
+            }
+
             return resultTensor;
         }
-        public static Tensor MatTranspose(Tensor tensor)
+        public static Tensor TransposeMat(Tensor tensor)
         {
             var shape = tensor.shape;
             Tensor result = new Tensor(shape[1], shape[0], shape[2]);
@@ -370,46 +513,175 @@ namespace DeepUnity
 
             return result;
         }
-        public static Tensor[] Slice(Tensor tensor, int axis)
+        public static Tensor JoinSclsToVec(Tensor[] scalars)
         {
-            if (axis < 0 || axis >= tensor.shape.Length)
-                throw new ArgumentException("Invalid axis.");
-
-            int[] shape = tensor.shape;
-            int sliceSize = shape[axis];
-            int[] slicedShape = shape.Clone() as int[];
-            slicedShape[axis] = 1;
-
-            Tensor[] slices = new Tensor[sliceSize];
-
-            for (int i = 0; i < sliceSize; i++)
+            Tensor vector = Zeros(scalars.Length);
+            for (int i = 0; i < scalars.Length; i++)
             {
-                slices[i] = new Tensor(slicedShape);
+                vector.data[i] = scalars[i].data[0];
+            }
+            return vector;
 
-                int[] indices = Enumerable.Repeat(0, shape.Length).ToArray();
-                indices[axis] = i;
+        }
+        public static Tensor JoinVecsToMat(Tensor[] vectors)
+        {
+            Tensor matrix = new Tensor(vectors[0].shape[0], vectors.Length);
 
-                for (int j = 0; j < shape[0]; j++)
+            int veclength = vectors[0].shape[0];
+            int index = 0;
+            for (int i = 0; i < vectors.Length; i++)
+            {
+                for (int j = 0; j < veclength; j++)
                 {
-                    for (int k = 0; k < shape[1]; k++)
+                    matrix.data[index++] = vectors[i].data[j]; 
+                }
+            }
+
+            return matrix;
+        }
+        public static Tensor JoinMatsToCube(Tensor[] matrices)
+        {
+            int matRows = matrices[0].shape[0];
+            int matCols = matrices[0].shape[1];
+            int cubeDepth = matrices.Length;
+
+            Tensor cube = new Tensor(matRows, matCols, cubeDepth);
+
+            int index = 0;
+            for (int k = 0; k < cubeDepth; k++)
+            {
+                for (int i = 0; i < matRows; i++)
+                {
+                    for (int j = 0; j < matCols; j++)
                     {
-                        for (int l = 0; l < shape[2]; l++)
-                        {
-                            for (int m = 0; m < shape[3]; m++)
-                            {
-                                int[] slicedIndices = new int[] { j, k, l, m };
-                                slicedIndices[axis] = 0;
-                                slices[i][slicedIndices[0], slicedIndices[1], slicedIndices[2], slicedIndices[3]] = tensor[indices[0], indices[1], indices[2], indices[3]];
-                            }
-                        }
+                        cube.data[index++] = matrices[k].data[i * matCols + j];
                     }
                 }
             }
 
-            return slices;
+            return cube;
+        }
+        public static Tensor ExpandScl(Tensor scalar, int times)
+        {
+            Tensor expandedScalar = Tensor.Zeros(times);
+            float scalarValue = scalar.data[0];
+
+            for (int i = 0; i < times; i++)
+            {
+                expandedScalar.data[i] = scalarValue;
+            }
+
+            return expandedScalar;
+        }
+        public static Tensor ExpandVec(Tensor vector, int times)
+        {
+            int vecLength = vector.shape[0];
+            Tensor matrix = Zeros(vecLength, times);
+
+            int index = 0;
+            for (int k = 0; k < times; k++)
+            {
+                for (int i = 0; i < vecLength; i++)
+                {
+                    matrix.data[index++] = vector.data[i];
+                }
+            }
+
+            return matrix;
+        }
+        public static Tensor ExpandMat(Tensor matrix, int times)
+        {
+            int matRows = matrix.shape[0];
+            int matCols = matrix.shape[1];
+
+            Tensor expandedMatrix = Tensor.Zeros(matRows, matCols * times);
+
+            for (int i = 0; i < matRows; i++)
+            {
+                for (int j = 0; j < matCols; j++)
+                {
+                    float matrixValue = matrix.data[i * matCols + j];
+                    int index = i * (matCols * times) + j;
+                    for (int k = 0; k < times; k++)
+                    {
+                        expandedMatrix.data[index] = matrixValue;
+                        index += matCols;
+                    }
+                }
+            }
+
+            return expandedMatrix;
+        }
+        public static Tensor[] SliceVec(Tensor vector)
+        {
+            Tensor[] scalars = new Tensor[vector.shape[0]];
+            for (int i = 0; i < scalars.Length; i++)
+            {
+                scalars[i] = Tensor.Constant(vector.data[i]);
+            }
+            return scalars;
+        }
+        public static Tensor[] SliceMatrix(Tensor matrix)
+        {
+            Tensor[] vectors = new Tensor[matrix.shape[1]];
+
+            for (int j = 0; j < matrix.shape[1]; j++)
+            {
+                Tensor vector = new Tensor(matrix.shape[0]);
+
+                for (int i = 0; i < matrix.shape[0]; i++)
+                {
+                    vector.data[i] = matrix[i, j];
+                }
+
+                vectors[j] = vector;
+            }
+            return vectors;
+        }
+        public static Tensor[] SliceCube(Tensor cube)
+        {
+            Tensor[] matrices = new Tensor[cube.shape[2]];
+
+            for (int k = 0; k < cube.shape[2]; k++)
+            {
+                Tensor matrix = new Tensor(cube.shape[0], cube.shape[1]);
+
+                for (int j = 0; j < cube.shape[1]; j++)
+                {
+                    for (int i = 0; i < cube.shape[0]; i++)
+                    {
+                        matrix[i, j] = cube[i, j, k];
+                    }
+                }
+
+                matrices[k] = matrix;
+            }
+
+            return matrices;
         }
 
         // Math functions
+        public static Tensor Exp(Tensor tensor)
+        {
+            Tensor result = new Tensor(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Exp(tensor.data[i]);
+
+            }
+
+            if (AutoGrad)
+            {
+                for (int i = 0; i < result.data.Length; i++)
+                {
+                    if (AutoGrad)
+                        result.gradients[i] *= tensor.gradients[i] * MathF.Exp(tensor.data[i]);
+                }
+            }
+
+            return result;
+        }
         public static Tensor Pow(Tensor @base, float power)
         {
             Tensor result = new Tensor(@base.shape);
@@ -417,7 +689,18 @@ namespace DeepUnity
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] = MathF.Pow(@base.data[i], power);
+            
             }
+
+            if (AutoGrad)
+            {
+                for (int i = 0; i < result.data.Length; i++)
+                {
+                    if (AutoGrad)
+                        result.gradients[i] = @base.gradients[i] * MathF.Pow(@base.data[i], power - 1);
+                }
+            }
+
             return result;
         }
         public static Tensor Sqrt(Tensor @base)
@@ -428,8 +711,21 @@ namespace DeepUnity
             {
                 result.data[i] = MathF.Sqrt(@base.data[i]);
             }
+
+            if(AutoGrad)
+            {
+                for (int i = 0; i < result.data.Length; i++)
+                {
+                    if (AutoGrad)
+                        result.gradients[i] = @base.gradients[i] * 0.5f * MathF.Pow(@base.data[i], -0.5f);
+                }
+            }
+
             return result;
         }
+
+
+
         public static float Mean(Tensor tensor) => tensor.data.Average();
         public static float StdDev(Tensor tensor) => MathF.Sqrt(Var(tensor));
         public static float Var(Tensor tensor)
@@ -448,7 +744,7 @@ namespace DeepUnity
             return meanSquares - (mean * mean);
         }
 
-        // LINQ
+        // LINQ (Not applied in autograd system)
         public int Count(Func<float, bool> selector = null)
         {
             if (selector == null)
@@ -479,12 +775,18 @@ namespace DeepUnity
 
             return sum;
         }
-        public void ForEach(Func<float, float> action)
+        public void ForEach(Func<float, float> action, bool multithreaded = false)
         {
-            for (int i = 0; i < data.Length; i++)
-            {
-                data[i] = action(data[i]);
-            }
+            if(multithreaded)
+                System.Threading.Tasks.Parallel.For(0, data.Length, i =>
+                {
+                    data[i] = action(data[i]);
+                });
+            else
+                for (int i = 0; i < data.Length; i++)
+                {
+                    data[i] = action(data[i]);
+                }
         }
         public Tensor Select(Func<float, float> selector)
         {
@@ -594,19 +896,30 @@ namespace DeepUnity
             sb.Append("]");
 
             return sb.ToString();
-        }
-        public string ShapeToString { get => "[" + string.Join(", ", Shape) + "]"; }
+        } 
         public override int GetHashCode()
         {
             return base.GetHashCode();
         }
-        public object Clone()
-        {
-            var clone = new Tensor(shape);
-            Array.Copy(data, clone.data, data.Length);
-            return clone;
-        }
 
+
+        // Autograd system (in development)
+        private static bool AutoGrad = false;
+        private float[] gradients;
+       
+        private Tensor Gradients
+        {
+            get
+            {
+                Tensor grad = new Tensor(this.shape);
+                grad.data = this.gradients;
+                return grad;
+            }
+        }
+        private void ResetGradients()
+        {
+            gradients = new float[gradients.Length];
+        }
     }
 }
 

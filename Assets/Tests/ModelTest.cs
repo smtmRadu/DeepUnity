@@ -10,62 +10,118 @@ namespace kbRadu
     {
 
         public NeuralNetwork net;
-
+        public Device device;
         public int samples = 100;
 
-        private Tensor[] inputs;
-        private Tensor[] targets;
+        private Tensor[] trainInputs;
+        private Tensor[] trainLabels;
+
+        private Tensor[] testInputs;
+        private Tensor[] testLabels;
+
+        private Vector3[] trainPoints = null;
+        private Vector3[] testPoints = null;
+        public int drawScale = 10;
 
         private int epoch = 0;
+        private int i = 0;
         public void Start()
         {
             if(net == null)
             {
-                Dense fc1 = new Dense(1, 100, WeightInit.HE, Device.CPU);
-                Dense fc2 = new Dense(100, 100, WeightInit.HE, Device.CPU);
-                Dense fc3 = new Dense(100, 1, WeightInit.HE, Device.CPU);
                 net = new NeuralNetwork(
-                 fc1,
+                 new Dense(2, 64, device: device),
                  new ReLU(),
-                 fc2,
+                 new Dense(64, 64, device: device),
                  new ReLU(),
-                 fc3
+                 new Dense(64, 1, device: device)
                  );
                 net.Compile(new Adam(), "somenet");
             }
 
-            inputs = Enumerable.Range(0, samples).ToList().
-                          Select(x => Tensor.Constant(Utils.Random.Gaussian(0f, 0.5f, out _))).ToArray();
+            trainInputs = new Tensor[samples];
+            trainLabels = new Tensor[samples];
+            testInputs = new Tensor[samples];
+            testLabels = new Tensor[samples];
 
-            targets = inputs.Select(x => Tensor.Constant(MathF.Cos(x[0]))).ToArray();
+            trainPoints = new Vector3[samples];
+            testPoints = new Vector3[samples];
+
+            for (int i = 0; i < samples; i++)
+            {
+                float x = Utils.Random.Gaussian(0, 1f, out _);
+                float y = Utils.Random.Gaussian(0, 1f, out _);
+                trainInputs[i] = Tensor.Constant(new float[] { x, y });
+                trainLabels[i] = Tensor.Constant(MathF.Abs(x) +  MathF.Abs(y));
+
+                float xTest = Utils.Random.Gaussian(0, 1f, out _);
+                float yTest = Utils.Random.Gaussian(0, 1f, out _);
+                testInputs[i] = Tensor.Constant(new float[] { xTest, yTest });
+                testLabels[i] = Tensor.Constant(MathF.Abs(xTest) +  MathF.Abs(yTest));
+            }
 
         }
 
 
+        List<float> trainAcc = new List<float>();
+        List<float> testAcc = new List<float>();
 
         public void Update()
         {
-            List<float> accs = new List<float>();
-
-            for (int i = 0; i < samples; i++)
+            if(i == samples)
             {
-                var prediction = net.Forward(inputs[i]);
-                var loss = Loss.MSE(prediction, targets[i]);
 
-                net.Backward(loss);
-
-
-                // print("fc1g\n" + fc1.gWeights);
-                // print("fc21g\n" + fc2.gWeights);
-                // print("fc3g\n" + fc3.gWeights);
-                net.Step();
-
-                // Compute accuracy
-                float acc = Metrics.Accuracy(prediction, targets[i]);
-                accs.Add(acc);
+                Debug.Log($"Epoch {++epoch} | Train Accuracy {trainAcc.Average() * 100f}% | Test Accuracy {testAcc.Average() * 100f}%");
+                trainAcc.Clear();
+                testAcc.Clear();
+                i = 0;
+                return;
             }
 
-            Debug.Log($"Epoch {++epoch} | Accuracy {accs.Average() * 100}%");
+            var prediction = net.Forward(trainInputs[i]);
+            var loss = Loss.MSE(prediction, trainLabels[i]);
+            net.ZeroGrad();
+            net.Backward(loss);
+            net.Step();
+
+            // Compute accuracy
+            trainPoints[i] = new Vector3(trainInputs[i][0], prediction[0], trainInputs[i][1]); 
+            
+            float acc = Metrics.Accuracy(prediction, trainLabels[i]);
+            trainAcc.Add(acc);
+
+
+            var testPrediction = net.Forward(testInputs[i]);
+            // Compute test accuracy
+            testPoints[i] = new Vector3(testInputs[i][0], testPrediction[0], testInputs[i][1]);
+
+            float testacc = Metrics.Accuracy(testPrediction, testLabels[i]);
+            testAcc.Add(testacc);
+
+            i++;
+        }
+
+        public void OnDrawGizmos()
+        {
+            
+            if (trainPoints == null)
+                return;
+            try
+            {
+                Gizmos.color = Color.blue;
+                for (int i = 0; i < samples; i++)
+                {
+                    Gizmos.DrawCube(trainPoints[i] * drawScale, Vector3.one);
+                }
+
+                Gizmos.color = Color.red;
+                for (int i = 0; i < samples; i++)
+                {
+                    
+                    Gizmos.DrawSphere(testPoints[i] * drawScale, 1f);
+                }
+            }
+            catch { }
         }
     }
 }

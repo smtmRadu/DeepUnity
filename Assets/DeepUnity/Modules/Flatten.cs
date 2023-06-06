@@ -7,7 +7,7 @@ namespace DeepUnity
         {
             // input.shape = width x height x batch
             // output.shape = w*h x batch
-            InputCache = input.Clone() as Tensor;
+            InputCache = Tensor.Identity(input);
             var shape = input.Shape;
 
             Tensor output = Tensor.Zeros(shape[0] * shape[1], shape[3]);

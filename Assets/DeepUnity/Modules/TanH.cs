@@ -8,7 +8,7 @@ namespace DeepUnity
 
         public Tensor Forward(Tensor input)
         {
-            InputCache = input.Clone() as Tensor;
+            InputCache = Tensor.Identity(input);
             return InputCache.Select(x =>
             {
                 float e2x = Mathf.Exp(2 * x);

@@ -6,19 +6,16 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class NeuralNetwork : ScriptableObject, ISerializationCallbackReceiver, IModule 
+    public class NeuralNetwork : ScriptableObject, IModule, ISerializationCallbackReceiver
     {
         [SerializeField] private string Name;
         [SerializeField] private OptimizerWrapper serializedOptimizer;
         [SerializeField] private ModuleWrapper[] serializedModules;
         
-
-        public Tensor InputCache { get; set; }
         private IOptimizer Optimizer;
         private IModule[] Modules;
         
         
-
         public NeuralNetwork(params IModule[] modules) => this.Modules = modules;
         public void Compile(IOptimizer optimizer, string name)
         {
@@ -52,12 +49,14 @@ namespace DeepUnity
 
                 Dense dense = (Dense) module;
 
-                dense.gWeights.ForEach(x => 0f);
-                dense.gBiases.ForEach(x => 0f);
+                dense.g_W.ForEach(x => 0f);
+                dense.g_B.ForEach(x => 0f);
             }
         }
         public void Step()
         {
+            if (Optimizer == null)
+                throw new Exception("Cannot train an uncompiled network.");
             Optimizer.Step(Modules.Where(x => x.GetType() == typeof(Dense)).Select(x => (Dense)x).ToArray());
         }
   
