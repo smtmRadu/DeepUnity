@@ -17,6 +17,8 @@ namespace DeepUnity
         public SGD sgd;
         public RMSProp rmsprop;
         public Adadelta adadelta;
+        public Adagrad adagrad;
+        public AdaMax adamax;
         public OptimizerWrapper(IOptimizer optimizer)
         {
             // Initialize the fields based on the optimizer type
@@ -36,6 +38,14 @@ namespace DeepUnity
             else if(optimizer is Adadelta adadeltaOptimizer)
             {
                 adadelta = adadeltaOptimizer;
+            }
+            else if(optimizer is Adagrad adagradOptimizer)
+            {
+                adagrad = adagradOptimizer;
+            }
+            else if(optimizer is AdaMax adamaxOptimizer)
+            {
+                adamax = adamaxOptimizer;
             }
             else
                 throw new Exception("Unhandled optimizer type on wrapping.");
@@ -59,6 +69,14 @@ namespace DeepUnity
             else if(typeof(Adadelta).Name.Equals(optimizerWrapper.name))
             {
                 optimizer = optimizerWrapper.adadelta;
+            }
+            else if(typeof(Adagrad).Name.Equals(optimizerWrapper.name))
+            {
+                optimizer = optimizerWrapper.adagrad;
+            }
+            else if(typeof(AdaMax).Name.Equals(optimizerWrapper.name))
+            {
+                optimizer = optimizerWrapper.adamax;
             }
             else
                 throw new Exception("Unhandled optimizer type on unwrapping.");

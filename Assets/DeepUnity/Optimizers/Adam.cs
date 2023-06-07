@@ -15,7 +15,7 @@ namespace DeepUnity
         [SerializeField] private float weightDecay;
 
         
-        public Adam(float learningRate = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float weightDecay = 1e-5f)
+        public Adam(float learningRate = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float weightDecay = 0f)
         {
             this.t = 0;
             this.alpha = learningRate;

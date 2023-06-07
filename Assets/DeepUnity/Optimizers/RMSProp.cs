@@ -12,7 +12,7 @@ namespace DeepUnity
         [SerializeField] private float momentum;
         [SerializeField] private float weightDecay;
 
-        public RMSProp(float learningRate = 0.01f, float alpha = 0.99f, float momentum = 0.9f, float weightDecay = 1e-5f)
+        public RMSProp(float learningRate = 0.01f, float alpha = 0.99f, float momentum = 0.9f, float weightDecay = 0f)
         {
             this.learningRate = learningRate;
             this.alpha = alpha;

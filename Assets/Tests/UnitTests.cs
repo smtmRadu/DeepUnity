@@ -9,12 +9,13 @@ public class UnitTests : MonoBehaviour
     public int Runs = 10;
     public Device device;
     public int MatrixSize = 64;
-    public ComputeShader matmulCS;
+
     public void Start()
     {
-        BenchmarkFoward();
-        BenchmarkBackward();
-        BenchmarkStep();
+        //MatmulBenchmark();
+        //BenchmarkFoward();
+        //BenchmarkBackward();
+        //BenchmarkStep();
 
         // var t = Tensor.Random(10,10);
         // print(t);
@@ -100,20 +101,20 @@ public class UnitTests : MonoBehaviour
     }
     public void MatMulCompare()
     {
-        int tests = 10000;
+        int tests = 1000;
         int succes = 0;
 
         for (int test = 0; test < tests; test++)
         {
-            var w1 = UnityEngine.Random.Range(1, 4);
-            var mid = UnityEngine.Random.Range(1, 4);
-            var h2 = UnityEngine.Random.Range(1, 4);
+            var w1 = UnityEngine.Random.Range(1, 6);
+            var mid = UnityEngine.Random.Range(1, 6);
+            var h2 = UnityEngine.Random.Range(1, 6);
 
             var t1 = Tensor.Random(w1, mid);
             var t2 = Tensor.Random(mid, h2);
 
-            var m1 = Tensor.MatMul(t1, t2);
-            var m2 = Tensor.MatMul(t1, t2, matmulCS);
+            var m1 = Tensor.MatMul(t1, t2, Device.CPU);
+            var m2 = Tensor.MatMul(t1, t2, Device.GPU);
 
             if(m1.Equals(m2))
                 succes++;
@@ -138,28 +139,16 @@ public class UnitTests : MonoBehaviour
         DateTime start;
         TimeSpan end;
 
-         //   start = DateTime.Now;
-         //   
-         //   for (int i = 0; i < Runs; i++)
-         //   {
-         //       Tensor.MatMul(t1, t2);
-         //   }
-         //   
-         //   end = DateTime.Now - start;
-         //   
-         //   Debug.Log("Matmul on CPU: " + end);
-        
-        
         start = DateTime.Now;
 
         for (int i = 0; i < Runs; i++)
         {
-            Tensor.MatMul(t1, t2, matmulCS);
+            Tensor.MatMul(t1, t2, device);
         }
 
         end = DateTime.Now - start;
 
-        Debug.Log("Matmul on GPU: " + end);
+        Debug.Log($"Matmul on {device}: " + end);
     }
     public void TensorTest()
     {

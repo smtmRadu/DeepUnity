@@ -14,7 +14,7 @@ namespace DeepUnity
         [SerializeField] private float dampening;
         [SerializeField] private bool nesterov;
         [SerializeField] private bool maximize;
-        public SGD(float learningRate = 0.01f, float momentum = 0.9f, float weightDecay = 1e-5f, float dampening = 0f, bool nesterov = false, bool maximize = false)
+        public SGD(float learningRate = 0.01f, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false)
         {
             this.t = 0;
             this.learningRate = learningRate;

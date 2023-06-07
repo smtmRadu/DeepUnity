@@ -10,7 +10,7 @@ namespace DeepUnity
         [SerializeField] private float rho;
         [SerializeField] private float weightDecay;
 
-        public Adadelta(float learningRate = 1.0f, float rho = 0.9f, float weightDecay = 1e-5f)
+        public Adadelta(float learningRate = 1.0f, float rho = 0.9f, float weightDecay = 0f)
         {
             this.learningRate = learningRate;
             this.weightDecay = weightDecay;

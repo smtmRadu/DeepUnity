@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using UnityEditor;
 using UnityEngine;
 
 namespace DeepUnity
@@ -10,12 +11,22 @@ namespace DeepUnity
     [Serializable]
     public class Tensor : IEnumerable, IEquatable<Tensor>
     {
-        private readonly static int[] numthreads = new int[] { 32, 32, 1 };
+        private readonly static ComputeShader MatMulCS;
+        private readonly static int[] numthreads;
+
         [SerializeField] private int[] shape;
         [SerializeField] private float[] data;
-        
-       
+        private Tape tape = null;
+
         // Create
+        static Tensor()
+        {
+            numthreads = new int[] { 32, 32, 1 };
+
+            string csguid = AssetDatabase.FindAssets("MatMulCS")[0];
+            string cspath = AssetDatabase.GUIDToAssetPath(csguid);
+            MatMulCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+        }
         private Tensor(params int[] _shape)
         {
             if (_shape.Length > 4)
@@ -39,9 +50,13 @@ namespace DeepUnity
             {
                 this.shape[3] = _shape[3];
             }
-            data = new float[this.shape[0] * this.shape[1] * this.shape[2] * this.shape[3]];
 
-            gradients = AutoGrad ? new float[this.shape[0] * this.shape[1] * this.shape[2] * this.shape[3]] : null;
+            int size = shape[0] * shape[1] * shape[2] * shape[3];
+
+            if (size > 16_777_216) // hardcoded like this because 4096x4096 max allowed matrix, on 8192 it crashes
+                throw new Exception("Tensor dimensions is too large on initialization (cannot surpass 16,777,216 units).");
+
+            data = new float[size];
         }
         public static Tensor Identity(Tensor other)
         {
@@ -128,7 +143,7 @@ namespace DeepUnity
 
             for (int i = 0; i < tensor.data.Length; i++)
             {
-                tensor.data[i] = 1;
+                tensor.data[i] = 1f;
             }
 
             return tensor;
@@ -216,17 +231,7 @@ namespace DeepUnity
             for (int i = 0; i < tensor.data.Length; i++)
             {
                 result.data[i] = tensor.data[i];
-            }
-
-            if (AutoGrad)
-            {
-                for (int i = 0; i < tensor.data.Length; i++)
-                {
-                    if (AutoGrad)
-                        result.gradients[i] = tensor.gradients[i];
-                }            
-            }
-                
+            }             
                 
             return result;
         }
@@ -236,15 +241,6 @@ namespace DeepUnity
             for (int i = 0; i < tensor.data.Length; i++)
             {
                 result.data[i] = -tensor.data[i];
-            }
-
-            if(AutoGrad)
-            {
-                for (int i = 0; i < tensor.data.Length; i++)
-                {
-                    if (AutoGrad)
-                        result.gradients[i] = tensor.gradients[i];
-                }
             }
 
             return result;
@@ -258,17 +254,6 @@ namespace DeepUnity
                 result.data[i] += right;
             }
 
-            if(AutoGrad)
-            {
-                for (int i = 0; i < result.data.Length; i++)
-                {
-
-                    if (AutoGrad)
-                        result.gradients[i] = left.gradients[i];
-                }
-
-            }
-
             return result;
         }
         public static Tensor operator -(Tensor left, float right)
@@ -278,15 +263,6 @@ namespace DeepUnity
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] -= right;
-            }
-
-            if(AutoGrad)
-            {
-                for (int i = 0; i < result.data.Length; i++)
-                {
-                    if (AutoGrad)
-                        result.gradients[i] = left.gradients[i];
-                }
             }
 
             return result;
@@ -300,16 +276,6 @@ namespace DeepUnity
                 result.data[i] *= right;
             }
 
-            if(AutoGrad)
-            {
-                for (int i = 0; i < result.data.Length; i++)
-                {
-                    if (AutoGrad)
-                        result.gradients[i] = left.gradients[i] * right;
-
-                }
-            }
-
             return result;
         }
         public static Tensor operator /(Tensor left, float right)
@@ -319,16 +285,6 @@ namespace DeepUnity
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] /= right;
-            }
-
-            if (AutoGrad)
-            {
-                for (int i = 0; i < result.data.Length; i++)
-                {
-                    if (AutoGrad)
-                        result.gradients[i] = left.gradients[i] / right;
-
-                }
             }
 
             return result;
@@ -344,14 +300,6 @@ namespace DeepUnity
                 result.data[i] = left.data[i] + right.data[i];
             }
 
-            if (AutoGrad)
-            {
-                for (int i = 0; i < result.data.Length; i++)
-                {
-                    if (AutoGrad)
-                        result.gradients[i] = left.gradients[i] + right.gradients[i];
-                }
-            }
 
             return result;
         }
@@ -361,15 +309,6 @@ namespace DeepUnity
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] = left.data[i] - right.data[i];
-            }
-
-            if (AutoGrad)
-            {
-                for (int i = 0; i < result.data.Length; i++)
-                {
-                    if (AutoGrad)
-                        result.gradients[i] = left.gradients[i] - right.gradients[i];
-                }
             }
 
             return result;
@@ -384,16 +323,6 @@ namespace DeepUnity
             }
 
 
-            if (AutoGrad)
-            {
-                for (int i = 0; i < result.data.Length; i++)
-                {
-                    if (AutoGrad)
-                        result.gradients[i] = left.gradients[i] * right.data[i] + right.gradients[i] * right.data[i];
-                }
-            }
-
-
             return result;
         }
         public static Tensor operator /(Tensor left, Tensor right)
@@ -405,20 +334,11 @@ namespace DeepUnity
                 result.data[i] = left.data[i] / right.data[i];
             }
 
-            if (AutoGrad)
-            {
-                for (int i = 0; i < result.data.Length; i++)
-                {
-                    if (AutoGrad)
-                        result.gradients[i] = (left.gradients[i] * right.data[i] - right.gradients[i] * left.data[i]) / (right.data[i] * right.data[i]);
-                }
-            }
-
             return result;
         }
 
         // Refactoring operations
-        public static Tensor MatMul(Tensor left, Tensor right, ComputeShader MatMulCS = null)
+        public static Tensor MatMul(Tensor left, Tensor right, Device device)
         {
             int w1 = left.shape[0];
             int h1 = left.shape[1];
@@ -432,7 +352,7 @@ namespace DeepUnity
             Tensor resultTensor = new Tensor(w1, h2, batch);
 
 
-            if (MatMulCS == null)
+            if (device == Device.CPU)
             {
                 System.Threading.Tasks.Parallel.For(0, w1, i =>
                 {
@@ -447,8 +367,7 @@ namespace DeepUnity
                                 sum += left[i, l, k] * right[l, j, k];
                             }
 
-                            lock (resultTensor)
-                                resultTensor[i, j, k] = sum;
+                            resultTensor[i, j, k] = sum;
 
                         }
                     }
@@ -456,13 +375,12 @@ namespace DeepUnity
             }
             else
             {
-                ComputeBuffer leftBuffer = new ComputeBuffer(left.data.Length, sizeof(float));
-                ComputeBuffer rightBuffer = new ComputeBuffer(right.data.Length, sizeof(float));
-                ComputeBuffer resultBuffer = new ComputeBuffer(w1 * h2 * batch, sizeof(float));
+                ComputeBuffer leftBuffer = new ComputeBuffer(left.data.Length, 4);
+                ComputeBuffer rightBuffer = new ComputeBuffer(right.data.Length, 4);
+                ComputeBuffer resultBuffer = new ComputeBuffer(w1 * h2 * batch, 4);
+
                 leftBuffer.SetData(left.data);
                 rightBuffer.SetData(right.data);
-
-
 
                 MatMulCS.SetBuffer(0, "leftArr", leftBuffer);
                 MatMulCS.SetBuffer(0, "rightArr", rightBuffer);
@@ -476,7 +394,6 @@ namespace DeepUnity
                                  (h2 + numthreads[1] - 1) / numthreads[1],
                                  (batch + numthreads[2] - 1) / numthreads[2]);
 
-                // Get result[]
                 resultBuffer.GetData(resultTensor.data);
 
                 leftBuffer.Dispose();
@@ -484,13 +401,6 @@ namespace DeepUnity
                 resultBuffer.Dispose();
             }
 
-            if (AutoGrad)
-            {
-                for (int i = 0; i < resultTensor.gradients.Length; i++)
-                {
-                    resultTensor.gradients[i] = 1f;
-                }
-            }
 
             return resultTensor;
         }
@@ -671,15 +581,6 @@ namespace DeepUnity
 
             }
 
-            if (AutoGrad)
-            {
-                for (int i = 0; i < result.data.Length; i++)
-                {
-                    if (AutoGrad)
-                        result.gradients[i] *= tensor.gradients[i] * MathF.Exp(tensor.data[i]);
-                }
-            }
-
             return result;
         }
         public static Tensor Pow(Tensor @base, float power)
@@ -690,15 +591,6 @@ namespace DeepUnity
             {
                 result.data[i] = MathF.Pow(@base.data[i], power);
             
-            }
-
-            if (AutoGrad)
-            {
-                for (int i = 0; i < result.data.Length; i++)
-                {
-                    if (AutoGrad)
-                        result.gradients[i] = @base.gradients[i] * MathF.Pow(@base.data[i], power - 1);
-                }
             }
 
             return result;
@@ -712,19 +604,41 @@ namespace DeepUnity
                 result.data[i] = MathF.Sqrt(@base.data[i]);
             }
 
-            if(AutoGrad)
+            return result;
+        }
+        public static Tensor Abs(Tensor tensor)
+        {
+            Tensor result = new Tensor(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
             {
-                for (int i = 0; i < result.data.Length; i++)
-                {
-                    if (AutoGrad)
-                        result.gradients[i] = @base.gradients[i] * 0.5f * MathF.Pow(@base.data[i], -0.5f);
-                }
+                result.data[i] = MathF.Abs(tensor.data[i]);
             }
 
             return result;
         }
+        public static Tensor Max(Tensor left, Tensor right)
+        {
+            Tensor result = new Tensor(left.shape);
 
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Max(left.data[i], right.data[i]);
+            }
 
+            return result;
+        }
+        public static Tensor Min(Tensor left, Tensor right)
+        {
+            Tensor result = new Tensor(left.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Min(left.data[i], right.data[i]);
+            }
+
+            return result;
+        }
 
         public static float Mean(Tensor tensor) => tensor.data.Average();
         public static float StdDev(Tensor tensor) => MathF.Sqrt(Var(tensor));
@@ -743,6 +657,7 @@ namespace DeepUnity
             float meanSquares = sumSqr / tensor.data.Length;
             return meanSquares - (mean * mean);
         }
+
 
         // LINQ (Not applied in autograd system)
         public int Count(Func<float, bool> selector = null)
@@ -902,44 +817,6 @@ namespace DeepUnity
             return base.GetHashCode();
         }
 
-
-        // Autograd system (in development)
-        private static bool AutoGrad = false;
-        private float[] gradients;
-       
-        private Tensor Gradients
-        {
-            get
-            {
-                Tensor grad = new Tensor(this.shape);
-                grad.data = this.gradients;
-                return grad;
-            }
-        }
-        private void ResetGradients()
-        {
-            gradients = new float[gradients.Length];
-        }
+        
     }
 }
-
-
-// Matmul benchmark on generic Tensor<T>
-/*
- * 
- * Matmul benchmark on base Tensor (float type)
- * 
- * (1024, 1024) * (1024, 1024)  X  1 Times
- * CPU: 03.28s | GPU: 00.12s
- * 
- * (32, 32) * (32, 32)          X  1K Times
- * CPU: 01.05s | GPU: 00.53s   
- * 
- * (8, 8) * (8, 8)              X  10K Times
- * CPU: 00.38s | GPU: 02.79
- * 
- * (4096, 4096) * (4096, 4096)  X 100 Times (uses 50-95% of GPU)
- * GPU: 01:01.63 (above 1 minute)
- * Conclusion: On SMALL tensors the CPU is faster. 
- *             On MEDIUM and LARGE tensor the GPU is faster.
- *///
