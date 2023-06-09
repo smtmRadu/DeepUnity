@@ -1,34 +1,28 @@
+using System;
 using UnityEngine;
 
 namespace DeepUnity
 {
-    public class TanH : IModule
+    [Serializable]
+    public class TanH : ActivationBase, IModule
     {
-        public Tensor InputCache { get; set; }
-
-        public Tensor Forward(Tensor input)
+        protected override void Activation(Tensor x)
         {
-            InputCache = Tensor.Identity(input);
-            return InputCache.Select(x =>
+            x.ForEach(x =>
             {
-                float e2x = Mathf.Exp(2 * x);
-                float tanh = (e2x - 1) / (e2x + 1);
+                float e2x = Mathf.Exp(2f * x);
+                float tanh = (e2x - 1f) / (e2x + 1f);
                 return tanh;
             });
-
         }
-
-        public Tensor Backward(Tensor loss)
+        protected override void Derivative(Tensor x)
         {
-            var dTanHdInput = InputCache.Select(x =>
+            x.ForEach(x =>
             {
-                float e2x = Mathf.Exp(2 * x);
-                float tanh = (e2x - 1) / (e2x + 1);
-                return 1 - tanh * tanh;
+                float e2x = Mathf.Exp(2f * x);
+                float tanh = (e2x - 1f) / (e2x + 1f);
+                return 1f - tanh * tanh;
             });
-
-            var dCostdInput = dTanHdInput * loss;
-            return dCostdInput;
         }
     }
 

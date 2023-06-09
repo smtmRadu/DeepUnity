@@ -3,56 +3,115 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    // does not work idk why
     // https://pytorch.org/docs/stable/generated/torch.optim.RMSprop.html
     [Serializable]
     public sealed class RMSProp : IOptimizer
     {
         [SerializeField] private float learningRate;
-        [SerializeField] private float alpha;
+        [SerializeField] private float alpha; //smoothing constant
         [SerializeField] private float momentum;
+        [SerializeField] private bool centered;
         [SerializeField] private float weightDecay;
 
-        public RMSProp(float learningRate = 0.01f, float alpha = 0.99f, float momentum = 0.9f, float weightDecay = 0f)
+        // square average 
+        [NonSerialized] public Tensor[] v_W;
+        [NonSerialized] public Tensor[] v_B;
+
+        // buffer
+        [NonSerialized] public Tensor[] b_W;
+        [NonSerialized] public Tensor[] b_B;
+
+        // average gradient
+        [NonSerialized] public Tensor[] gAve_W;
+        [NonSerialized] public Tensor[] gAve_B;
+
+
+        public RMSProp(float lr = 0.01f, float alpha = 0.99f, float momentum = 0.9f, float weightDecay = 0f, bool centered = false)
         {
-            this.learningRate = learningRate;
+            throw new Exception("RMSProp not working...");
+            this.learningRate = lr;
             this.alpha = alpha;
             this.momentum = momentum;
             this.weightDecay = weightDecay;
+            this.centered = centered;
         }
 
-        public void Step(Dense[] layers)
+        public void Initialize(IModule[] modules)
         {
-            int channels = layers[0].InputCache.Shape[1];
+            b_W = new Tensor[modules.Length];
+            b_B = new Tensor[modules.Length];
 
-            
-            System.Threading.Tasks.Parallel.ForEach(layers, L =>
+            v_W = new Tensor[modules.Length];
+            v_B = new Tensor[modules.Length];
+
+            if(centered)
             {
-                if (weightDecay != 0)
+                gAve_W = new Tensor[modules.Length];
+                gAve_B = new Tensor[modules.Length];
+            }
+
+            for (int i = 0; i < modules.Length; i++)
+            {
+                if (modules[i] is Dense D)
                 {
-                    L.g_W += L.t_W * weightDecay;
-                    // we do not apply decay on biases
+                    int inputs = D.param_W.Shape[1];
+                    int outputs = D.param_W.Shape[0];
+
+                    b_W[i] = Tensor.Zeros(outputs, inputs);
+                    b_B[i] = Tensor.Zeros(outputs);
+
+                    v_W[i] = Tensor.Zeros(outputs, inputs);
+                    v_B[i] = Tensor.Zeros(outputs);
+
+                    if(centered)
+                    {
+                        gAve_W[i] = Tensor.Zeros(outputs, inputs);
+                        gAve_B[i] = Tensor.Zeros(outputs);
+                    }
                 }
+            }
+        }
 
-                L.v_W = alpha * L.v_W + (1f - alpha) * Tensor.Pow(L.g_W, 2);
-                L.v_B = alpha * L.v_B + (1f - alpha) * Tensor.Pow(L.g_B, 2);
-
-                // centered?... let's say pass
-
-                if(momentum > 0)
+        public void Step(IModule[] modules)
+        {
+            System.Threading.Tasks.Parallel.For(0, modules.Length, i =>
+            {
+                if (modules[i] is Dense D)
                 {
-                    // In RMSProp i use v as momentums, and m as buffers. (m and v are from dense)
-                    L.m_W = momentum * L.m_W + L.g_W / (Tensor.Sqrt(L.v_W) + Utils.EPSILON);
-                    L.m_B = momentum * L.m_B + L.g_B / (Tensor.Sqrt(L.v_B) + Utils.EPSILON);
+                    if (weightDecay != 0)
+                        D.grad_W += D.param_W * weightDecay;
 
-                    L.t_W = L.t_W - learningRate * L.m_W;
-                    L.t_B = L.t_B - learningRate * L.m_B;
-                }
-                else
-                {
-                    L.t_W = L.t_W - learningRate * L.g_W / (Tensor.Sqrt(L.v_W) + Utils.EPSILON);
-                    L.t_B = L.t_B - learningRate * L.g_B / (Tensor.Sqrt(L.v_B) + Utils.EPSILON);
-                }
 
+                    v_W[i] = alpha * v_W[i] + (1f - alpha) * Tensor.Pow(D.grad_W, 2);
+                    v_B[i] = alpha * v_B[i] + (1f - alpha) * Tensor.Pow(D.grad_B, 2);
+
+                    var vBar_W = Tensor.Identity(v_W[i]);
+                    var vBar_B = Tensor.Identity(v_B[i]);
+
+                    if(centered)
+                    {
+                        gAve_W[i] = gAve_W[i] * alpha + (1f - alpha) * D.grad_W;
+                        gAve_B[i] = gAve_B[i] * alpha + (1f - alpha) * D.grad_B;
+
+                        vBar_W = vBar_W - Tensor.Pow(gAve_W[i], 2f);
+                        vBar_B = vBar_B - Tensor.Pow(gAve_B[i], 2f);
+                    }
+
+                    if (momentum > 0f)
+                    {
+                        b_W[i] = momentum * b_W[i] + D.grad_W / (Tensor.Sqrt(vBar_W) + Utils.EPSILON);
+                        b_B[i] = momentum * b_B[i] + D.grad_B / (Tensor.Sqrt(vBar_B) + Utils.EPSILON);
+
+                        D.param_W = D.param_W - learningRate * b_W[i];
+                        D.param_B = D.param_B - learningRate * b_B[i];
+                    }
+                    else
+                    {
+                        D.param_W = D.param_W - learningRate * D.grad_W / (Tensor.Sqrt(vBar_W) + Utils.EPSILON);
+                        D.param_B = D.param_B - learningRate * D.grad_B / (Tensor.Sqrt(vBar_B) + Utils.EPSILON);
+                    }
+                }
             });
         }
     }

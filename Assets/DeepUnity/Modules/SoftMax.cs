@@ -1,12 +1,9 @@
 using System;
-using Unity.VisualScripting;
-
 namespace DeepUnity
 {
+    [Serializable]
     public class SoftMax : ActivationBase, IModule
     {
-        protected override Tensor InputCache { get; set; }
-
         protected override void Activation(Tensor x)
         {
             for (int j = 0; j < x.Shape[1]; j++)
@@ -43,18 +40,6 @@ namespace DeepUnity
                     x[i, j] = (exp * exp_sum - exp * exp) / (exp_sum * exp_sum);
                 }
             }
-        }
-
-        public Tensor Forward(Tensor input)
-        {
-            InputCache = Tensor.Identity(input);
-            Activation(input);
-            return input;
-        }
-        public Tensor Backward(Tensor loss)
-        {
-            Derivative(InputCache);
-            return InputCache * loss;
         }
     }
 

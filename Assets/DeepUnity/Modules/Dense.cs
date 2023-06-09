@@ -1,16 +1,15 @@
 using UnityEngine;
 using System;
-using UnityEditor;
 
 namespace DeepUnity
 {
-    public enum WeightInit
+    public enum InitType
     {
+        Default,
         HE,
         Xavier,
         Normal,
-        Random,
-        Ones
+        Uniform,
     }
     public enum Device
     {
@@ -21,59 +20,48 @@ namespace DeepUnity
     [Serializable]
     public class Dense : IModule, ISerializationCallbackReceiver
     {
-        public Tensor InputCache { get; set; }
+        private Tensor Input_Cache { get; set; }
         [SerializeField] public Device device;
         
         // Parameters (theta)
-        [SerializeField] public Tensor t_W;
-        [SerializeField] public Tensor t_B;
+        [SerializeField] public Tensor param_W;
+        [SerializeField] public Tensor param_B;
 
         // Gradients (g)
-        [NonSerialized] public Tensor g_W;
-        [NonSerialized] public Tensor g_B;
+        [NonSerialized] public Tensor grad_W;
+        [NonSerialized] public Tensor grad_B;
+       
 
-        // 1st momentum buffer
-        [NonSerialized] public Tensor m_W;
-        [NonSerialized] public Tensor m_B;
-
-        // 2nd momentum buffer 
-        [NonSerialized] public Tensor v_W;
-        [NonSerialized] public Tensor v_B;
-
-        public Dense(int inputs, int outputs, WeightInit init = WeightInit.HE, Device device = Device.CPU)
+        public Dense(int in_features, int out_features, InitType init = InitType.Default, Device device = Device.CPU)
         {
             this.device = device;
 
-            this.t_W = Tensor.Zeros(outputs, inputs);
-            this.t_B = Tensor.Zeros(outputs);
+            this.param_W = Tensor.Zeros(out_features, in_features);
+            this.param_B = Tensor.Zeros(out_features);
 
-            this.g_W = Tensor.Zeros(outputs, inputs);
-            this.g_B = Tensor.Zeros(outputs);
-
-            this.m_W = Tensor.Zeros(outputs, inputs);
-            this.m_B = Tensor.Zeros(outputs);
-
-            this.v_W = Tensor.Zeros(outputs, inputs);
-            this.v_B = Tensor.Zeros(outputs);
+            this.grad_W = Tensor.Zeros(out_features, in_features);
+            this.grad_B = Tensor.Zeros(out_features);
 
             switch (init)
             {
-                case WeightInit.HE:
-                    float sigmaHE = MathF.Sqrt(2f / t_W.Shape[1]); //fanIn
-                    t_W.ForEach(x => Utils.Random.Gaussian(0f, sigmaHE, out _));
+                case InitType.Default:
+                    float sqrtK = MathF.Sqrt(1f / in_features);
+                    param_W.ForEach(x => Utils.Random.Range(-sqrtK, sqrtK));
+                    param_B.ForEach(x => Utils.Random.Range(-sqrtK, sqrtK));
                     break;
-                case WeightInit.Xavier:
-                    float sigmaXA = MathF.Sqrt(2f / (t_W.Shape[0] + t_W.Shape[1])); // fanIn + fanOut
-                    t_W.ForEach(x => Utils.Random.Gaussian(0f, sigmaXA, out _));
+                case InitType.HE:
+                    float sigmaHE = MathF.Sqrt(2f / param_W.Shape[1]); //fanIn
+                    param_W.ForEach(x => Utils.Random.Gaussian(0f, sigmaHE));
                     break;
-                case WeightInit.Normal:
-                    t_W.ForEach(x => Utils.Random.Gaussian(0f, 1f, out _));
+                case InitType.Xavier:
+                    float sigmaXA = MathF.Sqrt(2f / (param_W.Shape[0] + param_W.Shape[1])); // fanIn + fanOut
+                    param_W.ForEach(x => Utils.Random.Gaussian(0f, sigmaXA));
                     break;
-                case WeightInit.Random:
-                    t_W.ForEach(x => Utils.Random.Value * 2f - 1f);
+                case InitType.Normal:
+                    param_W.ForEach(x => Utils.Random.Gaussian());
                     break;
-                case WeightInit.Ones:
-                    t_W.ForEach(x => 1f);
+                case InitType.Uniform:
+                    param_W.ForEach(x => Utils.Random.Value * 2f - 1f); // [-1, 1]
                     break;
                 default:
                     throw new Exception("Unhandled initialization type!");
@@ -84,12 +72,12 @@ namespace DeepUnity
         {
             // for faster improvement on GPU, set for forward only on CPU!
             // it seems like forward is always faster with CPU rather than GPU for matrices < 1024 size. Maybe on large scales it must be changed again on GPU.
-            InputCache = Tensor.Identity(input);
-            return Tensor.MatMul(t_W, input, device) + Tensor.ExpandVec(t_B, input.Shape[1]);
+            Input_Cache = Tensor.Identity(input);
+            return Tensor.MatMul(param_W, input, device) + Tensor.Expand(param_B, axis: 1, times: input.Shape[1]);
         }
         public Tensor Backward(Tensor loss)
         {
-            var transposedInput = Tensor.TransposeMat(InputCache);
+            var transposedInput = Tensor.TransposeMat(Input_Cache);
             Tensor gradW = Tensor.MatMul(loss, transposedInput, device);
             Tensor gradB = Tensor.MatMul(loss, Tensor.Ones(transposedInput.Shape), device);
 
@@ -97,15 +85,15 @@ namespace DeepUnity
             float batch = loss.Shape[1];
 
             // Update the gradients
-            g_W += gradW / batch;
-            g_B += gradB / batch;
+            grad_W += gradW / batch;
+            grad_B += gradB / batch;
 
             // Backpropagate the loss
             // Tensor dLossdActivation = Tensor.MatMul(Tensor.MatTranspose(t_W), loss, MatMulCS);
             // return dLossdActivation;
 
             // A bit faster back with double tranposition on loss (may work better on large dense)
-            Tensor dLossActivation = Tensor.MatMul(Tensor.TransposeMat(loss), t_W, device);
+            Tensor dLossActivation = Tensor.MatMul(Tensor.TransposeMat(loss), param_W, device);
             return Tensor.TransposeMat(dLossActivation);
         }
 
@@ -116,20 +104,14 @@ namespace DeepUnity
         public void OnAfterDeserialize()
         {
             // This function is actually having 2 workers on serialization, and one on them is called when weights.shape.length == 0.
-            if (t_W.Shape.Length == 0)
+            if (param_W.Shape.Length == 0)
                 return;
 
-            int outputs = t_W.Shape[0];
-            int inputs = t_W.Shape[1];
+            int outputs = param_W.Shape[0];
+            int inputs = param_W.Shape[1];
 
-            this.g_W = Tensor.Zeros(outputs, inputs);
-            this.g_B = Tensor.Zeros(outputs);
-
-            this.m_W = Tensor.Zeros(outputs, inputs);
-            this.m_B = Tensor.Zeros(outputs);
-
-            this.v_W = Tensor.Zeros(outputs, inputs);
-            this.v_B = Tensor.Zeros(outputs);
+            this.grad_W = Tensor.Zeros(outputs, inputs);
+            this.grad_B = Tensor.Zeros(outputs);
         }
     }
 

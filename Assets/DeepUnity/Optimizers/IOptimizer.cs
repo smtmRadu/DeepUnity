@@ -5,8 +5,42 @@ namespace DeepUnity
 {
     public interface IOptimizer
     {
-        public void Step(Dense[] layers);
+        /// For now this generic method is deprecated.    
+        private static IOptimizer Create(OptimizerType optimizerType)
+        {
+            switch(optimizerType)
+            {
+                case OptimizerType.Adam:
+                    return new Adam();
+                case OptimizerType.RMSProp:
+                    return new RMSProp();
+                case OptimizerType.SGD:
+                    return new SGD();
+                case OptimizerType.AdaMax:
+                    return new AdaMax();
+                case OptimizerType.Adagrad:
+                    return new Adagrad();
+                case OptimizerType.Adadelta:
+                    return new Adadelta();
+                default:
+                    throw new Exception("Optimizer type not handled");
+            }
+        }
+        private enum OptimizerType
+        {
+            Adam,
+            AdaMax,
+            SGD,
+            Adagrad,
+            Adadelta,
+            RMSProp,
+        }
+
+
+        public void Initialize(IModule[] modules);
+        public void Step(IModule[] modules);
     }
+
 
     [Serializable]
     public class OptimizerWrapper
@@ -22,6 +56,7 @@ namespace DeepUnity
         public OptimizerWrapper(IOptimizer optimizer)
         {
             // Initialize the fields based on the optimizer type
+
             name = optimizer.GetType().Name;
             if (optimizer is Adam adamOptimizer)
             {
@@ -50,7 +85,7 @@ namespace DeepUnity
             else
                 throw new Exception("Unhandled optimizer type on wrapping.");
         }
-        public static IOptimizer Get(OptimizerWrapper optimizerWrapper)
+        public static IOptimizer Unwrap(OptimizerWrapper optimizerWrapper)
         {
             IOptimizer optimizer = null;
 

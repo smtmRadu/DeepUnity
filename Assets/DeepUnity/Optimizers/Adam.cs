@@ -9,63 +9,113 @@ namespace DeepUnity
     public class Adam : IOptimizer
     {
         [SerializeField] private int t;
-        [SerializeField] private float alpha;
+        [SerializeField] private float learningRate;
         [SerializeField] private float beta1;
         [SerializeField] private float beta2;
         [SerializeField] private float weightDecay;
 
-        
-        public Adam(float learningRate = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float weightDecay = 0f)
+        // 1st momentum buffer
+        [NonSerialized] public Tensor[] m_W;
+        [NonSerialized] public Tensor[] m_B;
+
+        // 2nd momentum buffer 
+        [NonSerialized] public Tensor[] v_W;
+        [NonSerialized] public Tensor[] v_B;
+
+
+        public Adam(float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float weightDecay = 0f)
         {
             this.t = 0;
-            this.alpha = learningRate;
+            this.learningRate = lr;
             this.beta1 = beta1;
             this.beta2 = beta2;
             this.weightDecay = weightDecay;
         }
+        public void Initialize(IModule[] modules)
+        {
+            m_W = new Tensor[modules.Length];
+            m_B = new Tensor[modules.Length];
 
-        public void Step(Dense[] layers)
+            v_W = new Tensor[modules.Length];
+            v_B = new Tensor[modules.Length];
+
+            for (int i = 0; i < modules.Length; i++)
+            {
+                if (modules[i] is Dense D)
+                {
+                    int inputs = D.param_W.Shape[1];
+                    int outputs = D.param_W.Shape[0];
+
+                    m_W[i] = Tensor.Zeros(outputs, inputs);
+                    m_B[i] = Tensor.Zeros(outputs);
+
+                    v_W[i] = Tensor.Zeros(outputs, inputs);
+                    v_B[i] = Tensor.Zeros(outputs);
+
+                }
+                else if (modules[i] is BatchNorm B)
+                {
+                    int inputs = B.beta.Shape[0];
+
+                    m_W[i] = Tensor.Zeros(inputs); // W is for gamma
+                    m_B[i] = Tensor.Zeros(inputs); // B is for beta
+
+                    v_W[i] = Tensor.Zeros(inputs);
+                    v_B[i] = Tensor.Zeros(inputs);
+                }
+
+            }
+        }
+        
+        public void Step(IModule[] modules)
         {
             t++;
 
-            System.Threading.Tasks.Parallel.ForEach(layers, L =>
+            System.Threading.Tasks.Parallel.For(0, modules.Length, i =>
             {
-                Tensor mHat;
-                Tensor vHat;
+                if (modules[i] is Dense D)
+                {
+                    // keep W and B separately just to use this 2 variables for both cases
+                    Tensor mHat;
+                    Tensor vHat;
 
-                // Update biased first momentum estimate
-                L.m_W = beta1 * L.m_W + (1f - beta1) * L.g_W;
+                    // Update biased first momentum estimate
+                    m_W[i] = beta1 * m_W[i] + (1f - beta1) * D.grad_W;
 
-                // Update biased second raw momentum estimate
-                L.v_W = beta2 * L.v_W + (1f - beta2) * Tensor.Pow(L.g_W, 2f);
+                    // Update biased second raw momentum estimate
+                    v_W[i] = beta2 * v_W[i] + (1f - beta2) * Tensor.Pow(D.grad_W, 2f);
 
-                // Compute bias-corrected first momentum estimate
-                mHat = L.m_W / (1f - MathF.Pow(beta1, t));
+                    // Compute bias-corrected first momentum estimate
+                    mHat = m_W[i] / (1f - MathF.Pow(beta1, t));
 
-                // Compute bias-corrected second raw momentum estimate
-                vHat = L.v_W / (1f - MathF.Pow(beta2, t));
+                    // Compute bias-corrected second raw momentum estimate
+                    vHat = v_W[i] / (1f - MathF.Pow(beta2, t));
 
-                // Update parameters
-                L.t_W = L.t_W * (1f - weightDecay) - alpha * mHat / (Tensor.Sqrt(vHat) + Utils.EPSILON);
-
-
+                    // Update parameters
+                    D.param_W = D.param_W * (1f - weightDecay) - learningRate * mHat / (Tensor.Sqrt(vHat) + Utils.EPSILON);
 
 
-                // Update biased first momentum estimate
-                L.m_B = beta1 * L.m_B + (1f - beta1) * L.g_B;
 
-                // Update biased second raw momentum estimate
-                L.v_B = beta2 * L.v_B + (1f - beta2) * Tensor.Pow(L.g_B, 2f);
 
-                // Compute bias-corrected first momentum estimate
-                mHat = L.m_B / (1f - MathF.Pow(beta1, t));
+                    // Update biased first momentum estimate
+                    m_B[i] = beta1 * m_B[i] + (1f - beta1) * D.grad_B;
 
-                // Compute bias-corrected second raw momentum estimate
-                vHat = L.v_B / (1f - MathF.Pow(beta2, t));
+                    // Update biased second raw momentum estimate
+                    v_B[i] = beta2 * v_B[i] + (1f - beta2) * Tensor.Pow(D.grad_B, 2f);
 
-                // Update parameters 
-                L.t_B = L.t_B - alpha * mHat / (Tensor.Sqrt(vHat) + Utils.EPSILON);
+                    // Compute bias-corrected first momentum estimate
+                    mHat = m_B[i] / (1f - MathF.Pow(beta1, t));
 
+                    // Compute bias-corrected second raw momentum estimate
+                    vHat = v_B[i] / (1f - MathF.Pow(beta2, t));
+
+                    // Update parameters 
+                    D.param_B = D.param_B - learningRate * mHat / (Tensor.Sqrt(vHat) + Utils.EPSILON);
+                }
+                else if (modules[i] is BatchNorm B)
+                {
+
+                }
             });
 
         }

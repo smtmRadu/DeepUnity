@@ -49,13 +49,13 @@ namespace kbRadu
 
             for (int i = 0; i < samples; i++)
             {
-                float x = Utils.Random.Gaussian(0, 1f, out _);
-                float y = Utils.Random.Gaussian(0, 1f, out _);
+                float x = Utils.Random.Gaussian();
+                float y = Utils.Random.Gaussian();
                 trainInputs[i] = Tensor.Constant(new float[] { x, y });
                 trainLabels[i] = Tensor.Constant(MathF.Abs(x) +  MathF.Abs(y));
 
-                float xTest = Utils.Random.Gaussian(0, 1f, out _);
-                float yTest = Utils.Random.Gaussian(0, 1f, out _);
+                float xTest = Utils.Random.Gaussian();
+                float yTest = Utils.Random.Gaussian();
                 testInputs[i] = Tensor.Constant(new float[] { xTest, yTest });
                 testLabels[i] = Tensor.Constant(MathF.Abs(xTest) +  MathF.Abs(yTest));
             }
@@ -80,6 +80,7 @@ namespace kbRadu
 
             var prediction = net.Forward(trainInputs[i]);
             var loss = Loss.MSE(prediction, trainLabels[i]);
+
             net.ZeroGrad();
             net.Backward(loss);
             net.Step();

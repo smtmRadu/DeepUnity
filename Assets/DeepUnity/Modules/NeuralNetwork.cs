@@ -21,6 +21,7 @@ namespace DeepUnity
         {
             this.Optimizer = optimizer;
             this.Name = name;
+            Optimizer.Initialize(Modules);
         }
 
         public Tensor Forward(Tensor input)
@@ -44,20 +45,24 @@ namespace DeepUnity
         {
             foreach (var module in Modules)
             {
-                if (module.GetType() != typeof(Dense))
-                    continue;
-
-                Dense dense = (Dense) module;
-
-                dense.g_W.ForEach(x => 0f);
-                dense.g_B.ForEach(x => 0f);
+                if(module is Dense D)
+                {
+                    D.grad_W.ForEach(x => 0f);
+                    D.grad_B.ForEach(x => 0f);
+                }      
+                else if(module is BatchNorm B)
+                {
+                    B.grad_Gamma.ForEach(x => 0f);
+                    B.grad_Beta.ForEach(x => 0f);
+                }
             }
         }
         public void Step()
         {
             if (Optimizer == null)
                 throw new Exception("Cannot train an uncompiled network.");
-            Optimizer.Step(Modules.Where(x => x.GetType() == typeof(Dense)).Select(x => (Dense)x).ToArray());
+
+            Optimizer.Step(Modules);
         }
   
         public void Save()
@@ -80,7 +85,8 @@ namespace DeepUnity
         public void OnAfterDeserialize()
         {
             Modules = serializedModules.Select(x => ModuleWrapper.Get(x)).ToArray();
-            Optimizer = OptimizerWrapper.Get(serializedOptimizer);
+            Optimizer = OptimizerWrapper.Unwrap(serializedOptimizer);
+            Optimizer.Initialize(Modules);
 
         }
     }

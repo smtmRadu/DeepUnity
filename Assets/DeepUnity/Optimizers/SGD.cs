@@ -14,10 +14,15 @@ namespace DeepUnity
         [SerializeField] private float dampening;
         [SerializeField] private bool nesterov;
         [SerializeField] private bool maximize;
-        public SGD(float learningRate = 0.01f, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false)
+
+        // Momentum buffer
+        [NonSerialized] public Tensor[] m_W;
+        [NonSerialized] public Tensor[] m_B;
+
+        public SGD(float lr = 0.01f, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false)
         {
             this.t = 0;
-            this.learningRate = learningRate;
+            this.learningRate = lr;
             this.momentum = momentum;
             this.weightDecay = weightDecay;
             this.dampening = dampening;
@@ -25,12 +30,41 @@ namespace DeepUnity
             this.maximize = maximize;
         }
 
-        public void Step(Dense[] layers)
+        public void Initialize(IModule[] modules)
+        {
+            m_W = new Tensor[modules.Length];
+            m_B = new Tensor[modules.Length];
+
+            for (int i = 0; i < modules.Length; i++)
+            {
+                if (modules[i] is Dense d)
+                {
+                    int inputs = d.param_W.Shape[1];
+                    int outputs = d.param_W.Shape[0];
+
+                    m_W[i] = Tensor.Zeros(outputs, inputs);
+                    m_B[i] = Tensor.Zeros(outputs);
+
+                }
+            }
+        }
+        public void Step(IModule[] modules)
         {
             t++;
 
-            System.Threading.Tasks.Parallel.ForEach(layers, L =>
+            System.Threading.Tasks.Parallel.For(0, modules.Length, i =>
             {
+                if (modules[i] is Dense D)
+                {
+                    m_W[i] = m_W[i] * momentum - D.grad_W * learningRate;
+                    m_B[i] = m_B[i] * momentum - D.grad_B * learningRate;
+
+                    D.param_W = D.param_W * (1f - weightDecay) + m_W[i];
+                    D.param_B = D.param_B + m_B[i];
+                }
+               
+            });
+
                 // // Tensorflow algorithm (+ L2 penalty added)
                 // if(momentum == 0)
                 // {
@@ -95,14 +129,6 @@ namespace DeepUnity
                 //     L.t_B = L.t_B - (1f - learningRate) * L.g_B;
                 // }
 
-                // Basic SGD with momentum
-                L.m_W = L.m_W * momentum - L.g_W * learningRate;
-                L.m_B = L.m_B * momentum - L.g_B * learningRate;
-                
-                L.t_W = L.t_W * (1f -  weightDecay) + L.m_W;
-                L.t_B = L.t_B + L.m_B;
-
-            });
         }
     }
 

@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 
@@ -18,14 +19,20 @@ namespace DeepUnity
         [SerializeField] private float[] data;
         private Tape tape = null;
 
+       
         // Create
         static Tensor()
         {
-            numthreads = new int[] { 32, 32, 1 };
+            try
+            {
+                numthreads = new int[] { 32, 32, 1 };
 
-            string csguid = AssetDatabase.FindAssets("MatMulCS")[0];
-            string cspath = AssetDatabase.GUIDToAssetPath(csguid);
-            MatMulCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+                string csguid = AssetDatabase.FindAssets("MatMulCS")[0];
+                string cspath = AssetDatabase.GUIDToAssetPath(csguid);
+                MatMulCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+            }
+            catch { }
+                   
         }
         private Tensor(params int[] _shape)
         {
@@ -165,7 +172,7 @@ namespace DeepUnity
 
             for (int i = 0; i < tensor.data.Length; i++)
             {
-                tensor.data[i] = Utils.Random.Gaussian(0f, 1f, out _);
+                tensor.data[i] = Utils.Random.Gaussian();
             }
 
             return tensor;
@@ -354,7 +361,7 @@ namespace DeepUnity
 
             if (device == Device.CPU)
             {
-                System.Threading.Tasks.Parallel.For(0, w1, i =>
+                Parallel.For(0, w1, i =>
                 {
                     for (int k = 0; k < batch; k++)
                     {
@@ -423,7 +430,7 @@ namespace DeepUnity
 
             return result;
         }
-        public static Tensor JoinSclsToVec(Tensor[] scalars)
+        public static Tensor JoinSclsToVec(params Tensor[] scalars)
         {
             Tensor vector = Zeros(scalars.Length);
             for (int i = 0; i < scalars.Length; i++)
@@ -433,7 +440,7 @@ namespace DeepUnity
             return vector;
 
         }
-        public static Tensor JoinVecsToMat(Tensor[] vectors)
+        public static Tensor JoinVecsToMat(params Tensor[] vectors)
         {
             Tensor matrix = new Tensor(vectors[0].shape[0], vectors.Length);
 
@@ -449,7 +456,7 @@ namespace DeepUnity
 
             return matrix;
         }
-        public static Tensor JoinMatsToCube(Tensor[] matrices)
+        public static Tensor JoinMatsToCube(params Tensor[] matrices)
         {
             int matRows = matrices[0].shape[0];
             int matCols = matrices[0].shape[1];
@@ -471,106 +478,427 @@ namespace DeepUnity
 
             return cube;
         }
-        public static Tensor ExpandScl(Tensor scalar, int times)
+
+        // Operations on axis
+        public static Tensor Expand(Tensor tensor, int axis, int times)
         {
-            Tensor expandedScalar = Tensor.Zeros(times);
-            float scalarValue = scalar.data[0];
+            int[] shape = tensor.shape;
+            int[] expandedShape = shape.ToArray();
+            expandedShape[axis] *= times;
 
-            for (int i = 0; i < times; i++)
+            Tensor expandedTensor = Zeros(expandedShape);
+
+            if (axis == 0)
             {
-                expandedScalar.data[i] = scalarValue;
-            }
-
-            return expandedScalar;
-        }
-        public static Tensor ExpandVec(Tensor vector, int times)
-        {
-            int vecLength = vector.shape[0];
-            Tensor matrix = Zeros(vecLength, times);
-
-            int index = 0;
-            for (int k = 0; k < times; k++)
-            {
-                for (int i = 0; i < vecLength; i++)
+                for (int t = 0; t < times; t++)
                 {
-                    matrix.data[index++] = vector.data[i];
+                    for (int i = 0; i < shape[0]; i++)
+                    {
+                        for (int j = 0; j < shape[1]; j++)
+                        {
+                            for (int k = 0; k < shape[2]; k++)
+                            {
+                                for (int l = 0; l < shape[3]; l++)
+                                {
+                                    expandedTensor[t * shape[0] + i, j, k, l] = tensor[i, j, k, l];
+                                }
+                            }
+                        }
+                    }
                 }
             }
-
-            return matrix;
-        }
-        public static Tensor ExpandMat(Tensor matrix, int times)
-        {
-            int matRows = matrix.shape[0];
-            int matCols = matrix.shape[1];
-
-            Tensor expandedMatrix = Tensor.Zeros(matRows, matCols * times);
-
-            for (int i = 0; i < matRows; i++)
+            else if (axis == 1)
             {
-                for (int j = 0; j < matCols; j++)
+                for (int t = 0; t < times; t++)
                 {
-                    float matrixValue = matrix.data[i * matCols + j];
-                    int index = i * (matCols * times) + j;
-                    for (int k = 0; k < times; k++)
+                    for (int i = 0; i < shape[0]; i++)
                     {
-                        expandedMatrix.data[index] = matrixValue;
-                        index += matCols;
+                        for (int j = 0; j < shape[1]; j++)
+                        {
+                            for (int k = 0; k < shape[2]; k++)
+                            {
+                                for (int l = 0; l < shape[3]; l++)
+                                {
+                                    expandedTensor[i, t * shape[1] + j, k, l] = tensor[i, j, k, l];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else if (axis == 2)
+            {
+                for (int t = 0; t < times; t++)
+                {
+                    for (int i = 0; i < shape[0]; i++)
+                    {
+                        for (int j = 0; j < shape[1]; j++)
+                        {
+                            for (int k = 0; k < shape[2]; k++)
+                            {
+                                for (int l = 0; l < shape[3]; l++)
+                                {
+                                    expandedTensor[i, j, t * shape[2] + k, l] = tensor[i, j, k, l];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else if (axis == 3)
+            {
+                for (int t = 0; t < times; t++)
+                {
+                    for (int i = 0; i < shape[0]; i++)
+                    {
+                        for (int j = 0; j < shape[1]; j++)
+                        {
+                            for (int k = 0; k < shape[2]; k++)
+                            {
+                                for (int l = 0; l < shape[3]; l++)
+                                {
+                                    expandedTensor[i, j, k, t * shape[3] + l] = tensor[i, j, k, l];
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            return expandedMatrix;
+            return expandedTensor;
         }
-        public static Tensor[] SliceVec(Tensor vector)
+        public static Tensor[] Slice(Tensor tensor, int axis)
         {
-            Tensor[] scalars = new Tensor[vector.shape[0]];
-            for (int i = 0; i < scalars.Length; i++)
-            {
-                scalars[i] = Tensor.Constant(vector.data[i]);
-            }
-            return scalars;
-        }
-        public static Tensor[] SliceMatrix(Tensor matrix)
-        {
-            Tensor[] vectors = new Tensor[matrix.shape[1]];
+            int[] shape = tensor.shape;
+            int numSlices = shape[axis];
+            Tensor[] slices = new Tensor[numSlices];
 
-            for (int j = 0; j < matrix.shape[1]; j++)
-            {
-                Tensor vector = new Tensor(matrix.shape[0]);
+            int[] sliceShape = shape.ToArray();
+            sliceShape[axis] = 1;
 
-                for (int i = 0; i < matrix.shape[0]; i++)
+            for (int s = 0; s < numSlices; s++)
+            {
+                if (axis == 0)
                 {
-                    vector.data[i] = matrix[i, j];
-                }
+                    slices[s] = Zeros(sliceShape);
 
-                vectors[j] = vector;
-            }
-            return vectors;
-        }
-        public static Tensor[] SliceCube(Tensor cube)
-        {
-            Tensor[] matrices = new Tensor[cube.shape[2]];
-
-            for (int k = 0; k < cube.shape[2]; k++)
-            {
-                Tensor matrix = new Tensor(cube.shape[0], cube.shape[1]);
-
-                for (int j = 0; j < cube.shape[1]; j++)
-                {
-                    for (int i = 0; i < cube.shape[0]; i++)
+                    for (int j = 0; j < shape[1]; j++)
                     {
-                        matrix[i, j] = cube[i, j, k];
+                        for (int k = 0; k < shape[2]; k++)
+                        {
+                            for (int l = 0; l < shape[3]; l++)
+                            {
+                                slices[s][0, j, k, l] = tensor[s, j, k, l];
+                            }
+                        }
                     }
                 }
+                else if (axis == 1)
+                {
+                    slices[s] = Zeros(sliceShape);
 
-                matrices[k] = matrix;
+                    for (int i = 0; i < shape[0]; i++)
+                    {
+                        for (int k = 0; k < shape[2]; k++)
+                        {
+                            for (int l = 0; l < shape[3]; l++)
+                            {
+                                slices[s][i, 0, k, l] = tensor[i, s, k, l];
+                            }
+                        }
+                    }
+                }
+                else if (axis == 2)
+                {
+                    slices[s] = Zeros(sliceShape);
+
+                    for (int i = 0; i < shape[0]; i++)
+                    {
+                        for (int j = 0; j < shape[1]; j++)
+                        {
+                            for (int l = 0; l < shape[3]; l++)
+                            {
+                                slices[s][i, j, 0, l] = tensor[i, j, s, l];
+                            }
+                        }
+                    }
+                }
+                else if (axis == 3)
+                {
+                    slices[s] = Zeros(sliceShape);
+
+                    for (int i = 0; i < shape[0]; i++)
+                    {
+                        for (int j = 0; j < shape[1]; j++)
+                        {
+                            for (int k = 0; k < shape[2]; k++)
+                            {
+                                slices[s][i, j, k, 0] = tensor[i, j, k, s];
+                            }
+                        }
+                    }
+                }
             }
 
-            return matrices;
+            return slices;
+        }
+        public static Tensor Sum(Tensor tensor, int axis)
+        {
+            Tensor sumT = null;
+            int[] shape = tensor.shape;
+
+            if (axis == 0)
+            {
+                sumT = Zeros(1, shape[1], shape[2], shape[3]);
+                for (int l = 0; l < shape[3]; l++)
+                {
+                    for (int k = 0; k < shape[2]; k++)
+                    {
+                        for (int j = 0; j < shape[1]; j++)
+                        {
+                            float sum = 0f;
+                            for (int i = 0; i < shape[0]; i++)
+                            {
+                                sum += tensor[i, j, k, l];
+                            }
+                            sumT[0, j, k, l] = sum;
+                        }
+                    }
+                }
+            }
+            else if (axis == 1)
+            {
+                sumT = Zeros(shape[0], 1, shape[2], shape[3]);
+                for (int l = 0; l < shape[3]; l++)
+                {
+                    for (int k = 0; k < shape[2]; k++)
+                    {
+                        for (int i = 0; i < shape[0]; i++)
+                        {
+                            float sum = 0f;
+                            for (int j = 0; j < shape[1]; j++)
+                            {
+                                sum += tensor[i, j, k, l];
+                            }
+                            sumT[i, 0, k, l] = sum;
+                        }
+                    }
+                }
+            }
+            else if (axis == 2)
+            {
+                sumT = Zeros(shape[0], shape[1], 1, shape[3]);
+                for (int l = 0; l < shape[3]; l++)
+                {
+                    for (int j = 0; j < shape[1]; j++)
+                    {
+                        for (int i = 0; i < shape[0]; i++)
+                        {
+                            float sum = 0f;
+                            for (int k = 0; k < shape[2]; k++)
+                            {
+                                sum += tensor[i, j, k, l];
+                            }
+                            sumT[i, j, 0, l] = sum;
+                        }
+                    }
+                }
+            }
+            else if (axis == 3)
+            {
+                sumT = Zeros(shape[0], shape[1], shape[2], 1);
+                for (int k = 0; k < shape[2]; k++)
+                {
+                    for (int j = 0; j < shape[1]; j++)
+                    {
+                        for (int i = 0; i < shape[0]; i++)
+                        {
+                            float sum = 0f;
+                            for (int l = 0; l < shape[3]; l++)
+                            {
+                                sum += tensor[i, j, k, l];
+                            }
+                            sumT[i, j, k, 0] = sum;
+                        }
+                    }
+                }
+            }
+
+            return sumT;
+        }
+        public static Tensor Mean(Tensor tensor, int axis)
+        {
+            Tensor meanT = null;
+            int[] shape = tensor.shape;
+
+            if (axis == 0)
+            {
+                meanT = Zeros(1, shape[1], shape[2], shape[3]);
+                for (int l = 0; l < shape[3]; l++)
+                {
+                    for (int k = 0; k < shape[2]; k++)
+                    {
+                        for (int j = 0; j < shape[1]; j++)
+                        {
+                            float sum = 0f;
+                            for (int i = 0; i < shape[0]; i++)
+                            {
+                                sum += tensor[i, j, k, l];
+                            }
+                            meanT[0, j, k, l] = sum / shape[0];
+                        }
+                    }
+                }
+            }
+            else if (axis == 1)
+            {
+                meanT = Zeros(shape[0], 1, shape[2], shape[3]);
+                for (int l = 0; l < shape[3]; l++)
+                {
+                    for (int k = 0; k < shape[2]; k++)
+                    {
+                        for (int i = 0; i < shape[0]; i++)
+                        {
+                            float sum = 0f;
+                            for (int j = 0; j < shape[1]; j++)
+                            {
+                                sum += tensor[i, j, k, l];
+                            }
+                            meanT[i, 0, k, l] = sum / shape[1];
+                        }
+                    }
+                }
+            }
+            else if (axis == 2)
+            {
+                meanT = Zeros(shape[0], shape[1], 1, shape[3]);
+                for (int l = 0; l < shape[3]; l++)
+                {
+                    for (int j = 0; j < shape[1]; j++)
+                    {
+                        for (int i = 0; i < shape[0]; i++)
+                        {
+                            float sum = 0f;
+                            for (int k = 0; k < shape[2]; k++)
+                            {
+                                sum += tensor[i, j, k, l];
+                            }
+                            meanT[i, j, 0, l] = sum / shape[2];
+                        }
+                    }
+                }
+            }
+            else if (axis == 3)
+            {
+                meanT = Zeros(shape[0], shape[1], shape[2], 1);
+                for (int k = 0; k < shape[2]; k++)
+                {
+                    for (int j = 0; j < shape[1]; j++)
+                    {
+                        for (int i = 0; i < shape[0]; i++)
+                        {
+                            float sum = 0f;
+                            for (int l = 0; l < shape[3]; l++)
+                            {
+                                sum += tensor[i, j, k, l];
+                            }
+                            meanT[i, j, k, 0] = sum / shape[3];
+                        }
+                    }
+                }
+            }
+            else throw new Exception("Available axis for tensor are 0, 1, 2 and 3.");
+
+            return meanT;
+        }
+        public static Tensor Std(Tensor tensor, int axis) => Sqrt(Var(tensor, axis));
+        public static Tensor Var(Tensor tensor, int axis)
+        {
+            Tensor varT = null;
+            int[] shape = tensor.shape;
+
+            if (axis == 0)
+            {
+                varT = Zeros(1, shape[1], shape[2], shape[3]);
+                for (int l = 0; l < shape[3]; l++)
+                {
+                    for (int k = 0; k < shape[2]; k++)
+                    {
+                        for (int j = 0; j < shape[1]; j++)
+                        {
+                            float sum = 0f;
+                            for (int i = 0; i < shape[0]; i++)
+                            {
+                                sum += tensor[i, j, k, l];
+                            }
+                            varT[0, j, k, l] = sum;
+                        }
+                    }
+                }
+            }
+            else if (axis == 1)
+            {
+                varT = Zeros(shape[0], 1, shape[2], shape[3]);
+                for (int l = 0; l < shape[3]; l++)
+                {
+                    for (int k = 0; k < shape[2]; k++)
+                    {
+                        for (int i = 0; i < shape[0]; i++)
+                        {
+                            float sum = 0f;
+                            for (int j = 0; j < shape[1]; j++)
+                            {
+                                sum += tensor[i, j, k, l];
+                            }
+                            varT[i, 0, k, l] = sum;
+                        }
+                    }
+                }
+            }
+            else if (axis == 2)
+            {
+                varT = Zeros(shape[0], shape[1], 1, shape[3]);
+                for (int l = 0; l < shape[3]; l++)
+                {
+                    for (int j = 0; j < shape[1]; j++)
+                    {
+                        for (int i = 0; i < shape[0]; i++)
+                        {
+                            float sum = 0f;
+                            for (int k = 0; k < shape[2]; k++)
+                            {
+                                sum += tensor[i, j, k, l];
+                            }
+                            varT[i, j, 0, l] = sum;
+                        }
+                    }
+                }
+            }
+            else if (axis == 3)
+            {
+                varT = Zeros(shape[0], shape[1], shape[2], 1);
+                for (int k = 0; k < shape[2]; k++)
+                {
+                    for (int j = 0; j < shape[1]; j++)
+                    {
+                        for (int i = 0; i < shape[0]; i++)
+                        {
+                            float sum = 0f;
+                            for (int l = 0; l < shape[3]; l++)
+                            {
+                                sum += tensor[i, j, k, l];
+                            }
+                            varT[i, j, k, 0] = sum;
+                        }
+                    }
+                }
+            }
+            else throw new Exception("Available axis for tensor are 0, 1, 2 and 3.");
+
+            return varT;
         }
 
-        // Math functions
+        // Math operations
         public static Tensor Exp(Tensor tensor)
         {
             Tensor result = new Tensor(tensor.shape);
@@ -617,6 +945,17 @@ namespace DeepUnity
 
             return result;
         }
+        public static Tensor Clip(Tensor tensor, float min, float max)
+        {
+            Tensor result = new Tensor(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = Math.Clamp(tensor.data[i], min, max);
+            }
+
+            return result;
+        }
         public static Tensor Max(Tensor left, Tensor right)
         {
             Tensor result = new Tensor(left.shape);
@@ -640,26 +979,60 @@ namespace DeepUnity
             return result;
         }
 
-        public static float Mean(Tensor tensor) => tensor.data.Average();
-        public static float StdDev(Tensor tensor) => MathF.Sqrt(Var(tensor));
-        public static float Var(Tensor tensor)
-        {
-            float sum = 0;
-            float sumSqr = 0;
-
-            for (int i = 0; i < tensor.data.Length; i++)
-            {
-                sum += tensor.data[i];
-                sumSqr += tensor.data[i] * tensor.data[i];
-            }
-
-            float mean = sum / tensor.data.Length;
-            float meanSquares = sumSqr / tensor.data.Length;
-            return meanSquares - (mean * mean);
-        }
-
+       
 
         // LINQ (Not applied in autograd system)
+        
+        /// <summary>
+        /// This tensor values = function(this tensor values).
+        /// </summary>
+        public void ForEach(Func<float, float> function, bool multithreaded = false)
+        {
+            if(multithreaded)
+                Parallel.For(0, data.Length, i =>
+                {
+                    data[i] = function(data[i]);
+                });
+            else
+                for (int i = 0; i < data.Length; i++)
+                {
+                    data[i] = function(data[i]);
+                }
+        }
+        /// <summary>
+        /// Returns a new Tensor where 'new tensor values = selector(this tensor values)'
+        /// </summary>
+        public Tensor Select(Func<float, float> selector, bool multithreaded = false)
+        {
+            Tensor result = new Tensor(shape);
+
+            if (multithreaded)
+                Parallel.For(0, data.Length, i =>
+                {
+                    result.data[i] = selector(data[i]);
+                });
+            else
+                for (int i = 0; i < data.Length; i++)
+                {
+                    result.data[i] = selector(data[i]);
+                }
+
+            return result;
+        }
+        /// <summary>
+        /// Returns a new Tensor where 'new tensor values = resultSelector(1st tensor values, 2nd tensor values).
+        /// </summary>
+        public Tensor Zip(Tensor second, Func<float, float, float> resultSelector)
+        {
+            Tensor result = new Tensor(shape);
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                result.data[i] = resultSelector(data[i], second.data[i]);
+            }
+
+            return result;
+        }
         public int Count(Func<float, bool> selector = null)
         {
             if (selector == null)
@@ -672,60 +1045,10 @@ namespace DeepUnity
                 count += selector(data[i]) ? 1 : 0;
             }
 
-            
+
             return count;
         }
-        public float[] ToArray() => data.ToArray();
-        public float Sum(Func<float, float> selector = null) 
-        {
-            if (selector == null)
-                return data.Sum();
 
-            float sum = 0.0f;
-
-            for (int i = 0; i < data.Length; i++)
-            {
-                sum += selector(data[i]);
-            }
-
-            return sum;
-        }
-        public void ForEach(Func<float, float> action, bool multithreaded = false)
-        {
-            if(multithreaded)
-                System.Threading.Tasks.Parallel.For(0, data.Length, i =>
-                {
-                    data[i] = action(data[i]);
-                });
-            else
-                for (int i = 0; i < data.Length; i++)
-                {
-                    data[i] = action(data[i]);
-                }
-        }
-        public Tensor Select(Func<float, float> selector)
-        {
-            Tensor result = new Tensor(shape);
-
-            for (int i = 0; i < data.Length; i++)
-            {
-                result.data[i] = selector(data[i]);
-            }
-
-            return result;
-        }
-        public Tensor Zip(Tensor second, Func<float, float, float> resultSelector)
-        {
-            Tensor result = new Tensor(shape);
-
-            for (int i = 0; i < data.Length; i++)
-            {
-                result.data[i] = resultSelector(data[i], second.data[i]);
-            }
-
-            return result;
-        }
-        
         // System.Object/Collection
         IEnumerator IEnumerable.GetEnumerator()
         {
@@ -758,11 +1081,13 @@ namespace DeepUnity
         }
         public override string ToString()
         {
-            StringBuilder sb = new StringBuilder();
-            sb.Append("[");
-
-            int[] shape = this.shape;
             int rank = Rank;
+            string format = "0.000000";
+
+            StringBuilder sb = new StringBuilder();
+            sb.Append("\n[");
+
+            
 
             for (int l = 0; l < shape[3]; l++)
             {
@@ -788,12 +1113,13 @@ namespace DeepUnity
                         if (rank > 1)
                             sb.Append("[");
 
+
                         for (int i = 0; i < shape[0]; i++)
                         {
                             if (i > 0)
                                 sb.Append(", ");
 
-                            sb.Append(this[i, j, k, l].ToString());
+                            sb.Append(this[i, j, k, l].ToString(format));
                         }
 
                         if (rank > 1)
@@ -815,8 +1141,6 @@ namespace DeepUnity
         public override int GetHashCode()
         {
             return base.GetHashCode();
-        }
-
-        
+        }      
     }
 }

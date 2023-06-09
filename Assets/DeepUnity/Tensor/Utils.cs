@@ -30,6 +30,15 @@ namespace DeepUnity
         public static class Random
         {        
             public static float Value { get { lock (RNG) return (float) RNG.NextDouble(); } }
+            public static float Range(float min, float max) => Value * (max - min) + min;
+            public static float Gaussian(float mean = 0f, float stddev = 1f)
+            {
+                float x1 = 1.0f - Value;
+                float x2 = 1.0f - Value;
+
+                var entropy = MathF.Sqrt(-2.0f * MathF.Log(x1)) * MathF.Cos(2.0f * MathF.PI * x2);
+                return entropy * stddev + mean;
+            }
             public static float Gaussian(float mean, float stddev, out float entropy)
             {
                 float x1 = 1.0f - Value;
@@ -38,6 +47,7 @@ namespace DeepUnity
                 entropy = MathF.Sqrt(-2.0f * MathF.Log(x1)) * MathF.Cos(2.0f * MathF.PI * x2);
                 return entropy * stddev + mean;
             }
+           
         }
     }
 

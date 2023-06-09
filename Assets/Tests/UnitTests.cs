@@ -1,14 +1,17 @@
 using DeepUnity;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 
 public class UnitTests : MonoBehaviour
 {
-    public NeuralNetwork blablabla;
+    public NeuralNetwork network;
     public int Runs = 10;
     public Device device;
     public int MatrixSize = 64;
+    public InitType init;
 
     public void Start()
     {
@@ -27,6 +30,62 @@ public class UnitTests : MonoBehaviour
         //ForwardTest();
         //BackwardTest();
         //SaveTest();
+
+        if(!network)
+        {
+            network = new NeuralNetwork(
+                 new Dense(1, MatrixSize, init, device),
+                 new ReLU(),
+                 new Dense(MatrixSize, MatrixSize, init, device),
+                 new ReLU(),
+                 new Dense(MatrixSize, 1, init, device),
+                 new Linear());
+
+            network.Compile(new Adam(), "none");
+        }
+ 
+
+        inputs = Tensor.Normal(1, 100);
+        outputs = inputs.Select(x => MathF.Cos(x));
+
+        slicedinputs = Tensor.Slice(inputs, 1);
+        slicedoutputs = Tensor.Slice(outputs, 1);
+    }
+
+
+    int t = 1;
+
+    Tensor inputs;
+    Tensor outputs;
+
+    Tensor[] slicedinputs;
+    Tensor[] slicedoutputs;
+
+
+
+    public void Update()
+    {
+        t++;
+        var errors = new List<float>();
+
+        for (int i = 0; i < slicedinputs.Length; i++)
+        {
+
+            var pred = network.Forward(slicedinputs[i]);
+
+
+            var loss = Loss.MSE(pred, slicedoutputs[i]);
+
+            network.ZeroGrad();
+            network.Backward(loss);
+            network.Step();
+
+
+            errors.Add(Metrics.Accuracy(pred, slicedoutputs[i]));
+
+        }
+
+        print($"Epoch {t + 1} | Accuracy {errors.Average() * 100}%");
     }
     public void BenchmarkFoward()
     { 
@@ -159,9 +218,9 @@ public class UnitTests : MonoBehaviour
     public void ForwardTest()
     {
         var net = new NeuralNetwork(
-            new Dense(1, 5, WeightInit.Ones),
-            new Dense(5, 5, WeightInit.Ones),
-            new Dense(5, 1, WeightInit.Ones),
+            new Dense(1, 5, InitType.Uniform),
+            new Dense(5, 5, InitType.Uniform),
+            new Dense(5, 1, InitType.Uniform),
             new Linear()
             );
 
@@ -179,9 +238,9 @@ public class UnitTests : MonoBehaviour
     public void BackwardTest()
     {
         var net = new NeuralNetwork(
-            new Dense(1, 5, WeightInit.Ones, Device.CPU),
-            new Dense(5, 5, WeightInit.Ones, Device.CPU),
-            new Dense(5, 1, WeightInit.Ones, Device.CPU)
+            new Dense(1, 5, InitType.Uniform, Device.CPU),
+            new Dense(5, 5, InitType.Uniform, Device.CPU),
+            new Dense(5, 1, InitType.Uniform, Device.CPU)
             );
 
         net.Compile(new Adam(), "somenet");
@@ -195,7 +254,6 @@ public class UnitTests : MonoBehaviour
         Debug.Log(output);
         Debug.Log(back);
     }
-
     public void SaveTest()
     {
         // if (blablabla == null)
