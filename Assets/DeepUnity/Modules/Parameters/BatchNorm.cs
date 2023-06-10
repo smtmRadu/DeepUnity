@@ -4,7 +4,7 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class BatchNorm : IModule
+    public class BatchNorm : IModule, IParameters
     {
         private Tensor x_norm_Cache { get; set; }
         private Tensor x_hat_Cache { get; set; }
@@ -25,9 +25,7 @@ namespace DeepUnity
         [SerializeField] public Tensor runningVar;
 
         
-
-
-        public BatchNorm(int num_features, float momentum = 0.9f, float eps = 1e-5f)
+        public BatchNorm(int num_features, float momentum = 0.1f, float eps = 1e-5f)
         {
             gamma = Tensor.Ones(num_features);
             beta = Tensor.Zeros(num_features);
@@ -41,6 +39,7 @@ namespace DeepUnity
             this.momentum = momentum;
             this.epsilon = eps;
         }
+        
         public Tensor Forward(Tensor input)
         {
             bool train = input.Shape[1] > 1 ? true : false;
@@ -123,6 +122,36 @@ namespace DeepUnity
             return dLdx;
         }
 
+        public void ZeroGrad()
+        {
+            grad_Gamma.ForEach(x => 0f);
+            grad_Beta.ForEach(x => 0f);
+        }
+        public void ClipGradValue(float clip_value)
+        {
+            Tensor.Clip(grad_Gamma, -clip_value, clip_value);
+            Tensor.Clip(grad_Beta, -clip_value, clip_value);
+        }
+        public void ClipGradNorm(float max_norm)
+        {
+            Tensor normG = Tensor.Norm(grad_Gamma, NormType.ManhattanL1);
+
+            if (normG[0] > max_norm)
+            {
+                float scale = max_norm / normG[0];
+                grad_Gamma *= scale;
+            }
+
+
+            Tensor normB = Tensor.Norm(grad_Beta, NormType.ManhattanL1);
+
+            if (normB[0] > max_norm)
+            {
+                float scale = max_norm / normB[0];
+                grad_Beta *= scale;
+            }
+
+        }
 
         /*   Improving BN networks
              Increase learning rate. In a batch-normalized model,

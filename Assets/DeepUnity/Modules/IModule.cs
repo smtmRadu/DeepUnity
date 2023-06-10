@@ -1,12 +1,12 @@
+using kbRadu;
 using System;
-using Unity.VisualScripting;
-using Unity.VisualScripting.ReorderableList;
 using UnityEngine;
 
 namespace DeepUnity
 {
     public interface IModule
     {
+        //  public Tensor Predict(Tensor input) -> Non-caching forward.
         public Tensor Forward(Tensor input);
         public Tensor Backward(Tensor loss);
     }
@@ -16,23 +16,36 @@ namespace DeepUnity
     {
         public string name;
 
-        [Space]
-        public Dense dense;          
-        public Dropout dropout;
+        [Header("Parameter modules")]
+        public Dense dense;                  
+        public BatchNorm batchnorm;
+        public LayerNorm layernorm;
 
+        [Header("Activation modules")]
         public Linear linear;
         public ReLU relu;
         public TanH tanh;
         public SoftMax softmax;
-        //...
 
-        public ModuleWrapper(IModule module)
+        [Header("Other")]
+        public Dropout dropout;
+
+
+        private ModuleWrapper(IModule module)
         {
             name = module.GetType().Name;
 
             if (module is Dense denseModule)
             {
                 dense = denseModule;
+            }
+            else if(module is BatchNorm batchnormModule)
+            {
+                batchnorm = batchnormModule;
+            }
+            else if(module is LayerNorm layernormModule)
+            {
+                layernorm = layernormModule;
             }
             else if (module is ReLU reluModule)
             {
@@ -57,13 +70,26 @@ namespace DeepUnity
             else
                throw new Exception("Unhandled module type on wrapping.");
         }
-        public static IModule Get(ModuleWrapper moduleWrapper)
+
+        public static ModuleWrapper Wrap(IModule module)
+        {
+            return new ModuleWrapper(module);
+        }
+        public static IModule Unwrap(ModuleWrapper moduleWrapper)
         {
             IModule module = null;
 
             if (typeof(Dense).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.dense;
+            }
+            else if (typeof(BatchNorm).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.batchnorm;
+            }
+            else if (typeof(LayerNorm).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.layernorm;
             }
             else if (typeof(ReLU).Name.Equals(moduleWrapper.name))
             {

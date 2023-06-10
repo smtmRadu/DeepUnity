@@ -1,7 +1,7 @@
 
 namespace DeepUnity
 {
-    public abstract class ActivationBase
+    public abstract class ActivationBase : IModule
     {
         private Tensor InputCache { get; set; }
         protected abstract void Activation(Tensor x);

@@ -31,8 +31,8 @@ namespace DeepUnity
             {
                 if (modules[i] is Dense d)
                 {
-                    int inputs = d.param_W.Shape[1];
-                    int outputs = d.param_W.Shape[0];
+                    int inputs = d.weights.Shape[1];
+                    int outputs = d.weights.Shape[0];
 
                     statesum_W[i] = Tensor.Zeros(outputs, inputs);
                     statesum_B[i] = Tensor.Zeros(outputs);
@@ -52,14 +52,14 @@ namespace DeepUnity
 
                     if (weightDecay != 0f)
                     {
-                        D.grad_W = D.grad_W + weightDecay * D.grad_W;
+                        D.grad_Weights = D.grad_Weights + weightDecay * D.grad_Weights;
                     }
 
-                    statesum_W[i] = statesum_W[i] + Tensor.Pow(D.grad_W, 2f);
-                    statesum_B[i] = statesum_B[i] + Tensor.Pow(D.grad_B, 2f);
+                    statesum_W[i] = statesum_W[i] + Tensor.Pow(D.grad_Weights, 2f);
+                    statesum_B[i] = statesum_B[i] + Tensor.Pow(D.grad_Biases, 2f);
 
-                    D.param_W = D.param_W - gammaBar * (D.grad_W / (Tensor.Sqrt(statesum_W[i]) + 1e-10f));
-                    D.param_B = D.param_B - gammaBar * (D.grad_B / (Tensor.Sqrt(statesum_B[i]) + 1e-10f));
+                    D.weights = D.weights - gammaBar * (D.grad_Weights / (Tensor.Sqrt(statesum_W[i]) + 1e-10f));
+                    D.biases = D.biases - gammaBar * (D.grad_Biases / (Tensor.Sqrt(statesum_B[i]) + 1e-10f));
                 }
             });
 

@@ -39,8 +39,8 @@ namespace DeepUnity
             {
                 if (modules[i] is Dense d)
                 {
-                    int inputs = d.param_W.Shape[1];
-                    int outputs = d.param_W.Shape[0];
+                    int inputs = d.weights.Shape[1];
+                    int outputs = d.weights.Shape[0];
 
                     m_W[i] = Tensor.Zeros(outputs, inputs);
                     m_B[i] = Tensor.Zeros(outputs);
@@ -56,11 +56,11 @@ namespace DeepUnity
             {
                 if (modules[i] is Dense D)
                 {
-                    m_W[i] = m_W[i] * momentum - D.grad_W * learningRate;
-                    m_B[i] = m_B[i] * momentum - D.grad_B * learningRate;
+                    m_W[i] = m_W[i] * momentum - D.grad_Weights * learningRate;
+                    m_B[i] = m_B[i] * momentum - D.grad_Biases * learningRate;
 
-                    D.param_W = D.param_W * (1f - weightDecay) + m_W[i];
-                    D.param_B = D.param_B + m_B[i];
+                    D.weights = D.weights * (1f - weightDecay) + m_W[i];
+                    D.biases = D.biases + m_B[i];
                 }
                
             });

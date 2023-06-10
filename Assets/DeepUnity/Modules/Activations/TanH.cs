@@ -4,13 +4,13 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class TanH : ActivationBase, IModule
+    public class TanH : ActivationBase
     {
         protected override void Activation(Tensor x)
         {
             x.ForEach(x =>
             {
-                float e2x = Mathf.Exp(2f * x);
+                float e2x = MathF.Exp(2f * x);
                 float tanh = (e2x - 1f) / (e2x + 1f);
                 return tanh;
             });
@@ -19,7 +19,7 @@ namespace DeepUnity
         {
             x.ForEach(x =>
             {
-                float e2x = Mathf.Exp(2f * x);
+                float e2x = MathF.Exp(2f * x);
                 float tanh = (e2x - 1f) / (e2x + 1f);
                 return 1f - tanh * tanh;
             });

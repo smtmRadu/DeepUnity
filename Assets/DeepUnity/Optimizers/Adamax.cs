@@ -45,8 +45,8 @@ namespace DeepUnity
             {
                 if (modules[i] is Dense D)
                 {
-                    int inputs = D.param_W.Shape[1];
-                    int outputs = D.param_W.Shape[0];
+                    int inputs = D.weights.Shape[1];
+                    int outputs = D.weights.Shape[0];
 
                     m_W[i] = Tensor.Zeros(outputs, inputs);
                     m_B[i] = Tensor.Zeros(outputs);
@@ -68,16 +68,16 @@ namespace DeepUnity
                 if (modules[i] is Dense L)
                 {
                     // Update biased first momentum estimate
-                    m_W[i] = beta1 * m_W[i] + (1f - beta1) * L.grad_W;
-                    m_B[i] = beta1 * m_B[i] + (1f - beta1) * L.grad_B;
+                    m_W[i] = beta1 * m_W[i] + (1f - beta1) * L.grad_Weights;
+                    m_B[i] = beta1 * m_B[i] + (1f - beta1) * L.grad_Biases;
 
                     // Update the exponentially weighted infinity norm
-                    u_W[i] = Tensor.Max(beta2 * u_W[i], Tensor.Abs(L.grad_W));
-                    u_B[i] = Tensor.Max(beta2 * u_B[i], Tensor.Abs(L.grad_B));
+                    u_W[i] = Tensor.Maximum(beta2 * u_W[i], Tensor.Abs(L.grad_Weights));
+                    u_B[i] = Tensor.Maximum(beta2 * u_B[i], Tensor.Abs(L.grad_Biases));
 
                     // Update parameters
-                    L.param_W = L.param_W * (1f - weightDecay) - alpha / (1f - MathF.Pow(beta1, t)) * m_W[i] / u_W[i];
-                    L.param_B = L.param_B - alpha / (1f - MathF.Pow(beta1, t)) * m_B[i] / u_B[i];
+                    L.weights = L.weights * (1f - weightDecay) - alpha / (1f - MathF.Pow(beta1, t)) * m_W[i] / u_W[i];
+                    L.biases = L.biases - alpha / (1f - MathF.Pow(beta1, t)) * m_B[i] / u_B[i];
                 }
             });
 

@@ -231,7 +231,6 @@ namespace DeepUnity
             set => data[w * shape[2] * shape[1] * shape[0] + z * shape[1] * shape[0] + y * shape[0] + x] = value;
         }
 
-
         public static Tensor operator +(Tensor tensor)
         {
             Tensor result = new Tensor(tensor.shape);
@@ -344,7 +343,6 @@ namespace DeepUnity
             return result;
         }
 
-        // Refactoring operations
         public static Tensor MatMul(Tensor left, Tensor right, Device device)
         {
             int w1 = left.shape[0];
@@ -411,75 +409,136 @@ namespace DeepUnity
 
             return resultTensor;
         }
-        public static Tensor TransposeMat(Tensor tensor)
+        public static Tensor Transpose(Tensor tensor, int axis0, int axis1)
         {
-            var shape = tensor.shape;
-            Tensor result = new Tensor(shape[1], shape[0], shape[2]);
+            // For mat transpose, axis0 = 0, axis1 = 1
+            int[] shape = tensor.shape;
+            int[] transposedShape = shape.ToArray();
 
-            
-            for (int k = 0; k < shape[2]; k++)
+            // Swap the dimensions
+            int dim0 = transposedShape[axis0];
+            transposedShape[axis0] = transposedShape[axis1];
+            transposedShape[axis1] = dim0;
+
+            Tensor transposed = Zeros(transposedShape);
+
+            int[] indices = new int[4];
+            int newIndex0, newIndex1, newIndex2, newIndex3;
+
+            for (indices[0] = 0; indices[0] < shape[0]; indices[0]++)
             {
-                for (int j = 0; j < shape[1]; j++)
+                for (indices[1] = 0; indices[1] < shape[1]; indices[1]++)
                 {
-                    for (int i = 0; i < shape[0]; i++)
+                    for (indices[2] = 0; indices[2] < shape[2]; indices[2]++)
                     {
-                        result[j, i] = tensor[i, j];
+                        for (indices[3] = 0; indices[3] < shape[3]; indices[3]++)
+                        {
+                            // Set the indices according to the transposition
+                            newIndex0 = (axis0 == 0) ? indices[axis1] : indices[0];
+                            newIndex1 = (axis1 == 1) ? indices[axis0] : indices[1];
+                            newIndex2 = (axis0 == 2) ? indices[axis1] : indices[2];
+                            newIndex3 = (axis1 == 3) ? indices[axis0] : indices[3];
+
+                            // Assign the element to the transposed tensor
+                            transposed[newIndex0, newIndex1, newIndex2, newIndex3] = tensor[indices[0], indices[1], indices[2], indices[3]];
+                        }
                     }
                 }
             }
 
-            return result;
+            return transposed;
         }
-        public static Tensor JoinSclsToVec(params Tensor[] scalars)
+        public static Tensor Join(int axis, params Tensor[] tensors)
         {
-            Tensor vector = Zeros(scalars.Length);
-            for (int i = 0; i < scalars.Length; i++)
-            {
-                vector.data[i] = scalars[i].data[0];
-            }
-            return vector;
+            if (tensors == null || tensors.Length == 0)
+                throw new Exception("Tensors used for joining are not defined.");
 
-        }
-        public static Tensor JoinVecsToMat(params Tensor[] vectors)
-        {
-            Tensor matrix = new Tensor(vectors[0].shape[0], vectors.Length);
+            int[] sliceShape = tensors[0].shape;
+            int[] joinedShape = sliceShape.ToArray();
+            joinedShape[axis] = tensors.Length;
 
-            int veclength = vectors[0].shape[0];
-            int index = 0;
-            for (int i = 0; i < vectors.Length; i++)
+            Tensor joinedTensor = Zeros(joinedShape);
+
+            if (axis == 0)
             {
-                for (int j = 0; j < veclength; j++)
+                for (int s = 0; s < tensors.Length; s++)
                 {
-                    matrix.data[index++] = vectors[i].data[j]; 
+                    for (int i = 0; i < sliceShape[0]; i++)
+                    {
+                        for (int j = 0; j < sliceShape[1]; j++)
+                        {
+                            for (int k = 0; k < sliceShape[2]; k++)
+                            {
+                                for (int l = 0; l < sliceShape[3]; l++)
+                                {
+                                    joinedTensor[s, j, k, l] = tensors[s][i, j, k, l];
+                                }
+                            }
+                        }
+                    }
                 }
             }
-
-            return matrix;
-        }
-        public static Tensor JoinMatsToCube(params Tensor[] matrices)
-        {
-            int matRows = matrices[0].shape[0];
-            int matCols = matrices[0].shape[1];
-            int cubeDepth = matrices.Length;
-
-            Tensor cube = new Tensor(matRows, matCols, cubeDepth);
-
-            int index = 0;
-            for (int k = 0; k < cubeDepth; k++)
+            else if (axis == 1)
             {
-                for (int i = 0; i < matRows; i++)
+                for (int s = 0; s < tensors.Length; s++)
                 {
-                    for (int j = 0; j < matCols; j++)
+                    for (int i = 0; i < sliceShape[0]; i++)
                     {
-                        cube.data[index++] = matrices[k].data[i * matCols + j];
+                        for (int j = 0; j < sliceShape[1]; j++)
+                        {
+                            for (int k = 0; k < sliceShape[2]; k++)
+                            {
+                                for (int l = 0; l < sliceShape[3]; l++)
+                                {
+                                    joinedTensor[i, s, k, l] = tensors[s][i, j, k, l];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else if (axis == 2)
+            {
+                for (int s = 0; s < tensors.Length; s++)
+                {
+                    for (int i = 0; i < sliceShape[0]; i++)
+                    {
+                        for (int j = 0; j < sliceShape[1]; j++)
+                        {
+                            for (int k = 0; k < sliceShape[2]; k++)
+                            {
+                                for (int l = 0; l < sliceShape[3]; l++)
+                                {
+                                    joinedTensor[i, j, s, l] = tensors[s][i, j, k, l];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else if (axis == 3)
+            {
+                for (int s = 0; s < tensors.Length; s++)
+                {
+                    for (int i = 0; i < sliceShape[0]; i++)
+                    {
+                        for (int j = 0; j < sliceShape[1]; j++)
+                        {
+                            for (int k = 0; k < sliceShape[2]; k++)
+                            {
+                                for (int l = 0; l < sliceShape[3]; l++)
+                                {
+                                    joinedTensor[i, j, k, s] = tensors[s][i, j, k, l];
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            return cube;
-        }
+            return joinedTensor;
 
-        // Operations on axis
+        }
         public static Tensor Expand(Tensor tensor, int axis, int times)
         {
             int[] shape = tensor.shape;
@@ -956,7 +1015,7 @@ namespace DeepUnity
 
             return result;
         }
-        public static Tensor Max(Tensor left, Tensor right)
+        public static Tensor Maximum(Tensor left, Tensor right)
         {
             Tensor result = new Tensor(left.shape);
 
@@ -967,7 +1026,7 @@ namespace DeepUnity
 
             return result;
         }
-        public static Tensor Min(Tensor left, Tensor right)
+        public static Tensor Minimum(Tensor left, Tensor right)
         {
             Tensor result = new Tensor(left.shape);
 
@@ -978,11 +1037,37 @@ namespace DeepUnity
 
             return result;
         }
+        
+        public static Tensor Norm(Tensor tensor, NormType normType = NormType.ManhattanL1)
+        {
+            switch(normType)
+            {
+                case NormType.ManhattanL1:
+                    float abssum = tensor.data.Sum(x => MathF.Abs(x));
+                    return Constant(abssum);
+                case NormType.EuclideanL2:
+                    float sum = tensor.data.Sum();
+                    return Constant(MathF.Sqrt(sum));
+                case NormType.Frobenius:
+                    float sqrsum = tensor.data.Sum(x => x * x);
+                    return Constant(MathF.Sqrt(sqrsum));
+                default:
+                    throw new Exception("Unhandled norm type.");
+            }
+        }
+        public static Tensor Min(Tensor tensor)
+        {
+            float min = tensor.data.Min();
+            return Constant(min);
+        }
+        public static Tensor Max(Tensor tensor)
+        {
+            float max = tensor.data.Max();
+            return Constant(max);
+        }
 
-       
 
         // LINQ (Not applied in autograd system)
-        
         /// <summary>
         /// This tensor values = function(this tensor values).
         /// </summary>
@@ -1033,10 +1118,10 @@ namespace DeepUnity
 
             return result;
         }
-        public int Count(Func<float, bool> selector = null)
+        public Tensor Count(Func<float, bool> selector = null)
         {
             if (selector == null)
-                return shape[0] * shape[1] * shape[2] * shape[3];
+                return Constant(shape[0] * shape[1] * shape[2] * shape[3]);
 
             int count = 0;
 
@@ -1046,7 +1131,7 @@ namespace DeepUnity
             }
 
 
-            return count;
+            return Constant(count);
         }
 
         // System.Object/Collection
@@ -1142,5 +1227,12 @@ namespace DeepUnity
         {
             return base.GetHashCode();
         }      
+    }
+
+    public enum NormType
+    {
+        ManhattanL1,
+        EuclideanL2,
+        Frobenius
     }
 }

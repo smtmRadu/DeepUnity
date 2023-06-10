@@ -46,14 +46,16 @@ namespace DeepUnity
     public class OptimizerWrapper
     {
         public string name;
+
         [Space]
         public Adam adam;
-        public SGD sgd;
-        public RMSProp rmsprop;
+        public SGD sgd;       
         public Adadelta adadelta;
         public Adagrad adagrad;
+        public RMSProp rmsprop;
         public AdaMax adamax;
-        public OptimizerWrapper(IOptimizer optimizer)
+
+        private OptimizerWrapper(IOptimizer optimizer)
         {
             // Initialize the fields based on the optimizer type
 
@@ -66,25 +68,30 @@ namespace DeepUnity
             {
                 sgd = sgdOptimizer;
             }
-            else if(optimizer is RMSProp rmspropOptimizer)
+            else if (optimizer is RMSProp rmspropOptimizer)
             {
                 rmsprop = rmspropOptimizer;
             }
-            else if(optimizer is Adadelta adadeltaOptimizer)
+            else if (optimizer is Adadelta adadeltaOptimizer)
             {
                 adadelta = adadeltaOptimizer;
             }
-            else if(optimizer is Adagrad adagradOptimizer)
+            else if (optimizer is Adagrad adagradOptimizer)
             {
                 adagrad = adagradOptimizer;
             }
-            else if(optimizer is AdaMax adamaxOptimizer)
+            else if (optimizer is AdaMax adamaxOptimizer)
             {
                 adamax = adamaxOptimizer;
             }
             else
                 throw new Exception("Unhandled optimizer type on wrapping.");
         }
+
+        public static OptimizerWrapper Wrap(IOptimizer optimizer)
+        {
+            return new OptimizerWrapper(optimizer);
+        }     
         public static IOptimizer Unwrap(OptimizerWrapper optimizerWrapper)
         {
             IOptimizer optimizer = null;

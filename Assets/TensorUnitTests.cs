@@ -18,10 +18,10 @@ namespace kbRadu
             print(array);
             print(array2);
 
-            Tensor mat = Tensor.JoinVecsToMat(array, array2);
+            Tensor mat = Tensor.Join(1, array, array2);
             print(mat);
 
-            Tensor cube = Tensor.JoinMatsToCube(mat, mat);
+            Tensor cube = Tensor.Join(2, mat, mat);
             print(cube);
 
             Tensor[] mats = Tensor.Slice(cube, 2);
@@ -38,9 +38,12 @@ namespace kbRadu
             print(array);
             print(Tensor.Expand(array, 1, 10));
 
-            mat = Tensor.Random(2, 2);
+            mat = Tensor.Random(2, 3);
             print(mat);
             print(Tensor.Expand(mat, 2, 10));
+
+            print("Some mat" + mat);
+            print("Transposed mat" + Tensor.Transpose(mat, 0, 1));
             
         }
     }

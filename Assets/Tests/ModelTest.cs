@@ -11,7 +11,12 @@ namespace kbRadu
 
         public NeuralNetwork net;
         public Device device;
+        public int hiddenSize = 64;
+        public float rotationSpeed = 0.4f;
+
+        [Space]
         public int samples = 100;
+        public float dataSigma = 1f;
 
         private Tensor[] trainInputs;
         private Tensor[] trainLabels;
@@ -30,11 +35,11 @@ namespace kbRadu
             if(net == null)
             {
                 net = new NeuralNetwork(
-                 new Dense(2, 64, device: device),
+                 new Dense(2, hiddenSize, device: device),
                  new ReLU(),
-                 new Dense(64, 64, device: device),
+                 new Dense(hiddenSize, hiddenSize, device: device),
                  new ReLU(),
-                 new Dense(64, 1, device: device)
+                 new Dense(hiddenSize, 1, device: device)
                  );
                 net.Compile(new Adam(), "somenet");
             }
@@ -49,15 +54,15 @@ namespace kbRadu
 
             for (int i = 0; i < samples; i++)
             {
-                float x = Utils.Random.Gaussian();
-                float y = Utils.Random.Gaussian();
+                float x = Utils.Random.Gaussian(0, dataSigma);
+                float y = Utils.Random.Gaussian(0, dataSigma);
                 trainInputs[i] = Tensor.Constant(new float[] { x, y });
-                trainLabels[i] = Tensor.Constant(MathF.Abs(x) +  MathF.Abs(y));
+                trainLabels[i] = Tensor.Constant(MathF.Sqrt(MathF.Pow(1, 2) + MathF.Pow(x,2) + MathF.Pow(y, 2)));
 
-                float xTest = Utils.Random.Gaussian();
-                float yTest = Utils.Random.Gaussian();
+                float xTest = Utils.Random.Gaussian(0, dataSigma);
+                float yTest = Utils.Random.Gaussian(0, dataSigma);
                 testInputs[i] = Tensor.Constant(new float[] { xTest, yTest });
-                testLabels[i] = Tensor.Constant(MathF.Abs(xTest) +  MathF.Abs(yTest));
+                testLabels[i] = Tensor.Constant(MathF.Sqrt(MathF.Pow(1, 2) + MathF.Pow(xTest, 2) + MathF.Pow(yTest, 2)));
             }
 
         }
@@ -100,8 +105,14 @@ namespace kbRadu
             testAcc.Add(testacc);
 
             i++;
+
+            
         }
 
+        public void LateUpdate()
+        {
+            transform.RotateAround(Vector3.zero, Vector3.up, rotationSpeed);
+        }
         public void OnDrawGizmos()
         {
             

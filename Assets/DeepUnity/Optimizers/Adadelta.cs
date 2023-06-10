@@ -44,8 +44,8 @@ namespace DeepUnity
             {
                 if (modules[i] is Dense d)
                 {
-                    int inputs = d.param_W.Shape[1];
-                    int outputs = d.param_W.Shape[0];
+                    int inputs = d.weights.Shape[1];
+                    int outputs = d.weights.Shape[0];
 
                     v_W[i] = Tensor.Zeros(outputs, inputs);
                     v_B[i] = Tensor.Zeros(outputs);
@@ -63,20 +63,20 @@ namespace DeepUnity
                 if (modules[i] is Dense D)
                 {
                     if (weightDecay != 0f)
-                        D.grad_W = D.grad_W + weightDecay * D.param_W;
+                        D.grad_Weights = D.grad_Weights + weightDecay * D.weights;
 
-                    v_W[i] = v_W[i] * rho + Tensor.Pow(D.grad_W, 2f) * (1f - rho);
-                    v_B[i] = v_B[i] * rho + Tensor.Pow(D.grad_B, 2f) * (1f - rho);
+                    v_W[i] = v_W[i] * rho + Tensor.Pow(D.grad_Weights, 2f) * (1f - rho);
+                    v_B[i] = v_B[i] * rho + Tensor.Pow(D.grad_Biases, 2f) * (1f - rho);
 
                     // In Adadelta, i use v for square avg and m for accumulate variables
-                    var dxWeights = Tensor.Sqrt(u_W[i] + Utils.EPSILON) / Tensor.Sqrt(v_W[i] + Utils.EPSILON) * D.grad_W;
-                    var dxBiases = Tensor.Sqrt(u_B[i] + Utils.EPSILON) / Tensor.Sqrt(v_B[i] + Utils.EPSILON) * D.grad_B;
+                    var dxWeights = Tensor.Sqrt(u_W[i] + Utils.EPSILON) / Tensor.Sqrt(v_W[i] + Utils.EPSILON) * D.grad_Weights;
+                    var dxBiases = Tensor.Sqrt(u_B[i] + Utils.EPSILON) / Tensor.Sqrt(v_B[i] + Utils.EPSILON) * D.grad_Biases;
 
                     u_W[i] = u_W[i] * rho + Tensor.Pow(dxWeights, 2f) * (1f - rho);
                     u_B[i] = u_B[i] * rho + Tensor.Pow(dxBiases, 2f) * (1f - rho);
 
-                    D.param_W = D.param_W - learningRate * dxWeights;
-                    D.param_B = D.param_B - learningRate * dxBiases;
+                    D.weights = D.weights - learningRate * dxWeights;
+                    D.biases = D.biases - learningRate * dxBiases;
                 }
               
             });
