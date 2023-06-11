@@ -35,11 +35,11 @@ namespace kbRadu
             if(net == null)
             {
                 net = new NeuralNetwork(
-                 new Dense(2, hiddenSize, device: device),
+                 new Dense(2, hiddenSize),
                  new ReLU(),
-                 new Dense(hiddenSize, hiddenSize, device: device),
+                 new Dense(hiddenSize, hiddenSize),
                  new ReLU(),
-                 new Dense(hiddenSize, 1, device: device)
+                 new Dense(hiddenSize, 1)
                  );
                 net.Compile(new Adam(), "somenet");
             }

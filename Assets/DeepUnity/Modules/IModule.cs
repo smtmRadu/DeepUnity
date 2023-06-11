@@ -6,9 +6,10 @@ namespace DeepUnity
 {
     public interface IModule
     {
-        //  public Tensor Predict(Tensor input) -> Non-caching forward.
+        public Tensor Predict(Tensor input);
         public Tensor Forward(Tensor input);
         public Tensor Backward(Tensor loss);
+       
     }
 
     [Serializable]
@@ -16,20 +17,18 @@ namespace DeepUnity
     {
         public string name;
 
-        [Header("Parameter modules")]
+        [Header("Value save modules")]
         public Dense dense;                  
         public BatchNorm batchnorm;
         public LayerNorm layernorm;
+        public Dropout dropout;
 
-        [Header("Activation modules")]
+        // Activation modules
         public Linear linear;
         public ReLU relu;
         public TanH tanh;
         public SoftMax softmax;
-
-        [Header("Other")]
-        public Dropout dropout;
-
+        
 
         private ModuleWrapper(IModule module)
         {

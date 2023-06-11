@@ -34,11 +34,11 @@ public class UnitTests : MonoBehaviour
         if(!network)
         {
             network = new NeuralNetwork(
-                 new Dense(1, MatrixSize, init, device),
+                 new Dense(1, MatrixSize, init),
                  new ReLU(),
-                 new Dense(MatrixSize, MatrixSize, init, device),
+                 new Dense(MatrixSize, MatrixSize, init),
                  new ReLU(),
-                 new Dense(MatrixSize, 1, init, device),
+                 new Dense(MatrixSize, 1, init),
                  new Linear());
 
             network.Compile(new Adam(), "none");
@@ -48,8 +48,8 @@ public class UnitTests : MonoBehaviour
         inputs = Tensor.Normal(1, 100);
         outputs = inputs.Select(x => MathF.Cos(x));
 
-        slicedinputs = Tensor.Slice(inputs, 1);
-        slicedoutputs = Tensor.Slice(outputs, 1);
+        slicedinputs = Tensor.Split(inputs, 1, 1);
+        slicedoutputs = Tensor.Split(outputs, 1, 1);
     }
 
 
@@ -90,11 +90,11 @@ public class UnitTests : MonoBehaviour
     public void BenchmarkFoward()
     { 
         NeuralNetwork net = new NeuralNetwork(
-            new Dense(10, MatrixSize, device: device),
+            new Dense(10, MatrixSize),
             new ReLU(),
-            new Dense(MatrixSize, MatrixSize, device: device),
+            new Dense(MatrixSize, MatrixSize),
             new ReLU(), 
-            new Dense(MatrixSize, 10, device: device));
+            new Dense(MatrixSize, 10));
 
         Tensor input = Tensor.Random(10);
 
@@ -112,11 +112,11 @@ public class UnitTests : MonoBehaviour
     public void BenchmarkBackward()
     {
         NeuralNetwork net = new NeuralNetwork(
-            new Dense(10, MatrixSize, device: device),
+            new Dense(10, MatrixSize),
             new ReLU(),
-            new Dense(MatrixSize, MatrixSize, device: device),
+            new Dense(MatrixSize, MatrixSize),
             new ReLU(),
-            new Dense(MatrixSize, 10, device: device));
+            new Dense(MatrixSize, 10));
 
         Tensor loss = Tensor.Random(10);
         
@@ -135,11 +135,11 @@ public class UnitTests : MonoBehaviour
     public void BenchmarkStep()
     {
         NeuralNetwork net = new NeuralNetwork(
-           new Dense(10, MatrixSize, device: device),
+           new Dense(10, MatrixSize),
            new ReLU(),
-           new Dense(MatrixSize, MatrixSize, device: device),
+           new Dense(MatrixSize, MatrixSize),
            new ReLU(),
-           new Dense(MatrixSize, 10, device: device));
+           new Dense(MatrixSize, 10));
 
         net.Compile(new Adam(), "non");
 
@@ -172,8 +172,8 @@ public class UnitTests : MonoBehaviour
             var t1 = Tensor.Random(w1, mid);
             var t2 = Tensor.Random(mid, h2);
 
-            var m1 = Tensor.MatMul(t1, t2, Device.CPU);
-            var m2 = Tensor.MatMul(t1, t2, Device.GPU);
+            var m1 = Tensor.MatMul(t1, t2);
+            var m2 = Tensor.MatMul(t1, t2);
 
             if(m1.Equals(m2))
                 succes++;
@@ -202,7 +202,7 @@ public class UnitTests : MonoBehaviour
 
         for (int i = 0; i < Runs; i++)
         {
-            Tensor.MatMul(t1, t2, device);
+            Tensor.MatMul(t1, t2);
         }
 
         end = DateTime.Now - start;
@@ -238,9 +238,9 @@ public class UnitTests : MonoBehaviour
     public void BackwardTest()
     {
         var net = new NeuralNetwork(
-            new Dense(1, 5, InitType.Uniform, Device.CPU),
-            new Dense(5, 5, InitType.Uniform, Device.CPU),
-            new Dense(5, 1, InitType.Uniform, Device.CPU)
+            new Dense(1, 5, InitType.Uniform),
+            new Dense(5, 5, InitType.Uniform),
+            new Dense(5, 1, InitType.Uniform)
             );
 
         net.Compile(new Adam(), "somenet");

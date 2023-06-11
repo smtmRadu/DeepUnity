@@ -1,4 +1,5 @@
 using System;
+using System.Drawing.Printing;
 using UnityEngine;
 
 namespace DeepUnity
@@ -6,23 +7,26 @@ namespace DeepUnity
     [Serializable]
     public class BatchNorm : IModule, IParameters
     {
-        private Tensor x_norm_Cache { get; set; }
+        private Tensor x_minus_mu_cache { get; set; }
         private Tensor x_hat_Cache { get; set; }
-        private Tensor std_Cache { get; set; }
+        private Tensor std_cache { get; set; }
 
 
         [SerializeField] public float momentum;
         [SerializeField] public float epsilon;
 
         // Learnable parameters
+        [SerializeField] public Tensor runningMean;
+        [SerializeField] public Tensor runningVar;
+
         [SerializeField] public Tensor gamma;
         [SerializeField] public Tensor beta;
+
 
         [NonSerialized] public Tensor grad_Gamma;
         [NonSerialized] public Tensor grad_Beta;
 
-        [SerializeField] public Tensor runningMean;
-        [SerializeField] public Tensor runningVar;
+        
 
         
         public BatchNorm(int num_features, float momentum = 0.1f, float eps = 1e-5f)
@@ -40,86 +44,69 @@ namespace DeepUnity
             this.epsilon = eps;
         }
         
+        public Tensor Predict(Tensor input)
+        {
+            var input_centered = (input - runningMean) / Tensor.Sqrt(runningVar + epsilon);
+            var output = gamma * input_centered + beta;
+
+            return output;
+        }
         public Tensor Forward(Tensor input)
         {
-            bool train = input.Shape[1] > 1 ? true : false;
+            int batch = input.Shape[1];
 
-            if(train)
-            {
-                int features = input.Shape[0];
-                // When training (only on mini-batch training), we cache the values for backprop also
-                var mu_B = Tensor.Mean(input, 0); // mini-batch means [1, batch]
-                var var_B = Tensor.Var(input, 0); // mini-batch variances [1, batch]
+            // When training (only on mini-batch training), we cache the values for backprop also
+            var mu_B = Tensor.Mean(input, 1); // mini-batch means      [batch]
+            var var_B = Tensor.Var(input, 1); // mini-batch variances  [batch]
 
-                // input [features, batch]  - mu_B [1, batch] -> need expand on axis 0
-                var x_norm = input - Tensor.Expand(mu_B, 0, features);
-                var std = Tensor.Sqrt(Tensor.Expand(var_B, 0, features) + epsilon);
-                var x_hat = x_norm / std;
-                var y = gamma * x_hat + beta;
+            // input [features, batch]  - muB or varB [features, 1] -> need expand on axis 1 by batch
 
-                // Cache everything
-                x_norm_Cache = x_norm;
-                x_hat_Cache = x_hat;
-                std_Cache = std;
+            // normalize
+            var x_minus_mu = input - Tensor.Expand(mu_B, 1, batch);
+            var sqrt_var = Tensor.Expand(Tensor.Sqrt(var_B + epsilon), 1, batch); 
+            var x_hat = x_minus_mu / sqrt_var;
 
-                // compute running mean and var
-                runningMean = runningMean * momentum + mu_B * (1f - momentum);
-                runningVar = runningVar * momentum + var_B * (1f - momentum);
+            // scale and shift
+            var yB = Tensor.Expand(gamma, 1, batch) * x_hat + Tensor.Expand(beta, 1, batch);
 
-                return y;
-            }
-            else
-            {
-                // When using the network, we just normalize the input and forward it to the next module
+            // Cache everything
+            x_minus_mu_cache = x_minus_mu;
+            x_hat_Cache = x_hat;
+            std_cache = sqrt_var;
 
-                var xNorm = (input - runningMean) / Tensor.Sqrt(runningVar + epsilon);
-                var y = gamma * xNorm + beta;
+            // compute running mean and var
+            runningMean = runningMean * momentum + mu_B * (1f - momentum);
+            runningVar = runningVar * momentum + var_B * (1f - momentum);
 
-                return y;
-            }           
+            return yB;
+          
         }
-        public Tensor Backward(Tensor loss)
+        public Tensor Backward(Tensor dLdY)
         {
-            int m = loss.Shape[1];
-
-            // algorithm from https://towardsdatascience.com/implementing-batch-normalization-in-python-a044b0369567
-            // var dGamma = Tensor.Sum(loss * x_norm_Cache, 0);
-            // var dBeta = Tensor.Sum(loss, 0);
-            // 
-            // var dx_norm = loss * gamma;
-            // var dx_centered = dx_norm / std_Cache;
-            // 
-            // var dMean = -(Tensor.Sum(dx_centered, 0) +
-            //               2f / m *
-            //               Tensor.Sum(x_hat_Cache, 0));
-            // var dStd = Tensor.Sum(dx_norm * x_hat_Cache * -Tensor.Pow(std_Cache, -2f), 1);
-            // var dVar = dStd / 2 / std_Cache;
-            // 
-            // var dx = dx_centered + (dMean + dVar * 2 * x_hat_Cache) / m;
-
-            //return dx;
+            int m = dLdY.Shape[1];
 
             // paper algorithm https://arxiv.org/pdf/1502.03167.pdf
 
-            var dLdxHat = loss * gamma;
+            var dLdxHat = dLdY * Tensor.Expand(gamma, axis: 1, times: m); // [features, batch]
 
-            var dLdVar = Tensor.Sum(dLdxHat * x_norm_Cache * (-1f / 2f) * Tensor.Pow(std_Cache + epsilon, -3f / 2f), 0);
-            var dLdMu = Tensor.Sum(dLdxHat * -1f / Tensor.Sum(std_Cache + epsilon, 0), 0) +
-                        dLdVar * Tensor.Sum(-2f * x_norm_Cache, 0) / m;
+            var dLdVarB = Tensor.Mean(dLdxHat * x_minus_mu_cache * (-1f / 2f) *
+                         Tensor.Pow(std_cache + epsilon, -3f / 2f), 1);
 
-            var dLdx = dLdxHat * 1f / (Tensor.Sqrt(std_Cache + epsilon)) +
-                       dLdVar * 2f * (x_norm_Cache) / m +
-                       dLdMu * (1f / m);
+            var dLdMuB = Tensor.Mean(dLdxHat * -1f / std_cache + epsilon +
+                        Tensor.Expand(dLdVarB, 1, m) * -2f * x_minus_mu_cache / m, 1);
 
-            
-            var dLdGamma = Tensor.Sum(loss * x_hat_Cache, 0);
-            var dLdBeta = Tensor.Sum(loss, 0);
+            var dLdX = dLdxHat * 1f / Tensor.Sqrt(std_cache + epsilon) +
+                       Tensor.Expand(dLdVarB, 1, m) * 2f * x_minus_mu_cache / m +
+                       Tensor.Expand(dLdMuB, 1, m) * (1f / m);
 
-            grad_Gamma += dLdGamma / m;
-            grad_Beta += dLdBeta / m;
 
-            // returning the derivative of the loss wrt inputs.
-            return dLdx;
+            var dLdGamma = Tensor.Mean(dLdY * x_hat_Cache, 1);
+            var dLdBeta = Tensor.Mean(dLdY, 1);
+
+            grad_Gamma += dLdGamma;
+            grad_Beta += dLdBeta;
+
+            return dLdX;
         }
 
         public void ZeroGrad()
@@ -153,7 +140,23 @@ namespace DeepUnity
 
         }
 
-        /*   Improving BN networks
+        public void OnBeforeSerialize()
+        {
+
+        }
+        public void OnAfterDeserialize()
+        {
+            // This function is actually having 2 workers on serialization, and one on them is called when weights.shape.length == 0.
+            if (gamma.Shape.Length == 0)
+                return;
+
+            int num_features = gamma.Shape[0];
+
+            this.grad_Gamma = Tensor.Zeros(num_features);
+            this.grad_Beta = Tensor.Zeros(num_features);
+        }
+
+        /*   Improving BN networks (placed before 
              Increase learning rate. In a batch-normalized model,
           we have been able to achieve a training speedup from
           higher learning rates, with no ill side effects (Sec. 3.3).

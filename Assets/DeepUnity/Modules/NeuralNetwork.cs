@@ -11,11 +11,11 @@ namespace DeepUnity
         [SerializeField] private string Name;
         [SerializeField] private OptimizerWrapper serializedOptimizer;
         [SerializeField] private ModuleWrapper[] serializedModules;
-        
+
         private IOptimizer Optimizer;
         private IModule[] Modules;
-        
-        
+
+
         public NeuralNetwork(params IModule[] modules) => Modules = modules;
         public void Compile(IOptimizer optimizer, string name)
         {
@@ -24,6 +24,14 @@ namespace DeepUnity
             Optimizer.Initialize(Modules);
         }
 
+        public Tensor Predict(Tensor input)
+        {
+            foreach (var module in Modules)
+            {
+                input = module.Predict(input);
+            }
+            return input;
+        }
         public Tensor Forward(Tensor input)
         {
             foreach (var module in Modules)
@@ -49,7 +57,7 @@ namespace DeepUnity
         {
             foreach (var module in Modules)
             {
-                if(module is IParameters param)
+                if (module is IParameters param)
                     param.ZeroGrad();
             }
         }
@@ -86,8 +94,11 @@ namespace DeepUnity
 
             Optimizer.Step(Modules);
         }
-  
 
+        /// <summary>
+        /// Called internally.
+        /// </summary>
+        public void InitializeGradients() { }
 
         // Saving
         /// <summary>

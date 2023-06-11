@@ -3,26 +3,13 @@ using System;
 
 namespace DeepUnity
 {
-    public enum InitType
-    {
-        Default,
-        HE,
-        Xavier,
-        Normal,
-        Uniform,
-    }
-    public enum Device
-    {
-        CPU,
-        GPU
-    }
+    
     
     [Serializable]
-    public class Dense : IModule, IParameters, ISerializationCallbackReceiver
+    public class Dense : IModule, IParameters
     {
         private Tensor Input_Cache { get; set; }
-        [SerializeField] public Device device;
-        
+
         // Parameters (theta)
         [SerializeField] public Tensor weights;
         [SerializeField] public Tensor biases;
@@ -32,10 +19,8 @@ namespace DeepUnity
         [NonSerialized] public Tensor grad_Biases;
        
 
-        public Dense(int in_features, int out_features, InitType init = InitType.Default, Device device = Device.CPU)
+        public Dense(int in_features, int out_features, InitType init = InitType.Default)
         {
-            this.device = device;
-
             this.weights = Tensor.Zeros(out_features, in_features);
             this.biases = Tensor.Zeros(out_features);
 
@@ -68,18 +53,25 @@ namespace DeepUnity
             }
         }
 
+        public Tensor Predict(Tensor input)
+        {
+            return Tensor.MatMul(weights, input) + Tensor.Expand(biases, axis: 1, times: input.Shape[1]);
+
+        }
         public Tensor Forward(Tensor input) 
         {
             // for faster improvement on GPU, set for forward only on CPU!
             // it seems like forward is always faster with CPU rather than GPU for matrices < 1024 size. Maybe on large scales it must be changed again on GPU.
             Input_Cache = Tensor.Identity(input);
-            return Tensor.MatMul(weights, input, device) + Tensor.Expand(biases, axis: 1, times: input.Shape[1]);
+            int batch = input.Shape[1];
+
+            return Tensor.MatMul(weights, input) + Tensor.Expand(biases, axis: 1, times: batch);
         }
         public Tensor Backward(Tensor loss)
         {
             var transposedInput = Tensor.Transpose(Input_Cache, 0, 1);
-            Tensor gradW = Tensor.MatMul(loss, transposedInput, device);
-            Tensor gradB = Tensor.MatMul(loss, Tensor.Ones(transposedInput.Shape), device);
+            Tensor gradW = Tensor.MatMul(loss, transposedInput);
+            Tensor gradB = Tensor.MatMul(loss, Tensor.Ones(transposedInput.Shape));
 
             // Average the gradients
             float batch = loss.Shape[1];
@@ -93,7 +85,7 @@ namespace DeepUnity
             // return dLossdActivation;
 
             // A bit faster back with double tranposition on loss (may work better on large dense)
-            Tensor dLossActivation = Tensor.MatMul(Tensor.Transpose(loss, 0, 1), weights, device);
+            Tensor dLossActivation = Tensor.MatMul(Tensor.Transpose(loss, 0, 1), weights);
             return Tensor.Transpose(dLossActivation, 0, 1);
         }
 

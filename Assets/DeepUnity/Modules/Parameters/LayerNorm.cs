@@ -2,9 +2,12 @@ using DeepUnity;
 
 namespace kbRadu
 {
-    public class LayerNorm : IModule, IParameters
+    public class LayerNorm: IModule
     {
-
+        public Tensor Predict(Tensor input)
+        {
+            return null;
+        }
         public Tensor Forward(Tensor input)
         {
             return null;

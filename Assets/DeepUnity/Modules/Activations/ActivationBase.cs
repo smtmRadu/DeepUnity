@@ -7,6 +7,11 @@ namespace DeepUnity
         protected abstract void Activation(Tensor x);
         protected abstract void Derivative(Tensor x);
 
+        public Tensor Predict(Tensor input)
+        {
+            Activation(input);
+            return input;
+        }
         public Tensor Forward(Tensor input)
         {
             InputCache = Tensor.Identity(input);

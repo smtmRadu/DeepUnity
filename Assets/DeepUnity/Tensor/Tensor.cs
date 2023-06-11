@@ -4,58 +4,45 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using UnityEditor;
 using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// [width, height, depth, N/A]      <br />
+    /// [width, height, channels, batch] <br />
+    /// [features, sequence, batch, N/A] <br />
+    /// </summary>
     [Serializable]
     public class Tensor : IEnumerable, IEquatable<Tensor>
     {
-        private readonly static ComputeShader MatMulCS;
-        private readonly static int[] numthreads;
-
         [SerializeField] private int[] shape;
         [SerializeField] private float[] data;
-        private Tape tape = null;
+        // [NonSerialized]  private Tape tape = null;
 
        
-        // Create
-        static Tensor()
+        private Tensor(params int[] short_shape)
         {
-            try
-            {
-                numthreads = new int[] { 32, 32, 1 };
-
-                string csguid = AssetDatabase.FindAssets("MatMulCS")[0];
-                string cspath = AssetDatabase.GUIDToAssetPath(csguid);
-                MatMulCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
-            }
-            catch { }
-                   
-        }
-        private Tensor(params int[] _shape)
-        {
-            if (_shape.Length > 4)
+            if (short_shape.Length > 4)
                 throw new Exception("Tensor cannot be instantiated with more than 4 dimensions.");
 
             this.shape = new int[] { 1, 1, 1, 1 };
 
-            if (_shape.Length > 0)
+            if (short_shape.Length > 0)
             {
-                this.shape[0] = _shape[0];
+                this.shape[0] = short_shape[0];
             }
-            if (_shape.Length > 1)
+            if (short_shape.Length > 1)
             {
-                this.shape[1] = _shape[1];
+                this.shape[1] = short_shape[1];
             }
-            if (_shape.Length > 2)
+            if (short_shape.Length > 2)
             {
-                this.shape[2] = _shape[2];
+                this.shape[2] = short_shape[2];
             }
-            if (_shape.Length > 3)
+            if (short_shape.Length > 3)
             {
-                this.shape[3] = _shape[3];
+                this.shape[3] = short_shape[3];
             }
 
             int size = shape[0] * shape[1] * shape[2] * shape[3];
@@ -71,6 +58,16 @@ namespace DeepUnity
             Array.Copy(other.data, clone.data, other.data.Length);
             Array.Copy(other.shape, clone.shape, other.shape.Length);
             return clone;
+        }
+        public static Tensor Reshape(Tensor tensor, params int[] shape)
+        {
+            Tensor reshaped = Zeros(shape);
+
+            if (reshaped.Count() != tensor.Count())
+                throw new Exception("Cannot reshape tensor because of shape incompatibility.");
+
+            Array.Copy(tensor.data, reshaped.data, tensor.data.Length);
+            return reshaped;
         }
         public static Tensor Constant(float scalar)
         {
@@ -208,7 +205,44 @@ namespace DeepUnity
         }
         public string ShapeToString
         {
-            get => "[" + string.Join(", ", Shape) + "]";
+            get
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.Append('[');
+                int rank = Rank;
+                if (rank == 0 || rank == 1)
+                {
+                    sb.Append(shape[0]);
+                }
+                else if (rank == 2)
+                {
+                    sb.Append(shape[0]);
+                    sb.Append(", ");
+                    sb.Append(shape[1]);
+                }
+                else if(rank == 3)
+                {
+                    sb.Append(shape[0]);
+                    sb.Append(", ");
+                    sb.Append(shape[1]);
+                    sb.Append(", ");
+                    sb.Append(shape[2]);
+                }
+                else if(rank == 4)
+                {
+                    sb.Append(shape[0]);
+                    sb.Append(", ");
+                    sb.Append(shape[1]);
+                    sb.Append(", ");
+                    sb.Append(shape[2]);
+                    sb.Append(", ");
+                    sb.Append(shape[3]);
+                }
+
+                sb.Append(']');
+
+                return sb.ToString();
+            }
         }
         public float this[int x]
         {
@@ -343,7 +377,7 @@ namespace DeepUnity
             return result;
         }
 
-        public static Tensor MatMul(Tensor left, Tensor right, Device device)
+        public static Tensor MatMul(Tensor left, Tensor right)
         {
             int w1 = left.shape[0];
             int h1 = left.shape[1];
@@ -357,7 +391,7 @@ namespace DeepUnity
             Tensor resultTensor = new Tensor(w1, h2, batch);
 
 
-            if (device == Device.CPU)
+            if (Settings.Device == Device.CPU)
             {
                 Parallel.For(0, w1, i =>
                 {
@@ -387,17 +421,17 @@ namespace DeepUnity
                 leftBuffer.SetData(left.data);
                 rightBuffer.SetData(right.data);
 
-                MatMulCS.SetBuffer(0, "leftArr", leftBuffer);
-                MatMulCS.SetBuffer(0, "rightArr", rightBuffer);
-                MatMulCS.SetBuffer(0, "resultArr", resultBuffer);
-                MatMulCS.SetInt("leftWidth", w1);
-                MatMulCS.SetInt("leftHeightRightWidth", h1); // or w2 same thing
-                MatMulCS.SetInt("rightHeight", h2);
+                Settings.MatMulCS.SetBuffer(0, "leftArr", leftBuffer);
+                Settings.MatMulCS.SetBuffer(0, "rightArr", rightBuffer);
+                Settings.MatMulCS.SetBuffer(0, "resultArr", resultBuffer);
+                Settings.MatMulCS.SetInt("leftWidth", w1);
+                Settings.MatMulCS.SetInt("leftHeightRightWidth", h1); // or w2 same thing
+                Settings.MatMulCS.SetInt("rightHeight", h2);
 
-                MatMulCS.Dispatch(0,
-                                 (w1 + numthreads[0] - 1) / numthreads[0],
-                                 (h2 + numthreads[1] - 1) / numthreads[1],
-                                 (batch + numthreads[2] - 1) / numthreads[2]);
+                Settings.MatMulCS.Dispatch(0,
+                                 (w1 + Settings.numthreads[0] - 1) / Settings.numthreads[0],
+                                 (h2 + Settings.numthreads[1] - 1) / Settings.numthreads[1],
+                                 (batch + Settings.numthreads[2] - 1) / Settings.numthreads[2]);
 
                 resultBuffer.GetData(resultTensor.data);
 
@@ -626,80 +660,94 @@ namespace DeepUnity
 
             return expandedTensor;
         }
-        public static Tensor[] Slice(Tensor tensor, int axis)
+        public static Tensor[] Split(Tensor tensor, int axis, int split_size)
         {
             int[] shape = tensor.shape;
-            int numSlices = shape[axis];
-            Tensor[] slices = new Tensor[numSlices];
+            int dimAxis = shape[axis];
 
-            int[] sliceShape = shape.ToArray();
-            sliceShape[axis] = 1;
+            List<Tensor> slices = new List<Tensor>();
 
-            for (int s = 0; s < numSlices; s++)
+            int dimIndex = 0;
+            while (dimIndex < dimAxis)
             {
+                // If axis dim is a multiple of split_size, then each slice will have the exact same size
+                // Otherwise, the last slice will have a smaller shape
+                int dimCopySize = Math.Min(split_size, dimAxis - dimIndex);
+                int[] sliceShape = shape.ToArray();
+                sliceShape[axis] = dimCopySize;
+                Tensor slice = Zeros(sliceShape);
+
+                // Copy the data from the original tensor to the slice tensor based on the specified axis
                 if (axis == 0)
                 {
-                    slices[s] = Zeros(sliceShape);
-
-                    for (int j = 0; j < shape[1]; j++)
+                    for (int i = 0; i < dimCopySize; i++)
                     {
-                        for (int k = 0; k < shape[2]; k++)
+                        for (int j = 0; j < shape[1]; j++)
                         {
-                            for (int l = 0; l < shape[3]; l++)
+                            for (int k = 0; k < shape[2]; k++)
                             {
-                                slices[s][0, j, k, l] = tensor[s, j, k, l];
+                                for (int l = 0; l < shape[3]; l++)
+                                {
+                                    slice[i, j, k, l] = tensor[dimIndex + i, j, k, l];
+                                }
                             }
                         }
                     }
                 }
                 else if (axis == 1)
                 {
-                    slices[s] = Zeros(sliceShape);
-
                     for (int i = 0; i < shape[0]; i++)
                     {
-                        for (int k = 0; k < shape[2]; k++)
+                        for (int j = 0; j < dimCopySize; j++)
                         {
-                            for (int l = 0; l < shape[3]; l++)
+                            for (int k = 0; k < shape[2]; k++)
                             {
-                                slices[s][i, 0, k, l] = tensor[i, s, k, l];
+                                for (int l = 0; l < shape[3]; l++)
+                                {
+                                    slice[i, j, k, l] = tensor[i, dimIndex + j, k, l];
+                                }
                             }
                         }
                     }
                 }
                 else if (axis == 2)
                 {
-                    slices[s] = Zeros(sliceShape);
-
                     for (int i = 0; i < shape[0]; i++)
                     {
                         for (int j = 0; j < shape[1]; j++)
                         {
-                            for (int l = 0; l < shape[3]; l++)
+                            for (int k = 0; k < dimCopySize; k++)
                             {
-                                slices[s][i, j, 0, l] = tensor[i, j, s, l];
+                                for (int l = 0; l < shape[3]; l++)
+                                {
+                                    slice[i, j, k, l] = tensor[i, j, dimIndex + k, l];
+                                }
                             }
                         }
                     }
                 }
                 else if (axis == 3)
                 {
-                    slices[s] = Zeros(sliceShape);
-
                     for (int i = 0; i < shape[0]; i++)
                     {
                         for (int j = 0; j < shape[1]; j++)
                         {
                             for (int k = 0; k < shape[2]; k++)
                             {
-                                slices[s][i, j, k, 0] = tensor[i, j, k, s];
+                                for (int l = 0; l < dimCopySize; l++)
+                                {
+                                    slice[i, j, k, l] = tensor[i, j, k, dimIndex + l];
+                                }
                             }
                         }
                     }
                 }
+
+                slices.Add(slice);
+                dimIndex += split_size;
             }
 
-            return slices;
+            return slices.ToArray();
         }
         public static Tensor Sum(Tensor tensor, int axis)
         {
@@ -870,8 +918,8 @@ namespace DeepUnity
 
             return meanT;
         }
-        public static Tensor Std(Tensor tensor, int axis) => Sqrt(Var(tensor, axis));
-        public static Tensor Var(Tensor tensor, int axis)
+        public static Tensor Std(Tensor tensor, int axis, int correction = 1) => Sqrt(Var(tensor, axis, correction));
+        public static Tensor Var(Tensor tensor, int axis, int correction = 1)
         {
             Tensor varT = null;
             int[] shape = tensor.shape;
@@ -886,11 +934,14 @@ namespace DeepUnity
                         for (int j = 0; j < shape[1]; j++)
                         {
                             float sum = 0f;
+                            float sumSquared = 0f;
                             for (int i = 0; i < shape[0]; i++)
                             {
                                 sum += tensor[i, j, k, l];
+                                sumSquared += tensor[i, j, k, l] * tensor[i, j, k, l];
                             }
-                            varT[0, j, k, l] = sum;
+                            varT[0, j, k, l] = (sumSquared - (sum * sum) / shape[0]) / 
+                                                    (shape[0] - correction);
                         }
                     }
                 }
@@ -905,11 +956,14 @@ namespace DeepUnity
                         for (int i = 0; i < shape[0]; i++)
                         {
                             float sum = 0f;
+                            float sumSquared = 0f;
                             for (int j = 0; j < shape[1]; j++)
                             {
                                 sum += tensor[i, j, k, l];
+                                sumSquared += tensor[i, j, k, l] * tensor[i, j, k, l];
                             }
-                            varT[i, 0, k, l] = sum;
+                            varT[i, 0, k, l] = (sumSquared - (sum * sum) / shape[1]) / 
+                                                    (shape[1] - correction);
                         }
                     }
                 }
@@ -924,11 +978,14 @@ namespace DeepUnity
                         for (int i = 0; i < shape[0]; i++)
                         {
                             float sum = 0f;
+                            float sumSquared = 0f;
                             for (int k = 0; k < shape[2]; k++)
                             {
                                 sum += tensor[i, j, k, l];
+                                sumSquared += tensor[i, j, k, l] * tensor[i, j, k, l];
                             }
-                            varT[i, j, 0, l] = sum;
+                            varT[i, j, 0, l] = (sumSquared - (sum * sum) / shape[2]) / 
+                                                    (shape[2] - correction);
                         }
                     }
                 }
@@ -943,19 +1000,26 @@ namespace DeepUnity
                         for (int i = 0; i < shape[0]; i++)
                         {
                             float sum = 0f;
+                            float sumSquared = 0f;
                             for (int l = 0; l < shape[3]; l++)
                             {
                                 sum += tensor[i, j, k, l];
+                                sumSquared += tensor[i, j, k, l] * tensor[i, j, k, l];
                             }
-                            varT[i, j, k, 0] = sum;
+                            varT[i, j, k, 0] = (sumSquared - (sum * sum) / shape[3]) / 
+                                                    (shape[3] - correction);
                         }
                     }
                 }
             }
-            else throw new Exception("Available axis for tensor are 0, 1, 2 and 3.");
+            else
+            {
+                throw new Exception("Available axis for tensor are 0, 1, 2, and 3.");
+            }
 
             return varT;
         }
+
 
         // Math operations
         public static Tensor Exp(Tensor tensor)
@@ -1000,6 +1064,30 @@ namespace DeepUnity
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] = MathF.Abs(tensor.data[i]);
+            }
+
+            return result;
+        }
+        public static Tensor Cos(Tensor tensor)
+        {
+            Tensor result = new Tensor(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Cos(tensor.data[i]);
+
+            }
+
+            return result;
+        }
+        public static Tensor Sin(Tensor tensor)
+        {
+            Tensor result = new Tensor(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Sin(tensor.data[i]);
+
             }
 
             return result;
@@ -1172,32 +1260,45 @@ namespace DeepUnity
             StringBuilder sb = new StringBuilder();
             sb.Append("\n[");
 
-            
-
+           
             for (int l = 0; l < shape[3]; l++)
             {
                 if (l > 0)
-                    sb.Append(",\n\n\n");
-
+                {
+                    sb.Append("\n\n\n");
+                    for (int indent = 0; indent < rank - 3; indent++)
+                    {
+                        sb.Append(" ");
+                    }
+                }
                 if (rank > 3)
                     sb.Append("[");
 
                 for (int k = 0; k < shape[2]; k++)
                 {
                     if (k > 0)
-                        sb.Append(",\n\n");
-
+                    {
+                        sb.Append("\n\n");
+                        for (int indent = 0; indent < rank - 2; indent++)
+                        {
+                            sb.Append(" ");
+                        }
+                    }
                     if (rank > 2)
                         sb.Append("[");
 
                     for (int j = 0; j < shape[1]; j++)
                     {
                         if (j > 0 && rank > 1)
-                            sb.Append(",\n");
-
+                        {
+                            sb.Append("\n");
+                            for (int indent = 0; indent < rank - 1; indent++)
+                            {
+                                sb.Append(" ");
+                            }
+                        }
                         if (rank > 1)
                             sb.Append("[");
-
 
                         for (int i = 0; i < shape[0]; i++)
                         {
@@ -1229,10 +1330,5 @@ namespace DeepUnity
         }      
     }
 
-    public enum NormType
-    {
-        ManhattanL1,
-        EuclideanL2,
-        Frobenius
-    }
+   
 }
