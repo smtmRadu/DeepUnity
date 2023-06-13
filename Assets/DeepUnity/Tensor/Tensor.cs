@@ -1,209 +1,78 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using UnityEngine;
 
 namespace DeepUnity
 {
-    /// <summary>
-    /// [width, height, depth, N/A]      <br />
-    /// [width, height, channels, batch] <br />
-    /// [features, sequence, batch, N/A] <br />
-    /// </summary>
-    [Serializable]
-    public class Tensor : IEnumerable, IEquatable<Tensor>
+    public class Tensor : NDArray
     {
-        [SerializeField] private int[] shape;
-        [SerializeField] private float[] data;
-        // [NonSerialized]  private Tape tape = null;
-
-       
-        private Tensor(params int[] short_shape)
+        private static int[] ReversedShape(int[] shape)
         {
-            if (short_shape.Length > 4)
-                throw new Exception("Tensor cannot be instantiated with more than 4 dimensions.");
-
-            this.shape = new int[] { 1, 1, 1, 1 };
-
-            if (short_shape.Length > 0)
-            {
-                this.shape[0] = short_shape[0];
-            }
-            if (short_shape.Length > 1)
-            {
-                this.shape[1] = short_shape[1];
-            }
-            if (short_shape.Length > 2)
-            {
-                this.shape[2] = short_shape[2];
-            }
-            if (short_shape.Length > 3)
-            {
-                this.shape[3] = short_shape[3];
-            }
-
-            int size = shape[0] * shape[1] * shape[2] * shape[3];
-
-            if (size > 16_777_216) // hardcoded like this because 4096x4096 max allowed matrix, on 8192 it crashes
-                throw new Exception("Tensor dimensions is too large on initialization (cannot surpass 16,777,216 units).");
-
-            data = new float[size];
+            int[] rev_shape = shape.ToArray();
+            Array.Reverse(rev_shape);
+            return rev_shape;
         }
-        public static Tensor Identity(Tensor other)
+        private static int ReversedAxis(int rank, int axis)
         {
-            Tensor clone = new Tensor(other.shape);
-            Array.Copy(other.data, clone.data, other.data.Length);
-            Array.Copy(other.shape, clone.shape, other.shape.Length);
-            return clone;
-        }
-        public static Tensor Reshape(Tensor tensor, params int[] shape)
-        {
-            Tensor reshaped = Zeros(shape);
-
-            if (reshaped.Count() != tensor.Count())
-                throw new Exception("Cannot reshape tensor because of shape incompatibility.");
-
-            Array.Copy(tensor.data, reshaped.data, tensor.data.Length);
-            return reshaped;
-        }
-        public static Tensor Constant(float scalar)
-        {
-            Tensor tensor = new Tensor();
-            tensor.data[0] = scalar;
-            return tensor;
-        }
-        public static Tensor Constant(float[] vector)
-        {
-            Tensor tensor = new Tensor(vector.GetLength(0));
-            var shape = tensor.shape;
-            for (int i = 0; i < shape[0]; i++)
-            {
-                tensor.data[i] = vector[i];
-            }
-            return tensor;
-        }
-        public static Tensor Constant(float[,] matrix)
-        {
-            Tensor tensor = new Tensor(matrix.GetLength(0), matrix.GetLength(1));
-            var shape = tensor.shape;
-            for (int j = 0; j < shape[1]; j++)
-            {
-                for (int i = 0; i < shape[0]; i++)
-                {
-
-                    tensor[i, j] = matrix[i, j];
-
-                }
-            }
-            return tensor;
-        }
-        public static Tensor Constant(float[,,] cuboid)
-        {
-            Tensor tensor = new Tensor(cuboid.GetLength(0), cuboid.GetLength(1), cuboid.GetLength(2));
-            var shape = tensor.shape;
-
-
-            for (int k = 0; k < shape[2]; k++)
-            {
-                for (int j = 0; j < shape[1]; j++)
-                {
-                    for (int i = 0; i < shape[0]; i++)
-                    {
-                        tensor[i, j, k] = cuboid[i, j, k];
-                    }
-                }
-            }
-
-            return tensor;
-        }
-        public static Tensor Constant(float[,,,] tesseract)
-        {
-            Tensor tensor = new Tensor(tesseract.GetLength(0), tesseract.GetLength(1), tesseract.GetLength(2), tesseract.GetLength(3));
-            var shape = tensor.shape;
-
-            for (int l = 0; l < shape[3]; l++)
-            {
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            tensor[i, j, k, l] = tesseract[i, j, k, l];
-                        }
-                    }
-                }
-            }
-
-            return tensor;
-        }
-        public static Tensor Zeros(params int[] shape) => new Tensor(shape);
-        public static Tensor Ones(params int[] shape)
-        {
-            Tensor tensor = new Tensor(shape);
-
-            for (int i = 0; i < tensor.data.Length; i++)
-            {
-                tensor.data[i] = 1f;
-            }
-
-            return tensor;
-        }
-        public static Tensor Random(params int[] shape)
-        {
-            Tensor tensor = new Tensor(shape);
-
-            for (int i = 0; i < tensor.data.Length; i++)
-            {
-                tensor.data[i] = Utils.Random.Value;
-            }
-
-            return tensor;
-        }
-        public static Tensor Normal(params int[] shape)
-        {
-            Tensor tensor = new Tensor(shape);
-
-            for (int i = 0; i < tensor.data.Length; i++)
-            {
-                tensor.data[i] = Utils.Random.Gaussian();
-            }
-
-            return tensor;
-        }
-        public static Tensor Fill(float value, params int[] shape)
-        {
-            Tensor tensor = new Tensor(shape);
-
-            for (int i = 0; i < tensor.data.Length; i++)
-            {
-                tensor.data[i] = value;
-            }
-
-            return tensor;
+            if (axis >= 0)
+                return rank - 1 - axis;
+            else
+                return -1 - axis;
         }
 
-        // Operator overloading
-        public int Rank
+        private Tensor(NDArray ndarray)
+        {
+            this.shape = ndarray.Shape;
+            this.data = ndarray.Data;
+        }
+        private Tensor(params int[] short_shape) : base(ReversedShape(short_shape)) { }
+        public static Tensor Identity(Tensor other) => new Tensor(NDArray.Identity(other));
+        public new static Tensor Constant(float scalar) => new Tensor(NDArray.Constant(scalar));
+        public new static Tensor Constant(float[,] matrix) => new Tensor(NDArray.Constant(matrix));
+        public new static Tensor Constant(float[,,] cuboid) => new Tensor(NDArray.Constant(cuboid));
+        public new static Tensor Constant(float[,,,] tesseract) => new Tensor(NDArray.Constant(tesseract));
+        public new static Tensor Zeros(params int[] shape) => new Tensor(NDArray.Zeros(ReversedShape(shape)));
+        public new static Tensor Ones(params int[] shape) => new Tensor(NDArray.Ones(ReversedShape(shape)));
+        public new static Tensor Random(params int[] shape) => new Tensor(NDArray.Random(ReversedShape(shape)));
+        public new static Tensor RandomNormal(params int[] shape) => new Tensor(NDArray.RandomNormal(ReversedShape(shape)));
+        public new static Tensor Fill(float value, params int[] shape) => new Tensor(NDArray.Fill(value, ReversedShape(shape)));
+
+        /// <summary>
+        /// Dot product between a Tensor n x m with another Tensor m x p.
+        /// </summary>
+        public static Tensor MatMul(Tensor left, Tensor right) => new Tensor(NDArray.MatMul(Transpose(left, 1, 0), Transpose(right, 1, 0)));
+        public static Tensor Transpose(Tensor tensor, int dim0, int dim1) => new Tensor(NDArray.Transpose(tensor, ReversedAxis(tensor.Rank, dim0), ReversedAxis(tensor.Rank, dim1)));
+        public static Tensor Join(int dim, params Tensor[] tensors) => new Tensor(NDArray.Join(ReversedAxis(tensors[0].Rank, dim), tensors));
+        public static Tensor[] Split(Tensor tensor, int dim, int split_size) => NDArray.Split(tensor, ReversedAxis(tensor.Rank, dim), split_size).Select(x => new Tensor(x)).ToArray();
+        public static Tensor Shuffle(Tensor tensor, int dim) => new Tensor(NDArray.Shuffle(tensor, ReversedAxis(tensor.Rank, dim)));
+        public static Tensor Sum(Tensor tensor, int dim) => new Tensor(NDArray.Sum(tensor, ReversedAxis(tensor.Rank, dim)));
+        public static Tensor Mean(Tensor tensor, int dim) => new Tensor(NDArray.Mean(tensor, ReversedAxis(tensor.Rank, dim)));
+        public static Tensor Std(Tensor tensor, int dim, int correction) => new Tensor(NDArray.Std(tensor, ReversedAxis(tensor.Rank, dim), correction));
+        public static Tensor Var(Tensor tensor, int dim, int correction) => new Tensor(NDArray.Var(tensor, ReversedAxis(tensor.Rank, dim), correction));
+
+
+        public static Tensor Exp(Tensor tensor) => new Tensor(NDArray.Exp(tensor));
+        public static Tensor Pow(Tensor @base, float power) => new Tensor(NDArray.Pow(@base, power));
+        public static Tensor Sqrt(Tensor @base) => new Tensor(NDArray.Sqrt(@base));
+        public static Tensor Abs(Tensor tensor) => new Tensor(NDArray.Abs(tensor));
+        public static Tensor Cos(Tensor tensor) => new Tensor(NDArray.Cos(tensor));
+        public static Tensor Sin(Tensor tensor) => new Tensor(NDArray.Sin(tensor)); 
+        public static Tensor Clip(Tensor tensor, float min, float max) => new Tensor(NDArray.Clip(tensor, min, max));
+        public static Tensor Minimum(Tensor tensor1, Tensor tensor2) => new Tensor(NDArray.Minimum(tensor1, tensor2));
+        public static Tensor Maximum(Tensor tensor1, Tensor tensor2) => new Tensor(NDArray.Maximum(tensor1, tensor2));
+        public static Tensor Norm(Tensor tensor, NormType normType = NormType.ManhattanL1) => new Tensor(NDArray.Norm(tensor, normType));
+        public static Tensor Min(Tensor tensor) => new Tensor(NDArray.Min(tensor));
+        public static Tensor Max(Tensor tensor) => new Tensor(NDArray.Min(tensor));
+        
+        public new int Rank => base.Rank;
+        public new int[] Shape
         {
             get
             {
-                for (int i = shape.Length - 1; i >= 0; i--)
-                {
-                    if (shape[i] > 1)
-                        return i + 1;
-                }
-                return 0;
+                return ReversedShape(base.Shape);
             }
         }
-        public int[] Shape
-        {
-            get => shape;
-        }
-        public string ShapeToString
+        public new string ShapeToString
         {
             get
             {
@@ -212,31 +81,31 @@ namespace DeepUnity
                 int rank = Rank;
                 if (rank == 0 || rank == 1)
                 {
-                    sb.Append(shape[0]);
+                    sb.Append(Shape[3]);
                 }
                 else if (rank == 2)
                 {
-                    sb.Append(shape[0]);
+                    sb.Append(Shape[2]);
                     sb.Append(", ");
-                    sb.Append(shape[1]);
+                    sb.Append(Shape[3]);
                 }
-                else if(rank == 3)
+                else if (rank == 3)
                 {
-                    sb.Append(shape[0]);
+                    sb.Append(Shape[1]);
                     sb.Append(", ");
-                    sb.Append(shape[1]);
+                    sb.Append(Shape[2]);
                     sb.Append(", ");
-                    sb.Append(shape[2]);
+                    sb.Append(Shape[3]);
                 }
-                else if(rank == 4)
+                else if (rank == 4)
                 {
-                    sb.Append(shape[0]);
+                    sb.Append(Shape[0]);
                     sb.Append(", ");
-                    sb.Append(shape[1]);
+                    sb.Append(Shape[1]);
                     sb.Append(", ");
-                    sb.Append(shape[2]);
+                    sb.Append(Shape[2]);
                     sb.Append(", ");
-                    sb.Append(shape[3]);
+                    sb.Append(Shape[3]);
                 }
 
                 sb.Append(']');
@@ -244,1007 +113,28 @@ namespace DeepUnity
                 return sb.ToString();
             }
         }
-        public float this[int x]
+        public new float this[int w]
         {
-            get => data[x];
-            set => data[x] = value;
+            get => base[w];
+            set => base[w] = value;
         }
-        public float this[int x, int y]
+        public new float this[int h, int w]
         {
-            get => data[y * shape[0] + x];
-            set => data[y * shape[0] + x] = value;
+            get => base[h, w];
+            set => base[h, w] = value;
         }
-        public float this[int x, int y, int z]
+        public new float this[int b, int h, int w]
         {
-            get => data[z * shape[1] * shape[0] + y * shape[0] + x];
-            set => data[z * shape[1] * shape[0] + y * shape[0] + x] = value;
+            get => base[b, h, w];
+            set => base[b, h, w] = value;
         }
-        public float this[int x, int y, int z, int w]
+        public new float this[int n, int b, int h, int w]
         {
-            get => data[w * shape[2] * shape[1] * shape[0] + z * shape[1] * shape[0] + y * shape[0] + x];
-            set => data[w * shape[2] * shape[1] * shape[0] + z * shape[1] * shape[0] + y * shape[0] + x] = value;
-        }
-
-        public static Tensor operator +(Tensor tensor)
-        {
-            Tensor result = new Tensor(tensor.shape);
-            for (int i = 0; i < tensor.data.Length; i++)
-            {
-                result.data[i] = tensor.data[i];
-            }             
-                
-            return result;
-        }
-        public static Tensor operator -(Tensor tensor)
-        {
-            Tensor result = new Tensor(tensor.shape);
-            for (int i = 0; i < tensor.data.Length; i++)
-            {
-                result.data[i] = -tensor.data[i];
-            }
-
-            return result;
-        }
-        public static Tensor operator +(Tensor left, float right)
-        {
-            Tensor result = Identity(left);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] += right;
-            }
-
-            return result;
-        }
-        public static Tensor operator -(Tensor left, float right)
-        {
-            Tensor result = Identity(left);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] -= right;
-            }
-
-            return result;
-        }
-        public static Tensor operator *(Tensor left, float right)
-        {
-            Tensor result = Identity(left);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] *= right;
-            }
-
-            return result;
-        }
-        public static Tensor operator /(Tensor left, float right)
-        {
-            Tensor result = Identity(left);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] /= right;
-            }
-
-            return result;
-        }
-        public static Tensor operator +(float left, Tensor right) => right + left;
-        public static Tensor operator *(float left, Tensor right) => right * left;
-        public static Tensor operator +(Tensor left, Tensor right)
-        {
-            Tensor result = new Tensor(left.shape);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = left.data[i] + right.data[i];
-            }
-
-
-            return result;
-        }
-        public static Tensor operator -(Tensor left, Tensor right)
-        {
-            Tensor result = new Tensor(left.shape);
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = left.data[i] - right.data[i];
-            }
-
-            return result;
-        }
-        public static Tensor operator *(Tensor left, Tensor right)
-        {
-            Tensor result = new Tensor(left.shape);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = left.data[i] * right.data[i];
-            }
-
-
-            return result;
-        }
-        public static Tensor operator /(Tensor left, Tensor right)
-        {
-            Tensor result = new Tensor(left.shape);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = left.data[i] / right.data[i];
-            }
-
-            return result;
+            get => base[n, b, h, w];
+            set => base[n, b, h, w] = value;
         }
 
-        public static Tensor MatMul(Tensor left, Tensor right)
-        {
-            int w1 = left.shape[0];
-            int h1 = left.shape[1];
-            int w2 = right.shape[0];
-            int h2 = right.shape[1];
-            int batch = left.shape[2];
-
-            if (h1 != w2)
-                throw new ArgumentException("Tensors must have compatible shapes for matrix multiplication (height of left tensor is not matching the width of the right tensor).");
-
-            Tensor resultTensor = new Tensor(w1, h2, batch);
-
-
-            if (Settings.Device == Device.CPU)
-            {
-                Parallel.For(0, w1, i =>
-                {
-                    for (int k = 0; k < batch; k++)
-                    {
-                        for (int j = 0; j < h2; j++)
-                        {
-                            float sum = 0.0f;
-
-                            for (int l = 0; l < h1; l++)
-                            {
-                                sum += left[i, l, k] * right[l, j, k];
-                            }
-
-                            resultTensor[i, j, k] = sum;
-
-                        }
-                    }
-                });
-            }
-            else
-            {
-                ComputeBuffer leftBuffer = new ComputeBuffer(left.data.Length, 4);
-                ComputeBuffer rightBuffer = new ComputeBuffer(right.data.Length, 4);
-                ComputeBuffer resultBuffer = new ComputeBuffer(w1 * h2 * batch, 4);
-
-                leftBuffer.SetData(left.data);
-                rightBuffer.SetData(right.data);
-
-                Settings.MatMulCS.SetBuffer(0, "leftArr", leftBuffer);
-                Settings.MatMulCS.SetBuffer(0, "rightArr", rightBuffer);
-                Settings.MatMulCS.SetBuffer(0, "resultArr", resultBuffer);
-                Settings.MatMulCS.SetInt("leftWidth", w1);
-                Settings.MatMulCS.SetInt("leftHeightRightWidth", h1); // or w2 same thing
-                Settings.MatMulCS.SetInt("rightHeight", h2);
-
-                Settings.MatMulCS.Dispatch(0,
-                                 (w1 + Settings.numthreads[0] - 1) / Settings.numthreads[0],
-                                 (h2 + Settings.numthreads[1] - 1) / Settings.numthreads[1],
-                                 (batch + Settings.numthreads[2] - 1) / Settings.numthreads[2]);
-
-                resultBuffer.GetData(resultTensor.data);
-
-                leftBuffer.Dispose();
-                rightBuffer.Dispose();
-                resultBuffer.Dispose();
-            }
-
-
-            return resultTensor;
-        }
-        public static Tensor Transpose(Tensor tensor, int axis0, int axis1)
-        {
-            // For mat transpose, axis0 = 0, axis1 = 1
-            int[] shape = tensor.shape;
-            int[] transposedShape = shape.ToArray();
-
-            // Swap the dimensions
-            int dim0 = transposedShape[axis0];
-            transposedShape[axis0] = transposedShape[axis1];
-            transposedShape[axis1] = dim0;
-
-            Tensor transposed = Zeros(transposedShape);
-
-            int[] indices = new int[4];
-            int newIndex0, newIndex1, newIndex2, newIndex3;
-
-            for (indices[0] = 0; indices[0] < shape[0]; indices[0]++)
-            {
-                for (indices[1] = 0; indices[1] < shape[1]; indices[1]++)
-                {
-                    for (indices[2] = 0; indices[2] < shape[2]; indices[2]++)
-                    {
-                        for (indices[3] = 0; indices[3] < shape[3]; indices[3]++)
-                        {
-                            // Set the indices according to the transposition
-                            newIndex0 = (axis0 == 0) ? indices[axis1] : indices[0];
-                            newIndex1 = (axis1 == 1) ? indices[axis0] : indices[1];
-                            newIndex2 = (axis0 == 2) ? indices[axis1] : indices[2];
-                            newIndex3 = (axis1 == 3) ? indices[axis0] : indices[3];
-
-                            // Assign the element to the transposed tensor
-                            transposed[newIndex0, newIndex1, newIndex2, newIndex3] = tensor[indices[0], indices[1], indices[2], indices[3]];
-                        }
-                    }
-                }
-            }
-
-            return transposed;
-        }
-        public static Tensor Join(int axis, params Tensor[] tensors)
-        {
-            if (tensors == null || tensors.Length == 0)
-                throw new Exception("Tensors used for joining are not defined.");
-
-            int[] sliceShape = tensors[0].shape;
-            int[] joinedShape = sliceShape.ToArray();
-            joinedShape[axis] = tensors.Length;
-
-            Tensor joinedTensor = Zeros(joinedShape);
-
-            if (axis == 0)
-            {
-                for (int s = 0; s < tensors.Length; s++)
-                {
-                    for (int i = 0; i < sliceShape[0]; i++)
-                    {
-                        for (int j = 0; j < sliceShape[1]; j++)
-                        {
-                            for (int k = 0; k < sliceShape[2]; k++)
-                            {
-                                for (int l = 0; l < sliceShape[3]; l++)
-                                {
-                                    joinedTensor[s, j, k, l] = tensors[s][i, j, k, l];
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else if (axis == 1)
-            {
-                for (int s = 0; s < tensors.Length; s++)
-                {
-                    for (int i = 0; i < sliceShape[0]; i++)
-                    {
-                        for (int j = 0; j < sliceShape[1]; j++)
-                        {
-                            for (int k = 0; k < sliceShape[2]; k++)
-                            {
-                                for (int l = 0; l < sliceShape[3]; l++)
-                                {
-                                    joinedTensor[i, s, k, l] = tensors[s][i, j, k, l];
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else if (axis == 2)
-            {
-                for (int s = 0; s < tensors.Length; s++)
-                {
-                    for (int i = 0; i < sliceShape[0]; i++)
-                    {
-                        for (int j = 0; j < sliceShape[1]; j++)
-                        {
-                            for (int k = 0; k < sliceShape[2]; k++)
-                            {
-                                for (int l = 0; l < sliceShape[3]; l++)
-                                {
-                                    joinedTensor[i, j, s, l] = tensors[s][i, j, k, l];
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else if (axis == 3)
-            {
-                for (int s = 0; s < tensors.Length; s++)
-                {
-                    for (int i = 0; i < sliceShape[0]; i++)
-                    {
-                        for (int j = 0; j < sliceShape[1]; j++)
-                        {
-                            for (int k = 0; k < sliceShape[2]; k++)
-                            {
-                                for (int l = 0; l < sliceShape[3]; l++)
-                                {
-                                    joinedTensor[i, j, k, s] = tensors[s][i, j, k, l];
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            return joinedTensor;
-
-        }
-        public static Tensor Expand(Tensor tensor, int axis, int times)
-        {
-            int[] shape = tensor.shape;
-            int[] expandedShape = shape.ToArray();
-            expandedShape[axis] *= times;
-
-            Tensor expandedTensor = Zeros(expandedShape);
-
-            if (axis == 0)
-            {
-                for (int t = 0; t < times; t++)
-                {
-                    for (int i = 0; i < shape[0]; i++)
-                    {
-                        for (int j = 0; j < shape[1]; j++)
-                        {
-                            for (int k = 0; k < shape[2]; k++)
-                            {
-                                for (int l = 0; l < shape[3]; l++)
-                                {
-                                    expandedTensor[t * shape[0] + i, j, k, l] = tensor[i, j, k, l];
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else if (axis == 1)
-            {
-                for (int t = 0; t < times; t++)
-                {
-                    for (int i = 0; i < shape[0]; i++)
-                    {
-                        for (int j = 0; j < shape[1]; j++)
-                        {
-                            for (int k = 0; k < shape[2]; k++)
-                            {
-                                for (int l = 0; l < shape[3]; l++)
-                                {
-                                    expandedTensor[i, t * shape[1] + j, k, l] = tensor[i, j, k, l];
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else if (axis == 2)
-            {
-                for (int t = 0; t < times; t++)
-                {
-                    for (int i = 0; i < shape[0]; i++)
-                    {
-                        for (int j = 0; j < shape[1]; j++)
-                        {
-                            for (int k = 0; k < shape[2]; k++)
-                            {
-                                for (int l = 0; l < shape[3]; l++)
-                                {
-                                    expandedTensor[i, j, t * shape[2] + k, l] = tensor[i, j, k, l];
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else if (axis == 3)
-            {
-                for (int t = 0; t < times; t++)
-                {
-                    for (int i = 0; i < shape[0]; i++)
-                    {
-                        for (int j = 0; j < shape[1]; j++)
-                        {
-                            for (int k = 0; k < shape[2]; k++)
-                            {
-                                for (int l = 0; l < shape[3]; l++)
-                                {
-                                    expandedTensor[i, j, k, t * shape[3] + l] = tensor[i, j, k, l];
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            return expandedTensor;
-        }
-        public static Tensor[] Split(Tensor tensor, int axis, int split_size)
-        {
-            int[] shape = tensor.shape;
-            int dimAxis = shape[axis];
-
-            List<Tensor> slices = new List<Tensor>();
-
-            int dimIndex = 0;
-            while (dimIndex < dimAxis)
-            {
-                // If axis dim is a multiple of split_size, then each slice will have the exact same size
-                // Otherwise, the last slice will have a smaller shape
-                int dimCopySize = Math.Min(split_size, dimAxis - dimIndex);
-                int[] sliceShape = shape.ToArray();
-                sliceShape[axis] = dimCopySize;
-                Tensor slice = Zeros(sliceShape);
-
-                // Copy the data from the original tensor to the slice tensor based on the specified axis
-                if (axis == 0)
-                {
-                    for (int i = 0; i < dimCopySize; i++)
-                    {
-                        for (int j = 0; j < shape[1]; j++)
-                        {
-                            for (int k = 0; k < shape[2]; k++)
-                            {
-                                for (int l = 0; l < shape[3]; l++)
-                                {
-                                    slice[i, j, k, l] = tensor[dimIndex + i, j, k, l];
-                                }
-                            }
-                        }
-                    }
-                }
-                else if (axis == 1)
-                {
-                    for (int i = 0; i < shape[0]; i++)
-                    {
-                        for (int j = 0; j < dimCopySize; j++)
-                        {
-                            for (int k = 0; k < shape[2]; k++)
-                            {
-                                for (int l = 0; l < shape[3]; l++)
-                                {
-                                    slice[i, j, k, l] = tensor[i, dimIndex + j, k, l];
-                                }
-                            }
-                        }
-                    }
-                }
-                else if (axis == 2)
-                {
-                    for (int i = 0; i < shape[0]; i++)
-                    {
-                        for (int j = 0; j < shape[1]; j++)
-                        {
-                            for (int k = 0; k < dimCopySize; k++)
-                            {
-                                for (int l = 0; l < shape[3]; l++)
-                                {
-                                    slice[i, j, k, l] = tensor[i, j, dimIndex + k, l];
-                                }
-                            }
-                        }
-                    }
-                }
-                else if (axis == 3)
-                {
-                    for (int i = 0; i < shape[0]; i++)
-                    {
-                        for (int j = 0; j < shape[1]; j++)
-                        {
-                            for (int k = 0; k < shape[2]; k++)
-                            {
-                                for (int l = 0; l < dimCopySize; l++)
-                                {
-                                    slice[i, j, k, l] = tensor[i, j, k, dimIndex + l];
-                                }
-                            }
-                        }
-                    }
-                }
-
-                slices.Add(slice);
-                dimIndex += split_size;
-            }
-
-            return slices.ToArray();
-        }
-        public static Tensor Sum(Tensor tensor, int axis)
-        {
-            Tensor sumT = null;
-            int[] shape = tensor.shape;
-
-            if (axis == 0)
-            {
-                sumT = Zeros(1, shape[1], shape[2], shape[3]);
-                for (int l = 0; l < shape[3]; l++)
-                {
-                    for (int k = 0; k < shape[2]; k++)
-                    {
-                        for (int j = 0; j < shape[1]; j++)
-                        {
-                            float sum = 0f;
-                            for (int i = 0; i < shape[0]; i++)
-                            {
-                                sum += tensor[i, j, k, l];
-                            }
-                            sumT[0, j, k, l] = sum;
-                        }
-                    }
-                }
-            }
-            else if (axis == 1)
-            {
-                sumT = Zeros(shape[0], 1, shape[2], shape[3]);
-                for (int l = 0; l < shape[3]; l++)
-                {
-                    for (int k = 0; k < shape[2]; k++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            float sum = 0f;
-                            for (int j = 0; j < shape[1]; j++)
-                            {
-                                sum += tensor[i, j, k, l];
-                            }
-                            sumT[i, 0, k, l] = sum;
-                        }
-                    }
-                }
-            }
-            else if (axis == 2)
-            {
-                sumT = Zeros(shape[0], shape[1], 1, shape[3]);
-                for (int l = 0; l < shape[3]; l++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            float sum = 0f;
-                            for (int k = 0; k < shape[2]; k++)
-                            {
-                                sum += tensor[i, j, k, l];
-                            }
-                            sumT[i, j, 0, l] = sum;
-                        }
-                    }
-                }
-            }
-            else if (axis == 3)
-            {
-                sumT = Zeros(shape[0], shape[1], shape[2], 1);
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            float sum = 0f;
-                            for (int l = 0; l < shape[3]; l++)
-                            {
-                                sum += tensor[i, j, k, l];
-                            }
-                            sumT[i, j, k, 0] = sum;
-                        }
-                    }
-                }
-            }
-
-            return sumT;
-        }
-        public static Tensor Mean(Tensor tensor, int axis)
-        {
-            Tensor meanT = null;
-            int[] shape = tensor.shape;
-
-            if (axis == 0)
-            {
-                meanT = Zeros(1, shape[1], shape[2], shape[3]);
-                for (int l = 0; l < shape[3]; l++)
-                {
-                    for (int k = 0; k < shape[2]; k++)
-                    {
-                        for (int j = 0; j < shape[1]; j++)
-                        {
-                            float sum = 0f;
-                            for (int i = 0; i < shape[0]; i++)
-                            {
-                                sum += tensor[i, j, k, l];
-                            }
-                            meanT[0, j, k, l] = sum / shape[0];
-                        }
-                    }
-                }
-            }
-            else if (axis == 1)
-            {
-                meanT = Zeros(shape[0], 1, shape[2], shape[3]);
-                for (int l = 0; l < shape[3]; l++)
-                {
-                    for (int k = 0; k < shape[2]; k++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            float sum = 0f;
-                            for (int j = 0; j < shape[1]; j++)
-                            {
-                                sum += tensor[i, j, k, l];
-                            }
-                            meanT[i, 0, k, l] = sum / shape[1];
-                        }
-                    }
-                }
-            }
-            else if (axis == 2)
-            {
-                meanT = Zeros(shape[0], shape[1], 1, shape[3]);
-                for (int l = 0; l < shape[3]; l++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            float sum = 0f;
-                            for (int k = 0; k < shape[2]; k++)
-                            {
-                                sum += tensor[i, j, k, l];
-                            }
-                            meanT[i, j, 0, l] = sum / shape[2];
-                        }
-                    }
-                }
-            }
-            else if (axis == 3)
-            {
-                meanT = Zeros(shape[0], shape[1], shape[2], 1);
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            float sum = 0f;
-                            for (int l = 0; l < shape[3]; l++)
-                            {
-                                sum += tensor[i, j, k, l];
-                            }
-                            meanT[i, j, k, 0] = sum / shape[3];
-                        }
-                    }
-                }
-            }
-            else throw new Exception("Available axis for tensor are 0, 1, 2 and 3.");
-
-            return meanT;
-        }
-        public static Tensor Std(Tensor tensor, int axis, int correction = 1) => Sqrt(Var(tensor, axis, correction));
-        public static Tensor Var(Tensor tensor, int axis, int correction = 1)
-        {
-            Tensor varT = null;
-            int[] shape = tensor.shape;
-
-            if (axis == 0)
-            {
-                varT = Zeros(1, shape[1], shape[2], shape[3]);
-                for (int l = 0; l < shape[3]; l++)
-                {
-                    for (int k = 0; k < shape[2]; k++)
-                    {
-                        for (int j = 0; j < shape[1]; j++)
-                        {
-                            float sum = 0f;
-                            float sumSquared = 0f;
-                            for (int i = 0; i < shape[0]; i++)
-                            {
-                                sum += tensor[i, j, k, l];
-                                sumSquared += tensor[i, j, k, l] * tensor[i, j, k, l];
-                            }
-                            varT[0, j, k, l] = (sumSquared - (sum * sum) / shape[0]) / 
-                                                    (shape[0] - correction);
-                        }
-                    }
-                }
-            }
-            else if (axis == 1)
-            {
-                varT = Zeros(shape[0], 1, shape[2], shape[3]);
-                for (int l = 0; l < shape[3]; l++)
-                {
-                    for (int k = 0; k < shape[2]; k++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            float sum = 0f;
-                            float sumSquared = 0f;
-                            for (int j = 0; j < shape[1]; j++)
-                            {
-                                sum += tensor[i, j, k, l];
-                                sumSquared += tensor[i, j, k, l] * tensor[i, j, k, l];
-                            }
-                            varT[i, 0, k, l] = (sumSquared - (sum * sum) / shape[1]) / 
-                                                    (shape[1] - correction);
-                        }
-                    }
-                }
-            }
-            else if (axis == 2)
-            {
-                varT = Zeros(shape[0], shape[1], 1, shape[3]);
-                for (int l = 0; l < shape[3]; l++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            float sum = 0f;
-                            float sumSquared = 0f;
-                            for (int k = 0; k < shape[2]; k++)
-                            {
-                                sum += tensor[i, j, k, l];
-                                sumSquared += tensor[i, j, k, l] * tensor[i, j, k, l];
-                            }
-                            varT[i, j, 0, l] = (sumSquared - (sum * sum) / shape[2]) / 
-                                                    (shape[2] - correction);
-                        }
-                    }
-                }
-            }
-            else if (axis == 3)
-            {
-                varT = Zeros(shape[0], shape[1], shape[2], 1);
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            float sum = 0f;
-                            float sumSquared = 0f;
-                            for (int l = 0; l < shape[3]; l++)
-                            {
-                                sum += tensor[i, j, k, l];
-                                sumSquared += tensor[i, j, k, l] * tensor[i, j, k, l];
-                            }
-                            varT[i, j, k, 0] = (sumSquared - (sum * sum) / shape[3]) / 
-                                                    (shape[3] - correction);
-                        }
-                    }
-                }
-            }
-            else
-            {
-                throw new Exception("Available axis for tensor are 0, 1, 2, and 3.");
-            }
-
-            return varT;
-        }
-
-
-        // Math operations
-        public static Tensor Exp(Tensor tensor)
-        {
-            Tensor result = new Tensor(tensor.shape);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = MathF.Exp(tensor.data[i]);
-
-            }
-
-            return result;
-        }
-        public static Tensor Pow(Tensor @base, float power)
-        {
-            Tensor result = new Tensor(@base.shape);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = MathF.Pow(@base.data[i], power);
-            
-            }
-
-            return result;
-        }
-        public static Tensor Sqrt(Tensor @base)
-        {
-            Tensor result = new Tensor(@base.shape);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = MathF.Sqrt(@base.data[i]);
-            }
-
-            return result;
-        }
-        public static Tensor Abs(Tensor tensor)
-        {
-            Tensor result = new Tensor(tensor.shape);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = MathF.Abs(tensor.data[i]);
-            }
-
-            return result;
-        }
-        public static Tensor Cos(Tensor tensor)
-        {
-            Tensor result = new Tensor(tensor.shape);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = MathF.Cos(tensor.data[i]);
-
-            }
-
-            return result;
-        }
-        public static Tensor Sin(Tensor tensor)
-        {
-            Tensor result = new Tensor(tensor.shape);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = MathF.Sin(tensor.data[i]);
-
-            }
-
-            return result;
-        }
-        public static Tensor Clip(Tensor tensor, float min, float max)
-        {
-            Tensor result = new Tensor(tensor.shape);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = Math.Clamp(tensor.data[i], min, max);
-            }
-
-            return result;
-        }
-        public static Tensor Maximum(Tensor left, Tensor right)
-        {
-            Tensor result = new Tensor(left.shape);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = MathF.Max(left.data[i], right.data[i]);
-            }
-
-            return result;
-        }
-        public static Tensor Minimum(Tensor left, Tensor right)
-        {
-            Tensor result = new Tensor(left.shape);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = MathF.Min(left.data[i], right.data[i]);
-            }
-
-            return result;
-        }
-        
-        public static Tensor Norm(Tensor tensor, NormType normType = NormType.ManhattanL1)
-        {
-            switch(normType)
-            {
-                case NormType.ManhattanL1:
-                    float abssum = tensor.data.Sum(x => MathF.Abs(x));
-                    return Constant(abssum);
-                case NormType.EuclideanL2:
-                    float sum = tensor.data.Sum();
-                    return Constant(MathF.Sqrt(sum));
-                case NormType.Frobenius:
-                    float sqrsum = tensor.data.Sum(x => x * x);
-                    return Constant(MathF.Sqrt(sqrsum));
-                default:
-                    throw new Exception("Unhandled norm type.");
-            }
-        }
-        public static Tensor Min(Tensor tensor)
-        {
-            float min = tensor.data.Min();
-            return Constant(min);
-        }
-        public static Tensor Max(Tensor tensor)
-        {
-            float max = tensor.data.Max();
-            return Constant(max);
-        }
-
-
-        // LINQ (Not applied in autograd system)
-        /// <summary>
-        /// This tensor values = function(this tensor values).
-        /// </summary>
-        public void ForEach(Func<float, float> function, bool multithreaded = false)
-        {
-            if(multithreaded)
-                Parallel.For(0, data.Length, i =>
-                {
-                    data[i] = function(data[i]);
-                });
-            else
-                for (int i = 0; i < data.Length; i++)
-                {
-                    data[i] = function(data[i]);
-                }
-        }
-        /// <summary>
-        /// Returns a new Tensor where 'new tensor values = selector(this tensor values)'
-        /// </summary>
-        public Tensor Select(Func<float, float> selector, bool multithreaded = false)
-        {
-            Tensor result = new Tensor(shape);
-
-            if (multithreaded)
-                Parallel.For(0, data.Length, i =>
-                {
-                    result.data[i] = selector(data[i]);
-                });
-            else
-                for (int i = 0; i < data.Length; i++)
-                {
-                    result.data[i] = selector(data[i]);
-                }
-
-            return result;
-        }
-        /// <summary>
-        /// Returns a new Tensor where 'new tensor values = resultSelector(1st tensor values, 2nd tensor values).
-        /// </summary>
-        public Tensor Zip(Tensor second, Func<float, float, float> resultSelector)
-        {
-            Tensor result = new Tensor(shape);
-
-            for (int i = 0; i < data.Length; i++)
-            {
-                result.data[i] = resultSelector(data[i], second.data[i]);
-            }
-
-            return result;
-        }
-        public Tensor Count(Func<float, bool> selector = null)
-        {
-            if (selector == null)
-                return Constant(shape[0] * shape[1] * shape[2] * shape[3]);
-
-            int count = 0;
-
-            for (int i = 0; i < data.Length; i++)
-            {
-                count += selector(data[i]) ? 1 : 0;
-            }
-
-
-            return Constant(count);
-        }
-
-        // System.Object/Collection
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return this.GetEnumerator();
-        }
-        public IEnumerator<float> GetEnumerator()
-        {
-            for (int i = 0; i < data.Length; i++)
-            {
-                yield return data[i];
-            }
-        }
-        public bool Equals(Tensor other)
-        {
-            if (!shape.SequenceEqual(other.shape))
-                return false;
-
-            for (int i = 0; i < data.Length; i++)
-                if (!data[i].Equals(other.data[i]))
-                    return false;
-            
-            return true;
-        }
+        public bool Equals(Tensor other) => base.Equals(other);
         public override bool Equals(object obj)
         {
             if (obj == null || GetType() != obj.GetType())
@@ -1252,83 +142,13 @@ namespace DeepUnity
 
             return Equals(obj as Tensor);
         }
-        public override string ToString()
-        {
-            int rank = Rank;
-            string format = "0.000000";
-
-            StringBuilder sb = new StringBuilder();
-            sb.Append("\n[");
-
-           
-            for (int l = 0; l < shape[3]; l++)
-            {
-                if (l > 0)
-                {
-                    sb.Append("\n\n\n");
-                    for (int indent = 0; indent < rank - 3; indent++)
-                    {
-                        sb.Append(" ");
-                    }
-                }
-                if (rank > 3)
-                    sb.Append("[");
-
-                for (int k = 0; k < shape[2]; k++)
-                {
-                    if (k > 0)
-                    {
-                        sb.Append("\n\n");
-                        for (int indent = 0; indent < rank - 2; indent++)
-                        {
-                            sb.Append(" ");
-                        }
-                    }
-                    if (rank > 2)
-                        sb.Append("[");
-
-                    for (int j = 0; j < shape[1]; j++)
-                    {
-                        if (j > 0 && rank > 1)
-                        {
-                            sb.Append("\n");
-                            for (int indent = 0; indent < rank - 1; indent++)
-                            {
-                                sb.Append(" ");
-                            }
-                        }
-                        if (rank > 1)
-                            sb.Append("[");
-
-                        for (int i = 0; i < shape[0]; i++)
-                        {
-                            if (i > 0)
-                                sb.Append(", ");
-
-                            sb.Append(this[i, j, k, l].ToString(format));
-                        }
-
-                        if (rank > 1)
-                            sb.Append("]");
-                    }
-
-                    if (rank > 2)
-                        sb.Append("]");
-                }
-
-                if (rank > 3)
-                    sb.Append("]");
-            }
-
-            sb.Append("]");
-
-            return sb.ToString();
-        } 
         public override int GetHashCode()
         {
             return base.GetHashCode();
-        }      
-    }
+        }
 
-   
+      
+        
+    }
 }
+

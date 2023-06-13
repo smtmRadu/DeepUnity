@@ -7,67 +7,68 @@ namespace DeepUnity
     [Serializable]
     public class BatchNorm : IModule, IParameters
     {
-        private Tensor x_minus_mu_cache { get; set; }
-        private Tensor x_hat_Cache { get; set; }
-        private Tensor std_cache { get; set; }
+        private NDArray x_minus_mu_cache { get; set; }
+        private NDArray x_hat_Cache { get; set; }
+        private NDArray std_cache { get; set; }
 
 
         [SerializeField] public float momentum;
         [SerializeField] public float epsilon;
 
         // Learnable parameters
-        [SerializeField] public Tensor runningMean;
-        [SerializeField] public Tensor runningVar;
+        [SerializeField] public NDArray runningMean;
+        [SerializeField] public NDArray runningVar;
 
-        [SerializeField] public Tensor gamma;
-        [SerializeField] public Tensor beta;
+        [SerializeField] public NDArray gamma;
+        [SerializeField] public NDArray beta;
 
 
-        [NonSerialized] public Tensor grad_Gamma;
-        [NonSerialized] public Tensor grad_Beta;
+        [NonSerialized] public NDArray grad_Gamma;
+        [NonSerialized] public NDArray grad_Beta;
 
         
 
         
         public BatchNorm(int num_features, float momentum = 0.1f, float eps = 1e-5f)
         {
-            gamma = Tensor.Ones(num_features);
-            beta = Tensor.Zeros(num_features);
+            gamma = NDArray.Ones(num_features);
+            beta = NDArray.Zeros(num_features);
 
-            runningMean = Tensor.Zeros(num_features);
-            runningVar = Tensor.Zeros(num_features);
+            runningVar = NDArray.Ones(num_features);
+            runningMean = NDArray.Zeros(num_features);
+            
 
-            grad_Gamma = Tensor.Zeros(num_features);
-            grad_Beta = Tensor.Zeros(num_features);
+            grad_Gamma = NDArray.Zeros(num_features);
+            grad_Beta = NDArray.Zeros(num_features);
 
             this.momentum = momentum;
             this.epsilon = eps;
         }
         
-        public Tensor Predict(Tensor input)
+        public NDArray Predict(NDArray input)
         {
-            var input_centered = (input - runningMean) / Tensor.Sqrt(runningVar + epsilon);
+            var input_centered = (input - runningMean) / NDArray.Sqrt(runningVar + epsilon);
             var output = gamma * input_centered + beta;
 
             return output;
         }
-        public Tensor Forward(Tensor input)
+        public NDArray Forward(NDArray input)
         {
             int batch = input.Shape[1];
 
             // When training (only on mini-batch training), we cache the values for backprop also
-            var mu_B = Tensor.Mean(input, 1); // mini-batch means      [batch]
-            var var_B = Tensor.Var(input, 1); // mini-batch variances  [batch]
+            var mu_B = NDArray.Mean(input, 1); // mini-batch means      [batch]
+            var var_B = NDArray.Var(input, 1); // mini-batch variances  [batch]
 
             // input [features, batch]  - muB or varB [features, 1] -> need expand on axis 1 by batch
 
             // normalize
-            var x_minus_mu = input - Tensor.Expand(mu_B, 1, batch);
-            var sqrt_var = Tensor.Expand(Tensor.Sqrt(var_B + epsilon), 1, batch); 
+            var x_minus_mu = input - NDArray.Expand(mu_B, 1, batch);
+            var sqrt_var = NDArray.Expand(NDArray.Sqrt(var_B + epsilon), 1, batch); 
             var x_hat = x_minus_mu / sqrt_var;
 
             // scale and shift
-            var yB = Tensor.Expand(gamma, 1, batch) * x_hat + Tensor.Expand(beta, 1, batch);
+            var yB = NDArray.Expand(gamma, 1, batch) * x_hat + NDArray.Expand(beta, 1, batch);
 
             // Cache everything
             x_minus_mu_cache = x_minus_mu;
@@ -81,27 +82,27 @@ namespace DeepUnity
             return yB;
           
         }
-        public Tensor Backward(Tensor dLdY)
+        public NDArray Backward(NDArray dLdY)
         {
             int m = dLdY.Shape[1];
 
             // paper algorithm https://arxiv.org/pdf/1502.03167.pdf
 
-            var dLdxHat = dLdY * Tensor.Expand(gamma, axis: 1, times: m); // [features, batch]
+            var dLdxHat = dLdY * NDArray.Expand(gamma, axis: 1, times: m); // [features, batch]
 
-            var dLdVarB = Tensor.Mean(dLdxHat * x_minus_mu_cache * (-1f / 2f) *
-                         Tensor.Pow(std_cache + epsilon, -3f / 2f), 1);
+            var dLdVarB = NDArray.Mean(dLdxHat * x_minus_mu_cache * (-1f / 2f) *
+                         NDArray.Pow(std_cache + epsilon, -3f / 2f), 1);
 
-            var dLdMuB = Tensor.Mean(dLdxHat * -1f / std_cache + epsilon +
-                        Tensor.Expand(dLdVarB, 1, m) * -2f * x_minus_mu_cache / m, 1);
+            var dLdMuB = NDArray.Mean(dLdxHat * -1f / std_cache + epsilon +
+                        NDArray.Expand(dLdVarB, 1, m) * -2f * x_minus_mu_cache / m, 1);
 
-            var dLdX = dLdxHat * 1f / Tensor.Sqrt(std_cache + epsilon) +
-                       Tensor.Expand(dLdVarB, 1, m) * 2f * x_minus_mu_cache / m +
-                       Tensor.Expand(dLdMuB, 1, m) * (1f / m);
+            var dLdX = dLdxHat * 1f / NDArray.Sqrt(std_cache + epsilon) +
+                       NDArray.Expand(dLdVarB, 1, m) * 2f * x_minus_mu_cache / m +
+                       NDArray.Expand(dLdMuB, 1, m) * (1f / m);
 
 
-            var dLdGamma = Tensor.Mean(dLdY * x_hat_Cache, 1);
-            var dLdBeta = Tensor.Mean(dLdY, 1);
+            var dLdGamma = NDArray.Mean(dLdY * x_hat_Cache, 1);
+            var dLdBeta = NDArray.Mean(dLdY, 1);
 
             grad_Gamma += dLdGamma;
             grad_Beta += dLdBeta;
@@ -116,12 +117,12 @@ namespace DeepUnity
         }
         public void ClipGradValue(float clip_value)
         {
-            Tensor.Clip(grad_Gamma, -clip_value, clip_value);
-            Tensor.Clip(grad_Beta, -clip_value, clip_value);
+            NDArray.Clip(grad_Gamma, -clip_value, clip_value);
+            NDArray.Clip(grad_Beta, -clip_value, clip_value);
         }
         public void ClipGradNorm(float max_norm)
         {
-            Tensor normG = Tensor.Norm(grad_Gamma, NormType.ManhattanL1);
+            NDArray normG = NDArray.Norm(grad_Gamma, NormType.ManhattanL1);
 
             if (normG[0] > max_norm)
             {
@@ -130,7 +131,7 @@ namespace DeepUnity
             }
 
 
-            Tensor normB = Tensor.Norm(grad_Beta, NormType.ManhattanL1);
+            NDArray normB = NDArray.Norm(grad_Beta, NormType.ManhattanL1);
 
             if (normB[0] > max_norm)
             {
@@ -152,10 +153,9 @@ namespace DeepUnity
 
             int num_features = gamma.Shape[0];
 
-            this.grad_Gamma = Tensor.Zeros(num_features);
-            this.grad_Beta = Tensor.Zeros(num_features);
+            this.grad_Gamma = NDArray.Zeros(num_features);
+            this.grad_Beta = NDArray.Zeros(num_features);
         }
-
         /*   Improving BN networks (placed before 
              Increase learning rate. In a batch-normalized model,
           we have been able to achieve a training speedup from

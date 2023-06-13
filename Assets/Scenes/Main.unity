@@ -139,7 +139,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &517515818
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -291,12 +291,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8bcd361c18baee448b82c710f6590c92, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  net: {fileID: 0}
   device: 0
+  net: {fileID: 0}
   hiddenSize: 64
+  samples: 1024
+  batch_size: 32
   rotationSpeed: 0.4
-  samples: 511
-  dataSigma: 1.03
+  dataScale: 3.01
   drawScale: 10
 --- !u!4 &820382132
 Transform:
@@ -521,7 +522,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &2147335998
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -539,8 +540,8 @@ MonoBehaviour:
   batch_size: 20
   input_batches: []
   output_batches: []
-  device: 1
-  hid_size: 512
+  device: 0
+  hid_size: 32
 --- !u!4 &2147335999
 Transform:
   m_ObjectHideFlags: 0

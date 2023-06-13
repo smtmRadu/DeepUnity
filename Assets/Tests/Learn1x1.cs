@@ -12,8 +12,8 @@ namespace kbRadu
         public int no_samples;
         public int batch_size;
 
-        public Tensor[] input_batches;
-        public Tensor[] output_batches;
+        public NDArray[] input_batches;
+        public NDArray[] output_batches;
         public Device device;
         public int hid_size = 64;
 
@@ -37,11 +37,11 @@ namespace kbRadu
             }
 
             // create the training data
-            var inputs = Tensor.Random(1, no_samples);
-            var outputs = Tensor.Cos(inputs);
+            var inputs = NDArray.Random(1, no_samples);
+            var outputs = NDArray.Cos(inputs);
 
-            input_batches = Tensor.Split(inputs, 1, batch_size);
-            output_batches = Tensor.Split(outputs, 1, batch_size);
+            input_batches = NDArray.Split(inputs, 1, batch_size);
+            output_batches = NDArray.Split(outputs, 1, batch_size);
 
         }
 

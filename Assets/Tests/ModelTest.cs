@@ -8,21 +8,21 @@ namespace kbRadu
 {
     public class ModelTest : MonoBehaviour
     {
-
-        public NeuralNetwork net;
         public Device device;
+        public NeuralNetwork net;       
         public int hiddenSize = 64;
+        public int samples = 1024;
+        public int batch_size = 32;
+
+        [Space]      
         public float rotationSpeed = 0.4f;
+        public float dataScale = 1f;
 
-        [Space]
-        public int samples = 100;
-        public float dataSigma = 1f;
-
-        private Tensor[] trainInputs;
-        private Tensor[] trainLabels;
-
-        private Tensor[] testInputs;
-        private Tensor[] testLabels;
+        private NDArray[] trainXbatches;
+        private NDArray[] trainYbatches;
+               
+        private NDArray[] testXbatches;
+        private NDArray[] testYbatches;
 
         private Vector3[] trainPoints = null;
         private Vector3[] testPoints = null;
@@ -44,26 +44,25 @@ namespace kbRadu
                 net.Compile(new Adam(), "somenet");
             }
 
-            trainInputs = new Tensor[samples];
-            trainLabels = new Tensor[samples];
-            testInputs = new Tensor[samples];
-            testLabels = new Tensor[samples];
-
             trainPoints = new Vector3[samples];
             testPoints = new Vector3[samples];
 
-            for (int i = 0; i < samples; i++)
-            {
-                float x = Utils.Random.Gaussian(0, dataSigma);
-                float y = Utils.Random.Gaussian(0, dataSigma);
-                trainInputs[i] = Tensor.Constant(new float[] { x, y });
-                trainLabels[i] = Tensor.Constant(MathF.Sqrt(MathF.Pow(1, 2) + MathF.Pow(x,2) + MathF.Pow(y, 2)));
+            // Prepare train batches
+            NDArray x1 = NDArray.RandomNormal(1, samples) * dataScale;
+            NDArray x2 = NDArray.RandomNormal(1, samples) * dataScale;
+            NDArray y = NDArray.Sqrt(NDArray.Exp(x1) + NDArray.Exp(x2));
 
-                float xTest = Utils.Random.Gaussian(0, dataSigma);
-                float yTest = Utils.Random.Gaussian(0, dataSigma);
-                testInputs[i] = Tensor.Constant(new float[] { xTest, yTest });
-                testLabels[i] = Tensor.Constant(MathF.Sqrt(MathF.Pow(1, 2) + MathF.Pow(xTest, 2) + MathF.Pow(yTest, 2)));
-            }
+            trainXbatches = NDArray.Split(NDArray.Join(0, x1, x2), 1, batch_size);
+            trainYbatches = NDArray.Split(y, 1, batch_size);
+
+            // Prepare test batches
+            x1 = NDArray.RandomNormal(1, samples) * dataScale;
+            x2 = NDArray.RandomNormal(1, samples) * dataScale;
+            y = NDArray.Sqrt(NDArray.Exp(x1) + NDArray.Exp(x2));
+
+            testXbatches = NDArray.Split(NDArray.Join(0, x1, x2), 1, batch_size);
+            testYbatches = NDArray.Split(y, 1, batch_size);
+
 
         }
 
@@ -73,7 +72,7 @@ namespace kbRadu
 
         public void Update()
         {
-            if(i == samples)
+            if(i == samples/batch_size)
             {
 
                 Debug.Log($"Epoch {++epoch} | Train Accuracy {trainAcc.Average() * 100f}% | Test Accuracy {testAcc.Average() * 100f}%");
@@ -83,30 +82,31 @@ namespace kbRadu
                 return;
             }
 
-            var prediction = net.Forward(trainInputs[i]);
-            var loss = Loss.MSE(prediction, trainLabels[i]);
+            var trainPrediction = net.Forward(trainXbatches[i]);
+            var loss = Loss.MSE(trainPrediction, trainYbatches[i]);
 
             net.ZeroGrad();
             net.Backward(loss);
             net.Step();
 
-            // Compute accuracy
-            trainPoints[i] = new Vector3(trainInputs[i][0], prediction[0], trainInputs[i][1]); 
-            
-            float acc = Metrics.Accuracy(prediction, trainLabels[i]);
-            trainAcc.Add(acc);
+            // Compute train accuracy
+            float trainacc = Metrics.Accuracy(trainPrediction, trainYbatches[i]);
+            trainAcc.Add(trainacc);
 
-
-            var testPrediction = net.Forward(testInputs[i]);
             // Compute test accuracy
-            testPoints[i] = new Vector3(testInputs[i][0], testPrediction[0], testInputs[i][1]);
-
-            float testacc = Metrics.Accuracy(testPrediction, testLabels[i]);
+            var testPrediction = net.Forward(testXbatches[i]);
+            float testacc = Metrics.Accuracy(testPrediction, testYbatches[i]);
             testAcc.Add(testacc);
 
-            i++;
+           
 
+            for(int j = 0; j < batch_size; j++)
+            {
+                trainPoints[j + i * batch_size] = new Vector3(trainXbatches[i][0, j], trainPrediction[0, j], trainXbatches[i][1, j]);
+                testPoints[j + i * batch_size] = new Vector3(testXbatches[i][0, j], testPrediction[0, j], testXbatches[i][1, j]);
             
+            }
+            i++;
         }
 
         public void LateUpdate()

@@ -15,12 +15,12 @@ namespace DeepUnity
         [SerializeField] private float weightDecay;
 
         // 1st momentum buffer
-        [NonSerialized] public Tensor[] m_W;
-        [NonSerialized] public Tensor[] m_B;
+        [NonSerialized] public NDArray[] m_W;
+        [NonSerialized] public NDArray[] m_B;
 
         // exponentially weighted infinity norm
-        [NonSerialized] public Tensor[] u_W;
-        [NonSerialized] public Tensor[] u_B;
+        [NonSerialized] public NDArray[] u_W;
+        [NonSerialized] public NDArray[] u_B;
 
 
         public AdaMax(float learningRate = 0.002f, float beta1 = 0.9f, float beta2 = 0.999f, float weightDecay = 0f)
@@ -35,11 +35,11 @@ namespace DeepUnity
 
         public void Initialize(IModule[] modules)
         {
-            m_W = new Tensor[modules.Length];
-            m_B = new Tensor[modules.Length];
+            m_W = new NDArray[modules.Length];
+            m_B = new NDArray[modules.Length];
 
-            u_W = new Tensor[modules.Length];
-            u_B = new Tensor[modules.Length];
+            u_W = new NDArray[modules.Length];
+            u_B = new NDArray[modules.Length];
 
             for (int i = 0; i < modules.Length; i++)
             {
@@ -48,11 +48,11 @@ namespace DeepUnity
                     int inputs = D.weights.Shape[1];
                     int outputs = D.weights.Shape[0];
 
-                    m_W[i] = Tensor.Zeros(outputs, inputs);
-                    m_B[i] = Tensor.Zeros(outputs);
+                    m_W[i] = NDArray.Zeros(outputs, inputs);
+                    m_B[i] = NDArray.Zeros(outputs);
 
-                    u_W[i] = Tensor.Zeros(outputs, inputs);
-                    u_B[i] = Tensor.Zeros(outputs);
+                    u_W[i] = NDArray.Zeros(outputs, inputs);
+                    u_B[i] = NDArray.Zeros(outputs);
 
                 }
             }
@@ -72,8 +72,8 @@ namespace DeepUnity
                     m_B[i] = beta1 * m_B[i] + (1f - beta1) * L.grad_Biases;
 
                     // Update the exponentially weighted infinity norm
-                    u_W[i] = Tensor.Maximum(beta2 * u_W[i], Tensor.Abs(L.grad_Weights));
-                    u_B[i] = Tensor.Maximum(beta2 * u_B[i], Tensor.Abs(L.grad_Biases));
+                    u_W[i] = NDArray.Maximum(beta2 * u_W[i], NDArray.Abs(L.grad_Weights));
+                    u_B[i] = NDArray.Maximum(beta2 * u_B[i], NDArray.Abs(L.grad_Biases));
 
                     // Update parameters
                     L.weights = L.weights * (1f - weightDecay) - alpha / (1f - MathF.Pow(beta1, t)) * m_W[i] / u_W[i];

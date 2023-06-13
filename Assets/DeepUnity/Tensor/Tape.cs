@@ -7,7 +7,7 @@ namespace DeepUnity
         List<Operation> operations;
         public Tape() => operations = new List<Operation>();
         public void Add(Operation operation) => operations.Add(operation);
-        public Tensor Backward()
+        public NDArray Backward()
         {
             return null;
         }

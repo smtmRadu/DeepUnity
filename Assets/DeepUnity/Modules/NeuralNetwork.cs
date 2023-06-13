@@ -24,7 +24,7 @@ namespace DeepUnity
             Optimizer.Initialize(Modules);
         }
 
-        public Tensor Predict(Tensor input)
+        public NDArray Predict(NDArray input)
         {
             foreach (var module in Modules)
             {
@@ -32,7 +32,7 @@ namespace DeepUnity
             }
             return input;
         }
-        public Tensor Forward(Tensor input)
+        public NDArray Forward(NDArray input)
         {
             foreach (var module in Modules)
             {
@@ -40,7 +40,7 @@ namespace DeepUnity
             }
             return input;
         }
-        public Tensor Backward(Tensor loss)
+        public NDArray Backward(NDArray loss)
         {
             for (int i = Modules.Length - 1; i >= 0; i--)
             {

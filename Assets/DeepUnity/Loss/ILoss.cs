@@ -2,27 +2,27 @@ using System;
 
 namespace DeepUnity
 {
-    public delegate Tensor ILoss(Tensor predictions, Tensor targets);
+    public delegate NDArray ILoss(NDArray predictions, NDArray targets);
     public static class Loss
     {
         // Derivatives
-        public static Tensor MSE(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => 2 * (p - t));
-        public static Tensor MAE(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => p - t > 0 ? 1f : -1f);
-        public static Tensor CrossEntropy(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => (t - p) / (p * (p - 1f) + Utils.EPSILON));
-        public static Tensor HingeEmbedded(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => 1f - p * t > 0f ? -t : 0f);
+        public static NDArray MSE(NDArray predicts, NDArray targets) => predicts.Zip(targets, (p, t) => 2 * (p - t));
+        public static NDArray MAE(NDArray predicts, NDArray targets) => predicts.Zip(targets, (p, t) => p - t > 0 ? 1f : -1f);
+        public static NDArray CrossEntropy(NDArray predicts, NDArray targets) => predicts.Zip(targets, (p, t) => (t - p) / (p * (p - 1f) + Utils.EPSILON));
+        public static NDArray HingeEmbedded(NDArray predicts, NDArray targets) => predicts.Zip(targets, (p, t) => 1f - p * t > 0f ? -t : 0f);
 
     }
 
     internal static class Error
     {
         // Functions
-        private static Tensor MSE(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => (p - t) * (p - t));
-        private static Tensor MAE(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => Math.Abs(p - t));
-        private static Tensor CrossEntropy(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) =>
+        private static NDArray MSE(NDArray predicts, NDArray targets) => predicts.Zip(targets, (p, t) => (p - t) * (p - t));
+        private static NDArray MAE(NDArray predicts, NDArray targets) => predicts.Zip(targets, (p, t) => Math.Abs(p - t));
+        private static NDArray CrossEntropy(NDArray predicts, NDArray targets) => predicts.Zip(targets, (p, t) =>
         {
             float error = -t * MathF.Log(p);
             return float.IsNaN(error) ? 0f : error;
         });
-        private static Tensor HingeEmbedded(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => MathF.Max(0f, 1f - p * t));
+        private static NDArray HingeEmbedded(NDArray predicts, NDArray targets) => predicts.Zip(targets, (p, t) => MathF.Max(0f, 1f - p * t));
     }
 }

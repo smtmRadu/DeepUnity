@@ -16,8 +16,8 @@ namespace DeepUnity
         [SerializeField] private bool maximize;
 
         // Momentum buffer
-        [NonSerialized] public Tensor[] m_W;
-        [NonSerialized] public Tensor[] m_B;
+        [NonSerialized] public NDArray[] m_W;
+        [NonSerialized] public NDArray[] m_B;
 
         public SGD(float lr = 0.01f, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false)
         {
@@ -32,8 +32,8 @@ namespace DeepUnity
 
         public void Initialize(IModule[] modules)
         {
-            m_W = new Tensor[modules.Length];
-            m_B = new Tensor[modules.Length];
+            m_W = new NDArray[modules.Length];
+            m_B = new NDArray[modules.Length];
 
             for (int i = 0; i < modules.Length; i++)
             {
@@ -42,8 +42,8 @@ namespace DeepUnity
                     int inputs = d.weights.Shape[1];
                     int outputs = d.weights.Shape[0];
 
-                    m_W[i] = Tensor.Zeros(outputs, inputs);
-                    m_B[i] = Tensor.Zeros(outputs);
+                    m_W[i] = NDArray.Zeros(outputs, inputs);
+                    m_B[i] = NDArray.Zeros(outputs);
 
                 }
             }

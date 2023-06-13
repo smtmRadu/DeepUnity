@@ -4,7 +4,7 @@ namespace DeepUnity
     [Serializable]
     public class SoftMax : ActivationBase
     {
-        protected override void Activation(Tensor x)
+        protected override void Activation(NDArray x)
         {
             for (int j = 0; j < x.Shape[1]; j++)
             {
@@ -22,7 +22,7 @@ namespace DeepUnity
                 }
             }
         }
-        protected override void Derivative(Tensor x)
+        protected override void Derivative(NDArray x)
         {
             for (int j = 0; j < x.Shape[1]; j++)
             {

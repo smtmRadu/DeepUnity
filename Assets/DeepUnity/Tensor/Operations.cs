@@ -2,41 +2,41 @@ namespace DeepUnity
 {
     public interface Operation
     {
-        public Tensor Backward();
+        public NDArray Backward();
     }
 
     public sealed class AdditionOperation : Operation
     {
-        private Tensor left;
-        private Tensor right;
-        private Tensor result;
+        private NDArray left;
+        private NDArray right;
+        private NDArray result;
 
-        public AdditionOperation(Tensor left, Tensor right, Tensor result)
+        public AdditionOperation(NDArray left, NDArray right, NDArray result)
         {
             this.left = left;
             this.right = right;
             this.result = result;
         }
 
-        public Tensor Backward()
+        public NDArray Backward()
         {
             return null;
         }
     }
     public sealed class MatMulOperation : Operation
     {
-        private Tensor left;
-        private Tensor right;
-        private Tensor result;
+        private NDArray left;
+        private NDArray right;
+        private NDArray result;
 
-        public MatMulOperation(Tensor left, Tensor right, Tensor result)
+        public MatMulOperation(NDArray left, NDArray right, NDArray result)
         {
             this.left = left;
             this.right = right;
             this.result = result;
         }
 
-        public Tensor Backward()
+        public NDArray Backward()
         {
             return null;
         }
