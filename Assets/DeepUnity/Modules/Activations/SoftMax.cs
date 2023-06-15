@@ -1,45 +1,27 @@
 using System;
+using Unity.VisualScripting;
+
 namespace DeepUnity
 {
     [Serializable]
     public class SoftMax : ActivationBase
     {
-        protected override void Activation(NDArray x)
+        protected override void Activation(Tensor x)
         {
-            for (int j = 0; j < x.Shape[1]; j++)
-            {
-                float exp_sum = 0f;
-                for (int i = 0; i < x.Shape[0]; i++)
-                {
-                    float exp = MathF.Exp(x[i, j]);
-                    x[i, j] = exp;
-                    exp_sum += exp;
-                }
+            // [batch, width]
+            Tensor exp = Tensor.Exp(x); // [batch, width]
+            Tensor exp_sum = Tensor.Sum(exp, 0); // [batch, 1]
+            exp_sum = Tensor.Expand(exp_sum, 1, exp.Shape.width); // [batch, width]
 
-                for (int i = 0; i < x.Shape[0]; i++)
-                {
-                    x[i, j] /= exp_sum;
-                }
-            }
+            x = exp / exp_sum;
         }
-        protected override void Derivative(NDArray x)
+        protected override void Derivative(Tensor x)
         {
-            for (int j = 0; j < x.Shape[1]; j++)
-            {
-                float exp_sum = 0f;
-                for (int i = 0; i < x.Shape[0]; i++)
-                {
-                    float exp = MathF.Exp(x[i, j]);
-                    x[i, j] = exp;
-                    exp_sum += exp;
-                }
+            Tensor exp = Tensor.Exp(x);
+            Tensor exp_sum = Tensor.Sum(exp, 0); // [batch, 1]
+            exp_sum = Tensor.Expand(exp_sum, 1, exp.Shape.width); // [batch, width]
 
-                for (int i = 0; i < x.Shape[0]; i++)
-                {
-                    float exp = x[i, j];
-                    x[i, j] = (exp * exp_sum - exp * exp) / (exp_sum * exp_sum);
-                }
-            }
+            x = (exp * exp_sum - exp * exp) / (exp_sum * exp_sum);
         }
     }
 

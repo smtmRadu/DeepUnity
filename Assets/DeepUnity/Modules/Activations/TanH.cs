@@ -1,12 +1,11 @@
 using System;
-using UnityEngine;
 
 namespace DeepUnity
 {
     [Serializable]
     public class TanH : ActivationBase
     {
-        protected override void Activation(NDArray x)
+        protected override void Activation(Tensor x)
         {
             x.ForEach(x =>
             {
@@ -15,7 +14,7 @@ namespace DeepUnity
                 return tanh;
             });
         }
-        protected override void Derivative(NDArray x)
+        protected override void Derivative(Tensor x)
         {
             x.ForEach(x =>
             {

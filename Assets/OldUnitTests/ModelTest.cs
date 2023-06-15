@@ -8,7 +8,7 @@ namespace kbRadu
 {
     public class ModelTest : MonoBehaviour
     {
-        public Device device;
+       /* public Device device;
         public NeuralNetwork net;       
         public int hiddenSize = 64;
         public int samples = 1024;
@@ -18,11 +18,11 @@ namespace kbRadu
         public float rotationSpeed = 0.4f;
         public float dataScale = 1f;
 
-        private NDArray[] trainXbatches;
-        private NDArray[] trainYbatches;
+        private InversedTensor[] trainXbatches;
+        private InversedTensor[] trainYbatches;
                
-        private NDArray[] testXbatches;
-        private NDArray[] testYbatches;
+        private InversedTensor[] testXbatches;
+        private InversedTensor[] testYbatches;
 
         private Vector3[] trainPoints = null;
         private Vector3[] testPoints = null;
@@ -48,20 +48,20 @@ namespace kbRadu
             testPoints = new Vector3[samples];
 
             // Prepare train batches
-            NDArray x1 = NDArray.RandomNormal(1, samples) * dataScale;
-            NDArray x2 = NDArray.RandomNormal(1, samples) * dataScale;
-            NDArray y = NDArray.Sqrt(NDArray.Exp(x1) + NDArray.Exp(x2));
+            InversedTensor x1 = InversedTensor.RandomNormal(1, samples) * dataScale;
+            InversedTensor x2 = InversedTensor.RandomNormal(1, samples) * dataScale;
+            InversedTensor y = InversedTensor.Sqrt(InversedTensor.Exp(x1) + InversedTensor.Exp(x2));
 
-            trainXbatches = NDArray.Split(NDArray.Join(0, x1, x2), 1, batch_size);
-            trainYbatches = NDArray.Split(y, 1, batch_size);
+            trainXbatches = InversedTensor.Split(InversedTensor.Join(0, x1, x2), 1, batch_size);
+            trainYbatches = InversedTensor.Split(y, 1, batch_size);
 
             // Prepare test batches
-            x1 = NDArray.RandomNormal(1, samples) * dataScale;
-            x2 = NDArray.RandomNormal(1, samples) * dataScale;
-            y = NDArray.Sqrt(NDArray.Exp(x1) + NDArray.Exp(x2));
+            x1 = InversedTensor.RandomNormal(1, samples) * dataScale;
+            x2 = InversedTensor.RandomNormal(1, samples) * dataScale;
+            y = InversedTensor.Sqrt(InversedTensor.Exp(x1) + InversedTensor.Exp(x2));
 
-            testXbatches = NDArray.Split(NDArray.Join(0, x1, x2), 1, batch_size);
-            testYbatches = NDArray.Split(y, 1, batch_size);
+            testXbatches = InversedTensor.Split(InversedTensor.Join(0, x1, x2), 1, batch_size);
+            testYbatches = InversedTensor.Split(y, 1, batch_size);
 
 
         }
@@ -134,7 +134,7 @@ namespace kbRadu
                 }
             }
             catch { }
-        }
+        }*/
     }
 }
 

@@ -7,7 +7,7 @@ using UnityEngine;
 
 public class UnitTests : MonoBehaviour
 {
-    public NeuralNetwork network;
+    /*public NeuralNetwork network;
     public int Runs = 10;
     public Device device;
     public int MatrixSize = 64;
@@ -45,21 +45,21 @@ public class UnitTests : MonoBehaviour
         }
  
 
-        inputs = NDArray.RandomNormal(1, 100);
+        inputs = InversedTensor.RandomNormal(1, 100);
         outputs = inputs.Select(x => MathF.Cos(x));
 
-        slicedinputs = NDArray.Split(inputs, 1, 1);
-        slicedoutputs = NDArray.Split(outputs, 1, 1);
+        slicedinputs = InversedTensor.Split(inputs, 1, 1);
+        slicedoutputs = InversedTensor.Split(outputs, 1, 1);
     }
 
 
     int t = 1;
 
-    NDArray inputs;
-    NDArray outputs;
+    InversedTensor inputs;
+    InversedTensor outputs;
 
-    NDArray[] slicedinputs;
-    NDArray[] slicedoutputs;
+    InversedTensor[] slicedinputs;
+    InversedTensor[] slicedoutputs;
 
 
 
@@ -96,7 +96,7 @@ public class UnitTests : MonoBehaviour
             new ReLU(), 
             new Dense(MatrixSize, 10));
 
-        NDArray input = NDArray.Random(10);
+        InversedTensor input = InversedTensor.Random(10);
 
         var start = DateTime.Now;
 
@@ -118,7 +118,7 @@ public class UnitTests : MonoBehaviour
             new ReLU(),
             new Dense(MatrixSize, 10));
 
-        NDArray loss = NDArray.Random(10);
+        InversedTensor loss = InversedTensor.Random(10);
         
         var start = DateTime.Now;
 
@@ -143,7 +143,7 @@ public class UnitTests : MonoBehaviour
 
         net.Compile(new Adam(), "non");
 
-        NDArray loss = NDArray.Zeros(10);
+        InversedTensor loss = InversedTensor.Zeros(10);
 
         var start = DateTime.Now;
 
@@ -169,11 +169,11 @@ public class UnitTests : MonoBehaviour
             var mid = UnityEngine.Random.Range(1, 6);
             var h2 = UnityEngine.Random.Range(1, 6);
 
-            var t1 = NDArray.Random(w1, mid);
-            var t2 = NDArray.Random(mid, h2);
+            var t1 = InversedTensor.Random(w1, mid);
+            var t2 = InversedTensor.Random(mid, h2);
 
-            var m1 = NDArray.MatMul(t1, t2);
-            var m2 = NDArray.MatMul(t1, t2);
+            var m1 = InversedTensor.MatMul(t1, t2);
+            var m2 = InversedTensor.MatMul(t1, t2);
 
             if(m1.Equals(m2))
                 succes++;
@@ -188,10 +188,10 @@ public class UnitTests : MonoBehaviour
     }
     public void MatmulBenchmark()
     {
-        var t1 = NDArray.RandomNormal(MatrixSize, MatrixSize);
+        var t1 = InversedTensor.RandomNormal(MatrixSize, MatrixSize);
         // Debug.Log("T1: " + t1.ToString());
 
-        var t2 = NDArray.RandomNormal(MatrixSize, MatrixSize);
+        var t2 = InversedTensor.RandomNormal(MatrixSize, MatrixSize);
         // Debug.Log("T2: " + t2.ToString());
 
 
@@ -202,7 +202,7 @@ public class UnitTests : MonoBehaviour
 
         for (int i = 0; i < Runs; i++)
         {
-            NDArray.MatMul(t1, t2);
+            InversedTensor.MatMul(t1, t2);
         }
 
         end = DateTime.Now - start;
@@ -211,7 +211,7 @@ public class UnitTests : MonoBehaviour
     }
     public void TensorTest()
     {
-        var t1 = NDArray.Fill(3, 2, 2);
+        var t1 = InversedTensor.Fill(3, 2, 2);
         print(t1);
 
     }
@@ -228,7 +228,7 @@ public class UnitTests : MonoBehaviour
 
         for (int i = 0; i < 100; i++)
         {
-            var input = NDArray.Constant(1);
+            var input = InversedTensor.Constant(1);
             var output = net.Forward(input);
 
             Debug.Log(input);
@@ -246,7 +246,7 @@ public class UnitTests : MonoBehaviour
         net.Compile(new Adam(), "somenet");
 
 
-        var input = NDArray.Constant(1f);
+        var input = InversedTensor.Constant(1f);
         var output = net.Forward(input);
         var back = net.Backward(output);
 
@@ -280,6 +280,6 @@ public class UnitTests : MonoBehaviour
         // print(string.Join(", ", c1.Shape));
         // print(c1);
 
-    }
+    }*/
    
 }

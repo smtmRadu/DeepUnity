@@ -1,31 +1,32 @@
 using UnityEngine;
 using System;
+using System.Drawing.Printing;
 
 namespace DeepUnity
 {
-    
-    
+
+
     [Serializable]
     public class Dense : IModule, IParameters
     {
-        private NDArray Input_Cache { get; set; }
+        private Tensor Input_Cache { get; set; }
 
         // Parameters (theta)
-        [SerializeField] public NDArray weights;
-        [SerializeField] public NDArray biases;
+        [SerializeField] public Tensor weights;
+        [SerializeField] public Tensor biases;
 
         // Gradients (g)
-        [NonSerialized] public NDArray grad_Weights;
-        [NonSerialized] public NDArray grad_Biases;
-       
+        [NonSerialized] public Tensor grad_Weights;
+        [NonSerialized] public Tensor grad_Biases;
+
 
         public Dense(int in_features, int out_features, InitType init = InitType.Default)
         {
-            this.weights = NDArray.Zeros(out_features, in_features);
-            this.biases = NDArray.Zeros(out_features);
+            this.weights = Tensor.Zeros(in_features, out_features);
+            this.biases = Tensor.Zeros(out_features);
 
-            this.grad_Weights = NDArray.Zeros(out_features, in_features);
-            this.grad_Biases = NDArray.Zeros(out_features);
+            this.grad_Weights = Tensor.Zeros(in_features, out_features);
+            this.grad_Biases = Tensor.Zeros(out_features);
 
             switch (init)
             {
@@ -35,11 +36,11 @@ namespace DeepUnity
                     biases.ForEach(x => Utils.Random.Range(-sqrtK, sqrtK));
                     break;
                 case InitType.HE:
-                    float sigmaHE = MathF.Sqrt(2f / weights.Shape[1]); //fanIn
+                    float sigmaHE = MathF.Sqrt(2f / weights.Shape.height); //fanIn
                     weights.ForEach(x => Utils.Random.Gaussian(0f, sigmaHE));
                     break;
                 case InitType.Xavier:
-                    float sigmaXA = MathF.Sqrt(2f / (weights.Shape[0] + weights.Shape[1])); // fanIn + fanOut
+                    float sigmaXA = MathF.Sqrt(2f / (weights.Shape.width + weights.Shape.height)); // fanIn + fanOut
                     weights.ForEach(x => Utils.Random.Gaussian(0f, sigmaXA));
                     break;
                 case InitType.Normal:
@@ -53,40 +54,40 @@ namespace DeepUnity
             }
         }
 
-        public NDArray Predict(NDArray input)
+        public Tensor Predict(Tensor input)
         {
-            return NDArray.MatMul(weights, input) + NDArray.Expand(biases, axis: 1, times: input.Shape[1]);
+            int batch = input.Shape.height;
+            return Tensor.MatMul(input, weights) + Tensor.Expand(biases, -1, batch);
 
         }
-        public NDArray Forward(NDArray input) 
+        public Tensor Forward(Tensor input)
         {
             // for faster improvement on GPU, set for forward only on CPU!
             // it seems like forward is always faster with CPU rather than GPU for matrices < 1024 size. Maybe on large scales it must be changed again on GPU.
-            Input_Cache = NDArray.Identity(input);
-            int batch = input.Shape[1];
-
-            return NDArray.MatMul(weights, input) + NDArray.Expand(biases, axis: 1, times: batch);
+            Input_Cache = Tensor.Identity(input);
+            int batch_size = input.Shape.height;
+            return Tensor.MatMul(input, weights) + Tensor.Expand(biases, -1, batch_size);
         }
-        public NDArray Backward(NDArray loss)
+        public Tensor Backward(Tensor loss)
         {
-            var transposedInput = NDArray.Transpose(Input_Cache, 0, 1);
-            NDArray gradW = NDArray.MatMul(loss, transposedInput);
-            NDArray gradB = NDArray.MatMul(loss, NDArray.Ones(transposedInput.Shape));
+            int batch_size = loss.Shape.height;
+            var transposedInput = Tensor.MatTranspose(Input_Cache);
 
-            // Average the gradients
-            float batch = loss.Shape[1];
+            Tensor gradW = Tensor.MatMul(transposedInput, loss);
+            Tensor gradB = Tensor.MatMul(Tensor.Ones(1, batch_size), loss);
+
 
             // Update the gradients
-            grad_Weights += gradW / batch;
-            grad_Biases += gradB / batch;
+            grad_Weights += gradW / batch_size;
+            grad_Biases += gradB / batch_size;
 
             // Backpropagate the loss
             // Tensor dLossdActivation = Tensor.MatMul(Tensor.MatTranspose(t_W), loss, MatMulCS);
             // return dLossdActivation;
 
             // A bit faster back with double tranposition on loss (may work better on large dense)
-            NDArray dLossActivation = NDArray.MatMul(NDArray.Transpose(loss, 0, 1), weights);
-            return NDArray.Transpose(dLossActivation, 0, 1);
+            Tensor dLossActivation = Tensor.MatMul(weights, Tensor.MatTranspose(loss));
+            return Tensor.MatTranspose(dLossActivation);
         }
 
 
@@ -97,12 +98,12 @@ namespace DeepUnity
         }
         public void ClipGradValue(float clip_value)
         {
-            NDArray.Clip(grad_Weights, -clip_value, clip_value);
-            NDArray.Clip(grad_Biases, -clip_value, clip_value);
+            Tensor.Clip(grad_Weights, -clip_value, clip_value);
+            Tensor.Clip(grad_Biases, -clip_value, clip_value);
         }
         public void ClipGradNorm(float max_norm)
         {
-            NDArray norm = NDArray.Norm(grad_Weights, NormType.ManhattanL1) + NDArray.Norm(grad_Biases, NormType.ManhattanL1);
+            Tensor norm = Tensor.Norm(grad_Weights, NormType.ManhattanL1) + Tensor.Norm(grad_Biases, NormType.ManhattanL1);
 
             if (norm[0] > max_norm)
             {
@@ -119,14 +120,14 @@ namespace DeepUnity
         public void OnAfterDeserialize()
         {
             // This function is actually having 2 workers on serialization, and one on them is called when weights.shape.length == 0.
-            if (weights.Shape.Length == 0)
+            if (weights.Shape == null)
                 return;
 
-            int outputs = weights.Shape[0];
-            int inputs = weights.Shape[1];
+            int outputs = weights.Shape.height;
+            int inputs = weights.Shape.width;
 
-            this.grad_Weights = NDArray.Zeros(outputs, inputs);
-            this.grad_Biases = NDArray.Zeros(outputs);
+            this.grad_Weights = Tensor.Zeros(inputs, outputs);
+            this.grad_Biases = Tensor.Zeros(outputs);
         }
     }
 

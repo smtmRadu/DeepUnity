@@ -12,40 +12,41 @@ namespace kbRadu
         [SerializeField] public float epsilon;
 
         // Learnable parameters
-        [SerializeField] public NDArray runningMean;
-        [SerializeField] public NDArray runningVar;
+        [SerializeField] public Tensor runningMean;
+        [SerializeField] public Tensor runningVar;
 
-        [SerializeField] public NDArray gamma;
-        [SerializeField] public NDArray beta;
+        [SerializeField] public Tensor gamma;
+        [SerializeField] public Tensor beta;
 
 
         public LayerNorm(int hid_units, float eps = 1e-5f)
         {
             this.epsilon = eps;
 
-            this.gamma = NDArray.Ones(hid_units);
-            this.beta = NDArray.Zeros(hid_units);
+            this.gamma = Tensor.Ones(hid_units);
+            this.beta = Tensor.Zeros(hid_units);
         }
-        public NDArray Predict(NDArray input)
+        public Tensor Predict(Tensor input)
         {
-            int batch = input.Shape[1];
+            int batch = input.Shape.width;
 
             // input [features, batch]
 
-            NDArray mu = NDArray.Mean(input, axis: 0);
-            NDArray std = NDArray.Std(input, axis: 0);
+            Tensor mu = Tensor.Mean(input, 0);
+            Tensor std = Tensor.Std(input, 0);
 
-            input = (input - NDArray.Expand(mu, axis: 0, times: batch))
-                    / NDArray.Expand(std, axis: 0, times : batch);
+
+            input = (input - Tensor.Expand(mu, 0, batch))
+                    / Tensor.Expand(std, 0, batch);
 
             return input;
         }
 
-        public NDArray Forward(NDArray input)
+        public Tensor Forward(Tensor input)
         {
             return null;
         }
-        public NDArray Backward(NDArray loss)
+        public Tensor Backward(Tensor loss)
         {
             return null;
         }

@@ -12,8 +12,8 @@ namespace DeepUnity
         [SerializeField] private float learningRateDecay;
         [SerializeField] private float weightDecay;
 
-        [NonSerialized] public NDArray[] statesum_W;
-        [NonSerialized] public NDArray[] statesum_B;
+        [NonSerialized] public Tensor[] statesum_W;
+        [NonSerialized] public Tensor[] statesum_B;
 
         public Adagrad(float learningRate = 0.01f, float learningRateDecay = 0f, float weightDecay = 0f)
         {
@@ -24,18 +24,18 @@ namespace DeepUnity
         }
         public void Initialize(IModule[] modules)
         {
-            statesum_W = new NDArray[modules.Length];
-            statesum_B = new NDArray[modules.Length];
+            statesum_W = new Tensor[modules.Length];
+            statesum_B = new Tensor[modules.Length];
 
             for (int i = 0; i < modules.Length; i++)
             {
                 if (modules[i] is Dense d)
                 {
-                    int inputs = d.weights.Shape[1];
-                    int outputs = d.weights.Shape[0];
+                    int inputs = d.weights.Shape.width;
+                    int outputs = d.weights.Shape.height;
 
-                    statesum_W[i] = NDArray.Zeros(outputs, inputs);
-                    statesum_B[i] = NDArray.Zeros(outputs);
+                    statesum_W[i] = Tensor.Zeros(outputs, inputs);
+                    statesum_B[i] = Tensor.Zeros(outputs);
 
                 }
             }
@@ -55,15 +55,14 @@ namespace DeepUnity
                         D.grad_Weights = D.grad_Weights + weightDecay * D.grad_Weights;
                     }
 
-                    statesum_W[i] = statesum_W[i] + NDArray.Pow(D.grad_Weights, 2f);
-                    statesum_B[i] = statesum_B[i] + NDArray.Pow(D.grad_Biases, 2f);
+                    statesum_W[i] = statesum_W[i] + Tensor.Pow(D.grad_Weights, 2f);
+                    statesum_B[i] = statesum_B[i] + Tensor.Pow(D.grad_Biases, 2f);
 
-                    D.weights = D.weights - gammaBar * (D.grad_Weights / (NDArray.Sqrt(statesum_W[i]) + 1e-10f));
-                    D.biases = D.biases - gammaBar * (D.grad_Biases / (NDArray.Sqrt(statesum_B[i]) + 1e-10f));
+                    D.weights = D.weights - gammaBar * (D.grad_Weights / (Tensor.Sqrt(statesum_W[i]) + 1e-10f));
+                    D.biases = D.biases - gammaBar * (D.grad_Biases / (Tensor.Sqrt(statesum_B[i]) + 1e-10f));
                 }
             });
 
         }
     }
 }
-

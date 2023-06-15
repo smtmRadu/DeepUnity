@@ -24,7 +24,7 @@ namespace DeepUnity
             Optimizer.Initialize(Modules);
         }
 
-        public NDArray Predict(NDArray input)
+        public Tensor Predict(Tensor input)
         {
             foreach (var module in Modules)
             {
@@ -32,7 +32,7 @@ namespace DeepUnity
             }
             return input;
         }
-        public NDArray Forward(NDArray input)
+        public Tensor Forward(Tensor input)
         {
             foreach (var module in Modules)
             {
@@ -40,7 +40,7 @@ namespace DeepUnity
             }
             return input;
         }
-        public NDArray Backward(NDArray loss)
+        public Tensor Backward(Tensor loss)
         {
             for (int i = Modules.Length - 1; i >= 0; i--)
             {
@@ -113,7 +113,7 @@ namespace DeepUnity
             var instance = AssetDatabase.LoadAssetAtPath<NeuralNetwork>("Assets/" + Name + ".asset");
             if (instance == null)
                 AssetDatabase.CreateAsset(this, "Assets/" + Name + ".asset");
-            
+
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssetIfDirty(this);
         }
@@ -131,7 +131,7 @@ namespace DeepUnity
         }
     }
 
-   
-    
+
+
 
 }

@@ -15,16 +15,16 @@ namespace DeepUnity
         [SerializeField] private float weightDecay;
 
         // square average 
-        [NonSerialized] public NDArray[] v_W;
-        [NonSerialized] public NDArray[] v_B;
+        [NonSerialized] public Tensor[] v_W;
+        [NonSerialized] public Tensor[] v_B;
 
         // buffer
-        [NonSerialized] public NDArray[] b_W;
-        [NonSerialized] public NDArray[] b_B;
+        [NonSerialized] public Tensor[] b_W;
+        [NonSerialized] public Tensor[] b_B;
 
         // average gradient
-        [NonSerialized] public NDArray[] gAve_W;
-        [NonSerialized] public NDArray[] gAve_B;
+        [NonSerialized] public Tensor[] gAve_W;
+        [NonSerialized] public Tensor[] gAve_B;
 
 
         public RMSProp(float lr = 0.01f, float alpha = 0.99f, float momentum = 0.9f, float weightDecay = 0f, bool centered = false)
@@ -39,35 +39,35 @@ namespace DeepUnity
 
         public void Initialize(IModule[] modules)
         {
-            b_W = new NDArray[modules.Length];
-            b_B = new NDArray[modules.Length];
+            b_W = new Tensor[modules.Length];
+            b_B = new Tensor[modules.Length];
 
-            v_W = new NDArray[modules.Length];
-            v_B = new NDArray[modules.Length];
+            v_W = new Tensor[modules.Length];
+            v_B = new Tensor[modules.Length];
 
-            if(centered)
+            if (centered)
             {
-                gAve_W = new NDArray[modules.Length];
-                gAve_B = new NDArray[modules.Length];
+                gAve_W = new Tensor[modules.Length];
+                gAve_B = new Tensor[modules.Length];
             }
 
             for (int i = 0; i < modules.Length; i++)
             {
                 if (modules[i] is Dense D)
                 {
-                    int inputs = D.weights.Shape[1];
-                    int outputs = D.weights.Shape[0];
+                    int inputs = D.weights.Shape.width;
+                    int outputs = D.weights.Shape.height;
 
-                    b_W[i] = NDArray.Zeros(outputs, inputs);
-                    b_B[i] = NDArray.Zeros(outputs);
+                    b_W[i] = Tensor.Zeros(outputs, inputs);
+                    b_B[i] = Tensor.Zeros(outputs);
 
-                    v_W[i] = NDArray.Zeros(outputs, inputs);
-                    v_B[i] = NDArray.Zeros(outputs);
+                    v_W[i] = Tensor.Zeros(outputs, inputs);
+                    v_B[i] = Tensor.Zeros(outputs);
 
-                    if(centered)
+                    if (centered)
                     {
-                        gAve_W[i] = NDArray.Zeros(outputs, inputs);
-                        gAve_B[i] = NDArray.Zeros(outputs);
+                        gAve_W[i] = Tensor.Zeros(outputs, inputs);
+                        gAve_B[i] = Tensor.Zeros(outputs);
                     }
                 }
             }
@@ -83,33 +83,33 @@ namespace DeepUnity
                         D.grad_Weights += D.weights * weightDecay;
 
 
-                    v_W[i] = alpha * v_W[i] + (1f - alpha) * NDArray.Pow(D.grad_Weights, 2);
-                    v_B[i] = alpha * v_B[i] + (1f - alpha) * NDArray.Pow(D.grad_Biases, 2);
+                    v_W[i] = alpha * v_W[i] + (1f - alpha) * Tensor.Pow(D.grad_Weights, 2);
+                    v_B[i] = alpha * v_B[i] + (1f - alpha) * Tensor.Pow(D.grad_Biases, 2);
 
-                    var vBar_W = NDArray.Identity(v_W[i]);
-                    var vBar_B = NDArray.Identity(v_B[i]);
+                    var vBar_W = Tensor.Identity(v_W[i]);
+                    var vBar_B = Tensor.Identity(v_B[i]);
 
-                    if(centered)
+                    if (centered)
                     {
                         gAve_W[i] = gAve_W[i] * alpha + (1f - alpha) * D.grad_Weights;
                         gAve_B[i] = gAve_B[i] * alpha + (1f - alpha) * D.grad_Biases;
 
-                        vBar_W = vBar_W - NDArray.Pow(gAve_W[i], 2f);
-                        vBar_B = vBar_B - NDArray.Pow(gAve_B[i], 2f);
+                        vBar_W = vBar_W - Tensor.Pow(gAve_W[i], 2f);
+                        vBar_B = vBar_B - Tensor.Pow(gAve_B[i], 2f);
                     }
 
                     if (momentum > 0f)
                     {
-                        b_W[i] = momentum * b_W[i] + D.grad_Weights / (NDArray.Sqrt(vBar_W) + Utils.EPSILON);
-                        b_B[i] = momentum * b_B[i] + D.grad_Biases / (NDArray.Sqrt(vBar_B) + Utils.EPSILON);
+                        b_W[i] = momentum * b_W[i] + D.grad_Weights / (Tensor.Sqrt(vBar_W) + Utils.EPSILON);
+                        b_B[i] = momentum * b_B[i] + D.grad_Biases / (Tensor.Sqrt(vBar_B) + Utils.EPSILON);
 
                         D.weights = D.weights - learningRate * b_W[i];
                         D.biases = D.biases - learningRate * b_B[i];
                     }
                     else
                     {
-                        D.weights = D.weights - learningRate * D.grad_Weights / (NDArray.Sqrt(vBar_W) + Utils.EPSILON);
-                        D.biases = D.biases - learningRate * D.grad_Biases / (NDArray.Sqrt(vBar_B) + Utils.EPSILON);
+                        D.weights = D.weights - learningRate * D.grad_Weights / (Tensor.Sqrt(vBar_W) + Utils.EPSILON);
+                        D.biases = D.biases - learningRate * D.grad_Biases / (Tensor.Sqrt(vBar_B) + Utils.EPSILON);
                     }
                 }
             });

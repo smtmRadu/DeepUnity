@@ -144,6 +144,9 @@ namespace DeepUnity
         }
         public static class Random
         {        
+            /// <summary>
+            /// Returns a value in range [0, 1)
+            /// </summary>
             public static float Value { get { lock (RNG) return (float) RNG.NextDouble(); } }
             public static float Range(float min, float max) => Value * (max - min) + min;
             public static bool Bernoulli(float p = 0.5f) => Value < p;

@@ -8,12 +8,12 @@ namespace kbRadu
 {
     public class Learn1x1 : MonoBehaviour
     {
-        public NeuralNetwork net;
+       /* public NeuralNetwork net;
         public int no_samples;
         public int batch_size;
 
-        public NDArray[] input_batches;
-        public NDArray[] output_batches;
+        public InversedTensor[] input_batches;
+        public InversedTensor[] output_batches;
         public Device device;
         public int hid_size = 64;
 
@@ -37,11 +37,11 @@ namespace kbRadu
             }
 
             // create the training data
-            var inputs = NDArray.Random(1, no_samples);
-            var outputs = NDArray.Cos(inputs);
+            var inputs = InversedTensor.Random(1, no_samples);
+            var outputs = InversedTensor.Cos(inputs);
 
-            input_batches = NDArray.Split(inputs, 1, batch_size);
-            output_batches = NDArray.Split(outputs, 1, batch_size);
+            input_batches = InversedTensor.Split(inputs, 1, batch_size);
+            output_batches = InversedTensor.Split(outputs, 1, batch_size);
 
         }
 
@@ -70,7 +70,7 @@ namespace kbRadu
             if (epoch % 10 == 0)
                 net.Save();
         }
-
+*/
     }
 }
 

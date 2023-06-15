@@ -1,4 +1,3 @@
-using UnityEngine;
 
 namespace DeepUnity
 {
@@ -6,9 +5,9 @@ namespace DeepUnity
     {
         public readonly partial struct Mean
         {
-            internal static NDArray AsTensor
+            internal static Tensor AsTensor
             {
-                get => NDArray.Constant(AsMatrix);
+                get => Tensor.Constant(AsMatrix);
             }
             internal static float[,] AsMatrix
             {

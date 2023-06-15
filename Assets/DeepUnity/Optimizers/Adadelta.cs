@@ -13,15 +13,15 @@ namespace DeepUnity
 
 
         // Square avg buffer
-        [NonSerialized] public NDArray[] v_W;
-        [NonSerialized] public NDArray[] v_B;
+        [NonSerialized] public Tensor[] v_W;
+        [NonSerialized] public Tensor[] v_B;
 
 
         // Accumulate var buffer
-        [NonSerialized] public NDArray[] u_W;
-        [NonSerialized] public NDArray[] u_B;
+        [NonSerialized] public Tensor[] u_W;
+        [NonSerialized] public Tensor[] u_B;
 
-       
+
 
         public Adadelta(float learningRate = 1.0f, float rho = 0.9f, float weightDecay = 0f)
         {
@@ -32,26 +32,26 @@ namespace DeepUnity
 
         public void Initialize(IModule[] modules)
         {
-            v_W = new NDArray[modules.Length];
-            v_B = new NDArray[modules.Length];
+            v_W = new Tensor[modules.Length];
+            v_B = new Tensor[modules.Length];
 
-            u_W = new NDArray[modules.Length];
-            u_B = new NDArray[modules.Length];
+            u_W = new Tensor[modules.Length];
+            u_B = new Tensor[modules.Length];
 
-          
+
 
             for (int i = 0; i < modules.Length; i++)
             {
                 if (modules[i] is Dense d)
                 {
-                    int inputs = d.weights.Shape[1];
-                    int outputs = d.weights.Shape[0];
+                    int inputs = d.weights.Shape.width;
+                    int outputs = d.weights.Shape.height;
 
-                    v_W[i] = NDArray.Zeros(outputs, inputs);
-                    v_B[i] = NDArray.Zeros(outputs);
+                    v_W[i] = Tensor.Zeros(outputs, inputs);
+                    v_B[i] = Tensor.Zeros(outputs);
 
-                    u_W[i] = NDArray.Zeros(outputs, inputs);
-                    u_B[i] = NDArray.Zeros(outputs);
+                    u_W[i] = Tensor.Zeros(outputs, inputs);
+                    u_B[i] = Tensor.Zeros(outputs);
                 }
             }
         }
@@ -65,22 +65,21 @@ namespace DeepUnity
                     if (weightDecay != 0f)
                         D.grad_Weights = D.grad_Weights + weightDecay * D.weights;
 
-                    v_W[i] = v_W[i] * rho + NDArray.Pow(D.grad_Weights, 2f) * (1f - rho);
-                    v_B[i] = v_B[i] * rho + NDArray.Pow(D.grad_Biases, 2f) * (1f - rho);
+                    v_W[i] = v_W[i] * rho + Tensor.Pow(D.grad_Weights, 2f) * (1f - rho);
+                    v_B[i] = v_B[i] * rho + Tensor.Pow(D.grad_Biases, 2f) * (1f - rho);
 
                     // In Adadelta, i use v for square avg and m for accumulate variables
-                    var dxWeights = NDArray.Sqrt(u_W[i] + Utils.EPSILON) / NDArray.Sqrt(v_W[i] + Utils.EPSILON) * D.grad_Weights;
-                    var dxBiases = NDArray.Sqrt(u_B[i] + Utils.EPSILON) / NDArray.Sqrt(v_B[i] + Utils.EPSILON) * D.grad_Biases;
+                    var dxWeights = Tensor.Sqrt(u_W[i] + Utils.EPSILON) / Tensor.Sqrt(v_W[i] + Utils.EPSILON) * D.grad_Weights;
+                    var dxBiases = Tensor.Sqrt(u_B[i] + Utils.EPSILON) / Tensor.Sqrt(v_B[i] + Utils.EPSILON) * D.grad_Biases;
 
-                    u_W[i] = u_W[i] * rho + NDArray.Pow(dxWeights, 2f) * (1f - rho);
-                    u_B[i] = u_B[i] * rho + NDArray.Pow(dxBiases, 2f) * (1f - rho);
+                    u_W[i] = u_W[i] * rho + Tensor.Pow(dxWeights, 2f) * (1f - rho);
+                    u_B[i] = u_B[i] * rho + Tensor.Pow(dxBiases, 2f) * (1f - rho);
 
                     D.weights = D.weights - learningRate * dxWeights;
                     D.biases = D.biases - learningRate * dxBiases;
                 }
-              
+
             });
         }
     }
 }
-

@@ -3,23 +3,23 @@ namespace DeepUnity
 {
     public abstract class ActivationBase : IModule
     {
-        private NDArray InputCache { get; set; }
-        protected abstract void Activation(NDArray x);
-        protected abstract void Derivative(NDArray x);
+        private Tensor InputCache { get; set; }
+        protected abstract void Activation(Tensor x);
+        protected abstract void Derivative(Tensor x);
 
-        public NDArray Predict(NDArray input)
+        public Tensor Predict(Tensor input)
         {
             Activation(input);
             return input;
         }
-        public NDArray Forward(NDArray input)
+        public Tensor Forward(Tensor input)
         {
-            InputCache = NDArray.Identity(input);
+            InputCache = Tensor.Identity(input);
             Activation(input);
             return input;
 
         }
-        public NDArray Backward(NDArray loss)
+        public Tensor Backward(Tensor loss)
         {
             Derivative(InputCache);
             return InputCache * loss;

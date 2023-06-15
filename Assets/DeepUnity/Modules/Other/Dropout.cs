@@ -9,20 +9,20 @@ namespace DeepUnity
     public class Dropout : IModule
     {
         public float dropout;
-        public NDArray InputCache { get; set; }
+        public Tensor InputCache { get; set; }
 
 
         public Dropout(float dropout = 0.5f) => this.dropout = dropout;
 
-        public NDArray Predict(NDArray input) => input;
-        public NDArray Forward(NDArray input)
+        public Tensor Predict(Tensor input) => input;
+        public Tensor Forward(Tensor input)
         {
-            input.ForEach(x => Utils.Random.Bernoulli(dropout)? 0f : x);
-            InputCache = NDArray.Identity(input);
+            input.ForEach(x => Utils.Random.Bernoulli(dropout) ? 0f : x);
+            InputCache = Tensor.Identity(input);
             return input;
 
         }
-        public NDArray Backward(NDArray loss)
+        public Tensor Backward(Tensor loss)
         {
             return loss.Zip(InputCache, (l, i) => i != 0f ? l : 0f);
         }

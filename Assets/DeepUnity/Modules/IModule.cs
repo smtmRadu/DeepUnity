@@ -6,9 +6,9 @@ namespace DeepUnity
 {
     public interface IModule
     {
-        public NDArray Predict(NDArray input);
-        public NDArray Forward(NDArray input);
-        public NDArray Backward(NDArray loss);
+        public Tensor Predict(Tensor input);
+        public Tensor Forward(Tensor input);
+        public Tensor Backward(Tensor loss);
        
     }
 

@@ -2,20 +2,21 @@ namespace DeepUnity
 {
     public class Conv2D : IModule
     {
-        public NDArray InputCache { get; set; }
+        public Tensor InputCache { get; set; }
 
-        public NDArray Predict(NDArray input)
+        public Tensor Predict(Tensor input)
         {
             return null;
         }
-        public NDArray Forward(NDArray input)
+        public Tensor Forward(Tensor input)
         {
             return null;
         }
-        public NDArray Backward(NDArray loss)
+        public Tensor Backward(Tensor loss)
         {
             return null;
         }
     }
+
 
 }
