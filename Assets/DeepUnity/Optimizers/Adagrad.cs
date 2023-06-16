@@ -31,10 +31,10 @@ namespace DeepUnity
             {
                 if (modules[i] is Dense d)
                 {
-                    int inputs = d.weights.Shape.width;
-                    int outputs = d.weights.Shape.height;
+                    int inputs = d.weights.Shape.height;
+                    int outputs = d.weights.Shape.width;
 
-                    statesum_W[i] = Tensor.Zeros(outputs, inputs);
+                    statesum_W[i] = Tensor.Zeros(inputs, outputs);
                     statesum_B[i] = Tensor.Zeros(outputs);
 
                 }

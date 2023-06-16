@@ -5,7 +5,7 @@ namespace DeepUnity
     [Serializable]
     public class TanH : ActivationBase
     {
-        protected override void Activation(Tensor x)
+        protected override void Activation(ref Tensor x)
         {
             x.ForEach(x =>
             {
@@ -14,7 +14,7 @@ namespace DeepUnity
                 return tanh;
             });
         }
-        protected override void Derivative(Tensor x)
+        protected override void Derivative(ref Tensor x)
         {
             x.ForEach(x =>
             {

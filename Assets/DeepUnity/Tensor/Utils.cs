@@ -55,9 +55,9 @@ namespace DeepUnity
             int index = -1;
             double max = double.MinValue;
             for (int i = 0; i < values.Length; i++)
-                if ((dynamic)values[i] > max)
+                if (Convert.ToDouble(values[i]) > max)
                 {
-                    max = (dynamic)values[i];
+                    max = Convert.ToDouble(values[i]);
                     index = i;
                 }
             return index;
@@ -148,7 +148,8 @@ namespace DeepUnity
             /// Returns a value in range [0, 1)
             /// </summary>
             public static float Value { get { lock (RNG) return (float) RNG.NextDouble(); } }
-            public static float Range(float min, float max) => Value * (max - min) + min;
+            public static float Range(float minInclusive, float maxExclusive) => Value * (maxExclusive - minInclusive) + minInclusive;
+            public static int Range(int minInclusive, int maxExclusive) => (int)Value * (maxExclusive - minInclusive) + minInclusive;
             public static bool Bernoulli(float p = 0.5f) => Value < p;
             public static float Gaussian(float mean = 0f, float stddev = 1f)
             {

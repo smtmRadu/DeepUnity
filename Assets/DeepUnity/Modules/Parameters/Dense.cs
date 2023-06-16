@@ -1,6 +1,5 @@
 using UnityEngine;
 using System;
-using System.Drawing.Printing;
 
 namespace DeepUnity
 {
@@ -119,8 +118,9 @@ namespace DeepUnity
         }
         public void OnAfterDeserialize()
         {
+            // Stil here a problemo..
             // This function is actually having 2 workers on serialization, and one on them is called when weights.shape.length == 0.
-            if (weights.Shape == null)
+            if (weights.Shape == null || weights.Shape.width == 0)
                 return;
 
             int outputs = weights.Shape.height;

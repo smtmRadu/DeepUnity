@@ -25,7 +25,6 @@ namespace DeepUnity
 
         public AdaMax(float learningRate = 0.002f, float beta1 = 0.9f, float beta2 = 0.999f, float weightDecay = 0f)
         {
-            throw new Exception("AdaMax not working...");
             this.t = 0;
             this.alpha = learningRate;
             this.beta1 = beta1;
@@ -48,10 +47,10 @@ namespace DeepUnity
                     int inputs = D.weights.Shape.height;
                     int outputs = D.weights.Shape.width;
 
-                    m_W[i] = Tensor.Zeros(outputs, inputs);
+                    m_W[i] = Tensor.Zeros(inputs, outputs);
                     m_B[i] = Tensor.Zeros(outputs);
 
-                    u_W[i] = Tensor.Zeros(outputs, inputs);
+                    u_W[i] = Tensor.Zeros(inputs, outputs);
                     u_B[i] = Tensor.Zeros(outputs);
 
                 }

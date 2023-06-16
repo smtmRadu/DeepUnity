@@ -44,13 +44,13 @@ namespace DeepUnity
             {
                 if (modules[i] is Dense d)
                 {
-                    int inputs = d.weights.Shape.width;
-                    int outputs = d.weights.Shape.height;
+                    int inputs = d.weights.Shape.height;
+                    int outputs = d.weights.Shape.width;
 
-                    v_W[i] = Tensor.Zeros(outputs, inputs);
+                    v_W[i] = Tensor.Zeros(inputs, outputs);
                     v_B[i] = Tensor.Zeros(outputs);
 
-                    u_W[i] = Tensor.Zeros(outputs, inputs);
+                    u_W[i] = Tensor.Zeros(inputs, outputs);
                     u_B[i] = Tensor.Zeros(outputs);
                 }
             }

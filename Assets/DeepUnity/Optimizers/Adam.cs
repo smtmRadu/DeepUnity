@@ -55,7 +55,7 @@ namespace DeepUnity
                 }
                 else if (modules[i] is BatchNorm B)
                 {
-                    int inputs = B.beta.Shape.height;
+                    int inputs = B.beta.Shape.width;
 
                     m_W[i] = Tensor.Zeros(inputs); // W is for gamma
                     m_B[i] = Tensor.Zeros(inputs); // B is for beta

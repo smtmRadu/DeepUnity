@@ -29,7 +29,6 @@ namespace DeepUnity
 
         public RMSProp(float lr = 0.01f, float alpha = 0.99f, float momentum = 0.9f, float weightDecay = 0f, bool centered = false)
         {
-            throw new Exception("RMSProp not working...");
             this.learningRate = lr;
             this.alpha = alpha;
             this.momentum = momentum;
@@ -55,13 +54,13 @@ namespace DeepUnity
             {
                 if (modules[i] is Dense D)
                 {
-                    int inputs = D.weights.Shape.width;
-                    int outputs = D.weights.Shape.height;
+                    int inputs = D.weights.Shape.height;
+                    int outputs = D.weights.Shape.width;
 
-                    b_W[i] = Tensor.Zeros(outputs, inputs);
+                    b_W[i] = Tensor.Zeros(inputs, outputs);
                     b_B[i] = Tensor.Zeros(outputs);
 
-                    v_W[i] = Tensor.Zeros(outputs, inputs);
+                    v_W[i] = Tensor.Zeros(inputs, outputs);
                     v_B[i] = Tensor.Zeros(outputs);
 
                     if (centered)

@@ -1,5 +1,4 @@
 using System;
-using System.Drawing.Printing;
 using UnityEngine;
 
 namespace DeepUnity
@@ -54,21 +53,21 @@ namespace DeepUnity
         }
         public Tensor Forward(Tensor input)
         {
-            int batch = input.Shape.width;
+            int batch = input.Shape.height;
 
             // When training (only on mini-batch training), we cache the values for backprop also
             var mu_B = Tensor.Mean(input, 0); // mini-batch means      [batch]
             var var_B = Tensor.Var(input, 0); // mini-batch variances  [batch]
 
-            // input [features, batch]  - muB or varB [features, 1] -> need expand on axis 1 by batch
+            // input [batch, features]  - muB or varB [features] -> need expand on axis 0 by batch
 
             // normalize
-            var x_minus_mu = input - Tensor.Expand(mu_B, 0, batch);
-            var sqrt_var = Tensor.Expand(Tensor.Sqrt(var_B + epsilon), 0, batch);
+            var x_minus_mu = input - Tensor.Expand(mu_B, -1, batch);
+            var sqrt_var = Tensor.Expand(Tensor.Sqrt(var_B + epsilon), -1, batch);
             var x_hat = x_minus_mu / sqrt_var;
 
             // scale and shift
-            var yB = Tensor.Expand(gamma, 0, batch) * x_hat + Tensor.Expand(beta, 0, batch);
+            var yB = Tensor.Expand(gamma, -1, batch) * x_hat + Tensor.Expand(beta, -1, batch);
 
             // Cache everything
             x_minus_mu_cache = x_minus_mu;
@@ -84,21 +83,21 @@ namespace DeepUnity
         }
         public Tensor Backward(Tensor dLdY)
         {
-            int m = dLdY.Shape.width;
+            int m = dLdY.Shape.height;
 
             // paper algorithm https://arxiv.org/pdf/1502.03167.pdf
 
-            var dLdxHat = dLdY * Tensor.Expand(gamma, 0, m); // [features, batch]
+            var dLdxHat = dLdY * Tensor.Expand(gamma, -1, m); 
 
             var dLdVarB = Tensor.Mean(dLdxHat * x_minus_mu_cache * (-1f / 2f) *
                          Tensor.Pow(std_cache + epsilon, -3f / 2f), 0);
 
             var dLdMuB = Tensor.Mean(dLdxHat * -1f / std_cache + epsilon +
-                        Tensor.Expand(dLdVarB, 1, m) * -2f * x_minus_mu_cache / m, 0);
+                        Tensor.Expand(dLdVarB, -1, m) * -2f * x_minus_mu_cache / m, 0);
 
             var dLdX = dLdxHat * 1f / Tensor.Sqrt(std_cache + epsilon) +
-                       Tensor.Expand(dLdVarB, 0, m) * 2f * x_minus_mu_cache / m +
-                       Tensor.Expand(dLdMuB, 0, m) * (1f / m);
+                       Tensor.Expand(dLdVarB, -1, m) * 2f * x_minus_mu_cache / m +
+                       Tensor.Expand(dLdMuB, -1, m) * (1f / m);
 
 
             var dLdGamma = Tensor.Mean(dLdY * x_hat_Cache, 0);
@@ -148,7 +147,7 @@ namespace DeepUnity
         public void OnAfterDeserialize()
         {
             // This function is actually having 2 workers on serialization, and one on them is called when weights.shape.length == 0.
-            if (gamma.Shape == null)
+            if (gamma.Shape == null || gamma.Shape.width == 0)
                 return;
 
             int num_features = gamma.Shape.width;
