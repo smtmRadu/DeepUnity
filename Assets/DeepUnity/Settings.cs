@@ -1,3 +1,4 @@
+using System;
 using UnityEditor;
 using UnityEngine;
 
@@ -38,6 +39,21 @@ namespace DeepUnity
             catch { }
         }
  	   
+    }
+    public static class Timer
+    {
+        static DateTime start;
+        static TimeSpan time;
+        public static void Start()
+        {
+            start = DateTime.Now;
+        }
+        public static TimeSpan Stop()
+        {
+            time = DateTime.Now - start;
+            Debug.Log("[Timer] : " +  time);
+            return time;
+        }
     }
     public enum InitType
     {

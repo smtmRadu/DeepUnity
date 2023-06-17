@@ -37,6 +37,7 @@ namespace kbRadu
             {
                 net = new NeuralNetwork(
                  new Dense(2, hiddenSize),
+                 new BatchNorm(hiddenSize),
                  new ReLU(),
                  new Dense(hiddenSize, hiddenSize),
                  new ReLU(),

@@ -56,7 +56,7 @@ namespace DeepUnity
         public Tensor Predict(Tensor input)
         {
             int batch = input.Shape.height;
-            return Tensor.MatMul(input, weights) + Tensor.Expand(biases, -1, batch);
+            return Tensor.MatMul(input, weights) + Tensor.Expand(biases, TDim.height, batch);
 
         }
         public Tensor Forward(Tensor input)
@@ -65,7 +65,7 @@ namespace DeepUnity
             // it seems like forward is always faster with CPU rather than GPU for matrices < 1024 size. Maybe on large scales it must be changed again on GPU.
             Input_Cache = Tensor.Identity(input);
             int batch_size = input.Shape.height;
-            return Tensor.MatMul(input, weights) + Tensor.Expand(biases, -1, batch_size);
+            return Tensor.MatMul(input, weights) + Tensor.Expand(biases,TDim.height, batch_size);
         }
         public Tensor Backward(Tensor loss)
         {

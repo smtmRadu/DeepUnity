@@ -7,9 +7,9 @@ namespace DeepUnity
     public class BatchNorm : IModule, IParameters
     {
         private Tensor x_minus_mu_cache { get; set; }
-        private Tensor x_hat_Cache { get; set; }
         private Tensor std_cache { get; set; }
-
+        private Tensor x_hat_Cache { get; set; }
+       
 
         [SerializeField] public float momentum;
         [SerializeField] public float epsilon;
@@ -27,7 +27,9 @@ namespace DeepUnity
 
 
 
-
+        /// <summary>
+        /// </summary>
+        /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85)</param>
         public BatchNorm(int num_features, float momentum = 0.1f, float eps = 1e-5f)
         {
             gamma = Tensor.Ones(num_features);
@@ -56,23 +58,24 @@ namespace DeepUnity
             int batch = input.Shape.height;
 
             // When training (only on mini-batch training), we cache the values for backprop also
-            var mu_B = Tensor.Mean(input, 0); // mini-batch means      [batch]
-            var var_B = Tensor.Var(input, 0); // mini-batch variances  [batch]
+            var mu_B = Tensor.Mean(input, TDim.height); // mini-batch means      [batch, 1]
+            var var_B = Tensor.Var(input, TDim.height); // mini-batch variances  [batch, 1]
 
             // input [batch, features]  - muB or varB [features] -> need expand on axis 0 by batch
 
             // normalize
-            var x_minus_mu = input - Tensor.Expand(mu_B, -1, batch);
-            var sqrt_var = Tensor.Expand(Tensor.Sqrt(var_B + epsilon), -1, batch);
+            var x_minus_mu = input - Tensor.Expand(mu_B, TDim.height, batch);
+            var sqrt_var = Tensor.Expand(Tensor.Sqrt(var_B + epsilon), TDim.height, batch);
             var x_hat = x_minus_mu / sqrt_var;
 
             // scale and shift
-            var yB = Tensor.Expand(gamma, -1, batch) * x_hat + Tensor.Expand(beta, -1, batch);
+            var yB = Tensor.Expand(gamma, TDim.height, batch) * x_hat + Tensor.Expand(beta, TDim.height, batch);
 
             // Cache everything
             x_minus_mu_cache = x_minus_mu;
-            x_hat_Cache = x_hat;
             std_cache = sqrt_var;
+            x_hat_Cache = x_hat;
+            
 
             // compute running mean and var
             runningMean = runningMean * momentum + mu_B * (1f - momentum);
@@ -87,21 +90,23 @@ namespace DeepUnity
 
             // paper algorithm https://arxiv.org/pdf/1502.03167.pdf
 
-            var dLdxHat = dLdY * Tensor.Expand(gamma, -1, m); 
+            var dLdxHat = dLdY * Tensor.Expand(gamma, TDim.height, m); // [batch, outs]
 
             var dLdVarB = Tensor.Mean(dLdxHat * x_minus_mu_cache * (-1f / 2f) *
-                         Tensor.Pow(std_cache + epsilon, -3f / 2f), 0);
+                         Tensor.Pow(std_cache + epsilon, -3f / 2f), TDim.height, true);
 
-            var dLdMuB = Tensor.Mean(dLdxHat * -1f / std_cache + epsilon +
-                        Tensor.Expand(dLdVarB, -1, m) * -2f * x_minus_mu_cache / m, 0);
+            var dLdMuB = Tensor.Mean(
+                         dLdxHat * -1f / (std_cache + epsilon) +
+                         dLdVarB * -2f * x_minus_mu_cache / m, 
+                         TDim.height, true);
 
             var dLdX = dLdxHat * 1f / Tensor.Sqrt(std_cache + epsilon) +
-                       Tensor.Expand(dLdVarB, -1, m) * 2f * x_minus_mu_cache / m +
-                       Tensor.Expand(dLdMuB, -1, m) * (1f / m);
+                       dLdVarB * 2f * x_minus_mu_cache / m +
+                       dLdMuB * (1f / m);
 
 
-            var dLdGamma = Tensor.Mean(dLdY * x_hat_Cache, 0);
-            var dLdBeta = Tensor.Mean(dLdY, 0);
+            var dLdGamma = Tensor.Mean(dLdY * x_hat_Cache, TDim.height);
+            var dLdBeta = Tensor.Mean(dLdY, TDim.height);
 
             grad_Gamma += dLdGamma;
             grad_Beta += dLdBeta;

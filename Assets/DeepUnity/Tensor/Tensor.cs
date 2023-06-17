@@ -218,11 +218,11 @@ namespace DeepUnity
             shape = new TShape(ndim, batch, height, width);
             data = new float[size];
         }
-        private Tensor(TShape shape)
+        private Tensor(TShape tshape)
         {
-            this.shape = new TShape(shape.ndim, shape.batch, shape.height, shape.width);
+            this.shape = new TShape(tshape.ndim, tshape.batch, tshape.height, tshape.width);
             
-            int size = shape.ndim * shape.batch * shape.height * shape.width;
+            int size = tshape.ndim * tshape.batch * tshape.height * tshape.width;
 
             if (size > 16_777_216) // hardcoded like this because 4096x4096 max allowed matrix, on 8192 it crashes
                 throw new Exception("Tensor dimensions is too large on initialization (cannot surpass 16,777,216 units).");
@@ -239,6 +239,12 @@ namespace DeepUnity
         {
             Tensor t = new Tensor(1);
             t.data[0] = scalar;
+            return t;
+        }
+        public static Tensor Constant(float[] vector)
+        {
+            Tensor t = new Tensor(vector.GetLength(0));
+            t.data = vector.ToArray();
             return t;
         }
         public static Tensor Constant(float[,] matrix)
@@ -378,7 +384,7 @@ namespace DeepUnity
         public static Tensor operator +(Tensor left, Tensor right)
         {
             if (!left.shape.Equals(right.shape))
-                throw new Exception($"Left{left.ShapeToString} and right{right.ShapeToString} tensors must have different shape for Element-wise operation.");
+                throw new Exception($"Left{left.ShapeToString} and right{right.ShapeToString} tensors must have different shape for Element-wise addition (+).");
 
             Tensor result = new Tensor(left.shape);
 
@@ -393,7 +399,7 @@ namespace DeepUnity
         public static Tensor operator -(Tensor left, Tensor right)
         {
             if (!left.shape.Equals(right.shape))
-                throw new Exception($"Left{left.ShapeToString} and right{right.ShapeToString} tensors must have different shape for Element-wise operation.");
+                throw new Exception($"Left{left.ShapeToString} and right{right.ShapeToString} tensors must have different shape for Element-wise subtraction (-).");
 
             Tensor result = new Tensor(left.shape);
             for (int i = 0; i < result.data.Length; i++)
@@ -406,7 +412,7 @@ namespace DeepUnity
         public static Tensor operator *(Tensor left, Tensor right)
         {
             if (!left.shape.Equals(right.shape))
-                throw new Exception($"Left{left.ShapeToString} and right{right.ShapeToString} tensors must have different shape for Element-wise operation.");
+                throw new Exception($"Left{left.ShapeToString} and right{right.ShapeToString} tensors must have different shape for Element-wise multiplication (*).");
 
             Tensor result = new Tensor(left.shape);
 
@@ -421,7 +427,7 @@ namespace DeepUnity
         public static Tensor operator /(Tensor left, Tensor right)
         {
             if (!left.shape.Equals(right.shape))
-                throw new Exception($"Left{left.ShapeToString} and right{right.ShapeToString} tensors must have different shape for Element-wise operation.");
+                throw new Exception($"Left{left.ShapeToString} and right{right.ShapeToString} tensors must have different shape for Element-wise division (/).");
 
             Tensor result = new Tensor(left.shape);
 
@@ -596,8 +602,8 @@ namespace DeepUnity
             return result;
         }
 
-        // On Axis, working with axis may become confusing
         /// <summary>
+        /// [Deprecated] 
         /// Splits axis in split_size batches.
         /// If Axis is not a multiple of split_size, the last batch will remain incompletely.
         /// </summary>-
@@ -653,6 +659,7 @@ namespace DeepUnity
             return slices.ToArray();
         }
         /// <summary>
+        /// [Deprecated]
         /// Concatenates all tensors same dimension.
         /// Tensors dimension N is N * no_slices in the result tensor.
         /// On axis - 1, the tensors are batched.
@@ -711,6 +718,7 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
+        /// [Deprecated]
         /// Expands a dimension N of value X to value X * times. 
         /// On axis -1, the tensor is duplicated in times batches.
         /// </summary>
@@ -760,12 +768,18 @@ namespace DeepUnity
 
             return result;
         }   
+        /// <summary>
+        /// [Deprecated]
+        /// </summary>
         public static Tensor Shuffle(Tensor tensor, int axis)
         {
             Tensor[] slices = Split(tensor, axis, 1);
             slices = Utils.Shuffle(slices).ToArray();
             return Join(axis, slices);
         }
+        /// <summary>
+        /// [Deprecated]
+        /// </summary>
         public static Tensor Sum(Tensor tensor, int axis)
         {
             Tensor result = null;
@@ -853,6 +867,9 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// [Deprecated]
+        /// </summary>
         public static Tensor Mean(Tensor tensor, int axis)
         {
             Tensor result = null;
@@ -940,6 +957,9 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// [Deprecated]
+        /// </summary>
         public static Tensor Var(Tensor tensor, int axis, int correction = 1)
         {
             Tensor result = null;
@@ -1038,102 +1058,407 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// [Deprecated]
+        /// </summary>
         public static Tensor Std(Tensor tensor, int axis, int correction = 1)
         {
             return Sqrt(Var(tensor, axis, correction));
         }
 
         // On Dimension
-        public static Tensor Var(Tensor tensor, TDim dim, int correction = 1)
+        public static Tensor Var(Tensor tensor, TDim dim, int correction = 1, bool keepDim = false)
         {
             Tensor result = null;
             int[] shape = tensor.shape.ToArray();
 
-            if (dim == TDim.width)
+            if(!keepDim)
             {
-                result = new Tensor(shape[0], shape[1], shape[2], 1);
-                for (int l = 0; l < shape[0]; l++)
+                if (dim == TDim.width)
+                {
+                    result = new Tensor(shape[0], shape[1], shape[2], 1);
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int k = 0; k < shape[1]; k++)
+                        {
+                            for (int j = 0; j < shape[2]; j++)
+                            {
+                                float sum = 0f;
+                                float sumSqr = 0f;
+                                for (int i = 0; i < shape[3]; i++)
+                                {
+                                    float value = tensor[l, k, j, i];
+                                    sum += value;
+                                    sumSqr += value * value;
+                                }
+                                result[l, k, j, 0] = (sumSqr - (sum * sum) / shape[3]) / (shape[3] - correction);
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.height)
+                {
+                    result = new Tensor(shape[0], shape[1], 1, shape[3]);
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int k = 0; k < shape[1]; k++)
+                        {
+                            for (int i = 0; i < shape[3]; i++)
+                            {
+                                float sum = 0f;
+                                float sumSqr = 0f;
+                                for (int j = 0; j < shape[2]; j++)
+                                {
+                                    float value = tensor[l, k, j, i];
+                                    sum += value;
+                                    sumSqr += value * value;
+                                }
+                                result[l, k, 0, i] = (sumSqr - (sum * sum) / shape[2]) / (shape[2] - correction);
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.batch)
+                {
+                    result = new Tensor(shape[0], 1, shape[2], shape[3]);
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int j = 0; j < shape[2]; j++)
+                        {
+                            for (int i = 0; i < shape[3]; i++)
+                            {
+                                float sum = 0f;
+                                float sumSqr = 0f;
+                                for (int k = 0; k < shape[1]; k++)
+                                {
+                                    float value = tensor[l, k, j, i];
+                                    sum += value;
+                                    sumSqr += value * value;
+                                }
+
+                                result[l, 0, j, i] = (sumSqr - (sum * sum) / shape[1]) / (shape[1] - correction);
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.ndim)
+                {
+                    result = new Tensor(1, shape[1], shape[2], shape[3]);
+                    for (int k = 0; k < shape[1]; k++)
+                    {
+                        for (int j = 0; j < shape[2]; j++)
+                        {
+                            for (int i = 0; i < shape[3]; i++)
+                            {
+                                float sum = 0f;
+                                float sumSqr = 0f;
+                                for (int l = 0; l < shape[0]; l++)
+                                {
+                                    float value = tensor[l, k, j, i];
+                                    sum += value;
+                                    sumSqr += value * value;
+                                }
+                                result[0, k, j, i] = (sumSqr - (sum * sum) / shape[0]) / (shape[0] - correction);
+                            }
+                        }
+                    }
+                }
+
+            }
+            else
+            {
+                result = new Tensor(tensor.shape);
+                if (dim == TDim.width)
+                {
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int k = 0; k < shape[1]; k++)
+                        {
+                            for (int j = 0; j < shape[2]; j++)
+                            {
+                                float sum = 0f;
+                                float sumSqr = 0f;
+                                for (int i = 0; i < shape[3]; i++)
+                                {
+                                    float value = tensor[l, k, j, i];
+                                    sum += value;
+                                    sumSqr += value * value;
+                                }
+
+                                float res = (sumSqr - (sum * sum) / shape[3]) / (shape[3] - correction);
+                                for (int i = 0; i < shape[3]; i++)
+                                {
+                                    result[l, k, j, i] = res;
+                                }
+
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.height)
+                {
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int k = 0; k < shape[1]; k++)
+                        {
+                            for (int i = 0; i < shape[3]; i++)
+                            {
+                                float sum = 0f;
+                                float sumSqr = 0f;
+                                for (int j = 0; j < shape[2]; j++)
+                                {
+                                    float value = tensor[l, k, j, i];
+                                    sum += value;
+                                    sumSqr += value * value;
+                                }
+                                float res = (sumSqr - (sum * sum) / shape[2]) / (shape[2] - correction);
+                                for (int j = 0; j < shape[2]; j++)
+                                {
+                                    result[l, k, j, i] = res;
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.batch)
+                {
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int j = 0; j < shape[2]; j++)
+                        {
+                            for (int i = 0; i < shape[3]; i++)
+                            {
+                                float sum = 0f;
+                                float sumSqr = 0f;
+                                for (int k = 0; k < shape[1]; k++)
+                                {
+                                    float value = tensor[l, k, j, i];
+                                    sum += value;
+                                    sumSqr += value * value;
+                                }
+
+                                float res = (sumSqr - (sum * sum) / shape[1]) / (shape[1] - correction);
+                                for (int k = 0; k < shape[1]; k++)
+                                {
+                                    result[l, k, j, i] = res;
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.ndim)
                 {
                     for (int k = 0; k < shape[1]; k++)
                     {
                         for (int j = 0; j < shape[2]; j++)
                         {
-                            float sum = 0f;
-                            float sumSqr = 0f;
                             for (int i = 0; i < shape[3]; i++)
                             {
-                                float value = tensor[l, k, j, i];
-                                sum += value;
-                                sumSqr += value * value;
+                                float sum = 0f;
+                                float sumSqr = 0f;
+                                for (int l = 0; l < shape[0]; l++)
+                                {
+                                    float value = tensor[l, k, j, i];
+                                    sum += value;
+                                    sumSqr += value * value;
+                                }
+                                float res = (sumSqr - (sum * sum) / shape[0]) / (shape[0] - correction);
+                                for (int l = 0; l < shape[0]; l++)
+                                {
+                                    result[l, k, j, i] = res;
+                                }
                             }
-                            result[l, k, j, 0] = (sumSqr - (sum * sum) / shape[3]) / (shape[3] - correction);
                         }
                     }
                 }
             }
-            else if (dim == TDim.height)
+            return result;
+        }
+        public static Tensor Std(Tensor tensor, TDim dim, int correction = 1, bool keepDim = false)
+        {
+            return Sqrt(Var(tensor, dim, correction, keepDim));
+        }
+        public static Tensor Mean(Tensor tensor, TDim dim, bool keepDim = false)
+        {
+            Tensor result = null;
+            int[] shape = tensor.shape.ToArray();
+
+            if(!keepDim)
             {
-                result = new Tensor(shape[0], shape[1], 1, shape[3]);
-                for (int l = 0; l < shape[0]; l++)
+                if (dim == TDim.width)
+                {
+                    result = new Tensor(shape[0], shape[1], shape[2], 1);
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int k = 0; k < shape[1]; k++)
+                        {
+                            for (int j = 0; j < shape[2]; j++)
+                            {
+                                float sum = 0f;
+                                for (int i = 0; i < shape[3]; i++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
+                                result[l, k, j, 0] = sum / shape[3];
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.height)
+                {
+                    result = new Tensor(shape[0], shape[1], 1, shape[3]);
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int k = 0; k < shape[1]; k++)
+                        {
+                            for (int i = 0; i < shape[3]; i++)
+                            {
+                                float sum = 0f;
+                                for (int j = 0; j < shape[2]; j++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
+                                result[l, k, 0, i] = sum / shape[2];
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.batch)
+                {
+                    result = new Tensor(shape[0], 1, shape[2], shape[3]);
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int j = 0; j < shape[2]; j++)
+                        {
+                            for (int i = 0; i < shape[3]; i++)
+                            {
+                                float sum = 0f;
+
+                                for (int k = 0; k < shape[1]; k++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
+
+                                result[l, 0, j, i] = sum / shape[1];
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.ndim)
+                {
+                    result = new Tensor(1, shape[1], shape[2], shape[3]);
+                    for (int k = 0; k < shape[1]; k++)
+                    {
+                        for (int j = 0; j < shape[2]; j++)
+                        {
+                            for (int i = 0; i < shape[3]; i++)
+                            {
+                                float sum = 0f;
+                                for (int l = 0; l < shape[0]; l++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
+                                result[0, k, j, i] = sum / shape[0];
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                result = new Tensor(tensor.shape);
+                if (dim == TDim.width)
+                {
+                    
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int k = 0; k < shape[1]; k++)
+                        {
+                            for (int j = 0; j < shape[2]; j++)
+                            {
+                                float sum = 0f;
+                                for (int i = 0; i < shape[3]; i++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
+                                sum /= shape[3];
+
+                                for (int i = 0; i < shape[3]; i++)
+                                {
+                                    result[l, k, j, i] = sum;
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.height)
+                {
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int k = 0; k < shape[1]; k++)
+                        {
+                            for (int i = 0; i < shape[3]; i++)
+                            {
+                                float sum = 0f;
+                                for (int j = 0; j < shape[2]; j++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
+                                sum /= shape[2];
+
+                                for (int j = 0; j < shape[2]; j++)
+                                {
+                                    result[l, k, j, i] = sum;
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.batch)
+                {
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int j = 0; j < shape[2]; j++)
+                        {
+                            for (int i = 0; i < shape[3]; i++)
+                            {
+                                float sum = 0f;
+
+                                for (int k = 0; k < shape[1]; k++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
+
+                                sum /= shape[1];
+
+                                for (int k = 0; k < shape[1]; k++)
+                                {
+                                    result[l, k, j, i] = sum;
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.ndim)
                 {
                     for (int k = 0; k < shape[1]; k++)
                     {
-                        for (int i = 0; i < shape[3]; i++)
+                        for (int j = 0; j < shape[2]; j++)
                         {
-                            float sum = 0f;
-                            float sumSqr = 0f;
-                            for (int j = 0; j < shape[2]; j++)
+                            for (int i = 0; i < shape[3]; i++)
                             {
-                                float value = tensor[l, k, j, i];
-                                sum += value;
-                                sumSqr += value * value;
-                            }
-                            result[l, k, 0, i] = (sumSqr - (sum * sum) / shape[2]) / (shape[2] - correction);
-                        }
-                    }
-                }
-            }
-            else if (dim == TDim.batch)
-            {
-                result = new Tensor(shape[0], 1, shape[2], shape[3]);
-                for (int l = 0; l < shape[0]; l++)
-                {
-                    for (int j = 0; j < shape[2]; j++)
-                    {
-                        for (int i = 0; i < shape[3]; i++)
-                        {
-                            float sum = 0f;
-                            float sumSqr = 0f;
-                            for (int k = 0; k < shape[1]; k++)
-                            {
-                                float value = tensor[l, k, j, i];
-                                sum += value;
-                                sumSqr += value * value;
-                            }
+                                float sum = 0f;
+                                for (int l = 0; l < shape[0]; l++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
+                                sum /= shape[0];
 
-                            result[l, 0, j, i] = (sumSqr - (sum * sum) / shape[1]) / (shape[1] - correction);
-                        }
-                    }
-                }
-            }
-            else if (dim == TDim.ndim)
-            {
-                result = new Tensor(1, shape[1], shape[2], shape[3]);
-                for (int k = 0; k < shape[1]; k++)
-                {
-                    for (int j = 0; j < shape[2]; j++)
-                    {
-                        for (int i = 0; i < shape[3]; i++)
-                        {
-                            float sum = 0f;
-                            float sumSqr = 0f;
-                            for (int l = 0; l < shape[0]; l++)
-                            {
-                                float value = tensor[l, k, j, i];
-                                sum += value;
-                                sumSqr += value * value;
+                                for (int l = 0; l < shape[0]; l++)
+                                {
+                                    result[l, k, j, i] = sum;
+                                }
                             }
-                            result[0, k, j, i] = (sumSqr - (sum * sum) / shape[0]) / (shape[0] - correction);
                         }
                     }
                 }
@@ -1141,179 +1466,191 @@ namespace DeepUnity
 
             return result;
         }
-        public static Tensor Std(Tensor tensor, TDim dim, int correction = 1)
-        {
-            return Sqrt(Var(tensor, dim, correction));
-        }
-        public static Tensor Mean(Tensor tensor, TDim dim)
+        public static Tensor Sum(Tensor tensor, TDim dim, bool keepDim = false)
         {
             Tensor result = null;
             int[] shape = tensor.shape.ToArray();
 
-            if (dim == TDim.width)
+            if(!keepDim)
             {
-                result = new Tensor(shape[0], shape[1], shape[2], 1);
-                for (int l = 0; l < shape[0]; l++)
+                if (dim == TDim.width)
                 {
+                    result = new Tensor(shape[0], shape[1], shape[2], 1);
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int k = 0; k < shape[1]; k++)
+                        {
+                            for (int j = 0; j < shape[2]; j++)
+                            {
+                                float sum = 0f;
+                                for (int i = 0; i < shape[3]; i++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
+                                result[l, k, j, 0] = sum;
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.height)
+                {
+                    result = new Tensor(shape[0], shape[1], 1, shape[3]);
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int k = 0; k < shape[1]; k++)
+                        {
+                            for (int i = 0; i < shape[3]; i++)
+                            {
+                                float sum = 0f;
+                                for (int j = 0; j < shape[2]; j++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
+                                result[l, k, 0, i] = sum;
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.batch)
+                {
+                    result = new Tensor(shape[0], 1, shape[2], shape[3]);
+                    for (int l = 0; l < shape[0]; l++)
+                    {
+                        for (int j = 0; j < shape[2]; j++)
+                        {
+                            for (int i = 0; i < shape[3]; i++)
+                            {
+                                float sum = 0f;
+
+                                for (int k = 0; k < shape[1]; k++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
+
+                                result[l, 0, j, i] = sum;
+                            }
+                        }
+                    }
+                }
+                else if (dim == TDim.ndim)
+                {
+                    result = new Tensor(1, shape[1], shape[2], shape[3]);
                     for (int k = 0; k < shape[1]; k++)
                     {
                         for (int j = 0; j < shape[2]; j++)
                         {
-                            float sum = 0f;
                             for (int i = 0; i < shape[3]; i++)
                             {
-                                sum += tensor[l, k, j, i];
+                                float sum = 0f;
+                                for (int l = 0; l < shape[0]; l++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
+                                result[0, k, j, i] = sum;
                             }
-                            result[l, k, j, 0] = sum / shape[3];
                         }
                     }
                 }
             }
-            else if (dim == TDim.height)
+            else
             {
-                result = new Tensor(shape[0], shape[1], 1, shape[3]);
-                for (int l = 0; l < shape[0]; l++)
+                result = new Tensor(tensor.shape);
+                if (dim == TDim.width)
                 {
-                    for (int k = 0; k < shape[1]; k++)
+            
+                    for (int l = 0; l < shape[0]; l++)
                     {
-                        for (int i = 0; i < shape[3]; i++)
+                        for (int k = 0; k < shape[1]; k++)
                         {
-                            float sum = 0f;
                             for (int j = 0; j < shape[2]; j++)
                             {
-                                sum += tensor[l, k, j, i];
+                                float sum = 0f;
+                                for (int i = 0; i < shape[3]; i++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
+
+                                for (int i = 0; i < shape[3]; i++)
+                                {
+                                    result[l, k, j, i] = sum;
+                                }
+
                             }
-                            result[l, k, 0, i] = sum / shape[2];
                         }
                     }
                 }
-            }
-            else if (dim == TDim.batch)
-            {
-                result = new Tensor(shape[0], 1, shape[2], shape[3]);
-                for (int l = 0; l < shape[0]; l++)
+                else if (dim == TDim.height)
                 {
-                    for (int j = 0; j < shape[2]; j++)
+                  
+                    for (int l = 0; l < shape[0]; l++)
                     {
-                        for (int i = 0; i < shape[3]; i++)
+                        for (int k = 0; k < shape[1]; k++)
                         {
-                            float sum = 0f;
-
-                            for (int k = 0; k < shape[1]; k++)
+                            for (int i = 0; i < shape[3]; i++)
                             {
-                                sum += tensor[l, k, j, i];
-                            }
+                                float sum = 0f;
+                                for (int j = 0; j < shape[2]; j++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
 
-                            result[l, 0, j, i] = sum / shape[1];
+                                for (int j = 0; j < shape[2]; j++)
+                                {
+                                    result[l, k, j, i] = sum;
+                                }
+                            }
                         }
                     }
                 }
-            }
-            else if (dim == TDim.ndim)
-            {
-                result = new Tensor(1, shape[1], shape[2], shape[3]);
-                for (int k = 0; k < shape[1]; k++)
+                else if (dim == TDim.batch)
                 {
-                    for (int j = 0; j < shape[2]; j++)
+                   
+                    for (int l = 0; l < shape[0]; l++)
                     {
-                        for (int i = 0; i < shape[3]; i++)
+                        for (int j = 0; j < shape[2]; j++)
                         {
-                            float sum = 0f;
-                            for (int l = 0; l < shape[0]; l++)
+                            for (int i = 0; i < shape[3]; i++)
                             {
-                                sum += tensor[l, k, j, i];
+                                float sum = 0f;
+
+                                for (int k = 0; k < shape[1]; k++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
+
+                                for (int k = 0; i < shape[1]; k++)
+                                {
+                                    result[l, k, j, i] = sum;
+                                }
                             }
-                            result[0, k, j, i] = sum / shape[0];
                         }
                     }
                 }
-            }
-
-            return result;
-        }
-        public static Tensor Sum(Tensor tensor, TDim dim)
-        {
-            Tensor result = null;
-            int[] shape = tensor.shape.ToArray();
-
-            if (dim == TDim.width)
-            {
-                result = new Tensor(shape[0], shape[1], shape[2], 1);
-                for (int l = 0; l < shape[0]; l++)
+                else if (dim == TDim.ndim)
                 {
+                   
                     for (int k = 0; k < shape[1]; k++)
                     {
                         for (int j = 0; j < shape[2]; j++)
                         {
-                            float sum = 0f;
                             for (int i = 0; i < shape[3]; i++)
                             {
-                                sum += tensor[l, k, j, i];
-                            }
-                            result[l, k, j, 0] = sum;
-                        }
-                    }
-                }
-            }
-            else if (dim == TDim.height)
-            {
-                result = new Tensor(shape[0], shape[1], 1, shape[3]);
-                for (int l = 0; l < shape[0]; l++)
-                {
-                    for (int k = 0; k < shape[1]; k++)
-                    {
-                        for (int i = 0; i < shape[3]; i++)
-                        {
-                            float sum = 0f;
-                            for (int j = 0; j < shape[2]; j++)
-                            {
-                                sum += tensor[l, k, j, i];
-                            }
-                            result[l, k, 0, i] = sum;
-                        }
-                    }
-                }
-            }
-            else if (dim == TDim.batch)
-            {
-                result = new Tensor(shape[0], 1, shape[2], shape[3]);
-                for (int l = 0; l < shape[0]; l++)
-                {
-                    for (int j = 0; j < shape[2]; j++)
-                    {
-                        for (int i = 0; i < shape[3]; i++)
-                        {
-                            float sum = 0f;
+                                float sum = 0f;
+                                for (int l = 0; l < shape[0]; l++)
+                                {
+                                    sum += tensor[l, k, j, i];
+                                }
 
-                            for (int k = 0; k < shape[1]; k++)
-                            {
-                                sum += tensor[l, k, j, i];
+                                for (int l = 0; l < shape[0]; l++)
+                                {
+                                    result[l, k, j, i] = sum;
+                                }
                             }
-
-                            result[l, 0, j, i] = sum;
                         }
                     }
                 }
             }
-            else if (dim == TDim.ndim)
-            {
-                result = new Tensor(1, shape[1], shape[2], shape[3]);
-                for (int k = 0; k < shape[1]; k++)
-                {
-                    for (int j = 0; j < shape[2]; j++)
-                    {
-                        for (int i = 0; i < shape[3]; i++)
-                        {
-                            float sum = 0f;
-                            for (int l = 0; l < shape[0]; l++)
-                            {
-                                sum += tensor[l, k, j, i];
-                            }
-                            result[0, k, j, i] = sum;
-                        }
-                    }
-                }
-            }
+         
 
             return result;
         }
@@ -1507,6 +1844,7 @@ namespace DeepUnity
             return slices.ToArray();
         }
 
+
         // Basic Math
         public static Tensor Pow(Tensor tensor, float power)
         {
@@ -1633,42 +1971,42 @@ namespace DeepUnity
                     throw new Exception("Unhandled norm type.");
             }
         }
-        public static Tensor MinValue(Tensor tensor)
+        /// <summary>
+        /// Returns the minimum value in the array.
+        /// </summary>
+        /// <returns>A tensor with shape [1], or a tensor with the same shape if keepShape is true.</returns>
+        public static Tensor MinValue(Tensor tensor, bool keepShape = false)
         {
-            return Constant(tensor.data.Min());
+            if (!keepShape)
+                return Constant(tensor.data.Min());
+            else return Fill(tensor.data.Min(), tensor.shape.ToArray());
         }
-        public static Tensor MaxValue(Tensor tensor)
+        /// <summary>
+        /// Returns the maximum value in the array.
+        /// </summary>
+        /// <returns>A tensor with shape [1], or a tensor with the same shape if keepShape is true.</returns>
+        public static Tensor MaxValue(Tensor tensor, bool keepShape = false)
         {
-            return Constant(tensor.data.Max());
+            if (!keepShape)
+                return Constant(tensor.data.Max());
+            else return Fill(tensor.data.Max(), tensor.shape.ToArray());
         }
 
-        public void ForEach(Func<float, float> function, bool multithreaded = false)
+        public void ForEach(Func<float, float> function)
         {
-            if (multithreaded)
-                Parallel.For(0, data.Length, i =>
-                {
-                    data[i] = function(data[i]);
-                });
-            else
-                for (int i = 0; i < data.Length; i++)
-                {
-                    data[i] = function(data[i]);
-                }
+            for (int i = 0; i < data.Length; i++)
+            {
+                data[i] = function(data[i]);
+            }
         }
-        public Tensor Select(Func<float, float> selector, bool multithreaded = false)
+        public Tensor Select(Func<float, float> selector)
         {
             Tensor result = new Tensor(shape);
 
-            if (multithreaded)
-                Parallel.For(0, data.Length, i =>
-                {
-                    result.data[i] = selector(data[i]);
-                });
-            else
-                for (int i = 0; i < data.Length; i++)
-                {
-                    result.data[i] = selector(data[i]);
-                }
+            for (int i = 0; i < data.Length; i++)
+            {
+                result.data[i] = selector(data[i]);
+            }
 
             return result;
         }
@@ -1686,7 +2024,7 @@ namespace DeepUnity
         public Tensor Count(Func<float, bool> selector = null)
         {
             if (selector == null)
-                return Constant(shape.ndim * shape.batch * shape.height * shape.width);
+                return Constant(data.Length);
 
             int count = 0;
 

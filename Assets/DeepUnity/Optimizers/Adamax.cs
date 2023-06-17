@@ -75,8 +75,8 @@ namespace DeepUnity
                     u_B[i] = Tensor.Max(beta2 * u_B[i], Tensor.Abs(L.grad_Biases));
 
                     // Update parameters
-                    L.weights = L.weights * (1f - weightDecay) - alpha / (1f - MathF.Pow(beta1, t)) * m_W[i] / u_W[i];
-                    L.biases = L.biases - alpha / (1f - MathF.Pow(beta1, t)) * m_B[i] / u_B[i];
+                    L.weights = L.weights * (1f - weightDecay) - (alpha / (1f - MathF.Pow(beta1, t))) * m_W[i] / u_W[i];
+                    L.biases = L.biases - (alpha / (1f - MathF.Pow(beta1, t))) * m_B[i] / u_B[i];
                 }
             });
 

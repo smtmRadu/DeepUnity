@@ -9,7 +9,7 @@ namespace DeepUnity
         [SerializeField] private int padding;
         [SerializeField] private PaddingType padding_mode;
 
-        public AvgPool2D(int kernel_size, PaddingType padding_mode = PaddingType.Mirror, int padding = 0)
+        public AvgPool2D(int kernel_size, int padding = 0, PaddingType padding_mode = PaddingType.Mirror)
         {
             this.kernel_size = kernel_size;
             this.padding = padding;

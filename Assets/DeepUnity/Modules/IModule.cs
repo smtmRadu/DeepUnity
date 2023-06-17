@@ -17,17 +17,25 @@ namespace DeepUnity
     {
         public string name;
 
-        [Header("Value save modules")]
+        [Header("These modules have save-able fields.")]
+
+        // Parameter modules
         public Dense dense;                  
-        public BatchNorm batchnorm;
-        public LayerNorm layernorm;
+        public BatchNorm batchnorm;    
         public Dropout dropout;
+        public LayerNorm layernorm;
 
         // Activation modules
         public Linear linear;
         public ReLU relu;
         public TanH tanh;
         public SoftMax softmax;
+        public LeakyReLU leakyrelu;
+        public Sigmoid sigmoid;
+        public SoftPlus softplus;
+        public Mish mish;
+        
+        
         
 
         private ModuleWrapper(IModule module)
@@ -66,8 +74,24 @@ namespace DeepUnity
             {
                 softmax = softmaxModule;
             }
+            else if(module is LeakyReLU leakyreluModule)
+            {
+                leakyrelu = leakyreluModule;
+            }
+            else if(module is Mish mishModule)
+            {
+                mish = mishModule;
+            }
+            else if(module is Sigmoid sigmoidModule)
+            {
+                sigmoid = sigmoidModule;
+            }
+            else if (module is SoftPlus softplusModule)
+            {
+                softplus = softplusModule;
+            }
             else
-               throw new Exception("Unhandled module type on wrapping.");
+                throw new Exception("Unhandled module type while wrapping.");
         }
 
         public static ModuleWrapper Wrap(IModule module)
@@ -110,8 +134,24 @@ namespace DeepUnity
             {
                 module = moduleWrapper.softmax;
             }
+            else if(typeof(LeakyReLU).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.leakyrelu;
+            }
+            else if (typeof(Sigmoid).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.sigmoid;
+            }
+            else if (typeof(Mish).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.mish;
+            }
+            else if (typeof(SoftPlus).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.softplus;
+            }
             else
-                throw new Exception("Unhandled module type on unwrapping.");
+                throw new Exception("Unhandled module type while unwrapping.");
 
             return module;
         }

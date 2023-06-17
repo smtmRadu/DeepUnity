@@ -12,7 +12,12 @@ namespace kbRadu
 
         private void Start()
         {
-            MatMulBenchmark();
+            Tensor x = Tensor.Random01(3, 8);
+            print(x);
+            print(Tensor.Std(x, TDim.height,0,  keepDim: true));
+
+
+            //MatMulBenchmark();
         }
 
         void MatMulTest()
