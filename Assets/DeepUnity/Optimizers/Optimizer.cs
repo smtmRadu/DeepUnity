@@ -3,42 +3,11 @@ using UnityEngine;
 
 namespace DeepUnity
 {
-    public interface IOptimizer
+    public abstract class Optimizer
     {
-        /// For now this generic method is deprecated.    
-        private static IOptimizer Create(OptimizerType optimizerType)
-        {
-            switch(optimizerType)
-            {
-                case OptimizerType.Adam:
-                    return new Adam();
-                case OptimizerType.RMSProp:
-                    return new RMSProp();
-                case OptimizerType.SGD:
-                    return new SGD();
-                case OptimizerType.AdaMax:
-                    return new AdaMax();
-                case OptimizerType.Adagrad:
-                    return new Adagrad();
-                case OptimizerType.Adadelta:
-                    return new Adadelta();
-                default:
-                    throw new Exception("Optimizer type not handled");
-            }
-        }
-        private enum OptimizerType
-        {
-            Adam,
-            AdaMax,
-            SGD,
-            Adagrad,
-            Adadelta,
-            RMSProp,
-        }
-
-
-        public void Initialize(IModule[] modules);
-        public void Step(IModule[] modules);
+        public float learningRate;
+        public abstract void Initialize(IModule[] modules);
+        public abstract void Step(IModule[] modules);
     }
 
 
@@ -55,7 +24,7 @@ namespace DeepUnity
         public RMSProp rmsprop;
         public AdaMax adamax;
 
-        private OptimizerWrapper(IOptimizer optimizer)
+        private OptimizerWrapper(Optimizer optimizer)
         {
             // Initialize the fields based on the optimizer type
 
@@ -88,13 +57,13 @@ namespace DeepUnity
                 throw new Exception("Unhandled optimizer type on wrapping.");
         }
 
-        public static OptimizerWrapper Wrap(IOptimizer optimizer)
+        public static OptimizerWrapper Wrap(Optimizer optimizer)
         {
             return new OptimizerWrapper(optimizer);
         }     
-        public static IOptimizer Unwrap(OptimizerWrapper optimizerWrapper)
+        public static Optimizer Unwrap(OptimizerWrapper optimizerWrapper)
         {
-            IOptimizer optimizer = null;
+            Optimizer optimizer = null;
 
             if (typeof(Adam).Name.Equals(optimizerWrapper.name))
             {

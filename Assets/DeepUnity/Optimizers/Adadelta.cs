@@ -5,9 +5,8 @@ namespace DeepUnity
 {
     // https://pytorch.org/docs/stable/generated/torch.optim.Adadelta.html
     [System.Serializable]
-    public class Adadelta : IOptimizer
+    public class Adadelta : Optimizer
     {
-        [SerializeField] private float learningRate;
         [SerializeField] private float rho;
         [SerializeField] private float weightDecay;
 
@@ -30,7 +29,7 @@ namespace DeepUnity
             this.rho = rho;
         }
 
-        public void Initialize(IModule[] modules)
+        public override void Initialize(IModule[] modules)
         {
             v_W = new Tensor[modules.Length];
             v_B = new Tensor[modules.Length];
@@ -56,7 +55,7 @@ namespace DeepUnity
             }
         }
 
-        public void Step(IModule[] modules)
+        public override void Step(IModule[] modules)
         {
             System.Threading.Tasks.Parallel.For(0, modules.Length, i =>
             {

@@ -6,9 +6,8 @@ namespace DeepUnity
     // does not work idk why
     // https://pytorch.org/docs/stable/generated/torch.optim.RMSprop.html
     [Serializable]
-    public sealed class RMSProp : IOptimizer
+    public sealed class RMSProp : Optimizer
     {
-        [SerializeField] private float learningRate;
         [SerializeField] private float alpha; //smoothing constant
         [SerializeField] private float momentum;
         [SerializeField] private bool centered;
@@ -36,7 +35,7 @@ namespace DeepUnity
             this.centered = centered;
         }
 
-        public void Initialize(IModule[] modules)
+        public override void Initialize(IModule[] modules)
         {
             b_W = new Tensor[modules.Length];
             b_B = new Tensor[modules.Length];
@@ -72,7 +71,7 @@ namespace DeepUnity
             }
         }
 
-        public void Step(IModule[] modules)
+        public override void Step(IModule[] modules)
         {
             System.Threading.Tasks.Parallel.For(0, modules.Length, i =>
             {

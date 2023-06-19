@@ -12,10 +12,31 @@ namespace kbRadu
 
         private void Start()
         {
-            Tensor x = Tensor.Random01(3, 8);
-            print(x);
-            print(Tensor.Std(x, TDim.height,0,  keepDim: true));
+            Tensor x = Tensor.Random01(MatShape.x, MatShape.y);
 
+            Timer.Start();
+            for (int i = 0; i < Runs; i++)
+            {
+                Tensor.Transpose(x, TDim.width, TDim.height);
+            }
+            
+            Timer.Stop();
+
+            // Timer.Start();
+            // for (int i = 0; i < Runs; i++)
+            // {
+            //     Tensor.Transpose(x, 1, 0);
+            // }
+            // 
+            // Timer.Stop();
+
+            // Timer.Start();
+            // for (int i = 0; i < Runs; i++)
+            // {
+            //     Tensor.MatTranspose(x);
+            // }
+            // 
+            // Timer.Stop();
 
             //MatMulBenchmark();
         }
@@ -33,10 +54,10 @@ namespace kbRadu
                 Tensor x = Tensor.Random01(a, b);
                 Tensor y = Tensor.Random01(b, c);
 
-                Settings.Device = Device.CPU;
+                DeepUnityMeta.Device = Device.CPU;
                 var cpu = Tensor.MatMul(x, y);
 
-                Settings.Device = Device.GPU;
+                DeepUnityMeta.Device = Device.GPU;
                 var gpu = Tensor.MatMul(x, y);
 
                 if (cpu.Equals(gpu))
@@ -48,7 +69,7 @@ namespace kbRadu
 
         void MatMulBenchmark()
         {
-            Settings.Device = Device;
+            DeepUnityMeta.Device = Device;
             Tensor x = Tensor.Random01(MatShape.x, MatShape.y);
             Tensor y = Tensor.Random01(MatShape.y, MatShape.x);
 
@@ -61,7 +82,7 @@ namespace kbRadu
                 Tensor.MatMul(x, y);
             }
             end = DateTime.Now - start;
-            print($"{Runs} runs on {Settings.Device} on {x.ShapeToString} * {y.ShapeToString} in: {end}");
+            print($"{Runs} runs on {DeepUnityMeta.Device} on {x.ShapeToString} * {y.ShapeToString} in: {end}");
 
         }
     }

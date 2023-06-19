@@ -140,7 +140,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &621327370
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -154,10 +154,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   device: 0
-  net: {fileID: 11400000, guid: 0a0a1324d3f2c214cb5a3bb52e51c164, type: 2}
-  hiddenSize: 128
-  trainingSamples: 1024
-  batch_size: 32
+  net: {fileID: 11400000, guid: 561f61240ab39e6428f1202f2b48eb7c, type: 2}
+  hiddenSize: 64
+  trainingSamples: 512
+  batch_size: 64
   validationSamples: 6
   rotationSpeed: 0.35
   dataScale: 0.15
@@ -338,7 +338,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &752495706
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -352,8 +352,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   Device: 0
-  MatShape: {x: 64, y: 64}
-  Runs: 10000
+  MatShape: {x: 128, y: 128}
+  Runs: 1000
 --- !u!4 &752495707
 Transform:
   m_ObjectHideFlags: 0

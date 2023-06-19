@@ -8,7 +8,7 @@ namespace DeepUnity
 {
     public static class Utils
     {
-        public static readonly float EPSILON = 1e-8f;
+        public const float EPSILON = 1e-8f;
         private static System.Random RNG = new System.Random(DateTime.Now.Millisecond);
 
         public static T[] Shuffle<T>(T[] collection)
@@ -139,8 +139,6 @@ namespace DeepUnity
                 float part2 = -0.5f * std * std;
                 return part1 * MathF.Exp(part2);
             }
-
-
         }
         public static class Random
         {        

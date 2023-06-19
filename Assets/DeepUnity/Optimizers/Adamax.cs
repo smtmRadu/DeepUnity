@@ -6,10 +6,9 @@ namespace DeepUnity
     // This one is took right from the paper, does not work idk why
 
     [Serializable]
-    public class AdaMax : IOptimizer
+    public class AdaMax : Optimizer
     {
         [SerializeField] private int t;
-        [SerializeField] private float alpha;
         [SerializeField] private float beta1;
         [SerializeField] private float beta2;
         [SerializeField] private float weightDecay;
@@ -26,13 +25,13 @@ namespace DeepUnity
         public AdaMax(float learningRate = 0.002f, float beta1 = 0.9f, float beta2 = 0.999f, float weightDecay = 0f)
         {
             this.t = 0;
-            this.alpha = learningRate;
+            this.learningRate = learningRate;
             this.beta1 = beta1;
             this.beta2 = beta2;
             this.weightDecay = weightDecay;
         }
 
-        public void Initialize(IModule[] modules)
+        public override void Initialize(IModule[] modules)
         {
             m_W = new Tensor[modules.Length];
             m_B = new Tensor[modules.Length];
@@ -58,7 +57,7 @@ namespace DeepUnity
         }
 
 
-        public void Step(IModule[] modules)
+        public override void Step(IModule[] modules)
         {
             t++;
 
@@ -75,8 +74,8 @@ namespace DeepUnity
                     u_B[i] = Tensor.Max(beta2 * u_B[i], Tensor.Abs(L.grad_Biases));
 
                     // Update parameters
-                    L.weights = L.weights * (1f - weightDecay) - (alpha / (1f - MathF.Pow(beta1, t))) * m_W[i] / u_W[i];
-                    L.biases = L.biases - (alpha / (1f - MathF.Pow(beta1, t))) * m_B[i] / u_B[i];
+                    L.weights = L.weights * (1f - weightDecay) - (learningRate / (1f - MathF.Pow(beta1, t))) * m_W[i] / u_W[i];
+                    L.biases = L.biases - (learningRate / (1f - MathF.Pow(beta1, t))) * m_B[i] / u_B[i];
                 }
             });
 

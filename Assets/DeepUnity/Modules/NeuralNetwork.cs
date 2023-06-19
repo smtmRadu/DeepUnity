@@ -12,12 +12,12 @@ namespace DeepUnity
         [SerializeField] private OptimizerWrapper serializedOptimizer;
         [SerializeField] private ModuleWrapper[] serializedModules;
 
-        private IOptimizer Optimizer;
+        private Optimizer Optimizer;
         private IModule[] Modules;
 
 
         public NeuralNetwork(params IModule[] modules) => Modules = modules;
-        public void Compile(IOptimizer optimizer, string name)
+        public void Compile(Optimizer optimizer, string name)
         {
             this.Optimizer = optimizer;
             this.Name = name;
@@ -130,8 +130,4 @@ namespace DeepUnity
 
         }
     }
-
-
-
-
 }

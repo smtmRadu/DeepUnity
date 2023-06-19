@@ -6,10 +6,9 @@ namespace DeepUnity
     // This one is took right from the paper
 
     [Serializable]
-    public class Adam : IOptimizer
+    public class Adam : Optimizer
     {
         [SerializeField] private int t;
-        [SerializeField] private float learningRate;
         [SerializeField] private float beta1;
         [SerializeField] private float beta2;
         [SerializeField] private float weightDecay;
@@ -31,7 +30,7 @@ namespace DeepUnity
             this.beta2 = beta2;
             this.weightDecay = weightDecay;
         }
-        public void Initialize(IModule[] modules)
+        public override void Initialize(IModule[] modules)
         {
             m_W = new Tensor[modules.Length];
             m_B = new Tensor[modules.Length];
@@ -63,22 +62,31 @@ namespace DeepUnity
                     v_W[i] = Tensor.Zeros(inputs);
                     v_B[i] = Tensor.Zeros(inputs);
                 }
+                else if (modules[i] is LayerNorm L)
+                {
+                    m_W[i] = Tensor.Zeros(1);
+                    v_W[i] = Tensor.Zeros(1);
+
+                    m_B[i] = Tensor.Zeros(1);
+                    v_B[i] = Tensor.Zeros(1);
+                }
 
             }
         }
 
-        public void Step(IModule[] modules)
+        public override void Step(IModule[] modules)
         {
             t++;
 
             System.Threading.Tasks.Parallel.For(0, modules.Length, i =>
             {
+                // keep W and B separately just to use this 2 variables for both cases
+
+                Tensor mHat;
+                Tensor vHat;
+
                 if (modules[i] is Dense D)
                 {
-                    // keep W and B separately just to use this 2 variables for both cases
-                    Tensor mHat;
-                    Tensor vHat;
-
                     // Update biased first momentum estimate
                     m_W[i] = beta1 * m_W[i] + (1f - beta1) * D.grad_Weights;
 
@@ -114,10 +122,6 @@ namespace DeepUnity
                 }
                 else if (modules[i] is BatchNorm BN)
                 {
-                    // keep Gamma and Beta separately just to use this 2 variables for both cases
-                    // W is for gamma, B is for Beta
-                    Tensor mHat;
-                    Tensor vHat;
 
                     // Update biased first momentum estimate
                     m_W[i] = beta1 * m_W[i] + (1f - beta1) * BN.grad_Gamma;
@@ -151,6 +155,42 @@ namespace DeepUnity
 
                     // Update parameters 
                     BN.beta = BN.beta - learningRate * mHat / (Tensor.Sqrt(vHat) + Utils.EPSILON);
+                }
+                else if (modules[i] is LayerNorm LN)
+                {
+                    // Update biased first momentum estimate
+                    m_W[i] = beta1 * m_W[i] + (1f - beta1) * LN.grad_Gamma;
+
+                    // Update biased second raw momentum estimate
+                    v_W[i] = beta2 * v_W[i] + (1f - beta2) * MathF.Pow(LN.grad_Gamma, 2f);
+
+                    // Compute bias-corrected first momentum estimate
+                    mHat = m_W[i] / (1f - MathF.Pow(beta1, t));
+
+                    // Compute bias-corrected second raw momentum estimate
+                    vHat = v_W[i] / (1f - MathF.Pow(beta2, t));
+
+                    // Update parameters
+                    LN.gamma = LN.gamma * (1f - weightDecay) - learningRate * mHat[0] / (MathF.Sqrt(vHat[0] + Utils.EPSILON));
+
+
+
+
+                    // Update biased first momentum estimate
+                    m_B[i] = beta1 * m_B[i] + (1f - beta1) * LN.grad_Beta;
+
+                    // Update biased second raw momentum estimate
+                    v_B[i] = beta2 * v_B[i] + (1f - beta2) * MathF.Pow(LN.grad_Beta, 2f);
+
+                    // Compute bias-corrected first momentum estimate
+                    mHat = m_B[i] / (1f - MathF.Pow(beta1, t));
+
+                    // Compute bias-corrected second raw momentum estimate
+                    vHat = v_B[i] / (1f - MathF.Pow(beta2, t));
+
+                    // Update parameters 
+                    LN.beta = LN.beta - learningRate * mHat[0] / (MathF.Sqrt(vHat[0]) + Utils.EPSILON);
+
                 }
             });
 

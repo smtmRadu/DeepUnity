@@ -24,6 +24,7 @@ namespace DeepUnity
         public BatchNorm batchnorm;    
         public Dropout dropout;
         public LayerNorm layernorm;
+        public Conv2D conv2d;
 
         // Activation modules
         public Linear linear;
@@ -90,6 +91,10 @@ namespace DeepUnity
             {
                 softplus = softplusModule;
             }
+            else if(module is Conv2D conv2dModule)
+            {
+                conv2d = conv2dModule;
+            }
             else
                 throw new Exception("Unhandled module type while wrapping.");
         }
@@ -149,6 +154,10 @@ namespace DeepUnity
             else if (typeof(SoftPlus).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.softplus;
+            }
+            else if(typeof(Conv2D).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.conv2d;
             }
             else
                 throw new Exception("Unhandled module type while unwrapping.");

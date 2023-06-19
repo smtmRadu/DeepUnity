@@ -23,7 +23,7 @@ namespace DeepUnity
                 float sech = 1f / MathF.Cosh(MathF.Log(1f + exp));
                 float mishDerivative = MathF.Tanh(MathF.Log(1f + exp)) + x * sech * sech;
                 return mishDerivative;
-            });
+            }, true);
         }
     }
 }

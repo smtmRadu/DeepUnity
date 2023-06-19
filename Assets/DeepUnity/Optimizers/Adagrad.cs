@@ -5,10 +5,9 @@ namespace DeepUnity
 {
     // https://pytorch.org/docs/stable/generated/torch.optim.Adagrad.html
     [Serializable]
-    public class Adagrad : IOptimizer
+    public class Adagrad : Optimizer
     {
         [SerializeField] private int t;
-        [SerializeField] private float learningRate;
         [SerializeField] private float learningRateDecay;
         [SerializeField] private float weightDecay;
 
@@ -22,7 +21,7 @@ namespace DeepUnity
             this.learningRateDecay = learningRateDecay;
             this.weightDecay = weightDecay;
         }
-        public void Initialize(IModule[] modules)
+        public override void Initialize(IModule[] modules)
         {
             statesum_W = new Tensor[modules.Length];
             statesum_B = new Tensor[modules.Length];
@@ -40,7 +39,7 @@ namespace DeepUnity
                 }
             }
         }
-        public void Step(IModule[] modules)
+        public override void Step(IModule[] modules)
         {
             t++;
 

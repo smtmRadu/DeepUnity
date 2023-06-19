@@ -6,6 +6,8 @@ namespace DeepUnity
     [Serializable]
     public class BatchNorm : IModule, IParameters
     {
+        // https://arxiv.org/pdf/1502.03167.pdf
+
         private Tensor x_minus_mu_cache { get; set; }
         private Tensor std_cache { get; set; }
         private Tensor x_hat_Cache { get; set; }

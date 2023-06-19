@@ -70,7 +70,7 @@ namespace DeepUnity
         public Tensor Backward(Tensor loss)
         {
             int batch_size = loss.Shape.height;
-            var transposedInput = Tensor.MatTranspose(Input_Cache);
+            var transposedInput = Tensor.Transpose(Input_Cache, TDim.width, TDim.height);
 
             Tensor gradW = Tensor.MatMul(transposedInput, loss);
             Tensor gradB = Tensor.MatMul(Tensor.Ones(1, batch_size), loss);
@@ -85,8 +85,8 @@ namespace DeepUnity
             // return dLossdActivation;
 
             // A bit faster back with double tranposition on loss (may work better on large dense)
-            Tensor dLossActivation = Tensor.MatMul(weights, Tensor.MatTranspose(loss));
-            return Tensor.MatTranspose(dLossActivation);
+            Tensor dLossActivation = Tensor.MatMul(weights, Tensor.Transpose(loss, TDim.width, TDim.height));
+            return Tensor.Transpose(dLossActivation, TDim.width, TDim.height);
         }
 
 
@@ -118,13 +118,12 @@ namespace DeepUnity
         }
         public void OnAfterDeserialize()
         {
-            // Stil here a problemo..
             // This function is actually having 2 workers on serialization, and one on them is called when weights.shape.length == 0.
             if (weights.Shape == null || weights.Shape.width == 0)
                 return;
 
-            int outputs = weights.Shape.height;
-            int inputs = weights.Shape.width;
+            int outputs = weights.Shape.width;
+            int inputs = weights.Shape.height;
 
             this.grad_Weights = Tensor.Zeros(inputs, outputs);
             this.grad_Biases = Tensor.Zeros(outputs);

@@ -5,10 +5,9 @@ namespace DeepUnity
     // https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/experimental/SGD
     // https://pytorch.org/docs/stable/generated/torch.optim.SGD.html
     [Serializable]
-    public sealed class SGD : IOptimizer
+    public sealed class SGD : Optimizer
     {
         [SerializeField] private int t;
-        [SerializeField] private float learningRate;
         [SerializeField] private float momentum;
         [SerializeField] private float weightDecay;
         [SerializeField] private float dampening;
@@ -30,7 +29,7 @@ namespace DeepUnity
             this.maximize = maximize;
         }
 
-        public void Initialize(IModule[] modules)
+        public override void Initialize(IModule[] modules)
         {
             m_W = new Tensor[modules.Length];
             m_B = new Tensor[modules.Length];
@@ -48,7 +47,7 @@ namespace DeepUnity
                 }
             }
         }
-        public void Step(IModule[] modules)
+        public override void Step(IModule[] modules)
         {
             t++;
 

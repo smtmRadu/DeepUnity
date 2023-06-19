@@ -32,12 +32,11 @@ namespace kbRadu
         private int i = 0;
         public void Start()
         {
-            Settings.Device = device;
+            DeepUnityMeta.Device = device;
             if (net == null)
             {
                 net = new NeuralNetwork(
                  new Dense(2, hiddenSize),
-                 new BatchNorm(hiddenSize),
                  new ReLU(),
                  new Dense(hiddenSize, hiddenSize),
                  new ReLU(),

@@ -1,10 +1,11 @@
 using System;
+using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 
 namespace DeepUnity
 {
-    public static class Settings
+    public static class DeepUnityMeta
     {
         public static Device Device = Device.CPU;
 
@@ -23,8 +24,12 @@ namespace DeepUnity
         /// </summary>
         internal readonly static int[] numthreads = new int[] { 10, 10, 8 };
 
+        /// <summary>
+        /// MaxDegreeOfParallelism of 8 for multi-threaded tasks.
+        /// </summary>
+        internal readonly static ParallelOptions threadLimit8 = new ParallelOptions { MaxDegreeOfParallelism = 8 };
 
-        static Settings()
+        static DeepUnityMeta()
         {
             try
             {
@@ -80,6 +85,13 @@ namespace DeepUnity
         Mirror,
         // Replicate
         // Circular
+    }
+    public enum TDim
+    {
+        batch,
+        channel,
+        height,
+        width
     }
 }
 

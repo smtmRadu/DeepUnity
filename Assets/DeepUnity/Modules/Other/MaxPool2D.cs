@@ -3,13 +3,13 @@ using System.Linq;
 using UnityEngine;
 namespace DeepUnity
 {
-    public class AvgPool2D : IModule
+    public class MaxPool2D : IModule
     {
         [SerializeField] private int kernel_size;
         [SerializeField] private int padding;
         [SerializeField] private PaddingType padding_mode;
 
-        public AvgPool2D(int kernel_size, int padding = 0, PaddingType padding_mode = PaddingType.Mirror)
+        public MaxPool2D(int kernel_size, int padding = 0, PaddingType padding_mode = PaddingType.Mirror)
         {
             this.kernel_size = kernel_size;
             this.padding = padding;
@@ -29,10 +29,10 @@ namespace DeepUnity
 
             List<float> values_pool = new List<float>();
 
-            for (int b = 0; b < pooled_input.Shape.ndim; b++)
+            for (int b = 0; b < pooled_input.Shape.batch; b++)
             {
                 // Foreach channel
-                for (int c = 0; c < pooled_input.Shape.batch; c++)
+                for (int c = 0; c < pooled_input.Shape.channels; c++)
                 {
                     // foreach pool result
                     for (int i = 0; i < pooled_input.Shape.width; i++)
@@ -49,7 +49,7 @@ namespace DeepUnity
                                 }
                             }
 
-                            pooled_input[i, j, c, b] = values_pool.Average();
+                            pooled_input[i, j, c, b] = values_pool.Max();
 
                             values_pool.Clear();
                         }
@@ -74,10 +74,10 @@ namespace DeepUnity
 
             List<float> values_pool = new List<float>();
 
-            for (int b = 0; b < pooled_input.Shape.ndim; b++)
+            for (int b = 0; b < pooled_input.Shape.batch; b++)
             {
                 // Foreach channel
-                for (int c = 0; c < pooled_input.Shape.batch; c++)
+                for (int c = 0; c < pooled_input.Shape.channels; c++)
                 {
                     // foreach pool result
                     for (int i = 0; i < pooled_input.Shape.width; i++)
@@ -94,7 +94,7 @@ namespace DeepUnity
                                 }
                             }
 
-                            pooled_input[i, j, c, b] = values_pool.Average();
+                            pooled_input[i, j, c, b] = values_pool.Max();
 
                             values_pool.Clear();
                         }
