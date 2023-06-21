@@ -6,39 +6,44 @@ namespace DeepUnity
     [Serializable]
     public class RunningStandardizer
     {
-        [SerializeField] private string name;
-
-        [SerializeField] private int count = 0;
+        [SerializeField] private int step;
         [SerializeField] private Tensor mean; 
-        [SerializeField] private Tensor std;
+        [SerializeField] private Tensor variance;
 
 
-        public RunningStandardizer(string name) => this.name = name;
-
-        public void Step(Tensor tuples)
+        public RunningStandardizer(int size)
         {
-            if(mean == null)
-            {
-                mean = Tensor.Zeros(tuples.Shape.width);
-                std = Tensor.Ones(tuples.Shape.width);
-            }
+            step = 0;
 
-            Tensor[] batches = Tensor.Split(tuples, TDim.height, 1);
-            foreach (var tuple in batches)
-            {
-                count++;
-                Tensor deltaMean = tuple - mean;
-                mean += deltaMean / count;
-                Tensor deltaStd = tuple - mean;
-                std = Tensor.Sqrt(deltaMean * deltaStd / count);
-            }   
+            mean = Tensor.Zeros(size);
+            variance = Tensor.Ones(size);
+        }
+
+        private void Update(Tensor tuples)
+        {
+
+            int batch_size = tuples.Size(TDim.height);
+            float total = step + batch_size;
+
+
+            // convert tuples to tuple
+
+            Tensor deltaMu = Tensor.Mean(tuples, TDim.height) - mean;
+            mean = mean * (step / total) + deltaMu * (batch_size / total);
+
+            Tensor deltaVar = Tensor.Var(tuples, TDim.height) - variance;
+            variance = variance * (step / total) + deltaVar * (batch_size / total);
+
+            step = (int)total;
         }
 
         public Tensor Standardise(Tensor tuples)
         {
-            int batch = tuples.Shape.height;
+            Update(tuples);
+
+            int batch = tuples.Size(TDim.height);
             return (tuples - Tensor.Expand(mean, TDim.height, batch)) / 
-                Tensor.Expand(std, TDim.height, batch);
+                Tensor.Expand(Tensor.Sqrt(variance), TDim.height, batch);
         }
     }
 }

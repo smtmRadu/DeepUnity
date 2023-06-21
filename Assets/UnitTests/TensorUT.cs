@@ -12,15 +12,20 @@ namespace kbRadu
 
         private void Start()
         {
-            Tensor x = Tensor.Random01(MatShape.x, MatShape.y);
+            TestCorrelation();
+            // RunningStandardizer rn = new RunningStandardizer(10);
+            // 
+            // Tensor data = Tensor.RandomRange(0, 360, 1024, 10);
+            // 
+            // Tensor[] batches = Tensor.Split(data, 0, 32);
+            // 
+            // foreach (var batch in batches)
+            // {
+            //     rn.Update(batch);
+            // }
+            // 
+            // print(rn.Standardise(Tensor.Random01(10)));
 
-            Timer.Start();
-            for (int i = 0; i < Runs; i++)
-            {
-                Tensor.Transpose(x, TDim.width, TDim.height);
-            }
-            
-            Timer.Stop();
 
             // Timer.Start();
             // for (int i = 0; i < Runs; i++)
@@ -40,7 +45,20 @@ namespace kbRadu
 
             //MatMulBenchmark();
         }
+        void TestCorrelation()
+        {
+            Tensor input = Tensor.Random01(32, 3, 28, 28);
 
+            Conv2D c = new Conv2D(3, 64, 3);
+
+            Timer.Start();
+            Tensor y = c.Predict(input);
+            Timer.Stop();
+
+            print(input);
+            print(y);
+
+        }
         void MatMulTest()
         {
 
@@ -82,7 +100,7 @@ namespace kbRadu
                 Tensor.MatMul(x, y);
             }
             end = DateTime.Now - start;
-            print($"{Runs} runs on {DeepUnityMeta.Device} on {x.ShapeToString} * {y.ShapeToString} in: {end}");
+            print($"{Runs} runs on {DeepUnityMeta.Device} on {x.Shape} * {y.Shape} in: {end}");
 
         }
     }

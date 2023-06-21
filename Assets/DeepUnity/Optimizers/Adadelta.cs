@@ -4,7 +4,7 @@ using UnityEngine;
 namespace DeepUnity
 {
     // https://pytorch.org/docs/stable/generated/torch.optim.Adadelta.html
-    [System.Serializable]
+    [Serializable]
     public class Adadelta : Optimizer
     {
         [SerializeField] private float rho;
@@ -22,60 +22,56 @@ namespace DeepUnity
 
 
 
-        public Adadelta(float learningRate = 1.0f, float rho = 0.9f, float weightDecay = 0f)
+        public Adadelta(Learnable[] parameters, float learningRate = 1.0f, float rho = 0.9f, float weightDecay = 0f)
         {
             this.learningRate = learningRate;
             this.weightDecay = weightDecay;
             this.rho = rho;
-        }
-
-        public override void Initialize(IModule[] modules)
-        {
-            v_W = new Tensor[modules.Length];
-            v_B = new Tensor[modules.Length];
-
-            u_W = new Tensor[modules.Length];
-            u_B = new Tensor[modules.Length];
 
 
+            this.parameters = parameters;
 
-            for (int i = 0; i < modules.Length; i++)
+            v_W = new Tensor[parameters.Length];
+            v_B = new Tensor[parameters.Length];
+
+            u_W = new Tensor[parameters.Length];
+            u_B = new Tensor[parameters.Length];
+
+            for (int i = 0; i < parameters.Length; i++)
             {
-                if (modules[i] is Dense d)
+                if (parameters[i] is Learnable P)
                 {
-                    int inputs = d.weights.Shape.height;
-                    int outputs = d.weights.Shape.width;
+                    v_W[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
+                    v_B[i] = Tensor.Zeros(P.beta.Shape.ToArray());
 
-                    v_W[i] = Tensor.Zeros(inputs, outputs);
-                    v_B[i] = Tensor.Zeros(outputs);
-
-                    u_W[i] = Tensor.Zeros(inputs, outputs);
-                    u_B[i] = Tensor.Zeros(outputs);
+                    u_W[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
+                    u_B[i] = Tensor.Zeros(P.beta.Shape.ToArray());
                 }
             }
         }
 
-        public override void Step(IModule[] modules)
+
+        public override void Step()
         {
-            System.Threading.Tasks.Parallel.For(0, modules.Length, i =>
+            System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
-                if (modules[i] is Dense D)
+                if (parameters[i] is Learnable P)
                 {
                     if (weightDecay != 0f)
-                        D.grad_Weights = D.grad_Weights + weightDecay * D.weights;
+                        P.gradGamma = P.gradGamma + weightDecay * P.gamma;
 
-                    v_W[i] = v_W[i] * rho + Tensor.Pow(D.grad_Weights, 2f) * (1f - rho);
-                    v_B[i] = v_B[i] * rho + Tensor.Pow(D.grad_Biases, 2f) * (1f - rho);
+                    v_W[i] = v_W[i] * rho + Tensor.Pow(P.gradGamma, 2f) * (1f - rho);
+                    v_B[i] = v_B[i] * rho + Tensor.Pow(P.gradBeta, 2f) * (1f - rho);
 
                     // In Adadelta, i use v for square avg and m for accumulate variables
-                    var dxWeights = Tensor.Sqrt(u_W[i] + Utils.EPSILON) / Tensor.Sqrt(v_W[i] + Utils.EPSILON) * D.grad_Weights;
-                    var dxBiases = Tensor.Sqrt(u_B[i] + Utils.EPSILON) / Tensor.Sqrt(v_B[i] + Utils.EPSILON) * D.grad_Biases;
+                    var dxWeights = Tensor.Sqrt(u_W[i] + Utils.EPSILON) / Tensor.Sqrt(v_W[i] + Utils.EPSILON) * P.gradGamma;
+                    var dxBiases = Tensor.Sqrt(u_B[i] + Utils.EPSILON) / Tensor.Sqrt(v_B[i] + Utils.EPSILON) * P.gradBeta;
 
                     u_W[i] = u_W[i] * rho + Tensor.Pow(dxWeights, 2f) * (1f - rho);
                     u_B[i] = u_B[i] * rho + Tensor.Pow(dxBiases, 2f) * (1f - rho);
 
-                    D.weights = D.weights - learningRate * dxWeights;
-                    D.biases = D.biases - learningRate * dxBiases;
+                    P.gamma = P.gamma - learningRate * dxWeights;
+                    P.beta = P.beta - learningRate * dxBiases;
                 }
 
             });

@@ -28,7 +28,7 @@ namespace DeepUnity
             return $"(Observations {observations})";
 
         }
-        public int Capacity => observations.Shape.width;
+        public int Capacity => observations.Size(0);
     }
 }
 

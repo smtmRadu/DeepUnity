@@ -8,7 +8,8 @@ namespace kbRadu
     public class ModelUT : MonoBehaviour
     {
         public Device device = Device.CPU;
-        public NeuralNetwork net;
+        public Sequential net;
+        public Optimizer optimizer;
         public int hiddenSize = 64;
         public int trainingSamples = 1024;
         public int batch_size = 32;
@@ -35,14 +36,14 @@ namespace kbRadu
             DeepUnityMeta.Device = device;
             if (net == null)
             {
-                net = new NeuralNetwork(
+                net = new Sequential(
                  new Dense(2, hiddenSize),
                  new ReLU(),
                  new Dense(hiddenSize, hiddenSize),
                  new ReLU(),
                  new Dense(hiddenSize, 1)
                  );
-                net.Compile(new Adam(), "somenet");
+                optimizer = new Adam(net.Parameters());
             }
 
             trainPoints = new Vector3[trainingSamples];
@@ -78,7 +79,7 @@ namespace kbRadu
                 trainAcc.Clear();
                 validationAcc.Clear();
                 if (epoch % 10 == 0)
-                    net.Save();
+                    net.Save("test");
                 i = 0;
                 return;
             }
@@ -87,7 +88,7 @@ namespace kbRadu
 
             net.ZeroGrad();
             net.Backward(loss);
-            net.Step();
+            optimizer.Step();
 
             // Compute train accuracy
             float trainacc = Metrics.Accuracy(trainPrediction, trainYbatches[i]);
@@ -108,8 +109,7 @@ namespace kbRadu
 
             for (int j = 0; j < batch_size; j++)
             {
-                trainPoints[j + i * batch_size] = new Vector3(trainXbatches[i][j, 0], trainPrediction[j , 0], trainXbatches[i][j, 1]);
-                
+                trainPoints[j + i * batch_size] = new Vector3(trainXbatches[i][j, 0], trainPrediction[j , 0], trainXbatches[i][j, 1]);               
             }
 
             i++;

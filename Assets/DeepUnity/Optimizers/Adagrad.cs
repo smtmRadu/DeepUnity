@@ -14,51 +14,50 @@ namespace DeepUnity
         [NonSerialized] public Tensor[] statesum_W;
         [NonSerialized] public Tensor[] statesum_B;
 
-        public Adagrad(float learningRate = 0.01f, float learningRateDecay = 0f, float weightDecay = 0f)
+        public Adagrad(Learnable[] parameters, float learningRate = 0.01f, float learningRateDecay = 0f, float weightDecay = 0f)
         {
             this.t = 0;
             this.learningRate = learningRate;
             this.learningRateDecay = learningRateDecay;
             this.weightDecay = weightDecay;
-        }
-        public override void Initialize(IModule[] modules)
-        {
-            statesum_W = new Tensor[modules.Length];
-            statesum_B = new Tensor[modules.Length];
 
-            for (int i = 0; i < modules.Length; i++)
+
+            this.parameters = parameters;
+
+            statesum_W = new Tensor[parameters.Length];
+            statesum_B = new Tensor[parameters.Length];
+
+            for (int i = 0; i < parameters.Length; i++)
             {
-                if (modules[i] is Dense d)
+                if (parameters[i] is Learnable P)
                 {
-                    int inputs = d.weights.Shape.height;
-                    int outputs = d.weights.Shape.width;
-
-                    statesum_W[i] = Tensor.Zeros(inputs, outputs);
-                    statesum_B[i] = Tensor.Zeros(outputs);
+                    statesum_W[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
+                    statesum_B[i] = Tensor.Zeros(P.beta.Shape.ToArray());
 
                 }
             }
         }
-        public override void Step(IModule[] modules)
+
+        public override void Step()
         {
             t++;
 
-            System.Threading.Tasks.Parallel.For(0, modules.Length, i =>
+            System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
-                if (modules[i] is Dense D)
+                if (parameters[i] is Learnable P)
                 {
                     var gammaBar = learningRate / (1 + (t - 1) * learningRateDecay);
 
                     if (weightDecay != 0f)
                     {
-                        D.grad_Weights = D.grad_Weights + weightDecay * D.grad_Weights;
+                        P.gradGamma = P.gradGamma + weightDecay * P.gradGamma;
                     }
 
-                    statesum_W[i] = statesum_W[i] + Tensor.Pow(D.grad_Weights, 2f);
-                    statesum_B[i] = statesum_B[i] + Tensor.Pow(D.grad_Biases, 2f);
+                    statesum_W[i] = statesum_W[i] + Tensor.Pow(P.gradGamma, 2f);
+                    statesum_B[i] = statesum_B[i] + Tensor.Pow(P.gradBeta, 2f);
 
-                    D.weights = D.weights - gammaBar * (D.grad_Weights / (Tensor.Sqrt(statesum_W[i]) + 1e-10f));
-                    D.biases = D.biases - gammaBar * (D.grad_Biases / (Tensor.Sqrt(statesum_B[i]) + 1e-10f));
+                    P.gamma = P.gamma - gammaBar * (P.gradGamma / (Tensor.Sqrt(statesum_W[i]) + 1e-10f));
+                    P.beta = P.beta - gammaBar * (P.gradBeta / (Tensor.Sqrt(statesum_B[i]) + 1e-10f));
                 }
             });
 

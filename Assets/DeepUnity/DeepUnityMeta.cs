@@ -17,7 +17,7 @@ namespace DeepUnity
         /// <summary>
         /// Reference to Conv2DCS Compute Shader.
         /// </summary>
-        internal readonly static ComputeShader Conv2DCS;
+        internal readonly static ComputeShader Correlation2DCS;
 
         /// <summary>
         /// Threads displacement for Compute Shaders usage.
@@ -37,9 +37,9 @@ namespace DeepUnity
                 string cspath = AssetDatabase.GUIDToAssetPath(csguid);
                 MatMulCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
 
-                csguid = AssetDatabase.FindAssets("Conv2DCS")[0];
+                csguid = AssetDatabase.FindAssets("Correlation2DCS")[0];
                 cspath = AssetDatabase.GUIDToAssetPath(csguid);
-                Conv2DCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+                Correlation2DCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
             }
             catch { }
         }
@@ -92,6 +92,12 @@ namespace DeepUnity
         channel,
         height,
         width
+    }
+    public enum CorrelationMode
+    {
+        Valid,
+        Full,
+        Same
     }
 }
 

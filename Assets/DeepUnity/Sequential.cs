@@ -6,23 +6,13 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class NeuralNetwork : ScriptableObject, IModule, IParameters, ISerializationCallbackReceiver
+    public class Sequential : ScriptableObject, IModule, ISerializationCallbackReceiver
     {
-        [SerializeField] private string Name;
-        [SerializeField] private OptimizerWrapper serializedOptimizer;
         [SerializeField] private ModuleWrapper[] serializedModules;
-
-        private Optimizer Optimizer;
         private IModule[] Modules;
 
 
-        public NeuralNetwork(params IModule[] modules) => Modules = modules;
-        public void Compile(Optimizer optimizer, string name)
-        {
-            this.Optimizer = optimizer;
-            this.Name = name;
-            Optimizer.Initialize(Modules);
-        }
+        public Sequential(params IModule[] modules) => Modules = modules;
 
         public Tensor Predict(Tensor input)
         {
@@ -40,6 +30,11 @@ namespace DeepUnity
             }
             return input;
         }
+        /// <summary>
+        /// Backpropagates the loss and calculates the gradients.
+        /// </summary>
+        /// <param name="loss">Derivative of the loss function w.r.t output. (dLdY)</param>
+        /// <returns></returns>
         public Tensor Backward(Tensor loss)
         {
             for (int i = Modules.Length - 1; i >= 0; i--)
@@ -57,7 +52,7 @@ namespace DeepUnity
         {
             foreach (var module in Modules)
             {
-                if (module is IParameters param)
+                if (module is Learnable param)
                     param.ZeroGrad();
             }
         }
@@ -68,7 +63,7 @@ namespace DeepUnity
         {
             foreach (var module in Modules)
             {
-                if (module is IParameters param)
+                if (module is Learnable param)
                     param.ClipGradValue(clip_value);
             }
         }
@@ -79,40 +74,27 @@ namespace DeepUnity
         {
             foreach (var module in Modules)
             {
-                if (module is IParameters param)
+                if (module is Learnable param)
                     param.ClipGradNorm(max_norm);
             }
         }
-        /// <summary>
-        /// Optimize parameters of the neural network.
-        /// </summary>
-        /// <exception cref="Uncompiled network error."></exception>
-        public void Step()
-        {
-            if (Optimizer == null)
-                throw new Exception("Cannot train an uncompiled network.");
 
-            Optimizer.Step(Modules);
-        }
+        public Learnable[] Parameters() => Modules.Where(x => x is Learnable P).Select(x => (Learnable)x).ToArray();
 
-        /// <summary>
-        /// Called internally.
-        /// </summary>
-        public void InitializeGradients() { }
 
         // Saving
         /// <summary>
         /// Saves the network in Unity Assets folder. Overwrites the network file with the same name.
         /// </summary>
         /// <exception cref="Uncompiled Network error."></exception>
-        public void Save()
+        public void Save(string name)
         {
-            if (Name == null)
+            if (name == null)
                 throw new Exception("Cannot save a non-compiled Neural Network.");
 
-            var instance = AssetDatabase.LoadAssetAtPath<NeuralNetwork>("Assets/" + Name + ".asset");
+            var instance = AssetDatabase.LoadAssetAtPath<Sequential>("Assets/" + name + ".asset");
             if (instance == null)
-                AssetDatabase.CreateAsset(this, "Assets/" + Name + ".asset");
+                AssetDatabase.CreateAsset(this, "Assets/" + name + ".asset");
 
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssetIfDirty(this);
@@ -120,14 +102,10 @@ namespace DeepUnity
         public void OnBeforeSerialize()
         {
             serializedModules = Modules.Select(x => ModuleWrapper.Wrap(x)).ToArray();
-            serializedOptimizer = OptimizerWrapper.Wrap(Optimizer);
         }
         public void OnAfterDeserialize()
         {
             Modules = serializedModules.Select(x => ModuleWrapper.Unwrap(x)).ToArray();
-            Optimizer = OptimizerWrapper.Unwrap(serializedOptimizer);
-            Optimizer.Initialize(Modules);
-
         }
     }
 }

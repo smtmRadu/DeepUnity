@@ -1,0 +1,13 @@
+
+#pragma kernel CrossCorrelation
+RWStructuredBuffer<float4> inputArr;
+RWStructuredBuffer<float4> kernelsArr;
+RWStructuredBuffer<float4> resultArr;
+
+int mode;
+
+[numthreads(10,10,8)]
+void CrossCorrelation (uint3 id : SV_DispatchThreadID)
+{
+    
+}

@@ -18,7 +18,7 @@ namespace DeepUnity
         [NonSerialized] public Tensor[] m_W;
         [NonSerialized] public Tensor[] m_B;
 
-        public SGD(float lr = 0.01f, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false)
+        public SGD(Learnable[] parameters, float lr = 0.01f, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false)
         {
             this.t = 0;
             this.learningRate = lr;
@@ -27,39 +27,37 @@ namespace DeepUnity
             this.dampening = dampening;
             this.nesterov = nesterov;
             this.maximize = maximize;
-        }
 
-        public override void Initialize(IModule[] modules)
-        {
-            m_W = new Tensor[modules.Length];
-            m_B = new Tensor[modules.Length];
 
-            for (int i = 0; i < modules.Length; i++)
+
+            this.parameters = parameters;
+
+            m_W = new Tensor[parameters.Length];
+            m_B = new Tensor[parameters.Length];
+
+            for (int i = 0; i < parameters.Length; i++)
             {
-                if (modules[i] is Dense d)
+                if (parameters[i] is Learnable P)
                 {
-                    int inputs = d.weights.Shape.height;
-                    int outputs = d.weights.Shape.width;
-
-                    m_W[i] = Tensor.Zeros(inputs, outputs);
-                    m_B[i] = Tensor.Zeros(outputs);
+                    m_W[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
+                    m_B[i] = Tensor.Zeros(P.beta.Shape.ToArray());
 
                 }
             }
         }
-        public override void Step(IModule[] modules)
+        public override void Step()
         {
             t++;
 
-            System.Threading.Tasks.Parallel.For(0, modules.Length, i =>
+            System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
-                if (modules[i] is Dense D)
+                if (parameters[i] is Learnable P)
                 {
-                    m_W[i] = m_W[i] * momentum - D.grad_Weights * learningRate;
-                    m_B[i] = m_B[i] * momentum - D.grad_Biases * learningRate;
+                    m_W[i] = m_W[i] * momentum - P.gradGamma * learningRate;
+                    m_B[i] = m_B[i] * momentum - P.gradBeta * learningRate;
 
-                    D.weights = D.weights * (1f - weightDecay) + m_W[i];
-                    D.biases = D.biases + m_B[i];
+                    P.gamma = P.gamma * (1f - weightDecay) + m_W[i];
+                    P.beta = P.beta + m_B[i];
                 }
 
             });

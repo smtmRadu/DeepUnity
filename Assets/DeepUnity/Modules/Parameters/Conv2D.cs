@@ -1,99 +1,66 @@
-using UnityEngine;
 using System;
 namespace DeepUnity
 {
     [Serializable]
-    public class Conv2D : IModule, IParameters
+    public class Conv2D : Learnable, IModule 
     {
         // https://www.youtube.com/watch?v=Lakz2MoHy6o
         private Tensor Input_Cache { get; set; }
 
-
+        /// Biases are applied over the final output. Biases (out_channels, out_height, out_width).
         // input shape = [batch, Ichannels, Iheight, Iwidth]
         // output_shape = [batch, Ochannels, Iheight - K + 1, Iwidth - K + 1] 
-
-
-        [SerializeField] Tensor kernels; // [Ochannels, Ichannels, K, K]
-        [SerializeField] Tensor biases; // [Ochannels, 1, K, K]
-
-        Tensor grad_Kernels;
-        Tensor grad_Biases;
-
-        public Conv2D(int in_channels, int out_channels, int kernel_size, int padding = 0)
+        // In Conv2D, Gamma represents kernels, Beta represents biases
+        public Conv2D(int in_channels, int out_channels, int kernel_size)
         {
-            kernels = Tensor.RandomNormal(out_channels, in_channels, kernel_size, kernel_size);
-            biases = Tensor.RandomNormal(out_channels, 1, kernel_size, kernel_size);
-
-            grad_Kernels = Tensor.Zeros(out_channels, in_channels, kernel_size, kernel_size);
-            grad_Biases = Tensor.Zeros(out_channels, 1, kernel_size, kernel_size);
+            
+            gamma = Tensor.RandomNormal(out_channels, in_channels, kernel_size, kernel_size);
+            gradGamma = Tensor.Zeros(out_channels, in_channels, kernel_size, kernel_size);
         }
         public Tensor Predict(Tensor input)
         {
-            return null;
+            if (beta == null)
+            {
+                int kernel_size = gamma.Size(TDim.width);
+
+                int out_channels = gamma.Size(TDim.batch);
+                int h = input.Size(TDim.height) - kernel_size + 1;
+                int w = input.Size(TDim.width) - kernel_size + 1;
+
+                beta = Tensor.RandomNormal(out_channels, h, w);
+                gradBeta = Tensor.Zeros(out_channels, h, w);
+            }
+
+
+            int batch_size = input.Size(TDim.batch);
+            return Tensor.Correlate2D(input, gamma, CorrelationMode.Valid) + Tensor.Expand(beta, TDim.batch, batch_size);
         }
         public Tensor Forward(Tensor input)
         {
-            int batch = input.Shape.batch;
-            int output_channels = biases.Shape.batch;
-            int output_height = biases.Shape.height;
-            int output_width = biases.Shape.width;
-            Tensor output = Tensor.Zeros(batch, output_channels, output_height, output_width);
-
-
-            for (int b = 0; b < batch; b++)
+            if(beta == null)
             {
-                for (int oc = 0; oc < output_channels; oc++)
-                {
-                    for (int ic = 0; ic < input.Shape.channels; ic++)
-                    {
-                        // And here we apply corr2D
-                        // Y = B + E(1..k kernels)(X star K)
-                        // I * K (Convolution) == I star rot180(K) (Correlation)
-                        
+                int kernel_size = gamma.Size(TDim.width);
 
+                int out_channels = gamma.Size(TDim.batch);
+                int h = input.Size(TDim.height) - kernel_size + 1;
+                int w = input.Size(TDim.width) - kernel_size + 1;
 
-
-                    }
-                }
+                beta = Tensor.RandomNormal(out_channels, h, w);
+                gradBeta = Tensor.Zeros(out_channels, h, w);
             }
 
-            return output;
+
+            Input_Cache = Tensor.Identity(input);
+            int batch_size = input.Size(TDim.batch);
+            return Tensor.Correlate2D(input, gamma, CorrelationMode.Valid) + Tensor.Expand(beta, TDim.batch, batch_size);
         }
         public Tensor Backward(Tensor loss)
         {
-            return null;
-        }
+            int batch_size = loss.Size(TDim.batch);
+            gradGamma += Tensor.Correlate2D(Input_Cache, loss, CorrelationMode.Valid) / batch_size;
+            gradBeta += loss / batch_size;
 
-        public void ZeroGrad()
-        {
-            grad_Kernels.ForEach(x => 0f);
-            grad_Biases.ForEach(x => 0f);
-        }
-        public void ClipGradValue(float clip_value)
-        {
-            return;
-        }
-        public void ClipGradNorm(float max_norm)
-        {
-            return;
-        }
-        public void OnBeforeSerialize()
-        {
-
-        }
-        public void OnAfterDeserialize()
-        {
-            // This function is actually having 2 workers on serialization, and one on them is called when weights.shape.length == 0.
-            if (kernels.Shape == null || kernels.Shape.width == 0)
-                return;
-
-            int out_channels = kernels.Shape.batch;
-            int in_channels = kernels.Shape.channels;
-            int kernel_size = kernels.Shape.width;
-
-
-            grad_Kernels = Tensor.Zeros(out_channels, in_channels, kernel_size, kernel_size);
-            grad_Biases = Tensor.Zeros(out_channels, 1, kernel_size, kernel_size);
+            return Tensor.Convolve2D(loss, gamma, CorrelationMode.Full);
         }
 
     }

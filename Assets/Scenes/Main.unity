@@ -140,7 +140,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &621327370
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -155,8 +155,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   device: 0
   net: {fileID: 11400000, guid: 561f61240ab39e6428f1202f2b48eb7c, type: 2}
-  hiddenSize: 64
-  trainingSamples: 512
+  hiddenSize: 128
+  trainingSamples: 2048
   batch_size: 64
   validationSamples: 6
   rotationSpeed: 0.35
@@ -338,7 +338,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &752495706
 MonoBehaviour:
   m_ObjectHideFlags: 0

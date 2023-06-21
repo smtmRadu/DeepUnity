@@ -4,29 +4,21 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class BatchNorm : IModule, IParameters
+    public class BatchNorm : Learnable, IModule
     {
         // https://arxiv.org/pdf/1502.03167.pdf
 
-        private Tensor x_minus_mu_cache { get; set; }
-        private Tensor std_cache { get; set; }
-        private Tensor x_hat_Cache { get; set; }
+        private Tensor xCentered { get; set; }
+        private Tensor std { get; set; }
+        private Tensor xHat { get; set; }
        
 
         [SerializeField] public float momentum;
         [SerializeField] public float epsilon;
 
         // Learnable parameters
-        [SerializeField] public Tensor runningMean;
-        [SerializeField] public Tensor runningVar;
-
-        [SerializeField] public Tensor gamma;
-        [SerializeField] public Tensor beta;
-
-
-        [NonSerialized] public Tensor grad_Gamma;
-        [NonSerialized] public Tensor grad_Beta;
-
+        [SerializeField] private Tensor runningMean;
+        [SerializeField] private Tensor runningVar;
 
 
         /// <summary>
@@ -34,18 +26,19 @@ namespace DeepUnity
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85)</param>
         public BatchNorm(int num_features, float momentum = 0.1f, float eps = 1e-5f)
         {
+            this.momentum = momentum;
+            this.epsilon = eps;
+
             gamma = Tensor.Ones(num_features);
             beta = Tensor.Zeros(num_features);
+
+            gradGamma = Tensor.Zeros(num_features);
+            gradBeta = Tensor.Zeros(num_features);
 
             runningVar = Tensor.Ones(num_features);
             runningMean = Tensor.Zeros(num_features);
 
-
-            grad_Gamma = Tensor.Zeros(num_features);
-            grad_Beta = Tensor.Zeros(num_features);
-
-            this.momentum = momentum;
-            this.epsilon = eps;
+           
         }
 
         public Tensor Predict(Tensor input)
@@ -65,18 +58,14 @@ namespace DeepUnity
 
             // input [batch, features]  - muB or varB [features] -> need expand on axis 0 by batch
 
-            // normalize
-            var x_minus_mu = input - Tensor.Expand(mu_B, TDim.height, batch);
-            var sqrt_var = Tensor.Expand(Tensor.Sqrt(var_B + epsilon), TDim.height, batch);
-            var x_hat = x_minus_mu / sqrt_var;
+            // normalize and cache
+            xCentered = input - Tensor.Expand(mu_B, TDim.height, batch);
+            std = Tensor.Expand(Tensor.Sqrt(var_B + epsilon), TDim.height, batch);
+            xHat = xCentered / std;
 
             // scale and shift
-            var yB = Tensor.Expand(gamma, TDim.height, batch) * x_hat + Tensor.Expand(beta, TDim.height, batch);
+            var yB = Tensor.Expand(gamma, TDim.height, batch) * xHat + Tensor.Expand(beta, TDim.height, batch);
 
-            // Cache everything
-            x_minus_mu_cache = x_minus_mu;
-            std_cache = sqrt_var;
-            x_hat_Cache = x_hat;
             
 
             // compute running mean and var
@@ -94,79 +83,33 @@ namespace DeepUnity
 
             var dLdxHat = dLdY * Tensor.Expand(gamma, TDim.height, m); // [batch, outs]
 
-            var dLdVarB = Tensor.Mean(dLdxHat * x_minus_mu_cache * (-1f / 2f) *
-                         Tensor.Pow(std_cache + epsilon, -3f / 2f), TDim.height, true);
+            var dLdVarB = Tensor.Mean(dLdxHat * xCentered * (-1f / 2f) *
+                         Tensor.Pow(std + epsilon, -3f / 2f), TDim.height, true);
 
             var dLdMuB = Tensor.Mean(
-                         dLdxHat * -1f / (std_cache + epsilon) +
-                         dLdVarB * -2f * x_minus_mu_cache / m, 
+                         dLdxHat * -1f / (std + epsilon) +
+                         dLdVarB * -2f * xCentered / m, 
                          TDim.height, true);
 
-            var dLdX = dLdxHat * 1f / Tensor.Sqrt(std_cache + epsilon) +
-                       dLdVarB * 2f * x_minus_mu_cache / m +
+            var dLdX = dLdxHat * 1f / Tensor.Sqrt(std + epsilon) +
+                       dLdVarB * 2f * xCentered / m +
                        dLdMuB * (1f / m);
 
 
-            var dLdGamma = Tensor.Mean(dLdY * x_hat_Cache, TDim.height);
+            var dLdGamma = Tensor.Mean(dLdY * xHat, TDim.height);
             var dLdBeta = Tensor.Mean(dLdY, TDim.height);
 
-            grad_Gamma += dLdGamma;
-            grad_Beta += dLdBeta;
+            gradGamma += dLdGamma;
+            gradBeta += dLdBeta;
 
             return dLdX;
         }
 
-        public void ZeroGrad()
-        {
-            grad_Gamma.ForEach(x => 0f);
-            grad_Beta.ForEach(x => 0f);
-        }
-        public void ClipGradValue(float clip_value)
-        {
-            Tensor.Clip(grad_Gamma, -clip_value, clip_value);
-            Tensor.Clip(grad_Beta, -clip_value, clip_value);
-        }
-        public void ClipGradNorm(float max_norm)
-        {
-            Tensor normG = Tensor.Norm(grad_Gamma, NormType.ManhattanL1);
-
-            if (normG[0] > max_norm)
-            {
-                float scale = max_norm / normG[0];
-                grad_Gamma *= scale;
-            }
-
-
-            Tensor normB = Tensor.Norm(grad_Beta, NormType.ManhattanL1);
-
-            if (normB[0] > max_norm)
-            {
-                float scale = max_norm / normB[0];
-                grad_Beta *= scale;
-            }
-
-        }
-
-        public void OnBeforeSerialize()
-        {
-
-        }
-        public void OnAfterDeserialize()
-        {
-            // This function is actually having 2 workers on serialization, and one on them is called when weights.shape.length == 0.
-            if (gamma.Shape == null || gamma.Shape.width == 0)
-                return;
-
-            int num_features = gamma.Shape.width;
-
-            this.grad_Gamma = Tensor.Zeros(num_features);
-            this.grad_Beta = Tensor.Zeros(num_features);
-        }
-        /*   Improving BN networks (placed before 
+        /*   Improving BN networks (placed before activation)
              Increase learning rate. In a batch-normalized model,
           we have been able to achieve a training speedup from
           higher learning rates, with no ill side effects (Sec. 3.3).
-          Remove Dropout. As described in Sec. 3.4, Batch Normalization fulfills some of the same goals as Dropout. Removing Dropout from Modified BN-Inception speeds up
+             Remove Dropout. As described in Sec. 3.4, Batch Normalization fulfills some of the same goals as Dropout. Removing Dropout from Modified BN-Inception speeds up
           training, without increasing overfitting.
             Reduce the L2 weight regularization. While in Inception an L2 loss on the model parameters controls overfitting, in Modified BN-Inception the weight of this loss is
           reduced by a factor of 5. We find that this improves the

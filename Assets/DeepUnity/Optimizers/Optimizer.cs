@@ -5,12 +5,15 @@ namespace DeepUnity
 {
     public abstract class Optimizer
     {
+        protected Learnable[] parameters;
         public float learningRate;
-        public abstract void Initialize(IModule[] modules);
-        public abstract void Step(IModule[] modules);
+
+        public abstract void Step();
     }
 
-
+    /// <summary>
+    /// [Deprecated]
+    /// </summary>
     [Serializable]
     public class OptimizerWrapper
     {
