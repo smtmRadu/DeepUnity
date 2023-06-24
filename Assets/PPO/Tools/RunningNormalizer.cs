@@ -2,31 +2,35 @@ using DeepUnity;
 using System;
 using UnityEngine;
 
-namespace kbRadu
+namespace DeepUnity
 {
     [Serializable]
     public class RunningNormalizer
     {
-        [SerializeField] readonly float MIN_LIMIT;
-        [SerializeField] readonly float MAX_LIMIT;
+        [SerializeField] private float MIN_RANGE;
+        [SerializeField] private float MAX_RANGE;
 
-        [SerializeField] Tensor min;
-        [SerializeField] Tensor max;
- 	    public RunningNormalizer(int size, float min = -1f, float max = 1f)
+        [SerializeField] private Tensor min;
+        [SerializeField] private Tensor max;
+        public RunningNormalizer(int size, float min = -1f, float max = 1f)
         {
-            MIN_LIMIT = min;
-            MAX_LIMIT = max;
+            MIN_RANGE = min;
+            MAX_RANGE = max;
 
             this.min = Tensor.Fill(min, size);
             this.min = Tensor.Fill(max, size);
         }
-        private void Update(Tensor tuples)
+        private void Update(Tensor tuple)
         {
-            
+            min = Tensor.Minimum(min, tuple);
+            max = Tensor.Maximum(max, tuple);
         }
-        private Tensor Normalize(Tensor tuples)
+        public Tensor Normalize(Tensor tuple, bool update = true)
         {
-            return null;
+            if (update)
+                Update(tuple);
+
+            return (tuple - min) / (max - min) * (MAX_RANGE - MIN_RANGE) + MIN_RANGE;
         }
     }
 }

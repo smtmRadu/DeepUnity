@@ -9,7 +9,7 @@ namespace DeepUnity
             // [batch, width]
             Tensor exp = Tensor.Exp(x); // [batch, width]
             Tensor exp_sum = Tensor.Sum(exp, TDim.width); // [batch, 1]
-            exp_sum = Tensor.Expand(exp_sum, TDim.width, exp.Shape.width); // [batch, width]
+            exp_sum = Tensor.Expand(exp_sum, TDim.width, exp.Shape.Width); // [batch, width]
 
             x = exp / exp_sum;
         }
@@ -17,7 +17,7 @@ namespace DeepUnity
         {
             Tensor exp = Tensor.Exp(x);
             Tensor exp_sum = Tensor.Sum(exp, TDim.width); // [batch, 1]
-            exp_sum = Tensor.Expand(exp_sum, TDim.width, exp.Shape.width); // [batch, width]
+            exp_sum = Tensor.Expand(exp_sum, TDim.width, exp.Shape.Width); // [batch, width]
 
             x = (exp * exp_sum - exp * exp) / (exp_sum * exp_sum);
         }

@@ -1,23 +1,26 @@
+using System.Linq;
+using Unity.VisualScripting;
+
 namespace DeepUnity
 {
     public class ActionBuffer
     {
-        public Tensor DiscreteActions { get; set; }
-        public Tensor ContinuousActions { get; set; }
+        public float[] DiscreteActions { get; set; }
+        public float[] ContinuousActions { get; set; }
 
         public ActionBuffer(int capacity)
         {
-            DiscreteActions = Tensor.Zeros(capacity);
-            ContinuousActions = Tensor.Zeros(capacity);
+            DiscreteActions = new float[capacity];
+            ContinuousActions = new float[capacity];
         }
         public void Clear()
         {
-            DiscreteActions.ForEach(x => 0f);
-            ContinuousActions.ForEach(x => 0f);
+            DiscreteActions = DiscreteActions.Select(x => float.NaN).ToArray();
+            ContinuousActions = ContinuousActions.Select(x => float.NaN).ToArray();
         }
         public override string ToString()
         {
-            return $"(ContinuousActions {ContinuousActions} | DiscreteActions {DiscreteActions})";
+            return $"(ContinuousActions {ContinuousActions.ToCommaSeparatedString()} | DiscreteActions {DiscreteActions.ToCommaSeparatedString()})";
         }
     }
 }

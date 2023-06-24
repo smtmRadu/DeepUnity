@@ -7,9 +7,7 @@ namespace DeepUnity
     [Serializable]
     public sealed class SGD : Optimizer
     {
-        [SerializeField] private int t;
         [SerializeField] private float momentum;
-        [SerializeField] private float weightDecay;
         [SerializeField] private float dampening;
         [SerializeField] private bool nesterov;
         [SerializeField] private bool maximize;
@@ -18,19 +16,12 @@ namespace DeepUnity
         [NonSerialized] public Tensor[] m_W;
         [NonSerialized] public Tensor[] m_B;
 
-        public SGD(Learnable[] parameters, float lr = 0.01f, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false)
+        public SGD(Learnable[] parameters, float lr = 0.01f, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false) : base(parameters, lr, weightDecay)
         {
-            this.t = 0;
-            this.learningRate = lr;
             this.momentum = momentum;
-            this.weightDecay = weightDecay;
             this.dampening = dampening;
             this.nesterov = nesterov;
             this.maximize = maximize;
-
-
-
-            this.parameters = parameters;
 
             m_W = new Tensor[parameters.Length];
             m_B = new Tensor[parameters.Length];

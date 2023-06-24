@@ -2,8 +2,6 @@ using System;
 
 namespace DeepUnity
 {
-
-
     [Serializable]
     public class Dense : Learnable, IModule
     {
@@ -25,11 +23,11 @@ namespace DeepUnity
                     beta.ForEach(x => Utils.Random.Range(-sqrtK, sqrtK));
                     break;
                 case InitType.HE:
-                    float sigmaHE = MathF.Sqrt(2f / gamma.Shape.height); //fanIn
+                    float sigmaHE = MathF.Sqrt(2f / gamma.Shape.Height); //fanIn
                     gamma.ForEach(x => Utils.Random.Gaussian(0f, sigmaHE));
                     break;
                 case InitType.Xavier:
-                    float sigmaXA = MathF.Sqrt(2f / (gamma.Shape.width + gamma.Shape.height)); // fanIn + fanOut
+                    float sigmaXA = MathF.Sqrt(2f / (gamma.Shape.Width + gamma.Shape.Height)); // fanIn + fanOut
                     gamma.ForEach(x => Utils.Random.Gaussian(0f, sigmaXA));
                     break;
                 case InitType.Normal:
@@ -45,21 +43,19 @@ namespace DeepUnity
 
         public Tensor Predict(Tensor input)
         {
-            int batch = input.Shape.height;
+            int batch = input.Shape.Height;
             return Tensor.MatMul(input, gamma) + Tensor.Expand(beta, TDim.height, batch);
 
         }
         public Tensor Forward(Tensor input)
         {
-            // for faster improvement on GPU, set for forward only on CPU!
-            // it seems like forward is always faster with CPU rather than GPU for matrices < 1024 size. Maybe on large scales it must be changed again on GPU.
             Input_Cache = Tensor.Identity(input);
-            int batch_size = input.Shape.height;
+            int batch_size = input.Shape.Height;
             return Tensor.MatMul(input, gamma) + Tensor.Expand(beta,TDim.height, batch_size);
         }
         public Tensor Backward(Tensor loss)
         {
-            int batch_size = loss.Shape.height;
+            int batch_size = loss.Shape.Height;
             var transposedInput = Tensor.Transpose(Input_Cache, TDim.width, TDim.height);
 
             Tensor gradW = Tensor.MatMul(transposedInput, loss);

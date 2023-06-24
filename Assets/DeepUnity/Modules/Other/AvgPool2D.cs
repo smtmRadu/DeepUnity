@@ -29,21 +29,21 @@ namespace DeepUnity
 
             List<float> values_pool = new List<float>();
 
-            for (int b = 0; b < pooled_input.Shape.batch; b++)
+            for (int b = 0; b < pooled_input.Shape.Batch; b++)
             {
                 // Foreach channel
-                for (int c = 0; c < pooled_input.Shape.channels; c++)
+                for (int c = 0; c < pooled_input.Shape.Channels; c++)
                 {
                     // foreach pool result
-                    for (int i = 0; i < pooled_input.Shape.width; i++)
+                    for (int i = 0; i < pooled_input.Shape.Width; i++)
                     {
-                        for (int j = 0; j < pooled_input.Shape.height; j++)
+                        for (int j = 0; j < pooled_input.Shape.Height; j++)
                         {
 
                             // foreach pool element in the pool
-                            for (int pi = 0; pi < input.Shape.width; pi++)
+                            for (int pi = 0; pi < input.Shape.Width; pi++)
                             {
-                                for (int pj = 0; pj < input.Shape.height; pj++)
+                                for (int pj = 0; pj < input.Shape.Height; pj++)
                                 {
                                     values_pool.Add(input[i * 2 + pi, j * 2 + pj, c, b]);
                                 }
@@ -74,21 +74,21 @@ namespace DeepUnity
 
             List<float> values_pool = new List<float>();
 
-            for (int b = 0; b < pooled_input.Shape.batch; b++)
+            for (int b = 0; b < pooled_input.Shape.Batch; b++)
             {
                 // Foreach channel
-                for (int c = 0; c < pooled_input.Shape.channels; c++)
+                for (int c = 0; c < pooled_input.Shape.Channels; c++)
                 {
                     // foreach pool result
-                    for (int i = 0; i < pooled_input.Shape.width; i++)
+                    for (int i = 0; i < pooled_input.Shape.Width; i++)
                     {
-                        for (int j = 0; j < pooled_input.Shape.height; j++)
+                        for (int j = 0; j < pooled_input.Shape.Height; j++)
                         {
 
                             // foreach pool element in the pool
-                            for (int pi = 0; pi < input.Shape.width; pi++)
+                            for (int pi = 0; pi < input.Shape.Width; pi++)
                             {
-                                for (int pj = 0; pj < input.Shape.height; pj++)
+                                for (int pj = 0; pj < input.Shape.Height; pj++)
                                 {
                                     values_pool.Add(input[i * 2 + pi, j * 2 + pj, c, b]);
                                 }

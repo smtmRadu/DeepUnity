@@ -5,7 +5,6 @@ using UnityEngine;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Unity.VisualScripting;
-using System.Numerics;
 
 namespace DeepUnity
 {
@@ -19,6 +18,7 @@ namespace DeepUnity
         [SerializeField] private TShape shape;
         [SerializeField] private float[] data;
 
+        public static string PrintFormat = "0.00000";
         public int Rank => shape.Rank;
         public TShape Shape => shape;
         public int Size(int axis)
@@ -29,7 +29,7 @@ namespace DeepUnity
         {
             return shape.Get(dim);
         }
-        
+
         public float this[int w]
         {
             get => data[w];
@@ -37,18 +37,18 @@ namespace DeepUnity
         }
         public float this[int h, int w]
         {
-            get => data[w * shape.height + h];
-            set => data[w * shape.height + h] = value;
+            get => data[w * shape.Height + h];
+            set => data[w * shape.Height + h] = value;
         }
         public float this[int c, int h, int w]
         {
-            get => data[c * shape.height * shape.width + w * shape.height + h];
-            set => data[c * shape.height * shape.width + w * shape.height + h] = value;
+            get => data[c * shape.Height * shape.Width + w * shape.Height + h];
+            set => data[c * shape.Height * shape.Width + w * shape.Height + h] = value;
         }
         public float this[int n, int c, int h, int w]
         {
-            get => data[n * shape.channels * shape.height * shape.width + c * shape.height * shape.width + w * shape.height + h];
-            set => data[n * shape.channels * shape.height * shape.width + c * shape.height * shape.width + w * shape.height + h] = value;
+            get => data[n * shape.Channels * shape.Height * shape.Width + c * shape.Height * shape.Width + w * shape.Height + h];
+            set => data[n * shape.Channels * shape.Height * shape.Width + c * shape.Height * shape.Width + w * shape.Height + h] = value;
 
         }
 
@@ -61,16 +61,16 @@ namespace DeepUnity
                 throw new ArgumentException("Tensor cannot be instantiated with null shape.");
             if (shortShape.Length > 4)
                 throw new ArgumentException("Tensor cannot be instantiated with more than 4 dimensions.");
-           
+
             int width = 1;
             int height = 1;
             int channels = 1;
             int batch = 1;
-            if(shortShape.Length == 1)
+            if (shortShape.Length == 1)
             {
                 width = shortShape[0];
             }
-            else if(shortShape.Length == 2)
+            else if (shortShape.Length == 2)
             {
                 width = shortShape[1];
                 height = shortShape[0];
@@ -99,9 +99,9 @@ namespace DeepUnity
         }
         private Tensor(TShape tshape)
         {
-            this.shape = new TShape(tshape.batch, tshape.channels, tshape.height, tshape.width);
-            
-            int size = tshape.batch * tshape.channels * tshape.height * tshape.width;
+            this.shape = new TShape(tshape.Batch, tshape.Channels, tshape.Height, tshape.Width);
+
+            int size = tshape.Batch * tshape.Channels * tshape.Height * tshape.Width;
 
             if (size > 16_777_216) // hardcoded like this because 4096x4096 max allowed matrix, on 8192 it crashes
                 throw new NotSupportedException("Tensor dimensions is too large on initialization (cannot surpass 16,777,216 units).");
@@ -110,13 +110,13 @@ namespace DeepUnity
         }
         public static Tensor Identity(Tensor other)
         {
-            Tensor clone = new Tensor(other.shape);
+            Tensor clone = new(other.shape);
             Array.Copy(other.data, clone.data, other.data.Length);
             return clone;
         }
         public static Tensor Constant(float scalar)
         {
-            Tensor t = new Tensor(1);
+            Tensor t = new(1);
             t.data[0] = scalar;
             return t;
         }
@@ -124,7 +124,7 @@ namespace DeepUnity
         {
             int width = vector.GetLength(0);
 
-            Tensor t = new Tensor(width);
+            Tensor t = new(width);
             for (int i = 0; i < width; i++)
             {
                 t[i] = vector[i];
@@ -138,16 +138,16 @@ namespace DeepUnity
             int width = matrix.GetLength(0);
             int height = matrix.GetLength(1);
 
-            Tensor t = new Tensor(height, width);
+            Tensor t = new(height, width);
             for (int i = 0; i < height; i++)
             {
                 for (int j = 0; j < width; j++)
                 {
-                    t[i,j] = matrix[i,j];
+                    t[i, j] = matrix[i, j];
                 }
 
             }
-           
+
 
             return t;
         }
@@ -157,7 +157,7 @@ namespace DeepUnity
             int height = cube.GetLength(1);
             int depth = cube.GetLength(2);
 
-            Tensor t = new Tensor(depth, height, width);
+            Tensor t = new(depth, height, width);
             for (int z = 0; z < depth; z++)
             {
                 for (int y = 0; y < height; y++)
@@ -179,7 +179,7 @@ namespace DeepUnity
             int depth = tesseract.GetLength(2);
             int time = tesseract.GetLength(3);
 
-            Tensor t = new Tensor(time, depth, height, width);
+            Tensor t = new(time, depth, height, width);
             for (int w = 0; w < time; w++)
             {
                 for (int z = 0; z < depth; z++)
@@ -198,11 +198,11 @@ namespace DeepUnity
         }
         public static Tensor Zeros(params int[] shape)
         {
-            return new Tensor(shape);
+            return new(shape);
         }
         public static Tensor Ones(params int[] shape)
         {
-            Tensor t = new Tensor(shape);
+            Tensor t = new(shape);
             for (int i = 0; i < t.data.Length; i++)
             {
                 t.data[i] = 1f;
@@ -211,7 +211,7 @@ namespace DeepUnity
         }
         public static Tensor Random01(params int[] shape)
         {
-            Tensor t = new Tensor(shape);
+            Tensor t = new(shape);
             for (int i = 0; i < t.data.Length; i++)
             {
                 t.data[i] = Utils.Random.Value;
@@ -220,7 +220,7 @@ namespace DeepUnity
         }
         public static Tensor RandomNormal(params int[] shape)
         {
-            Tensor t = new Tensor(shape);
+            Tensor t = new(shape);
             for (int i = 0; i < t.data.Length; i++)
             {
                 t.data[i] = Utils.Random.Gaussian();
@@ -229,7 +229,7 @@ namespace DeepUnity
         }
         public static Tensor RandomRange(float min, float max, params int[] shape)
         {
-            Tensor t = new Tensor(shape);
+            Tensor t = new(shape);
             for (int i = 0; i < t.data.Length; i++)
             {
                 t.data[i] = Utils.Random.Range(min, max);
@@ -238,7 +238,7 @@ namespace DeepUnity
         }
         public static Tensor Fill(float value, params int[] shape)
         {
-            Tensor t = new Tensor(shape);
+            Tensor t = new(shape);
             for (int i = 0; i < t.data.Length; i++)
             {
                 t.data[i] = value;
@@ -253,7 +253,7 @@ namespace DeepUnity
 
         public static Tensor operator +(Tensor tensor)
         {
-            Tensor result = new Tensor(tensor.shape);
+            Tensor result = new(tensor.shape);
             for (int i = 0; i < tensor.data.Length; i++)
             {
                 result.data[i] = tensor.data[i];
@@ -263,7 +263,7 @@ namespace DeepUnity
         }
         public static Tensor operator -(Tensor tensor)
         {
-            Tensor result = new Tensor(tensor.shape);
+            Tensor result = new(tensor.shape);
             for (int i = 0; i < tensor.data.Length; i++)
             {
                 result.data[i] = -tensor.data[i];
@@ -321,8 +321,8 @@ namespace DeepUnity
         {
             if (!left.shape.Equals(right.shape))
                 throw new OperationCanceledException($"Left{left.Shape} and right{right.Shape} tensors must have different shape for Element-wise addition (+).");
-           
-            Tensor result = new Tensor(left.shape);
+
+            Tensor result = new(left.shape);
 
             for (int i = 0; i < result.data.Length; i++)
             {
@@ -337,7 +337,7 @@ namespace DeepUnity
             if (!left.shape.Equals(right.shape))
                 throw new OperationCanceledException($"Left{left.Shape} and right{right.Shape} tensors must have different shape for Element-wise subtraction (-).");
 
-            Tensor result = new Tensor(left.shape);
+            Tensor result = new(left.shape);
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] = left.data[i] - right.data[i];
@@ -350,7 +350,7 @@ namespace DeepUnity
             if (!left.shape.Equals(right.shape))
                 throw new OperationCanceledException($"Left{left.Shape} and right{right.Shape} tensors must have different shape for Element-wise multiplication (*).");
 
-            Tensor result = new Tensor(left.shape);
+            Tensor result = new(left.shape);
 
             for (int i = 0; i < result.data.Length; i++)
             {
@@ -365,7 +365,7 @@ namespace DeepUnity
             if (!left.shape.Equals(right.shape))
                 throw new OperationCanceledException($"Left{left.Shape} and right{right.Shape} tensors must have different shape for Element-wise division (/).");
 
-            Tensor result = new Tensor(left.shape);
+            Tensor result = new(left.shape);
 
             for (int i = 0; i < result.data.Length; i++)
             {
@@ -387,24 +387,24 @@ namespace DeepUnity
         {
             /* N x M dot M x P => N x P
              */
-            int w1 = left.shape.height;
-            int h1 = left.shape.width;
-            int w2 = right.shape.height;
-            int h2 = right.shape.width;
-            int b1 = left.shape.channels;
-            int b2 = right.shape.channels;
+            int w1 = left.shape.Height;
+            int h1 = left.shape.Width;
+            int w2 = right.shape.Height;
+            int h2 = right.shape.Width;
+            int b1 = left.shape.Channels;
+            int b2 = right.shape.Channels;
 
             if (h1 != w2)
                 throw new ArgumentException("Tensor must have compatible shapes for matrix multiplication (height of left tensor is not matching the width of the right tensor).");
 
             if (b1 != b2)
                 throw new ArgumentException("Tensors must have similar number of batches for batched matrix multiplication.");
-            
-            Tensor result = new Tensor(new TShape(1, b1, w1, h2));
+
+            Tensor result = new(new TShape(1, b1, w1, h2));
 
             if (DeepUnityMeta.Device == Device.CPU)
             {
-                if(b1 == 1)
+                if (b1 == 1)
                 {
                     Parallel.For(0, w1, m =>
                     {
@@ -418,7 +418,7 @@ namespace DeepUnity
                             result[m, r] = sum;
 
                         }
-                        
+
                     });
                 }
                 else
@@ -440,20 +440,20 @@ namespace DeepUnity
                         }
                     });
                 }
-                
+
             }
             else
             {
                 ComputeShader CS = DeepUnityMeta.MatMulCS;
 
-                ComputeBuffer leftBuffer = new ComputeBuffer(left.data.Length, 4);
-                ComputeBuffer rightBuffer = new ComputeBuffer(right.data.Length, 4);
-                ComputeBuffer resultBuffer = new ComputeBuffer(b1 * h2 * w1, 4);
+                ComputeBuffer leftBuffer = new (left.data.Length, 4);
+                ComputeBuffer rightBuffer = new (right.data.Length, 4);
+                ComputeBuffer resultBuffer = new (b1 * h2 * w1, 4);
 
                 leftBuffer.SetData(left.data);
                 rightBuffer.SetData(right.data);
 
-                
+
                 CS.SetBuffer(0, "leftArr", leftBuffer);
                 CS.SetBuffer(0, "rightArr", rightBuffer);
                 CS.SetBuffer(0, "resultArr", resultBuffer);
@@ -484,19 +484,19 @@ namespace DeepUnity
             if (padding == 0)
                 return tensor;
 
-            int w = tensor.shape.width + 2;
-            int h = tensor.shape.height + 2;
-            int b = tensor.shape.channels;
-            int n = tensor.shape.batch;
-            Tensor result = new Tensor(n, b, h, w);
+            int w = tensor.shape.Width + 2;
+            int h = tensor.shape.Height + 2;
+            int b = tensor.shape.Channels;
+            int n = tensor.shape.Batch;
+            Tensor result = new(n, b, h, w);
 
-            for (int l = 0; l < tensor.shape.batch; l++)
+            for (int l = 0; l < tensor.shape.Batch; l++)
             {
-                for (int k = 0; k < tensor.shape.channels; k++)
+                for (int k = 0; k < tensor.shape.Channels; k++)
                 {
-                    for (int j = 0; j < tensor.shape.height; j++)
+                    for (int j = 0; j < tensor.shape.Height; j++)
                     {
-                        for (int i = 0; i < tensor.shape.width; i++)
+                        for (int i = 0; i < tensor.shape.Width; i++)
                         {
                             result[l, k, j + 1, i + 1] = tensor[k, j, i];
                         }
@@ -504,13 +504,13 @@ namespace DeepUnity
                 }
             }
 
-            
-            if(paddingMode == PaddingType.Mirror)
+
+            if (paddingMode == PaddingType.Mirror)
             {
 
-                for (int l = 0; l < tensor.shape.batch; l++)
+                for (int l = 0; l < tensor.shape.Batch; l++)
                 {
-                    for (int k = 0; k < tensor.shape.channels; k++)
+                    for (int k = 0; k < tensor.shape.Channels; k++)
                     {
                         result[l, k, 0, 0] = result[l, k, 1, 1];
                         result[l, k, h - 1, 0] = result[l, k, h - 2, 1];
@@ -530,7 +530,7 @@ namespace DeepUnity
                         }
                     }
                 }
-                
+
             }
 
 
@@ -560,7 +560,7 @@ namespace DeepUnity
 
             if (correlationType == CorrelationMode.Valid)
             {
-                
+
 
                 int outputHeight = inputHeight - kernelHeight + 1;
                 int outputWidth = inputWidth - kernelWidth + 1;
@@ -634,7 +634,7 @@ namespace DeepUnity
                         }
                     }
                 });
-                
+
             }
             else if (correlationType == CorrelationMode.Same)
             {
@@ -681,9 +681,6 @@ namespace DeepUnity
             }
 
             return output;
-
-
-            return output;
         }
 
         /// <summary>
@@ -698,7 +695,7 @@ namespace DeepUnity
             // Rotate kernel by 180d
             int height = kernels.Size(TDim.height);
             int width = kernels.Size(TDim.width);
-            Tensor rot180Kernel = new Tensor(kernels.shape);
+            Tensor rot180Kernel = new(kernels.shape);
 
             for (int c = 0; c < kernels.Size(TDim.channel); c++)
             {
@@ -711,7 +708,7 @@ namespace DeepUnity
                 }
             }
 
-            return Correlate2D(inputs, rot180Kernel, correlationType);        
+            return Correlate2D(inputs, rot180Kernel, correlationType);
         }
 
         #endregion 
@@ -729,49 +726,49 @@ namespace DeepUnity
             if (dim0 == TDim.width)
             {
                 if (dim1 == TDim.height)
-                    swappedShape = new TShape(tensor.shape.batch, tensor.shape.channels, tensor.shape.width, tensor.shape.height);
+                    swappedShape = new TShape(tensor.shape.Batch, tensor.shape.Channels, tensor.shape.Width, tensor.shape.Height);
                 else if (dim1 == TDim.channel)
-                    swappedShape = new TShape(tensor.shape.batch, tensor.shape.width, tensor.shape.height, tensor.shape.channels);
+                    swappedShape = new TShape(tensor.shape.Batch, tensor.shape.Width, tensor.shape.Height, tensor.shape.Channels);
                 else if (dim1 == TDim.batch)
-                    swappedShape = new TShape(tensor.shape.width, tensor.shape.channels, tensor.shape.height, tensor.shape.batch);
+                    swappedShape = new TShape(tensor.shape.Width, tensor.shape.Channels, tensor.shape.Height, tensor.shape.Batch);
             }
             else if (dim0 == TDim.height)
             {
                 if (dim1 == TDim.width)
-                    swappedShape = new TShape(tensor.shape.batch, tensor.shape.channels, tensor.shape.height, tensor.shape.width);
+                    swappedShape = new TShape(tensor.shape.Batch, tensor.shape.Channels, tensor.shape.Height, tensor.shape.Width);
                 else if (dim1 == TDim.channel)
-                    swappedShape = new TShape(tensor.shape.batch, tensor.shape.height, tensor.shape.width, tensor.shape.channels);
+                    swappedShape = new TShape(tensor.shape.Batch, tensor.shape.Height, tensor.shape.Width, tensor.shape.Channels);
                 else if (dim1 == TDim.batch)
-                    swappedShape = new TShape(tensor.shape.height, tensor.shape.batch, tensor.shape.width, tensor.shape.channels);
+                    swappedShape = new TShape(tensor.shape.Height, tensor.shape.Batch, tensor.shape.Width, tensor.shape.Channels);
             }
             else if (dim0 == TDim.channel)
             {
                 if (dim1 == TDim.width)
-                    swappedShape = new TShape(tensor.shape.batch, tensor.shape.height, tensor.shape.channels, tensor.shape.width);
+                    swappedShape = new TShape(tensor.shape.Batch, tensor.shape.Height, tensor.shape.Channels, tensor.shape.Width);
                 else if (dim1 == TDim.height)
-                    swappedShape = new TShape(tensor.shape.batch, tensor.shape.channels, tensor.shape.height, tensor.shape.width);
+                    swappedShape = new TShape(tensor.shape.Batch, tensor.shape.Channels, tensor.shape.Height, tensor.shape.Width);
                 else if (dim1 == TDim.batch)
-                    swappedShape = new TShape(tensor.shape.channels, tensor.shape.batch, tensor.shape.height, tensor.shape.width);
+                    swappedShape = new TShape(tensor.shape.Channels, tensor.shape.Batch, tensor.shape.Height, tensor.shape.Width);
             }
             else if (dim0 == TDim.batch)
             {
                 if (dim1 == TDim.width)
-                    swappedShape = new TShape(tensor.shape.channels, tensor.shape.batch, tensor.shape.height, tensor.shape.width);
+                    swappedShape = new TShape(tensor.shape.Channels, tensor.shape.Batch, tensor.shape.Height, tensor.shape.Width);
                 else if (dim1 == TDim.height)
-                    swappedShape = new TShape(tensor.shape.height, tensor.shape.batch, tensor.shape.channels, tensor.shape.width);
+                    swappedShape = new TShape(tensor.shape.Height, tensor.shape.Batch, tensor.shape.Channels, tensor.shape.Width);
                 else if (dim1 == TDim.channel)
-                    swappedShape = new TShape(tensor.shape.batch, tensor.shape.height, tensor.shape.channels, tensor.shape.width);
+                    swappedShape = new TShape(tensor.shape.Batch, tensor.shape.Height, tensor.shape.Channels, tensor.shape.Width);
             }
 
-            Tensor result = new Tensor(swappedShape);
+            Tensor result = new(swappedShape);
 
-            for (int l = 0; l < swappedShape.batch; l++)
+            for (int l = 0; l < swappedShape.Batch; l++)
             {
-                for (int k = 0; k < swappedShape.channels; k++)
+                for (int k = 0; k < swappedShape.Channels; k++)
                 {
-                    for (int j = 0; j < swappedShape.height; j++)
+                    for (int j = 0; j < swappedShape.Height; j++)
                     {
-                        for (int i = 0; i < swappedShape.width; i++)
+                        for (int i = 0; i < swappedShape.Width; i++)
                         {
                             if (dim0 == TDim.width && dim1 == TDim.height)
                                 result[l, k, j, i] = tensor[l, k, i, j];
@@ -819,7 +816,7 @@ namespace DeepUnity
             {
                 if (dim == TDim.width)
                 {
-                    result = new Tensor(shape[0], shape[1], shape[2], 1);
+                    result = new(shape[0], shape[1], shape[2], 1);
                     for (int l = 0; l < shape[0]; l++)
                     {
                         for (int k = 0; k < shape[1]; k++)
@@ -841,7 +838,7 @@ namespace DeepUnity
                 }
                 else if (dim == TDim.height)
                 {
-                    result = new Tensor(shape[0], shape[1], 1, shape[3]);
+                    result = new(shape[0], shape[1], 1, shape[3]);
                     for (int l = 0; l < shape[0]; l++)
                     {
                         for (int k = 0; k < shape[1]; k++)
@@ -863,7 +860,7 @@ namespace DeepUnity
                 }
                 else if (dim == TDim.channel)
                 {
-                    result = new Tensor(shape[0], 1, shape[2], shape[3]);
+                    result = new(shape[0], 1, shape[2], shape[3]);
                     for (int l = 0; l < shape[0]; l++)
                     {
                         for (int j = 0; j < shape[2]; j++)
@@ -886,7 +883,7 @@ namespace DeepUnity
                 }
                 else if (dim == TDim.batch)
                 {
-                    result = new Tensor(1, shape[1], shape[2], shape[3]);
+                    result = new(1, shape[1], shape[2], shape[3]);
                     for (int k = 0; k < shape[1]; k++)
                     {
                         for (int j = 0; j < shape[2]; j++)
@@ -910,7 +907,7 @@ namespace DeepUnity
             }
             else
             {
-                result = new Tensor(tensor.shape);
+                result = new(tensor.shape);
                 if (dim == TDim.width)
                 {
                     for (int l = 0; l < shape[0]; l++)
@@ -1030,7 +1027,7 @@ namespace DeepUnity
             {
                 if (dim == TDim.width)
                 {
-                    result = new Tensor(shape[0], shape[1], shape[2], 1);
+                    result = new(shape[0], shape[1], shape[2], 1);
                     for (int l = 0; l < shape[0]; l++)
                     {
                         for (int k = 0; k < shape[1]; k++)
@@ -1049,7 +1046,7 @@ namespace DeepUnity
                 }
                 else if (dim == TDim.height)
                 {
-                    result = new Tensor(shape[0], shape[1], 1, shape[3]);
+                    result = new(shape[0], shape[1], 1, shape[3]);
                     for (int l = 0; l < shape[0]; l++)
                     {
                         for (int k = 0; k < shape[1]; k++)
@@ -1068,7 +1065,7 @@ namespace DeepUnity
                 }
                 else if (dim == TDim.channel)
                 {
-                    result = new Tensor(shape[0], 1, shape[2], shape[3]);
+                    result = new(shape[0], 1, shape[2], shape[3]);
                     for (int l = 0; l < shape[0]; l++)
                     {
                         for (int j = 0; j < shape[2]; j++)
@@ -1089,7 +1086,7 @@ namespace DeepUnity
                 }
                 else if (dim == TDim.batch)
                 {
-                    result = new Tensor(1, shape[1], shape[2], shape[3]);
+                    result = new(1, shape[1], shape[2], shape[3]);
                     for (int k = 0; k < shape[1]; k++)
                     {
                         for (int j = 0; j < shape[2]; j++)
@@ -1109,7 +1106,7 @@ namespace DeepUnity
             }
             else
             {
-                result = new Tensor(tensor.shape);
+                result = new(tensor.shape);
                 if (dim == TDim.width)
                 {
 
@@ -1218,7 +1215,7 @@ namespace DeepUnity
             {
                 if (dim == TDim.width)
                 {
-                    result = new Tensor(shape[0], shape[1], shape[2], 1);
+                    result = new(shape[0], shape[1], shape[2], 1);
                     for (int l = 0; l < shape[0]; l++)
                     {
                         for (int k = 0; k < shape[1]; k++)
@@ -1237,7 +1234,7 @@ namespace DeepUnity
                 }
                 else if (dim == TDim.height)
                 {
-                    result = new Tensor(shape[0], shape[1], 1, shape[3]);
+                    result = new(shape[0], shape[1], 1, shape[3]);
                     for (int l = 0; l < shape[0]; l++)
                     {
                         for (int k = 0; k < shape[1]; k++)
@@ -1256,7 +1253,7 @@ namespace DeepUnity
                 }
                 else if (dim == TDim.channel)
                 {
-                    result = new Tensor(shape[0], 1, shape[2], shape[3]);
+                    result = new(shape[0], 1, shape[2], shape[3]);
                     for (int l = 0; l < shape[0]; l++)
                     {
                         for (int j = 0; j < shape[2]; j++)
@@ -1277,7 +1274,7 @@ namespace DeepUnity
                 }
                 else if (dim == TDim.batch)
                 {
-                    result = new Tensor(1, shape[1], shape[2], shape[3]);
+                    result = new(1, shape[1], shape[2], shape[3]);
                     for (int k = 0; k < shape[1]; k++)
                     {
                         for (int j = 0; j < shape[2]; j++)
@@ -1297,7 +1294,7 @@ namespace DeepUnity
             }
             else
             {
-                result = new Tensor(tensor.shape);
+                result = new(tensor.shape);
                 if (dim == TDim.width)
                 {
 
@@ -1412,44 +1409,44 @@ namespace DeepUnity
             switch (dim)
             {
                 case TDim.width:
-                    shape = new TShape(tensor.shape.batch, tensor.shape.channels, tensor.shape.height, times);
+                    shape = new TShape(tensor.shape.Batch, tensor.shape.Channels, tensor.shape.Height, times);
                     break;
                 case TDim.height:
-                    shape = new TShape(tensor.shape.batch, tensor.shape.channels, times, tensor.shape.width);
+                    shape = new TShape(tensor.shape.Batch, tensor.shape.Channels, times, tensor.shape.Width);
                     break;
                 case TDim.channel:
-                    shape = new TShape(tensor.shape.batch, times, tensor.shape.height, tensor.shape.width);
+                    shape = new TShape(tensor.shape.Batch, times, tensor.shape.Height, tensor.shape.Width);
                     break;
                 case TDim.batch:
-                    shape = new TShape(times, tensor.shape.channels, tensor.shape.height, tensor.shape.width);
+                    shape = new TShape(times, tensor.shape.Channels, tensor.shape.Height, tensor.shape.Width);
                     break;
 
             }
-            Tensor result = new Tensor(shape);
+            Tensor result = new(shape);
 
             for (int t = 0; t < times; t++)
             {
-                for (int l = 0; l < tensor.shape.batch; l++)
+                for (int l = 0; l < tensor.shape.Batch; l++)
                 {
-                    for (int k = 0; k < tensor.shape.channels; k++)
+                    for (int k = 0; k < tensor.shape.Channels; k++)
                     {
-                        for (int j = 0; j < tensor.shape.height; j++)
+                        for (int j = 0; j < tensor.shape.Height; j++)
                         {
-                            for (int i = 0; i < tensor.shape.width; i++)
+                            for (int i = 0; i < tensor.shape.Width; i++)
                             {
                                 switch (dim)
                                 {
                                     case TDim.width:
-                                        result[l, k, j, t * tensor.shape.width + i] = tensor[l, k, j, i];
+                                        result[l, k, j, t * tensor.shape.Width + i] = tensor[l, k, j, i];
                                         break;
                                     case TDim.height:
-                                        result[l, k, t * tensor.shape.height + j, i] = tensor[l, k, j, i];
+                                        result[l, k, t * tensor.shape.Height + j, i] = tensor[l, k, j, i];
                                         break;
                                     case TDim.channel:
-                                        result[l, t * tensor.shape.channels + k, j, i] = tensor[l, k, j, i];
+                                        result[l, t * tensor.shape.Channels + k, j, i] = tensor[l, k, j, i];
                                         break;
                                     case TDim.batch:
-                                        result[t * tensor.shape.batch + l, k, j, i] = tensor[l, k, j, i];
+                                        result[t * tensor.shape.Batch + l, k, j, i] = tensor[l, k, j, i];
                                         break;
                                 }
 
@@ -1477,43 +1474,43 @@ namespace DeepUnity
             switch (dim)
             {
                 case TDim.width:
-                    shape = new TShape(slice.shape.batch, slice.shape.channels, slice.shape.height, slice.shape.width * no_slices);
+                    shape = new TShape(slice.shape.Batch, slice.shape.Channels, slice.shape.Height, slice.shape.Width * no_slices);
                     break;
                 case TDim.height:
-                    shape = new TShape(slice.shape.batch, slice.shape.channels, slice.shape.height * no_slices, slice.shape.width);
+                    shape = new TShape(slice.shape.Batch, slice.shape.Channels, slice.shape.Height * no_slices, slice.shape.Width);
                     break;
                 case TDim.channel:
-                    shape = new TShape(slice.shape.batch, slice.shape.channels * no_slices, slice.shape.height, slice.shape.width);
+                    shape = new TShape(slice.shape.Batch, slice.shape.Channels * no_slices, slice.shape.Height, slice.shape.Width);
                     break;
                 case TDim.batch:
-                    shape = new TShape(slice.shape.batch * no_slices, slice.shape.channels, slice.shape.height, slice.shape.width);
+                    shape = new TShape(slice.shape.Batch * no_slices, slice.shape.Channels, slice.shape.Height, slice.shape.Width);
                     break;
             }
-            Tensor result = new Tensor(shape);
+            Tensor result = new(shape);
 
             for (int s = 0; s < no_slices; s++)
             {
-                for (int l = 0; l < slice.shape.batch; l++)
+                for (int l = 0; l < slice.shape.Batch; l++)
                 {
-                    for (int k = 0; k < slice.shape.channels; k++)
+                    for (int k = 0; k < slice.shape.Channels; k++)
                     {
-                        for (int j = 0; j < slice.shape.height; j++)
+                        for (int j = 0; j < slice.shape.Height; j++)
                         {
-                            for (int i = 0; i < slice.shape.width; i++)
+                            for (int i = 0; i < slice.shape.Width; i++)
                             {
                                 switch (dim)
                                 {
                                     case TDim.width:
-                                        result[l, k, j, s * slice.shape.width + i] = tensors[s][l, k, j, i];
+                                        result[l, k, j, s * slice.shape.Width + i] = tensors[s][l, k, j, i];
                                         break;
                                     case TDim.height:
-                                        result[l, k, s * slice.shape.height + j, i] = tensors[s][l, k, j, i];
+                                        result[l, k, s * slice.shape.Height + j, i] = tensors[s][l, k, j, i];
                                         break;
                                     case TDim.channel:
-                                        result[l, s * slice.shape.channels + k, j, i] = tensors[s][l, k, j, i];
+                                        result[l, s * slice.shape.Channels + k, j, i] = tensors[s][l, k, j, i];
                                         break;
                                     case TDim.batch:
-                                        result[s * slice.shape.batch + l, k, j, i] = tensors[s][l, k, j, i];
+                                        result[s * slice.shape.Batch + l, k, j, i] = tensors[s][l, k, j, i];
                                         break;
                                 }
 
@@ -1533,7 +1530,7 @@ namespace DeepUnity
         /// </summary>
         public static Tensor[] Split(Tensor tensor, TDim dim, int split_size)
         {
-            List<Tensor> slices = new List<Tensor>();
+            List<Tensor> slices = new();
 
             int dimLength = tensor.shape.Get(dim);
             int dimPos = 0;
@@ -1545,28 +1542,28 @@ namespace DeepUnity
                 switch (dim)
                 {
                     case TDim.width:
-                        shape = new TShape(tensor.shape.batch, tensor.shape.channels, tensor.shape.height, dimCopySize);
+                        shape = new TShape(tensor.shape.Batch, tensor.shape.Channels, tensor.shape.Height, dimCopySize);
                         break;
                     case TDim.height:
-                        shape = new TShape(tensor.shape.batch, tensor.shape.channels, dimCopySize, tensor.shape.width);
+                        shape = new TShape(tensor.shape.Batch, tensor.shape.Channels, dimCopySize, tensor.shape.Width);
                         break;
                     case TDim.channel:
-                        shape = new TShape(tensor.shape.batch, dimCopySize, tensor.shape.height, tensor.shape.width);
+                        shape = new TShape(tensor.shape.Batch, dimCopySize, tensor.shape.Height, tensor.shape.Width);
                         break;
                     case TDim.batch:
-                        shape = new TShape(dimCopySize, tensor.shape.channels, tensor.shape.height, tensor.shape.width);
+                        shape = new TShape(dimCopySize, tensor.shape.Channels, tensor.shape.Height, tensor.shape.Width);
                         break;
 
                 }
-                Tensor slice = new Tensor(shape);
+                Tensor slice = new(shape);
 
-                for (int l = 0; l < slice.shape.batch; l++)
+                for (int l = 0; l < slice.shape.Batch; l++)
                 {
-                    for (int k = 0; k < slice.shape.channels; k++)
+                    for (int k = 0; k < slice.shape.Channels; k++)
                     {
-                        for (int j = 0; j < slice.shape.height; j++)
+                        for (int j = 0; j < slice.shape.Height; j++)
                         {
-                            for (int i = 0; i < slice.shape.width; i++)
+                            for (int i = 0; i < slice.shape.Width; i++)
                             {
                                 switch (dim)
                                 {
@@ -1601,13 +1598,13 @@ namespace DeepUnity
             int[] shape = tensor.shape.ToArray();
 
             if (keepDim)
-                result = new Tensor(tensor.shape);
+                result = new(tensor.shape);
             else
             {
-                if(dim == TDim.width) result = new Tensor(shape[0], shape[1], shape[2], 1);
-                else if (dim == TDim.height) result = new Tensor(shape[0], shape[1], 1, shape[3]);
-                else if (dim == TDim.channel) result = new Tensor(shape[0], 1, shape[2], shape[3]);
-                else if (dim == TDim.batch)result = new Tensor(1, shape[1], shape[2], shape[3]);
+                if (dim == TDim.width) result = new(shape[0], shape[1], shape[2], 1);
+                else if (dim == TDim.height) result = new(shape[0], shape[1], 1, shape[3]);
+                else if (dim == TDim.channel) result = new(shape[0], 1, shape[2], shape[3]);
+                else if (dim == TDim.batch) result = new(1, shape[1], shape[2], shape[3]);
             }
 
             if (dim == TDim.width)
@@ -1625,9 +1622,9 @@ namespace DeepUnity
                                 min = MathF.Min(min, tensor[l, k, j, i]);
                             }
 
-                            for (int i = 0; i < result.shape.width; i++)
+                            for (int i = 0; i < result.shape.Width; i++)
                             {
-                               result[l, k, j, i] = min;
+                                result[l, k, j, i] = min;
                             }
                         }
                     }
@@ -1635,7 +1632,7 @@ namespace DeepUnity
             }
             else if (dim == TDim.height)
             {
-               
+
                 for (int l = 0; l < shape[0]; l++)
                 {
                     for (int k = 0; k < shape[1]; k++)
@@ -1648,18 +1645,18 @@ namespace DeepUnity
                                 min = MathF.Min(min, tensor[l, k, j, i]);
                             }
 
-                            for (int j = 0; j < result.shape.height; j++)
+                            for (int j = 0; j < result.shape.Height; j++)
                             {
                                 result[l, k, j, i] = min;
                             }
-                           
+
                         }
                     }
                 }
             }
             else if (dim == TDim.channel)
             {
-              
+
                 for (int l = 0; l < shape[0]; l++)
                 {
                     for (int j = 0; j < shape[2]; j++)
@@ -1673,12 +1670,12 @@ namespace DeepUnity
                                 min = MathF.Min(min, tensor[l, k, j, i]);
                             }
 
-                            for (int k = 0; k < result.shape.channels; k++)
+                            for (int k = 0; k < result.shape.Channels; k++)
                             {
                                 result[l, k, j, i] = min;
                             }
 
-                          
+
                         }
                     }
                 }
@@ -1696,16 +1693,16 @@ namespace DeepUnity
                             {
                                 min = MathF.Min(min, tensor[l, k, j, i]);
                             }
-                            for (int l = 0; l < result.shape.batch; l++)
+                            for (int l = 0; l < result.shape.Batch; l++)
                             {
                                 result[l, k, j, i] = min;
                             }
-                          
+
                         }
                     }
                 }
             }
-            
+
             return result;
         }
         public static Tensor Max(Tensor tensor, TDim dim, bool keepDim = false)
@@ -1714,13 +1711,13 @@ namespace DeepUnity
             int[] shape = tensor.shape.ToArray();
 
             if (keepDim)
-                result = new Tensor(tensor.shape);
+                result = new(tensor.shape);
             else
             {
-                if (dim == TDim.width) result = new Tensor(shape[0], shape[1], shape[2], 1);
-                else if (dim == TDim.height) result = new Tensor(shape[0], shape[1], 1, shape[3]);
-                else if (dim == TDim.channel) result = new Tensor(shape[0], 1, shape[2], shape[3]);
-                else if (dim == TDim.batch) result = new Tensor(1, shape[1], shape[2], shape[3]);
+                if (dim == TDim.width) result = new(shape[0], shape[1], shape[2], 1);
+                else if (dim == TDim.height) result = new(shape[0], shape[1], 1, shape[3]);
+                else if (dim == TDim.channel) result = new(shape[0], 1, shape[2], shape[3]);
+                else if (dim == TDim.batch) result = new(1, shape[1], shape[2], shape[3]);
             }
 
             if (dim == TDim.width)
@@ -1738,7 +1735,7 @@ namespace DeepUnity
                                 max = MathF.Max(max, tensor[l, k, j, i]);
                             }
 
-                            for (int i = 0; i < result.shape.width; i++)
+                            for (int i = 0; i < result.shape.Width; i++)
                             {
                                 result[l, k, j, i] = max;
                             }
@@ -1761,7 +1758,7 @@ namespace DeepUnity
                                 max = MathF.Max(max, tensor[l, k, j, i]);
                             }
 
-                            for (int j = 0; j < result.shape.height; j++)
+                            for (int j = 0; j < result.shape.Height; j++)
                             {
                                 result[l, k, j, i] = max;
                             }
@@ -1786,7 +1783,7 @@ namespace DeepUnity
                                 max = MathF.Max(max, tensor[l, k, j, i]);
                             }
 
-                            for (int k = 0; k < result.shape.channels; k++)
+                            for (int k = 0; k < result.shape.Channels; k++)
                             {
                                 result[l, k, j, i] = max;
                             }
@@ -1809,7 +1806,7 @@ namespace DeepUnity
                             {
                                 max = MathF.Max(max, tensor[l, k, j, i]);
                             }
-                            for (int l = 0; l < result.shape.batch; l++)
+                            for (int l = 0; l < result.shape.Batch; l++)
                             {
                                 result[l, k, j, i] = max;
                             }
@@ -1832,7 +1829,7 @@ namespace DeepUnity
         {
             if (axis0 < 0 || axis0 >= tensor.Rank || axis1 < 0 || axis1 >= tensor.Rank)
                 throw new ArgumentException("The specified axes are out of range for this tensor's rank.");
-            
+
 
             if (axis0 == axis1)
                 return Identity(tensor);
@@ -1840,23 +1837,23 @@ namespace DeepUnity
 
             axis0 = GetAxisIndex(tensor.Rank, axis0);
             axis1 = GetAxisIndex(tensor.Rank, axis1);
-            int[] permutation = new int[] { tensor.shape.batch, tensor.shape.channels, tensor.shape.height, tensor.shape.width };
-            
+            int[] permutation = new int[] { tensor.shape.Batch, tensor.shape.Channels, tensor.shape.Height, tensor.shape.Width };
+
 
             var temp = permutation[axis0];
             permutation[axis0] = permutation[axis1];
             permutation[axis1] = temp;
 
-            Tensor result = new Tensor(permutation);
+            Tensor result = new(permutation);
 
 
-            for (int l = 0; l < tensor.shape.batch; l++)
+            for (int l = 0; l < tensor.shape.Batch; l++)
             {
-                for (int k = 0; k < tensor.shape.channels; k++)
+                for (int k = 0; k < tensor.shape.Channels; k++)
                 {
-                    for (int j = 0; j < tensor.shape.height; j++)
+                    for (int j = 0; j < tensor.shape.Height; j++)
                     {
-                        for (int i = 0; i < tensor.shape.width; i++)
+                        for (int i = 0; i < tensor.shape.Width; i++)
                         {
                             int[] transposedIndices = new int[] { l, k, j, i };
 
@@ -1881,24 +1878,24 @@ namespace DeepUnity
             int rank = tensor.Rank;
             int axisIndex = GetAxisIndex(rank, axis);
             int[] stackShape = tensor.shape.ToArray();
-            List<Tensor> slices = new List<Tensor>();
+            List<Tensor> slices = new();
 
             int dimLength = stackShape[axisIndex];
             int dimPos = 0;
-            while(dimPos < dimLength)
+            while (dimPos < dimLength)
             {
                 int dimCopySize = Math.Min(split_size, dimLength - dimPos);
                 int[] sliceShape = stackShape.ToArray();
                 sliceShape[axisIndex] = dimCopySize;
-                Tensor slice = new Tensor(sliceShape);
+                Tensor slice = new(sliceShape);
 
-                for (int l = 0; l < slice.shape.batch; l++)
+                for (int l = 0; l < slice.shape.Batch; l++)
                 {
-                    for (int k = 0; k < slice.shape.channels; k++)
+                    for (int k = 0; k < slice.shape.Channels; k++)
                     {
-                        for (int j = 0; j < slice.shape.height; j++)
+                        for (int j = 0; j < slice.shape.Height; j++)
                         {
-                            for (int i = 0; i < slice.shape.width; i++)
+                            for (int i = 0; i < slice.shape.Width; i++)
                             {
                                 switch (axisIndex)
                                 {
@@ -1936,38 +1933,38 @@ namespace DeepUnity
             int axisIndex = GetAxisIndex(rank, axis);
             int no_slices = tensors.Length;
 
-            
+
 
             Tensor slice = tensors[0];
 
             int[] result_shape = slice.shape.ToArray();
             result_shape[axisIndex] *= no_slices;
 
-            Tensor result = new Tensor(result_shape);
+            Tensor result = new(result_shape);
 
             for (int s = 0; s < no_slices; s++)
             {
-                for (int l = 0; l < slice.shape.batch; l++)
+                for (int l = 0; l < slice.shape.Batch; l++)
                 {
-                    for (int k = 0; k < slice.shape.channels; k++)
+                    for (int k = 0; k < slice.shape.Channels; k++)
                     {
-                        for (int j = 0; j < slice.shape.height; j++)
+                        for (int j = 0; j < slice.shape.Height; j++)
                         {
-                            for (int i = 0; i < slice.shape.width; i++)
+                            for (int i = 0; i < slice.shape.Width; i++)
                             {
                                 switch (axisIndex)
                                 {
                                     case 3:
-                                        result[l, k, j, s * slice.shape.width + i] = tensors[s][l, k, j, i];
+                                        result[l, k, j, s * slice.shape.Width + i] = tensors[s][l, k, j, i];
                                         break;
                                     case 2:
-                                        result[l, k, s * slice.shape.height + j, i] = tensors[s][l, k, j, i];
+                                        result[l, k, s * slice.shape.Height + j, i] = tensors[s][l, k, j, i];
                                         break;
                                     case 1:
-                                        result[l, s * slice.shape.channels + k, j, i] = tensors[s][l, k, j, i];
+                                        result[l, s * slice.shape.Channels + k, j, i] = tensors[s][l, k, j, i];
                                         break;
                                     case 0:
-                                        result[s * slice.shape.batch + l, k, j, i] = tensors[s][l, k, j, i];
+                                        result[s * slice.shape.Batch + l, k, j, i] = tensors[s][l, k, j, i];
                                         break;
                                 }
 
@@ -1987,44 +1984,44 @@ namespace DeepUnity
             int[] shape = tensor.shape.ToArray();
             shape[axisIndex] *= times;
 
-            Tensor result = new Tensor(shape);
+            Tensor result = new(shape);
 
             for (int t = 0; t < times; t++)
             {
-                for (int l = 0; l < tensor.shape.batch; l++)
+                for (int l = 0; l < tensor.shape.Batch; l++)
                 {
-                    for (int k = 0; k < tensor.shape.channels; k++)
+                    for (int k = 0; k < tensor.shape.Channels; k++)
                     {
-                        for (int j = 0; j < tensor.shape.height; j++)
+                        for (int j = 0; j < tensor.shape.Height; j++)
                         {
-                            for (int i = 0; i < tensor.shape.width; i++)
+                            for (int i = 0; i < tensor.shape.Width; i++)
                             {
-                                switch(axisIndex)
+                                switch (axisIndex)
                                 {
                                     case 3:
-                                        result[l, k, j, t * tensor.shape.width + i] = tensor[l, k, j, i];
+                                        result[l, k, j, t * tensor.shape.Width + i] = tensor[l, k, j, i];
                                         break;
                                     case 2:
-                                        result[l, k, t * tensor.shape.height + j, i] = tensor[l, k, j, i];
+                                        result[l, k, t * tensor.shape.Height + j, i] = tensor[l, k, j, i];
                                         break;
                                     case 1:
-                                        result[l, t * tensor.shape.channels + k, j, i] = tensor[l, k, j, i];
+                                        result[l, t * tensor.shape.Channels + k, j, i] = tensor[l, k, j, i];
                                         break;
                                     case 0:
-                                        result[t * tensor.shape.batch + l, k, j, i] = tensor[l, k, j, i];
+                                        result[t * tensor.shape.Batch + l, k, j, i] = tensor[l, k, j, i];
                                         break;
                                 }
-                               
+
                             }
                         }
                     }
                 }
-                
+
             }
 
 
             return result;
-        }   
+        }
         public static Tensor Shuffle(Tensor tensor, int axis)
         {
             Tensor[] slices = Split(tensor, axis, 1);
@@ -2037,9 +2034,9 @@ namespace DeepUnity
             int[] shape = tensor.shape.ToArray();
             int axisIndex = GetAxisIndex(tensor.Rank, axis);
 
-            if(axisIndex == 3)
+            if (axisIndex == 3)
             {
-                result = new Tensor(shape[0], shape[1], shape[2], 1);
+                result = new(shape[0], shape[1], shape[2], 1);
                 for (int l = 0; l < shape[0]; l++)
                 {
                     for (int k = 0; k < shape[1]; k++)
@@ -2056,9 +2053,9 @@ namespace DeepUnity
                     }
                 }
             }
-            else if(axisIndex == 2)
+            else if (axisIndex == 2)
             {
-                result = new Tensor(shape[0], shape[1], 1, shape[3]);
+                result = new(shape[0], shape[1], 1, shape[3]);
                 for (int l = 0; l < shape[0]; l++)
                 {
                     for (int k = 0; k < shape[1]; k++)
@@ -2075,9 +2072,9 @@ namespace DeepUnity
                     }
                 }
             }
-            else if(axisIndex == 1)
+            else if (axisIndex == 1)
             {
-                result = new Tensor(shape[0], 1, shape[2], shape[3]);
+                result = new(shape[0], 1, shape[2], shape[3]);
                 for (int l = 0; l < shape[0]; l++)
                 {
                     for (int j = 0; j < shape[2]; j++)
@@ -2096,9 +2093,9 @@ namespace DeepUnity
                     }
                 }
             }
-            else if(axisIndex == 0)
+            else if (axisIndex == 0)
             {
-                result = new Tensor(1, shape[1], shape[2], shape[3]);
+                result = new(1, shape[1], shape[2], shape[3]);
                 for (int k = 0; k < shape[1]; k++)
                 {
                     for (int j = 0; j < shape[2]; j++)
@@ -2126,7 +2123,7 @@ namespace DeepUnity
 
             if (axisIndex == 3)
             {
-                result = new Tensor(shape[0], shape[1], shape[2], 1);
+                result = new(shape[0], shape[1], shape[2], 1);
                 for (int l = 0; l < shape[0]; l++)
                 {
                     for (int k = 0; k < shape[1]; k++)
@@ -2145,7 +2142,7 @@ namespace DeepUnity
             }
             else if (axisIndex == 2)
             {
-                result = new Tensor(shape[0], shape[1], 1, shape[3]);
+                result = new(shape[0], shape[1], 1, shape[3]);
                 for (int l = 0; l < shape[0]; l++)
                 {
                     for (int k = 0; k < shape[1]; k++)
@@ -2164,7 +2161,7 @@ namespace DeepUnity
             }
             else if (axisIndex == 1)
             {
-                result = new Tensor(shape[0], 1, shape[2], shape[3]);
+                result = new(shape[0], 1, shape[2], shape[3]);
                 for (int l = 0; l < shape[0]; l++)
                 {
                     for (int j = 0; j < shape[2]; j++)
@@ -2185,7 +2182,7 @@ namespace DeepUnity
             }
             else if (axisIndex == 0)
             {
-                result = new Tensor(1, shape[1], shape[2], shape[3]);
+                result = new(1, shape[1], shape[2], shape[3]);
                 for (int k = 0; k < shape[1]; k++)
                 {
                     for (int j = 0; j < shape[2]; j++)
@@ -2213,7 +2210,7 @@ namespace DeepUnity
 
             if (axisIndex == 3)
             {
-                result = new Tensor(shape[0], shape[1], shape[2], 1);
+                result = new(shape[0], shape[1], shape[2], 1);
                 for (int l = 0; l < shape[0]; l++)
                 {
                     for (int k = 0; k < shape[1]; k++)
@@ -2235,7 +2232,7 @@ namespace DeepUnity
             }
             else if (axisIndex == 2)
             {
-                result = new Tensor(shape[0], shape[1], 1, shape[3]);
+                result = new(shape[0], shape[1], 1, shape[3]);
                 for (int l = 0; l < shape[0]; l++)
                 {
                     for (int k = 0; k < shape[1]; k++)
@@ -2257,7 +2254,7 @@ namespace DeepUnity
             }
             else if (axisIndex == 1)
             {
-                result = new Tensor(shape[0], 1, shape[2], shape[3]);
+                result = new(shape[0], 1, shape[2], shape[3]);
                 for (int l = 0; l < shape[0]; l++)
                 {
                     for (int j = 0; j < shape[2]; j++)
@@ -2280,7 +2277,7 @@ namespace DeepUnity
             }
             else if (axisIndex == 0)
             {
-                result = new Tensor(1, shape[1], shape[2], shape[3]);
+                result = new(1, shape[1], shape[2], shape[3]);
                 for (int k = 0; k < shape[1]; k++)
                 {
                     for (int j = 0; j < shape[2]; j++)
@@ -2314,13 +2311,13 @@ namespace DeepUnity
             int axisIndex = GetAxisIndex(tensor.Rank, axis);
 
             if (keepDim)
-                result = new Tensor(tensor.shape);
+                result = new(tensor.shape);
             else
             {
-                if (axisIndex == 3) result = new Tensor(shape[0], shape[1], shape[2], 1);
-                else if (axisIndex == 2) result = new Tensor(shape[0], shape[1], 1, shape[3]);
-                else if (axisIndex == 1) result = new Tensor(shape[0], 1, shape[2], shape[3]);
-                else if (axisIndex == 0) result = new Tensor(1, shape[1], shape[2], shape[3]);
+                if (axisIndex == 3) result = new(shape[0], shape[1], shape[2], 1);
+                else if (axisIndex == 2) result = new(shape[0], shape[1], 1, shape[3]);
+                else if (axisIndex == 1) result = new(shape[0], 1, shape[2], shape[3]);
+                else if (axisIndex == 0) result = new(1, shape[1], shape[2], shape[3]);
             }
 
             if (axisIndex == 3)
@@ -2338,7 +2335,7 @@ namespace DeepUnity
                                 min = MathF.Min(min, tensor[l, k, j, i]);
                             }
 
-                            for (int i = 0; i < result.shape.width; i++)
+                            for (int i = 0; i < result.shape.Width; i++)
                             {
                                 result[l, k, j, i] = min;
                             }
@@ -2361,7 +2358,7 @@ namespace DeepUnity
                                 min = MathF.Min(min, tensor[l, k, j, i]);
                             }
 
-                            for (int j = 0; j < result.shape.height; j++)
+                            for (int j = 0; j < result.shape.Height; j++)
                             {
                                 result[l, k, j, i] = min;
                             }
@@ -2386,7 +2383,7 @@ namespace DeepUnity
                                 min = MathF.Min(min, tensor[l, k, j, i]);
                             }
 
-                            for (int k = 0; k < result.shape.channels; k++)
+                            for (int k = 0; k < result.shape.Channels; k++)
                             {
                                 result[l, k, j, i] = min;
                             }
@@ -2409,7 +2406,7 @@ namespace DeepUnity
                             {
                                 min = MathF.Min(min, tensor[l, k, j, i]);
                             }
-                            for (int l = 0; l < result.shape.batch; l++)
+                            for (int l = 0; l < result.shape.Batch; l++)
                             {
                                 result[l, k, j, i] = min;
                             }
@@ -2429,13 +2426,13 @@ namespace DeepUnity
             int axisIndex = GetAxisIndex(tensor.Rank, axis);
 
             if (keepDim)
-                result = new Tensor(tensor.shape);
+                result = new(tensor.shape);
             else
             {
-                if (axisIndex == 3) result = new Tensor(shape[0], shape[1], shape[2], 1);
-                else if (axisIndex == 2) result = new Tensor(shape[0], shape[1], 1, shape[3]);
-                else if (axisIndex == 1) result = new Tensor(shape[0], 1, shape[2], shape[3]);
-                else if (axisIndex == 0) result = new Tensor(1, shape[1], shape[2], shape[3]);
+                if (axisIndex == 3) result = new(shape[0], shape[1], shape[2], 1);
+                else if (axisIndex == 2) result = new(shape[0], shape[1], 1, shape[3]);
+                else if (axisIndex == 1) result = new(shape[0], 1, shape[2], shape[3]);
+                else if (axisIndex == 0) result = new(1, shape[1], shape[2], shape[3]);
             }
 
             if (axisIndex == 3)
@@ -2453,7 +2450,7 @@ namespace DeepUnity
                                 max = MathF.Max(max, tensor[l, k, j, i]);
                             }
 
-                            for (int i = 0; i < result.shape.width; i++)
+                            for (int i = 0; i < result.shape.Width; i++)
                             {
                                 result[l, k, j, i] = max;
                             }
@@ -2476,7 +2473,7 @@ namespace DeepUnity
                                 max = MathF.Max(max, tensor[l, k, j, i]);
                             }
 
-                            for (int j = 0; j < result.shape.height; j++)
+                            for (int j = 0; j < result.shape.Height; j++)
                             {
                                 result[l, k, j, i] = max;
                             }
@@ -2501,7 +2498,7 @@ namespace DeepUnity
                                 max = MathF.Max(max, tensor[l, k, j, i]);
                             }
 
-                            for (int k = 0; k < result.shape.channels; k++)
+                            for (int k = 0; k < result.shape.Channels; k++)
                             {
                                 result[l, k, j, i] = max;
                             }
@@ -2524,7 +2521,7 @@ namespace DeepUnity
                             {
                                 max = MathF.Max(max, tensor[l, k, j, i]);
                             }
-                            for (int l = 0; l < result.shape.batch; l++)
+                            for (int l = 0; l < result.shape.Batch; l++)
                             {
                                 result[l, k, j, i] = max;
                             }
@@ -2544,7 +2541,7 @@ namespace DeepUnity
 
         public static Tensor Pow(Tensor tensor, float power)
         {
-            Tensor result = new Tensor(tensor.shape);
+            Tensor result = new(tensor.shape);
 
             for (int i = 0; i < result.data.Length; i++)
             {
@@ -2555,7 +2552,7 @@ namespace DeepUnity
         }
         public static Tensor Sqrt(Tensor tensor)
         {
-            Tensor result = new Tensor(tensor.shape);
+            Tensor result = new(tensor.shape);
 
             for (int i = 0; i < result.data.Length; i++)
             {
@@ -2566,7 +2563,7 @@ namespace DeepUnity
         }
         public static Tensor Exp(Tensor tensor)
         {
-            Tensor result = new Tensor(tensor.shape);
+            Tensor result = new(tensor.shape);
 
             for (int i = 0; i < result.data.Length; i++)
             {
@@ -2575,9 +2572,20 @@ namespace DeepUnity
 
             return result;
         }
+        public static Tensor Log(Tensor tensor, float @base = MathF.E)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Log(tensor.data[i], @base);
+            }
+
+            return result;
+        }
         public static Tensor Abs(Tensor tensor)
         {
-            Tensor result = new Tensor(tensor.shape);
+            Tensor result = new(tensor.shape);
 
             for (int i = 0; i < result.data.Length; i++)
             {
@@ -2588,7 +2596,7 @@ namespace DeepUnity
         }
         public static Tensor Sin(Tensor tensor)
         {
-            Tensor result = new Tensor(tensor.shape);
+            Tensor result = new(tensor.shape);
 
             for (int i = 0; i < result.data.Length; i++)
             {
@@ -2599,7 +2607,7 @@ namespace DeepUnity
         }
         public static Tensor Cos(Tensor tensor)
         {
-            Tensor result = new Tensor(tensor.shape);
+            Tensor result = new(tensor.shape);
 
             for (int i = 0; i < result.data.Length; i++)
             {
@@ -2608,13 +2616,20 @@ namespace DeepUnity
 
             return result;
         }
-        public static Tensor Min(Tensor left, Tensor right)
+        /// <summary>
+        /// Computes the element-wise minimum
+        /// </summary>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        public static Tensor Minimum(Tensor left, Tensor right)
         {
             if (!left.shape.Equals(right.shape))
                 throw new ArgumentException($"Left{left.Shape} and right{right.Shape} tensors must have different shape for Min operation.");
 
 
-            Tensor result = new Tensor(left.shape);
+            Tensor result = new(left.shape);
 
             for (int i = 0; i < result.data.Length; i++)
             {
@@ -2623,14 +2638,21 @@ namespace DeepUnity
 
             return result;
         }
-        public static Tensor Max(Tensor left, Tensor right)
+        /// <summary>
+        /// Computes the element-wise maximum.
+        /// </summary>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        public static Tensor Maximum(Tensor left, Tensor right)
         {
             if (!left.shape.Equals(right.shape))
                 throw new ArgumentException($"Left{left.Shape} and right{right.Shape} tensors must have different shape for Max operation.");
 
 
 
-            Tensor result = new Tensor(left.shape);
+            Tensor result = new(left.shape);
 
             for (int i = 0; i < result.data.Length; i++)
             {
@@ -2641,7 +2663,7 @@ namespace DeepUnity
         }
         public static Tensor Clip(Tensor tensor, float min, float max)
         {
-            Tensor result = new Tensor(tensor.shape);
+            Tensor result = new(tensor.shape);
 
             for (int i = 0; i < result.data.Length; i++)
             {
@@ -2652,7 +2674,7 @@ namespace DeepUnity
         }
         public static Tensor Norm(Tensor tensor, NormType normType = NormType.ManhattanL1)
         {
-            switch(normType)
+            switch (normType)
             {
                 case NormType.ManhattanL1:
                     float abssum = tensor.data.Sum(x => MathF.Abs(x));
@@ -2667,7 +2689,26 @@ namespace DeepUnity
                     throw new Exception("Unhandled norm type.");
             }
         }
+        public static Tensor Gaussian(Tensor mu, Tensor sigma, out Tensor entropies)
+        {
+            Tensor x = new (mu.shape);
+            entropies = new (mu.shape);
 
+            for (int i = 0; i < x.data.Length; i++)
+            {
+                x.data[i] = Utils.Random.Gaussian(mu.data[i], sigma.data[i], out entropies.data[i]);
+            }
+
+            return x;
+        }
+        public static Tensor LogDensity(Tensor x, Tensor mu, Tensor sigma)
+        {
+            var frac = (x - mu) / sigma;
+            var elem1 = Log(sigma);
+            var elem2 = 0.5f * MathF.Log(2.0f * MathF.PI);
+            var elem3 = 0.5f * frac * frac;
+            return -elem1 - elem2 - elem3;
+        }
         #endregion
 
         public static Tensor Reshape(Tensor tensor, params int[] newShape)
@@ -2681,13 +2722,13 @@ namespace DeepUnity
                 {
                     data[i] = function(data[i]);
                 }
-            else 
-                Parallel.For(0, data.Length, DeepUnityMeta.threadLimit8, 
+            else
+                Parallel.For(0, data.Length, DeepUnityMeta.threadLimit8,
                     i => data[i] = function(data[i]));
         }
         public Tensor Select(Func<float, float> selector)
         {
-            Tensor result = new Tensor(shape);
+            Tensor result = new(shape);
 
             for (int i = 0; i < data.Length; i++)
             {
@@ -2698,7 +2739,7 @@ namespace DeepUnity
         }
         public Tensor Zip(Tensor second, Func<float, float, float> resultSelector)
         {
-            Tensor result = new Tensor(shape);
+            Tensor result = new(shape);
 
             for (int i = 0; i < data.Length; i++)
             {
@@ -2707,10 +2748,13 @@ namespace DeepUnity
 
             return result;
         }
-        public Tensor Count(Func<float, bool> selector = null)
+        /// <summary>
+        /// Counts the total number of elements in the Tensor [that matches the selector function].
+        /// </summary>
+        public int Count(Func<float, bool> selector = null)
         {
             if (selector == null)
-                return Constant(data.Length);
+                return data.Length;
 
             int count = 0;
 
@@ -2720,18 +2764,34 @@ namespace DeepUnity
             }
 
 
-            return Constant(count);
+            return count;
         }
+        /// <summary>
+        /// Returns a copy of the Tensor data.
+        /// </summary>
         public float[] ToArray() => data.ToArray();
+        /// <summary>
+        /// Creates a Tensor using a copy of the values parsed as argument.
+        /// </summary>
         public static Tensor FromArray(float[] data, params int[] shape)
         {
-            var t = Tensor.Zeros(shape);
+            int prod = 1;
+            foreach (var item in shape)
+            {
+                prod *= item;
+            }
+
+            if (prod != data.Length)
+                throw new System.FormatException("Tensor shape does not matches the size of the data.");
+
+
+            var t = Zeros(shape);
             t.data = data.ToArray();
             return t;
         }
 
-       
-       
+
+
         public bool Equals(Tensor other)
         {
             if (!shape.Equals(other.shape))
@@ -2753,15 +2813,14 @@ namespace DeepUnity
         public override string ToString()
         {
             int rank = Rank;
-            string format = "0.000000";
 
-            StringBuilder sb = new StringBuilder();
+            StringBuilder sb = new ();
 
             sb.Append("Tensor");
             sb.Append(Shape);
 
             sb.Append("\n[");
-            for (int l = 0; l < shape.batch; l++)
+            for (int l = 0; l < shape.Batch; l++)
             {
                 if (l > 0)
                 {
@@ -2774,7 +2833,7 @@ namespace DeepUnity
                 if (rank > 3)
                     sb.Append("[");
 
-                for (int k = 0; k < shape.channels; k++)
+                for (int k = 0; k < shape.Channels; k++)
                 {
                     if (k > 0)
                     {
@@ -2787,7 +2846,7 @@ namespace DeepUnity
                     if (rank > 2)
                         sb.Append("[");
 
-                    for (int j = 0; j < shape.height; j++)
+                    for (int j = 0; j < shape.Height; j++)
                     {
                         if (j > 0 && rank > 1)
                         {
@@ -2800,12 +2859,12 @@ namespace DeepUnity
                         if (rank > 1)
                             sb.Append("[");
 
-                        for (int i = 0; i < shape.width; i++)
+                        for (int i = 0; i < shape.Width; i++)
                         {
                             if (i > 0)
                                 sb.Append(", ");
 
-                            sb.Append(this[l, k, j, i].ToString(format));
+                            sb.Append(this[l, k, j, i].ToString(PrintFormat));
                         }
 
                         if (rank > 1)
@@ -2832,7 +2891,7 @@ namespace DeepUnity
         {
             if (axis > rank)
                 throw new ArgumentException($"Cannot use axis {axis} for a tensor of rank {rank}.");
-           
+
             if (rank == 0)
                 return 3 + axis;
 
@@ -2843,7 +2902,7 @@ namespace DeepUnity
 
             return index;
         }
-       
+
     }
     [Serializable]
     public class TShape
@@ -2853,10 +2912,10 @@ namespace DeepUnity
         [SerializeField] private int _height;
         [SerializeField] private int _width;
 
-        public int batch => _batch;
-        public int channels => _channels;
-        public int height => _height;
-        public int width => _width;
+        public int Batch => _batch;
+        public int Channels => _channels;
+        public int Height => _height;
+        public int Width => _width;
 
         public int Rank
         {
@@ -2895,10 +2954,10 @@ namespace DeepUnity
         internal int[] ToArray() => new int[] { _batch, _channels, _height, _width };
         public bool Equals(TShape other)
         {
-            if (batch != other.batch) return false;
-            if (channels != other.channels) return false;
-            if (height != other.height) return false;
-            if (width != other.width) return false;
+            if (Batch != other.Batch) return false;
+            if (Channels != other.Channels) return false;
+            if (Height != other.Height) return false;
+            if (Width != other.Width) return false;
             return true;
         }
         public int Get(TDim dim)
@@ -2923,7 +2982,7 @@ namespace DeepUnity
         public override string ToString()
         {
 
-            StringBuilder sb = new StringBuilder();
+            StringBuilder sb = new();
             sb.Append('[');
             int rank = Rank;
             if (rank == 0 || rank == 1)
@@ -2959,7 +3018,6 @@ namespace DeepUnity
 
             return sb.ToString();
         }
-    }  
+    }
 
 }
-

@@ -4,11 +4,11 @@ namespace kbRadu
 {
     public class StepLR
     {
-        private Optimizer optimizer;
-        private float initialLR;
-        private int stepSize;
-        private float decay;
-        private int lastEpoch;
+        private readonly Optimizer optimizer;
+        private readonly float initialLR;
+        private readonly int stepSize;
+        private readonly float decay;
+        private readonly int lastEpoch;
         private int currentEpoch;
 
         /// <summary>

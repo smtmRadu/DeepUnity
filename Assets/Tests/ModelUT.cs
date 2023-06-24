@@ -43,7 +43,7 @@ namespace kbRadu
                  new ReLU(),
                  new Dense(hiddenSize, 1)
                  );
-                optimizer = new Adam(net.Parameters());
+                optimizer = new AdaMax(net.Parameters());
             }
 
             trainPoints = new Vector3[trainingSamples];

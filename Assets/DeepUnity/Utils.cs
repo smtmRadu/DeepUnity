@@ -123,6 +123,8 @@ namespace DeepUnity
 
         public static class Numerics
         {
+
+            
             public static float LogDensity(float x, float mu, float sigma)
             {
                 //* https://stats.stackexchange.com/questions/404191/what-is-the-log-of-the-pdf-for-a-normal-distribution *//

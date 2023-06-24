@@ -8,7 +8,6 @@ namespace DeepUnity
     public class Adadelta : Optimizer
     {
         [SerializeField] private float rho;
-        [SerializeField] private float weightDecay;
 
 
         // Square avg buffer
@@ -22,14 +21,9 @@ namespace DeepUnity
 
 
 
-        public Adadelta(Learnable[] parameters, float learningRate = 1.0f, float rho = 0.9f, float weightDecay = 0f)
+        public Adadelta(Learnable[] parameters, float lr = 1f, float rho = 0.9f, float weightDecay = 0f) : base(parameters, lr, weightDecay)
         {
-            this.learningRate = learningRate;
-            this.weightDecay = weightDecay;
             this.rho = rho;
-
-
-            this.parameters = parameters;
 
             v_W = new Tensor[parameters.Length];
             v_B = new Tensor[parameters.Length];
@@ -53,6 +47,8 @@ namespace DeepUnity
 
         public override void Step()
         {
+            t++;
+
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
                 if (parameters[i] is Learnable P)

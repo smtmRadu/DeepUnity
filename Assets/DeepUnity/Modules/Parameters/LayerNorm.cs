@@ -38,7 +38,7 @@ namespace DeepUnity
             input_rank = normalized_shape.Length;
             step = 0;
 
-            if(normalized_shape.Length == 1)
+            if(input_rank == 1) // BASE DNN
             {
                 gamma = Tensor.Ones(1);
                 beta = Tensor.Zeros(1);
@@ -46,7 +46,7 @@ namespace DeepUnity
                 gradGamma = Tensor.Zeros(1);
                 gradBeta = Tensor.Zeros(1);
             }
-            else if(normalized_shape.Length == 2)
+            else if(input_rank == 2) // RNN
             {
                 gamma = Tensor.Ones(normalized_shape[0], 1);
                 beta = Tensor.Zeros(normalized_shape[0], 1);
@@ -55,7 +55,7 @@ namespace DeepUnity
                 gradBeta = Tensor.Zeros(normalized_shape[0], 1);
 
             }
-            else if(normalized_shape.Length == 3)
+            else if(input_rank == 3) // CNN
             {
                 gamma = Tensor.Ones(normalized_shape[0], 1, 1);
                 beta = Tensor.Zeros(normalized_shape[0], 1, 1);
@@ -63,7 +63,7 @@ namespace DeepUnity
                 gradGamma = Tensor.Zeros(normalized_shape[0], 1, 1);
                 gradBeta = Tensor.Zeros(normalized_shape[0], 1, 1);
             }
-            else if(normalized_shape.Length == 4)
+            else if(input_rank == 4)
             {
                 throw new Exception("The batch dimension should not be included in normalized_shape.");
             }
@@ -81,7 +81,6 @@ namespace DeepUnity
 
             Tensor mu;
             Tensor var;
-            Tensor y = null;
 
             int batch_size = -1;
             if (input.Rank == input_rank + 1)
@@ -104,7 +103,7 @@ namespace DeepUnity
             std = Tensor.Sqrt(var + Utils.EPSILON);
             xHat = xCentered / std;
 
-            y = gamma * xHat + beta;
+            Tensor y = gamma * xHat + beta;
 
 
             int total = step + batch_size;
@@ -120,32 +119,62 @@ namespace DeepUnity
         }
         public Tensor Backward(Tensor dLdY)
         {
-            Tensor dLdX = null;
-           // int m = dLdY.Shape.height;
-           // var dLdxHat = dLdY * gamma;
-           // var dLdVar = Tensor.Mean(dLdxHat + xCentered * (-1f / 2f) *
-           //              Tensor.Pow(std + epsilon, -3f / 2f),
-           //              TDim.width, true);
-           // 
-           // var dLdMu = Tensor.Mean(dLdxHat * -1f / (std + epsilon) +
-           //             dLdVar * -2f * xCentered / m,
-           //             TDim.width, true);
-           // 
-           // var dLdX = dLdxHat * 1f / Tensor.Sqrt(std + epsilon) +
-           //            dLdVar * 2f * xCentered / m + dLdMu * (1f / m);
-           // 
-           // var dLdGamma = Tensor.Mean(dLdY + xCentered, TDim.width);
-           // var dLdBeta = Tensor.Mean(dLdY, TDim.width);
-           // 
-           // grad_Gamma += Tensor.Mean(dLdGamma, TDim.height)[0];
-           // grad_Beta += Tensor.Mean(dLdBeta, TDim.height)[0];
-           // 
-           return dLdX;
+            int m = -1;
+            if (dLdY.Rank == input_rank + 1)
+                m = dLdY.Size(0);
+            else if (dLdY.Rank == input_rank)
+                m = 1;
+
+
+            var dLdxHat = dLdY * gamma;
+            var dLdVar = Tensor.Mean(dLdxHat + xCentered * (-1f / 2f) *
+                          Tensor.Pow(std + Utils.EPSILON, -3f / 2f),
+                          TDim.width, true);
+
+            if(input_rank == 3) // CNN CASE (apply mean calculation for both width and height
+                dLdVar = Tensor.Mean(dLdVar, TDim.height, true);
+            
+            
+             var dLdMu = Tensor.Mean(dLdxHat * -1f / (std + Utils.EPSILON) +
+                             dLdVar * -2f * xCentered / m,
+                             TDim.width, true);
+            if(input_rank == 3) // CNN CASE
+                dLdMu = Tensor.Mean(dLdMu, TDim.height, true);
+
+
+
+            var dLdX = dLdxHat * 1f / Tensor.Sqrt(std + Utils.EPSILON) +
+                        dLdVar * 2f * xCentered / m + dLdMu * (1f / m);
+            
+            var dLdGamma = Tensor.Mean(dLdY + xCentered, TDim.width);
+            var dLdBeta = Tensor.Mean(dLdY, TDim.width);
+            
+            if(input_rank == 3)
+            {
+                dLdGamma = Tensor.Mean(dLdGamma, TDim.height);
+                dLdBeta = Tensor.Mean(dLdBeta, TDim.height);
+            }
+           
+            if(input_rank != 3)
+            {
+                gradGamma += Tensor.Mean(dLdGamma, TDim.height);
+                gradBeta += Tensor.Mean(dLdBeta, TDim.height);
+            }
+            else
+            {
+                gradGamma += Tensor.Mean(dLdGamma, TDim.channel);
+                gradBeta += Tensor.Mean(dLdBeta, TDim.channel);
+            }
+           
+            
+            return dLdX;
         }
     }
 }
 
-/*// For now the sequence length is 1. This module will be developed further for RNNs.
+// Old version
+
+/*// 
         // Learable parameters will be converted to Tensors to reach each sequence element.
         /// https://proceedings.neurips.cc/paper_files/paper/2019/file/2f4fe03d77724a7217006e5d16728874-Paper.pdf
        

@@ -2,15 +2,15 @@ namespace DeepUnity
 {
     public class MemoryBuffer
     {
-        Tensor[] states;
-        Tensor[] actions;
-        Tensor[] continuous_log_probs;
-        Tensor[] discrete_log_probs;
-        Tensor[] values;
-        Tensor[] rewards;
-        Tensor[] dones;
+        public Tensor[] states;
+        public Tensor[] actions;
+        public Tensor[] continuous_log_probs;
+        public Tensor[] discrete_log_probs;
+        public Tensor[] values;
+        public Tensor[] rewards;
+        public Tensor[] dones;
 
-        int index;
+        public int index;
 
         public MemoryBuffer(int capacity)
         {
@@ -37,6 +37,18 @@ namespace DeepUnity
             dones[index] = done;
             
             index++;
+        }
+        public void StoreContinuous(float[] state, float[] action, float log_prob, float value, float reward, bool done)
+        {
+            if (index == states.Length)
+                throw new System.Exception("MemoryBuffer is full.");
+
+            states[index] = Tensor.Constant(state);
+            actions[index] = Tensor.Constant(action);
+            continuous_log_probs[index] = Tensor.Constant(log_prob);
+            values[index] = Tensor.Constant(value);
+            rewards[index] = Tensor.Constant(reward);
+            dones[index] = Tensor.Constant(done == true? 1 : 0);
         }
         public void Clear()
         {

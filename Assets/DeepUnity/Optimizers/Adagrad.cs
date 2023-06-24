@@ -7,22 +7,14 @@ namespace DeepUnity
     [Serializable]
     public class Adagrad : Optimizer
     {
-        [SerializeField] private int t;
         [SerializeField] private float learningRateDecay;
-        [SerializeField] private float weightDecay;
 
         [NonSerialized] public Tensor[] statesum_W;
         [NonSerialized] public Tensor[] statesum_B;
 
-        public Adagrad(Learnable[] parameters, float learningRate = 0.01f, float learningRateDecay = 0f, float weightDecay = 0f)
+        public Adagrad(Learnable[] parameters, float lr = 0.01f, float lrDecay = 0f, float weightDecay = 0f) : base(parameters, lr, weightDecay)
         {
-            this.t = 0;
-            this.learningRate = learningRate;
-            this.learningRateDecay = learningRateDecay;
-            this.weightDecay = weightDecay;
-
-
-            this.parameters = parameters;
+            this.learningRateDecay = lrDecay;
 
             statesum_W = new Tensor[parameters.Length];
             statesum_B = new Tensor[parameters.Length];

@@ -35,6 +35,8 @@ namespace DeepUnity
         public Sigmoid sigmoid;
         public SoftPlus softplus;
         public Mish mish;
+        public ELU elu;
+        public Threshold threshold;
         
         
         
@@ -94,6 +96,14 @@ namespace DeepUnity
             else if(module is Conv2D conv2dModule)
             {
                 conv2d = conv2dModule;
+            }
+            else if(module is ELU eluModule)
+            {
+                elu = eluModule;
+            }
+            else if(module is Threshold thresholdModule)
+            {
+                threshold = thresholdModule;
             }
             else
                 throw new Exception("Unhandled module type while wrapping.");
@@ -158,6 +168,14 @@ namespace DeepUnity
             else if(typeof(Conv2D).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.conv2d;
+            }
+            else if (typeof(ELU).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.elu;
+            }
+            else if (typeof(Threshold).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.threshold;
             }
             else
                 throw new Exception("Unhandled module type while unwrapping.");

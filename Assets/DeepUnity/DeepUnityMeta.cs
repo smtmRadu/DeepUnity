@@ -22,7 +22,7 @@ namespace DeepUnity
         /// <summary>
         /// Threads displacement for Compute Shaders usage.
         /// </summary>
-        internal readonly static int[] numthreads = new int[] { 10, 10, 8 };
+        internal readonly static int[] numthreads = new int[] { 8, 8, 8 };
 
         /// <summary>
         /// MaxDegreeOfParallelism of 8 for multi-threaded tasks.

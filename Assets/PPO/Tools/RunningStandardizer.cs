@@ -14,36 +14,27 @@ namespace DeepUnity
         public RunningStandardizer(int size)
         {
             step = 0;
-
             mean = Tensor.Zeros(size);
             variance = Tensor.Ones(size);
         }
 
-        private void Update(Tensor tuples)
+
+        public Tensor Standardise(Tensor tuple, bool update = true)
         {
+            if (update)
+                Update(tuple);
 
-            int batch_size = tuples.Size(TDim.height);
-            float total = step + batch_size;
-
-
-            // convert tuples to tuple
-
-            Tensor deltaMu = Tensor.Mean(tuples, TDim.height) - mean;
-            mean = mean * (step / total) + deltaMu * (batch_size / total);
-
-            Tensor deltaVar = Tensor.Var(tuples, TDim.height) - variance;
-            variance = variance * (step / total) + deltaVar * (batch_size / total);
-
-            step = (int)total;
+            return (tuple - mean) / Tensor.Sqrt(variance);
         }
-
-        public Tensor Standardise(Tensor tuples)
+        private void Update(Tensor tuple)
         {
-            Update(tuples);
+            step++;
 
-            int batch = tuples.Size(TDim.height);
-            return (tuples - Tensor.Expand(mean, TDim.height, batch)) / 
-                Tensor.Expand(Tensor.Sqrt(variance), TDim.height, batch);
+            Tensor d1 = tuple - mean;
+            mean += d1 / step;
+            Tensor d2 = tuple - mean;
+            variance = (variance * (step - 1) + d1 * d2) / step;
+            //variance_sum += delta * delta2;
         }
     }
 }

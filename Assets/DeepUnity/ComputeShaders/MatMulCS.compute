@@ -8,7 +8,7 @@ int w1; // left width
 int h1w2; // left height or right width
 int h2; // right height
 
-[numthreads(10, 10, 8)]
+[numthreads(8, 8, 8)]
 void MatMul(uint3 id : SV_DispatchThreadID)
 {
     if (id.x < w1 && id.y < h2)

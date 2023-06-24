@@ -3,10 +3,24 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// Optimizer serialization is off.
+    /// </summary>
     public abstract class Optimizer
     {
         protected Learnable[] parameters;
+
         public float learningRate;
+        protected float weightDecay;
+        protected int t; // step counter
+
+        protected Optimizer(Learnable[] param, float lr, float L2Penalty)
+        {
+            parameters = param;
+            learningRate = lr;
+            weightDecay = L2Penalty;
+            t = 0;       
+        }
 
         public abstract void Step();
     }
@@ -66,7 +80,7 @@ namespace DeepUnity
         }     
         public static Optimizer Unwrap(OptimizerWrapper optimizerWrapper)
         {
-            Optimizer optimizer = null;
+            Optimizer optimizer;
 
             if (typeof(Adam).Name.Equals(optimizerWrapper.name))
             {

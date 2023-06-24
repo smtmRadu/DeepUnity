@@ -23,8 +23,8 @@ namespace DeepUnity
 
         /// <summary>
         /// </summary>
-        /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85)</param>
-        public BatchNorm(int num_features, float momentum = 0.1f, float eps = 1e-5f)
+        /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is 'm' where m * dataset_size = batch_size</param>
+        public BatchNorm(int num_features, float momentum = 0.9f, float eps = 1e-5f)
         {
             this.momentum = momentum;
             this.epsilon = eps;
@@ -50,7 +50,7 @@ namespace DeepUnity
         }
         public Tensor Forward(Tensor input)
         {
-            int batch = input.Shape.height;
+            int batch = input.Shape.Height;
 
             // When training (only on mini-batch training), we cache the values for backprop also
             var mu_B = Tensor.Mean(input, TDim.height); // mini-batch means      [batch, 1]
@@ -77,7 +77,7 @@ namespace DeepUnity
         }
         public Tensor Backward(Tensor dLdY)
         {
-            int m = dLdY.Shape.height;
+            int m = dLdY.Shape.Height;
 
             // paper algorithm https://arxiv.org/pdf/1502.03167.pdf
 
@@ -104,6 +104,11 @@ namespace DeepUnity
 
             return dLdX;
         }
+        // TIPS for improvement
+        // increase learn rate
+        // remove dropout and reduce L2 penalty (BN regularizes the network)
+        // accelerate lr decay (on StepLR)
+        // shuffle dataset more
 
         /*   Improving BN networks (placed before activation)
              Increase learning rate. In a batch-normalized model,

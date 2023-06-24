@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace kbRadu
 {
-    public class Trainer : MonoBehaviour
+    public class MNISTTest : MonoBehaviour
     {
  	   
     }
