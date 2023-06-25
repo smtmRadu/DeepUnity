@@ -13,17 +13,17 @@ namespace DeepUnity
         [Tooltip("How many steps of experience to collect per-agent before adding it to the experience buffer.")]
         public int timeHorizon = 64;
 
-        [Tooltip("Total number of steps (i.e., observation collected and action taken) that must be taken in the environment (or across all environments if using multiple in parallel) before ending the training process.")]
+        [Tooltip("The maximum number of steps the agent takes before being done. (no. FixedUpdate() calls)")]
         public int maxSteps = 500000;
 
         [Tooltip("Initial learning rate for gradient descent.")]
         public float learningRate = 3e-4f;
 
         [Tooltip("This should always be multiple times smaller than bufferSize. Typical range: (Continuous 512 - 5120) (Discrete 32 - 512)")]
-        public int batchSize = 512;
+        public int batchSize = 32;
 
         [Tooltip("Typical range 2048 - 409600")]
-        public int bufferSize = 4096;
+        public int bufferSize = 512;
 
         [Tooltip("Number of units in the hidden layers of the neural network.")]
         public int hiddenUnits = 128;
@@ -34,14 +34,19 @@ namespace DeepUnity
         [Tooltip("Applies linear decay of the learning rate until reaching maxSteps")]
         public bool learningRateScheduler = false;
 
-        [Tooltip("Apply normalization to observation inputs.")]
+        [Tooltip("Apply normalization to observation inputs and rewards, as well as the advantages.")]
         public bool normalize = true;
+
+        [Tooltip("Display statistics of each episode in the Console.")]
+        public bool verbose = false;
 
         [Header("PPO-specific Configurations")]
 
         public float beta = 5e-3f;
 
         public float epsilon = 0.2f;
+
+        public float gamma = 0.99f;
 
         public float lambda = 0.95f;
 

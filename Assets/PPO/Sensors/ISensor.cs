@@ -7,5 +7,10 @@ namespace DeepUnity
     {
         public IEnumerable GetObservations();
     }
+    public enum World
+    {
+        World3d,
+        World2d,
+    }
 }
 

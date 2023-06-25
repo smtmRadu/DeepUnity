@@ -13,7 +13,7 @@ namespace DeepUnity
 
         [SerializeField, Tooltip("@scene type")] World world = World.World3d;
         [SerializeField, Tooltip("@LayerMask used when casting the rays")] LayerMask layerMask = ~0;
-        [SerializeField, Tooltip("@observation value returned by the rays")] Info info = Info.Distance;
+        [SerializeField, Tooltip("@observation value returned by the rays")] RayInfo info = RayInfo.Distance;
         [SerializeField, Range(1, 50), Tooltip("@size of the buffer equals the number of rays")] int rays = 5;
         [SerializeField, Range(1, 360)] int fieldOfView = 45;
         [SerializeField, Range(0, 359)] int rotationOffset = 0;
@@ -157,16 +157,16 @@ namespace DeepUnity
             {
                 switch(info)
                 {
-                    case Info.Distance:
+                    case RayInfo.Distance:
                         Observations.Add(hit.distance);
                         break;
-                    case Info.Layer:
+                    case RayInfo.Layer:
                         Observations.Add(hit.collider.gameObject.layer);
                         break;
-                    case Info.Angle:
+                    case RayInfo.Angle:
                         Observations.Add(Vector3.Angle(hit.normal, rayDirection));
                         break;
-                    case Info.All:
+                    case RayInfo.All:
                         Observations.Add(hit.distance);
                         Observations.Add(hit.collider.gameObject.layer);
                         Observations.Add(Vector3.Angle(hit.normal, rayDirection));
@@ -177,16 +177,16 @@ namespace DeepUnity
             {
                 switch (info)
                 {
-                    case Info.Distance:
+                    case RayInfo.Distance:
                         Observations.Add(0);
                         break;
-                    case Info.Layer:
+                    case RayInfo.Layer:
                         Observations.Add(0);
                         break;
-                    case Info.Angle:
+                    case RayInfo.Angle:
                         Observations.Add(0);
                         break;
-                    case Info.All:
+                    case RayInfo.All:
                         Observations.Add(0);
                         Observations.Add(0);
                         Observations.Add(0);
@@ -204,16 +204,16 @@ namespace DeepUnity
             {
                 switch (info)
                 {
-                    case Info.Distance:
+                    case RayInfo.Distance:
                         Observations.Add(hit.distance);
                         break;
-                    case Info.Layer:
+                    case RayInfo.Layer:
                         Observations.Add(hit.collider.gameObject.layer);
                         break;
-                    case Info.Angle:
+                    case RayInfo.Angle:
                         Observations.Add(Vector3.Angle(hit.normal, rayDirection));
                         break;
-                    case Info.All:
+                    case RayInfo.All:
                         Observations.Add(hit.distance);
                         Observations.Add(hit.collider.gameObject.layer);
                         Observations.Add(Vector3.Angle(hit.normal, rayDirection));
@@ -224,16 +224,16 @@ namespace DeepUnity
             {
                 switch (info)
                 {
-                    case Info.Distance:
+                    case RayInfo.Distance:
                         Observations.Add(0);
                         break;
-                    case Info.Layer:
+                    case RayInfo.Layer:
                         Observations.Add(0);
                         break;
-                    case Info.Angle:
+                    case RayInfo.Angle:
                         Observations.Add(0);
                         break;
-                    case Info.All:
+                    case RayInfo.All:
                         Observations.Add(0);
                         Observations.Add(0);
                         Observations.Add(0);
@@ -242,12 +242,8 @@ namespace DeepUnity
             }
         }        
     }
-    public enum World
-    {
-        World3d,
-        World2d,
-    }
-    public enum Info
+  
+    public enum RayInfo
     {
         [Tooltip("1 float value per ray")]
         Distance,

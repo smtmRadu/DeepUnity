@@ -1,6 +1,7 @@
 using UnityEngine;
 using DeepUnity;
 using System;
+using Unity.VisualScripting;
 
 namespace kbRadu
 {
@@ -12,38 +13,32 @@ namespace kbRadu
 
         private void Start()
         {
-            TestCorrelation();
-            // RunningStandardizer rn = new RunningStandardizer(10);
-            // 
-            // Tensor data = Tensor.RandomRange(0, 360, 1024, 10);
-            // 
-            // Tensor[] batches = Tensor.Split(data, 0, 32);
-            // 
-            // foreach (var batch in batches)
-            // {
-            //     rn.Update(batch);
-            // }
-            // 
-            // print(rn.Standardise(Tensor.Random01(10)));
+            Tensor[] arr = new Tensor[10];
+            for (int i = 0; i < 10; i++)
+            {
+                arr[i] = Tensor.Random01(1);
+            }
+            print(arr.ToCommaSeparatedString());
 
+            Utils.Swap(ref arr[0], ref arr[1]);
+            print(arr.ToCommaSeparatedString());
 
-            // Timer.Start();
-            // for (int i = 0; i < Runs; i++)
-            // {
-            //     Tensor.Transpose(x, 1, 0);
-            // }
-            // 
-            // Timer.Stop();
+        }
 
-            // Timer.Start();
-            // for (int i = 0; i < Runs; i++)
-            // {
-            //     Tensor.MatTranspose(x);
-            // }
-            // 
-            // Timer.Stop();
+        void StdTest()
+        {
+            RunningStandardizer rn = new RunningStandardizer(10);
 
-            //MatMulBenchmark();
+            Tensor data = Tensor.RandomRange(0, 360, 1024, 10);
+
+            Tensor[] batches = Tensor.Split(data, 0, 32);
+
+            foreach (var batch in batches)
+            {
+                rn.Standardise(batch);
+            }
+
+            print(rn.Standardise(Tensor.Random01(10)));
         }
         void TestCorrelation()
         {
@@ -51,9 +46,9 @@ namespace kbRadu
 
             Conv2D c = new Conv2D(3, 64, 3);
 
-            Timer.Start();
+            DeepUnity.Timer.Start();
             Tensor y = c.Predict(input);
-            Timer.Stop();
+            DeepUnity.Timer.Stop();
 
             print(input);
             print(y);

@@ -9,7 +9,7 @@ namespace DeepUnity
     public class Sequential : ScriptableObject, IModule, ISerializationCallbackReceiver
     {
         [SerializeField] private ModuleWrapper[] serializedModules;
-        private IModule[] Modules;
+        [NonSerialized]  private IModule[] Modules;
 
 
         public Sequential(params IModule[] modules) => Modules = modules;
@@ -31,7 +31,7 @@ namespace DeepUnity
             return input;
         }
         /// <summary>
-        /// Backpropagates the loss and calculates the gradients.
+        /// Backpropagates the loss and computes the gradients.
         /// </summary>
         /// <param name="loss">Derivative of the loss function w.r.t output. (dLdY)</param>
         /// <returns></returns>
@@ -46,43 +46,10 @@ namespace DeepUnity
 
 
         /// <summary>
-        /// All gradients are set to 0.
+        /// Gets all <typeparamref name="Learnable"/> modules.
         /// </summary>
-        public void ZeroGrad()
-        {
-            foreach (var module in Modules)
-            {
-                if (module is Learnable param)
-                    param.ZeroGrad();
-            }
-        }
-        /// <summary>
-        /// The gradients are clipped in the range [-clip_value, clip_value]
-        /// </summary>
-        public void ClipGradValue(float clip_value)
-        {
-            foreach (var module in Modules)
-            {
-                if (module is Learnable param)
-                    param.ClipGradValue(clip_value);
-            }
-        }
-        /// <summary>
-        /// The norm is computed over each module separately.
-        /// </summary>
-        public void ClipGradNorm(float max_norm)
-        {
-            foreach (var module in Modules)
-            {
-                if (module is Learnable param)
-                    param.ClipGradNorm(max_norm);
-            }
-        }
-
+        /// <returns></returns>
         public Learnable[] Parameters() => Modules.Where(x => x is Learnable P).Select(x => (Learnable)x).ToArray();
-
-
-        // Saving
         /// <summary>
         /// Saves the network in Unity Assets folder. Overwrites the network file with the same name.
         /// </summary>
@@ -99,6 +66,7 @@ namespace DeepUnity
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssetIfDirty(this);
         }
+
         public void OnBeforeSerialize()
         {
             serializedModules = Modules.Select(x => ModuleWrapper.Wrap(x)).ToArray();

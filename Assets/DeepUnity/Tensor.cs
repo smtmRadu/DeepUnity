@@ -2709,6 +2709,30 @@ namespace DeepUnity
             var elem3 = 0.5f * frac * frac;
             return -elem1 - elem2 - elem3;
         }
+        public static Tensor Density(Tensor x, Tensor mu, Tensor sigma)
+        {
+            Tensor p1 = (sigma * MathF.Sqrt(2f * MathF.PI)) * 0.5f;
+            Tensor std = (x - mu) / sigma;
+            Tensor p2 = -0.5f * std * std;
+            return p1 * Tensor.Exp(p2);
+        }
+        public static Tensor KLDivergence(Tensor mu1, Tensor sig1, Tensor mu2, Tensor sig2)
+        {
+            var var1 = sig1 * sig1;
+            var var2 = sig2 * sig2;
+
+            return Tensor.Log((sig2 / (sig1 + Utils.EPSILON)) + Utils.EPSILON) +
+                (var1 + (mu1 - mu2) * (mu1 - mu2)) / (2f * var2) - 0.5f;
+        }        
+        public static bool HasNaN(Tensor tensor)
+        {
+            for (int i = 0; i < tensor.data.Length; i++)
+            {
+                if (tensor.data[i] == float.NaN)
+                    return true;
+            }
+            return false;
+        }
         #endregion
 
         public static Tensor Reshape(Tensor tensor, params int[] newShape)

@@ -120,6 +120,21 @@ namespace DeepUnity
         {
             return string.Format("#{0:X2}{1:X2}{2:X2}", r, g, b);
         }
+        public static Array GetRange(Array arr, int start, int count)
+        {
+            if (arr == null)
+                throw new ArgumentNullException(nameof(arr));
+
+            if (start < 0 || start >= arr.Length)
+                throw new ArgumentOutOfRangeException(nameof(start));
+
+            if (count < 0 || start + count > arr.Length)
+                throw new ArgumentOutOfRangeException(nameof(count));
+
+            Array result = Array.CreateInstance(arr.GetType().GetElementType(), count);
+            Array.Copy(arr, start, result, 0, count);
+            return result;
+        }
 
         public static class Numerics
         {

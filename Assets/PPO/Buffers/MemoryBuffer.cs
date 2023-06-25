@@ -1,61 +1,58 @@
+using System.ComponentModel.Design;
+using System.Text;
+
 namespace DeepUnity
 {
     public class MemoryBuffer
     {
         public Tensor[] states;
-        public Tensor[] actions;
-        public Tensor[] continuous_log_probs;
-        public Tensor[] discrete_log_probs;
         public Tensor[] values;
         public Tensor[] rewards;
         public Tensor[] dones;
 
-        public int index;
+        public Tensor[] continuous_actions;
+        public Tensor[] continuous_log_probs;
+        public Tensor[] discrete_actions;     
+        public Tensor[] discrete_log_probs;
+
+        public int indexPosition;
 
         public MemoryBuffer(int capacity)
         {
             states = new Tensor[capacity];
-            actions = new Tensor[capacity];
+            continuous_actions = new Tensor[capacity];
             continuous_log_probs = new Tensor[capacity];
+            discrete_actions = new Tensor[capacity];
             discrete_log_probs= new Tensor[capacity];
             values = new Tensor[capacity];
             rewards = new Tensor[capacity];
             dones = new Tensor[capacity];
 
-            index = 0;
+            indexPosition = 0;
         }
-        public void StoreContinuous(Tensor state, Tensor action, Tensor log_prob, Tensor value, Tensor reward, Tensor done)
+        public void Store(Tensor state, Tensor cont_action, Tensor disc_action, Tensor cont_log_probs, Tensor disc_log_probs, Tensor value, Tensor reward, Tensor done)
         {
-            if (index == states.Length)
+            if (indexPosition == states.Length)
                 throw new System.Exception("MemoryBuffer is full.");
 
-            states[index] = state;
-            actions[index] = action;
-            continuous_log_probs[index] = log_prob;
-            values[index] = value;
-            rewards[index] = reward;
-            dones[index] = done;
-            
-            index++;
-        }
-        public void StoreContinuous(float[] state, float[] action, float log_prob, float value, float reward, bool done)
-        {
-            if (index == states.Length)
-                throw new System.Exception("MemoryBuffer is full.");
+            states[indexPosition] = state;
+            values[indexPosition] = value;
+            rewards[indexPosition] = reward;
+            dones[indexPosition] = done;
 
-            states[index] = Tensor.Constant(state);
-            actions[index] = Tensor.Constant(action);
-            continuous_log_probs[index] = Tensor.Constant(log_prob);
-            values[index] = Tensor.Constant(value);
-            rewards[index] = Tensor.Constant(reward);
-            dones[index] = Tensor.Constant(done == true? 1 : 0);
+            continuous_actions[indexPosition] = cont_action;
+            continuous_log_probs[indexPosition] = cont_log_probs;
+            discrete_actions[indexPosition] = disc_action;
+            discrete_log_probs[indexPosition] = disc_log_probs;
+
+            indexPosition++;
         }
         public void Clear()
         {
-            for (int i = 0; i < index; i++)
+            for (int i = 0; i < indexPosition; i++)
             {
                 states[i] = null;
-                actions[i] = null;
+                continuous_actions[i] = null;
                 continuous_log_probs[i] = null;
                 discrete_log_probs[i] = null;
                 values[i] = null;
@@ -63,12 +60,27 @@ namespace DeepUnity
                 dones[i] = null;
             }
 
-            index = 0;
+            indexPosition = 0;
         }
-        public bool IsFull() => index == states.Length;
+        public bool IsFull() => indexPosition == states.Length;
         public override string ToString()
         {
-            return base.ToString();
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < indexPosition; i++)
+            {
+                sb.AppendLine($"\nFrame {i}\n(State: {states[i]}\nAction: {continuous_actions[i]}\nValue: {values[i]}\nReward: {rewards[i]}\nDone: {dones[i]}");
+            }
+            return sb.ToString();
+           
+        }
+        public string ToShortString()
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < indexPosition; i++)
+            {
+                sb.AppendLine($"Frame {i} [{states.GetHashCode()}]");
+            }
+            return sb.ToString();
         }
     }
 }

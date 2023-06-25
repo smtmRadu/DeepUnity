@@ -21,8 +21,39 @@ namespace DeepUnity
             weightDecay = L2Penalty;
             t = 0;       
         }
-
         public abstract void Step();
+
+        /// <summary>
+        /// Resets all gradients to 0.
+        /// </summary>
+        public void ZeroGrad()
+        {
+            foreach (var param in parameters)
+            {
+                param.ZeroGrad();
+            }
+        }
+        /// <summary>
+        /// The gradients are clipped in the range [-clip_value, clip_value]
+        /// </summary>
+        public void ClipGradValue(float clip_value)
+        {
+            foreach (var param in parameters)
+            {
+                param.ClipGradValue(clip_value);
+            }
+        }
+        /// <summary>
+        /// The norm is computed globaly.
+        /// </summary>
+        public void ClipGradNorm(float max_norm)
+        {
+            // Compute the grad norm on each learnable module
+            throw new NotImplementedException();
+        }
+
+
+        
     }
 
     /// <summary>

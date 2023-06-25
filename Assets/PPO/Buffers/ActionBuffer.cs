@@ -15,12 +15,12 @@ namespace DeepUnity
         }
         public void Clear()
         {
-            DiscreteActions = DiscreteActions.Select(x => float.NaN).ToArray();
-            ContinuousActions = ContinuousActions.Select(x => float.NaN).ToArray();
+            DiscreteActions = DiscreteActions?.Select(x => float.NaN).ToArray();
+            ContinuousActions = ContinuousActions?.Select(x => float.NaN).ToArray();
         }
         public override string ToString()
         {
-            return $"(ContinuousActions {ContinuousActions.ToCommaSeparatedString()} | DiscreteActions {DiscreteActions.ToCommaSeparatedString()})";
+            return $"(ContinuousActions {ContinuousActions?.ToCommaSeparatedString()} | DiscreteActions {DiscreteActions?.ToCommaSeparatedString()})";
         }
     }
 }

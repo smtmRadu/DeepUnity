@@ -86,7 +86,7 @@ namespace kbRadu
             var trainPrediction = net.Forward(trainXbatches[i]);
             var loss = Loss.MSE(trainPrediction, trainYbatches[i]);
 
-            net.ZeroGrad();
+            optimizer.ZeroGrad();
             net.Backward(loss);
             optimizer.Step();
 

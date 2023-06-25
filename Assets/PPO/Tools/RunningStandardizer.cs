@@ -24,7 +24,7 @@ namespace DeepUnity
             if (update)
                 Update(tuple);
 
-            return (tuple - mean) / Tensor.Sqrt(variance);
+            return (tuple - mean) / (Tensor.Sqrt(variance) + Utils.EPSILON);
         }
         private void Update(Tensor tuple)
         {
