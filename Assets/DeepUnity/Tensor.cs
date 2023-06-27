@@ -218,21 +218,21 @@ namespace DeepUnity
             }
             return t;
         }
-        public static Tensor RandomNormal(params int[] shape)
+        public static Tensor RandomNormal((float, float) mean_sd, params int[] shape)
         {
             Tensor t = new(shape);
             for (int i = 0; i < t.data.Length; i++)
             {
-                t.data[i] = Utils.Random.Gaussian();
+                t.data[i] = Utils.Random.Gaussian(mean_sd.Item1, mean_sd.Item2);
             }
             return t;
         }
-        public static Tensor RandomRange(float min, float max, params int[] shape)
+        public static Tensor RandomRange((float, float) min_max, params int[] shape)
         {
             Tensor t = new(shape);
             for (int i = 0; i < t.data.Length; i++)
             {
-                t.data[i] = Utils.Random.Range(min, max);
+                t.data[i] = Utils.Random.Range(min_max.Item1, min_max.Item2);
             }
             return t;
         }
@@ -1819,7 +1819,6 @@ namespace DeepUnity
             return result;
         }
 
-
         #endregion
 
 
@@ -2672,24 +2671,34 @@ namespace DeepUnity
 
             return result;
         }
-        public static Tensor Norm(Tensor tensor, NormType normType = NormType.ManhattanL1)
+        public static Tensor Norm(Tensor tensor, NormType normType = NormType.EuclideanL2)
         {
             switch (normType)
             {
+                case NormType.NonZeroL0:
+                    int nonzeros = tensor.Count(x => x != 0);
+                    return Constant(nonzeros);
                 case NormType.ManhattanL1:
-                    float abssum = tensor.data.Sum(x => MathF.Abs(x));
-                    return Constant(abssum);
+                    float absSum = tensor.data.Sum(x => MathF.Abs(x));
+                    return Constant(absSum);
                 case NormType.EuclideanL2:
-                    float sum = tensor.data.Sum();
-                    return Constant(MathF.Sqrt(sum));
-                case NormType.Frobenius:
-                    float sqrsum = tensor.data.Sum(x => x * x);
-                    return Constant(MathF.Sqrt(sqrsum));
+                    float sqrSum = tensor.data.Sum(x => x * x);
+                    return Constant(MathF.Sqrt(sqrSum));
+                case NormType.MaxLInf:
+                    float maxAbs = tensor.data.Max(x => Math.Abs(x));
+                    return Constant(maxAbs);
                 default:
                     throw new Exception("Unhandled norm type.");
             }
         }
-        public static Tensor Gaussian(Tensor mu, Tensor sigma, out Tensor entropies)
+        /// <summary>
+        /// Samples random normal distribution elements element-wise.
+        /// </summary>
+        /// <param name="mu"></param>
+        /// <param name="sigma"></param>
+        /// <param name="entropies"></param>
+        /// <returns></returns>
+        public static Tensor RandomGaussian(Tensor mu, Tensor sigma, out Tensor entropies)
         {
             Tensor x = new (mu.shape);
             entropies = new (mu.shape);
@@ -2733,6 +2742,7 @@ namespace DeepUnity
             }
             return false;
         }
+        
         #endregion
 
         public static Tensor Reshape(Tensor tensor, params int[] newShape)

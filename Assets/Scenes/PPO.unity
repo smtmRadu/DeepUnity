@@ -375,13 +375,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 981c49901ebb06c41b8c590a7b979867, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  behaviourName: ReachTheTarget
-  network: {fileID: 0}
-  behaviour: 2
-  onEpisodeEnd: 1
+  name: Behaviour#1
+  model: {fileID: 0}
   spaceSize: 4
   continuousActions: 2
   discreteBranches: 
+  behaviourType: 2
+  onEpisodeEnd: 1
   speed: 10
   target: {fileID: 1444833901}
 --- !u!114 &80255271
@@ -396,15 +396,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5970f7530cba1f0499a4a3dbe7d27f96, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  targetFPS: 60
+  device: 0
   timeHorizon: 64
-  maxSteps: 500000
+  maxStep: 65536
   learningRate: 0.0003
   batchSize: 32
-  bufferSize: 128
-  hiddenUnits: 128
+  bufferSize: 256
+  hiddenUnits: 64
   numLayers: 2
-  learningRateScheduler: 0
-  normalize: 0
+  learningRateSchedule: 0
+  normalize: 1
   verbose: 0
   beta: 0.005
   epsilon: 0.2
@@ -941,7 +943,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1444833900}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 1.78}
+  m_LocalPosition: {x: 0, y: 0, z: 4.84}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

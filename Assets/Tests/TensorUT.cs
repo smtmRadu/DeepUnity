@@ -13,23 +13,15 @@ namespace kbRadu
 
         private void Start()
         {
-            Tensor[] arr = new Tensor[10];
-            for (int i = 0; i < 10; i++)
-            {
-                arr[i] = Tensor.Random01(1);
-            }
-            print(arr.ToCommaSeparatedString());
-
-            Utils.Swap(ref arr[0], ref arr[1]);
-            print(arr.ToCommaSeparatedString());
-
+            Tensor x = Tensor.Random01(2000000, 1);
+            print(Tensor.Mean(x, TDim.height)[0]);
         }
 
         void StdTest()
         {
             RunningStandardizer rn = new RunningStandardizer(10);
 
-            Tensor data = Tensor.RandomRange(0, 360, 1024, 10);
+            Tensor data = Tensor.RandomRange((0, 360), 1024, 10);
 
             Tensor[] batches = Tensor.Split(data, 0, 32);
 

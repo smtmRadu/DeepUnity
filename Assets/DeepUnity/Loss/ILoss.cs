@@ -3,6 +3,10 @@ using System;
 namespace DeepUnity
 {
     public delegate Tensor ILoss(Tensor predictions, Tensor targets);
+
+    /// <summary>
+    /// Computes the derivative of the loss function w.r.t output. The value returned can be directly backpropagated.
+    /// </summary>
     public static class Loss
     {
         // Derivatives
@@ -12,7 +16,9 @@ namespace DeepUnity
         public static Tensor HingeEmbedded(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => 1f - p * t > 0f ? -t : 0f);
 
     }
-
+    /// <summary>
+    /// [Non-use] Computes the error of the targets w.r.t output. The value returned cannot be directly backpropagated. Use Loss class instead.
+    /// </summary>
     internal static class Error
     {
         // Functions

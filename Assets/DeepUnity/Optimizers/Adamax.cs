@@ -4,7 +4,7 @@ using UnityEngine;
 namespace DeepUnity
 { 
     // pytorch alg https://pytorch.org/docs/stable/generated/torch.optim.Adamax.html
-    public class AdaMax : Optimizer
+    public class Adamax : Optimizer
     {
         [SerializeField] private float beta1;
         [SerializeField] private float beta2;
@@ -18,7 +18,7 @@ namespace DeepUnity
         [NonSerialized] public Tensor[] uBeta;
 
 
-        public AdaMax(Learnable[] parameters, float lr = 0.002f, float beta1 = 0.9f, float beta2 = 0.999f, float weightDecay = 0f) : base(parameters, lr, weightDecay)
+        public Adamax(Learnable[] parameters, float lr = 0.002f, float beta1 = 0.9f, float beta2 = 0.999f, float weightDecay = 0f) : base(parameters, lr, weightDecay)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;

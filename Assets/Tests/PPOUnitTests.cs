@@ -8,7 +8,7 @@ namespace kbRadu
 
         private void Test1()
         {
-            Tensor mu = Tensor.RandomRange(-1, 1, 10);
+            Tensor mu = Tensor.RandomRange((-1, 1), 10);
             Tensor sigma = Tensor.Random01(10);
             Tensor gaussian = mu.Zip(sigma, (m, s) => Utils.Random.Gaussian(m, s));
 

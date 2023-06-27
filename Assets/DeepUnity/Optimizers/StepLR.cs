@@ -1,6 +1,4 @@
-using DeepUnity;
-
-namespace kbRadu
+namespace DeepUnity
 {
     public class StepLR
     {
@@ -35,13 +33,13 @@ namespace kbRadu
         {
             currentEpoch++;
 
-            if(stepSize % currentEpoch == 0)
+            if(currentEpoch % stepSize == 0)
                 optimizer.learningRate *= decay;
 
             if(currentEpoch == lastEpoch)
                 optimizer.learningRate = initialLR;  
         }
-        public float CurrentLR() => optimizer.learningRate;
+        public float CurrentLR { get => optimizer.learningRate; }
     }
 }
 

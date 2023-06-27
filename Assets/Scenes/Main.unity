@@ -234,12 +234,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77aaf4e69ab673d4d9b1336ed5da495f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  behaviourName: Behaviour#1
   network: {fileID: 0}
   behaviour: 2
   onEpisodeEnd: 1
-  observationSize: 2
-  actionSpace: 0
-  continuousDim: 2
+  spaceSize: 2
+  continuousActions: 2
   discreteBranches: 02000000
 --- !u!114 &49510991
 MonoBehaviour:
@@ -262,6 +262,7 @@ MonoBehaviour:
   numLayers: 2
   learningRateScheduler: 0
   normalize: 1
+  verbose: 0
   beta: 0.005
   epsilon: 0.2
   gamma: 0.99
@@ -391,7 +392,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &621327370
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -406,10 +407,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   device: 1
   net: {fileID: 11400000, guid: 561f61240ab39e6428f1202f2b48eb7c, type: 2}
-  hiddenSize: 256
-  trainingSamples: 2048
-  batch_size: 64
+  hiddenSize: 64
+  trainingSamples: 512
+  batch_size: 32
   validationSamples: 6
+  scheduler_step_size: 10000
+  scheduler_gamma: 1
   rotationSpeed: 0.35
   dataScale: 0.15
   drawScale: 200
@@ -589,7 +592,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &752495706
 MonoBehaviour:
   m_ObjectHideFlags: 0

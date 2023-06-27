@@ -10,10 +10,13 @@ namespace kbRadu
         public Device device = Device.CPU;
         public Sequential net;
         public Optimizer optimizer;
+        public StepLR scheduler;
         public int hiddenSize = 64;
         public int trainingSamples = 1024;
         public int batch_size = 32;
         public int validationSamples = 128;
+        public int scheduler_step_size = 10;
+        public float scheduler_gamma = 0.9f;
 
         [Space]
         public float rotationSpeed = 0.4f;
@@ -43,23 +46,24 @@ namespace kbRadu
                  new ReLU(),
                  new Dense(hiddenSize, 1)
                  );
-                optimizer = new AdaMax(net.Parameters());
+                optimizer = new Adamax(net.Parameters());
+                scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
             }
 
             trainPoints = new Vector3[trainingSamples];
             validationPoints = new Vector3[validationSamples];
 
             // Prepare train batches
-            Tensor x1 = Tensor.RandomNormal(trainingSamples, 1) * dataScale;
-            Tensor x2 = Tensor.RandomNormal(trainingSamples, 1) * dataScale;
+            Tensor x1 = Tensor.RandomNormal((0, 1), trainingSamples, 1) * dataScale;
+            Tensor x2 = Tensor.RandomNormal((0, 1), trainingSamples, 1) * dataScale;
             Tensor y = Tensor.Sqrt(Tensor.Pow(x1, 2) + Tensor.Pow(x2, 2));
 
             trainXbatches = Tensor.Split(Tensor.Join(1, x1, x2), 0, batch_size);
             trainYbatches = Tensor.Split(y, 0, batch_size);
 
             // Prepare test batches
-            x1 = Tensor.RandomNormal(validationSamples, 1) * dataScale;
-            x2 = Tensor.RandomNormal(validationSamples, 1) * dataScale;
+            x1 = Tensor.RandomNormal((0, 1), validationSamples, 1) * dataScale;
+            x2 = Tensor.RandomNormal((0, 1), validationSamples, 1) * dataScale;
             y = Tensor.Sqrt(Tensor.Pow(x1, 2) + Tensor.Pow(x2, 2));
 
             validationXrounds = Tensor.Split(Tensor.Join(1, x1, x2), 0, 1);
@@ -75,9 +79,10 @@ namespace kbRadu
             if (i == trainingSamples / batch_size)
             {
 
-                Debug.Log($"Epoch {++epoch} | Train Accuracy {trainAcc.Average() * 100f}% | Validation Accuracy {validationAcc.Average() * 100f}%");
+                Debug.Log($"Epoch {++epoch} | Train Accuracy {trainAcc.Average() * 100f}% | Validation Accuracy {validationAcc.Average() * 100f}% | LR {scheduler.CurrentLR}");
                 trainAcc.Clear();
                 validationAcc.Clear();
+                scheduler.Step();
                 if (epoch % 10 == 0)
                     net.Save("test");
                 i = 0;
@@ -88,7 +93,9 @@ namespace kbRadu
 
             optimizer.ZeroGrad();
             net.Backward(loss);
+            optimizer.ClipGradNorm(0.5f);
             optimizer.Step();
+            
 
             // Compute train accuracy
             float trainacc = Metrics.Accuracy(trainPrediction, trainYbatches[i]);

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace DeepUnity
@@ -48,8 +50,45 @@ namespace DeepUnity
         /// </summary>
         public void ClipGradNorm(float max_norm)
         {
-            // Compute the grad norm on each learnable module
-            throw new NotImplementedException();
+            int totalCount = 0;
+            foreach (var param in parameters)
+            {
+                totalCount += param.gamma.Count();
+                totalCount += param.beta.Count();
+            }
+
+            // Concatenate all gradients in a single tensor vector
+            Tensor vector = Tensor.Zeros(totalCount);
+            int index = 0;
+            foreach (var param in parameters)
+            {
+                float[] gradG = param.gradGamma.ToArray();
+                float[] gradB = param.gradBeta.ToArray();
+
+                for (int i = 0; i < gradG.Length; i++)
+                {
+                    vector[index++] = gradG[i];
+                }
+                for (int i = 0; i < gradB.Length; i++)
+                {
+                    vector[index++] = gradB[i];
+                }
+            }
+
+            // Compute norm
+            Tensor norm = Tensor.Norm(vector, NormType.ManhattanL1);
+
+            if (norm[0] <= max_norm)
+                return;
+
+            float scale = max_norm / norm[0];
+
+            foreach (var item in parameters)
+            {
+                item.gradGamma *= scale;
+                item.gradBeta *= scale;
+            }
+            
         }
 
 
@@ -70,7 +109,7 @@ namespace DeepUnity
         public Adadelta adadelta;
         public Adagrad adagrad;
         public RMSProp rmsprop;
-        public AdaMax adamax;
+        public Adamax adamax;
 
         private OptimizerWrapper(Optimizer optimizer)
         {
@@ -97,7 +136,7 @@ namespace DeepUnity
             {
                 adagrad = adagradOptimizer;
             }
-            else if (optimizer is AdaMax adamaxOptimizer)
+            else if (optimizer is Adamax adamaxOptimizer)
             {
                 adamax = adamaxOptimizer;
             }
@@ -133,7 +172,7 @@ namespace DeepUnity
             {
                 optimizer = optimizerWrapper.adagrad;
             }
-            else if(typeof(AdaMax).Name.Equals(optimizerWrapper.name))
+            else if(typeof(Adamax).Name.Equals(optimizerWrapper.name))
             {
                 optimizer = optimizerWrapper.adamax;
             }

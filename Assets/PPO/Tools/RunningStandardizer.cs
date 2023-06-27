@@ -34,7 +34,6 @@ namespace DeepUnity
             mean += d1 / step;
             Tensor d2 = tuple - mean;
             variance = (variance * (step - 1) + d1 * d2) / step;
-            //variance_sum += delta * delta2;
         }
     }
 }

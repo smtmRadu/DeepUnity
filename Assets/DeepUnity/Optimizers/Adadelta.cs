@@ -11,13 +11,13 @@ namespace DeepUnity
 
 
         // Square avg buffer
-        [NonSerialized] public Tensor[] v_W;
-        [NonSerialized] public Tensor[] v_B;
+        [NonSerialized] public Tensor[] vGamma;
+        [NonSerialized] public Tensor[] vBeta;
 
 
         // Accumulate var buffer
-        [NonSerialized] public Tensor[] u_W;
-        [NonSerialized] public Tensor[] u_B;
+        [NonSerialized] public Tensor[] uGamma;
+        [NonSerialized] public Tensor[] uBeta;
 
 
 
@@ -25,21 +25,21 @@ namespace DeepUnity
         {
             this.rho = rho;
 
-            v_W = new Tensor[parameters.Length];
-            v_B = new Tensor[parameters.Length];
+            vGamma = new Tensor[parameters.Length];
+            vBeta = new Tensor[parameters.Length];
 
-            u_W = new Tensor[parameters.Length];
-            u_B = new Tensor[parameters.Length];
+            uGamma = new Tensor[parameters.Length];
+            uBeta = new Tensor[parameters.Length];
 
             for (int i = 0; i < parameters.Length; i++)
             {
                 if (parameters[i] is Learnable P)
                 {
-                    v_W[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
-                    v_B[i] = Tensor.Zeros(P.beta.Shape.ToArray());
+                    vGamma[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
+                    vBeta[i] = Tensor.Zeros(P.beta.Shape.ToArray());
 
-                    u_W[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
-                    u_B[i] = Tensor.Zeros(P.beta.Shape.ToArray());
+                    uGamma[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
+                    uBeta[i] = Tensor.Zeros(P.beta.Shape.ToArray());
                 }
             }
         }
@@ -56,18 +56,18 @@ namespace DeepUnity
                     if (weightDecay != 0f)
                         P.gradGamma = P.gradGamma + weightDecay * P.gamma;
 
-                    v_W[i] = v_W[i] * rho + Tensor.Pow(P.gradGamma, 2f) * (1f - rho);
-                    v_B[i] = v_B[i] * rho + Tensor.Pow(P.gradBeta, 2f) * (1f - rho);
+                    vGamma[i] = vGamma[i] * rho + Tensor.Pow(P.gradGamma, 2f) * (1f - rho);
+                    vBeta[i] = vBeta[i] * rho + Tensor.Pow(P.gradBeta, 2f) * (1f - rho);
 
-                    // In Adadelta, i use v for square avg and m for accumulate variables
-                    var dxWeights = Tensor.Sqrt(u_W[i] + Utils.EPSILON) / Tensor.Sqrt(v_W[i] + Utils.EPSILON) * P.gradGamma;
-                    var dxBiases = Tensor.Sqrt(u_B[i] + Utils.EPSILON) / Tensor.Sqrt(v_B[i] + Utils.EPSILON) * P.gradBeta;
+                    // In Adadelta, i use v for square avg and u for accumulate variables
+                    var dxGamma = Tensor.Sqrt(uGamma[i] + 1e-6f) / Tensor.Sqrt(vGamma[i] + 1e-6f) * P.gradGamma;
+                    var dxBeta = Tensor.Sqrt(uBeta[i] + 1e-6f) / Tensor.Sqrt(vBeta[i] + 1e-6f) * P.gradBeta;
 
-                    u_W[i] = u_W[i] * rho + Tensor.Pow(dxWeights, 2f) * (1f - rho);
-                    u_B[i] = u_B[i] * rho + Tensor.Pow(dxBiases, 2f) * (1f - rho);
+                    uGamma[i] = uGamma[i] * rho + Tensor.Pow(dxGamma, 2f) * (1f - rho);
+                    uBeta[i] = uBeta[i] * rho + Tensor.Pow(dxBeta, 2f) * (1f - rho);
 
-                    P.gamma = P.gamma - learningRate * dxWeights;
-                    P.beta = P.beta - learningRate * dxBiases;
+                    P.gamma = P.gamma - learningRate * dxGamma;
+                    P.beta = P.beta - learningRate * dxBeta;
                 }
 
             });

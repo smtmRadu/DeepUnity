@@ -14,7 +14,7 @@ namespace DeepUnity
         public Conv2D(int in_channels, int out_channels, int kernel_size)
         {
             
-            gamma = Tensor.RandomNormal(out_channels, in_channels, kernel_size, kernel_size);
+            gamma = Tensor.RandomNormal((0, 1), out_channels, in_channels, kernel_size, kernel_size);
             gradGamma = Tensor.Zeros(out_channels, in_channels, kernel_size, kernel_size);
         }
         public Tensor Predict(Tensor input)
@@ -27,7 +27,7 @@ namespace DeepUnity
                 int h = input.Size(TDim.height) - kernel_size + 1;
                 int w = input.Size(TDim.width) - kernel_size + 1;
 
-                beta = Tensor.RandomNormal(out_channels, h, w);
+                beta = Tensor.RandomNormal((0, 1), out_channels, h, w);
                 gradBeta = Tensor.Zeros(out_channels, h, w);
             }
 
@@ -45,7 +45,7 @@ namespace DeepUnity
                 int h = input.Size(TDim.height) - kernel_size + 1;
                 int w = input.Size(TDim.width) - kernel_size + 1;
 
-                beta = Tensor.RandomNormal(out_channels, h, w);
+                beta = Tensor.RandomNormal((0, 1), out_channels, h, w);
                 gradBeta = Tensor.Zeros(out_channels, h, w);
             }
 

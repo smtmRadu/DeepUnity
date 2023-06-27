@@ -75,9 +75,10 @@ namespace DeepUnity
     }
     public enum NormType
     {
+        NonZeroL0,
         ManhattanL1,
         EuclideanL2,
-        Frobenius
+        MaxLInf
     }
     public enum PaddingType
     {

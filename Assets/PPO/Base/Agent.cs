@@ -1,4 +1,3 @@
-using DeepUnity.NeuroForge;
 using System.Collections.Generic;
 using System.Text;
 using UnityEditor;
@@ -16,17 +15,18 @@ namespace DeepUnity
     [AddComponentMenu("DeepUnity/Agent"), DisallowMultipleComponent, RequireComponent(typeof(HyperParameters))]
     public class Agent : MonoBehaviour
     {
-        public string behaviourName = "Behaviour#1";
-        public ActorCritic network;
-        public BehaviourType behaviour = BehaviourType.Inference;
-        public OnEpisodeEndType onEpisodeEnd = OnEpisodeEndType.ResetEnvironment;
-        
-        [Header("Observations & Actions")]
+        public new string name = "Behaviour#1";
+        public AgentBehaviour model;
+
+        [Space]
         public int spaceSize = 2;
         public int continuousActions = 2;
-        public int[] discreteBranches = new int[] { };
+        public int[] discreteBranches = new int[0];
 
-        
+        [Space]      
+        public BehaviourType behaviourType = BehaviourType.Inference;
+        public OnEpisodeEndType onEpisodeEnd = OnEpisodeEndType.ResetEnvironment;
+
         public MemoryBuffer Memory { get; private set; }
         public HyperParameters Hp { get; private set; }
         public SensorBuffer Observations { get; private set; }
@@ -37,43 +37,47 @@ namespace DeepUnity
         public float CumulativeReward { get; private set; }
 
         private List<ISensor> Sensors { get; set; }
-        private TransformReseter PersonalEnvironment { get; set; }
+        private GameObjectReseter PositionReseter { get; set; }
         private bool IsEpisodeEnd { get; set; }
 
         private void Awake()
         {
-            Application.targetFrameRate = 60;
-
             Hp = GetComponent<HyperParameters>();
+
+            Application.targetFrameRate = Hp.targetFPS;
+            DeepUnityMeta.Device = Hp.device;
+           
             Sensors = new List<ISensor>();
 
             InitNetwork();
             InitBuffers();
             InitSensors(transform);
 
-            PersonalEnvironment = onEpisodeEnd == OnEpisodeEndType.ResetAgent ?
-                new TransformReseter(transform) :
-                new TransformReseter(transform.parent);
+            PositionReseter = onEpisodeEnd == OnEpisodeEndType.ResetAgent ?
+                new GameObjectReseter(transform) :
+                new GameObjectReseter(transform.parent);
 
             CompletedEpisodes = 0;
             StepCount = 0;
             TimestepReward = 0;
             CumulativeReward = 0;
 
-            OnAwake();
+            OnAfterAwake();
         }
         private void Start()
         {
-            if (behaviour == BehaviourType.Inference)
+            if (behaviourType == BehaviourType.Inference)
                 Trainer.Subscribe(this);
 
-            OnStart();
+            OnAfterStart();
         }
         private void Update()
         {
+            OnBeforeUpdate();
+
             // AddReward(-1e-5f);
 
-            switch (behaviour)
+            switch (behaviourType)
             {
                 case BehaviourType.Inference:
                     InferenceBehavior();
@@ -86,7 +90,7 @@ namespace DeepUnity
                     ActiveBehavior();
                     break;
 
-                case BehaviourType.Manual:
+                case BehaviourType.Heuristic:
                     ManualBehavior();
                     break;
 
@@ -98,41 +102,39 @@ namespace DeepUnity
             StepCount++;          
             TimestepReward = 0;
 
-            if (StepCount == Hp.maxSteps)
+            if (StepCount == Hp.maxStep)
                 EndEpisode();
 
-            if (behaviour == BehaviourType.Inference && Memory.IsFull())
-                Trainer.Ready();
-
-            OnUpdate();          
+            if (behaviourType == BehaviourType.Inference && Memory.IsFull())
+                Trainer.Ready();                    
         }
         private void LateUpdate()
         {
             if (IsEpisodeEnd)
                 ResetEpisode();
 
-            OnLateUpdate();
+            OnAfterLateUpdate();
         }
 
 
         // Setup
         private void InitNetwork()
         {
-            if (network != null)
+            if (model != null)
             {
-                continuousActions = network.continuousDim;
-                discreteBranches = network.discreteBranches;
+                continuousActions = model.continuousDim;
+                discreteBranches = model.discreteBranches;
             }
             else
             {
-                network = new ActorCritic(spaceSize, continuousActions, discreteBranches, Hp, behaviourName);
+                model = new AgentBehaviour(spaceSize, continuousActions, discreteBranches, Hp, name);
             }
         }
         private void InitBuffers()
         {
             Memory = new MemoryBuffer(Hp.bufferSize);
-            Observations = new SensorBuffer(network.observationSize);
-            Actions = new ActionBuffer(network.continuousDim);
+            Observations = new SensorBuffer(model.observationSize);
+            Actions = new ActionBuffer(model.continuousDim);
         }
         private void InitSensors(Transform parent)
         {
@@ -148,23 +150,21 @@ namespace DeepUnity
         }
         private void ResetEpisode()
         {
-            if (behaviour == BehaviourType.Active || behaviour == BehaviourType.Inactive)
+            if (behaviourType == BehaviourType.Active || behaviourType == BehaviourType.Inactive)
                 return;
 
             if (Hp.verbose)
             {
                 StringBuilder statistic = new StringBuilder();
                 statistic.Append("<color=#0c74eb>");
-                statistic.Append("Episode: ");
-                statistic.Append(CompletedEpisodes + 1);
-                statistic.Append(" | Steps: ");
-                statistic.Append(StepCount);
-                statistic.Append("s | Cumulated Reward: ");
-                statistic.Append(CumulativeReward);
+                statistic.Append($"Agent {GetInstanceID()} | ");
+                statistic.Append($"Episode: {CompletedEpisodes + 1} | ");
+                statistic.Append($"Steps: {StepCount}s | ");
+                statistic.Append($"Cumulated Reward: {CumulativeReward}");
                 statistic.Append("</color>");
                 Debug.Log(statistic.ToString());
             }
-            PersonalEnvironment?.Reset();
+            PositionReseter?.Reset();
 
             IsEpisodeEnd = false;
             CumulativeReward = 0;
@@ -187,9 +187,9 @@ namespace DeepUnity
         }
         private void InferenceBehavior()
         {
+            // Collect new observations
             Observations.Clear();
             Actions.Clear();
-
             CollectObservations(Observations);
             Sensors.ForEach(x => Observations.AddObservation(x.GetObservations()));
 
@@ -200,17 +200,15 @@ namespace DeepUnity
 
             if (Hp.normalize)
             {
-                state = network.stateStandardizer.Standardise(state);
-                reward = network.rewardStadardizer.Standardise(reward);
+                state = model.stateStandardizer.Standardise(state);
+                reward = model.rewardStadardizer.Standardise(reward);
             }
                
             Tensor continuous_log_probs;
             Tensor discrete_log_probs;
-
-            Tensor contiunousAction = network.ContinuousAction(state, out continuous_log_probs, out _, out _);
-            Tensor discreteAction = network.DiscreteAction(state, out discrete_log_probs);
-
-            Tensor value = network.Value(state);
+            Tensor contiunousAction = model.ContinuousPredict(state, out continuous_log_probs);
+            Tensor discreteAction = model.DiscretePredict(state, out discrete_log_probs);
+            Tensor value = model.Value(state);
             Tensor done = Tensor.Constant(IsEpisodeEnd == true ? 1 : 0);
 
             Memory.Store(state, contiunousAction, discreteAction, continuous_log_probs, discrete_log_probs, value, reward, done);
@@ -223,12 +221,11 @@ namespace DeepUnity
         }
 
 
-
         // User call
-        public virtual void OnAwake() { }
-        public virtual void OnStart() { }
-        public virtual void OnUpdate() { }
-        public virtual void OnLateUpdate() { }
+        public virtual void OnAfterAwake() { }
+        public virtual void OnAfterStart() { }
+        public virtual void OnBeforeUpdate() { }
+        public virtual void OnAfterLateUpdate() { }
         public virtual void OnEpisodeBegin() { }
         public virtual void CollectObservations(SensorBuffer sensorBuffer) { }
         public virtual void OnActionReceived(ActionBuffer actionBuffer) { } 
@@ -253,7 +250,7 @@ namespace DeepUnity
         [Tooltip("Learning. Scene resets.")]
         Inference,
         [Tooltip("Manual control. No learning. Scene resets.")]
-        Manual,
+        Heuristic,
         [Tooltip("Active behavior. No Learning. Scene resets.")]
         Test
     }
