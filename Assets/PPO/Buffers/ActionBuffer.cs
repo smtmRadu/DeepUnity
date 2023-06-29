@@ -5,17 +5,18 @@ namespace DeepUnity
 {
     public class ActionBuffer
     {
-        public float[] DiscreteActions { get; set; }
+        public int[] DiscreteActions { get; set; }
         public float[] ContinuousActions { get; set; }
 
-        public ActionBuffer(int capacity)
+        public ActionBuffer(int continuousDim, int[] discreteBranches)
         {
-            DiscreteActions = new float[capacity];
-            ContinuousActions = new float[capacity];
+            ContinuousActions = new float[continuousDim];
+            DiscreteActions = discreteBranches == null? new int[0] : new int[discreteBranches.Length];
+           
         }
         public void Clear()
         {
-            DiscreteActions = DiscreteActions?.Select(x => float.NaN).ToArray();
+            DiscreteActions = DiscreteActions?.Select(x => -1).ToArray();
             ContinuousActions = ContinuousActions?.Select(x => float.NaN).ToArray();
         }
         public override string ToString()

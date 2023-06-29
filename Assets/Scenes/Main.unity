@@ -234,13 +234,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77aaf4e69ab673d4d9b1336ed5da495f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  behaviourName: Behaviour#1
-  network: {fileID: 0}
-  behaviour: 2
-  onEpisodeEnd: 1
+  name: Behaviour#1
+  model: {fileID: 0}
   spaceSize: 2
   continuousActions: 2
   discreteBranches: 02000000
+  behaviourType: 2
+  onEpisodeEnd: 1
 --- !u!114 &49510991
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -253,14 +253,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5970f7530cba1f0499a4a3dbe7d27f96, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  targetFPS: 60
+  device: 0
   timeHorizon: 64
-  maxSteps: 500000
+  maxStep: 65536
   learningRate: 0.0003
   batchSize: 512
   bufferSize: 4096
   hiddenUnits: 128
   numLayers: 2
-  learningRateScheduler: 0
+  learningRateSchedule: 0
   normalize: 1
   verbose: 0
   beta: 0.005
@@ -411,7 +413,7 @@ MonoBehaviour:
   trainingSamples: 512
   batch_size: 32
   validationSamples: 6
-  scheduler_step_size: 10000
+  scheduler_step_size: 1000000
   scheduler_gamma: 1
   rotationSpeed: 0.35
   dataScale: 0.15

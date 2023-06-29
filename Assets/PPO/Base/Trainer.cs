@@ -169,7 +169,7 @@ namespace DeepUnity
                     }
 
 
-                    print($"Epoch: {updatesCount++} | Critic Accuracy: {criticAccs.Average()}");
+                    print($"Epoch: {updatesCount++} | Critic Accuracy: {criticAccs.Average() * 100}%");
                 }
 
               
@@ -271,7 +271,7 @@ namespace DeepUnity
         }
         private void UpdateDiscreteNetwork(Tensor states, Tensor advantages, Tensor actions, Tensor oldLogProbs)
         {
-            
+            // Not implemented for now.
         }
 
 
@@ -290,17 +290,22 @@ namespace DeepUnity
                 for (int k = t; k < Math.Min(count - 1, hp.timeHorizon); k++)
                 {
                     a_T += discount *
-                           (rewards[k][0] + hp.gamma * values[k + 1][0] * (1f - dones[k][0]) -
-                           values[k][0]);
+                           (rewards[k][0] + hp.gamma * values[k + 1][0] * (1f - dones[k][0]) - values[k][0]);
 
                     discount *= hp.gamma * hp.lambda;
+
+                    // if this was a terminal state stop
+                    if (dones[k][0] == 1)
+                        break;
                 }
 
                 advantages[t] = Tensor.Constant(a_T);
             }
 
+
             return advantages;
         }
+
     }
 }
 

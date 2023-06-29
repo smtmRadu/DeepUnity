@@ -9,6 +9,13 @@ namespace DeepUnity
         [SerializeField] private int padding;
         [SerializeField] private PaddingType padding_mode;
 
+        /// <summary>
+        /// H out = H in + 2 * padding - (kernel_size - 1) - 1 <br />
+        /// W out = W in + 2 * padding - (kernel_size - 1) - 1 <br />
+        /// </summary>
+        /// <param name="kernel_size"></param>
+        /// <param name="padding"></param>
+        /// <param name="padding_mode"></param>
         public AvgPool2D(int kernel_size, int padding = 0, PaddingType padding_mode = PaddingType.Mirror)
         {
             this.kernel_size = kernel_size;
@@ -17,15 +24,12 @@ namespace DeepUnity
 
         public Tensor Predict(Tensor input)
         {
+            int Wout = input.Size(TDim.width) + 2 * padding - (kernel_size - 1) - 1;
+            int Hout = input.Size(TDim.height) + 2 * padding - (kernel_size - 1) - 1;
             // 1. Apply padding
             input = Tensor.MatPad(input, padding, padding_mode);
-
-            // 2. Pool by stride
-            int[] pooled_i_shape = input.Shape.ToArray();
-            pooled_i_shape[3] /= kernel_size;
-            pooled_i_shape[2] /= kernel_size;
-            Tensor pooled_input = Tensor.Zeros(pooled_i_shape);
-
+            
+            Tensor pooled_input = Tensor.Zeros(input.Size(TDim.batch), input.Size(TDim.channel), Hout, Wout);
 
             List<float> values_pool = new List<float>();
 
@@ -45,11 +49,11 @@ namespace DeepUnity
                             {
                                 for (int pj = 0; pj < input.Shape.Height; pj++)
                                 {
-                                    values_pool.Add(input[i * 2 + pi, j * 2 + pj, c, b]);
+                                    values_pool.Add(input[b,c, j * 2 + pj, i * 2 + pi]);
                                 }
                             }
 
-                            pooled_input[i, j, c, b] = values_pool.Average();
+                            pooled_input[b,c,j,i] = values_pool.Average();
 
                             values_pool.Clear();
                         }
@@ -62,15 +66,13 @@ namespace DeepUnity
         }
         public Tensor Forward(Tensor input)
         {
+            int Wout = input.Size(TDim.width) + 2 * padding - (kernel_size - 1) - 1;
+            int Hout = input.Size(TDim.height) + 2 * padding - (kernel_size - 1) - 1;
+
             // 1. Apply padding
             input = Tensor.MatPad(input, padding, padding_mode);
 
-            // 2. Pool by stride
-            int[] pooled_i_shape = input.Shape.ToArray();
-            pooled_i_shape[3] /= kernel_size;
-            pooled_i_shape[2] /= kernel_size;
-            Tensor pooled_input = Tensor.Zeros(pooled_i_shape);
-
+            Tensor pooled_input = Tensor.Zeros(input.Size(TDim.batch), input.Size(TDim.channel), Hout, Wout);
 
             List<float> values_pool = new List<float>();
 
@@ -90,11 +92,11 @@ namespace DeepUnity
                             {
                                 for (int pj = 0; pj < input.Shape.Height; pj++)
                                 {
-                                    values_pool.Add(input[i * 2 + pi, j * 2 + pj, c, b]);
+                                    values_pool.Add(input[b, c, j * 2 + pj, i * 2 + pi]);
                                 }
                             }
 
-                            pooled_input[i, j, c, b] = values_pool.Average();
+                            pooled_input[b, c, j, i] = values_pool.Average();
 
                             values_pool.Clear();
                         }
@@ -107,7 +109,7 @@ namespace DeepUnity
         }
         public Tensor Backward(Tensor input)
         {
-            return null;
+            throw new KeyNotFoundException();
         }
     }
 }

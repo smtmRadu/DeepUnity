@@ -401,12 +401,12 @@ MonoBehaviour:
   timeHorizon: 64
   maxStep: 65536
   learningRate: 0.0003
-  batchSize: 32
-  bufferSize: 256
+  batchSize: 256
+  bufferSize: 1024
   hiddenUnits: 64
   numLayers: 2
   learningRateSchedule: 0
-  normalize: 1
+  normalize: 0
   verbose: 0
   beta: 0.005
   epsilon: 0.2

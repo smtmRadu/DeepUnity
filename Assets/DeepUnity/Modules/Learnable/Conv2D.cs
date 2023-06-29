@@ -12,18 +12,20 @@ namespace DeepUnity
         // output_shape = [batch, Ochannels, Iheight - K + 1, Iwidth - K + 1] 
         // In Conv2D, Gamma represents kernels, Beta represents biases
         public Conv2D(int in_channels, int out_channels, int kernel_size)
-        {
-            
+        {          
             gamma = Tensor.RandomNormal((0, 1), out_channels, in_channels, kernel_size, kernel_size);
             gradGamma = Tensor.Zeros(out_channels, in_channels, kernel_size, kernel_size);
+
+            // beta is initialized on Forward or predict because we do not know the size of the input w and h
         }
         public Tensor Predict(Tensor input)
         {
+            
             if (beta == null)
             {
                 int kernel_size = gamma.Size(TDim.width);
 
-                int out_channels = gamma.Size(TDim.batch);
+                int out_channels = gamma.Size(TDim.channel);
                 int h = input.Size(TDim.height) - kernel_size + 1;
                 int w = input.Size(TDim.width) - kernel_size + 1;
 

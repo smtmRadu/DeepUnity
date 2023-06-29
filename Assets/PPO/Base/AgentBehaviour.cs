@@ -32,6 +32,7 @@ namespace DeepUnity
 
         public static readonly int default_step_size_StepLR = 10;
         public static readonly float default_gamma_StepLR = 0.99f;
+        public static readonly (float, float) sigma_clip = (0.01f, 5f);
 
         public AgentBehaviour(int stateSize, int continuousActions, int[] discreteBranches, HyperParameters hp, string name)
         {
@@ -125,7 +126,8 @@ namespace DeepUnity
         {
             // Sample mu and sigma
             Tensor mu = muHead.Predict(state);
-            Tensor sigma = Tensor.Ones(continuousDim);
+            Tensor sigma = Tensor.Fill(0.1f, mu.Shape.ToArray());
+            // sigma = Tensor.Clip(sigma, sigma_clip.Item1, sigma_clip.Item2);
 
             // Sample actions
             Tensor actions = Tensor.RandomGaussian(mu, sigma, out _);
@@ -145,6 +147,8 @@ namespace DeepUnity
             return actions;
 
         }
+
+
         public Tensor DiscretePredict(Tensor state, out Tensor logProbs)
         {
             logProbs = null;

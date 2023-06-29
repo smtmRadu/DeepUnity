@@ -20,7 +20,7 @@ namespace DeepUnity
 
         [Space]
         public int spaceSize = 2;
-        public int continuousActions = 2;
+        [Min(0)]public int continuousActions = 2;
         public int[] discreteBranches = new int[0];
 
         [Space]      
@@ -47,6 +47,7 @@ namespace DeepUnity
             Application.targetFrameRate = Hp.targetFPS;
             DeepUnityMeta.Device = Hp.device;
            
+
             Sensors = new List<ISensor>();
 
             InitNetwork();
@@ -133,8 +134,9 @@ namespace DeepUnity
         private void InitBuffers()
         {
             Memory = new MemoryBuffer(Hp.bufferSize);
+
             Observations = new SensorBuffer(model.observationSize);
-            Actions = new ActionBuffer(model.continuousDim);
+            Actions = new ActionBuffer(model.continuousDim, model.discreteBranches);
         }
         private void InitSensors(Transform parent)
         {
@@ -177,7 +179,24 @@ namespace DeepUnity
         // Loop
         private void ActiveBehavior()
         {
-
+            // Observations.Clear();
+            // Actions.Clear();
+            // 
+            // CollectObservations(Observations);
+            // Sensors.ForEach(x => Observations.AddObservation(x.GetObservations()));
+            // 
+            // Tensor state = Tensor.Constant(Observations.values);
+            // 
+            // if (Hp.normalize)
+            // {
+            //     state = model.stateStandardizer.Standardise(state);
+            // }
+            // 
+            // Actions.ContinuousActions = model.ContinuousPredict(state, out _)?.ToArray();
+            // Actions.DiscreteActions = null;
+            // 
+            // 
+            // OnActionReceived(Actions);
         }
         private void ManualBehavior()
         {
@@ -206,17 +225,17 @@ namespace DeepUnity
                
             Tensor continuous_log_probs;
             Tensor discrete_log_probs;
-            Tensor contiunousAction = model.ContinuousPredict(state, out continuous_log_probs);
+            Tensor continuousAction = model.ContinuousPredict(state, out continuous_log_probs);
             Tensor discreteAction = model.DiscretePredict(state, out discrete_log_probs);
             Tensor value = model.Value(state);
             Tensor done = Tensor.Constant(IsEpisodeEnd == true ? 1 : 0);
 
-            Memory.Store(state, contiunousAction, discreteAction, continuous_log_probs, discrete_log_probs, value, reward, done);
+            Memory.Store(state, continuousAction, discreteAction, continuous_log_probs, discrete_log_probs, value, reward, done);
 
 
             // Run agent's actions
-            Actions.ContinuousActions = contiunousAction?.ToArray();
-            Actions.DiscreteActions = discreteAction?.ToArray();
+            Actions.ContinuousActions = continuousAction?.ToArray();
+            Actions.DiscreteActions = null; // need to convert afterwards from tensor of logits [branch, logits] to argmax int[]
             OnActionReceived(Actions);
         }
 

@@ -13,25 +13,25 @@ namespace DeepUnity
         [SerializeField] private bool maximize;
 
         // Momentum buffer
-        [NonSerialized] public Tensor[] m_W;
-        [NonSerialized] public Tensor[] m_B;
+        [NonSerialized] public Tensor[] bGamma;
+        [NonSerialized] public Tensor[] bBeta;
 
-        public SGD(Learnable[] parameters, float lr = 0.01f, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false) : base(parameters, lr, weightDecay)
+        public SGD(Learnable[] parameters, float lr, float momentum = 0f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false) : base(parameters, lr, weightDecay)
         {
             this.momentum = momentum;
             this.dampening = dampening;
             this.nesterov = nesterov;
             this.maximize = maximize;
 
-            m_W = new Tensor[parameters.Length];
-            m_B = new Tensor[parameters.Length];
+            bGamma = new Tensor[parameters.Length];
+            bBeta = new Tensor[parameters.Length];
 
             for (int i = 0; i < parameters.Length; i++)
             {
                 if (parameters[i] is Learnable P)
                 {
-                    m_W[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
-                    m_B[i] = Tensor.Zeros(P.beta.Shape.ToArray());
+                    bGamma[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
+                    bBeta[i] = Tensor.Zeros(P.beta.Shape.ToArray());
 
                 }
             }
@@ -42,81 +42,57 @@ namespace DeepUnity
 
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
-                if (parameters[i] is Learnable P)
+                // Classic sgd (uses lr: 0.01f as default);
+                // if (parameters[i] is Learnable P)
+                // {
+                //     m_W[i] = m_W[i] * momentum - P.gradGamma * learningRate;
+                //     m_B[i] = m_B[i] * momentum - P.gradBeta * learningRate;
+                // 
+                //     P.gamma = P.gamma * (1f - weightDecay) + m_W[i];
+                //     P.beta = P.beta + m_B[i];
+                // }
+
+                // pytorch implementation
+                Learnable P = parameters[i];
+
+                if (weightDecay != 0f)
+                    P.gradGamma = P.gradGamma + weightDecay * P.gamma;
+
+                if(momentum != 0f)
                 {
-                    m_W[i] = m_W[i] * momentum - P.gradGamma * learningRate;
-                    m_B[i] = m_B[i] * momentum - P.gradBeta * learningRate;
+                    if (t > 1)
+                    {
+                        bGamma[i] = bGamma[i] + (1f - dampening) * P.gradGamma;
+                        bBeta[i] = bBeta[i] + (1f - dampening) * P.gradBeta;
+                    }
+                    else
+                    {
+                        bGamma[i] = P.gradGamma;
+                        bBeta[i] = P.gradBeta;
+                    }
+                    if(nesterov)
+                    {
+                        P.gradGamma = P.gradGamma + momentum * bGamma[i];
+                        P.gradBeta = P.gradBeta + momentum * bBeta[i];
+                    }
+                    else
+                    {
+                        P.gradGamma = Tensor.Identity(bGamma[i]);
+                        P.gradBeta = Tensor.Identity(bBeta[i]);
+                    }
 
-                    P.gamma = P.gamma * (1f - weightDecay) + m_W[i];
-                    P.beta = P.beta + m_B[i];
                 }
-
+                if(maximize)
+                {
+                    P.gamma = P.gamma + learningRate * P.gradGamma;
+                    P.beta = P.beta + learningRate * P.gradBeta;
+                }
+                else
+                {
+                    P.gamma = P.gamma - learningRate * P.gradGamma;
+                    P.beta = P.beta - learningRate * P.gradBeta;
+                }
             });
-
-            // // Tensorflow algorithm (+ L2 penalty added)
-            // if(momentum == 0)
-            // {
-            //     L.t_W = L.t_W - learningRate * L.g_W;
-            //     L.t_B = L.t_B - learningRate * L.g_B;
-            // }
-            // else
-            // {
-            //     L.v_W = momentum * L.v_W + learningRate * L.g_W;
-            //     L.v_B = momentum * L.v_B + learningRate * L.g_B;
-            // 
-            //     if (!nesterov)
-            //     {
-            //        
-            //         L.t_W = L.t_W * (1f - weightDecay) + L.v_W;
-            //         L.t_B = L.t_B + L.v_B;
-            //     }
-            //     else
-            //     {
-            //         L.t_W = L.t_W * (1f - weightDecay) + momentum * L.v_W - learningRate * L.g_W;
-            //         L.t_B = L.t_B + momentum * L.v_B - learningRate * L.g_B;
-            //     }
-            // }
-
-            // Pytorch algorithm
-            // if(weightDecay != 0)
-            //     L.g_W = L.g_W + weightDecay * L.t_W;
-            // 
-            // if(momentum != 0)
-            // {
-            //     if(t > 1)
-            //     {
-            //         L.m_W = momentum * L.m_W + (1f - dampening) * L.g_W;
-            //         L.m_B = momentum * L.m_B + (1f - dampening) * L.g_B;
-            //     }    
-            //     else
-            //     {
-            //         L.m_W = L.g_W.Clone() as Tensor;
-            //         L.m_B = L.g_B.Clone() as Tensor;
-            //     }
-            // 
-            //     if(nesterov)
-            //     {
-            //         L.g_W = L.g_W + momentum * L.m_W;
-            //         L.g_B = L.g_B + momentum * L.m_B;
-            //     }
-            //     else
-            //     {
-            //         L.g_W = L.m_B.Clone() as Tensor;
-            //         L.g_B = L.m_B.Clone() as Tensor;
-            //     }
-            // }
-            // 
-            // if(maximize)
-            // {
-            //     L.t_W = L.t_W + (1f - learningRate) * L.g_W;
-            //     L.t_B = L.t_B + (1f - learningRate) * L.g_B;
-            // }
-            // else
-            // {
-            //     L.t_W = L.t_W - (1f - learningRate) * L.g_W;
-            //     L.t_B = L.t_B - (1f - learningRate) * L.g_B;
-            // }
-
         }
     }
 
