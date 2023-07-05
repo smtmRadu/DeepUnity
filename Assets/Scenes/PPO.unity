@@ -376,7 +376,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   name: Behaviour#1
-  model: {fileID: 0}
+  model: {fileID: 11400000, guid: 1eb7afeadd0b1fc459188d0704e5a880, type: 2}
   spaceSize: 4
   continuousActions: 2
   discreteBranches: 
@@ -398,8 +398,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   targetFPS: 60
   device: 0
-  timeHorizon: 64
-  maxStep: 65536
+  timeHorizon: 860
+  maxStep: 1000
   learningRate: 0.0003
   batchSize: 256
   bufferSize: 1024
@@ -412,7 +412,7 @@ MonoBehaviour:
   epsilon: 0.2
   gamma: 0.99
   lambda: 0.95
-  numEpoch: 3
+  numEpoch: 100
   betaScheduler: 0
   epsilonScheduler: 0
 --- !u!1 &104508117

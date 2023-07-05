@@ -1,10 +1,13 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace DeepUnity
 {
     public class TrajectoryBuffer
     {
+        public bool reachedTerminalState = true;
         public List<Tensor> states;
         public List<Tensor> values;
         public List<Tensor> rewards;
@@ -42,8 +45,38 @@ namespace DeepUnity
             discrete_log_probs.Add(disc_log_prob);
         }
 
+       
+        public void Reset()
+        {
+            reachedTerminalState = true;
+            states.Clear();
+            values.Clear();
+            rewards.Clear();
+            continuous_actions.Clear();
+            continuous_log_probs.Clear();
+            discrete_actions.Clear();
+            discrete_log_probs.Clear();
+            returns.Clear();
+            advantages.Clear();
+
+        }
+
         public int Count { get => states.Count; }
         public float CumulativeReward { get => rewards.Sum(x => x[0]); }
+
+        public override string ToString()
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine($"Trajectory ({Count} steps) | Total Reward {CumulativeReward} | Reached Terminal State {reachedTerminalState}");
+            sb.AppendLine("{");
+            for (int i = 0; i < Count; i++)
+            {
+                sb.AppendLine($"\tFrame {i} | Value: {values[i][0]} | Reward: {rewards[i][0]} | Advantage: {advantages[i][0]} | Return: {returns[i][0]}");
+            }
+            sb.AppendLine("}");
+            return sb.ToString();
+
+        }
     }
 }
 

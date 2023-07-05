@@ -7,7 +7,7 @@ namespace DeepUnity
 {
     public static class DeepUnityMeta
     {
-        public static Device Device = Device.CPU;
+        public static Device device = Device.CPU;
 
         /// <summary>
         /// Reference to MatMulCS Compute Shader.
@@ -29,6 +29,13 @@ namespace DeepUnity
         /// </summary>
         internal readonly static ParallelOptions threadLimit8 = new ParallelOptions { MaxDegreeOfParallelism = 8 };
 
+
+        /// <summary>
+        /// Experimental
+        /// </summary>
+        internal readonly static ComputeShader TensorGPUCS;
+        internal readonly static int TensorGPUThreads = 1024;
+
         static DeepUnityMeta()
         {
             try
@@ -40,6 +47,13 @@ namespace DeepUnity
                 csguid = AssetDatabase.FindAssets("Correlation2DCS")[0];
                 cspath = AssetDatabase.GUIDToAssetPath(csguid);
                 Correlation2DCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+
+                // Experimental
+                csguid = AssetDatabase.FindAssets("TensorGPUCS")[0];
+                cspath = AssetDatabase.GUIDToAssetPath(csguid);
+                TensorGPUCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+
+
             }
             catch { }
         }

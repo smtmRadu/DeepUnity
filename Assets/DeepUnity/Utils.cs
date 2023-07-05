@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace DeepUnity
@@ -135,7 +136,26 @@ namespace DeepUnity
             Array.Copy(arr, start, result, 0, count);
             return result;
         }
+        public static List<T[]> Split<T>(IEnumerable<T> collection, int split_size)
+        {
+            List<T[]> slices = new();
+            int length = collection.Count();
 
+            int index = 0;
+            while(index < length)
+            {
+                int sliceSize = Math.Min(split_size, length - index);
+                T[] slice = new T[sliceSize];
+                for (int i = 0; i < sliceSize; i++)
+                {
+                    slice[i] = collection.ElementAt(index++);
+                }
+
+                slices.Add(slice);
+            }
+
+            return slices;
+        }
         public static class Numerics
         {
 

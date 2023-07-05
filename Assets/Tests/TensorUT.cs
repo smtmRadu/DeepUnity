@@ -1,7 +1,6 @@
 using UnityEngine;
 using DeepUnity;
 using System;
-using Unity.VisualScripting;
 
 namespace kbRadu
 {
@@ -13,17 +12,44 @@ namespace kbRadu
 
         private void Start()
         {
-            Tensor x = Tensor.Random01(2000000, 1);
-            print(Tensor.Mean(x, TDim.height)[0]);
+            Tensor t = Tensor.Random01(10, 10);
+            print(t);
+            print(new MaxPool2D(3).Forward(t));
         }
+        void TensorGPUTime()
+        {
+            var t1 = TensorGPU.Random01(MatShape.x, MatShape.y);
+            var t2 = TensorGPU.Random01(MatShape.x, MatShape.y);
 
+            
+            Timer.Start();
+            for (int i = 0; i < Runs; i++)
+            {
+                TensorGPU.MatMul(t1, t2);
+            }
+            Timer.Stop();
+
+        }
+        void TensorCPUTime()
+        {
+            var t1 = Tensor.Random01(MatShape.x, MatShape.y);
+            var t2 = Tensor.Random01(MatShape.x, MatShape.y);
+
+            Timer.Start();
+            for (int i = 0; i < Runs; i++)
+            {
+                Tensor.MatMul(t1, t2);
+            }
+            Timer.Stop();
+
+        }
         void StdTest()
         {
             RunningStandardizer rn = new RunningStandardizer(10);
 
             Tensor data = Tensor.RandomRange((0, 360), 1024, 10);
 
-            Tensor[] batches = Tensor.Split(data, 0, 32);
+            Tensor[] batches = Tensor.Split(data, TDim.height, 32);
 
             foreach (var batch in batches)
             {
@@ -59,10 +85,10 @@ namespace kbRadu
                 Tensor x = Tensor.Random01(a, b);
                 Tensor y = Tensor.Random01(b, c);
 
-                DeepUnityMeta.Device = Device.CPU;
+                DeepUnityMeta.device = Device.CPU;
                 var cpu = Tensor.MatMul(x, y);
 
-                DeepUnityMeta.Device = Device.GPU;
+                DeepUnityMeta.device = Device.GPU;
                 var gpu = Tensor.MatMul(x, y);
 
                 if (cpu.Equals(gpu))
@@ -74,7 +100,7 @@ namespace kbRadu
 
         void MatMulBenchmark()
         {
-            DeepUnityMeta.Device = Device;
+            DeepUnityMeta.device = Device;
             Tensor x = Tensor.Random01(MatShape.x, MatShape.y);
             Tensor y = Tensor.Random01(MatShape.y, MatShape.x);
 
@@ -87,7 +113,7 @@ namespace kbRadu
                 Tensor.MatMul(x, y);
             }
             end = DateTime.Now - start;
-            print($"{Runs} runs on {DeepUnityMeta.Device} on {x.Shape} * {y.Shape} in: {end}");
+            print($"{Runs} runs on {DeepUnityMeta.device} on {x.Shape} * {y.Shape} in: {end}");
 
         }
     }

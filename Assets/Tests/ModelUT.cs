@@ -36,14 +36,17 @@ namespace kbRadu
         private int i = 0;
         public void Start()
         {
-            DeepUnityMeta.Device = device;
+            DeepUnityMeta.device = device;
             if (net == null)
             {
                 net = new Sequential(
                  new Dense(2, hiddenSize),
+                 new LayerNorm(),
                  new ReLU(),
+                 
                  new Dense(hiddenSize, hiddenSize),
                  new ReLU(),
+                
                  new Dense(hiddenSize, 1)
                  );
                 optimizer = new Adamax(net.Parameters());
@@ -58,16 +61,16 @@ namespace kbRadu
             Tensor x2 = Tensor.RandomNormal((0, 1), trainingSamples, 1) * dataScale;
             Tensor y = Tensor.Sqrt(Tensor.Pow(x1, 2) + Tensor.Pow(x2, 2));
 
-            trainXbatches = Tensor.Split(Tensor.Join(1, x1, x2), 0, batch_size);
-            trainYbatches = Tensor.Split(y, 0, batch_size);
+            trainXbatches = Tensor.Split(Tensor.Join(TDim.width, x1, x2), TDim.height, batch_size);
+            trainYbatches = Tensor.Split(y, TDim.height, batch_size);
 
             // Prepare test batches
             x1 = Tensor.RandomNormal((0, 1), validationSamples, 1) * dataScale;
             x2 = Tensor.RandomNormal((0, 1), validationSamples, 1) * dataScale;
             y = Tensor.Sqrt(Tensor.Pow(x1, 2) + Tensor.Pow(x2, 2));
 
-            validationXrounds = Tensor.Split(Tensor.Join(1, x1, x2), 0, 1);
-            validationYrounds = Tensor.Split(y, 0, 1);
+            validationXrounds = Tensor.Split(Tensor.Join(TDim.width, x1, x2), TDim.height, 1);
+            validationYrounds = Tensor.Split(y, TDim.height, 1);
         }
 
 

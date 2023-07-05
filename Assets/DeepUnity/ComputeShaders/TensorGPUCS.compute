@@ -1,0 +1,25 @@
+
+
+RWStructuredBuffer<float> data1;
+RWStructuredBuffer<float> data2;
+RWStructuredBuffer<float> result;
+
+int value;
+
+
+
+#pragma kernel Random01
+
+[numthreads(1024,1,1)]
+void Random01(uint3 id : SV_DispatchThreadID)
+{
+    float randomValue = frac(sin(dot(float2((id.x + 1) * value, (id.x + 1) / value), float2(12.9898, 78.233))) * 43758.5453123);
+    data1[id.x] = randomValue; 
+}
+
+#pragma kernel Addition
+[numthreads(1024, 1, 1)]
+void Addition(uint3 id : SV_DispatchThreadID)
+{
+    result[id.x] = data1[id.x] + data2[id.x];
+}

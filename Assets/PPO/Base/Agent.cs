@@ -27,7 +27,7 @@ namespace DeepUnity
         public BehaviourType behaviourType = BehaviourType.Inference;
         public OnEpisodeEndType onEpisodeEnd = OnEpisodeEndType.ResetEnvironment;
 
-        public MemoryBuffer Memory { get; private set; }
+        public TrajectoryBuffer Trajectory { get; private set; }
         public HyperParameters Hp { get; private set; }
         public SensorBuffer Observations { get; private set; }
         public ActionBuffer Actions { get; private set; }
@@ -45,7 +45,7 @@ namespace DeepUnity
             Hp = GetComponent<HyperParameters>();
 
             Application.targetFrameRate = Hp.targetFPS;
-            DeepUnityMeta.Device = Hp.device;
+            DeepUnityMeta.device = Hp.device;
            
 
             Sensors = new List<ISensor>();
@@ -104,10 +104,13 @@ namespace DeepUnity
             TimestepReward = 0;
 
             if (StepCount == Hp.maxStep)
+            {
                 EndEpisode();
+                Trajectory.reachedTerminalState = false;
+            }
 
-            if (behaviourType == BehaviourType.Inference && Memory.IsFull())
-                Trainer.Ready();                    
+            if (behaviourType == BehaviourType.Inference && IsEpisodeEnd)
+                Trainer.Ready(this);                    
         }
         private void LateUpdate()
         {
@@ -133,7 +136,7 @@ namespace DeepUnity
         }
         private void InitBuffers()
         {
-            Memory = new MemoryBuffer(Hp.bufferSize);
+            Trajectory = new TrajectoryBuffer();
 
             Observations = new SensorBuffer(model.observationSize);
             Actions = new ActionBuffer(model.continuousDim, model.discreteBranches);
@@ -228,9 +231,8 @@ namespace DeepUnity
             Tensor continuousAction = model.ContinuousPredict(state, out continuous_log_probs);
             Tensor discreteAction = model.DiscretePredict(state, out discrete_log_probs);
             Tensor value = model.Value(state);
-            Tensor done = Tensor.Constant(IsEpisodeEnd == true ? 1 : 0);
 
-            Memory.Store(state, continuousAction, discreteAction, continuous_log_probs, discrete_log_probs, value, reward, done);
+            Trajectory.Remember(state, value, reward, continuousAction, continuous_log_probs, discreteAction,  discrete_log_probs);
 
 
             // Run agent's actions

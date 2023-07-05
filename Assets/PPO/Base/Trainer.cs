@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using Unity.VisualScripting;
 using UnityEngine;
+
 
 namespace DeepUnity
 {
@@ -10,11 +11,9 @@ namespace DeepUnity
     {
         private static Trainer Instance { get; set; }
 
-        private List<Agent> agents;
-        private int readyAgents;
+        private Dictionary<Agent, bool> agents;
         private HyperParameters hp;
         private AgentBehaviour ac;
-        private int updatesCount;
 
         private void Awake()
         {
@@ -29,7 +28,8 @@ namespace DeepUnity
         }
         private void LateUpdate()
         {
-            if (readyAgents == agents.Count)
+            // check if there are any ready agents
+            if(agents.Values.Contains(true))
                 Train();
 
         }
@@ -39,9 +39,7 @@ namespace DeepUnity
             {
                 GameObject go = new GameObject("Trainer");
                 go.AddComponent<Trainer>();
-                Instance.agents = new List<Agent>();
-                Instance.readyAgents = 0;
-                Instance.updatesCount = 0;
+                Instance.agents = new();
                 Instance.ac = agent.model;
                 Instance.hp = agent.Hp;
 
@@ -49,13 +47,12 @@ namespace DeepUnity
                 Instance.ac.InitSchedulers(Instance.hp);
             }
 
-            Instance.agents.Add(agent);
+            Instance.agents.Add(agent, false);
         }
-        public static void Ready()
+        public static void Ready(Agent agent)
         {
-            Instance.readyAgents++;
+            Instance.agents[agent] = true;
         }
-
 
 
 
@@ -63,101 +60,68 @@ namespace DeepUnity
 
         private void Train()
         {
-            foreach (var agent in agents)
+
+            foreach (var kv in agents)
             {
+                if (kv.Value == false)
+                    return;
+
+                Agent agent = kv.Key;
+                GeneralizedAdvantageEstimate(agent.Trajectory);
+
+
                 // Unzip the memory
-                Tensor[] states = agent.Memory.states;
-                Tensor[] continuousActions = agent.Memory.continuous_actions;
-                Tensor[] discreteActions = agent.Memory.discrete_actions;
-                Tensor[] continuousLogProbs = agent.Memory.continuous_log_probs;
-                Tensor[] discreteLogProbs = agent.Memory.discrete_log_probs;
-                Tensor[] values = agent.Memory.values;
-                Tensor[] rewards = agent.Memory.rewards;
-                Tensor[] dones = agent.Memory.dones;
-
-                // Compute advantages
-                Tensor[] advantages = GeneralizedAdvantageEstimation(rewards, values, dones);
+                List<Tensor> states = agent.Trajectory.states;
+                List<Tensor> continuousActions = agent.Trajectory.continuous_actions;
+                List<Tensor> discreteActions = agent.Trajectory.discrete_actions;
+                List<Tensor> continuousLogProbs = agent.Trajectory.continuous_log_probs;
+                List<Tensor> discreteLogProbs = agent.Trajectory.discrete_log_probs;
+                List<Tensor> values = agent.Trajectory.values;
+                List<Tensor> rewards = agent.Trajectory.rewards;
+                List<Tensor> advantages = agent.Trajectory.advantages;
+                List<Tensor> returns = agent.Trajectory.returns;
 
 
-                // Debug only
-                // StringBuilder sb = new StringBuilder();
-                // for (int i = 0; i < advantages.Length; i++)
-                // {
-                //     sb.AppendLine($"Frame {i} Advantage: {advantages[i][0]}");
-                // }
-                // Utils.DebugInFile(sb.ToString());
-                // Utils.DebugInFile(agent.Memory.ToString());
+                Utils.DebugInFile(agent.Trajectory.ToString());
 
                 // STEP Norm advantages
-                if(hp.normalize)
-                {
-                    int n = advantages.Length;
-                    float mean = advantages.Average(x => x[0]);
-                    float var = advantages.Sum(x => (x[0] - mean) * (x[0] - mean) / (n - 1));
-                    float std = MathF.Sqrt(var);
-                    advantages = advantages.Select(x => (x[0] - mean) / (std + Utils.EPSILON)).Select(x => Tensor.Constant(x)).ToArray();
-                }
-
-                // STEP Shuffle the data
-                // System.Random rng = new System.Random(System.DateTime.Now.Millisecond);
-                // 
-                // for (int i = hp.bufferSize - 1; i > 0; i--)
-                // {
-                //     int r = rng.Next(i + 1);
-                //     Utils.Swap(ref advantages[i], ref advantages[r]);
-                //     Utils.Swap(ref states[i], ref states[r]);
-                //     Utils.Swap(ref actions[i], ref actions[r]);
-                //     Utils.Swap(ref logProbs[i], ref logProbs[r]);
-                // }
+                int n = advantages.Count;
+                float mean = advantages.Average(x => x[0]);
+                float var = advantages.Sum(x => (x[0] - mean) * (x[0] - mean) / (n - 1));
+                float std = MathF.Sqrt(var);
+                advantages = advantages.Select(x => (x[0] - mean) / (std + Utils.EPSILON)).Select(x => Tensor.Constant(x)).ToList();
+                
+                
 
                 int noBatches = (int)(hp.bufferSize / (float)hp.batchSize);
                 for (int e = 0; e < hp.numEpoch; e++)
-                {           
-                    
-                    List<float> criticAccs = new List<float>();
+                {
+                    // shuffle the training data lists together
 
-                    for (int n = 0; n < noBatches; n++)
-                    {
-                        int start = n * hp.batchSize;
-                        
-                        // Generate a batch
-                        Tensor[] states_batch_arr = (Tensor[]) Utils.GetRange(states, start, hp.batchSize);
-                        Tensor[] cont_action_batch_arr = (Tensor[])Utils.GetRange(continuousActions, start, hp.batchSize);
-                        Tensor[] disc_action_batch_arr = (Tensor[])Utils.GetRange(discreteActions, start, hp.batchSize);
-                        Tensor[] cont_logProbs_batch_arr = (Tensor[]) Utils.GetRange(continuousLogProbs, start, hp.batchSize);
-                        Tensor[] disc_logProbs_batch_arr = (Tensor[])Utils.GetRange(discreteLogProbs, start, hp.batchSize);
-                        Tensor[] advantages_batch_arr = (Tensor[])Utils.GetRange(advantages, start, hp.batchSize);
+                    // split traindata to minibatches
+                    List<Tensor[]> states_batches = Utils.Split(states, hp.batchSize);
+                    List<Tensor[]> cont_act_batches = Utils.Split(continuousActions, hp.batchSize);
+                    List<Tensor[]> cont_log_probs_batches = Utils.Split(continuousLogProbs, hp.batchSize);
+                    List<Tensor[]> advantages_batches = Utils.Split(advantages, hp.batchSize);
+                    List<Tensor[]> returns_batches = Utils.Split(returns, hp.batchSize);
 
+                    int M = states_batches.Count;
 
-                        Tensor states_batch = Tensor.Join(TDim.height, states_batch_arr);
-                        Tensor advantages_batch = Tensor.Join(TDim.height, advantages_batch_arr);
- 
-                        // Update Critic and Heads
-                        float criticAcc = UpdateCriticNetwork(states_batch, advantages_batch);
-                        try
-                        {
-                            // Because cont_XXX can have null elements, it may fail on Joining. This happen due to missing continuous actions.
-                            UpdateContinuousNetwork(
-                                states_batch, 
-                                advantages_batch, 
-                                Tensor.Join(TDim.height, cont_action_batch_arr), 
-                                Tensor.Join(TDim.height, cont_logProbs_batch_arr));
+                    for (int b = 0; b < M; b++)
+                    { 
+                        Tensor states_batch = Tensor.Join(TDim.height, states_batches[b]);
+                        Tensor advantages_batch = Tensor.Join(TDim.height, advantages_batches[b]);
+                        Tensor returns_batch = Tensor.Join(TDim.height, returns_batches[b]);
 
-                        }
-                        catch { }
-                        try
-                        {
-                            // Because cont_XXX can have null elements, it may fail on Joining. This happen due to missing discrete actions.
-                            UpdateDiscreteNetwork(
+                        UpdateCritic(states_batch, returns_batch);
+                        UpdateContinuousNetwork(
                                 states_batch,
-                                advantages_batch, 
-                                null, 
-                                null);
-                        }
-                        catch { }
+                                advantages_batch,
+                                Tensor.Join(TDim.height, cont_act_batches[b]),
+                                Tensor.Join(TDim.height, cont_log_probs_batches[b]));
 
-                        criticAccs.Add(criticAcc);
                     }
+                   
 
                     // Step schedulers after each epoch
                     ac.criticScheduler.Step();
@@ -167,37 +131,36 @@ namespace DeepUnity
                     {
                         ac.discreteHeadsSchedulers[i].Step();
                     }
-
-
-                    print($"Epoch: {updatesCount++} | Critic Accuracy: {criticAccs.Average() * 100}%");
                 }
 
-              
-                agent.Memory.Clear();
+
+                agent.Trajectory.Reset();
+            }
+
+            var keys = agents.Keys.ToList();
+            foreach (var key in keys)
+            {
+                agents[key] = false;
             }
 
             // ac.Save();
-            readyAgents = 0;
-        }      
+        }
 
-
-        private float UpdateCriticNetwork(Tensor states, Tensor advantages)
+        private void UpdateCritic(Tensor states_batch, Tensor returns_batch)
         {
-            // [batch, values] shape
-            Tensor values = ac.critic.Forward(states);
-
-            Tensor returns = values + advantages; //targets
-
-            Tensor errors = Tensor.Abs(values - returns);
-            Tensor dLdV = 2f * (values - returns); // dMSE
+            Tensor values = ac.critic.Forward(states_batch);
+            Tensor dLdV = 2f * (values - returns_batch); // derivative of MSE
 
             ac.criticOptimizer.ZeroGrad();
             ac.critic.Backward(dLdV);
-            ac.criticOptimizer.ClipGradNorm(0.5f);
+            //ac.criticOptimizer.ClipGradNorm(0.5f);
             ac.criticOptimizer.Step();
 
-            return 1f - Tensor.Mean(errors, TDim.height)[0];
+
+            float error = Metrics.Accuracy(values, returns_batch);
+            print($"Critic Accuracy {error * 100f}%");
         }
+
         private void UpdateContinuousNetwork(Tensor states, Tensor advantages, Tensor oldActions, Tensor oldLogProbs)
         {
             int batch = states.Shape.Height;
@@ -232,13 +195,13 @@ namespace DeepUnity
                     float At = advantages[b, a];
 
                     // dMin(x,y)/dx
-                    dMindX[b,a] = (pt * At <= clip_p * At ? 1 : 0);
+                    dMindX[b,a] = (pt * At <= clip_p * At) ? 1 : 0;
 
                     // dMin(x,y)/dy
-                    dMindY[b,a] = (clip_p * At < pt * At ? 1 : 0);
+                    dMindY[b,a] = (clip_p * At < pt * At) ? 1 : 0;
 
                     // dClip(x,a,b)/dx
-                    dClipdX[b,a] = (1.0 - eps <= pt && pt <= 1.0 + eps ? 1 : 0);
+                    dClipdX[b,a] = (1.0 - eps <= pt && pt <= 1.0 + eps) ? 1 : 0;
                 }
             }
 
@@ -255,7 +218,7 @@ namespace DeepUnity
 
             ac.muHeadOptimizer.ZeroGrad();
             ac.muHead.Backward(dLdMu);
-            ac.muHeadOptimizer.ClipGradNorm(0.5f);
+            //ac.muHeadOptimizer.ClipGradNorm(0.5f);
             ac.muHeadOptimizer.Step();
 
 
@@ -269,42 +232,39 @@ namespace DeepUnity
 
             // Test KL
         }
-        private void UpdateDiscreteNetwork(Tensor states, Tensor advantages, Tensor actions, Tensor oldLogProbs)
+
+        public void GeneralizedAdvantageEstimate(TrajectoryBuffer trajectory)
         {
-            // Not implemented for now.
-        }
-
-
-
-        private Tensor[] GeneralizedAdvantageEstimation(Tensor[] rewards, Tensor[] values, Tensor[] dones)
-        {
-            int count = rewards.Length;
-
-            Tensor[] advantages = new Tensor[count];
-
-            for (int t = 0; t < count; t++)
+            // as described in the paper
+            int T = trajectory.Count;
+            for (int timestep = 0; timestep < T; timestep++)
             {
                 float discount = 1f;
-                float a_T = 0;
+                Tensor v_t = Tensor.Constant(0);
 
-                for (int k = t; k < Math.Min(count - 1, hp.timeHorizon); k++)
+                for(int t = timestep; t < T; t++)
+                {       
+                    v_t += discount * trajectory.rewards[t];
+                    discount *= hp.gamma;
+
+                }
+                // horizon ommited for now
+
+                if(trajectory.reachedTerminalState == false)
                 {
-                    a_T += discount *
-                           (rewards[k][0] + hp.gamma * values[k + 1][0] * (1f - dones[k][0]) - values[k][0]);
+                    v_t += discount * trajectory.values[T - 1];
 
-                    discount *= hp.gamma * hp.lambda;
-
-                    // if this was a terminal state stop
-                    if (dones[k][0] == 1)
-                        break;
+                    // else Vwold(state[t + n]) = 0
                 }
 
-                advantages[t] = Tensor.Constant(a_T);
+                Tensor a_t = v_t - trajectory.values[timestep];
+
+                trajectory.returns.Add(v_t);
+                trajectory.advantages.Add(a_t);
+
             }
-
-
-            return advantages;
         }
+        
 
     }
 }

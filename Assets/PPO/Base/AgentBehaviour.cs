@@ -87,7 +87,7 @@ namespace DeepUnity
             if (criticOptimizer != null)
                 return;
 
-            criticOptimizer = new Adam(critic.Parameters(), hp.learningRate);          
+            criticOptimizer = new Adam(critic.Parameters(), hp.learningRate * 3f);          
             muHeadOptimizer = new Adam(muHead.Parameters(), hp.learningRate);            
             sigmaHeadOptimizer = new Adam(sigmaHead.Parameters(), hp.learningRate);
 

@@ -10,7 +10,7 @@ namespace DeepUnity
     public static class Loss
     {
         // Derivatives
-        public static Tensor MSE(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => 2 * (p - t));
+        public static Tensor MSE(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => 2f * (p - t));
         public static Tensor MAE(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => p - t > 0 ? 1f : -1f);
         public static Tensor CrossEntropy(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => (t - p) / (p * (p - 1f) + Utils.EPSILON));
         public static Tensor HingeEmbedded(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => 1f - p * t > 0f ? -t : 0f);

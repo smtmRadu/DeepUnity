@@ -21,13 +21,20 @@ namespace DeepUnity
         public static string PrintFormat = "0.00000";
         public int Rank => shape.Rank;
         public TShape Shape => shape;
-        public int Size(int axis)
+        private int Size(int axis)
         {
             return shape.ToArray()[GetAxisIndex(Rank, axis)];
         }
         public int Size(TDim dim)
         {
-            return shape.Get(dim);
+            switch (dim)
+            {
+                case TDim.width: return shape.Width;
+                case TDim.height: return shape.Height;
+                case TDim.channel: return shape.Channels;
+                case TDim.batch: return shape.Batch;
+                default: throw new Exception("Unhandled dim type");
+            }
         }
 
         public float this[int w]
@@ -398,11 +405,11 @@ namespace DeepUnity
                 throw new ArgumentException("Tensor must have compatible shapes for matrix multiplication (height of left tensor is not matching the width of the right tensor).");
 
             if (b1 != b2)
-                throw new ArgumentException("Tensors must have similar number of batches for batched matrix multiplication.");
+                throw new ArgumentException("Tensors must have similar number of channels for channeled matrix multiplication.");
 
             Tensor result = new(new TShape(1, b1, w1, h2));
 
-            if (DeepUnityMeta.Device == Device.CPU)
+            if (DeepUnityMeta.device == Device.CPU)
             {
                 if (b1 == 1)
                 {
@@ -446,9 +453,9 @@ namespace DeepUnity
             {
                 ComputeShader CS = DeepUnityMeta.MatMulCS;
 
-                ComputeBuffer leftBuffer = new (left.data.Length, 4);
-                ComputeBuffer rightBuffer = new (right.data.Length, 4);
-                ComputeBuffer resultBuffer = new (b1 * h2 * w1, 4);
+                ComputeBuffer leftBuffer = new(left.data.Length, 4);
+                ComputeBuffer rightBuffer = new(right.data.Length, 4);
+                ComputeBuffer resultBuffer = new(b1 * h2 * w1, 4);
 
                 leftBuffer.SetData(left.data);
                 rightBuffer.SetData(right.data);
@@ -1532,7 +1539,7 @@ namespace DeepUnity
         {
             List<Tensor> slices = new();
 
-            int dimLength = tensor.shape.Get(dim);
+            int dimLength = tensor.Size(dim);
             int dimPos = 0;
             while (dimPos < dimLength)
             {
@@ -1824,7 +1831,7 @@ namespace DeepUnity
 
         #region On Axis Operation
 
-        public static Tensor Transpose(Tensor tensor, int axis0, int axis1)
+        private static Tensor Transpose(Tensor tensor, int axis0, int axis1)
         {
             if (axis0 < 0 || axis0 >= tensor.Rank || axis1 < 0 || axis1 >= tensor.Rank)
                 throw new ArgumentException("The specified axes are out of range for this tensor's rank.");
@@ -1867,12 +1874,7 @@ namespace DeepUnity
             }
             return result;
         }
-        /// <summary>
-        /// The selected axis is divided into smaller chunks. <br />
-        /// If the dimension is not a multiple of split_size, the last batch will remain incompletely.<br />
-        /// Example: Split(tensor(m, n, p), axis: 1, split_size: 2) => tensor(m, 2, p) x (n/2) tensors. 
-        /// </summary>
-        public static Tensor[] Split(Tensor tensor, int axis, int split_size)
+        private static Tensor[] Split(Tensor tensor, int axis, int split_size)
         {
             int rank = tensor.Rank;
             int axisIndex = GetAxisIndex(rank, axis);
@@ -1923,7 +1925,7 @@ namespace DeepUnity
 
             return slices.ToArray();
         }
-        public static Tensor Join(int axis, params Tensor[] tensors)
+        private static Tensor Join(int axis, params Tensor[] tensors)
         {
             if (tensors == null || tensors.Length == 0)
                 throw new ArgumentException("Tensor used for joining are not defined.");
@@ -1976,7 +1978,7 @@ namespace DeepUnity
 
             return result;
         }
-        public static Tensor Expand(Tensor tensor, int axis, int times)
+        private static Tensor Expand(Tensor tensor, int axis, int times)
         {
             int rank = tensor.Rank;
             int axisIndex = GetAxisIndex(rank, axis);
@@ -2021,13 +2023,13 @@ namespace DeepUnity
 
             return result;
         }
-        public static Tensor Shuffle(Tensor tensor, int axis)
+        private static Tensor Shuffle(Tensor tensor, int axis)
         {
             Tensor[] slices = Split(tensor, axis, 1);
             slices = Utils.Shuffle(slices).ToArray();
             return Join(axis, slices);
         }
-        public static Tensor Sum(Tensor tensor, int axis)
+        private static Tensor Sum(Tensor tensor, int axis)
         {
             Tensor result = null;
             int[] shape = tensor.shape.ToArray();
@@ -2114,7 +2116,7 @@ namespace DeepUnity
 
             return result;
         }
-        public static Tensor Mean(Tensor tensor, int axis)
+        private static Tensor Mean(Tensor tensor, int axis)
         {
             Tensor result = null;
             int[] shape = tensor.shape.ToArray();
@@ -2201,7 +2203,7 @@ namespace DeepUnity
 
             return result;
         }
-        public static Tensor Var(Tensor tensor, int axis, int correction = 1)
+        private static Tensor Var(Tensor tensor, int axis, int correction = 1)
         {
             Tensor result = null;
             int[] shape = tensor.shape.ToArray();
@@ -2299,11 +2301,11 @@ namespace DeepUnity
 
             return result;
         }
-        public static Tensor Std(Tensor tensor, int axis, int correction = 1)
+        private static Tensor Std(Tensor tensor, int axis, int correction = 1)
         {
             return Sqrt(Var(tensor, axis, correction));
         }
-        public static Tensor Min(Tensor tensor, int axis, bool keepDim = false)
+        private static Tensor Min(Tensor tensor, int axis, bool keepDim = false)
         {
             Tensor result = null;
             int[] shape = tensor.shape.ToArray();
@@ -2418,7 +2420,7 @@ namespace DeepUnity
             return result;
 
         }
-        public static Tensor Max(Tensor tensor, int axis, bool keepDim = false)
+        private static Tensor Max(Tensor tensor, int axis, bool keepDim = false)
         {
             Tensor result = null;
             int[] shape = tensor.shape.ToArray();
@@ -2700,8 +2702,8 @@ namespace DeepUnity
         /// <returns></returns>
         public static Tensor RandomGaussian(Tensor mu, Tensor sigma, out Tensor entropies)
         {
-            Tensor x = new (mu.shape);
-            entropies = new (mu.shape);
+            Tensor x = new(mu.shape);
+            entropies = new(mu.shape);
 
             for (int i = 0; i < x.data.Length; i++)
             {
@@ -2732,7 +2734,7 @@ namespace DeepUnity
 
             return Tensor.Log((sig2 / (sig1 + Utils.EPSILON)) + Utils.EPSILON) +
                 (var1 + (mu1 - mu2) * (mu1 - mu2)) / (2f * var2) - 0.5f;
-        }        
+        }
         public static bool HasNaN(Tensor tensor)
         {
             for (int i = 0; i < tensor.data.Length; i++)
@@ -2742,7 +2744,7 @@ namespace DeepUnity
             }
             return false;
         }
-        
+
         #endregion
 
         public static Tensor Reshape(Tensor tensor, params int[] newShape)
@@ -2848,7 +2850,7 @@ namespace DeepUnity
         {
             int rank = Rank;
 
-            StringBuilder sb = new ();
+            StringBuilder sb = new();
 
             sb.Append("Tensor");
             sb.Append(Shape);
@@ -2994,25 +2996,7 @@ namespace DeepUnity
             if (Width != other.Width) return false;
             return true;
         }
-        public int Get(TDim dim)
-        {
-            switch (dim)
-            {
-                case TDim.width: return _width;
-                case TDim.height: return _height;
-                case TDim.channel: return _channels;
-                case TDim.batch: return _batch;
-                default: throw new Exception("Unhandled dim type");
-            }
-        }
-        public TDim First()
-        {
-            if (_batch > 1) return TDim.batch;
-            if (_channels > 1) return TDim.channel;
-            if (_height > 1) return TDim.height;
-            return TDim.width;
 
-        }
         public override string ToString()
         {
 
