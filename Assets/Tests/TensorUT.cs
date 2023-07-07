@@ -12,15 +12,25 @@ namespace kbRadu
 
         private void Start()
         {
-            Tensor t = Tensor.Random01(10, 10);
-            print(t);
-            print(new MaxPool2D(3).Forward(t));
+            var t = Tensor.Random01(MatShape.x, MatShape.y);
+            var t2 = Tensor.Random01(MatShape.y, MatShape.x);
+
+            Timer.Start();
+            for (int i = 0; i < Runs; i++)
+            {
+                Tensor.MatMul(t, t2);
+            }
+           
+            Timer.Stop();
         }
+
         void TensorGPUTime()
         {
             var t1 = TensorGPU.Random01(MatShape.x, MatShape.y);
             var t2 = TensorGPU.Random01(MatShape.x, MatShape.y);
 
+            CamSensor ge;
+           
             
             Timer.Start();
             for (int i = 0; i < Runs; i++)

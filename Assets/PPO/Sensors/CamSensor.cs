@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using System.IO;
@@ -12,18 +11,26 @@ namespace DeepUnity
     [AddComponentMenu("DeepUnity/Cam Sensor")]
     public class CamSensor : MonoBehaviour, ISensor
     {
-        public Camera cam;
-        [Min(16)]public int Width = 640;
-        [Min(9)]public int Height = 480;
-        public CaptureType type = CaptureType.RGB;
+        [SerializeField] private Camera cam;
+        [SerializeField, Min(16)]private int Width = 640;
+        [SerializeField, Min(9)]private int Height = 480;
+        [SerializeField] private CaptureType type = CaptureType.RGB;
 
 
+        /// <summary>
+        /// <b>Length</b> = <b>Width</b> * <b>Height</b>.
+        /// </summary>
+        /// <returns>IEnumerable of Color values.</returns>
         public IEnumerable GetObservations()
         {
-            return Capture().GetPixels().Cast<float>();
+            return Capture().GetPixels();
         }
 
-        private Texture2D Capture()
+        /// <summary>
+        /// Returns the image texture rendered by the camera.
+        /// </summary>
+        /// <returns>Texture2D</returns>
+        public Texture2D Capture()
         {
             if (cam == null)
             {
@@ -55,11 +62,11 @@ namespace DeepUnity
             return image;
         }
 
-        public void TakeShot()
+        public void TakeAShot()
         {
             if (cam == null)
             {
-                Debug.LogError("<color=red>CameraSensor Cam object reference not set to an instance of an object.</color>");
+                Debug.LogError("CameraSensor Cam object reference not set to an instance of an object. Please assign a Camera for the first field!");
                 return;
             }
             if (cam.targetTexture == null)
@@ -96,28 +103,24 @@ namespace DeepUnity
         }  
     }
 
-    public enum CaptureType
-    {
-        RGB,
-        Greyscale,
-    }
+
 
     #region Editor
     [CustomEditor(typeof(CamSensor)), CanEditMultipleObjects]
     class ScriptlessCameraSensor : Editor
-    { 
+    {
+        public static string[] dontInclude = new string[] { "m_Script" };
         public override void OnInspectorGUI()
         {
-            List<string> dontInclude = new List<string>() { "m_Script" };
             CamSensor script = (CamSensor)target;
           
-            DrawPropertiesExcluding(serializedObject, dontInclude.ToArray());
+            DrawPropertiesExcluding(serializedObject, dontInclude);
             serializedObject.ApplyModifiedProperties();
 
             EditorGUILayout.Separator();
             if(GUILayout.Button("Take a shot"))
             {
-                script.TakeShot();
+                script.TakeAShot();
             }
         }
     }

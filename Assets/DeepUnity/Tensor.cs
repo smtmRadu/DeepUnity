@@ -13,13 +13,15 @@ namespace DeepUnity
     /// [batch, channels, height, width]
     /// </summary>
     [Serializable]
-    public partial class Tensor : IEquatable<Tensor>
+    public sealed partial class Tensor : IEquatable<Tensor>
     {
         [SerializeField] private TShape shape;
-        [SerializeField] private float[] data;
+        [SerializeField] public float[] data;
 
         public static string PrintFormat = "0.00000";
         public int Rank => shape.Rank;
+
+
         public TShape Shape => shape;
         private int Size(int axis)
         {
@@ -33,7 +35,7 @@ namespace DeepUnity
                 case TDim.height: return shape.Height;
                 case TDim.channel: return shape.Channels;
                 case TDim.batch: return shape.Batch;
-                default: throw new Exception("Unhandled dim type");
+                default: throw new Exception("Unhandled TDim type");
             }
         }
 
@@ -178,7 +180,6 @@ namespace DeepUnity
 
             return t;
         }
-
         public static Tensor Constant(float[,,,] tesseract)
         {
             int width = tesseract.GetLength(0);
@@ -203,6 +204,7 @@ namespace DeepUnity
 
             return t;
         }
+
         public static Tensor Zeros(params int[] shape)
         {
             return new(shape);

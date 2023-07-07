@@ -6,6 +6,10 @@ using System.Collections;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// No hit value: 0 [info != all] or 0,0,0 [info == all]      <br />
+    /// Hit value: x [info != all] or x,y,z [info == all]         <br />
+    /// </summary>
     [AddComponentMenu("DeepUnity/Ray Sensor")]
     public class RaySensor : MonoBehaviour, ISensor
     {
@@ -13,18 +17,18 @@ namespace DeepUnity
 
         [SerializeField, Tooltip("@scene type")] World world = World.World3d;
         [SerializeField, Tooltip("@LayerMask used when casting the rays")] LayerMask layerMask = ~0;
-        [SerializeField, Tooltip("@observation value returned by the rays")] RayInfo info = RayInfo.Distance;
+        [SerializeField, Tooltip("@observations values returned by rays")] RayInfo info = RayInfo.Distance;
         [SerializeField, Range(1, 50), Tooltip("@size of the buffer equals the number of rays")] int rays = 5;
         [SerializeField, Range(1, 360)] int fieldOfView = 45;
         [SerializeField, Range(0, 359)] int rotationOffset = 0;
-        [SerializeField, Range(1, 1000), Tooltip("@maximum length of the rays\n@when no collision, value of the observation is 0")] int distance = 100;
+        [SerializeField, Range(1, 1000), Tooltip("@maximum length of the rays")] int distance = 100;
         [SerializeField, Range(0.01f, 10)] float sphereCastRadius = 0.5f;
 
         [Space(10)]
-        [SerializeField, Range(-45, 45), Tooltip("@ray vertical tilt\n@not used in 2D world")] float tilt = 0;
         [SerializeField, Range(-5, 5), Tooltip("@ray X axis offset")] float xOffset = 0;
         [SerializeField, Range(-5, 5), Tooltip("@ray Y axis offset")] float yOffset = 0;
         [SerializeField, Range(-5, 5), Tooltip("@ray Z axis offset\n@not used in 2D world")] float zOffset = 0;
+        [SerializeField, Range(-45, 45), Tooltip("@ray vertical tilt\n@not used in 2D world")] float tilt = 0;
 
         [Space(10)]
         [SerializeField] Color rayColor = Color.green;
@@ -103,6 +107,10 @@ namespace DeepUnity
 
         }
     
+        /// <summary>
+        /// <b>Length</b> = <b>Rays</b> * (if Info != All <b>1</b> else <b>3</b>)
+        /// </summary>
+        /// <returns>IEnumerable of float values</returns>
         public IEnumerable GetObservations()
         {
             return Observations;
@@ -258,63 +266,27 @@ namespace DeepUnity
     [CustomEditor(typeof(RaySensor)), CanEditMultipleObjects]
     class ScriptlessRaySensor : Editor
     {
-        private static readonly string[] _dontIncludeMe = new string[] { "m_Script" };
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            
-            DrawPropertiesExcluding(serializedObject, _dontIncludeMe);
 
-            serializedObject.ApplyModifiedProperties();    
+            var script = target as RaySensor;
+
+            List<string> _dontDrawMe = new List<string>() { "m_Script" };
+
+
+            SerializedProperty sr = serializedObject.FindProperty("world");
+
+            if (sr.enumValueIndex == (int)World.World2d)
+            {
+                _dontDrawMe.Add("tilt");
+                _dontDrawMe.Add("zOffset");
+
+            }
+            DrawPropertiesExcluding(serializedObject, _dontDrawMe.ToArray());
+
+            serializedObject.ApplyModifiedProperties();
         }
     }
-    public class ReadOnlyAttribute : PropertyAttribute
-    {
-
-    }
-
-    [CustomPropertyDrawer(typeof(ReadOnlyAttribute))]
-    public class ReadOnlyDrawer : PropertyDrawer
-    {
-        public override float GetPropertyHeight(SerializedProperty property,
-                                                GUIContent label)
-        {
-            return EditorGUI.GetPropertyHeight(property, label, true);
-        }
-
-        public override void OnGUI(Rect position,
-                                   SerializedProperty property,
-                                   GUIContent label)
-        {
-            GUI.enabled = false;
-            EditorGUI.PropertyField(position, property, label, true);
-            GUI.enabled = true;
-        }
-    }
-    public static class EditorGUILayoutUtility
-    {
-        public static readonly Color DEFAULT_COLOR = new Color(0f, 0f, 0f, 0.3f);
-        public static readonly Vector2 DEFAULT_LINE_MARGIN = new Vector2(2f, 2f);
-
-        public const float DEFAULT_LINE_HEIGHT = 1f;
-
-        public static void HorizontalLine(Color color, float height, Vector2 margin)
-        {
-            GUILayout.Space(margin.x);
-
-            EditorGUI.DrawRect(EditorGUILayout.GetControlRect(false, height), color);
-
-            GUILayout.Space(margin.y);
-        }
-        public static void HorizontalLine(Color color, float height) => EditorGUILayoutUtility.HorizontalLine(color, height, DEFAULT_LINE_MARGIN);
-        public static void HorizontalLine(Color color, Vector2 margin) => EditorGUILayoutUtility.HorizontalLine(color, DEFAULT_LINE_HEIGHT, margin);
-        public static void HorizontalLine(float height, Vector2 margin) => EditorGUILayoutUtility.HorizontalLine(DEFAULT_COLOR, height, margin);
-
-        public static void HorizontalLine(Color color) => EditorGUILayoutUtility.HorizontalLine(color, DEFAULT_LINE_HEIGHT, DEFAULT_LINE_MARGIN);
-        public static void HorizontalLine(float height) => EditorGUILayoutUtility.HorizontalLine(DEFAULT_COLOR, height, DEFAULT_LINE_MARGIN);
-        public static void HorizontalLine(Vector2 margin) => EditorGUILayoutUtility.HorizontalLine(DEFAULT_COLOR, DEFAULT_LINE_HEIGHT, margin);
-
-        public static void HorizontalLine() => EditorGUILayoutUtility.HorizontalLine(DEFAULT_COLOR, DEFAULT_LINE_HEIGHT, DEFAULT_LINE_MARGIN);
-    }
-
+   
 }

@@ -34,7 +34,7 @@ namespace DeepUnity
         /// Experimental
         /// </summary>
         internal readonly static ComputeShader TensorGPUCS;
-        internal readonly static int TensorGPUThreads = 1024;
+        internal readonly static int THREADS_NUM = 256;
 
         static DeepUnityMeta()
         {
@@ -72,6 +72,29 @@ namespace DeepUnity
             time = DateTime.Now - start;
             Debug.Log("[Timer] : " +  time);
             return time;
+        }
+    }
+    public class ReadOnlyAttribute : PropertyAttribute
+    {
+
+    }
+
+    [CustomPropertyDrawer(typeof(ReadOnlyAttribute))]
+    public class ReadOnlyDrawer : PropertyDrawer
+    {
+        public override float GetPropertyHeight(SerializedProperty property,
+                                                GUIContent label)
+        {
+            return EditorGUI.GetPropertyHeight(property, label, true);
+        }
+
+        public override void OnGUI(Rect position,
+                                   SerializedProperty property,
+                                   GUIContent label)
+        {
+            GUI.enabled = false;
+            EditorGUI.PropertyField(position, property, label, true);
+            GUI.enabled = true;
         }
     }
     public enum InitType

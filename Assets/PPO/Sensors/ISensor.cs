@@ -1,4 +1,3 @@
-
 using System.Collections;
 
 namespace DeepUnity
@@ -11,6 +10,11 @@ namespace DeepUnity
     {
         World3d,
         World2d,
+    }
+    public enum CaptureType
+    {
+        RGB,
+        Greyscale,
     }
 }
 

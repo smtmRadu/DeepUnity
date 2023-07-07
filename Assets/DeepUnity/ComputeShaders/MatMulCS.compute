@@ -11,7 +11,7 @@ int h2; // right height
 [numthreads(8, 8, 8)]
 void MatMul(uint3 id : SV_DispatchThreadID)
 {
-    if (id.x < w1 && id.y < h2)
+    if ((w1 == 1 || id.x < w1) && (h2 == 1 || id.y < h2))
     {
         float sum = 0.;
         for (uint i = 0; i < h1w2; i++)

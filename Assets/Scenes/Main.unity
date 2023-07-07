@@ -590,7 +590,7 @@ GameObject:
   - component: {fileID: 752495706}
   m_Layer: 0
   m_Name: TensorTests
-  m_TagString: Untagged
+  m_TagString: MainCamera
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -607,8 +607,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 996be2ae7d250784f9a8301a37c7fc92, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Device: 1
-  MatShape: {x: 784, y: 784}
+  Device: 0
+  MatShape: {x: 64, y: 64}
   Runs: 1000
 --- !u!4 &752495707
 Transform:
