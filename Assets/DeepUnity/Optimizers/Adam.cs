@@ -35,11 +35,11 @@ namespace DeepUnity
                 Learnable P = parameters[i];
 
 
-                mGamma[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
-                mBeta[i] = Tensor.Zeros(P.beta.Shape.ToArray());
+                mGamma[i] = Tensor.Zeros(P.gamma.Shape);
+                mBeta[i] = Tensor.Zeros(P.beta.Shape);
 
-                vGamma[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
-                vBeta[i] = Tensor.Zeros(P.beta.Shape.ToArray());
+                vGamma[i] = Tensor.Zeros(P.gamma.Shape);
+                vBeta[i] = Tensor.Zeros(P.beta.Shape);
 
             }
         }

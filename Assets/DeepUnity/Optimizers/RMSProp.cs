@@ -46,16 +46,16 @@ namespace DeepUnity
             {
                 if (parameters[i] is Learnable P)
                 {
-                    buffGamma[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
-                    buffBeta[i] = Tensor.Zeros(P.beta.Shape.ToArray());
+                    buffGamma[i] = Tensor.Zeros(P.gamma.Shape);
+                    buffBeta[i] = Tensor.Zeros(P.beta.Shape);
 
-                    vGamma[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
-                    vBeta[i] = Tensor.Zeros(P.beta.Shape.ToArray());
+                    vGamma[i] = Tensor.Zeros(P.gamma.Shape);
+                    vBeta[i] = Tensor.Zeros(P.beta.Shape);
 
                     if (centered)
                     {
-                        gaveGamma[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
-                        gaveBeta[i] = Tensor.Zeros(P.beta.Shape.ToArray());
+                        gaveGamma[i] = Tensor.Zeros(P.gamma.Shape);
+                        gaveBeta[i] = Tensor.Zeros(P.beta.Shape);
                     }
                 }
             }

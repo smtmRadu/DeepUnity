@@ -23,8 +23,8 @@ namespace DeepUnity
             {
                 if (parameters[i] is Learnable P)
                 {
-                    statesum_W[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
-                    statesum_B[i] = Tensor.Zeros(P.beta.Shape.ToArray());
+                    statesum_W[i] = Tensor.Zeros(P.gamma.Shape);
+                    statesum_B[i] = Tensor.Zeros(P.beta.Shape);
 
                 }
             }

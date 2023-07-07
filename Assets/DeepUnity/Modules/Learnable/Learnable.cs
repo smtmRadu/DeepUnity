@@ -48,11 +48,11 @@ namespace DeepUnity
         public void OnAfterDeserialize()
         {
             // This function is actually having 2 workers on serialization.
-            if (gamma.Shape == null || gamma.Shape.Width == 0)
+            if (gamma.Shape == null || gamma.Width == 0)
                 return;
 
-            this.gradGamma = Tensor.Zeros(gamma.Shape.ToArray());
-            this.gradBeta = Tensor.Zeros(beta.Shape.ToArray());
+            this.gradGamma = Tensor.Zeros(gamma.Shape);
+            this.gradBeta = Tensor.Zeros(beta.Shape);
         }
     }
 }

@@ -23,29 +23,28 @@ namespace DeepUnity
             
             if (beta == null)
             {
-                int kernel_size = gamma.Size(TDim.width);
+                int kernel_size = gamma.Width;
 
-                int out_channels = gamma.Size(TDim.channel);
-                int h = input.Size(TDim.height) - kernel_size + 1;
-                int w = input.Size(TDim.width) - kernel_size + 1;
+                int out_channels = gamma.Channels;
+                int h = input.Height - kernel_size + 1;
+                int w = input.Width - kernel_size + 1;
 
                 beta = Tensor.RandomNormal((0, 1), out_channels, h, w);
                 gradBeta = Tensor.Zeros(out_channels, h, w);
             }
 
 
-            int batch_size = input.Size(TDim.batch);
-            return Tensor.Correlate2D(input, gamma, CorrelationMode.Valid) + Tensor.Expand(beta, TDim.batch, batch_size);
+            return Tensor.Correlate2D(input, gamma, CorrelationMode.Valid) + beta;
         }
         public Tensor Forward(Tensor input)
         {
             if(beta == null)
             {
-                int kernel_size = gamma.Size(TDim.width);
+                int kernel_size = gamma.Width;
 
-                int out_channels = gamma.Size(TDim.batch);
-                int h = input.Size(TDim.height) - kernel_size + 1;
-                int w = input.Size(TDim.width) - kernel_size + 1;
+                int out_channels = gamma.Batch;
+                int h = input.Height - kernel_size + 1;
+                int w = input.Width - kernel_size + 1;
 
                 beta = Tensor.RandomNormal((0, 1), out_channels, h, w);
                 gradBeta = Tensor.Zeros(out_channels, h, w);
@@ -53,12 +52,12 @@ namespace DeepUnity
 
 
             Input_Cache = Tensor.Identity(input);
-            int batch_size = input.Size(TDim.batch);
+            int batch_size = input.Batch;
             return Tensor.Correlate2D(input, gamma, CorrelationMode.Valid) + Tensor.Expand(beta, TDim.batch, batch_size);
         }
         public Tensor Backward(Tensor loss)
         {
-            int batch_size = loss.Size(TDim.batch);
+            int batch_size = loss.Batch;
             gradGamma += Tensor.Correlate2D(Input_Cache, loss, CorrelationMode.Valid) / batch_size;
             gradBeta += loss / batch_size;
 

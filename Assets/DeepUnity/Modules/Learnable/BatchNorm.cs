@@ -52,7 +52,7 @@ namespace DeepUnity
         }
         public Tensor Forward(Tensor input)
         {
-            int batch = input.Shape.Height;
+            int batch_size = input.Height;
 
             // When training (only on mini-batch training), we cache the values for backprop also
             var mu_B = Tensor.Mean(input, TDim.height); // mini-batch means      [batch, 1]
@@ -61,25 +61,25 @@ namespace DeepUnity
             // input [batch, features]  - muB or varB [features] -> need expand on axis 0 by batch
 
             // normalize and cache
-            xCentered = input - Tensor.Expand(mu_B, TDim.height, batch);
-            std = Tensor.Expand(Tensor.Sqrt(var_B + Utils.EPSILON), TDim.height, batch);
+            xCentered = input - Tensor.Expand(mu_B, TDim.height, batch_size);
+            std = Tensor.Expand(Tensor.Sqrt(var_B + Utils.EPSILON), TDim.height, batch_size);
             xHat = xCentered / std;
 
             // scale and shift
-            var yB = Tensor.Expand(gamma, TDim.height, batch) * xHat + Tensor.Expand(beta, TDim.height, batch);
+            var yB = Tensor.Expand(gamma, TDim.height, batch_size) * xHat + Tensor.Expand(beta, TDim.height, batch_size);
 
             
 
             // compute running mean and var
-            runningMean = runningMean * momentum + mu_B * (1f - momentum);
-            runningVar = runningVar * momentum + var_B * (1f - momentum);
+            runningMean = runningMean * momentum + Tensor.Squeeze(mu_B * (1f - momentum));
+            runningVar = runningVar * momentum + Tensor.Squeeze(var_B * (1f - momentum));
 
             return yB;
 
         }
         public Tensor Backward(Tensor dLdY)
         {
-            int m = dLdY.Shape.Height;
+            int m = dLdY.Height;
 
             // paper algorithm https://arxiv.org/pdf/1502.03167.pdf
 
@@ -100,6 +100,9 @@ namespace DeepUnity
 
             var dLdGamma = Tensor.Mean(dLdY * xHat, TDim.height);
             var dLdBeta = Tensor.Mean(dLdY, TDim.height);
+
+            dLdGamma = Tensor.Squeeze(dLdGamma);
+            dLdBeta = Tensor.Squeeze(dLdBeta);
 
             gradGamma += dLdGamma;
             gradBeta += dLdBeta;

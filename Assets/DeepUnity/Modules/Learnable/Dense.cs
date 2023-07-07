@@ -23,11 +23,11 @@ namespace DeepUnity
                     beta.ForEach(x => Utils.Random.Range(-sqrtK, sqrtK));
                     break;
                 case InitType.HE:
-                    float sigmaHE = MathF.Sqrt(2f / gamma.Shape.Height); //fanIn
+                    float sigmaHE = MathF.Sqrt(2f / gamma.Height); //fanIn
                     gamma.ForEach(x => Utils.Random.Gaussian(0f, sigmaHE));
                     break;
                 case InitType.Xavier:
-                    float sigmaXA = MathF.Sqrt(2f / (gamma.Shape.Width + gamma.Shape.Height)); // fanIn + fanOut
+                    float sigmaXA = MathF.Sqrt(2f / (gamma.Width + gamma.Height)); // fanIn + fanOut
                     gamma.ForEach(x => Utils.Random.Gaussian(0f, sigmaXA));
                     break;
                 case InitType.Normal:
@@ -43,24 +43,22 @@ namespace DeepUnity
 
         public Tensor Predict(Tensor input)
         {
-            int batch = input.Shape.Height;
-            return Tensor.MatMul(input, gamma) + Tensor.Expand(beta, TDim.height, batch);
+            return Tensor.MatMul(input, gamma) + beta;
 
         }
         public Tensor Forward(Tensor input)
         {
             Input_Cache = Tensor.Identity(input);
-            int batch_size = input.Shape.Height;
+            int batch_size = input.Height;
             return Tensor.MatMul(input, gamma) + Tensor.Expand(beta, TDim.height, batch_size);
         }
         public Tensor Backward(Tensor loss)
         {
-            int batch_size = loss.Shape.Height;
+            int batch_size = loss.Height;
             var transposedInput = Tensor.Transpose(Input_Cache, TDim.width, TDim.height);
 
             Tensor gradW = Tensor.MatMul(transposedInput, loss);
             Tensor gradB = Tensor.MatMul(Tensor.Ones(1, batch_size), loss);
-
 
             // Update the gradients
             gradGamma += gradW / batch_size;

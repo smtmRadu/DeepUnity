@@ -7,22 +7,28 @@ RWStructuredBuffer<float> resultArr;
 int w1; // left width
 int h1w2; // left height or right width
 int h2; // right height
+int b; // the batch over the first leftArr
 
+// x = width, y = height, z = channels
 [numthreads(8, 8, 8)]
 void MatMul(uint3 id : SV_DispatchThreadID)
 {
-    if ((w1 == 1 || id.x < w1) && (h2 == 1 || id.y < h2))
+    if (id.x < w1 && (h2 == 1 || id.y < h2))
     {
-        float sum = 0.;
-        for (uint i = 0; i < h1w2; i++)
+        for (int batch = 0; batch < b; b++)
         {
-            uint leftIndex = id.z * w1 * h1w2 + i * w1 + id.x;
-            uint rightIndex = id.z * h1w2 * h2 + id.y * h1w2 + i;
+            float sum = 0.;
+            for (uint i = 0; i < h1w2; i++)
+            {
+                uint leftIndex = batch * id.z * w1 * h1w2 + 0 + i * w1 + id.x;
+                uint rightIndex = id.z * h1w2 * h2 + id.y * h1w2 + i;
                     
-            sum += leftArr[leftIndex] * rightArr[rightIndex];
+                sum += leftArr[leftIndex] * rightArr[rightIndex];
+            }
+        
+            uint resultIndex = batch * id.z * w1 * h2 + id.z * w1 * h2 + id.y * w1 + id.x;
+            resultArr[resultIndex] = sum;
         }
         
-        uint resultIndex = id.z * w1 * h2 + id.y * w1 + id.x;
-        resultArr[resultIndex] = sum;
     }
 }

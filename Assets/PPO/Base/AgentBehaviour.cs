@@ -126,11 +126,11 @@ namespace DeepUnity
         {
             // Sample mu and sigma
             Tensor mu = muHead.Predict(state);
-            Tensor sigma = Tensor.Fill(0.1f, mu.Shape.ToArray());
+            Tensor sigma = Tensor.Fill(0.1f, mu.Shape);
             // sigma = Tensor.Clip(sigma, sigma_clip.Item1, sigma_clip.Item2);
 
             // Sample actions
-            Tensor actions = Tensor.RandomGaussian(mu, sigma, out _);
+            Tensor actions = Tensor.RandomGaussian(mu, sigma);
 
             // Get log probs
             logProbs = Tensor.LogDensity(actions, mu, sigma);
@@ -140,9 +140,9 @@ namespace DeepUnity
         public Tensor ContinuousForward(Tensor stateBatch, out Tensor mu, out Tensor sigma)
         {
             mu = muHead.Forward(stateBatch);
-            sigma = Tensor.Fill(0.1f, mu.Shape.ToArray());
+            sigma = Tensor.Fill(0.1f, mu.Shape);
 
-            Tensor actions = Tensor.RandomGaussian(mu, sigma, out _);
+            Tensor actions = Tensor.RandomGaussian(mu, sigma);
 
             return actions;
 

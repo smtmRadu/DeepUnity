@@ -163,8 +163,8 @@ namespace DeepUnity
 
         private void UpdateContinuousNetwork(Tensor states, Tensor advantages, Tensor oldActions, Tensor oldLogProbs)
         {
-            int batch = states.Shape.Height;
-            int actions_num = oldActions.Shape.Width;
+            int batch = states.Height;
+            int actions_num = oldActions.Width;
             advantages = Tensor.Expand(advantages, TDim.width, actions_num);
 
 

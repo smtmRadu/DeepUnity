@@ -12,16 +12,7 @@ namespace kbRadu
 
         private void Start()
         {
-            var t = Tensor.Random01(MatShape.x, MatShape.y);
-            var t2 = Tensor.Random01(MatShape.y, MatShape.x);
 
-            Timer.Start();
-            for (int i = 0; i < Runs; i++)
-            {
-                Tensor.MatMul(t, t2);
-            }
-           
-            Timer.Stop();
         }
 
         void TensorGPUTime()

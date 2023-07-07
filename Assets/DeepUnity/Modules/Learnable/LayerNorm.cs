@@ -53,8 +53,8 @@ namespace DeepUnity
 
         public Tensor Forward(Tensor input)
         {
-            int batch_size = input.Size(TDim.height);
-            int num_features = input.Size(TDim.width);
+            int batch_size = input.Height;
+            int num_features = input.Width;
 
             Tensor mu = Tensor.Mean(input, TDim.width, keepDim: true);
             Tensor var = Tensor.Var(input, TDim.width, keepDim: true);
@@ -89,7 +89,7 @@ namespace DeepUnity
         }
         public Tensor Backward(Tensor dLdY)
         {
-            int m = dLdY.Shape.Height;
+            int m = dLdY.Height;
             var dLdxHat = dLdY * gamma[0];
             var dLdVar = Tensor.Mean(dLdxHat + xCentered * (-1f / 2f) *
                          Tensor.Pow(std + Utils.EPSILON, -3f / 2f),
@@ -105,9 +105,15 @@ namespace DeepUnity
             var dLdGamma = Tensor.Mean(dLdY + xCentered, TDim.width);
             var dLdBeta = Tensor.Mean(dLdY, TDim.width);
 
-            
-            gradGamma += Tensor.Mean(dLdGamma, TDim.height);
-            gradBeta += Tensor.Mean(dLdBeta, TDim.height);
+            // Also get the mean along the batch (cause the learnable parameters are updated by batch_size steps each call)
+            dLdGamma = Tensor.Mean(dLdGamma, TDim.height);
+            dLdBeta = Tensor.Mean(dLdBeta, TDim.height);
+
+            dLdGamma = Tensor.Squeeze(dLdGamma);
+            dLdBeta = Tensor.Squeeze(dLdBeta);
+
+            gradGamma += dLdGamma;
+            gradBeta += dLdBeta;
 
             return dLdX;
         }

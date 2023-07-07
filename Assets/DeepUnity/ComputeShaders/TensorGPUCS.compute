@@ -326,7 +326,7 @@ void MaxElementWise(uint3 id : SV_DispatchThreadID)
 [numthreads(8,8,8)]
 void MatMul(uint3 id : SV_DispatchThreadID)
 {
-    if ((h1 == 1 || id.x < h1) && (w2 == 1 || id.y < w2))
+    if (id.x < h1 && (w2 == 1 || id.y < w2))
         for (int l = 0; l < b1; l++)
         {
             float sum = 0.0f;

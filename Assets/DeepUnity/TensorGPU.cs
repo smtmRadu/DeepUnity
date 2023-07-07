@@ -47,6 +47,10 @@ namespace DeepUnity
         public readonly int[] Shape;
         private bool disposed = false;
 
+        public int Size(int axis)
+        {
+            return Shape[axis];
+        }
         public int Width
         {
             get
@@ -675,18 +679,6 @@ namespace DeepUnity
 
             return true;
         }
-
-        public bool EqualsCPU(Tensor tensorcpu)
-        {
-            float[] data1 = new float[data.count];
-            data.GetData(data1);
-
-            if (tensorcpu.data.SequenceEqual(data1)) 
-                return true;
-
-            return false;
-        }
-
     }
 }
 

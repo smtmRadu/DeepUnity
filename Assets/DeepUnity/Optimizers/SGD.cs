@@ -30,8 +30,8 @@ namespace DeepUnity
             {
                 if (parameters[i] is Learnable P)
                 {
-                    bGamma[i] = Tensor.Zeros(P.gamma.Shape.ToArray());
-                    bBeta[i] = Tensor.Zeros(P.beta.Shape.ToArray());
+                    bGamma[i] = Tensor.Zeros(P.gamma.Shape);
+                    bBeta[i] = Tensor.Zeros(P.beta.Shape);
 
                 }
             }
