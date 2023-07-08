@@ -7,7 +7,6 @@ namespace kbRadu
 {
     public class ModelUT : MonoBehaviour
     {
-        public Device device = Device.CPU;
         public Sequential net;
         public Optimizer optimizer;
         public StepLR scheduler;
@@ -36,7 +35,6 @@ namespace kbRadu
         private int i = 0;
         public void Start()
         {
-            DeepUnityMeta.device = device;
             if (net == null)
             {
                 net = new Sequential(
@@ -51,9 +49,11 @@ namespace kbRadu
                 
                  new Dense(hiddenSize, 1)
                  );
-                optimizer = new Adamax(net.Parameters());
-                scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
             }
+
+            optimizer = new Adamax(net.Parameters());
+            scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
+
 
             trainPoints = new Vector3[trainingSamples];
             validationPoints = new Vector3[validationSamples];

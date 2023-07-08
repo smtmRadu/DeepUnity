@@ -7,27 +7,11 @@ using UnityEditor;
 using System.Collections.Generic;
 using kbRadu;
 using System.CodeDom;
+using DeepUnity;
 
 namespace DeepUnity
 {
-    [InitializeOnLoad]
-    internal class TensorGPUDisposer
-    {
-        static TensorGPUDisposer()
-        {
-            EditorApplication.playModeStateChanged += DisposeAllTensors;
-        }
-        private static void DisposeAllTensors(PlayModeStateChange state)
-        {
-            if (state == PlayModeStateChange.ExitingPlayMode)
-            {
-                foreach (var item in TensorGPU.tensors)
-                {
-                    item?.Dispose();
-                }
-            }
-        }
-    }
+    
     /// <summary>
     /// Experimental tensor fully on GPU.
     /// Current problems:
@@ -43,70 +27,88 @@ namespace DeepUnity
         public readonly static LinkedList<TensorGPU> tensors = new LinkedList<TensorGPU>();
 
         // i should go for a wrapper in the future to serialize this
-        private readonly ComputeBuffer data;
-        public readonly int[] Shape;
+        private  ComputeBuffer data;
+        private int[] shape;
         private bool disposed = false;
 
         public int Size(int axis)
         {
-            return Shape[axis];
+            return shape[axis];
+        }
+        public int Rank
+        {
+            get
+            {
+                if (shape.Length > 1)
+                    return shape.Length;
+                else if (shape[0] > 1)
+                    return 1;
+                else
+                    return 0;
+            }
         }
         public int Width
         {
             get
             {
-                return Shape.Last();
+                return shape.Last();
             }
         }
         public int Height
         {
             get
             {
-                if (Shape.Length < 2)
+                if (shape.Length < 2)
                     return 1;
                 else
-                    return Shape[Shape.Length - 2];
+                    return shape[shape.Length - 2];
             }
         }
         public int Channels
         {
             get
             {
-                if (Shape.Length < 3)
+                if (shape.Length < 3)
                     return 1;
                 else
-                    return Shape[Shape.Length - 3];
+                    return shape[shape.Length - 3];
             }
         }
         public int Batch
         {
             get
             {
-                if (Shape.Length < 4)
+                if (shape.Length < 4)
                     return 1;
                 else
-                    return Shape[Shape.Length - 4];
+                    return shape[shape.Length - 4];
             }
         }
-        public int Rank
-        {
-            get
-            {
-                if (Shape.Length > 1)
-                    return Shape.Length;
-                else if (Shape[0] > 1)
-                    return 1;
-                else
-                    return 0;
-            }
-        }
+        public int[] Shape => shape;
+
 
 
         // Create
         private TensorGPU(params int[] shape)
         {
-            this.Shape = shape;
+            if (shape == null || shape.Length == 0)
+                throw new ArgumentException("Tensor cannot be instantiated with null ");
+            if (shape.Length > 4)
+                throw new ArgumentException("Tensor cannot be instantiated with more than 4 dimensions.");
+
+            int size = 1;
+            foreach (var item in shape)
+            {
+                size *= item;
+            }
+
+            if (size > 4_194_304) // hardcoded like this because 4096x4096 max allowed matrix, on 8192 it crashes
+                throw new NotSupportedException("Tensor dimensions is too large on initialization (cannot surpass 16,777,216 units).");
+
+
+            this.shape = shape.ToArray();
             this.data = new ComputeBuffer(Count(), 4);
+
             tensors.AddLast(this);
             GC.Collect();
         }
@@ -117,7 +119,7 @@ namespace DeepUnity
 
             int count = (int) MathF.Ceiling((end - start) / step);
             TensorGPU t = new(count);
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
+            ComputeShader cs = DeepUnityMeta.TensorCS;
 
             int kernel = cs.FindKernel("Arange");
             cs.SetFloat("start", start);
@@ -131,7 +133,7 @@ namespace DeepUnity
         public static TensorGPU Random01(params int[] shape)
         {
             TensorGPU t = new(shape);
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
+            ComputeShader cs = DeepUnityMeta.TensorCS;
            
             int kernel = cs.FindKernel("Random01");
             cs.SetInt("seed", DateTime.Now.Millisecond);
@@ -143,7 +145,7 @@ namespace DeepUnity
         public static TensorGPU RandomNormal((float,float) mu_sigma, params int[] shape)
         {
             TensorGPU t = new(shape);
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
+            ComputeShader cs = DeepUnityMeta.TensorCS;
 
             int kernel = cs.FindKernel("RandomNormal");
             cs.SetInt("seed", DateTime.Now.Millisecond);
@@ -180,11 +182,11 @@ namespace DeepUnity
         // Operator overloading
         public static TensorGPU operator +(TensorGPU left, TensorGPU right)
         {
-            if (!left.Shape.SequenceEqual(right.Shape))
+            if (!left.shape.SequenceEqual(right.shape))
                 throw new OperationCanceledException($"Left and right tensors must have different shape for Element-Wise addition (+).");
 
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
-            TensorGPU result = new(left.Shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            TensorGPU result = new(left.shape);
 
             int kernel = cs.FindKernel("AdditionElementWise");
             cs.SetBuffer(kernel, "data1", left.data);
@@ -197,11 +199,11 @@ namespace DeepUnity
         }
         public static TensorGPU operator -(TensorGPU left, TensorGPU right)
         {
-            if (!left.Shape.SequenceEqual(right.Shape))
+            if (!left.shape.SequenceEqual(right.shape))
                 throw new OperationCanceledException($"Left and right tensors must have different shape for Element-Wise subtraction (-).");
 
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
-            TensorGPU result = new(left.Shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            TensorGPU result = new(left.shape);
 
             int kernel = cs.FindKernel("SubtractionElementWise");
             cs.SetBuffer(kernel, "data1", left.data);
@@ -214,11 +216,11 @@ namespace DeepUnity
         }
         public static TensorGPU operator *(TensorGPU left, TensorGPU right)
         {
-            if (!left.Shape.SequenceEqual(right.Shape))
+            if (!left.shape.SequenceEqual(right.shape))
                 throw new OperationCanceledException($"Left and right tensors must have different shape for Element-Wise multipication (*).");
 
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
-            TensorGPU result = new(left.Shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            TensorGPU result = new(left.shape);
 
             int kernel = cs.FindKernel("MultiplicationElementWise");
             cs.SetBuffer(kernel, "data1", left.data);
@@ -231,11 +233,11 @@ namespace DeepUnity
         }
         public static TensorGPU operator /(TensorGPU left, TensorGPU right)
         {
-            if (!left.Shape.SequenceEqual(right.Shape))
+            if (!left.shape.SequenceEqual(right.shape))
                 throw new OperationCanceledException($"Left and right tensors must have different shape for Element-Wise division (/).");
 
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
-            TensorGPU result = new(left.Shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            TensorGPU result = new(left.shape);
 
             int kernel = cs.FindKernel("DivisionElementWise");
             cs.SetBuffer(kernel, "data1", left.data);
@@ -248,8 +250,8 @@ namespace DeepUnity
         }
         public static TensorGPU operator +(TensorGPU left, float right)
         {
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
-            TensorGPU result = new(left.Shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            TensorGPU result = new(left.shape);
 
             int kernel = cs.FindKernel("AdditionWithScalar");
             cs.SetBuffer(kernel, "data1", left.data);
@@ -262,8 +264,8 @@ namespace DeepUnity
         }
         public static TensorGPU operator -(TensorGPU left, float right)
         {
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
-            TensorGPU result = new(left.Shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            TensorGPU result = new(left.shape);
 
             int kernel = cs.FindKernel("SubtractionWithScalar");
             cs.SetBuffer(kernel, "data1", left.data);
@@ -276,8 +278,8 @@ namespace DeepUnity
         }
         public static TensorGPU operator *(TensorGPU left, float right)
         {
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
-            TensorGPU result = new(left.Shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            TensorGPU result = new(left.shape);
 
             int kernel = cs.FindKernel("MultiplicationWithScalar");
             cs.SetBuffer(kernel, "data1", left.data);
@@ -290,8 +292,8 @@ namespace DeepUnity
         }
         public static TensorGPU operator /(TensorGPU left, float right)
         {
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
-            TensorGPU result = new(left.Shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            TensorGPU result = new(left.shape);
 
             int kernel = cs.FindKernel("DivisionWithScalar");
             cs.SetBuffer(kernel, "data1", left.data);
@@ -340,7 +342,7 @@ namespace DeepUnity
                 result = new(left.Batch, left.Channels, left.Height, right.Width);
 
 
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
+            ComputeShader cs = DeepUnityMeta.TensorCS;
 
             int kernel = cs.FindKernel("MatMul");
 
@@ -383,17 +385,17 @@ namespace DeepUnity
             int[] newShape;
             if (keepDim)
             {
-                newShape = tensor.Shape.ToArray();
+                newShape = tensor.shape.ToArray();
             }
             else
             {
-                newShape = tensor.Shape.ToArray();
+                newShape = tensor.shape.ToArray();
                 newShape[axis] = 1;
             }
 
             TensorGPU result = new TensorGPU(newShape);
 
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
+            ComputeShader cs = DeepUnityMeta.TensorCS;
 
             int kernel = cs.FindKernel("Mean");
             
@@ -427,17 +429,17 @@ namespace DeepUnity
             int[] newShape;
             if (keepDim)
             {
-                newShape = tensor.Shape.ToArray();
+                newShape = tensor.shape.ToArray();
             }
             else
             {
-                newShape = tensor.Shape.ToArray();
+                newShape = tensor.shape.ToArray();
                 newShape[axis] = 1;
             }
 
             TensorGPU result = new TensorGPU(newShape);
 
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
+            ComputeShader cs = DeepUnityMeta.TensorCS;
 
             int kernel = cs.FindKernel("Sum");
 
@@ -471,17 +473,17 @@ namespace DeepUnity
             int[] newShape;
             if (keepDim)
             {
-                newShape = tensor.Shape.ToArray();
+                newShape = tensor.shape.ToArray();
             }
             else
             {
-                newShape = tensor.Shape.ToArray();
+                newShape = tensor.shape.ToArray();
                 newShape[axis] = 1;
             }
 
             TensorGPU result = new TensorGPU(newShape);
 
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
+            ComputeShader cs = DeepUnityMeta.TensorCS;
 
             int kernel = cs.FindKernel("Var");
 
@@ -517,17 +519,17 @@ namespace DeepUnity
             int[] newShape;
             if (keepDim)
             {
-                newShape = tensor.Shape.ToArray();
+                newShape = tensor.shape.ToArray();
             }
             else
             {
-                newShape = tensor.Shape.ToArray();
+                newShape = tensor.shape.ToArray();
                 newShape[axis] = 1;
             }
 
             TensorGPU result = new TensorGPU(newShape);
 
-            ComputeShader cs = DeepUnityMeta.TensorGPUCS;
+            ComputeShader cs = DeepUnityMeta.TensorCS;
 
             int kernel = cs.FindKernel("Std");
 
@@ -569,7 +571,7 @@ namespace DeepUnity
         public int Count()
         {
             int count = 1;
-            foreach (var item in Shape)
+            foreach (var item in shape)
             {
                 count *= item;
 
@@ -595,7 +597,7 @@ namespace DeepUnity
             StringBuilder sb = new();
 
             sb.Append("Tensor ");
-            sb.Append($"[{Shape.ToCommaSeparatedString()}]");
+            sb.Append($"[{shape.ToCommaSeparatedString()}]");
 
 
             sb.Append("\n[");
@@ -665,7 +667,7 @@ namespace DeepUnity
         }
         public bool Equals(TensorGPU other)
         {
-            if (!Shape.SequenceEqual(other.Shape))
+            if (!shape.SequenceEqual(other.shape))
                 return false;
 
             float[] data1 = new float[data.count];
@@ -678,6 +680,28 @@ namespace DeepUnity
                 return false;
 
             return true;
+        }
+    }
+
+
+    [InitializeOnLoad]
+    internal sealed class TensorGPUDisposer
+    {
+        static TensorGPUDisposer()
+        {
+            EditorApplication.playModeStateChanged += DisposeAllTensors;
+        }
+
+        private TensorGPUDisposer() { }
+        private static void DisposeAllTensors(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.ExitingPlayMode)
+            {
+                foreach (var item in TensorGPU.tensors)
+                {
+                    item?.Dispose();
+                }
+            }
         }
     }
 }

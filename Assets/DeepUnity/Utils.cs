@@ -184,7 +184,7 @@ namespace DeepUnity
             /// </summary>
             public static float Value { get { lock (RNG) return (float) RNG.NextDouble(); } }
             public static float Range(float minInclusive, float maxExclusive) => Value * (maxExclusive - minInclusive) + minInclusive;
-            public static int Range(int minInclusive, int maxExclusive) => (int)Value * (maxExclusive - minInclusive) + minInclusive;
+            public static int Range(int minInclusive, int maxExclusive) => (int) (Value * (maxExclusive - minInclusive) + minInclusive);
             public static bool Bernoulli(float p = 0.5f) => Value < p;
             public static float Gaussian(float mean = 0f, float stddev = 1f)
             {

@@ -4,7 +4,7 @@ using System;
 
 namespace kbRadu
 {
-    public class TensorUT : MonoBehaviour
+    public class TensorManualTests : MonoBehaviour
     {
         public Device Device;
         public Vector2Int MatShape = new Vector2Int(64, 64);
@@ -13,6 +13,22 @@ namespace kbRadu
         private void Start()
         {
 
+
+            int a = (int)Utils.Random.Range(1, 5);
+            int b = (int)Utils.Random.Range(1, 5);
+            int c = (int)Utils.Random.Range(1, 5);
+            
+            Tensor x = Tensor.Random01(a, b);
+            Tensor y = Tensor.Random01(b, c);
+            
+            var cpu = Tensor.MatMul(x, y);
+            print(x);
+            print(y);
+            print(cpu);
+
+             var gpu = Tensor.MatMulGPU(x, y);
+             print(gpu);
+            //MatMulTestCPUsamewithGPU();
         }
 
         void TensorGPUTime()
@@ -73,7 +89,7 @@ namespace kbRadu
             print(y);
 
         }
-        void MatMulTest()
+        void MatMulTestCPUsamewithGPU()
         {
 
             int goods = 0;
@@ -86,12 +102,10 @@ namespace kbRadu
                 Tensor x = Tensor.Random01(a, b);
                 Tensor y = Tensor.Random01(b, c);
 
-                DeepUnityMeta.device = Device.CPU;
                 var cpu = Tensor.MatMul(x, y);
 
-                DeepUnityMeta.device = Device.GPU;
-                var gpu = Tensor.MatMul(x, y);
-
+                var gpu = Tensor.MatMulGPU(x, y);
+                
                 if (cpu.Equals(gpu))
                     goods++;
             }
@@ -101,7 +115,6 @@ namespace kbRadu
 
         void MatMulBenchmark()
         {
-            DeepUnityMeta.device = Device;
             Tensor x = Tensor.Random01(MatShape.x, MatShape.y);
             Tensor y = Tensor.Random01(MatShape.y, MatShape.x);
 
@@ -114,7 +127,7 @@ namespace kbRadu
                 Tensor.MatMul(x, y);
             }
             end = DateTime.Now - start;
-            print($"{Runs} runs on {DeepUnityMeta.device} on {x.Shape} * {y.Shape} in: {end}");
+            print($"{Runs} runs on CPU on {x.Shape} * {y.Shape} in: {end}");
 
         }
     }

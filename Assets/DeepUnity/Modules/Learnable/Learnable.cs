@@ -48,8 +48,15 @@ namespace DeepUnity
         public void OnAfterDeserialize()
         {
             // This function is actually having 2 workers on serialization.
-            if (gamma.Shape == null || gamma.Width == 0)
+            // If shape int[] was not deserialized, we need to break this worker.
+            try
+            {
+                var x = gamma.Shape;
+            }
+            catch
+            {
                 return;
+            }
 
             this.gradGamma = Tensor.Zeros(gamma.Shape);
             this.gradBeta = Tensor.Zeros(beta.Shape);

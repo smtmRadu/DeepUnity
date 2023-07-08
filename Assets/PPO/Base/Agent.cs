@@ -44,9 +44,7 @@ namespace DeepUnity
         {
             Hp = GetComponent<HyperParameters>();
 
-            Application.targetFrameRate = Hp.targetFPS;
-            DeepUnityMeta.device = Hp.device;
-           
+            Application.targetFrameRate = Hp.targetFPS;           
 
             Sensors = new List<ISensor>();
 

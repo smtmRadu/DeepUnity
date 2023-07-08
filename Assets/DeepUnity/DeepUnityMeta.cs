@@ -7,52 +7,16 @@ namespace DeepUnity
 {
     public static class DeepUnityMeta
     {
-        public static Device device = Device.CPU;
-
-        /// <summary>
-        /// Reference to MatMulCS Compute Shader.
-        /// </summary>
-        internal readonly static ComputeShader MatMulCS;
-
-        /// <summary>
-        /// Reference to Conv2DCS Compute Shader.
-        /// </summary>
-        internal readonly static ComputeShader Correlation2DCS;
-
-        /// <summary>
-        /// Threads displacement for Compute Shaders usage.
-        /// </summary>
-        internal readonly static int[] numthreads = new int[] { 8, 8, 8 };
-
-        /// <summary>
-        /// MaxDegreeOfParallelism of 8 for multi-threaded tasks.
-        /// </summary>
-        internal readonly static ParallelOptions threadLimit8 = new ParallelOptions { MaxDegreeOfParallelism = 8 };
-
-
-        /// <summary>
-        /// Experimental
-        /// </summary>
-        internal readonly static ComputeShader TensorGPUCS;
+        internal readonly static ComputeShader TensorCS;
         internal readonly static int THREADS_NUM = 256;
 
         static DeepUnityMeta()
         {
             try
             {
-                string csguid = AssetDatabase.FindAssets("MatMulCS")[0];
-                string cspath = AssetDatabase.GUIDToAssetPath(csguid);
-                MatMulCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
-
-                csguid = AssetDatabase.FindAssets("Correlation2DCS")[0];
-                cspath = AssetDatabase.GUIDToAssetPath(csguid);
-                Correlation2DCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
-
-                // Experimental
-                csguid = AssetDatabase.FindAssets("TensorGPUCS")[0];
-                cspath = AssetDatabase.GUIDToAssetPath(csguid);
-                TensorGPUCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
-
+                var csguid = AssetDatabase.FindAssets("TensorCS")[0];
+                var cspath = AssetDatabase.GUIDToAssetPath(csguid);
+                TensorCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
 
             }
             catch { }

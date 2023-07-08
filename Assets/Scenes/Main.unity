@@ -407,12 +407,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b84b8b2bedacc4a45b998f855a119d27, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  device: 1
   net: {fileID: 11400000, guid: 561f61240ab39e6428f1202f2b48eb7c, type: 2}
   hiddenSize: 64
   trainingSamples: 512
   batch_size: 32
-  validationSamples: 6
+  validationSamples: 32
   scheduler_step_size: 1000000
   scheduler_gamma: 1
   rotationSpeed: 0.35

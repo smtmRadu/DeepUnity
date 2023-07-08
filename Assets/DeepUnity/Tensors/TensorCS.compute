@@ -326,18 +326,22 @@ void MaxElementWise(uint3 id : SV_DispatchThreadID)
 [numthreads(8,8,8)]
 void MatMul(uint3 id : SV_DispatchThreadID)
 {
-    if (id.x < h1 && (w2 == 1 || id.y < w2))
-        for (int l = 0; l < b1; l++)
+    // id.x = p , id.y = n, id.z = k
+    // input [J x 1 x N x M] * other [K x M x P]
+    // out [J x K x N x P]
+    
+    // if ((h1 == 1 || id.x < h1) && (w2 == 1 || id.y < w2))
+    
+    for (int j = 0; j < b1; j++)
+    {
+        float sum = 0.0f;
+        for (uint m = 0; m < w1; m++)
         {
-            float sum = 0.0f;
-            for (uint i = 0; i < w1; i++)
-            {
-                sum += data1_get(l, id.z, id.y, i) * data2_get(l, id.z, i, id.x);
-               
-                
-            }
-            result_set(l, id.z, id.y, id.x, sum);
+            sum += data1_get(j, 0, id.y, m) * data2_get(j, id.z, m, id.x);                
         }
+        
+        result_set(j, id.z, id.y, id.x, sum);
+    }
 }
 
 
