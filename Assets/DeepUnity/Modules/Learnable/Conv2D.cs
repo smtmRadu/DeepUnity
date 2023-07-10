@@ -20,12 +20,12 @@ namespace DeepUnity
         }
         public Tensor Predict(Tensor input)
         {
-            
+
             if (beta == null)
             {
                 int kernel_size = gamma.Width;
 
-                int out_channels = gamma.Channels;
+                int out_channels = gamma.Batch;
                 int h = input.Height - kernel_size + 1;
                 int w = input.Width - kernel_size + 1;
 
@@ -33,8 +33,8 @@ namespace DeepUnity
                 gradBeta = Tensor.Zeros(out_channels, h, w);
             }
 
-
-            return Tensor.Correlate2D(input, gamma, CorrelationMode.Valid) + beta;
+            int batch_size = input.Batch;
+            return Tensor.Correlate2D(input, gamma, CorrelationMode.Valid) + Tensor.Expand(beta, Dim.batch, batch_size);
         }
         public Tensor Forward(Tensor input)
         {
@@ -53,7 +53,7 @@ namespace DeepUnity
 
             Input_Cache = Tensor.Identity(input);
             int batch_size = input.Batch;
-            return Tensor.Correlate2D(input, gamma, CorrelationMode.Valid) + Tensor.Expand(beta, TDim.batch, batch_size);
+            return Tensor.Correlate2D(input, gamma, CorrelationMode.Valid) + Tensor.Expand(beta, Dim.batch, batch_size);
         }
         public Tensor Backward(Tensor loss)
         {

@@ -12,8 +12,8 @@ namespace DeepUnity
 
         public void ZeroGrad()
         {
-            gradGamma.ForEach(x => 0f);
-            gradBeta.ForEach(x => 0f);
+            gradGamma = Tensor.Zeros(gradGamma.Shape);
+            gradBeta = Tensor.Zeros(gradBeta.Shape);
         }
         public void ClipGradValue(float clip_value)
         {
@@ -51,7 +51,10 @@ namespace DeepUnity
             // If shape int[] was not deserialized, we need to break this worker.
             try
             {
+                // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
                 var x = gamma.Shape;
+                if (x == null || x.Length == 0)
+                    throw new System.Exception();
             }
             catch
             {

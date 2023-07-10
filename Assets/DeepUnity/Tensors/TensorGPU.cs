@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using kbRadu;
 using System.CodeDom;
 using DeepUnity;
+using System.Drawing.Drawing2D;
 
 namespace DeepUnity
 {
@@ -31,10 +32,7 @@ namespace DeepUnity
         private int[] shape;
         private bool disposed = false;
 
-        public int Size(int axis)
-        {
-            return shape[axis];
-        }
+       
         public int Rank
         {
             get
@@ -84,17 +82,30 @@ namespace DeepUnity
                     return shape[shape.Length - 4];
             }
         }
-        public int[] Shape => shape;
-
+        public int[] Shape
+        {
+            get => shape.ToArray();
+        }    
+        public int Size(int axis)
+        {
+            if (axis >= 0)
+                return shape[axis];
+            else
+                return shape[shape.Length + axis];
+        }
 
 
         // Create
         private TensorGPU(params int[] shape)
         {
-            if (shape == null || shape.Length == 0)
+            if (shape == null)
                 throw new ArgumentException("Tensor cannot be instantiated with null ");
+            if (shape.Length == 0)
+                throw new ArgumentException("Tensor cannot be instantiated with a shape of length 0");
             if (shape.Length > 4)
                 throw new ArgumentException("Tensor cannot be instantiated with more than 4 dimensions.");
+            if (shape.Any(x => x < 1))
+                throw new ArgumentException("Tensor cannot be instantiated with a dimension < 1.");
 
             int size = 1;
             foreach (var item in shape)
@@ -130,30 +141,31 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
             return t;
         }
-        public static TensorGPU Random01(params int[] shape)
+        public static TensorGPU Constant(float scalar)
         {
-            TensorGPU t = new(shape);
-            ComputeShader cs = DeepUnityMeta.TensorCS;
-           
-            int kernel = cs.FindKernel("Random01");
-            cs.SetInt("seed", DateTime.Now.Millisecond);
-            cs.SetBuffer(kernel, "result", t.data);
-            
-            cs.Dispatch(kernel, 1, 1, 1);
+            TensorGPU t = new(1);
+            float[] dataarr = new float[] { 1 };
+            t.data.SetData(dataarr);
             return t;
         }
-        public static TensorGPU RandomNormal((float,float) mu_sigma, params int[] shape)
+        public static TensorGPU Constant(float[] vector)
         {
-            TensorGPU t = new(shape);
-            ComputeShader cs = DeepUnityMeta.TensorCS;
 
-            int kernel = cs.FindKernel("RandomNormal");
-            cs.SetInt("seed", DateTime.Now.Millisecond);
-            cs.SetBuffer(kernel, "result", t.data);
-            cs.SetFloat("mu", mu_sigma.Item1);
-            cs.SetFloat("sigma", mu_sigma.Item2);
+            int width = vector.GetLength(0);
 
-            cs.Dispatch(kernel, 1, 1, 1);
+            TensorGPU t = new(width);
+
+            float[] dataarr = new float[width];
+            int index = 0;
+            for (int i = 0; i < width; i++)
+            {
+
+                    dataarr[index++] = vector[i];
+                
+
+            }
+            t.data.SetData(dataarr);
+
             return t;
         }
         public static TensorGPU Constant(float[,] matrix)
@@ -175,6 +187,100 @@ namespace DeepUnity
             }
             t.data.SetData(dataarr);
 
+            return t;
+        }
+        public static TensorGPU Constant(float[,,] cube)
+        {
+            int depth = cube.GetLength(0);
+            int height = cube.GetLength(1);
+            int width = cube.GetLength(2);
+
+            TensorGPU t = new TensorGPU(depth, height, width);
+
+            float[] dataarr = new float[depth * height * width];
+            int index = 0;
+            for (int d = 0; d < depth; d++)
+            {
+                for (int h = 0; h < height; h++)
+                {
+                    for (int w = 0; w < width; w++)
+                    {
+                        dataarr[index++] = cube[d, h, w];
+                    }
+                }
+            }
+            t.data.SetData(dataarr);
+
+            return t;
+        }
+        public static TensorGPU Constant(float[,,,] tesseract)
+        {
+            int depth = tesseract.GetLength(0);
+            int height = tesseract.GetLength(1);
+            int width = tesseract.GetLength(2);
+            int extraDimension = tesseract.GetLength(3);
+
+            TensorGPU t = new TensorGPU(depth, height, width, extraDimension);
+
+            float[] dataarr = new float[depth * height * width * extraDimension];
+            int index = 0;
+            for (int d = 0; d < depth; d++)
+            {
+                for (int h = 0; h < height; h++)
+                {
+                    for (int w = 0; w < width; w++)
+                    {
+                        for (int e = 0; e < extraDimension; e++)
+                        {
+                            dataarr[index++] = tesseract[d, h, w, e];
+                        }
+                    }
+                }
+            }
+            t.data.SetData(dataarr);
+
+            return t;
+        }
+        public static TensorGPU Zeros(params int[] shape)
+        {
+            return new(shape);
+        }
+        public static TensorGPU Random01(params int[] shape)
+        {
+            TensorGPU t = new(shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Random01");
+            cs.SetInt("seed", DateTime.Now.Millisecond);
+            cs.SetBuffer(kernel, "result", t.data);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+            return t;
+        }
+        public static TensorGPU RandomNormal((float, float) mu_sigma, params int[] shape)
+        {
+            TensorGPU t = new(shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("RandomNormal");
+            cs.SetInt("seed", DateTime.Now.Millisecond);
+            cs.SetBuffer(kernel, "result", t.data);
+            cs.SetFloat("mu", mu_sigma.Item1);
+            cs.SetFloat("sigma", mu_sigma.Item2);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+            return t;
+        }
+        public static TensorGPU Fill(float value, params int[] shape)
+        {
+            TensorGPU t = new(shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Fill");
+            cs.SetFloat("value", value);
+            cs.SetBuffer(kernel, "result", t.data);
+
+            cs.Dispatch(kernel, 1, 1, 1);
             return t;
         }
 
@@ -324,23 +430,8 @@ namespace DeepUnity
             if (left.Width != right.Height)
                 throw new ArgumentException("Tensor must have compatible shapes for matrix multiplication (height of left tensor is not matching the width of the right tensor).");
 
-            if (left.Channels != right.Channels)
-                throw new ArgumentException("Tensors must have similar number of channels for channeled matrix multiplication.");
 
-            if (left.Rank != right.Rank)
-                throw new ArgumentException("Tensors must have similar rank for matrix multiplication.");
-
-            if(left.Rank < 2)
-                throw new ArgumentException("Tensors must rave rank >= 2 (need to be matrices) for matrix multiplication.");
-
-            TensorGPU result = null;
-            if (left.Rank == 2)
-                result = new(left.Height, right.Width);
-            else if (left.Rank == 3)
-                result = new(left.Channels, left.Height, right.Width);
-            else if (left.Rank == 4)
-                result = new(left.Batch, left.Channels, left.Height, right.Width);
-
+            TensorGPU result = new(CreateShape(left.Rank, left.Batch, right.Channels, left.Height, right.Width));
 
             ComputeShader cs = DeepUnityMeta.TensorCS;
 
@@ -370,6 +461,32 @@ namespace DeepUnity
                   (right.Width + 7) / 8,
                   (left.Channels + 7) / 8);
 
+
+
+            // Squeezing the result fast***
+            LinkedList<int> squeezedShape = new LinkedList<int>();
+
+            squeezedShape.AddFirst(result.Width);
+
+            if (result.Batch > 1)
+            {
+                squeezedShape.AddFirst(result.Height);
+                squeezedShape.AddFirst(result.Channels);
+                squeezedShape.AddFirst(result.Batch);
+
+            }
+            else if (result.Channels > 1)
+            {
+                squeezedShape.AddFirst(result.Height);
+                squeezedShape.AddFirst(result.Channels);
+
+            }
+            else if (result.Width > 1)
+            {
+                squeezedShape.AddFirst(result.Height);
+            }
+
+            result.shape = squeezedShape.ToArray();
 
             return result;
 
@@ -563,7 +680,18 @@ namespace DeepUnity
         // Math operations
         public static TensorGPU Pow(TensorGPU tensor, float power)
         {
-            return null;
+            TensorGPU t = new(tensor.shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Pow");
+
+            cs.SetFloat("power", power);
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "result", t.data);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+
+            return t;
         }
 
 
@@ -577,6 +705,12 @@ namespace DeepUnity
 
             }
             return count;
+        }
+        public float[] ToArray()
+        {
+            float[] tosend = new float[data.count];
+            data.GetData(tosend);
+            return tosend;
         }
         public void Dispose()
         { 
@@ -670,16 +804,32 @@ namespace DeepUnity
             if (!shape.SequenceEqual(other.shape))
                 return false;
 
-            float[] data1 = new float[data.count];
-            float[] data2 = new float[other.data.count];
-
-            data.GetData(data1);
-            other.data.GetData(data2);
-
-            if (!data1.SequenceEqual(data2))
+            if (!ToArray().SequenceEqual(other.ToArray()))
                 return false;
 
             return true;
+        }
+        public bool Equals(Tensor other)
+        {
+            if (!shape.SequenceEqual(other.Shape))
+                return false;
+
+            if (!ToArray().SequenceEqual(other.ToArray()))
+                return false;
+
+            return true;
+        }
+
+        private static int[] CreateShape(int rank, int b, int c, int h, int w)
+        {
+            if (rank < 2)
+                return new int[] { w };
+            else if (rank < 3)
+                return new int[] { h, w };
+            else if (rank < 4)
+                return new int[] { c, h, w };
+            else
+                return new int[] { b, c, h, w };
         }
     }
 

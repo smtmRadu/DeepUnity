@@ -24,8 +24,8 @@ namespace kbRadu
         private Tensor[] trainXbatches;
         private Tensor[] trainYbatches;
 
-        private Tensor[] validationXrounds;
-        private Tensor[] validationYrounds;
+        private Tensor validationInputs;
+        private Tensor validationTargets;
 
         private Vector3[] trainPoints = null;
         private Vector3[] validationPoints = null;
@@ -33,14 +33,16 @@ namespace kbRadu
 
         private int epoch = 0;
         private int i = 0;
+
         public void Start()
         {
             if (net == null)
             {
                 net = new Sequential(
                  new Dense(2, hiddenSize),
-                 // new BatchNorm(hiddenSize),
-                 new ReLU(),
+                 //new BatchNorm(hiddenSize),
+                 new TanH(),
+                 //new Dropout(0.1f),
                  
                  new Dense(hiddenSize, hiddenSize),
 
@@ -63,16 +65,16 @@ namespace kbRadu
             Tensor x2 = Tensor.RandomNormal((0, 1), trainingSamples, 1) * dataScale;
             Tensor y = Tensor.Sqrt(Tensor.Pow(x1, 2) + Tensor.Pow(x2, 2));
 
-            trainXbatches = Tensor.Split(Tensor.Join(TDim.width, x1, x2), TDim.height, batch_size);
-            trainYbatches = Tensor.Split(y, TDim.height, batch_size);
+            trainXbatches = Tensor.Split(Tensor.Join(Dim.width, x1, x2), Dim.height, batch_size);
+            trainYbatches = Tensor.Split(y, Dim.height, batch_size);
 
             // Prepare test batches
             x1 = Tensor.RandomNormal((0, 1), validationSamples, 1) * dataScale;
             x2 = Tensor.RandomNormal((0, 1), validationSamples, 1) * dataScale;
             y = Tensor.Sqrt(Tensor.Pow(x1, 2) + Tensor.Pow(x2, 2));
 
-            validationXrounds = Tensor.Split(Tensor.Join(TDim.width, x1, x2), TDim.height, 1);
-            validationYrounds = Tensor.Split(y, TDim.height, 1);
+            validationInputs = Tensor.Join(Dim.width, x1, x2);
+            validationTargets = y;
         }
 
 
@@ -106,16 +108,15 @@ namespace kbRadu
             float trainacc = Metrics.Accuracy(trainPrediction, trainYbatches[i]);
             trainAcc.Add(trainacc);
 
-            float validErr = 0f;
-            for (int j = 0; j < validationSamples; j++)
+            // Compute test accuracy
+            var testPrediction = net.Predict(validationInputs);
+            float testacc = Metrics.Accuracy(testPrediction, validationTargets);
+            for (int j = 0; j < validationInputs.Height; j++)
             {
-                // Compute test accuracy
-                var testPrediction = net.Predict(validationXrounds[j]);
-                float testacc = Metrics.Accuracy(testPrediction, validationYrounds[j]);
-                validationPoints[j] = new Vector3(validationXrounds[j][0], testPrediction[0], validationXrounds[j][1]);
-                validErr += testacc;
+                validationPoints[j] = new Vector3(validationInputs[j, 0], testPrediction[j, 0], validationInputs[j, 1]);
             }
-            validationAcc.Add(validErr/validationSamples);
+
+            validationAcc.Add(testacc);
 
 
 

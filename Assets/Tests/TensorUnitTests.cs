@@ -94,15 +94,15 @@ namespace kbRadu
                 t1 = Tensor.Random01(5, 5);
                 t2 = Tensor.Random01(1, 5, 1, 5);
 
-                Tensor.Expand(t1, TDim.channel, 3);
-                Tensor.Var(t1, TDim.width);
-                Tensor.Std(t1, TDim.height, 2, true);
-                Tensor.Sum(t1, TDim.width, false);
-                Tensor.Shuffle(t1, TDim.height);
-                Tensor.Transpose(t1, TDim.width, TDim.height);
-                Tensor.Split(t1, TDim.height, 2);
-                Tensor.Min(t1, TDim.height, false);
-                Tensor.Max(t1, TDim.width, true);
+                Tensor.Expand(t1, Dim.channel, 3);
+                Tensor.Var(t1, Dim.width);
+                Tensor.Std(t1, Dim.height, 2, true);
+                Tensor.Sum(t1, Dim.width, false);
+                Tensor.Shuffle(t1, Dim.height);
+                Tensor.Transpose(t1, Dim.width, Dim.height);
+                Tensor.Split(t1, Dim.height, 2);
+                Tensor.Min(t1, Dim.height, false);
+                Tensor.Max(t1, Dim.width, true);
                 Tensor.Squeeze(t2);
                 Tensor.Unsqueeze(t2);
             }
@@ -133,7 +133,6 @@ namespace kbRadu
 
                 Tensor.Clip(t1, -1, 0.5f);
                 Tensor.Norm(t1, NormType.EuclideanL2);
-                Tensor.RandomGaussian(t2, t1);
                 Tensor.LogDensity(t1, t1, t1);
                 Tensor.Density(t1, t1, t1);
                 Tensor.HasNaN(t1);
@@ -153,12 +152,11 @@ namespace kbRadu
                 Tensor t3 = Tensor.RandomNormal((0, 1), 5, 5);
 
                 Tensor.Reshape(t1, 25);
-                t1.ForEach(x => 2);
-                t1.Select(x => x * x + 2);
+                var x = t1.Select(x => 2);
+                var j = t1.Select(x => x * x + 2);
                 t1.Zip(t3, (a, b) => a * b);
-                t1.ToArray();
+                var s = t1.ToArray();
                 t1.Count(x => x < 1);
-                Tensor.FromArray(new float[] { 1, 2, 3 }, 3);
                 t1.ToString();
                 t1.GetHashCode();
                 t1.Equals(t2);

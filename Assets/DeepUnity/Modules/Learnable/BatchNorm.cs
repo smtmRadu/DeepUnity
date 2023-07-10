@@ -21,10 +21,7 @@ namespace DeepUnity
 
 
         /// <summary>
-        /// BatchNorm 1D. <br />
-        /// Can be applied before or after activation.    <br />
-        /// Forward input shape [batch, features]         <br />
-        /// Predict input shape [features]                <br />
+        /// <b>Placed after or before the non-linear activation function.</b>    <br />
         /// </summary>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
         public BatchNorm(int num_features, float momentum = 0.9f)
@@ -38,15 +35,19 @@ namespace DeepUnity
             gradBeta = Tensor.Zeros(num_features);
 
             runningVar = Tensor.Ones(num_features);
-            runningMean = Tensor.Zeros(num_features);
-
-           
+            runningMean = Tensor.Zeros(num_features);          
         }
 
         public Tensor Predict(Tensor input)
         {
-            var input_centered = (input - runningMean) / Tensor.Sqrt(runningVar + Utils.EPSILON);
-            var output = gamma * input_centered + beta;
+            int batch_size = input.Height;
+            var e_mean = Tensor.Expand(runningMean, Dim.height, batch_size);
+            var e_var = Tensor.Expand(runningVar, Dim.height, batch_size);
+            var e_gamma = Tensor.Expand(gamma, Dim.height, batch_size);
+            var e_beta = Tensor.Expand(beta, Dim.height, batch_size);
+
+            var input_centered = (input - e_mean) / Tensor.Sqrt(e_var + Utils.EPSILON);
+            var output = e_gamma * input_centered + e_beta;
 
             return output;
         }
@@ -55,18 +56,18 @@ namespace DeepUnity
             int batch_size = input.Height;
 
             // When training (only on mini-batch training), we cache the values for backprop also
-            var mu_B = Tensor.Mean(input, TDim.height); // mini-batch means      [batch, 1]
-            var var_B = Tensor.Var(input, TDim.height); // mini-batch variances  [batch, 1]
+            var mu_B = Tensor.Mean(input, Dim.height); // mini-batch means      [batch, 1]
+            var var_B = Tensor.Var(input, Dim.height); // mini-batch variances  [batch, 1]
 
             // input [batch, features]  - muB or varB [features] -> need expand on axis 0 by batch
 
             // normalize and cache
-            xCentered = input - Tensor.Expand(mu_B, TDim.height, batch_size);
-            std = Tensor.Expand(Tensor.Sqrt(var_B + Utils.EPSILON), TDim.height, batch_size);
+            xCentered = input - Tensor.Expand(mu_B, Dim.height, batch_size);
+            std = Tensor.Expand(Tensor.Sqrt(var_B + Utils.EPSILON), Dim.height, batch_size);
             xHat = xCentered / std;
 
             // scale and shift
-            var yB = Tensor.Expand(gamma, TDim.height, batch_size) * xHat + Tensor.Expand(beta, TDim.height, batch_size);
+            var yB = Tensor.Expand(gamma, Dim.height, batch_size) * xHat + Tensor.Expand(beta, Dim.height, batch_size);
 
             
 
@@ -83,23 +84,23 @@ namespace DeepUnity
 
             // paper algorithm https://arxiv.org/pdf/1502.03167.pdf
 
-            var dLdxHat = dLdY * Tensor.Expand(gamma, TDim.height, m); // [batch, outs]
+            var dLdxHat = dLdY * Tensor.Expand(gamma, Dim.height, m); // [batch, outs]
 
             var dLdVarB = Tensor.Mean(dLdxHat * xCentered * (-1f / 2f) *
-                         Tensor.Pow(std + Utils.EPSILON, -3f / 2f), TDim.height, true);
+                         Tensor.Pow(std + Utils.EPSILON, -3f / 2f), Dim.height, true);
 
             var dLdMuB = Tensor.Mean(
                          dLdxHat * -1f / (std + Utils.EPSILON) +
                          dLdVarB * -2f * xCentered / m, 
-                         TDim.height, true);
+                         Dim.height, true);
 
             var dLdX = dLdxHat * 1f / Tensor.Sqrt(std + Utils.EPSILON) +
                        dLdVarB * 2f * xCentered / m +
                        dLdMuB * (1f / m);
 
 
-            var dLdGamma = Tensor.Mean(dLdY * xHat, TDim.height);
-            var dLdBeta = Tensor.Mean(dLdY, TDim.height);
+            var dLdGamma = Tensor.Mean(dLdY * xHat, Dim.height);
+            var dLdBeta = Tensor.Mean(dLdY, Dim.height);
 
             dLdGamma = Tensor.Squeeze(dLdGamma);
             dLdBeta = Tensor.Squeeze(dLdBeta);

@@ -7,7 +7,7 @@ namespace DeepUnity
     {
         protected override void Activation(ref Tensor x)
         {
-            x.ForEach(x =>
+            x = x.Select(x =>
             {
                 float exp = MathF.Exp(x);
                 float mish = x * MathF.Tanh(MathF.Log(1f + exp));
@@ -17,13 +17,13 @@ namespace DeepUnity
 
         protected override void Derivative(ref Tensor x)
         {
-            x.ForEach(x =>
+            x = x.Select(x =>
             {
                 float exp = MathF.Exp(x);
                 float sech = 1f / MathF.Cosh(MathF.Log(1f + exp));
                 float mishDerivative = MathF.Tanh(MathF.Log(1f + exp)) + x * sech * sech;
                 return mishDerivative;
-            }, true);
+            });
         }
     }
 }

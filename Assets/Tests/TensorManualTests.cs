@@ -13,7 +13,10 @@ namespace kbRadu
         private void Start()
         {
 
-
+            Tensor abc = Tensor.Random01(10);
+            print(Tensor.Split(abc, Dim.width, 2)[0]);
+            
+            return;
             int a = (int)Utils.Random.Range(1, 5);
             int b = (int)Utils.Random.Range(1, 5);
             int c = (int)Utils.Random.Range(1, 5);
@@ -25,7 +28,7 @@ namespace kbRadu
             print(x);
             print(y);
             print(cpu);
-
+            
              var gpu = Tensor.MatMulGPU(x, y);
              print(gpu);
             //MatMulTestCPUsamewithGPU();
@@ -35,8 +38,6 @@ namespace kbRadu
         {
             var t1 = TensorGPU.Random01(MatShape.x, MatShape.y);
             var t2 = TensorGPU.Random01(MatShape.x, MatShape.y);
-
-            CamSensor ge;
            
             
             Timer.Start();
@@ -66,7 +67,7 @@ namespace kbRadu
 
             Tensor data = Tensor.RandomRange((0, 360), 1024, 10);
 
-            Tensor[] batches = Tensor.Split(data, TDim.height, 32);
+            Tensor[] batches = Tensor.Split(data, Dim.height, 32);
 
             foreach (var batch in batches)
             {
@@ -95,12 +96,14 @@ namespace kbRadu
             int goods = 0;
             for (int i = 0; i < Runs; i++)
             {
+                int batch = (int)Utils.Random.Range(1, 5);
+                int channels = (int)Utils.Random.Range(1, 5);
                 int a = (int)Utils.Random.Range(1, 5);
                 int b = (int)Utils.Random.Range(1, 5);
                 int c = (int)Utils.Random.Range(1, 5);
 
-                Tensor x = Tensor.Random01(a, b);
-                Tensor y = Tensor.Random01(b, c);
+                Tensor x = Tensor.Random01(batch, 1, a, b);
+                Tensor y = Tensor.Random01(channels, b, c);
 
                 var cpu = Tensor.MatMul(x, y);
 

@@ -32,19 +32,19 @@ namespace DeepUnity
             // 1. Apply padding
             input = Tensor.MatPad(input, padding, padding_mode);
 
-            Tensor pooled_input = Tensor.Zeros(input.Batch, input.Channels, Hout, Wout);
+            float[,,,] pooled_input = new float[input.Batch, input.Channels, Hout, Wout];
 
             List<float> values_pool = new List<float>();
 
-            for (int b = 0; b < pooled_input.Batch; b++)
+            for (int b = 0; b < pooled_input.GetLength(0); b++)
             {
                 // Foreach channel
-                for (int c = 0; c < pooled_input.Channels; c++)
+                for (int c = 0; c < pooled_input.GetLength(1); c++)
                 {
                     // foreach pool result
-                    for (int i = 0; i < pooled_input.Width; i++)
+                    for (int i = 0; i < pooled_input.GetLength(3); i++)
                     {
-                        for (int j = 0; j < pooled_input.Height; j++)
+                        for (int j = 0; j < pooled_input.GetLength(2); j++)
                         {
 
                             // foreach pool element in the pool
@@ -70,7 +70,7 @@ namespace DeepUnity
             }
 
 
-            return pooled_input;
+            return Tensor.Constant(pooled_input);
         }
         public Tensor Forward(Tensor input)
         {
@@ -81,19 +81,19 @@ namespace DeepUnity
             // 1. Apply padding
             input = Tensor.MatPad(input, padding, padding_mode);
 
-            Tensor pooled_input = Tensor.Zeros(input.Batch, input.Channels, Hout, Wout);
+            float[,,,] pooled_input = new float[input.Batch, input.Channels, Hout, Wout];
 
             List<float> values_pool = new List<float>();
 
-            for (int b = 0; b < pooled_input.Batch; b++)
+            for (int b = 0; b < pooled_input.GetLength(0); b++)
             {
                 // Foreach channel
-                for (int c = 0; c < pooled_input.Channels; c++)
+                for (int c = 0; c < pooled_input.GetLength(1); c++)
                 {
                     // foreach pool result
-                    for (int i = 0; i < pooled_input.Width; i++)
+                    for (int i = 0; i < pooled_input.GetLength(3); i++)
                     {
-                        for (int j = 0; j < pooled_input.Height; j++)
+                        for (int j = 0; j < pooled_input.GetLength(2); j++)
                         {
 
                             // foreach pool element in the pool
@@ -119,13 +119,13 @@ namespace DeepUnity
             }
 
 
-            return pooled_input;
+            return Tensor.Constant(pooled_input);
         }
         public Tensor Backward(Tensor loss)
         {
             // Initialize a tensor for gradients with the same shape as the input tensor
-            Tensor gradInput = Tensor.Zeros(Input_Cache.Shape.ToArray());
-
+            float[,,,] gradInput = new float[Input_Cache.Batch, Input_Cache.Channels, Input_Cache.Height, Input_Cache.Height];
+            
             for (int b = 0; b < loss.Batch; b++)
             {
                 // Foreach channel
@@ -159,7 +159,7 @@ namespace DeepUnity
                 }
             }
 
-            return gradInput;
+            return Tensor.Constant(gradInput);
         }
     }
 }

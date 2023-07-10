@@ -24,7 +24,7 @@ namespace DeepUnity
 
 
         /// <summary>
-        /// <b>Always placed before activation. </b>    <br />
+        /// <b>Placed before the non-linear activation function. </b>    <br />
         /// Forward input shape [batch, features]       <br />
         /// Predict input shape [features]              <br />
         /// </summary>
@@ -56,23 +56,23 @@ namespace DeepUnity
             int batch_size = input.Height;
             int num_features = input.Width;
 
-            Tensor mu = Tensor.Mean(input, TDim.width, keepDim: true);
-            Tensor var = Tensor.Var(input, TDim.width, keepDim: true);
+            Tensor mu = Tensor.Mean(input, Dim.width, keepDim: true);
+            Tensor var = Tensor.Var(input, Dim.width, keepDim: true);
 
             xCentered = input - mu;
             std = Tensor.Sqrt(var + Utils.EPSILON);
             xHat = xCentered / std;
 
-            Tensor expandedGamma = Tensor.Expand(gamma, TDim.width, num_features);
-            expandedGamma = Tensor.Expand(expandedGamma, TDim.height, batch_size);
+            Tensor expandedGamma = Tensor.Expand(gamma, Dim.width, num_features);
+            expandedGamma = Tensor.Expand(expandedGamma, Dim.height, batch_size);
 
-            Tensor expandedBeta = Tensor.Expand(beta, TDim.width, num_features);
-            expandedBeta = Tensor.Expand(expandedBeta, TDim.height, batch_size);
+            Tensor expandedBeta = Tensor.Expand(beta, Dim.width, num_features);
+            expandedBeta = Tensor.Expand(expandedBeta, Dim.height, batch_size);
             Tensor y = expandedGamma * xHat + expandedBeta;
 
 
-            float mu_across_batch = Tensor.Mean(mu, TDim.height)[0];
-            float var_across_batch = Tensor.Mean(var, TDim.height)[0];
+            float mu_across_batch = Tensor.Mean(mu, Dim.height)[0];
+            float var_across_batch = Tensor.Mean(var, Dim.height)[0];
 
             // Sharing consistance update approach
             // step += batch_size;
@@ -93,21 +93,21 @@ namespace DeepUnity
             var dLdxHat = dLdY * gamma[0];
             var dLdVar = Tensor.Mean(dLdxHat + xCentered * (-1f / 2f) *
                          Tensor.Pow(std + Utils.EPSILON, -3f / 2f),
-                         TDim.width, true);
+                         Dim.width, true);
 
             var dLdMu = Tensor.Mean(dLdxHat * -1f / (std + Utils.EPSILON) +
                         dLdVar * -2f * xCentered / m,
-                        TDim.width, true);
+                        Dim.width, true);
 
             var dLdX = dLdxHat * 1f / Tensor.Sqrt(std + Utils.EPSILON) +
                        dLdVar * 2f * xCentered / m + dLdMu * (1f / m);
 
-            var dLdGamma = Tensor.Mean(dLdY + xCentered, TDim.width);
-            var dLdBeta = Tensor.Mean(dLdY, TDim.width);
+            var dLdGamma = Tensor.Mean(dLdY + xCentered, Dim.width);
+            var dLdBeta = Tensor.Mean(dLdY, Dim.width);
 
             // Also get the mean along the batch (cause the learnable parameters are updated by batch_size steps each call)
-            dLdGamma = Tensor.Mean(dLdGamma, TDim.height);
-            dLdBeta = Tensor.Mean(dLdBeta, TDim.height);
+            dLdGamma = Tensor.Mean(dLdGamma, Dim.height);
+            dLdBeta = Tensor.Mean(dLdBeta, Dim.height);
 
             dLdGamma = Tensor.Squeeze(dLdGamma);
             dLdBeta = Tensor.Squeeze(dLdBeta);

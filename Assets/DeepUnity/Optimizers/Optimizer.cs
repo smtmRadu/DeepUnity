@@ -58,7 +58,7 @@ namespace DeepUnity
             }
 
             // Concatenate all gradients in a single tensor vector
-            Tensor vector = Tensor.Zeros(totalCount);
+            float[] vector = new float[totalCount];
             int index = 0;
             foreach (var param in parameters)
             {
@@ -76,7 +76,7 @@ namespace DeepUnity
             }
 
             // Compute norm
-            Tensor norm = Tensor.Norm(vector, NormType.ManhattanL1);
+            Tensor norm = Tensor.Norm(Tensor.Constant(vector), NormType.ManhattanL1);
 
             if (norm[0] <= max_norm)
                 return;

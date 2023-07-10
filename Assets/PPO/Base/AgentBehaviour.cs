@@ -1,4 +1,5 @@
 using System;
+using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 
@@ -130,7 +131,7 @@ namespace DeepUnity
             // sigma = Tensor.Clip(sigma, sigma_clip.Item1, sigma_clip.Item2);
 
             // Sample actions
-            Tensor actions = Tensor.RandomGaussian(mu, sigma);
+            Tensor actions = mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
 
             // Get log probs
             logProbs = Tensor.LogDensity(actions, mu, sigma);
@@ -142,7 +143,7 @@ namespace DeepUnity
             mu = muHead.Forward(stateBatch);
             sigma = Tensor.Fill(0.1f, mu.Shape);
 
-            Tensor actions = Tensor.RandomGaussian(mu, sigma);
+            Tensor actions = mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
 
             return actions;
 

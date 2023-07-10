@@ -88,7 +88,7 @@ namespace DeepUnity
         // Replicate
         // Circular
     }
-    public enum TDim
+    public enum Dim
     {
         batch,
         channel,

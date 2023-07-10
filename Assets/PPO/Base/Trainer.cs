@@ -109,16 +109,16 @@ namespace DeepUnity
 
                     for (int b = 0; b < M; b++)
                     { 
-                        Tensor states_batch = Tensor.Join(TDim.height, states_batches[b]);
-                        Tensor advantages_batch = Tensor.Join(TDim.height, advantages_batches[b]);
-                        Tensor returns_batch = Tensor.Join(TDim.height, returns_batches[b]);
+                        Tensor states_batch = Tensor.Join(Dim.height, states_batches[b]);
+                        Tensor advantages_batch = Tensor.Join(Dim.height, advantages_batches[b]);
+                        Tensor returns_batch = Tensor.Join(Dim.height, returns_batches[b]);
 
                         UpdateCritic(states_batch, returns_batch);
                         UpdateContinuousNetwork(
                                 states_batch,
                                 advantages_batch,
-                                Tensor.Join(TDim.height, cont_act_batches[b]),
-                                Tensor.Join(TDim.height, cont_log_probs_batches[b]));
+                                Tensor.Join(Dim.height, cont_act_batches[b]),
+                                Tensor.Join(Dim.height, cont_log_probs_batches[b]));
 
                     }
                    
@@ -165,7 +165,7 @@ namespace DeepUnity
         {
             int batch = states.Height;
             int actions_num = oldActions.Width;
-            advantages = Tensor.Expand(advantages, TDim.width, actions_num);
+            advantages = Tensor.Expand(advantages, Dim.width, actions_num);
 
 
             // Unpack what we need
@@ -180,10 +180,10 @@ namespace DeepUnity
             Tensor clipped_ratio = Tensor.Clip(ratio, 1 - hp.epsilon, 1 + hp.epsilon);
             Tensor PIold = Tensor.Exp(oldLogProbs);
 
-            Tensor dMindX = Tensor.Zeros(batch, actions_num);
-            Tensor dMindY = Tensor.Zeros(batch, actions_num);
-            Tensor dClipdX = Tensor.Zeros(batch, actions_num);
-            
+            float[,] dmindx = new float[batch, actions_num];
+            float[,] dmindy = new float[batch, actions_num];
+            float[,] dclipdx = new float[batch, actions_num];
+
             for (int b = 0; b < batch; b++)
             {
                 for (int a = 0; a < actions_num; a++)
@@ -195,15 +195,21 @@ namespace DeepUnity
                     float At = advantages[b, a];
 
                     // dMin(x,y)/dx
-                    dMindX[b,a] = (pt * At <= clip_p * At) ? 1 : 0;
+                    dmindx[b,a] = (pt * At <= clip_p * At) ? 1 : 0;
 
                     // dMin(x,y)/dy
-                    dMindY[b,a] = (clip_p * At < pt * At) ? 1 : 0;
+                    dmindy[b,a] = (clip_p * At < pt * At) ? 1 : 0;
 
                     // dClip(x,a,b)/dx
-                    dClipdX[b,a] = (1.0 - eps <= pt && pt <= 1.0 + eps) ? 1 : 0;
+                    dclipdx[b,a] = (1.0 - eps <= pt && pt <= 1.0 + eps) ? 1 : 0;
                 }
             }
+
+
+            Tensor dMindX = Tensor.Constant(dmindx);
+            Tensor dMindY = Tensor.Constant(dmindy);
+            Tensor dClipdX = Tensor.Constant(dclipdx);
+
 
             // d-LClip / dPi[a,s]
             Tensor dmLdPI = -1f * (dMindX * advantages + dMindY * advantages * dClipdX) * 1f / PIold;
