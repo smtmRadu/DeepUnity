@@ -127,6 +127,23 @@ void Ones(int3 id : SV_DispatchThreadID)
     }
 }
 
+#pragma kernel Fill
+[numthreads(1, 1, 1)]
+void Fill(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+
+    for (int i = 0; i < count; i++)
+    {
+        result[i] = value;
+
+    }
+}
+
+
 #pragma kernel Arange
 [numthreads(1, 1, 1)]
 void Arange(int3 id : SV_DispatchThreadID)
@@ -181,9 +198,9 @@ void RandomNormal(int3 id : SV_DispatchThreadID)
     }
 }
 
-#pragma kernel Fill
+#pragma kernel RandomRange
 [numthreads(1, 1, 1)]
-void Fill(int3 id : SV_DispatchThreadID)
+void RandomRange(int3 id : SV_DispatchThreadID)
 {
     uint count;
 
@@ -192,10 +209,12 @@ void Fill(int3 id : SV_DispatchThreadID)
 
     for (int i = 0; i < count; i++)
     {
-        result[i] = value;
+        result[i] = runif() * (maxvalue - minvalue) + minvalue;
 
     }
 }
+
+
 
 
 
@@ -350,9 +369,6 @@ void MaxElementWise(int3 id : SV_DispatchThreadID)
     }
 }
 
-
-
-
 // Special operations
 #pragma kernel MatMul
 [numthreads(8, 8, 8)]
@@ -367,22 +383,31 @@ void MatMul(int3 id : SV_DispatchThreadID)
     if (id.x >= wr || id.y >= hr || id.z >= cr)
         return;
     
-    
-    
-    int p = id.x;
-    int n = id.y;
-    int k = id.z;
-    
     for (int j = 0; j < br; j++)
     {
         float sum = 0.0f;
         for (int m = 0; m < w1; m++)
         {
-            sum += data1_get(j, 0, n, m) * data2_get(j, k, m, p);
+            sum += data1_get(j, 0, id.y, m) * data2_get(j, id.z, m, id.x);
         }
         
-        result_set(j, k, n, p, sum);
+        result_set(j, id.z, id.y, id.x, sum);
     }
+    
+    // int p = id.x;
+    // int n = id.y;
+    // int k = id.z;
+    // 
+    // for (int j = 0; j < br; j++)
+    // {
+    //     float sum = 0.0f;
+    //     for (int m = 0; m < w1; m++)
+    //     {
+    //         sum += data1_get(j, 0, n, m) * data2_get(j, k, m, p);
+    //     }
+    //     
+    //     result_set(j, k, n, p, sum);
+    // }
 }
 
 

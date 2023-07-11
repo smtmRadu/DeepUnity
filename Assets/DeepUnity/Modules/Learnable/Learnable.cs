@@ -54,7 +54,7 @@ namespace DeepUnity
                 // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
                 var x = gamma.Shape;
                 if (x == null || x.Length == 0)
-                    throw new System.Exception();
+                    throw new System.Exception("Is not even important...");
             }
             catch
             {

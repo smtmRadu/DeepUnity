@@ -13,7 +13,7 @@ namespace DeepUnity
         private Tensor xHat { get; set; }
        
 
-        [SerializeField] public float momentum;
+        [SerializeField] private float momentum;
 
         // Learnable parameters
         [SerializeField] private Tensor runningMean;

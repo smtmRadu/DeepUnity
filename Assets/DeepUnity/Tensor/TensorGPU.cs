@@ -5,34 +5,18 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
-using kbRadu;
-using System.CodeDom;
-using DeepUnity;
-using System.Drawing.Drawing2D;
+
 
 namespace DeepUnity
 {
-    
-    /// <summary>
-    /// Experimental tensor fully on GPU.
-    /// Current problems:
-    ///  - doesn t allow large tensors > 1024x1024
-    ///  - fullfills the vram because the GC has low latency
-    ///  
-    /// 
-    ///  Mean computing: 10k numbers. 0.008 on GPU, 0.0009 on CPU
-    /// </summary>
-
-    public class TensorGPU : IDisposable, IEquatable<TensorGPU>
+    [Serializable]
+    public class TensorGPU : IDisposable, IEquatable<TensorGPU>, ISerializationCallbackReceiver
     {
-        public readonly static LinkedList<TensorGPU> tensors = new LinkedList<TensorGPU>();
-
-        // i should go for a wrapper in the future to serialize this
-        private  ComputeBuffer data;
-        private int[] shape;
+        private ComputeBuffer data;
+        [SerializeField] private float[] serialized_data;
+        [SerializeField] private int[] shape;
         private bool disposed = false;
-
-       
+     
         public int Rank
         {
             get
@@ -94,7 +78,6 @@ namespace DeepUnity
                 return shape[shape.Length + axis];
         }
 
-
         // Create
         private TensorGPU(params int[] shape)
         {
@@ -118,10 +101,56 @@ namespace DeepUnity
 
 
             this.shape = shape.ToArray();
-            this.data = new ComputeBuffer(Count(), 4);
+            this.data = new ComputeBuffer(size, 4);
 
-            tensors.AddLast(this);
+            TensorGPUDisposer.tensors.AddLast(this);
             GC.Collect();
+        }
+        public static TensorGPU Reshape(TensorGPU tensor, params int[] newShape)
+        {
+            int count = 1;
+            foreach (var item in newShape)
+            {
+                count *= item;
+            }
+
+            if (count != tensor.Count())
+                throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
+
+            TensorGPU result = new TensorGPU(newShape);
+
+            float[] tensor_data = new float[tensor.Count()];
+            tensor.data.GetData(tensor_data);
+            float[] reshaped_data = new float[tensor.Count()];
+
+            int batch = result.Batch;
+            int channels = result.Channels;
+            int height = result.Height;
+            int width = result.Width;
+
+            int index = 0;
+            for (int b = 0; b < batch; b++)
+            {
+                for (int c = 0; c < channels; c++)
+                {
+                    for (int h = 0; h < height; h++)
+                    {
+                        for (int w = 0; w < width; w++)
+                        {
+                            reshaped_data[b * channels * height * width +  c * height * width + h * width + w] = tensor_data[index++];
+                        }
+                    }
+                }
+            }
+
+            result.data.SetData(reshaped_data);
+            return result;
+        }
+        public static TensorGPU Identity(TensorGPU other)
+        {
+            TensorGPU clone = new(other.shape);
+            clone.data.SetData(other.ToArray());
+            return clone;
         }
         public static TensorGPU Arange(float start, float end, float step)
         {
@@ -245,6 +274,28 @@ namespace DeepUnity
         {
             return new(shape);
         }
+        public static TensorGPU Ones(params int[] shape)
+        {
+            TensorGPU t = new(shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Ones");
+            cs.SetBuffer(kernel, "result", t.data);
+            cs.Dispatch(kernel, 1, 1, 1);
+            return t;
+        }
+        public static TensorGPU Fill(float value, params int[] shape)
+        {
+            TensorGPU t = new(shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Fill");
+            cs.SetFloat("value", value);
+            cs.SetBuffer(kernel, "result", t.data);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+            return t;
+        }
         public static TensorGPU Random01(params int[] shape)
         {
             TensorGPU t = new(shape);
@@ -271,14 +322,16 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
             return t;
         }
-        public static TensorGPU Fill(float value, params int[] shape)
+        public static TensorGPU RandomRange((float, float) min_max, params int[] shape)
         {
             TensorGPU t = new(shape);
             ComputeShader cs = DeepUnityMeta.TensorCS;
 
-            int kernel = cs.FindKernel("Fill");
-            cs.SetFloat("value", value);
+            int kernel = cs.FindKernel("RandomRange");
+            cs.SetInt("seed", DateTime.Now.Millisecond);
             cs.SetBuffer(kernel, "result", t.data);
+            cs.SetFloat("minvalue", min_max.Item1);
+            cs.SetFloat("maxvalue", min_max.Item2);
 
             cs.Dispatch(kernel, 1, 1, 1);
             return t;
@@ -696,31 +749,69 @@ namespace DeepUnity
 
 
         // other
-        public int Count()
-        {
-            int count = 1;
-            foreach (var item in shape)
+        public int Count(Func<float, bool> predicate = null)
+        {         
+            if (predicate == null)
             {
-                count *= item;
-
+                return data.count;
             }
-            return count;
+            else
+            {
+                int count = 0;
+                float[] data_cpu = new float[data.count];
+                data.GetData(data_cpu);
+
+                return data_cpu.Count(predicate);
+            }
+
+        }
+        public float Min(Func<float, float> selector = null)
+        {
+            float[] data_cpu = new float[data.count];
+            data.GetData(data_cpu);
+
+            if (selector == null)
+                return data_cpu.Min();
+            else
+                return data_cpu.Min(selector);
+            
+        }
+        public float Max(Func<float, float> selector = null)
+        {
+            float[] data_cpu = new float[data.count];
+            data.GetData(data_cpu);
+
+            if (selector == null)
+                return data_cpu.Max();
+            else
+                return data_cpu.Max(selector);
+
         }
         public float[] ToArray()
         {
             float[] tosend = new float[data.count];
             data.GetData(tosend);
             return tosend;
+        }       
+        public bool Equals(TensorGPU other)
+        {
+            if (!shape.SequenceEqual(other.shape))
+                return false;
+
+            if (!ToArray().SequenceEqual(other.ToArray()))
+                return false;
+
+            return true;
         }
-        public void Dispose()
-        { 
-            if(!disposed)
-            {
-                data.Release();
-                disposed = true;
-            }
-            
-            GC.SuppressFinalize(this);
+        public bool Equals(Tensor other)
+        {
+            if (!shape.SequenceEqual(other.Shape))
+                return false;
+
+            if (!ToArray().SequenceEqual(other.ToArray()))
+                return false;
+
+            return true;
         }
         public override string ToString()
         {
@@ -799,27 +890,34 @@ namespace DeepUnity
 
             return sb.ToString();
         }
-        public bool Equals(TensorGPU other)
+        public override int GetHashCode()
         {
-            if (!shape.SequenceEqual(other.shape))
-                return false;
-
-            if (!ToArray().SequenceEqual(other.ToArray()))
-                return false;
-
-            return true;
+            return base.GetHashCode();
         }
-        public bool Equals(Tensor other)
+        public void Dispose()
         {
-            if (!shape.SequenceEqual(other.Shape))
-                return false;
+            if (!disposed)
+            {
+                data.Release();
+                disposed = true;
+            }
 
-            if (!ToArray().SequenceEqual(other.ToArray()))
-                return false;
-
-            return true;
+            GC.SuppressFinalize(this);
+        }
+        public void OnBeforeSerialize()
+        {
+            serialized_data = new float[data.count];
+            data.GetData(serialized_data);
+        }
+        public void OnAfterDeserialize()
+        {
+            data = new ComputeBuffer(serialized_data.Length, 4);
+            disposed = false;
+            data.SetData(serialized_data);
+            TensorGPUDisposer.tensors.AddLast(this);
         }
 
+        // inside use
         private static int[] CreateShape(int rank, int b, int c, int h, int w)
         {
             if (rank < 2)
@@ -837,17 +935,17 @@ namespace DeepUnity
     [InitializeOnLoad]
     internal sealed class TensorGPUDisposer
     {
+        public readonly static LinkedList<TensorGPU> tensors = new LinkedList<TensorGPU>();
         static TensorGPUDisposer()
         {
             EditorApplication.playModeStateChanged += DisposeAllTensors;
         }
-
         private TensorGPUDisposer() { }
         private static void DisposeAllTensors(PlayModeStateChange state)
         {
             if (state == PlayModeStateChange.ExitingPlayMode)
             {
-                foreach (var item in TensorGPU.tensors)
+                foreach (var item in tensors)
                 {
                     item?.Dispose();
                 }

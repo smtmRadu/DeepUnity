@@ -101,5 +101,10 @@ namespace DeepUnity
         Full,
         Same
     }
+    public enum RNNnonLinearity
+    {
+        TanH,
+        ReLU
+    }
 }
 

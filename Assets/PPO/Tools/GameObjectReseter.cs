@@ -51,23 +51,23 @@ namespace DeepUnity
             }
         }
         private void GetAllRigidBodies(Transform parent)
-            {
-                Rigidbody[] rbs = parent.transform.GetComponents<Rigidbody>();
-                rigidBodies.AddRange(rbs);
-                foreach (Transform child in parent)
-                {                 
-                    GetAllTransforms(child);
-                }
+        {
+            Rigidbody[] rbs = parent.transform.GetComponents<Rigidbody>();
+            rigidBodies.AddRange(rbs);
+            foreach (Transform child in parent)
+            {                 
+                GetAllRigidBodies(child);
             }
+        }
         private void GetAllRigidBodies2D(Transform parent)
+        {
+            Rigidbody2D[] rbs2D = parent.transform.GetComponents<Rigidbody2D>();
+            rigidBodies2D.AddRange(rbs2D);
+            foreach (Transform child in parent)
             {
-                Rigidbody2D[] rbs2D = parent.transform.GetComponents<Rigidbody2D>();
-                rigidBodies2D.AddRange(rbs2D);
-                foreach (Transform child in parent)
-                {
-                    GetAllTransforms(child);
-                }
+                GetAllRigidBodies2D(child);
             }
+        }
 
         private void ResetAllTransforms(Transform parent, ref int index)
         {

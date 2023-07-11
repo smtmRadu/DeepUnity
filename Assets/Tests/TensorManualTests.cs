@@ -12,25 +12,38 @@ namespace kbRadu
 
         private void Start()
         {
-
-            Tensor abc = Tensor.Random01(10);
-            print(Tensor.Split(abc, Dim.width, 2)[0]);
-            
-            return;
-            int a = (int)Utils.Random.Range(1, 5);
-            int b = (int)Utils.Random.Range(1, 5);
-            int c = (int)Utils.Random.Range(1, 5);
-            
-            Tensor x = Tensor.Random01(a, b);
-            Tensor y = Tensor.Random01(b, c);
-            
-            var cpu = Tensor.MatMul(x, y);
+            Tensor x = Tensor.Arange(1, 4, 1);
+            Tensor y = Tensor.Arange(1, 13, 1);
+            y = Tensor.Reshape(y, 4, 3);
+            Tensor result = Tensor.MatMul(y, x);
             print(x);
-            print(y);
-            print(cpu);
-            
-             var gpu = Tensor.MatMulGPU(x, y);
-             print(gpu);
+            print(y);      
+            print(result);
+
+            return;
+            // Tensor a = Tensor.Arange(1f, 13f, 1);
+            // a = Tensor.Reshape(a, 3, 4);
+            // Tensor b = Tensor.Arange(1, 9f, 1);
+            // b = Tensor.Reshape(b, 4, 2);
+            // 
+            // print(a);
+            // print(b);
+            // print(Tensor.MatMul(a, b));
+            // print(Tensor.MatMulGPU(a, b));
+            // int a = (int)Utils.Random.Range(1, 5);
+            // int b = (int)Utils.Random.Range(1, 5);
+            // int c = (int)Utils.Random.Range(1, 5);
+            // 
+            // Tensor x = Tensor.Random01(a, b);
+            // Tensor y = Tensor.Random01(b, c);
+            // 
+            // var cpu = Tensor.MatMul(x, y);
+            // print(x);
+            // print(y);
+            // print(cpu);
+            // 
+            //  var gpu = Tensor.MatMulGPU(x, y);
+            //  print(gpu);
             //MatMulTestCPUsamewithGPU();
         }
 

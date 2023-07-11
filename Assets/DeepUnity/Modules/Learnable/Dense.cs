@@ -5,7 +5,7 @@ namespace DeepUnity
     [Serializable]
     public class Dense : Learnable, IModule
     {
-        private Tensor Input_Cache { get; set; }
+        private Tensor InputCache { get; set; }
 
         public Dense(int in_features, int out_features, InitType init = InitType.Default)
         {
@@ -13,61 +13,72 @@ namespace DeepUnity
             {
                 case InitType.Default:
                     float sqrtK = MathF.Sqrt(1f / in_features);
-                    gamma = Tensor.RandomRange((-sqrtK, sqrtK), in_features, out_features);
+                    gamma = Tensor.RandomRange((-sqrtK, sqrtK), out_features, in_features);
                     beta = Tensor.RandomRange((-sqrtK, sqrtK), out_features);
                     break;
                 case InitType.HE:
-                    float sigmaHE = MathF.Sqrt(2f / gamma.Height); //fanIn
-                    gamma = Tensor.RandomNormal((0, sigmaHE), in_features, out_features);
+                    float sigmaHE = MathF.Sqrt(2f / in_features); //fanIn
+                    gamma = Tensor.RandomNormal((0, sigmaHE), out_features, in_features);
                     beta = Tensor.Zeros(out_features);
                     break;
                 case InitType.Xavier:
-                    float sigmaXA = MathF.Sqrt(2f / (gamma.Width + gamma.Height)); // fanIn + fanOut
-                    gamma = Tensor.RandomNormal((0, sigmaXA), in_features, out_features);
+                    float sigmaXA = MathF.Sqrt(2f / (in_features + out_features)); // fanIn + fanOut
+                    gamma = Tensor.RandomNormal((0, sigmaXA), out_features, in_features);
                     beta = Tensor.Zeros(out_features);
                     break;
                 case InitType.Normal:
-                    gamma = Tensor.RandomNormal((0f, 1f), in_features, out_features);
+                    gamma = Tensor.RandomNormal((0f, 1f), out_features, in_features);
                     beta = Tensor.Zeros(out_features);
                     break;
                 case InitType.Uniform:
-                    gamma = Tensor.RandomRange((-1, 1), in_features, out_features);
+                    gamma = Tensor.RandomRange((-1, 1), out_features, in_features);
                     beta = Tensor.Zeros(out_features);
                     break;
                 default:
                     throw new Exception("Unhandled initialization type!");
             }
 
-            this.gradGamma = Tensor.Zeros(in_features, out_features);
+            this.gradGamma = Tensor.Zeros(out_features, in_features);
             this.gradBeta = Tensor.Zeros(out_features);
         }
 
         public Tensor Predict(Tensor input)
         {
+            // input = (B, IN)
+            // gamma = (OUT, IN)
+
+            // out = (B, OUT)
+            // input = (batch_size, in_features)
+            // gamma = (out_features, in_features)
+            // out = (out_features, batch_size)
             int batch_size = input.Height;
-            return Tensor.MatMul(input, gamma) + Tensor.Expand(beta, Dim.height, batch_size);
+            return Tensor.MatMul(input, Tensor.Transpose(gamma, Dim.width, Dim.height)) + Tensor.Expand(beta, Dim.height, batch_size);
         }
         public Tensor Forward(Tensor input)
         {
-            Input_Cache = Tensor.Identity(input);
             int batch_size = input.Height;
-            return Tensor.MatMul(input, gamma) + Tensor.Expand(beta, Dim.height, batch_size);
+            InputCache = Tensor.Identity(input);
+            return Tensor.MatMul(input, Tensor.Transpose(gamma, Dim.width, Dim.height)) + Tensor.Expand(beta, Dim.height, batch_size);
         }
         public Tensor Backward(Tensor loss)
         {
-            int batch_size = loss.Height;
-            var transposedInput = Tensor.Transpose(Input_Cache, Dim.width, Dim.height);
+            // input = (B, IN)
+            // loss = (B, OUT)
+            // tloss = (OUT, B)
 
-            Tensor gradW = Tensor.MatMul(transposedInput, loss);
-            Tensor gradB = Tensor.MatMul(Tensor.Ones(1, batch_size), loss);
+            //gradGamma(OUT, IN)
+            int batch_size = loss.Height;
+            var transposedLoss = Tensor.Transpose(loss, Dim.width, Dim.height);
+
+            Tensor gradW = Tensor.MatMul(transposedLoss, InputCache);
+            Tensor gradB = Tensor.MatMul(transposedLoss, Tensor.Ones(batch_size));
 
             // Update the gradients
-            gradGamma += gradW / batch_size;
-            gradBeta += gradB / batch_size;
-
-            // Backpropagate the loss
-            Tensor dLossActivation = Tensor.MatMul(gamma, Tensor.Transpose(loss, Dim.width, Dim.height));
-            return Tensor.Transpose(dLossActivation, Dim.width, Dim.height);
+            gradGamma += gradW / batch_size; // (out, in)
+            gradBeta += gradB / batch_size; // (out)
+            
+            // Backpropagate the loss (batch_size, in)
+            return Tensor.MatMul(loss, gamma);
         }
 
     }

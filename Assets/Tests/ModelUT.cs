@@ -40,15 +40,9 @@ namespace kbRadu
             {
                 net = new Sequential(
                  new Dense(2, hiddenSize),
-                 //new BatchNorm(hiddenSize),
                  new TanH(),
-                 //new Dropout(0.1f),
-                 
                  new Dense(hiddenSize, hiddenSize),
-
-                 //new LayerNorm(),
                  new ReLU(),
-                
                  new Dense(hiddenSize, 1)
                  );
             }

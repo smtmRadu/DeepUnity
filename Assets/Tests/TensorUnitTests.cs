@@ -135,7 +135,6 @@ namespace kbRadu
                 Tensor.Norm(t1, NormType.EuclideanL2);
                 Tensor.LogDensity(t1, t1, t1);
                 Tensor.Density(t1, t1, t1);
-                Tensor.HasNaN(t1);
             }
             catch
             {

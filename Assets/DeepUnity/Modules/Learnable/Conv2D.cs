@@ -5,7 +5,7 @@ namespace DeepUnity
     public class Conv2D : Learnable, IModule 
     {
         // https://www.youtube.com/watch?v=Lakz2MoHy6o
-        private Tensor Input_Cache { get; set; }
+        private Tensor InputCache { get; set; }
 
         /// Biases are applied over the final output. Biases (out_channels, out_height, out_width).
         // input shape = [batch, Ichannels, Iheight, Iwidth]
@@ -51,14 +51,14 @@ namespace DeepUnity
             }
 
 
-            Input_Cache = Tensor.Identity(input);
+            InputCache = Tensor.Identity(input);
             int batch_size = input.Batch;
             return Tensor.Correlate2D(input, gamma, CorrelationMode.Valid) + Tensor.Expand(beta, Dim.batch, batch_size);
         }
         public Tensor Backward(Tensor loss)
         {
             int batch_size = loss.Batch;
-            gradGamma += Tensor.Correlate2D(Input_Cache, loss, CorrelationMode.Valid) / batch_size;
+            gradGamma += Tensor.Correlate2D(InputCache, loss, CorrelationMode.Valid) / batch_size;
             gradBeta += loss / batch_size;
 
             return Tensor.Convolve2D(loss, gamma, CorrelationMode.Full);

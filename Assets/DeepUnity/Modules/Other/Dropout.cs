@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 
 namespace DeepUnity
 {
@@ -8,7 +9,7 @@ namespace DeepUnity
     [Serializable]
     public class Dropout : IModule
     {
-        public float dropout;
+        [SerializeField] private float dropout;
         public Tensor InputCache { get; set; }
 
         /// <summary>

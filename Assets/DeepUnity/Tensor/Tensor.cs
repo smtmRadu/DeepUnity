@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Eventing.Reader;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -8,10 +9,6 @@ using UnityEngine;
 
 namespace DeepUnity
 {
-    /// <summary>
-    /// Immutable. 4D.
-    /// [batch, channels, height, width]
-    /// </summary>
     [Serializable]
     public sealed partial class Tensor : IEquatable<Tensor>
     {
@@ -104,7 +101,6 @@ namespace DeepUnity
   
 
         #region Create Tensor
-
         private Tensor(params int[] shape)
         {
             if (shape == null)
@@ -128,14 +124,62 @@ namespace DeepUnity
             this.shape = shape.ToArray();
             data = new float[size];
         }
+        public static Tensor Reshape(Tensor tensor, params int[] newShape)
+        {
+            int count = 1;
+            foreach (var item in newShape)
+            {
+                count *= item;
+            }
+
+            if (count != tensor.Count())
+                throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
+
+            Tensor result = new Tensor(newShape);
+
+            int batch = result.Batch;
+            int channels = result.Channels;
+            int height = result.Height;
+            int width = result.Width;
+
+
+            // Reshape the data inside
+            int index = 0;
+            for (int b = 0; b < batch; b++)
+            {
+                for (int c = 0; c < channels; c++)
+                {
+                    for (int h = 0; h < height; h++)
+                    {
+                        for (int w = 0; w < width; w++)
+                        {
+                            result[b, c, h, w] = tensor.data[index++];
+                        }
+                    }
+                }
+            }
+
+            return result;
+        }
         public static Tensor Identity(Tensor other)
         {
             Tensor clone = new(other.shape);
-            Array.Copy(other.data, clone.data, other.data.Length);
-            return clone;
+            try
+            {
+                
+                Array.Copy(other.data, clone.data, other.data.Length);
+                return clone;
+            }
+            catch
+            {
+                throw new Exception($"{other.shape.ToCommaSeparatedString()} - {clone.shape.ToCommaSeparatedString()}");
+            }
         }
         public static Tensor Arange(float start, float end, float step)
         {
+            if (step == 0)
+                throw new ArgumentException("On Arange, step must be non-zero.");
+
             int count = (int)MathF.Ceiling((end - start) / step);
 
             Tensor result = new(count);
@@ -248,6 +292,15 @@ namespace DeepUnity
             }
             return t;
         }
+        public static Tensor Fill(float value, params int[] shape)
+        {
+            Tensor t = new(shape);
+            for (int i = 0; i < t.data.Length; i++)
+            {
+                t.data[i] = value;
+            }
+            return t;
+        }
         public static Tensor Random01(params int[] shape)
         {
             Tensor t = new(shape);
@@ -275,21 +328,11 @@ namespace DeepUnity
             }
             return t;
         }
-        public static Tensor Fill(float value, params int[] shape)
-        {
-            Tensor t = new(shape);
-            for (int i = 0; i < t.data.Length; i++)
-            {
-                t.data[i] = value;
-            }
-            return t;
-        }
 
         #endregion
 
 
         #region Operator overloading (+, -, *, /)
-
         public static Tensor operator +(Tensor tensor)
         {
             Tensor result = new(tensor.shape);
@@ -424,8 +467,21 @@ namespace DeepUnity
         /// </summary>
         public static Tensor MatMul(Tensor left, Tensor right)
         {
-            if (left.Width != right.Height)
+            int left_rank = left.Rank;
+            int right_rank = right.Rank;
+
+            if (left_rank == 1 && right_rank == 1)
+                return left * right;
+                       
+            if(left_rank == 1 && left.Width != right.Height)
                 throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
+
+            if(right_rank == 1 && left.Width != right.Width)
+                throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
+
+            if (left_rank > 1 && right_rank > 1 && left.Width != right.Height)
+                throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
+
 
             int N = left.Height;
             int M = left.Width;
@@ -433,60 +489,63 @@ namespace DeepUnity
             int K = right.Channels;
             int J = left.Batch;
 
+            Tensor result;
+            if (left_rank == 1)
+                result = new(CreateShape(left.Rank, J, K, 1, P));
+            else if (right_rank == 1)
+                result = new(CreateShape(left.Rank, J, K, 1, N));
+            else
+                result = new(CreateShape(left.Rank, J, K, N, P));
 
-           
-
-            Tensor result = new(CreateShape(left.Rank, J, K, N, P));
-
-            if (K == 1 && J == 1)
+ 
+            if(right_rank == 1)
             {
-                // just matrix x matrix
-                Parallel.For(0, N, n =>
+                for (int j = 0; j < J; j++)
                 {
-                    for (int j = 0; j < J; j++)
+                    for (int k = 0; k < K; k++)
+                    {
+                        for (int n = 0; n < N; n++)
+                        {
+                            float sum = 0f;
+                            for (int m = 0; m < M; m++)
+                            {
+                                float l = left[j, 0, n, m];
+                                float r = right[k, 0, m];
+                                sum += l * r;
+                            }
+                            result[j, k, 0, n] = sum;
+                        }
+                    }
+                }
+            }
+            else if(left_rank == 1)
+            {
+                for (int j = 0; j < J; j++)
+                {
+                    for (int k = 0; k < K; k++)
                     {
                         for (int p = 0; p < P; p++)
                         {
                             float sum = 0f;
                             for (int m = 0; m < M; m++)
                             {
-                                sum += left[n, m] * right[m, p];
+                                float l = left[j, 0, 0, m];
+                                float r = right[k, m, p];
+                                sum += l * r;
                             }
-                            result[n, p] = sum;
+                            result[j, k, 0, p] = sum;
                         }
                     }
-                });
-            }
-            else if (K > 1)
-            {
-                // parralelism on channels
-                Parallel.For(0, K, k =>
-                {
-                    for (int j = 0; j < J; j++)
-                    {
-                        for (int n = 0; n < N; n++)
-                        {
-                            for (int p = 0; p < P; p++)
-                            {
-                                float sum = 0f;
-                                for (int m = 0; m < M; m++)
-                                {
-                                    sum += left[j, 0, n, m] * right[k, m, p];
-                                }
-                                result[j, k, n, p] = sum;
-                            }
-                        }
-                    }                        
-                });
+                }
             }
             else
             {
-                // parralelism on batch
-                Parallel.For(0, J, j =>
+                // base matmul operation
+                Parallel.For(0, N, n =>
                 {
-                    for (int k = 0; k < K; k++)
+                    for (int j = 0; j < J; j++)
                     {
-                        for (int n = 0; n < N; n++)
+                        for (int k = 0; k < K; k++)
                         {
                             for (int p = 0; p < P; p++)
                             {
@@ -502,30 +561,34 @@ namespace DeepUnity
                 });
             }
 
-            // Squeezing the result fast***
-            LinkedList<int> squeezedShape = new LinkedList<int>();
 
-            squeezedShape.AddFirst(P);
+            // The result keeps the smallest rank
 
+            LinkedList<int> resultShape = new LinkedList<int>();
+
+
+            if (right.Rank > 1)
+                resultShape.AddFirst(P);
+
+            if (left.Rank > 1)
+                resultShape.AddFirst(N);
+
+                       
             if(J > 1)
             {
-                squeezedShape.AddFirst(N);
-                squeezedShape.AddFirst(K);
-                squeezedShape.AddFirst(J);
+                // add anyways
+                resultShape.AddFirst(K);
+                resultShape.AddFirst(J);
                
             }
             else if(K > 1)
             {
-                squeezedShape.AddFirst(N);
-                squeezedShape.AddFirst(K);
-               
+                resultShape.AddFirst(K);           
             }
-            else if(N > 1)
-            {
-                squeezedShape.AddFirst(N);   
-            }
+            
+
  
-            result.shape = squeezedShape.ToArray();
+            result.shape = resultShape.ToArray();
             return result;
         }
         /// <summary>
@@ -844,7 +907,6 @@ namespace DeepUnity
 
 
         #region On Dimension Operations
-
         public static Tensor Transpose(Tensor tensor, Dim dim0, Dim dim1)
         {
             if (dim0 == dim1)
@@ -1529,11 +1591,22 @@ namespace DeepUnity
             slices = Utils.Shuffle(slices).ToArray();
             return Join(dim, slices);
         }
+        /// <summary>
+        /// Expands the tensor along the specified dimension. If times = 1, no changes are applied to the tensor.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="dim"></param>
+        /// <param name="times"></param>
+        /// <returns></returns>
         public static Tensor Expand(Tensor tensor, Dim dim, int times)
         {
+            if (times < 1)
+                throw new ArgumentException("When expanding a tensor, times cannot be < 1");
+
             if (times == 1)
                 return Identity(tensor);
 
+            
             int[] shapex = null;
             switch (dim)
             {
@@ -1962,7 +2035,46 @@ namespace DeepUnity
 
 
         #region On Axis Operation
+        public static Tensor Unsqueeze(Tensor tensor, int? axis = null)
+        {
+            if (axis == null)
+            {
+                Tensor result = Identity(tensor);
+                result.shape = CreateShape(tensor.Rank + 1, tensor.Batch, tensor.Channels, tensor.Height, tensor.Width);
+                return result;
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
+        }
+        public static Tensor Squeeze(Tensor tensor, int? axis = null)
+        {
+            if (axis == null)
+            {
+                LinkedList<int> squeezedShape = new LinkedList<int>();
 
+                squeezedShape.AddFirst(tensor.Width);
+
+                if (tensor.Height > 1)
+                    squeezedShape.AddFirst(tensor.Height);
+
+                if (tensor.Channels > 1)
+                    squeezedShape.AddFirst(tensor.Channels);
+
+                if (tensor.Batch > 1)
+                    squeezedShape.AddFirst(tensor.Batch);
+
+                Tensor result = new(squeezedShape.ToArray());
+                Array.Copy(tensor.data, result.data, tensor.data.Length);
+                return result;
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
+
+        }
         public static Tensor Transpose(Tensor tensor, int axis0, int axis1)
         {
             if (axis0 < 0 || axis0 >= tensor.Rank || axis1 < 0 || axis1 >= tensor.Rank)
@@ -2671,7 +2783,6 @@ namespace DeepUnity
 
 
         #region Math Operations
-
         public static Tensor Pow(Tensor tensor, float power)
         {
             Tensor result = new(tensor.shape);
@@ -2884,104 +2995,12 @@ namespace DeepUnity
             return Tensor.Log((sig2 / (sig1 + Utils.EPSILON)) + Utils.EPSILON) +
                 (var1 + (mu1 - mu2) * (mu1 - mu2)) / (2f * var2) - 0.5f;
         }
-        /// <summary>
-        /// Checks if the tensor has any NaN value.
-        /// </summary>
-        /// <param name="tensor"></param>
-        /// <returns></returns>
-        public static bool HasNaN(Tensor tensor)
-        {
-            for (int i = 0; i < tensor.data.Length; i++)
-            {
-                if (float.IsNaN(tensor.data[i]))
-                    return true;
-            }
-            return false;
-        }
 
         #endregion Math operations
 
-        /// <summary>
-        /// Adds another dimension. The rank increments by 1.
-        /// </summary>
-        /// <param name="tensor"></param>
-        /// <param name="axis"></param>
-        /// <returns></returns>
-        /// <exception cref="NotImplementedException"></exception>
-        public static Tensor Unsqueeze(Tensor tensor, int? axis = null)
-        {
-            if (axis == null)
-            {
-                Tensor result = Identity(tensor);
-                result.shape = CreateShape(tensor.Rank + 1, tensor.Batch, tensor.Channels, tensor.Height, tensor.Width);
-                return result;
-            }
-            else
-            {
-                throw new NotImplementedException();
-            }
-        }
-        /// <summary>
-        /// Removes all dimensions with value 1. The rank may deincrements.
-        /// </summary>
-        /// <param name="tensor"></param>
-        /// <param name="axis"></param>
-        /// <returns></returns>
-        /// <exception cref="NotImplementedException"></exception>
-        public static Tensor Squeeze(Tensor tensor, int? axis = null)
-        {
-            if (axis == null)
-            {
-                LinkedList<int> squeezedShape = new LinkedList<int>();
 
-                squeezedShape.AddFirst(tensor.Width);
 
-                if (tensor.Height > 1)
-                    squeezedShape.AddFirst(tensor.Height);
 
-                if (tensor.Channels > 1)
-                    squeezedShape.AddFirst(tensor.Channels);
-
-                if (tensor.Batch > 1)
-                    squeezedShape.AddFirst(tensor.Batch);
-
-                Tensor result = new(squeezedShape.ToArray());
-                Array.Copy(tensor.data, result.data, tensor.data.Length);
-                return result;
-            }
-            else
-            {
-                throw new NotImplementedException();
-            }
-
-        }
-        /// <summary>
-        /// Changes the shape of the tensor.
-        /// </summary>
-        /// <param name="tensor"></param>
-        /// <param name="newShape"></param>
-        /// <returns></returns>
-        /// <exception cref="ArgumentException"></exception>
-        public static Tensor Reshape(Tensor tensor, params int[] newShape)
-        {
-            int count = 1;
-            foreach (var item in newShape)
-            {
-                count *= item;
-            }
-
-            if (count != tensor.Count())
-                throw new ArgumentException("The new shape must provide the same capcity of the tensor when reshaping it.");
-
-            Tensor result = new(newShape);
-            Array.Copy(tensor.data, result.data, tensor.data.Length);
-            return result;
-        }
-        /// <summary>
-        /// Creates a new tensor with the same shape and applies a function over each element.
-        /// </summary>
-        /// <param name="selector"></param>
-        /// <returns></returns>
         public Tensor Select(Func<float, float> selector)
         {
             Tensor result = new(shape);
@@ -2993,15 +3012,8 @@ namespace DeepUnity
 
             return result;
         }
-        /// <summary>
-        /// Creates a new tensor with the same shape and applies a function over each element pair.
-        /// The tensors must have the same shape.
-        /// </summary>
-        /// <param name="second"></param>
-        /// <param name="resultSelector"></param>
-        /// <returns></returns>
         public Tensor Zip(Tensor second, Func<float, float, float> resultSelector)
-        {
+        {       
             Tensor result = new(shape);
 
             for (int i = 0; i < data.Length; i++)
@@ -3011,31 +3023,31 @@ namespace DeepUnity
 
             return result;
         }
-        /// <summary>
-        /// Counts the total number of elements in the Tensor [that matches the selector function].
-        /// </summary>
-        public int Count(Func<float, bool> selector = null)
+        public int Count(Func<float, bool> predicate = null)
+        {
+            if (predicate == null)
+                return data.Count();
+            else
+                return data.Count(predicate);
+        }
+        public float Min(Func<float, float> selector = null)
         {
             if (selector == null)
-                return data.Length;
-
-            int count = 0;
-
-            for (int i = 0; i < data.Length; i++)
-            {
-                count += selector(data[i]) ? 1 : 0;
-            }
-
-
-            return count;
+                return data.Min();
+            else
+                return data.Min(selector);
         }
-        /// <summary>
-        /// Returns a copy of the Tensor data.
-        /// </summary>
-        public float[] ToArray() => data.ToArray();
-
-
-
+        public float Max(Func<float, float> selector = null)
+        {
+            if (selector == null)
+                return data.Max();
+            else
+                return data.Max(selector);
+        }  
+        public float[] ToArray()
+        {
+            return data.ToArray();
+        }
         public bool Equals(Tensor other)
         {
             if (!shape.SequenceEqual(other.shape))
@@ -3124,6 +3136,8 @@ namespace DeepUnity
             return base.GetHashCode();
         }
 
+
+        // inside use
         private static int HandleAxis(int rank, int axis)
         {
             // Returns the index in the full shape array of the axis.
@@ -3146,18 +3160,9 @@ namespace DeepUnity
         {
             return new int[] { Batch, Channels, Height, Width };
         }
-
-        /// <summary>
-        /// Auto corrects the rank.
-        /// </summary>
-        /// <param name="rank"></param>
-        /// <param name="b"></param>
-        /// <param name="c"></param>
-        /// <param name="h"></param>
-        /// <param name="w"></param>
-        /// <returns></returns>
         private static int[] CreateShape(int rank, int b, int c, int h, int w)
         {
+            /// Auto corrects the rank.
             int correctedRank;
             if (b > 1)
                 correctedRank = 4;

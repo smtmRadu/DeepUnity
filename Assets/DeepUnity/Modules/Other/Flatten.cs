@@ -7,10 +7,10 @@ namespace DeepUnity
     public class Flatten : IModule
     {
 
-        [SerializeField] Dim startDim;
-        [SerializeField] Dim endDim;
-        [SerializeField] int startAxis;
-        [SerializeField] int endAxis;
+        [SerializeField] private Dim startDim;
+        [SerializeField] private Dim endDim;
+        [SerializeField] private int startAxis;
+        [SerializeField] private int endAxis;
 
         public Flatten(Dim startDim, Dim endDim)
         {
