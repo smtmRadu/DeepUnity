@@ -394,7 +394,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &621327370
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -606,9 +606,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 996be2ae7d250784f9a8301a37c7fc92, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Device: 0
-  MatShape: {x: 64, y: 64}
-  Runs: 1000
+  matmulDevice: 0
+  MatShape: {x: 1024, y: 1024}
+  Runs: 1
 --- !u!4 &752495707
 Transform:
   m_ObjectHideFlags: 0

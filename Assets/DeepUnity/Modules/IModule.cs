@@ -9,7 +9,6 @@ namespace DeepUnity
         public Tensor Predict(Tensor input);
         public Tensor Forward(Tensor input);
         public Tensor Backward(Tensor loss);
-       
     }
 
     [Serializable]

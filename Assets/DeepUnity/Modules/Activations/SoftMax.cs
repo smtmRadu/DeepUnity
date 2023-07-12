@@ -6,19 +6,31 @@ namespace DeepUnity
     {
         protected override void Activation(ref Tensor x)
         {
-            // [batch, width]
-            Tensor exp = Tensor.Exp(x); // [batch, width]
-            Tensor exp_sum = Tensor.Sum(exp, Dim.width); // [batch, 1]
-            exp_sum = Tensor.Expand(exp_sum, Dim.width, exp.Width); // [batch, width]
-
+            Tensor exp = Tensor.Exp(x);
+            Tensor exp_sum;
+            if (IsBatchedInput(x))
+            {
+                exp_sum = Tensor.Sum(exp, 1, true); // [batch, features]
+            }
+            else
+            {
+                exp_sum = Tensor.Sum(exp, 0, true); // [features]
+            }
+            
             x = exp / exp_sum;
         }
         protected override void Derivative(ref Tensor x)
         {
             Tensor exp = Tensor.Exp(x);
-            Tensor exp_sum = Tensor.Sum(exp, Dim.width); // [batch, 1]
-            exp_sum = Tensor.Expand(exp_sum, Dim.width, exp.Width); // [batch, width]
-
+            Tensor exp_sum;
+            if (IsBatchedInput(x))
+            {
+                exp_sum = Tensor.Sum(exp, 1, true); // [batch, features]
+            }
+            else
+            {
+                exp_sum = Tensor.Sum(exp, 0, true); // [features]
+            }
             x = (exp * exp_sum - exp * exp) / (exp_sum * exp_sum);
         }
     }

@@ -1,5 +1,7 @@
 using kbRadu;
 using System;
+using System.Drawing.Printing;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity
@@ -53,27 +55,31 @@ namespace DeepUnity
 
         public Tensor Forward(Tensor input)
         {
-            int batch_size = input.Height;
-            int num_features = input.Width;
+            bool isBatched = IsBatchedInput(input);
 
-            Tensor mu = Tensor.Mean(input, Dim.width, keepDim: true);
-            Tensor var = Tensor.Var(input, Dim.width, keepDim: true);
+            int batch_size = isBatched ? input.Size(0) : 1;
+            int num_features = isBatched ? input.Size(1) : input.Size(0);
+
+
+            Tensor mu = Tensor.Mean(input, isBatched ? 1 : 0, keepDim: true); // actually we don t know if input is batched or not, so use deprecated version of mean
+            Tensor var = Tensor.Var(input, isBatched ? 1 : 0, keepDim: true);
 
             xCentered = input - mu;
             std = Tensor.Sqrt(var + Utils.EPSILON);
             xHat = xCentered / std;
 
-            Tensor expandedGamma = Tensor.Expand(gamma, Dim.width, num_features);
-            expandedGamma = Tensor.Expand(expandedGamma, Dim.height, batch_size);
+            Tensor expandedGamma = Tensor.Expand(gamma, 0, num_features);
+            expandedGamma = Tensor.Expand(Tensor.Unsqueeze(expandedGamma, 0), 0, batch_size);
 
-            Tensor expandedBeta = Tensor.Expand(beta, Dim.width, num_features);
-            expandedBeta = Tensor.Expand(expandedBeta, Dim.height, batch_size);
+            Tensor expandedBeta = Tensor.Expand(beta, 0, num_features);
+            expandedBeta = Tensor.Expand(Tensor.Unsqueeze(expandedBeta, 0), 0, batch_size);
             Tensor y = expandedGamma * xHat + expandedBeta;
 
 
-            float mu_across_batch = Tensor.Mean(mu, Dim.height)[0];
-            float var_across_batch = Tensor.Mean(var, Dim.height)[0];
+            float mu_across_batch = isBatched ? Tensor.Mean(mu, 0)[0] : mu[0];
+            float var_across_batch = isBatched ? Tensor.Mean(var, 0)[0] : var[0];
 
+            
             // Sharing consistance update approach
             // step += batch_size;
             // float d1 = mu_across_batch - runningMean[0];
@@ -89,33 +95,42 @@ namespace DeepUnity
         }
         public Tensor Backward(Tensor dLdY)
         {
+
+            bool isBatched = IsBatchedInput(dLdY);
+            // dLdY (B, OUT)
             int m = dLdY.Height;
             var dLdxHat = dLdY * gamma[0];
             var dLdVar = Tensor.Mean(dLdxHat + xCentered * (-1f / 2f) *
                          Tensor.Pow(std + Utils.EPSILON, -3f / 2f),
-                         Dim.width, true);
+                         isBatched ? 1 : 0, true);
 
             var dLdMu = Tensor.Mean(dLdxHat * -1f / (std + Utils.EPSILON) +
                         dLdVar * -2f * xCentered / m,
-                        Dim.width, true);
+                        isBatched ? 1 : 0, true);
 
             var dLdX = dLdxHat * 1f / Tensor.Sqrt(std + Utils.EPSILON) +
                        dLdVar * 2f * xCentered / m + dLdMu * (1f / m);
 
-            var dLdGamma = Tensor.Mean(dLdY + xCentered, Dim.width);
-            var dLdBeta = Tensor.Mean(dLdY, Dim.width);
+            // mean along the layer
+            var dLdGamma = Tensor.Mean(dLdY + xCentered, isBatched ? 1 : 0);
+            var dLdBeta = Tensor.Mean(dLdY, isBatched ? 1 : 0);
 
-            // Also get the mean along the batch (cause the learnable parameters are updated by batch_size steps each call)
-            dLdGamma = Tensor.Mean(dLdGamma, Dim.height);
-            dLdBeta = Tensor.Mean(dLdBeta, Dim.height);
+            // mean along the batch
+            float dLdGamma_across_batch = isBatched ? Tensor.Mean(dLdGamma, 0)[0] : dLdGamma[0];
+            float dLdBeta_across_batch = isBatched ? Tensor.Mean(dLdBeta, 0)[0] : dLdBeta[0];
 
-            dLdGamma = Tensor.Squeeze(dLdGamma);
-            dLdBeta = Tensor.Squeeze(dLdBeta);
-
-            gradGamma += dLdGamma;
-            gradBeta += dLdBeta;
+            gradGamma += dLdGamma_across_batch;
+            gradBeta += dLdBeta_across_batch;
 
             return dLdX;
+        }
+
+        protected static bool IsBatchedInput(Tensor input)
+        {
+            if (input.Rank == 2)
+                return true;
+
+            return false;
         }
     }
 }

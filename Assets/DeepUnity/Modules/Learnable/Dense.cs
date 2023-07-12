@@ -51,15 +51,17 @@ namespace DeepUnity
             // input = (batch_size, in_features)
             // gamma = (out_features, in_features)
             // out = (out_features, batch_size)
+
+
             int batch_size = input.Height;
-            return Tensor.MatMul(input, Tensor.Transpose(gamma, Dim.width, Dim.height)) + Tensor.Expand(beta, Dim.height, batch_size);
+            return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size); // Tensor.Expand(beta, Dim.height, batch_size); (more efficient but deprecated)
         }
         public Tensor Forward(Tensor input)
         {
             InputCache = Tensor.Identity(input);
 
             int batch_size = input.Height;
-            return Tensor.MatMul(input, Tensor.Transpose(gamma, Dim.width, Dim.height)) + Tensor.Expand(beta, Dim.height, batch_size);
+            return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) +  Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
         }
         public Tensor Backward(Tensor loss)
         {
@@ -69,7 +71,7 @@ namespace DeepUnity
 
             //gradGamma(OUT, IN)
             int batch_size = loss.Height;
-            var transposedLoss = Tensor.Transpose(loss, Dim.width, Dim.height);
+            var transposedLoss = Tensor.Transpose(loss, 0, 1);
 
             Tensor gradW = Tensor.MatMul(transposedLoss, InputCache);
             Tensor gradB = Tensor.MatMul(transposedLoss, Tensor.Ones(batch_size));

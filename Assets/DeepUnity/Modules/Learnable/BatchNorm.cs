@@ -41,10 +41,10 @@ namespace DeepUnity
         public Tensor Predict(Tensor input)
         {
             int batch_size = input.Height;
-            var e_mean = Tensor.Expand(runningMean, Dim.height, batch_size);
-            var e_var = Tensor.Expand(runningVar, Dim.height, batch_size);
-            var e_gamma = Tensor.Expand(gamma, Dim.height, batch_size);
-            var e_beta = Tensor.Expand(beta, Dim.height, batch_size);
+            var e_mean = Tensor.Expand(Tensor.Unsqueeze(runningMean, 0), 0, batch_size);
+            var e_var = Tensor.Expand(Tensor.Unsqueeze(runningVar, 0), 0, batch_size);
+            var e_gamma = Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size);
+            var e_beta = Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
 
             var input_centered = (input - e_mean) / Tensor.Sqrt(e_var + Utils.EPSILON);
             var output = e_gamma * input_centered + e_beta;
@@ -53,27 +53,31 @@ namespace DeepUnity
         }
         public Tensor Forward(Tensor input)
         {
+            if (!IsBatchedInput(input))
+                throw new ArgumentException("Models having BatchNorm layers must be trained using batched input.");
+
             int batch_size = input.Height;
 
             // When training (only on mini-batch training), we cache the values for backprop also
-            var mu_B = Tensor.Mean(input, Dim.height); // mini-batch means      [batch, 1]
-            var var_B = Tensor.Var(input, Dim.height); // mini-batch variances  [batch, 1]
+            var mu_B = Tensor.Mean(input, 0); // mini-batch means      [features_mean]
+            var var_B = Tensor.Var(input, 0); // mini-batch variances  [features_mean]
 
             // input [batch, features]  - muB or varB [features] -> need expand on axis 0 by batch
 
             // normalize and cache
-            xCentered = input - Tensor.Expand(mu_B, Dim.height, batch_size);
-            std = Tensor.Expand(Tensor.Sqrt(var_B + Utils.EPSILON), Dim.height, batch_size);
+            xCentered = input - Tensor.Expand(Tensor.Unsqueeze(mu_B, 0), 0, batch_size);
+            std = Tensor.Sqrt(var_B + Utils.EPSILON);
+            std = Tensor.Expand(Tensor.Unsqueeze(std, 0), 0, batch_size);
             xHat = xCentered / std;
 
             // scale and shift
-            var yB = Tensor.Expand(gamma, Dim.height, batch_size) * xHat + Tensor.Expand(beta, Dim.height, batch_size);
+            var yB = Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size) * xHat + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
 
             
 
             // compute running mean and var
-            runningMean = runningMean * momentum + Tensor.Squeeze(mu_B * (1f - momentum));
-            runningVar = runningVar * momentum + Tensor.Squeeze(var_B * (1f - momentum));
+            runningMean = runningMean * momentum + mu_B * (1f - momentum);
+            runningVar = runningVar * momentum + var_B * (1f - momentum);
 
             return yB;
 
@@ -84,32 +88,39 @@ namespace DeepUnity
 
             // paper algorithm https://arxiv.org/pdf/1502.03167.pdf
 
-            var dLdxHat = dLdY * Tensor.Expand(gamma, Dim.height, m); // [batch, outs]
+            var dLdxHat = dLdY * Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, m); // [batch, outs]
 
             var dLdVarB = Tensor.Mean(dLdxHat * xCentered * (-1f / 2f) *
-                         Tensor.Pow(std + Utils.EPSILON, -3f / 2f), Dim.height, true);
+                         Tensor.Pow(std + Utils.EPSILON, -3f / 2f), 0, true);
 
             var dLdMuB = Tensor.Mean(
                          dLdxHat * -1f / (std + Utils.EPSILON) +
                          dLdVarB * -2f * xCentered / m, 
-                         Dim.height, true);
+                         0, true);
 
             var dLdX = dLdxHat * 1f / Tensor.Sqrt(std + Utils.EPSILON) +
                        dLdVarB * 2f * xCentered / m +
                        dLdMuB * (1f / m);
 
 
-            var dLdGamma = Tensor.Mean(dLdY * xHat, Dim.height);
-            var dLdBeta = Tensor.Mean(dLdY, Dim.height);
-
-            dLdGamma = Tensor.Squeeze(dLdGamma);
-            dLdBeta = Tensor.Squeeze(dLdBeta);
+            var dLdGamma = Tensor.Mean(dLdY * xHat, 0);
+            var dLdBeta = Tensor.Mean(dLdY, 0);
 
             gradGamma += dLdGamma;
             gradBeta += dLdBeta;
 
             return dLdX;
         }
+
+        protected static bool IsBatchedInput(Tensor input)
+        {
+            if (input.Rank == 2)
+                return true;
+
+            return false;
+        }
+
+
         // TIPS for improvement
         // increase learn rate
         // remove dropout and reduce L2 penalty (BN regularizes the network)

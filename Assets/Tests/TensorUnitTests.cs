@@ -94,17 +94,17 @@ namespace kbRadu
                 t1 = Tensor.Random01(5, 5);
                 t2 = Tensor.Random01(1, 5, 1, 5);
 
-                Tensor.Expand(t1, Dim.channel, 3);
-                Tensor.Var(t1, Dim.width);
-                Tensor.Std(t1, Dim.height, 2, true);
-                Tensor.Sum(t1, Dim.width, false);
-                Tensor.Shuffle(t1, Dim.height);
-                Tensor.Transpose(t1, Dim.width, Dim.height);
-                Tensor.Split(t1, Dim.height, 2);
-                Tensor.Min(t1, Dim.height, false);
-                Tensor.Max(t1, Dim.width, true);
+                Tensor.Expand(t1, 1, 3);
+                Tensor.Var(t1, 1);
+                Tensor.Std(t1, 0, 2, true);
+                Tensor.Sum(t1, 1, false);
+                Tensor.Shuffle(t1, 0);
+                Tensor.Transpose(t1, 0, 1);
+                Tensor.Split(t1, 0, 2);
+                Tensor.Min(t1, 0, false);
+                Tensor.Max(t1, 1, true);
                 Tensor.Squeeze(t2);
-                Tensor.Unsqueeze(t2);
+                Tensor.Unsqueeze(t2, 0);
             }
             catch
             {

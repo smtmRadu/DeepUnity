@@ -34,7 +34,7 @@ namespace DeepUnity
             }
 
             int batch_size = input.Batch;
-            return Tensor.Correlate2D(input, gamma, CorrelationMode.Valid) + Tensor.Expand(beta, Dim.batch, batch_size);
+            return Tensor.Correlate2D(input, gamma, CorrelationMode.Valid) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
         }
         public Tensor Forward(Tensor input)
         {
@@ -53,7 +53,7 @@ namespace DeepUnity
 
             InputCache = Tensor.Identity(input);
             int batch_size = input.Batch;
-            return Tensor.Correlate2D(input, gamma, CorrelationMode.Valid) + Tensor.Expand(beta, Dim.batch, batch_size);
+            return Tensor.Correlate2D(input, gamma, CorrelationMode.Valid) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
         }
         public Tensor Backward(Tensor loss)
         {

@@ -24,6 +24,14 @@ namespace DeepUnity
             Derivative(ref InputCache);
             return InputCache * loss;
         }
+
+        protected static bool IsBatchedInput(Tensor input)
+        {
+            if (input.Rank == 2)
+                return true;
+
+            return false;
+        }
     }
 }
 

@@ -6,20 +6,14 @@ namespace DeepUnity
     [Serializable]
     public class Flatten : IModule
     {
-
-        [SerializeField] private Dim startDim;
-        [SerializeField] private Dim endDim;
         [SerializeField] private int startAxis;
         [SerializeField] private int endAxis;
 
-        public Flatten(Dim startDim, Dim endDim)
-        {
-
-        }
         public Flatten(int startAxis, int endAxis)
         {
-
+            throw new NotImplementedException();
         }
+
         public Tensor Predict(Tensor input)
         {
             return null;

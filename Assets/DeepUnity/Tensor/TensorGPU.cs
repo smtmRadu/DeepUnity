@@ -40,6 +40,7 @@ namespace DeepUnity
             else
                 return shape[shape.Length + axis];
         }
+
         private int Width
         {
             get

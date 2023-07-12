@@ -109,16 +109,16 @@ namespace DeepUnity
 
                     for (int b = 0; b < M; b++)
                     { 
-                        Tensor states_batch = Tensor.Join(Dim.height, states_batches[b]);
-                        Tensor advantages_batch = Tensor.Join(Dim.height, advantages_batches[b]);
-                        Tensor returns_batch = Tensor.Join(Dim.height, returns_batches[b]);
+                        Tensor states_batch = Tensor.Join(null, states_batches[b]);
+                        Tensor advantages_batch = Tensor.Join(null, advantages_batches[b]);
+                        Tensor returns_batch = Tensor.Join(null, returns_batches[b]);
 
                         UpdateCritic(states_batch, returns_batch);
                         UpdateContinuousNetwork(
                                 states_batch,
                                 advantages_batch,
-                                Tensor.Join(Dim.height, cont_act_batches[b]),
-                                Tensor.Join(Dim.height, cont_log_probs_batches[b]));
+                                Tensor.Join(null, cont_act_batches[b]),
+                                Tensor.Join(null, cont_log_probs_batches[b]));
 
                     }
                    
@@ -165,7 +165,7 @@ namespace DeepUnity
         {
             int batch = states.Height;
             int actions_num = oldActions.Width;
-            advantages = Tensor.Expand(advantages, Dim.width, actions_num);
+            advantages = Tensor.Expand(advantages, 1, actions_num);
 
 
             // Unpack what we need

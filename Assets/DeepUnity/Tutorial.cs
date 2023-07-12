@@ -37,14 +37,14 @@ public class Tutorial : MonoBehaviour
         int data_size = 1024;
         Tensor x = Tensor.RandomNormal((0, 0.5f), data_size, 1);
         Tensor y = Tensor.RandomNormal((0, 0.5f), data_size, 1);
-        train_inputs = Tensor.Join(Dim.width, x, y);
+        train_inputs = Tensor.Join(1, x, y);
         train_targets = x.Zip(y, (x, y) => x * x + y * y);
 
         // Generate validation set
         int valid_size = 64;
         x = Tensor.RandomNormal((0, 0.5f), valid_size, 1);
         y = Tensor.RandomNormal((0, 0.5f), valid_size, 1);
-        valid_inputs = Tensor.Join(Dim.width, x, y);
+        valid_inputs = Tensor.Join(1, x, y);
         valid_targets = x.Zip(y, (x, y) => x * x + y * y);
 
     }

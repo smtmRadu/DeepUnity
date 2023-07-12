@@ -10,9 +10,11 @@ namespace DeepUnity
         public static float Accuracy(Tensor predictions, Tensor targets)
         {
             Tensor errors = predictions.Zip(targets, (p, t) => MathF.Abs(p - t)); // [batch x outputs]
-            Tensor batch_errors = Tensor.Sum(errors, Dim.width); // for each batch, we sum up the errors [batch]
-            Tensor batch_mean = Tensor.Mean(errors, Dim.height); // we average batch errors [1]
-            float acc = 1.0f - batch_mean[0];
+
+            errors = Tensor.Mean(errors, 0);
+            errors = Tensor.Sum(errors, 0);
+
+            float acc = 1.0f - errors[0];
             return acc;
         }
     }

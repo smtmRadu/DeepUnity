@@ -41,7 +41,9 @@ namespace kbRadu
                 net = new Sequential(
                  new Dense(2, hiddenSize),
                  new TanH(),
+                 new BatchNorm(hiddenSize),
                  new Dense(hiddenSize, hiddenSize),
+                 // new LayerNorm(),
                  new ReLU(),
                  new Dense(hiddenSize, 1)
                  );
@@ -59,15 +61,15 @@ namespace kbRadu
             Tensor x2 = Tensor.RandomNormal((0, 1), trainingSamples, 1) * dataScale;
             Tensor y = Tensor.Sqrt(Tensor.Pow(x1, 2) + Tensor.Pow(x2, 2));
 
-            trainXbatches = Tensor.Split(Tensor.Join(Dim.width, x1, x2), Dim.height, batch_size);
-            trainYbatches = Tensor.Split(y, Dim.height, batch_size);
+            trainXbatches = Tensor.Split(Tensor.Join(1, x1, x2), 0, batch_size);
+            trainYbatches = Tensor.Split(y, 0, batch_size);
 
             // Prepare test batches
             x1 = Tensor.RandomNormal((0, 1), validationSamples, 1) * dataScale;
             x2 = Tensor.RandomNormal((0, 1), validationSamples, 1) * dataScale;
             y = Tensor.Sqrt(Tensor.Pow(x1, 2) + Tensor.Pow(x2, 2));
 
-            validationInputs = Tensor.Join(Dim.width, x1, x2);
+            validationInputs = Tensor.Join(1, x1, x2);
             validationTargets = y;
 
             Timer.Start();

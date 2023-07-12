@@ -13,27 +13,66 @@ namespace kbRadu
 
         private void Start()
         {
+            //Test_TensorOperaitons();
             //Test_MatMul();
-            Benchmark_TensorTime();
+            //Benchmark_Matmul_time();
             //Benchmark_TensorGPUTime();
             //Matmul_Tensor_vs_TensorGPU();
             //Matmul_Tensor_cpu_vs_gpu();
         }
 
-        void Benchmark_TensorTime()
+        void Test_MatMulUnbalanced()
         {
-            var t1 = Tensor.Random01(MatShape.x, MatShape.y);
-            var t2 = Tensor.Random01(MatShape.x, MatShape.y);
+            Tensor x = Tensor.Random01(1, 4);
+            Tensor y = Tensor.Random01(4);
+            print(x);
+            print(y);
+            print("x * y" + Tensor.MatMul(x, y));
 
-            Timer.Start();
-            for (int i = 0; i < Runs; i++)
+            x = Tensor.Random01(3);
+            y = Tensor.Random01(3, 1);
+            print(x);
+            print(y);
+            print("x * y" + Tensor.MatMul(x, y));
+
+            x = Tensor.Random01(1);
+            y = Tensor.Random01(1, 4);
+            print(x);
+            print(y);
+            print("x * y" + Tensor.MatMul(x, y));
+
+            x = Tensor.Random01(4, 1);
+            y = Tensor.Random01(1);
+            print(x);
+            print(y);
+            print("x * y" + Tensor.MatMul(x, y));
+        }
+        void Benchmark_Matmul_time()
+        {
+            if(matmulDevice == Device.CPU)
             {
-                if (matmulDevice == Device.CPU)
+                var t1 = Tensor.Random01(MatShape.x, MatShape.y);
+                var t2 = Tensor.Random01(MatShape.x, MatShape.y);
+
+                Timer.Start();
+                for (int i = 0; i < Runs; i++)
+                {
                     Tensor.MatMul(t1, t2);
-                else
-                    Tensor.MatMulGPU(t1, t2);
+                }
+                Timer.Stop();
             }
-            Timer.Stop();
+            else
+            {
+                var t1 = TensorGPU.Random01(MatShape.x, MatShape.y);
+                var t2 = TensorGPU.Random01(MatShape.x, MatShape.y);
+
+                Timer.Start();
+                for (int i = 0; i < Runs; i++)
+                {
+                    TensorGPU.MatMul(t1, t2);
+                }
+                Timer.Stop();
+            }
 
         }
         void Benchmark_TensorGPUTime()
@@ -50,15 +89,13 @@ namespace kbRadu
             Timer.Stop();
 
         }
-
-
         void StdTest()
         {
             RunningStandardizer rn = new RunningStandardizer(10);
 
             Tensor data = Tensor.RandomRange((0, 360), 1024, 10);
 
-            Tensor[] batches = Tensor.Split(data, Dim.height, 32);
+            Tensor[] batches = Tensor.Split(data, 0, 32);
 
             foreach (var batch in batches)
             {
@@ -67,37 +104,21 @@ namespace kbRadu
 
             print(rn.Standardise(Tensor.Random01(10)));
         }
-        void Test_MatMul()
+
+        void Test_TensorOperaitons()
         {
-            int success = 0;
-            for (int i = 0; i < Runs; i++)
-            {
-                int batch = (int)Utils.Random.Range(1, 2);
-                int channels = (int)Utils.Random.Range(1, 2);
-                int a = (int)Utils.Random.Range(1, 5);
-                int b = (int)Utils.Random.Range(1, 5);
-                int c = (int)Utils.Random.Range(1, 5);
+            Tensor x = Tensor.Random01(10, 10);
+            Tensor y = Tensor.Random01(10, 10);
 
-                Tensor x = Tensor.Random01(batch, 1, a, b);              
-                Tensor y = Tensor.Random01(channels, b, c);
-                TensorGPU xgpu = TensorGPU.Identity(x);
-                TensorGPU ygpu = TensorGPU.Identity(y);
+            print(x);
+            print(Tensor.Split(x, 0, 3)[0]);
+            print(Tensor.Mean(x, 1));
+            print(Tensor.Mean(x, 1));
 
-                // Tensor -> MatMul and MatMulGPU
-                var tensor_cpu = Tensor.MatMul(x, y);
-                var tensor_gpu = Tensor.MatMulGPU(x, y);
-                
-                // TensorGPU -> MatMUl
-                var tensorGPU_gpu = TensorGPU.MatMul(xgpu, ygpu);
-
-                if (tensor_cpu.Equals(tensor_gpu) && tensor_cpu.Equals(tensorGPU_gpu))
-                    success++;
-            }
-
-            print($"Accurracy: {(float)success / (float)Runs * 100}%");
+            print(Tensor.Mean(x, 0));
+            print(Tensor.Mean(x, 0));
         }
 
-     
     }
 }
 
