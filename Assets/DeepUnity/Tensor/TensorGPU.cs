@@ -10,8 +10,8 @@ using System.Collections.Generic;
 namespace DeepUnity
 {
     [Serializable]
-    public class TensorGPU : IDisposable, IEquatable<TensorGPU>, ISerializationCallbackReceiver
-    {
+    public class TensorGPU : IDisposable, ISerializationCallbackReceiver, IEquatable<Tensor>, IEquatable<TensorGPU>
+    { 
         private ComputeBuffer data;
         [SerializeField] private float[] serialized_data;
         [SerializeField] private int[] shape;
@@ -29,14 +29,25 @@ namespace DeepUnity
                     return 0;
             }
         }
-        public int Width
+        public int[] Shape
+        {
+            get => shape.ToArray();
+        }
+        public int Size(int axis)
+        {
+            if (axis >= 0)
+                return shape[axis];
+            else
+                return shape[shape.Length + axis];
+        }
+        private int Width
         {
             get
             {
                 return shape.Last();
             }
         }
-        public int Height
+        private int Height
         {
             get
             {
@@ -46,7 +57,7 @@ namespace DeepUnity
                     return shape[shape.Length - 2];
             }
         }
-        public int Channels
+        private int Channels
         {
             get
             {
@@ -56,7 +67,7 @@ namespace DeepUnity
                     return shape[shape.Length - 3];
             }
         }
-        public int Batch
+        private int Batch
         {
             get
             {
@@ -66,17 +77,7 @@ namespace DeepUnity
                     return shape[shape.Length - 4];
             }
         }
-        public int[] Shape
-        {
-            get => shape.ToArray();
-        }    
-        public int Size(int axis)
-        {
-            if (axis >= 0)
-                return shape[axis];
-            else
-                return shape[shape.Length + axis];
-        }
+       
 
         // Create
         private TensorGPU(params int[] shape)
@@ -152,6 +153,12 @@ namespace DeepUnity
             clone.data.SetData(other.ToArray());
             return clone;
         }
+        public static TensorGPU Identity(Tensor other)
+        {
+            TensorGPU clone = new(other.Shape);
+            clone.data.SetData(other.ToArray());
+            return clone;
+        }
         public static TensorGPU Arange(float start, float end, float step)
         {
             if (start == end)
@@ -173,7 +180,7 @@ namespace DeepUnity
         public static TensorGPU Constant(float scalar)
         {
             TensorGPU t = new(1);
-            float[] dataarr = new float[] { 1 };
+            float[] dataarr = new float[] { scalar };
             t.data.SetData(dataarr);
             return t;
         }
@@ -480,11 +487,36 @@ namespace DeepUnity
         // Special Operations
         public static TensorGPU MatMul(TensorGPU left, TensorGPU right)
         {
-            if (left.Width != right.Height)
-                throw new ArgumentException("Tensor must have compatible shapes for matrix multiplication (height of left tensor is not matching the width of the right tensor).");
+            int left_rank = left.Rank;
+            int right_rank = right.Rank;
+
+            if (left_rank == 1 && right_rank == 1)
+                return left * right;
+
+            if (left_rank == 1 && left.Width != right.Height)
+                throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
+
+            if (right_rank == 1 && left.Width != right.Width)
+                throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
+
+            if (left_rank > 1 && right_rank > 1 && left.Width != right.Height)
+                throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
 
 
-            TensorGPU result = new(CreateShape(left.Rank, left.Batch, right.Channels, left.Height, right.Width));
+            int N = left.Height;
+            int M = left.Width;
+            int P = right.Width;
+            int K = right.Channels;
+            int J = left.Batch;
+
+            TensorGPU result;
+            if (left_rank == 1)
+                result = new(CreateShape(left.Rank, J, K, 1, P));
+            else if (right_rank == 1)
+                result = new(CreateShape(left.Rank, J, K, 1, N));
+            else
+                result = new(CreateShape(left.Rank, J, K, N, P));
+
 
             ComputeShader cs = DeepUnityMeta.TensorCS;
 
@@ -498,49 +530,60 @@ namespace DeepUnity
             cs.SetInt("h1", left.Height);
             cs.SetInt("c1", left.Channels);
             cs.SetInt("b1", left.Batch);
+            cs.SetInt("r1", left.Rank);
 
             cs.SetInt("w2", right.Width);
             cs.SetInt("h2", right.Height);
             cs.SetInt("c2", right.Channels);
             cs.SetInt("b2", right.Batch);
+            cs.SetInt("r2", right.Rank);
 
-            cs.SetInt("wr", result.Width);
-            cs.SetInt("hr", result.Height);
-            cs.SetInt("cr", result.Channels);
-            cs.SetInt("br", result.Batch);
+            if (left_rank == 1)
+            {
+                cs.SetInt("wr", P);
+                cs.SetInt("hr", 1);
+            }
+            else if (right_rank == 1)
+            {
+                cs.SetInt("wr", N);
+                cs.SetInt("hr", 1);
+            }
+            else
+            {
+                cs.SetInt("wr", P);
+                cs.SetInt("hr", N);
+            }
+            cs.SetInt("cr", K);
+            cs.SetInt("br", J);
+            cs.SetInt("rr", result.Rank);
 
             cs.Dispatch(kernel,
-                  (left.Height + 7) / 8,
-                  (right.Width + 7) / 8,
-                  (left.Channels + 7) / 8);
+                  (P + 7) / 8,
+                  (N + 7) / 8,
+                  (K + 7) / 8);
+
+            // The result keeps the smallest rank
+            LinkedList<int> resultShape = new LinkedList<int>();
 
 
+            if (right.Rank > 1)
+                resultShape.AddFirst(P);
 
-            // Squeezing the result fast***
-            LinkedList<int> squeezedShape = new LinkedList<int>();
+            if (left.Rank > 1)
+                resultShape.AddFirst(N);
 
-            squeezedShape.AddFirst(result.Width);
-
-            if (result.Batch > 1)
+            if (J > 1)
             {
-                squeezedShape.AddFirst(result.Height);
-                squeezedShape.AddFirst(result.Channels);
-                squeezedShape.AddFirst(result.Batch);
+                resultShape.AddFirst(K);
+                resultShape.AddFirst(J);
 
             }
-            else if (result.Channels > 1)
+            else if (K > 1)
             {
-                squeezedShape.AddFirst(result.Height);
-                squeezedShape.AddFirst(result.Channels);
-
-            }
-            else if (result.Width > 1)
-            {
-                squeezedShape.AddFirst(result.Height);
+                resultShape.AddFirst(K);
             }
 
-            result.shape = squeezedShape.ToArray();
-
+            result.shape = resultShape.ToArray();
             return result;
 
         }
@@ -585,7 +628,6 @@ namespace DeepUnity
             cs.SetInt("rr", tensor.Rank);
 
             cs.SetInt("axis", axis);
-            cs.SetBool("keepDim", keepDim);
 
             cs.Dispatch(kernel, 1, 1, 1);
 
@@ -629,7 +671,6 @@ namespace DeepUnity
             cs.SetInt("rr", tensor.Rank);
 
             cs.SetInt("axis", axis);
-            cs.SetBool("keepDim", keepDim);
 
             cs.Dispatch(kernel, 1, 1, 1);
 
@@ -675,7 +716,6 @@ namespace DeepUnity
             
             cs.SetInt("axis", axis);
             cs.SetInt("correction", correction);
-            cs.SetBool("keepDim", keepDim);
 
             cs.Dispatch(kernel, 1, 1, 1);
 
@@ -721,13 +761,97 @@ namespace DeepUnity
 
             cs.SetInt("axis", axis);
             cs.SetInt("correction", correction);
-            cs.SetBool("keepDim", keepDim);
 
             cs.Dispatch(kernel, 1, 1, 1);
 
             return result;
         }
+        public static TensorGPU Min(TensorGPU tensor, int axis, bool keepDim = false)
+        {
+            if (axis < 0 || axis >= tensor.Rank)
+                throw new ArgumentOutOfRangeException("Invalid axis value.");
 
+            int[] newShape;
+            if (keepDim)
+            {
+                newShape = tensor.shape.ToArray();
+            }
+            else
+            {
+                newShape = tensor.shape.ToArray();
+                newShape[axis] = 1;
+            }
+
+            TensorGPU result = new TensorGPU(newShape);
+
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Min");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "result", result.data);
+
+            cs.SetInt("w1", tensor.Width);
+            cs.SetInt("h1", tensor.Height);
+            cs.SetInt("c1", tensor.Channels);
+            cs.SetInt("b1", tensor.Batch);
+            cs.SetInt("r1", tensor.Rank);
+
+            cs.SetInt("wr", result.Width);
+            cs.SetInt("hr", result.Height);
+            cs.SetInt("cr", result.Channels);
+            cs.SetInt("br", result.Batch);
+            cs.SetInt("rr", tensor.Rank);
+
+            cs.SetInt("axis", axis);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+
+            return result;
+        }
+        public static TensorGPU Max(TensorGPU tensor, int axis, bool keepDim = false)
+        {
+            if (axis < 0 || axis >= tensor.Rank)
+                throw new ArgumentOutOfRangeException("Invalid axis value.");
+
+            int[] newShape;
+            if (keepDim)
+            {
+                newShape = tensor.shape.ToArray();
+            }
+            else
+            {
+                newShape = tensor.shape.ToArray();
+                newShape[axis] = 1;
+            }
+
+            TensorGPU result = new TensorGPU(newShape);
+
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Max");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "result", result.data);
+
+            cs.SetInt("w1", tensor.Width);
+            cs.SetInt("h1", tensor.Height);
+            cs.SetInt("c1", tensor.Channels);
+            cs.SetInt("b1", tensor.Batch);
+            cs.SetInt("r1", tensor.Rank);
+
+            cs.SetInt("wr", result.Width);
+            cs.SetInt("hr", result.Height);
+            cs.SetInt("cr", result.Channels);
+            cs.SetInt("br", result.Batch);
+            cs.SetInt("rr", tensor.Rank);
+
+            cs.SetInt("axis", axis);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+
+            return result;
+        }
 
 
         // Math operations

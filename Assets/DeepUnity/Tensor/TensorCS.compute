@@ -37,7 +37,6 @@ int rr = 0;
 int seed;
 int axis;
 float value;
-bool keepDim;
 float power;
 float minvalue;
 float maxvalue;
@@ -64,27 +63,33 @@ int axisIndex(int axis, int rank)
 
 void data1_set(int b, int c, int h, int w, float value)
 {
-    data1[b * c1 * h1 * w1 + c * h1 * w1 + h * w1 + w] = value;
+    data1[b * c1 * h1 * w1 + c * h1 * w1 + w * h1 + h] = value;
+    //data1[b * c1 * h1 * w1 + c * h1 * w1 + h * w1 + w] = value;
 }
 float data1_get(int b, int c, int h, int w)
 {
-    return data1[b * c1 * h1 * w1 + c * h1 * w1 + h * w1 + w];
+    return data1[b * c1 * h1 * w1 + c * h1 * w1 + w * h1 + h];
+    //return data1[b * c1 * h1 * w1 + c * h1 * w1 + h * w1 + w];
 }
 void data2_set(int b, int c, int h, int w, float value)
 {
-    data2[b * c2 * h2 * w2 + c * h2 * w2 + h * w2 + w] = value;
+    data2[b * c2 * h2 * w2 + c * h2 * w2 + w * h2 + h] = value;
+    //data2[b * c2 * h2 * w2 + c * h2 * w2 + h * w2 + w] = value;
 }
 float data2_get(int b, int c, int h, int w)
 {
-    return data2[b * c2 * h2 * w2 + c * h2 * w2 + h * w2 + w];
+    return data2[b * c2 * h2 * w2 + c * h2 * w2 + w * h2 + h];
+    //return data2[b * c2 * h2 * w2 + c * h2 * w2 + h * w2 + w];
 }
 void result_set(int b, int c, int h, int w, float value)
 {
-    result[b * cr * hr * wr + c * hr * wr + h * wr + w] = value;
+    result[b * cr * hr * wr + c * hr * wr + w * hr + h] = value;
+    //result[b * cr * hr * wr + c * hr * wr + h * wr + w] = value;
 }
 float result_get(int b, int c, int h, int w)
 {
-    return result[b * cr * hr * wr + c * hr * wr + h * wr + w];
+    return result[b * cr * hr * wr + c * hr * wr + w * hr + h];
+    //return result[b * cr * hr * wr + c * hr * wr + h * wr + w];
 }
 float runif()
 {
@@ -373,9 +378,9 @@ void MaxElementWise(int3 id : SV_DispatchThreadID)
 #pragma kernel MatMul
 [numthreads(8, 8, 8)]
 void MatMul(int3 id : SV_DispatchThreadID)
-{
-    
+{   
     // id.x = p , id.y = n, id.z = k
+    
     // input [J x 1 x N x M] * other [K x M x P]
     // out [J x K x N x P]
     
@@ -383,31 +388,49 @@ void MatMul(int3 id : SV_DispatchThreadID)
     if (id.x >= wr || id.y >= hr || id.z >= cr)
         return;
     
-    for (int j = 0; j < br; j++)
+    if(r2 == 1)
     {
-        float sum = 0.0f;
-        for (int m = 0; m < w1; m++)
+        for (int j = 0; j < br; j++)
         {
-            sum += data1_get(j, 0, id.y, m) * data2_get(j, id.z, m, id.x);
-        }
+            float sum = 0.0f;
+            for (int m = 0; m < w1; m++)
+            {
+                float l = data1_get(j, 0, id.y, m);
+                float r = data2_get(0, id.z, 0, m);
+                sum += l * r;
+            }
         
-        result_set(j, id.z, id.y, id.x, sum);
+            result_set(j, id.z, 0, id.y, sum);
+        }
     }
-    
-    // int p = id.x;
-    // int n = id.y;
-    // int k = id.z;
-    // 
-    // for (int j = 0; j < br; j++)
-    // {
-    //     float sum = 0.0f;
-    //     for (int m = 0; m < w1; m++)
-    //     {
-    //         sum += data1_get(j, 0, n, m) * data2_get(j, k, m, p);
-    //     }
-    //     
-    //     result_set(j, k, n, p, sum);
-    // }
+    else if(r1 == 1)
+    {
+        for (int j = 0; j < br; j++)
+        {
+            float sum = 0.0f;
+            for (int m = 0; m < w1; m++)
+            {
+                float l = data1_get(j, 0, 0, m);
+                float r = data2_get(0, id.z, m, id.x);
+                sum += l * r;
+            }
+        
+            result_set(j, id.z, 0, id.x, sum);
+        }
+    }
+    else
+    {      
+        for (int j = 0; j < br; j++)
+        {
+            float sum = 0.0f;
+            for (int m = 0; m < w1; m++)
+            {
+                sum += data1_get(j, 0, id.y, m) * data2_get(0, id.z, m, id.x);
+            }
+        
+            result_set(j, id.z, id.y, id.x, sum);
+        }
+    }
 }
 
 
@@ -433,13 +456,10 @@ void Mean(int3 id : SV_DispatchThreadID)
                                        
                     }
                     sum /= float(w1);
-                    if (keepDim)
+                    for (int i = 0; i < w1; i++)
                     {
                         result_set(l, k, j, i, sum);
-                    }
-                    else
-                    {
-                        result_set(l, k, j, 0, sum);
+                                       
                     }
 
                 }
@@ -460,15 +480,10 @@ void Mean(int3 id : SV_DispatchThreadID)
 
                     }
                     sum /= float(h1);
-                    if (keepDim)
+                    for (int j = 0; j < h1; j++)
                     {
                         result_set(l, k, j, i, sum);
                     }
-                    else
-                    {
-                        result_set(l, k, 0, i, sum);
-                    }
-
                 }
             }
         }
@@ -485,13 +500,9 @@ void Mean(int3 id : SV_DispatchThreadID)
                         sum += data1_get(l, k, j, i);
                     }
                     sum /= float(c1);
-                    if (keepDim)
+                    for (int k = 0; k < c1; k++)
                     {
                         result_set(l, k, j, i, sum);
-                    }
-                    else
-                    {
-                        result_set(l, 0, j, i, sum);
                     }
                 }
             }
@@ -510,13 +521,9 @@ void Mean(int3 id : SV_DispatchThreadID)
                         sum += data1_get(l, k, j, i);
                     }
                     sum /= float(b1);
-                    if (keepDim)
+                    for (int l = 0; l < b1; l++)
                     {
                         result_set(l, k, j, i, sum);
-                    }
-                    else
-                    {
-                        result_set(0, k, j, i, sum);
                     }
                    
                 }
@@ -548,13 +555,10 @@ void Var(int3 id : SV_DispatchThreadID)
                         sumsqr += v * v;
                     }
                     float var = (sumsqr - (sum * sum) / float(w1)) / (float(w1) - correction);
-                    if (keepDim)
+                    for (int i = 0; i < w1; i++)
                     {
                         result_set(l, k, j, i, var);
-                    }
-                    else
-                    {
-                        result_set(l, k, j, 0, var);
+                                       
                     }
 
                 }
@@ -578,13 +582,9 @@ void Var(int3 id : SV_DispatchThreadID)
 
                     }
                     float var = (sumsqr - (sum * sum) / float(h1)) / (float(h1) - correction);
-                    if (keepDim)
+                    for (int j = 0; j < h1; j++)
                     {
                         result_set(l, k, j, i, var);
-                    }
-                    else
-                    {
-                        result_set(l, k, 0, i, var);
                     }
 
                 }
@@ -606,13 +606,9 @@ void Var(int3 id : SV_DispatchThreadID)
                         sumsqr += v * v;
                     }
                     float var = (sumsqr - (sum * sum) / float(c1)) / (float(c1) - correction);
-                    if (keepDim)
+                    for (int k = 0; k < c1; k++)
                     {
                         result_set(l, k, j, i, var);
-                    }
-                    else
-                    {
-                        result_set(l, 0, j, i, var);
                     }
                 }
             }
@@ -634,13 +630,9 @@ void Var(int3 id : SV_DispatchThreadID)
                         sumsqr += v * v;
                     }
                     float var = (sumsqr - (sum * sum) / float(b1)) / (float(b1) - correction);
-                    if (keepDim)
+                    for (int l = 0; l < b1; l++)
                     {
                         result_set(l, k, j, i, var);
-                    }
-                    else
-                    {
-                        result_set(0, k, j, i, var);
                     }
                    
                 }
@@ -672,15 +664,12 @@ void Std(int3 id : SV_DispatchThreadID)
                         sumsqr += v * v;
                     }
                     float var = (sumsqr - (sum * sum) / float(w1)) / (float(w1) - correction);
-                    if (keepDim)
+                    
+                    for (int i = 0; i < w1; i++)
                     {
                         result_set(l, k, j, i, sqrt(var));
+                                       
                     }
-                    else
-                    {
-                        result_set(l, k, j, 0, sqrt(var));
-                    }
-
                 }
             }
 
@@ -702,15 +691,11 @@ void Std(int3 id : SV_DispatchThreadID)
 
                     }
                     float var = (sumsqr - (sum * sum) / float(h1)) / (float(h1) - correction);
-                    if (keepDim)
+                    
+                    for (int j = 0; j < h1; j++)
                     {
                         result_set(l, k, j, i, sqrt(var));
                     }
-                    else
-                    {
-                        result_set(l, k, 0, i, sqrt(var));
-                    }
-
                 }
             }
         }
@@ -730,13 +715,10 @@ void Std(int3 id : SV_DispatchThreadID)
                         sumsqr += v * v;
                     }
                     float var = (sumsqr - (sum * sum) / float(c1)) / (float(c1) - correction);
-                    if (keepDim)
+                    
+                    for (int k = 0; k < c1; k++)
                     {
                         result_set(l, k, j, i, sqrt(var));
-                    }
-                    else
-                    {
-                        result_set(l, 0, j, i, sqrt(var));
                     }
                 }
             }
@@ -758,15 +740,11 @@ void Std(int3 id : SV_DispatchThreadID)
                         sumsqr += v * v;
                     }
                     float var = (sumsqr - (sum * sum) / float(b1)) / (float(b1) - correction);
-                    if (keepDim)
+                    
+                    for (int l = 0; l < b1; l++)
                     {
                         result_set(l, k, j, i, sqrt(var));
-                    }
-                    else
-                    {
-                        result_set(0, k, j, i, sqrt(var));
-                    }
-                   
+                    }                 
                 }
             }
         }
@@ -792,16 +770,12 @@ void Sum(int3 id : SV_DispatchThreadID)
                     {
                         sum += data1_get(l, k, j, i);
                                        
-                    }
-                    if (keepDim)
+                    }              
+                    for (int i = 0; i < w1; i++)
                     {
                         result_set(l, k, j, i, sum);
+                                       
                     }
-                    else
-                    {
-                        result_set(l, k, j, 0, sum);
-                    }
-
                 }
             }
 
@@ -819,15 +793,11 @@ void Sum(int3 id : SV_DispatchThreadID)
                         sum += data1_get(l, k, j, i);
 
                     }
-                    if (keepDim)
+                    for (int j = 0; j < h1; j++)
                     {
                         result_set(l, k, j, i, sum);
-                    }
-                    else
-                    {
-                        result_set(l, k, 0, i, sum);
-                    }
 
+                    }
                 }
             }
         }
@@ -843,13 +813,9 @@ void Sum(int3 id : SV_DispatchThreadID)
                     {
                         sum += data1_get(l, k, j, i);
                     }
-                    if (keepDim)
+                    for (int k = 0; k < c1; k++)
                     {
                         result_set(l, k, j, i, sum);
-                    }
-                    else
-                    {
-                        result_set(l, 0, j, i, sum);
                     }
                 }
             }
@@ -867,15 +833,10 @@ void Sum(int3 id : SV_DispatchThreadID)
                     {
                         sum += data1_get(l, k, j, i);
                     }
-                    if (keepDim)
+                    for (int l = 0; l < b1; l++)
                     {
                         result_set(l, k, j, i, sum);
-                    }
-                    else
-                    {
-                        result_set(0, k, j, i, sum);
-                    }
-                   
+                    }                   
                 }
             }
         }
@@ -902,13 +863,10 @@ void Min(int3 id : SV_DispatchThreadID)
                         m = min(m, data1_get(l, k, j, i));
                                        
                     }
-                    if (keepDim)
+                    for (int i = 0; i < w1; i++)
                     {
                         result_set(l, k, j, i, m);
-                    }
-                    else
-                    {
-                        result_set(l, k, j, 0, m);
+                                       
                     }
 
                 }
@@ -928,13 +886,10 @@ void Min(int3 id : SV_DispatchThreadID)
                         m = min(m, data1_get(l, k, j, i));
 
                     }
-                    if (keepDim)
+                    for (int j = 0; j < h1; j++)
                     {
                         result_set(l, k, j, i, m);
-                    }
-                    else
-                    {
-                        result_set(l, k, 0, i, m);
+
                     }
 
                 }
@@ -952,13 +907,9 @@ void Min(int3 id : SV_DispatchThreadID)
                     {
                         m = min(m, data1_get(l, k, j, i));
                     }
-                    if (keepDim)
+                    for (int k = 0; k < c1; k++)
                     {
                         result_set(l, k, j, i, m);
-                    }
-                    else
-                    {
-                        result_set(l, 0, j, i, m);
                     }
                 }
             }
@@ -976,13 +927,9 @@ void Min(int3 id : SV_DispatchThreadID)
                     {
                         m = min(m, data1_get(l, k, j, i));
                     }
-                    if (keepDim)
+                    for (int l = 0; l < b1; l++)
                     {
                         result_set(l, k, j, i, m);
-                    }
-                    else
-                    {
-                        result_set(0, k, j, i, m);
                     }
                    
                 }
@@ -1011,15 +958,11 @@ void Max(int3 id : SV_DispatchThreadID)
                         m = max(m, data1_get(l, k, j, i));
                                        
                     }
-                    if (keepDim)
+                    for (int i = 0; i < w1; i++)
                     {
                         result_set(l, k, j, i, m);
+                                       
                     }
-                    else
-                    {
-                        result_set(l, k, j, 0, m);
-                    }
-
                 }
             }
 
@@ -1037,13 +980,10 @@ void Max(int3 id : SV_DispatchThreadID)
                         m = max(m, data1_get(l, k, j, i));
 
                     }
-                    if (keepDim)
+                    for (int j = 0; j < h1; j++)
                     {
                         result_set(l, k, j, i, m);
-                    }
-                    else
-                    {
-                        result_set(l, k, 0, i, m);
+
                     }
 
                 }
@@ -1061,13 +1001,9 @@ void Max(int3 id : SV_DispatchThreadID)
                     {
                         m = max(m, data1_get(l, k, j, i));
                     }
-                    if (keepDim)
+                    for (int k = 0; k < c1; k++)
                     {
                         result_set(l, k, j, i, m);
-                    }
-                    else
-                    {
-                        result_set(l, 0, j, i, m);
                     }
                 }
             }
@@ -1085,13 +1021,9 @@ void Max(int3 id : SV_DispatchThreadID)
                     {
                         m = max(m, data1_get(l, k, j, i));
                     }
-                    if (keepDim)
+                    for (int l = 0; l < b1; l++)
                     {
                         result_set(l, k, j, i, m);
-                    }
-                    else
-                    {
-                        result_set(0, k, j, i, m);
                     }
                    
                 }

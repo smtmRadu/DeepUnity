@@ -69,6 +69,8 @@ namespace kbRadu
 
             validationInputs = Tensor.Join(Dim.width, x1, x2);
             validationTargets = y;
+
+            Timer.Start();
         }
 
 
@@ -87,6 +89,10 @@ namespace kbRadu
                 if (epoch % 10 == 0)
                     net.Save("test");
                 i = 0;
+
+                if (epoch == 100)
+                    Timer.Stop();
+
                 return;
             }
             var trainPrediction = net.Forward(trainXbatches[i]);

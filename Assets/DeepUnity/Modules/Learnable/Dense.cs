@@ -56,8 +56,9 @@ namespace DeepUnity
         }
         public Tensor Forward(Tensor input)
         {
-            int batch_size = input.Height;
             InputCache = Tensor.Identity(input);
+
+            int batch_size = input.Height;
             return Tensor.MatMul(input, Tensor.Transpose(gamma, Dim.width, Dim.height)) + Tensor.Expand(beta, Dim.height, batch_size);
         }
         public Tensor Backward(Tensor loss)
