@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.Eventing.Reader;
 using System.Linq;
+using System.Runtime.Remoting.Channels;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
@@ -72,24 +73,25 @@ namespace DeepUnity
         public float this[int w]
         {
             get => data[w];
-            private set => data[w] = value;
+            set => data[w] = value;
         }
         public float this[int h, int w]
         {
             get => data[h * Width + w];
-            private set => data[h * Width + w] = value;
+            set => data[h * Width + w] = value;
         }
         public float this[int c, int h, int w]
         {
             get => data[c * Height * Width + h * Width + w];
-            private set => data[c * Height * Width * h * Width + w] = value;
+            set => data[c * Height * Width * h * Width + w] = value;
         }
         public float this[int n, int c, int h, int w]
         {
             get => data[n * Channels * Height * Width + c * Height * Width + h * Width + w];
-            private set => data[n * Channels * Height * Width + c * Height * Width + h * Width + w] = value;
+            set => data[n * Channels * Height * Width + c * Height * Width + h * Width + w] = value;
 
         }
+
 
         #region Create
         private Tensor(params int[] shape)
@@ -924,7 +926,123 @@ namespace DeepUnity
 
             return Correlate2D(inputs, rot180Kernel, correlationType);
         }
+        /// <summary>
+        /// Computes the Element-Wise minimum.
+        /// </summary>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        public static Tensor Minimum(Tensor left, Tensor right)
+        {
+            if (!left.shape.SequenceEqual(right.shape))
+                throw new OperationCanceledException($"Left[{left.shape.ToCommaSeparatedString()}] and right[{right.shape.ToCommaSeparatedString()}] tensors must have different shape for Min operation.");
 
+
+            Tensor result = new(left.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Min(left.data[i], right.data[i]);
+            }
+
+            return result;
+        }
+        /// <summary>
+        /// Computes the Element-Wise maximum.
+        /// </summary>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        public static Tensor Maximum(Tensor left, Tensor right)
+        {
+            if (!left.shape.SequenceEqual(right.shape))
+                throw new OperationCanceledException($"Left[{left.shape.ToCommaSeparatedString()}] and right[{right.shape.ToCommaSeparatedString()}] tensors must have different shape for Max operation.");
+
+
+
+            Tensor result = new(left.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Max(left.data[i], right.data[i]);
+            }
+
+            return result;
+        }
+        /// <summary>
+        /// Computed the norm of the tensor.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="normType"></param>
+        /// <returns><see cref="Tensor"/> (1)</returns>
+        /// <exception cref="Exception"></exception>
+        public static Tensor Norm(Tensor tensor, NormType normType = NormType.EuclideanL2)
+        {
+            switch (normType)
+            {
+                case NormType.NonZeroL0:
+                    int nonzeros = tensor.Count(x => x != 0);
+                    return Constant(nonzeros);
+                case NormType.ManhattanL1:
+                    float absSum = tensor.data.Sum(x => MathF.Abs(x));
+                    return Constant(absSum);
+                case NormType.EuclideanL2:
+                    float sqrSum = tensor.data.Sum(x => x * x);
+                    return Constant(MathF.Sqrt(sqrSum));
+                case NormType.MaxLInf:
+                    float maxAbs = tensor.data.Max(x => Math.Abs(x));
+                    return Constant(maxAbs);
+                default:
+                    throw new Exception("Unhandled norm type.");
+            }
+        }
+        /// <summary>
+        /// Computes the element-wise log density,
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="mu"></param>
+        /// <param name="sigma"></param>
+        /// <returns></returns>
+        public static Tensor LogDensity(Tensor x, Tensor mu, Tensor sigma)
+        {
+            var frac = (x - mu) / sigma;
+            var elem1 = Log(sigma);
+            var elem2 = 0.5f * MathF.Log(2.0f * MathF.PI);
+            var elem3 = 0.5f * frac * frac;
+            return -elem1 - elem2 - elem3;
+        }
+        /// <summary>
+        /// Computes the element-wise density,
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="mu"></param>
+        /// <param name="sigma"></param>
+        /// <returns></returns>
+        public static Tensor Density(Tensor x, Tensor mu, Tensor sigma)
+        {
+            Tensor p1 = (sigma * MathF.Sqrt(2f * MathF.PI)) * 0.5f;
+            Tensor std = (x - mu) / sigma;
+            Tensor p2 = -0.5f * std * std;
+            return p1 * Tensor.Exp(p2);
+        }
+        /// <summary>
+        /// Computes the element-wise Kullback-Leibler divergence. Measures the distance between two data distributions showing how different the two distributions are from each other.
+        /// </summary>
+        /// <param name="mu1"></param>
+        /// <param name="sig1"></param>
+        /// <param name="mu2"></param>
+        /// <param name="sig2"></param>
+        /// <returns></returns>
+        public static Tensor KLDivergence(Tensor mu1, Tensor sig1, Tensor mu2, Tensor sig2)
+        {
+            var var1 = sig1 * sig1;
+            var var2 = sig2 * sig2;
+
+            return Tensor.Log((sig2 / (sig1 + Utils.EPSILON)) + Utils.EPSILON) +
+                (var1 + (mu1 - mu2) * (mu1 - mu2)) / (2f * var2) - 0.5f;
+        }
         #endregion Special
 
 
@@ -1026,18 +1144,18 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
-        /// If axis is null, the tensors are joined along the next dimension. <br></br>
+        /// All tensors must have the same shape. <br></br>
+        /// If axis == null, all tensors are unsqueezed(0). <br></br>
         /// Example: <br></br>
         /// Join(0, {(2,3),(2,3),(2,3),(2,3)}) => (8,3) <br></br>
         /// Join(1, {(2,3),(2,3),(2,3),(2,3)}) => (2,12) <br></br>
         /// Join(null, {(2,3),(2,3),(2,3),(2,3)}) => (4,2,3) <br></br>
         /// </summary>
-        /// <param name="axis"></param>
-        /// <param name="tensors"></param>
-        /// <returns></returns>
-        /// <exception cref="ArgumentException"></exception>
-        public static Tensor Join(int? axis, params Tensor[] tensors)
-        {            
+        public static Tensor Concat(int? axis, params Tensor[] tensors)
+        {
+            if (tensors == null || tensors.Length == 0)
+                throw new ArgumentException("At least one tensor must be provided for concatenation");
+
 
             if (tensors.Length == 1)
                 return Identity(tensors[0]);
@@ -1055,8 +1173,7 @@ namespace DeepUnity
             int[] shapex = null;
             Dim dim;
 
-            int ax = axis.Value;
-            HandleAxis(tensors[0], ref ax);
+            
 
             if (axis == null)
             {
@@ -1068,7 +1185,12 @@ namespace DeepUnity
                 
             }
             else
+            {
+                int ax = axis.Value;
+                HandleAxis(tensors[0], ref ax);
                 dim = AxisToDim(tensors[0], ax);
+            }
+               
             switch (dim)
             {
                 case Dim.width:
@@ -1286,7 +1408,7 @@ namespace DeepUnity
             HandleAxis(tensor, ref axis);
             Tensor[] slices = Split(tensor, axis, 1);
             slices = Utils.Shuffle(slices).ToArray();
-            return Join(axis, slices);
+            return Concat(axis, slices);
         }
         public static Tensor Sum(Tensor tensor, int axis, bool keepDim = false)
         {
@@ -1300,7 +1422,7 @@ namespace DeepUnity
             Dim dimIndex = AxisToDim(tensor, axis);
 
             int[] newShape = tensor.shape.ToArray();
-            newShape[axis] = keepDim == true ? newShape[axis] : 1;
+            newShape[axis] = 1; // keepDim = true? newShape[axis] : 1
             Tensor result = new(newShape);
 
             if (dimIndex == Dim.width)
@@ -1316,11 +1438,12 @@ namespace DeepUnity
                             {
                                 sum += tensor[l, k, j, i];
                             }
+                            result[l, k, j, 0] = sum;
 
-                            for (int i = 0; i < newShape[axis]; i++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            // for (int i = 0; i < newShape[axis]; i++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
@@ -1338,11 +1461,11 @@ namespace DeepUnity
                             {
                                 sum += tensor[l, k, j, i];
                             }
-
-                            for (int j = 0; j < newShape[axis]; j++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            result[l, k, 0, i] = sum;
+                            // for (int j = 0; j < newShape[axis]; j++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
@@ -1361,11 +1484,11 @@ namespace DeepUnity
                             {
                                 sum += tensor[l, k, j, i];
                             }
-
-                            for (int k = 0; k < newShape[axis]; k++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            result[l, 0, j, i] = sum;
+                            // for (int k = 0; k < newShape[axis]; k++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
@@ -1383,16 +1506,17 @@ namespace DeepUnity
                             {
                                 sum += tensor[l, k, j, i];
                             }
-                            for (int l = 0; l < newShape[axis]; l++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            result[0, k, j, i] = sum;
+                            // for (int l = 0; l < newShape[axis]; l++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
             }
-
-            result.Squeeze();
+            if(!keepDim)
+                result.Squeeze();
             return result;
         }
         public static Tensor Mean(Tensor tensor, int axis, bool keepDim = false)
@@ -1407,7 +1531,7 @@ namespace DeepUnity
             Dim dim = AxisToDim(tensor, axis);
 
             int[] newShape = tensor.shape.ToArray();
-            newShape[axis] = keepDim == true ? newShape[axis] : 1;
+            newShape[axis] = 1;
             Tensor result = new(newShape);
 
 
@@ -1425,10 +1549,12 @@ namespace DeepUnity
                                 sum += tensor[l, k, j, i];
                             }
                             sum /= width;
-                            for (int i = 0; i < newShape[axis]; i++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            result[l, k, j, 0] = sum;
+
+                            // for (int i = 0; i < newShape[axis]; i++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
@@ -1447,11 +1573,11 @@ namespace DeepUnity
                                 sum += tensor[l, k, j, i];
                             }
                             sum /= height;
-
-                            for (int j = 0; j < newShape[axis]; j++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            result[l, k, 0, i] = sum;
+                            // for (int j = 0; j < newShape[axis]; j++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
@@ -1471,10 +1597,11 @@ namespace DeepUnity
                                 sum += tensor[l, k, j, i];
                             }
                             sum /= channels;
-                            for (int k = 0; k < newShape[axis]; k++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            result[l, 0, j, i] = sum;
+                            // for (int k = 0; k < newShape[axis]; k++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
@@ -1493,16 +1620,17 @@ namespace DeepUnity
                                 sum += tensor[l, k, j, i];
                             }
                             sum /= batch;
-                            for (int l = 0; l < newShape[axis]; l++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            result[0, k, j, i] = sum;
+                            // for (int l = 0; l < newShape[axis]; l++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
             }
-
-            result.Squeeze();
+            if(!keepDim)
+                result.Squeeze();
             return result;
         }
         public static Tensor Var(Tensor tensor, int axis, int correction = 1, bool keepDim = false)
@@ -1517,7 +1645,7 @@ namespace DeepUnity
             Dim dimIndex = AxisToDim(tensor, axis);
 
             int[] newShape = tensor.shape.ToArray();
-            newShape[axis] = keepDim == true ? newShape[axis] : 1;
+            newShape[axis] = 1;
             Tensor result = new(newShape);
 
             if (dimIndex == Dim.width)
@@ -1537,11 +1665,11 @@ namespace DeepUnity
                                 sumSqr += value * value;
                             }
                             float vr = (sumSqr - (sum * sum) / width) / (width - correction);
-
-                            for (int i = 0; i < newShape[axis]; i++)
-                            {
-                                result[l, k, j, i] = vr;
-                            }
+                            result[l, k, j, 0] = vr;
+                            // for (int i = 0; i < newShape[axis]; i++)
+                            // {
+                            //     result[l, k, j, i] = vr;
+                            // }
                         }
                     }
                 }
@@ -1563,11 +1691,11 @@ namespace DeepUnity
                                 sumSqr += value * value;
                             }
                             float vr = (sumSqr - (sum * sum) / height) / (height - correction);
-
-                            for (int j = 0; j < newShape[axis]; j++)
-                            {
-                                result[l, k, j, i] = vr;
-                            }
+                            result[l, k, 0, i] = vr;
+                            // for (int j = 0; j < newShape[axis]; j++)
+                            // {
+                            //     result[l, k, j, i] = vr;
+                            // }
                         }
                     }
                 }
@@ -1590,11 +1718,11 @@ namespace DeepUnity
                             }
 
                             float vr = (sumSqr - (sum * sum) / channels) / (channels - correction);
-
-                            for (int k = 0; k < newShape[axis]; k++)
-                            {
-                                result[l, k, j, i] = vr;
-                            }
+                            result[l, 0, j, i] = vr;
+                            // for (int k = 0; k < newShape[axis]; k++)
+                            // {
+                            //     result[l, k, j, i] = vr;
+                            // }
                         }
                     }
                 }
@@ -1616,17 +1744,18 @@ namespace DeepUnity
                                 sumSqr += value * value;
                             }
                             float vr = (sumSqr - (sum * sum) / batch) / (batch - correction);
-
-                            for (int l = 0; l < newShape[axis]; l++)
-                            {
-                                result[l, k, j, i] = vr;
-                            }
+                            result[0, k, j, i] = vr;
+                            // for (int l = 0; l < newShape[axis]; l++)
+                            // {
+                            //     result[l, k, j, i] = vr;
+                            // }
                         }
                     }
                 }
             }
 
-            result.Squeeze();
+            if(!keepDim)
+                result.Squeeze();
             return result;
         }
         public static Tensor Std(Tensor tensor, int axis, int correction = 1, bool keepDim = false)
@@ -1647,7 +1776,7 @@ namespace DeepUnity
 
 
             int[] newShape = tensor.shape.ToArray();
-            newShape[axis] = keepDim == true ? newShape[axis] : 1;
+            newShape[axis] = 1;
             Tensor result = new(newShape);
 
             if (dim == Dim.width)
@@ -1663,11 +1792,11 @@ namespace DeepUnity
                             {
                                 min = MathF.Min(min, tensor[l, k, j, i]);
                             }
-
-                            for (int i = 0; i < newShape[axis]; i++)
-                            {
-                                result[l, k, j, i] = min;
-                            }
+                            result[l, k, j, 0] = min;
+                            // for (int i = 0; i < newShape[axis]; i++)
+                            // {
+                            //     result[l, k, j, i] = min;
+                            // }
                         }
                     }
                 }
@@ -1685,11 +1814,11 @@ namespace DeepUnity
                             {
                                 min = MathF.Min(min, tensor[l, k, j, i]);
                             }
-
-                            for (int j = 0; j < newShape[axis]; j++)
-                            {
-                                result[l, k, j, i] = min;
-                            }
+                            result[l, k, 0, i] = min;
+                            // for (int j = 0; j < newShape[axis]; j++)
+                            // {
+                            //     result[l, k, j, i] = min;
+                            // }
                         }
                     }
                 }
@@ -1708,11 +1837,11 @@ namespace DeepUnity
                             {
                                 min = MathF.Min(min, tensor[l, k, j, i]);
                             }
-
-                            for (int k = 0; k < newShape[axis]; k++)
-                            {
-                                result[l, k, j, i] = min;
-                            }
+                            result[l, 0, j, i] = min;
+                            // for (int k = 0; k < newShape[axis]; k++)
+                            // {
+                            //     result[l, k, j, i] = min;
+                            // }
                         }
                     }
                 }
@@ -1730,16 +1859,19 @@ namespace DeepUnity
                             {
                                 min = MathF.Min(min, tensor[l, k, j, i]);
                             }
-                            for (int l = 0; l < newShape[axis]; l++)
-                            {
-                                result[l, k, j, i] = min;
-                            }
+                            result[0, k, j, i] = min;
+                            // for (int l = 0; l < newShape[axis]; l++)
+                            // {
+                            //     result[l, k, j, i] = min;
+                            // }
                         }
                     }
                 }
             }
 
-            return result.Squeeze();
+            if (!keepDim)
+                result.Squeeze();
+            return result;
         }
         public static Tensor Max(Tensor tensor, int axis, bool keepDim = false)
         {
@@ -1754,7 +1886,7 @@ namespace DeepUnity
 
 
             int[] newShape = tensor.shape.ToArray();
-            newShape[axis] = keepDim == true ? newShape[axis] : 1;
+            newShape[axis] = 1;
             Tensor result = new(newShape);
 
             if (dim == Dim.width)
@@ -1770,11 +1902,11 @@ namespace DeepUnity
                             {
                                 m = MathF.Max(m, tensor[l, k, j, i]);
                             }
-
-                            for (int i = 0; i < newShape[axis]; i++)
-                            {
-                                result[l, k, j, i] = m;
-                            }
+                            result[l, k, j, 0] = m;
+                            // for (int i = 0; i < newShape[axis]; i++)
+                            // {
+                            //     result[l, k, j, i] = m;
+                            // }
                         }
                     }
                 }
@@ -1792,11 +1924,11 @@ namespace DeepUnity
                             {
                                 m = MathF.Max(m, tensor[l, k, j, i]);
                             }
-
-                            for (int j = 0; j < newShape[axis]; j++)
-                            {
-                                result[l, k, j, i] = m;
-                            }
+                            result[l, k, 0, i] = m;
+                            // for (int j = 0; j < newShape[axis]; j++)
+                            // {
+                            //     result[l, k, j, i] = m;
+                            // }
                         }
                     }
                 }
@@ -1815,11 +1947,11 @@ namespace DeepUnity
                             {
                                 m = MathF.Max(m, tensor[l, k, j, i]);
                             }
-
-                            for (int k = 0; k < newShape[axis]; k++)
-                            {
-                                result[l, k, j, i] = m;
-                            }
+                            result[l, 0, j, i] = m;
+                            // for (int k = 0; k < newShape[axis]; k++)
+                            // {
+                            //     result[l, k, j, i] = m;
+                            // }
                         }
                     }
                 }
@@ -1837,15 +1969,19 @@ namespace DeepUnity
                             {
                                 m = MathF.Max(m, tensor[l, k, j, i]);
                             }
-                            for (int l = 0; l < newShape[axis]; l++)
-                            {
-                                result[l, k, j, i] = m;
-                            }
+                            result[0, k, j, i] = m;
+                            // for (int l = 0; l < newShape[axis]; l++)
+                            // {
+                            //     result[l, k, j, i] = m;
+                            // }
                         }
                     }
                 }
             }
-            return result.Squeeze();
+
+            if (!keepDim)
+                result.Squeeze();
+            return result;
 
         }
         public static Tensor Pow(Tensor tensor, float power)
@@ -1925,13 +2061,6 @@ namespace DeepUnity
 
             return result;
         }
-        /// <summary>
-        /// Clips each element in the tensor in [min,max] range.
-        /// </summary>
-        /// <param name="tensor"></param>
-        /// <param name="min"></param>
-        /// <param name="max"></param>
-        /// <returns></returns>
         public static Tensor Clip(Tensor tensor, float min, float max)
         {
             Tensor result = new(tensor.shape);
@@ -1943,128 +2072,6 @@ namespace DeepUnity
 
             return result;
         }
-        /// <summary>
-        /// Computed the norm of the tensor.
-        /// </summary>
-        /// <param name="tensor"></param>
-        /// <param name="normType"></param>
-        /// <returns><see cref="Tensor"/> (1)</returns>
-        /// <exception cref="Exception"></exception>
-        public static Tensor Norm(Tensor tensor, NormType normType = NormType.EuclideanL2)
-        {
-            switch (normType)
-            {
-                case NormType.NonZeroL0:
-                    int nonzeros = tensor.Count(x => x != 0);
-                    return Constant(nonzeros);
-                case NormType.ManhattanL1:
-                    float absSum = tensor.data.Sum(x => MathF.Abs(x));
-                    return Constant(absSum);
-                case NormType.EuclideanL2:
-                    float sqrSum = tensor.data.Sum(x => x * x);
-                    return Constant(MathF.Sqrt(sqrSum));
-                case NormType.MaxLInf:
-                    float maxAbs = tensor.data.Max(x => Math.Abs(x));
-                    return Constant(maxAbs);
-                default:
-                    throw new Exception("Unhandled norm type.");
-            }
-        }
-
-
-
-        /// <summary>
-        /// Computes the Element-Wise minimum.
-        /// </summary>
-        /// <param name="left"></param>
-        /// <param name="right"></param>
-        /// <returns></returns>
-        /// <exception cref="ArgumentException"></exception>
-        public static Tensor Minimum(Tensor left, Tensor right)
-        {
-            if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left[{left.shape.ToCommaSeparatedString()}] and right[{right.shape.ToCommaSeparatedString()}] tensors must have different shape for Min operation.");
-
-
-            Tensor result = new(left.shape);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = MathF.Min(left.data[i], right.data[i]);
-            }
-
-            return result;
-        }
-        /// <summary>
-        /// Computes the Element-Wise maximum.
-        /// </summary>
-        /// <param name="left"></param>
-        /// <param name="right"></param>
-        /// <returns></returns>
-        /// <exception cref="ArgumentException"></exception>
-        public static Tensor Maximum(Tensor left, Tensor right)
-        {
-           if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left[{left.shape.ToCommaSeparatedString()}] and right[{right.shape.ToCommaSeparatedString()}] tensors must have different shape for Max operation.");
-
-
-
-            Tensor result = new(left.shape);
-
-            for (int i = 0; i < result.data.Length; i++)
-            {
-                result.data[i] = MathF.Max(left.data[i], right.data[i]);
-            }
-
-            return result;
-        }
-          
-        /// <summary>
-        /// Computes the element-wise log density,
-        /// </summary>
-        /// <param name="x"></param>
-        /// <param name="mu"></param>
-        /// <param name="sigma"></param>
-        /// <returns></returns>
-        public static Tensor LogDensity(Tensor x, Tensor mu, Tensor sigma)
-        {
-            var frac = (x - mu) / sigma;
-            var elem1 = Log(sigma);
-            var elem2 = 0.5f * MathF.Log(2.0f * MathF.PI);
-            var elem3 = 0.5f * frac * frac;
-            return -elem1 - elem2 - elem3;
-        }
-        /// <summary>
-        /// Computes the element-wise density,
-        /// </summary>
-        /// <param name="x"></param>
-        /// <param name="mu"></param>
-        /// <param name="sigma"></param>
-        /// <returns></returns>
-        public static Tensor Density(Tensor x, Tensor mu, Tensor sigma)
-        {
-            Tensor p1 = (sigma * MathF.Sqrt(2f * MathF.PI)) * 0.5f;
-            Tensor std = (x - mu) / sigma;
-            Tensor p2 = -0.5f * std * std;
-            return p1 * Tensor.Exp(p2);
-        }
-        /// <summary>
-        /// Computes the element-wise Kullback-Leibler divergence. Measures the distance between two data distributions showing how different the two distributions are from each other.
-        /// </summary>
-        /// <param name="mu1"></param>
-        /// <param name="sig1"></param>
-        /// <param name="mu2"></param>
-        /// <param name="sig2"></param>
-        /// <returns></returns>
-        public static Tensor KLDivergence(Tensor mu1, Tensor sig1, Tensor mu2, Tensor sig2)
-        {
-            var var1 = sig1 * sig1;
-            var var2 = sig2 * sig2;
-
-            return Tensor.Log((sig2 / (sig1 + Utils.EPSILON)) + Utils.EPSILON) +
-                (var1 + (mu1 - mu2) * (mu1 - mu2)) / (2f * var2) - 0.5f;
-        }
-
         #endregion Statics
 
 
@@ -2333,210 +2340,228 @@ namespace DeepUnity
             HandleAxis(this, ref axis);
             Tensor[] slices = Split(axis, 1);
             slices = Utils.Shuffle(slices).ToArray();
-            return Join(axis, slices);
+            return Concat(axis, slices);
         }
         public Tensor Sum(int axis, bool keepDim = false)
         {
             HandleAxis(this, ref axis);
-            Dim dim = AxisToDim(this, axis);
+
+            int batch = Batch;
+            int channels = Channels;
+            int height = Height;
+            int width = Width;
+
+            Dim dimIndex = AxisToDim(this, axis);
 
             int[] newShape = shape.ToArray();
-            newShape[axis] = keepDim ? newShape[axis] : 1;
-            Tensor result = new Tensor(newShape);
+            newShape[axis] = 1; // keepDim = true? newShape[axis] : 1
+            Tensor result = new(newShape);
 
-            if (dim == Dim.width)
+            if (dimIndex == Dim.width)
             {
-                for (int l = 0; l < Batch; l++)
+                for (int l = 0; l < batch; l++)
                 {
-                    for (int k = 0; k < Channels; k++)
+                    for (int k = 0; k < channels; k++)
                     {
-                        for (int j = 0; j < Height; j++)
+                        for (int j = 0; j < height; j++)
                         {
                             float sum = 0f;
-                            for (int i = 0; i < Width; i++)
+                            for (int i = 0; i < width; i++)
                             {
                                 sum += this[l, k, j, i];
                             }
+                            result[l, k, j, 0] = sum;
 
-                            for (int i = 0; i < newShape[axis]; i++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            // for (int i = 0; i < newShape[axis]; i++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
             }
-            else if (dim == Dim.height)
+            else if (dimIndex == Dim.height)
             {
-                for (int l = 0; l < Batch; l++)
+                for (int l = 0; l < batch; l++)
                 {
-                    for (int k = 0; k < Channels; k++)
+                    for (int k = 0; k < channels; k++)
                     {
-                        for (int i = 0; i < Width; i++)
+                        for (int i = 0; i < width; i++)
                         {
                             float sum = 0f;
-                            for (int j = 0; j < Height; j++)
+                            for (int j = 0; j < height; j++)
                             {
                                 sum += this[l, k, j, i];
                             }
-
-                            for (int j = 0; j < newShape[axis]; j++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            result[l, k, 0, i] = sum;
+                            // for (int j = 0; j < newShape[axis]; j++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
             }
-            else if (dim == Dim.channel)
+            else if (dimIndex == Dim.channel)
             {
-                for (int l = 0; l < Batch; l++)
+                for (int l = 0; l < batch; l++)
                 {
-                    for (int j = 0; j < Height; j++)
+                    for (int j = 0; j < height; j++)
                     {
-                        for (int i = 0; i < Width; i++)
+                        for (int i = 0; i < width; i++)
                         {
                             float sum = 0f;
 
-                            for (int k = 0; k < Channels; k++)
+                            for (int k = 0; k < channels; k++)
                             {
                                 sum += this[l, k, j, i];
                             }
-
-                            for (int k = 0; k < newShape[axis]; k++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            result[l, 0, j, i] = sum;
+                            // for (int k = 0; k < newShape[axis]; k++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
             }
-            else if (dim == Dim.batch)
+            else if (dimIndex == Dim.batch)
             {
-                for (int k = 0; k < Channels; k++)
+                for (int k = 0; k < channels; k++)
                 {
-                    for (int j = 0; j < Height; j++)
+                    for (int j = 0; j < height; j++)
                     {
-                        for (int i = 0; i < Width; i++)
+                        for (int i = 0; i < width; i++)
                         {
                             float sum = 0f;
-                            for (int l = 0; l < Batch; l++)
+                            for (int l = 0; l < batch; l++)
                             {
                                 sum += this[l, k, j, i];
                             }
-                            for (int l = 0; l < newShape[axis]; l++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            result[0, k, j, i] = sum;
+                            // for (int l = 0; l < newShape[axis]; l++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
             }
-
-            result.Squeeze();
+            if (!keepDim)
+                result.Squeeze();
             return result;
         }
         public Tensor Mean(int axis, bool keepDim = false)
         {
             HandleAxis(this, ref axis);
-            Dim dim = AxisToDim(this, axis);
+
+            int batch = Batch;
+            int channels = Channels;
+            int height = Height;
+            int width = Width;
+
+            Dim dimIndex = AxisToDim(this, axis);
 
             int[] newShape = shape.ToArray();
-            newShape[axis] = keepDim ? newShape[axis] : 1;
-            Tensor result = new Tensor(newShape);
+            newShape[axis] = 1; // keepDim = true? newShape[axis] : 1
+            Tensor result = new(newShape);
 
-            if (dim == Dim.width)
+            if (dimIndex == Dim.width)
             {
-                for (int l = 0; l < Batch; l++)
+                for (int l = 0; l < batch; l++)
                 {
-                    for (int k = 0; k < Channels; k++)
+                    for (int k = 0; k < channels; k++)
                     {
-                        for (int j = 0; j < Height; j++)
+                        for (int j = 0; j < height; j++)
                         {
                             float sum = 0f;
-                            for (int i = 0; i < Width; i++)
+                            for (int i = 0; i < width; i++)
                             {
                                 sum += this[l, k, j, i];
                             }
-                            sum /= Width;
-                            for (int i = 0; i < newShape[axis]; i++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            sum /= width;
+                            result[l, k, j, 0] = sum;
+
+                            // for (int i = 0; i < newShape[axis]; i++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
             }
-            else if (dim == Dim.height)
+            else if (dimIndex == Dim.height)
             {
-                for (int l = 0; l < Batch; l++)
+                for (int l = 0; l < batch; l++)
                 {
-                    for (int k = 0; k < Channels; k++)
+                    for (int k = 0; k < channels; k++)
                     {
-                        for (int i = 0; i < Width; i++)
+                        for (int i = 0; i < width; i++)
                         {
                             float sum = 0f;
-                            for (int j = 0; j < Height; j++)
+                            for (int j = 0; j < height; j++)
                             {
                                 sum += this[l, k, j, i];
                             }
-                            sum /= Height;
-
-                            for (int j = 0; j < newShape[axis]; j++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            sum /= height;
+                            result[l, k, 0, i] = sum;
+                            // for (int j = 0; j < newShape[axis]; j++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
             }
-            else if (dim == Dim.channel)
+            else if (dimIndex == Dim.channel)
             {
-                for (int l = 0; l < Batch; l++)
+                for (int l = 0; l < batch; l++)
                 {
-                    for (int j = 0; j < Height; j++)
+                    for (int j = 0; j < height; j++)
                     {
-                        for (int i = 0; i < Width; i++)
+                        for (int i = 0; i < width; i++)
                         {
                             float sum = 0f;
 
-                            for (int k = 0; k < Channels; k++)
+                            for (int k = 0; k < channels; k++)
                             {
                                 sum += this[l, k, j, i];
                             }
-                            sum /= Channels;
-                            for (int k = 0; k < newShape[axis]; k++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            sum /= channels;
+                            result[l, 0, j, i] = sum;
+                            // for (int k = 0; k < newShape[axis]; k++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
             }
-            else if (dim == Dim.batch)
+            else if (dimIndex == Dim.batch)
             {
-                for (int k = 0; k < Channels; k++)
+                for (int k = 0; k < channels; k++)
                 {
-                    for (int j = 0; j < Height; j++)
+                    for (int j = 0; j < height; j++)
                     {
-                        for (int i = 0; i < Width; i++)
+                        for (int i = 0; i < width; i++)
                         {
                             float sum = 0f;
-                            for (int l = 0; l < Batch; l++)
+                            for (int l = 0; l < batch; l++)
                             {
                                 sum += this[l, k, j, i];
                             }
-                            sum /= Batch;
-                            for (int l = 0; l < newShape[axis]; l++)
-                            {
-                                result[l, k, j, i] = sum;
-                            }
+                            sum /= height;
+                            result[0, k, j, i] = sum;
+                            // for (int l = 0; l < newShape[axis]; l++)
+                            // {
+                            //     result[l, k, j, i] = sum;
+                            // }
                         }
                     }
                 }
             }
-
-            result.Squeeze();
+            if (!keepDim)
+                result.Squeeze();
             return result;
         }
         public Tensor Var(int axis, int correction = 1, bool keepDim = false)
@@ -2545,7 +2570,7 @@ namespace DeepUnity
             Dim dim = AxisToDim(this, axis);
 
             int[] newShape = shape.ToArray();
-            newShape[axis] = keepDim ? newShape[axis] : 1;
+            newShape[axis] = 1;
             Tensor result = new Tensor(newShape);
 
             if (dim == Dim.width)
@@ -2565,11 +2590,11 @@ namespace DeepUnity
                                 sumSqr += value * value;
                             }
                             float vr = (sumSqr - (sum * sum) / Width) / (Width - correction);
-
-                            for (int i = 0; i < newShape[axis]; i++)
-                            {
-                                result[l, k, j, i] = vr;
-                            }
+                            result[l, k, j, 0] = vr;
+                            // for (int i = 0; i < newShape[axis]; i++)
+                            // {
+                            //     result[l, k, j, i] = vr;
+                            // }
                         }
                     }
                 }
@@ -2591,11 +2616,11 @@ namespace DeepUnity
                                 sumSqr += value * value;
                             }
                             float vr = (sumSqr - (sum * sum) / Height) / (Height - correction);
-
-                            for (int j = 0; j < newShape[axis]; j++)
-                            {
-                                result[l, k, j, i] = vr;
-                            }
+                            result[l, k, 0, i] = vr;
+                            // for (int j = 0; j < newShape[axis]; j++)
+                            // {
+                            //     result[l, k, j, i] = vr;
+                            // }
                         }
                     }
                 }
@@ -2618,11 +2643,11 @@ namespace DeepUnity
                             }
 
                             float vr = (sumSqr - (sum * sum) / Channels) / (Channels - correction);
-
-                            for (int k = 0; k < newShape[axis]; k++)
-                            {
-                                result[l, k, j, i] = vr;
-                            }
+                            result[l, 0, j, i] = vr;
+                            // for (int k = 0; k < newShape[axis]; k++)
+                            // {
+                            //     result[l, k, j, i] = vr;
+                            // }
                         }
                     }
                 }
@@ -2644,17 +2669,18 @@ namespace DeepUnity
                                 sumSqr += value * value;
                             }
                             float vr = (sumSqr - (sum * sum) / Batch) / (Batch - correction);
-
-                            for (int l = 0; l < newShape[axis]; l++)
-                            {
-                                result[l, k, j, i] = vr;
-                            }
+                            result[0, k, j, i] = vr;
+                            // for (int l = 0; l < newShape[axis]; l++)
+                            // {
+                            //     result[l, k, j, i] = vr;
+                            // }
                         }
                     }
                 }
             }
 
-            result.Squeeze();
+            if (!keepDim)
+                result.Squeeze();
             return result;
         }
         public Tensor Std(int axis, int correction = 1, bool keepDim = false)
@@ -2670,7 +2696,7 @@ namespace DeepUnity
 
 
             int[] newShape = shape.ToArray();
-            newShape[axis] = keepDim ? newShape[axis] : 1;
+            newShape[axis] = 1;
             Tensor result = new Tensor(newShape);
 
             if (dim == Dim.width)
@@ -2686,11 +2712,11 @@ namespace DeepUnity
                             {
                                 min = MathF.Min(min, this[l, k, j, i]);
                             }
-
-                            for (int i = 0; i < result.Width; i++)
-                            {
-                                result[l, k, j, i] = min;
-                            }
+                            result[l, k, j, 0] = min;
+                            // for (int i = 0; i < result.Width; i++)
+                            // {
+                            //     result[l, k, j, i] = min;
+                            // }
                         }
                     }
                 }
@@ -2708,11 +2734,11 @@ namespace DeepUnity
                             {
                                 min = MathF.Min(min, this[l, k, j, i]);
                             }
-
-                            for (int j = 0; j < result.Height; j++)
-                            {
-                                result[l, k, j, i] = min;
-                            }
+                            result[l, k, 0, i] = min;
+                            //for (int j = 0; j < result.Height; j++)
+                            //{
+                            //    result[l, k, j, i] = min;
+                            //}
                         }
                     }
                 }
@@ -2730,11 +2756,11 @@ namespace DeepUnity
                             {
                                 min = MathF.Min(min, this[l, k, j, i]);
                             }
-
-                            for (int k = 0; k < result.Channels; k++)
-                            {
-                                result[l, k, j, i] = min;
-                            }
+                            result[l, 0, j, i] = min;
+                            // for (int k = 0; k < result.Channels; k++)
+                            // {
+                            //     result[l, k, j, i] = min;
+                            // }
                         }
                     }
                 }
@@ -2752,17 +2778,18 @@ namespace DeepUnity
                             {
                                 min = MathF.Min(min, this[l, k, j, i]);
                             }
-
-                            for (int l = 0; l < result.Batch; l++)
-                            {
-                                result[l, k, j, i] = min;
-                            }
+                            result[0, k, j, i] = min;
+                            // for (int l = 0; l < result.Batch; l++)
+                            // {
+                            //     result[l, k, j, i] = min;
+                            // }
                         }
                     }
                 }
             }
 
-            result.Squeeze();
+            if (!keepDim)
+                result.Squeeze();
             return result;
         }
         public Tensor Max(int axis, bool keepDim = false)
@@ -2772,7 +2799,7 @@ namespace DeepUnity
             Dim dim = AxisToDim(this, axis);
 
             int[] newShape = shape.ToArray();
-            newShape[axis] = keepDim ? newShape[axis] : 1;
+            newShape[axis] = 1;
             Tensor result = new Tensor(newShape);
 
             if (dim == Dim.width)
@@ -2788,11 +2815,11 @@ namespace DeepUnity
                             {
                                 max = MathF.Max(max, this[l, k, j, i]);
                             }
-
-                            for (int i = 0; i < result.Width; i++)
-                            {
-                                result[l, k, j, i] = max;
-                            }
+                            result[l, k, j, 0] = max;
+                            // for (int i = 0; i < result.Width; i++)
+                            // {
+                            //     result[l, k, j, i] = max;
+                            // }
                         }
                     }
                 }
@@ -2810,11 +2837,11 @@ namespace DeepUnity
                             {
                                 max = MathF.Max(max, this[l, k, j, i]);
                             }
-
-                            for (int j = 0; j < result.Height; j++)
-                            {
-                                result[l, k, j, i] = max;
-                            }
+                            result[l, k, 0, i] = max;
+                            // for (int j = 0; j < result.Height; j++)
+                            // {
+                            //     result[l, k, j, i] = max;
+                            // }
                         }
                     }
                 }
@@ -2832,11 +2859,11 @@ namespace DeepUnity
                             {
                                 max = MathF.Max(max, this[l, k, j, i]);
                             }
-
-                            for (int k = 0; k < result.Channels; k++)
-                            {
-                                result[l, k, j, i] = max;
-                            }
+                            result[l, 0, j, i] = max;
+                            // for (int k = 0; k < result.Channels; k++)
+                            // {
+                            //     result[l, k, j, i] = max;
+                            // }
                         }
                     }
                 }
@@ -2854,17 +2881,18 @@ namespace DeepUnity
                             {
                                 max = MathF.Max(max, this[l, k, j, i]);
                             }
-
-                            for (int l = 0; l < result.Batch; l++)
-                            {
-                                result[l, k, j, i] = max;
-                            }
+                            result[0, k, j, i] = max;
+                            // for (int l = 0; l < result.Batch; l++)
+                            // {
+                            //     result[l, k, j, i] = max;
+                            // }
                         }
                     }
                 }
             }
 
-            result.Squeeze();
+            if (!keepDim)
+                result.Squeeze();
             return result;
         }
         public Tensor Pow(float power)
@@ -2940,30 +2968,11 @@ namespace DeepUnity
 
             return this;
         }
-        public Tensor Norm(NormType normType = NormType.EuclideanL2)
-        {
-            switch (normType)
-            {
-                case NormType.NonZeroL0:
-                    int nonzeros = data.Count(x => x != 0);
-                    return Constant(nonzeros);
-                case NormType.ManhattanL1:
-                    float absSum = data.Sum(x => MathF.Abs(x));
-                    return Constant(absSum);
-                case NormType.EuclideanL2:
-                    float sqrSum = data.Sum(x => x * x);
-                    return Constant(MathF.Sqrt(sqrSum));
-                case NormType.MaxLInf:
-                    float maxAbs = data.Max(x => MathF.Abs(x));
-                    return Constant(maxAbs);
-                default:
-                    throw new Exception("Unhandled norm type.");
-            }
-        }
 
         #endregion Instance
 
 
+        #region LINQ
         public void ForEach(Action<float> action)
         {
             for (int i = 0; i < data.Length; i++)
@@ -3044,7 +3053,7 @@ namespace DeepUnity
 
             StringBuilder sb = new();
 
-            sb.Append($"Tensor[{Shape.ToCommaSeparatedString()}]");
+            sb.Append($"Tensor({Shape.ToCommaSeparatedString()})");
 
             sb.Append("\n[");
             for (int l = 0; l < Batch; l++)
@@ -3114,6 +3123,9 @@ namespace DeepUnity
         {
             return base.GetHashCode();
         }
+
+        #endregion LINQ
+
 
 
         // inside use

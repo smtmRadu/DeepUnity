@@ -4,7 +4,7 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class BatchNorm : Learnable, IModule
+    public class BatchNorm1D : Learnable, IModule
     {
         // https://arxiv.org/pdf/1502.03167.pdf
 
@@ -21,10 +21,12 @@ namespace DeepUnity
 
 
         /// <summary>
-        /// <b>Placed after or before the non-linear activation function.</b>    <br />
+        /// <b>Placed before or after the non-linear activation function.</b>    <br />
+        /// Input: (batch, features)
+        /// Output: (batch, features)
         /// </summary>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
-        public BatchNorm(int num_features, float momentum = 0.9f)
+        public BatchNorm1D(int num_features, float momentum = 0.1f)
         {
             this.momentum = momentum;
 
@@ -44,7 +46,7 @@ namespace DeepUnity
 
             if(isBatched)
             {
-                int batch_size = input.Size(-2);
+                int batch_size = input.Size(0);
                 var e_mean = Tensor.Expand(Tensor.Unsqueeze(runningMean, 0), 0, batch_size);
                 var e_var = Tensor.Expand(Tensor.Unsqueeze(runningVar, 0), 0, batch_size);
                 var e_gamma = Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size);
@@ -69,7 +71,7 @@ namespace DeepUnity
             if (input.Rank != 2)
                 throw new ArgumentException("Models having BatchNorm layers must be trained using batched input (batch, features)");
 
-            int batch_size = input.Size(-2);
+            int batch_size = input.Size(0);
 
             // When training (only on mini-batch training), we cache the values for backprop also
             var mu_B = Tensor.Mean(input, 0); // mini-batch means      [features_mean]
@@ -85,7 +87,8 @@ namespace DeepUnity
             xHat = xCentered / std;
 
             // scale and shift
-            var yB = Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size) * xHat + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
+            var yB = Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size) * xHat + 
+                     Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
 
 
 
@@ -99,19 +102,23 @@ namespace DeepUnity
         }
         public Tensor Backward(Tensor dLdY)
         {
-            int m = dLdY.Size(-2);
+            int m = dLdY.Size(0);
 
             // paper algorithm https://arxiv.org/pdf/1502.03167.pdf
 
             var dLdxHat = dLdY * Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, m); // [batch, outs]
 
-            var dLdVarB = Tensor.Mean(dLdxHat * xCentered * (-1f / 2f) *
-                         Tensor.Pow(std + Utils.EPSILON, -3f / 2f), 0, true);
+            var dLdVarB = Tensor.Mean(
+                         dLdxHat * xCentered * (-1f / 2f) * Tensor.Pow(std + Utils.EPSILON, -3f / 2f),
+                         axis: 0, 
+                         keepDim: true).
+                         Expand(0, m);
 
             var dLdMuB = Tensor.Mean(
-                         dLdxHat * -1f / (std + Utils.EPSILON) +
-                         dLdVarB * -2f * xCentered / m, 
-                         0, true);
+                         dLdxHat * -1f / (std + Utils.EPSILON) + dLdVarB * -2f * xCentered / m, 
+                         axis: 0, 
+                         keepDim: true).
+                         Expand(0, m);
 
             var dLdX = dLdxHat * 1f / Tensor.Sqrt(std + Utils.EPSILON) +
                        dLdVarB * 2f * xCentered / m +

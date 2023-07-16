@@ -11,6 +11,18 @@ namespace kbRadu
 
         private void Start()
         {
+            Tensor x = Tensor.Arange(0, 100, 1).Reshape(10, 10);
+            Tensor y = Tensor.Arange(0, 100, 1).Reshape(10, 10);
+            Tensor z = Tensor.Arange(0, 100, 1).Reshape(10, 10);
+            // print(x);
+            // print(y);
+            // print(z);
+            print(Tensor.Sum(x, 0));
+            print(Tensor.Sum(x, 1));
+            print(Tensor.Sum(x, 0, true));
+            print(Tensor.Sum(x, 1, true));
+            print(Tensor.Sum(x, -2, true).Expand(-2, x.Size(-2)));
+            print(Tensor.Sum(x, -1, true).Expand(-1, x.Size(-1)));
             // Dictionary<Tensor, Tensor> train;
             // Dictionary<Tensor, Tensor> test;
             // Datasets.MNIST(out train, out test);

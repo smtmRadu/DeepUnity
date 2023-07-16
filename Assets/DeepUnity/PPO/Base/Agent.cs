@@ -62,6 +62,8 @@ namespace DeepUnity
             CumulativeReward = 0;
 
             OnAfterAwake();
+
+            model.Save();
         }
         private void Start()
         {

@@ -1,8 +1,11 @@
 using kbRadu;
 using System;
+using System.Collections.Generic;
 using System.Drawing.Printing;
+using System.Linq;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.Windows;
 
 namespace DeepUnity
 {
@@ -12,11 +15,12 @@ namespace DeepUnity
         // Epsilon should be 1e-5f as default, but i keep it on default 1e-8f
         // Just a good reference paper to learn from, i made this just by adapting batchnorm layer.
         /// https://proceedings.neurips.cc/paper_files/paper/2019/file/2f4fe03d77724a7217006e5d16728874-Paper.pdf
-       
+        
         private Tensor xCentered { get; set; }
         private Tensor xHat { get; set; }
         private Tensor std { get; set; }
 
+        [SerializeField] private int[] input_shape;
         [SerializeField] private float momentum;
         //[SerializeField] private int step;
 
@@ -27,11 +31,11 @@ namespace DeepUnity
 
         /// <summary>
         /// <b>Placed before the non-linear activation function. </b>    <br />
-        /// Forward input shape [batch, features]       <br />
-        /// Predict input shape [features]              <br />
+        /// Input: (Batch, *)      <br />
+        /// Output: (Batch, *)     <br />
         /// </summary>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
-        public LayerNorm(float momentum = 0.9f)
+        public LayerNorm(int[] input_shape, float momentum = 0.9f)
         {
             gamma = Tensor.Ones(1);
             beta = Tensor.Zeros(1);
@@ -43,6 +47,7 @@ namespace DeepUnity
             runningVar = Tensor.Ones(1);
 
             // step = 0;
+            this.input_shape = input_shape.ToArray();
             this.momentum = momentum;
         }
         public Tensor Predict(Tensor input)
@@ -55,14 +60,13 @@ namespace DeepUnity
 
         public Tensor Forward(Tensor input)
         {
-            bool isBatched = input.Rank == 2;
+            bool isBatched = input.Rank > input_shape.Rank;
+            int batch_size = isBatched? input.Size(0) : 1;
+            int num_features = input.Size(-1);
 
-            int batch_size = isBatched ? input.Size(0) : 1;
-            int num_features = isBatched ? input.Size(1) : input.Size(0);
 
-
-            Tensor mu = Tensor.Mean(input, isBatched ? 1 : 0, keepDim: true); // actually we don t know if input is batched or not, so use deprecated version of mean
-            Tensor var = Tensor.Var(input, isBatched ? 1 : 0, keepDim: true);
+            Tensor mu = Tensor.Mean(input, -1, keepDim: true).Expand(-1, input.Size(-1));
+            Tensor var = Tensor.Var(input, -1, keepDim: true).Expand(-1, input.Size(-1));
 
             xCentered = input - mu;
             std = Tensor.Sqrt(var + Utils.EPSILON);
@@ -95,24 +99,24 @@ namespace DeepUnity
         }
         public Tensor Backward(Tensor dLdY)
         {
-            bool isBatched = dLdY.Rank == 2;
-            // dLdY (B, OUT)
-            int m = isBatched ? dLdY.Size(-2) : 1;
+            bool isBatched = dLdY.Rank > input_shape.Rank;
+            int m = isBatched ? dLdY.Size(0) : 1;
+
             var dLdxHat = dLdY * gamma[0];
             var dLdVar = Tensor.Mean(dLdxHat + xCentered * (-1f / 2f) *
                          Tensor.Pow(std + Utils.EPSILON, -3f / 2f),
-                         isBatched ? 1 : 0, true);
+                         -1, true).Expand(-1, dLdY.Size(-1));
 
             var dLdMu = Tensor.Mean(dLdxHat * -1f / (std + Utils.EPSILON) +
                         dLdVar * -2f * xCentered / m,
-                        isBatched ? 1 : 0, true);
+                        -1, true).Expand(-1, dLdY.Size(-1));
 
             var dLdX = dLdxHat * 1f / Tensor.Sqrt(std + Utils.EPSILON) +
                        dLdVar * 2f * xCentered / m + dLdMu * (1f / m);
 
             // mean along the layer
-            var dLdGamma = Tensor.Mean(dLdY + xCentered, isBatched ? 1 : 0);
-            var dLdBeta = Tensor.Mean(dLdY, isBatched ? 1 : 0);
+            var dLdGamma = Tensor.Mean(dLdY + xCentered, -1);
+            var dLdBeta = Tensor.Mean(dLdY, -1);
 
             // mean along the batch
             float dLdGamma_across_batch = isBatched ? Tensor.Mean(dLdGamma, 0)[0] : dLdGamma[0];

@@ -50,8 +50,8 @@ namespace kbRadu
             {
                 (Tensor, Tensor)[] train_batch = train_batches[i];
 
-                Tensor input = Tensor.Join(null, train_batch.Select(x => x.Item1).ToArray());
-                Tensor target = Tensor.Join(null, train_batch.Select(x => x.Item2).ToArray());
+                Tensor input = Tensor.Concat(null, train_batch.Select(x => x.Item1).ToArray());
+                Tensor target = Tensor.Concat(null, train_batch.Select(x => x.Item2).ToArray());
 
 
                 Tensor prediction = network.Forward(input);
@@ -68,8 +68,8 @@ namespace kbRadu
             network.Save("MNIST_Model");
 
 
-            Tensor valid_input = Tensor.Join(null, test.Select(x => x.Item1).ToArray());
-            Tensor valid_target = Tensor.Join(null, test.Select(x => x.Item2).ToArray());
+            Tensor valid_input = Tensor.Concat(null, test.Select(x => x.Item1).ToArray());
+            Tensor valid_target = Tensor.Concat(null, test.Select(x => x.Item2).ToArray());
             float valid_acc = Metrics.Accuracy(network.Predict(valid_input), valid_target);
             print($"Epoch {Time.frameCount} | Train Accuracy: {epoch_train_accuracies.Average() * 100f}% | Validation Accuracy: {valid_acc * 100f}%");
         }

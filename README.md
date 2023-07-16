@@ -1,12 +1,13 @@
 # DeepUnity
 
 # **[In Development]**
-##### For now all modules are functional for sequencial modules and tested. PPO is still in testing.
+##### For now all modules are functional for sequencial modules and tested. RL is still in testing.
 
-DeepUnity is an add-on framework that provides tensor computation [with GPU support] and deep neural networks, along with reinforcement learning tools (alike ML Agents).
+DeepUnity is an add-on framework that provides tensor computation [with GPU support] and deep neural networks, along with reinforcement learning tools.
 
 #### Run your first DeepUnity script
 ```csharp
+
 using UnityEngine;
 using DeepUnity;
 using System.Collections.Generic;
@@ -14,7 +15,8 @@ using System.Linq;
 
 public class Tutorial : MonoBehaviour
 {
-    public Sequential network;
+    [SerializeField] 
+    private Sequential network;
     private Optimizer optim;
     private StepLR scheduler;
 
@@ -24,42 +26,41 @@ public class Tutorial : MonoBehaviour
     private Tensor valid_inputs;
     private Tensor valid_targets;
 
-    private List<float> train_accs = new List<float>();
-
     public void Start()
     {
         if(network == null)
         {
             network = new Sequential(
                 new Dense(2, 64),
-                new ReLU(),
+                new TanH(),
                 new Dense(64, 64),                
                 new ReLU(),
                 new Dense(64, 1));
         }
 
-        optim = new Adam(network.Parameters());
+        optim = new Adam(network.Parameters);
         scheduler = new StepLR(optim, 100);
 
         // Generate dataset - learning x^2 + y^2 function.
         int data_size = 1024;
         Tensor x = Tensor.RandomNormal((0, 0.5f), data_size, 1);
         Tensor y = Tensor.RandomNormal((0, 0.5f), data_size, 1);
-        train_inputs = Tensor.Join(1, x, y);
+        train_inputs = Tensor.Concat(1, x, y);
         train_targets = x.Zip(y, (x, y) => x * x + y * y);
 
         // Generate validation set
         int valid_size = 64;
         x = Tensor.RandomNormal((0, 0.5f), valid_size, 1);
         y = Tensor.RandomNormal((0, 0.5f), valid_size, 1);
-        valid_inputs = Tensor.Join(1, x, y);
+        valid_inputs = Tensor.Concat(1, x, y);
         valid_targets = x.Zip(y, (x, y) => x * x + y * y);
+
     }
 
     public void Update()
     {
-        train_accs.Clear();
-        
+        List<float> epoch_train_accuracies = new List<float>();
+
         // Split dataset into batches
         int batch_size = 32;
         Tensor[] input_batches = Tensor.Split(train_inputs, 0, batch_size);
@@ -77,18 +78,16 @@ public class Tutorial : MonoBehaviour
             optim.Step();
             
             float train_acc = Metrics.Accuracy(prediction, target_batches[i]);
-            train_accs.Add(train_acc);       
+            epoch_train_accuracies.Add(train_acc);       
         }
 
         scheduler.Step();
         network.Save("tutorial");
 
         float valid_acc = Metrics.Accuracy(network.Predict(valid_inputs), valid_targets);
-        print($"Epoch {Time.frameCount} | Train Accuracy: {train_accs.Average() * 100f}% | Validation Accuracy: {valid_acc * 100f}%");
+        print($"[Epoch {Time.frameCount} | Train Accuracy: {epoch_train_accuracies.Average() * 100f}% | Validation Accuracy: {valid_acc * 100f}%]");
     }
 }
-
-
 
 ```
 

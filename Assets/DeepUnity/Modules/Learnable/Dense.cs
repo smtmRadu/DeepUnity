@@ -68,9 +68,9 @@ namespace DeepUnity
             else
             {
                 if (device == Device.CPU)
-                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Unsqueeze(beta, 0);
+                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + beta;
                 else
-                    return Tensor.MatMulGPU(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Unsqueeze(beta, 0);
+                    return Tensor.MatMulGPU(input, Tensor.Transpose(gamma, 0, 1)) + beta;
             }
             
         }

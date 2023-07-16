@@ -117,13 +117,20 @@ float rnorm(float mean, float sd)
 // ----------------------------------------------------------------- Kernels
 
 // please keep this the first index 0 !!!
-#pragma kernel ValueAtIndex
+#pragma kernel GetAtIndex
 [numthreads(1, 1, 1)]
-void ValueAtIndex(int3 id : SV_DispatchThreadID)
+void GetAtIndex(int3 id : SV_DispatchThreadID)
 {
     float valueAtIndx = data1_get(b1, c1, h1, w1);
     result[0] = valueAtIndx;
+}
 
+// please keep this the first index 1 !!!
+#pragma kernel SetAtIndex
+[numthreads(1, 1, 1)]
+void SetAtIndex(int3 id : SV_DispatchThreadID)
+{
+    data1_set(b1, c1, h1, w1, value);
 }
 
 // Create
@@ -467,11 +474,7 @@ void Mean(int3 id : SV_DispatchThreadID)
                                        
                     }
                     sum /= float(w1);
-                    for (int i = 0; i < wr; i++)
-                    {
-                        result_set(l, k, j, i, sum);
-                                       
-                    }
+                    result_set(l, k, j, 0, sum);
 
                 }
             }
@@ -491,10 +494,7 @@ void Mean(int3 id : SV_DispatchThreadID)
 
                     }
                     sum /= float(h1);
-                    for (int j = 0; j < hr; j++)
-                    {
-                        result_set(l, k, j, i, sum);
-                    }
+                    result_set(l, k, 0, i, sum);
                 }
             }
         }
@@ -511,10 +511,7 @@ void Mean(int3 id : SV_DispatchThreadID)
                         sum += data1_get(l, k, j, i);
                     }
                     sum /= float(c1);
-                    for (int k = 0; k < cr; k++)
-                    {
-                        result_set(l, k, j, i, sum);
-                    }
+                    result_set(l, 0, j, i, sum);
                 }
             }
         }
@@ -532,10 +529,7 @@ void Mean(int3 id : SV_DispatchThreadID)
                         sum += data1_get(l, k, j, i);
                     }
                     sum /= float(b1);
-                    for (int l = 0; l < br; l++)
-                    {
-                        result_set(l, k, j, i, sum);
-                    }
+                    result_set(0, k, j, i, sum);
                    
                 }
             }
@@ -566,11 +560,7 @@ void Var(int3 id : SV_DispatchThreadID)
                         sumsqr += v * v;
                     }
                     float var = (sumsqr - (sum * sum) / float(w1)) / (float(w1) - correction);
-                    for (int i = 0; i < wr; i++)
-                    {
-                        result_set(l, k, j, i, var);
-                                       
-                    }
+                    result_set(l, k, j, 0, var);
 
                 }
             }
@@ -593,10 +583,7 @@ void Var(int3 id : SV_DispatchThreadID)
 
                     }
                     float var = (sumsqr - (sum * sum) / float(h1)) / (float(h1) - correction);
-                    for (int j = 0; j < hr; j++)
-                    {
-                        result_set(l, k, j, i, var);
-                    }
+                    result_set(l, k, 0, i, var);
 
                 }
             }
@@ -617,10 +604,7 @@ void Var(int3 id : SV_DispatchThreadID)
                         sumsqr += v * v;
                     }
                     float var = (sumsqr - (sum * sum) / float(c1)) / (float(c1) - correction);
-                    for (int k = 0; k < cr; k++)
-                    {
-                        result_set(l, k, j, i, var);
-                    }
+                    result_set(l, 0, j, i, var);
                 }
             }
         }
@@ -641,10 +625,7 @@ void Var(int3 id : SV_DispatchThreadID)
                         sumsqr += v * v;
                     }
                     float var = (sumsqr - (sum * sum) / float(b1)) / (float(b1) - correction);
-                    for (int l = 0; l < br; l++)
-                    {
-                        result_set(l, k, j, i, var);
-                    }
+                    result_set(0, k, j, i, var);
                    
                 }
             }
@@ -675,12 +656,12 @@ void Std(int3 id : SV_DispatchThreadID)
                         sumsqr += v * v;
                     }
                     float var = (sumsqr - (sum * sum) / float(w1)) / (float(w1) - correction);
-                    
-                    for (int i = 0; i < wr; i++)
-                    {
-                        result_set(l, k, j, i, sqrt(var));
-                                       
-                    }
+                    result_set(l, k, j, 0, sqrt(var));
+                    // for (int i = 0; i < wr; i++)
+                    // {
+                    //     result_set(l, k, j, i, sqrt(var));
+                    //                    
+                    // }
                 }
             }
 
@@ -702,11 +683,11 @@ void Std(int3 id : SV_DispatchThreadID)
 
                     }
                     float var = (sumsqr - (sum * sum) / float(h1)) / (float(h1) - correction);
-                    
-                    for (int j = 0; j < hr; j++)
-                    {
-                        result_set(l, k, j, i, sqrt(var));
-                    }
+                    result_set(l, k, 0, i, sqrt(var));
+                    // for (int j = 0; j < hr; j++)
+                    // {
+                    //     result_set(l, k, j, i, sqrt(var));
+                    // }
                 }
             }
         }
@@ -726,11 +707,11 @@ void Std(int3 id : SV_DispatchThreadID)
                         sumsqr += v * v;
                     }
                     float var = (sumsqr - (sum * sum) / float(c1)) / (float(c1) - correction);
-                    
-                    for (int k = 0; k < cr; k++)
-                    {
-                        result_set(l, k, j, i, sqrt(var));
-                    }
+                    result_set(l, 0, j, i, sqrt(var));
+                    // for (int k = 0; k < cr; k++)
+                    // {
+                    //     result_set(l, k, j, i, sqrt(var));
+                    // }
                 }
             }
         }
@@ -752,10 +733,11 @@ void Std(int3 id : SV_DispatchThreadID)
                     }
                     float var = (sumsqr - (sum * sum) / float(b1)) / (float(b1) - correction);
                     
-                    for (int l = 0; l < br; l++)
-                    {
-                        result_set(l, k, j, i, sqrt(var));
-                    }
+                    result_set(0, k, j, i, sqrt(var));
+                    // for (int l = 0; l < br; l++)
+                    // {
+                    //     result_set(l, k, j, i, sqrt(var));
+                    // }
                 }
             }
         }
@@ -782,11 +764,12 @@ void Sum(int3 id : SV_DispatchThreadID)
                         sum += data1_get(l, k, j, i);
                                        
                     }
-                    for (int i = 0; i < wr; i++)
-                    {
-                        result_set(l, k, j, i, sum);
-                                       
-                    }
+                    result_set(l, k, j, 0, sum);
+                    // for (int i = 0; i < wr; i++)
+                    // {
+                    //     result_set(l, k, j, i, sum);
+                    //                    
+                    // }
                 }
             }
 
@@ -804,11 +787,12 @@ void Sum(int3 id : SV_DispatchThreadID)
                         sum += data1_get(l, k, j, i);
 
                     }
-                    for (int j = 0; j < hr; j++)
-                    {
-                        result_set(l, k, j, i, sum);
-
-                    }
+                    result_set(l, k, 0, i, sum);
+                    // for (int j = 0; j < hr; j++)
+                    // {
+                    //     result_set(l, k, j, i, sum);
+                    // 
+                    // }
                 }
             }
         }
@@ -824,10 +808,11 @@ void Sum(int3 id : SV_DispatchThreadID)
                     {
                         sum += data1_get(l, k, j, i);
                     }
-                    for (int k = 0; k < cr; k++)
-                    {
-                        result_set(l, k, j, i, sum);
-                    }
+                    result_set(l, 0, j, i, sum);
+                    // for (int k = 0; k < cr; k++)
+                    // {
+                    //     result_set(l, k, j, i, sum);
+                    // }
                 }
             }
         }
@@ -844,10 +829,11 @@ void Sum(int3 id : SV_DispatchThreadID)
                     {
                         sum += data1_get(l, k, j, i);
                     }
-                    for (int l = 0; l < br; l++)
-                    {
-                        result_set(l, k, j, i, sum);
-                    }
+                    result_set(0, k, j, i, sum);
+                    //for (int l = 0; l < br; l++)
+                    //{
+                    //    result_set(l, k, j, i, sum);
+                    //}
                 }
             }
         }
@@ -874,11 +860,12 @@ void Min(int3 id : SV_DispatchThreadID)
                         m = min(m, data1_get(l, k, j, i));
                                        
                     }
-                    for (int i = 0; i < wr; i++)
-                    {
-                        result_set(l, k, j, i, m);
-                                       
-                    }
+                    result_set(l, k, j, 0, m);
+                    // for (int i = 0; i < wr; i++)
+                    // {
+                    //     result_set(l, k, j, i, m);
+                    //                    
+                    // }
 
                 }
             }
@@ -897,11 +884,12 @@ void Min(int3 id : SV_DispatchThreadID)
                         m = min(m, data1_get(l, k, j, i));
 
                     }
-                    for (int j = 0; j < hr; j++)
-                    {
-                        result_set(l, k, j, i, m);
-
-                    }
+                    result_set(l, k, 0, i, m);
+                    // for (int j = 0; j < hr; j++)
+                    // {
+                    //     result_set(l, k, j, i, m);
+                    // 
+                    // }
 
                 }
             }
@@ -918,10 +906,11 @@ void Min(int3 id : SV_DispatchThreadID)
                     {
                         m = min(m, data1_get(l, k, j, i));
                     }
-                    for (int k = 0; k < cr; k++)
-                    {
-                        result_set(l, k, j, i, m);
-                    }
+                    result_set(l, 0, j, i, m);
+                    // for (int k = 0; k < cr; k++)
+                    // {
+                    //     result_set(l, k, j, i, m);
+                    // }
                 }
             }
         }
@@ -938,10 +927,11 @@ void Min(int3 id : SV_DispatchThreadID)
                     {
                         m = min(m, data1_get(l, k, j, i));
                     }
-                    for (int l = 0; l < br; l++)
-                    {
-                        result_set(l, k, j, i, m);
-                    }
+                    result_set(0, k, j, i, m);
+                    // for (int l = 0; l < br; l++)
+                    // {
+                    //     result_set(l, k, j, i, m);
+                    // }
                    
                 }
             }
@@ -969,11 +959,8 @@ void Max(int3 id : SV_DispatchThreadID)
                         m = max(m, data1_get(l, k, j, i));
                                        
                     }
-                    for (int i = 0; i < wr; i++)
-                    {
-                        result_set(l, k, j, i, m);
-                                       
-                    }
+                    result_set(l, k, j, 0, m);
+
                 }
             }
 
@@ -991,11 +978,7 @@ void Max(int3 id : SV_DispatchThreadID)
                         m = max(m, data1_get(l, k, j, i));
 
                     }
-                    for (int j = 0; j < hr; j++)
-                    {
-                        result_set(l, k, j, i, m);
-
-                    }
+                    result_set(l, k, 0, i, m);
 
                 }
             }
@@ -1012,10 +995,7 @@ void Max(int3 id : SV_DispatchThreadID)
                     {
                         m = max(m, data1_get(l, k, j, i));
                     }
-                    for (int k = 0; k < cr; k++)
-                    {
-                        result_set(l, k, j, i, m);
-                    }
+                    result_set(l, 0, j, i, m);
                 }
             }
         }
@@ -1032,10 +1012,7 @@ void Max(int3 id : SV_DispatchThreadID)
                     {
                         m = max(m, data1_get(l, k, j, i));
                     }
-                    for (int l = 0; l < br; l++)
-                    {
-                        result_set(l, k, j, i, m);
-                    }
+                    result_set(0, k, j, i, m);
                    
                 }
             }

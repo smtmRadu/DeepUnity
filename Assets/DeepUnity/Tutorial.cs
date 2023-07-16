@@ -22,7 +22,7 @@ public class Tutorial : MonoBehaviour
         {
             network = new Sequential(
                 new Dense(2, 64),
-                new ReLU(),
+                new TanH(),
                 new Dense(64, 64),                
                 new ReLU(),
                 new Dense(64, 1));
@@ -35,14 +35,14 @@ public class Tutorial : MonoBehaviour
         int data_size = 1024;
         Tensor x = Tensor.RandomNormal((0, 0.5f), data_size, 1);
         Tensor y = Tensor.RandomNormal((0, 0.5f), data_size, 1);
-        train_inputs = Tensor.Join(1, x, y);
+        train_inputs = Tensor.Concat(1, x, y);
         train_targets = x.Zip(y, (x, y) => x * x + y * y);
 
         // Generate validation set
         int valid_size = 64;
         x = Tensor.RandomNormal((0, 0.5f), valid_size, 1);
         y = Tensor.RandomNormal((0, 0.5f), valid_size, 1);
-        valid_inputs = Tensor.Join(1, x, y);
+        valid_inputs = Tensor.Concat(1, x, y);
         valid_targets = x.Zip(y, (x, y) => x * x + y * y);
 
     }
@@ -75,7 +75,7 @@ public class Tutorial : MonoBehaviour
         network.Save("tutorial");
 
         float valid_acc = Metrics.Accuracy(network.Predict(valid_inputs), valid_targets);
-        print($"Epoch {Time.frameCount} | Train Accuracy: {epoch_train_accuracies.Average() * 100f}% | Validation Accuracy: {valid_acc * 100f}%");
+        print($"[Epoch {Time.frameCount} | Train Accuracy: {epoch_train_accuracies.Average() * 100f}% | Validation Accuracy: {valid_acc * 100f}%]");
     }
 }
 

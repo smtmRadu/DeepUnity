@@ -67,7 +67,7 @@ namespace DeepUnity
                     return;
 
                 Agent agent = kv.Key;
-                GeneralizedAdvantageEstimate(agent.Trajectory);
+                AdvantageEstimate(agent.Trajectory);
 
 
                 // Unzip the memory
@@ -109,16 +109,16 @@ namespace DeepUnity
 
                     for (int b = 0; b < M; b++)
                     { 
-                        Tensor states_batch = Tensor.Join(null, states_batches[b]);
-                        Tensor advantages_batch = Tensor.Join(null, advantages_batches[b]);
-                        Tensor returns_batch = Tensor.Join(null, returns_batches[b]);
+                        Tensor states_batch = Tensor.Concat(null, states_batches[b]);
+                        Tensor advantages_batch = Tensor.Concat(null, advantages_batches[b]);
+                        Tensor returns_batch = Tensor.Concat(null, returns_batches[b]);
 
                         UpdateCritic(states_batch, returns_batch);
                         UpdateContinuousNetwork(
                                 states_batch,
                                 advantages_batch,
-                                Tensor.Join(null, cont_act_batches[b]),
-                                Tensor.Join(null, cont_log_probs_batches[b]));
+                                Tensor.Concat(null, cont_act_batches[b]),
+                                Tensor.Concat(null, cont_log_probs_batches[b]));
 
                     }
                    
@@ -137,6 +137,8 @@ namespace DeepUnity
                 agent.Trajectory.Reset();
             }
 
+
+            // Set agents states to unready
             var keys = agents.Keys.ToList();
             foreach (var key in keys)
             {
@@ -239,7 +241,7 @@ namespace DeepUnity
             // Test KL
         }
 
-        public void GeneralizedAdvantageEstimate(TrajectoryBuffer trajectory)
+        public void AdvantageEstimate(TrajectoryBuffer trajectory)
         {
             // as described in the paper
             int T = trajectory.Count;

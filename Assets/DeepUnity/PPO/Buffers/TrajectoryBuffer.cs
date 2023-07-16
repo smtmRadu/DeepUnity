@@ -67,7 +67,7 @@ namespace DeepUnity
         public override string ToString()
         {
             StringBuilder sb = new StringBuilder();
-            sb.AppendLine($"Trajectory ({Count} steps) | Total Reward {CumulativeReward} | Reached Terminal State {reachedTerminalState}");
+            sb.AppendLine($"Trajectory ({Count} steps) | Total Cumulated Reward {CumulativeReward} | Reached Terminal State {reachedTerminalState}");
             sb.AppendLine("{");
             for (int i = 0; i < Count; i++)
             {

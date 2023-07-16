@@ -20,7 +20,7 @@ namespace DeepUnity
 
         // Parameter modules
         public Dense dense;                  
-        public BatchNorm batchnorm;         
+        public BatchNorm1D batchnorm;         
         public LayerNorm layernorm;
         public Conv2D conv2d;
 
@@ -54,7 +54,7 @@ namespace DeepUnity
             {
                 dense = denseModule;
             }
-            else if (module is BatchNorm batchnormModule)
+            else if (module is BatchNorm1D batchnormModule)
             {
                 batchnorm = batchnormModule;
             }
@@ -142,7 +142,7 @@ namespace DeepUnity
             {
                 module = moduleWrapper.dense;
             }
-            else if (typeof(BatchNorm).Name.Equals(moduleWrapper.name))
+            else if (typeof(BatchNorm1D).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.batchnorm;
             }

@@ -104,30 +104,136 @@ namespace DeepUnity
                 valueAtIndex.GetData(valueAtIndexRecv);
                 return valueAtIndexRecv[0];
             }
+            set
+            {
+                ComputeShader cs = DeepUnityMeta.TensorCS;
+
+                cs.SetBuffer(1, "data1", data);
+                cs.SetFloat("value", value);
+
+                cs.SetInt("w1", w);
+                cs.SetInt("h1", 1);
+                cs.SetInt("c1", 1);
+                cs.SetInt("b1", 1);
+
+                cs.Dispatch(1, 1, 1, 1);
+            }
         }
         public float this[int h, int w]
         {
             get
             {
-                // cs.SetInt("w1", Width);
-                // cs.SetInt("h1", Height);
-                // cs.SetInt("c1", Channels);
-                // cs.SetInt("b1", Batch);
-                return 1f;
+                if (valueAtIndex == null)
+                {
+                    valueAtIndex = new ComputeBuffer(1, 4);
+                    valueAtIndexRecv = new float[1];
+                }
+                ComputeShader cs = DeepUnityMeta.TensorCS;
+
+                cs.SetBuffer(0, "data1", data);
+                cs.SetBuffer(0, "result", valueAtIndex);
+
+                cs.SetInt("w1", w);
+                cs.SetInt("h1", h);
+                cs.SetInt("c1", 1);
+                cs.SetInt("b1", 1);
+
+                cs.Dispatch(0, 1, 1, 1);
+
+                valueAtIndex.GetData(valueAtIndexRecv);
+                return valueAtIndexRecv[0];
+            }
+            set
+            {
+                ComputeShader cs = DeepUnityMeta.TensorCS;
+
+                cs.SetBuffer(1, "data1", data);
+                cs.SetFloat("value", value);
+
+                cs.SetInt("w1", w);
+                cs.SetInt("h1", h);
+                cs.SetInt("c1", 1);
+                cs.SetInt("b1", 1);
+
+                cs.Dispatch(1, 1, 1, 1);
             }
         }
         public float this[int c, int h, int w]
         {
             get
             {
-                return 1f;
+                if (valueAtIndex == null)
+                {
+                    valueAtIndex = new ComputeBuffer(1, 4);
+                    valueAtIndexRecv = new float[1];
+                }
+                ComputeShader cs = DeepUnityMeta.TensorCS;
+
+                cs.SetBuffer(0, "data1", data);
+                cs.SetBuffer(0, "result", valueAtIndex);
+
+                cs.SetInt("w1", w);
+                cs.SetInt("h1", h);
+                cs.SetInt("c1", c);
+                cs.SetInt("b1", 1);
+
+                cs.Dispatch(0, 1, 1, 1);
+
+                valueAtIndex.GetData(valueAtIndexRecv);
+                return valueAtIndexRecv[0];
+            }
+            set
+            {
+                ComputeShader cs = DeepUnityMeta.TensorCS;
+
+                cs.SetBuffer(1, "data1", data);
+                cs.SetFloat("value", value);
+
+                cs.SetInt("w1", w);
+                cs.SetInt("h1", h);
+                cs.SetInt("c1", c);
+                cs.SetInt("b1", 1);
+
+                cs.Dispatch(1, 1, 1, 1);
             }
         }
         public float this[int n, int c, int h, int w]
         {
             get
             {
-                return 1f;
+                if (valueAtIndex == null)
+                {
+                    valueAtIndex = new ComputeBuffer(1, 4);
+                    valueAtIndexRecv = new float[1];
+                }
+                ComputeShader cs = DeepUnityMeta.TensorCS;
+
+                cs.SetBuffer(0, "data1", data);
+                cs.SetBuffer(0, "result", valueAtIndex);
+
+                cs.SetInt("w1", w);
+                cs.SetInt("h1", h);
+                cs.SetInt("c1", c);
+                cs.SetInt("b1", n);
+
+                cs.Dispatch(0, 1, 1, 1);
+
+                valueAtIndex.GetData(valueAtIndexRecv);
+                return valueAtIndexRecv[0];
+            }
+            set
+            {
+                ComputeShader cs = DeepUnityMeta.TensorCS;
+
+                cs.SetBuffer(1, "data1", data);
+                cs.SetFloat("value", value);
+
+                cs.SetInt("w1", w);
+                cs.SetInt("h1", h);
+                cs.SetInt("c1", c);
+                cs.SetInt("b1", h);
+
+                cs.Dispatch(1, 1, 1, 1);
             }
         }
 
@@ -171,32 +277,9 @@ namespace DeepUnity
                 throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
 
             TensorGPU result = new TensorGPU(newShape);
-
             float[] tensor_data = new float[tensor.Count()];
             tensor.data.GetData(tensor_data);
-            float[] reshaped_data = new float[tensor.Count()];
-
-            int batch = result.Batch;
-            int channels = result.Channels;
-            int height = result.Height;
-            int width = result.Width;
-
-            int index = 0;
-            for (int b = 0; b < batch; b++)
-            {
-                for (int c = 0; c < channels; c++)
-                {
-                    for (int h = 0; h < height; h++)
-                    {
-                        for (int w = 0; w < width; w++)
-                        {
-                            reshaped_data[b * channels * height * width +  c * height * width + h * width + w] = tensor_data[index++];
-                        }
-                    }
-                }
-            }
-
-            result.data.SetData(reshaped_data);
+            result.data.SetData(tensor_data);
             return result;
         }
         public static TensorGPU Identity(TensorGPU other)
@@ -641,7 +724,7 @@ namespace DeepUnity
         }
 
 
-        // Operations
+        #region Static operations
         public int Size(int axis)
         {
             if (axis >= 0)
@@ -715,17 +798,8 @@ namespace DeepUnity
         {
             HandleAxis(tensor, ref axis);
 
-            int[] newShape;
-            if (keepDim)
-            {
-                newShape = tensor.shape.ToArray();
-            }
-            else
-            {
-                newShape = tensor.shape.ToArray();
-                newShape[axis] = 1;
-            }
-
+            int[] newShape = tensor.shape.ToArray();
+            newShape[axis] = 1;
             TensorGPU result = new TensorGPU(newShape);
 
             ComputeShader cs = DeepUnityMeta.TensorCS;
@@ -751,24 +825,16 @@ namespace DeepUnity
 
             cs.Dispatch(kernel, 1, 1, 1);
 
-            return result.Squeeze();
+            if (!keepDim)
+                result.Squeeze();
+            return result;
         }
         public static TensorGPU Sum(TensorGPU tensor, int axis, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
 
-            int[] newShape;
-            if (keepDim)
-            {
-                newShape = tensor.shape.ToArray();
-            }
-            else
-            {
-                newShape = tensor.shape.ToArray();
-                newShape[axis] = 1;
-            }
-
-
+            int[] newShape = tensor.shape.ToArray();
+            newShape[axis] = 1;
             TensorGPU result = new TensorGPU(newShape);
 
             ComputeShader cs = DeepUnityMeta.TensorCS;
@@ -794,24 +860,18 @@ namespace DeepUnity
 
             cs.Dispatch(kernel, 1, 1, 1);
 
-            return result.Squeeze();
+            if (!keepDim)
+                result.Squeeze();
+            return result;
         }
         public static TensorGPU Var(TensorGPU tensor, int axis, int correction = 1, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
 
-            int[] newShape;
-            if (keepDim)
-            {
-                newShape = tensor.shape.ToArray();
-            }
-            else
-            {
-                newShape = tensor.shape.ToArray();
-                newShape[axis] = 1;
-            }
-
+            int[] newShape = tensor.shape.ToArray();
+            newShape[axis] = 1;
             TensorGPU result = new TensorGPU(newShape);
+
 
             ComputeShader cs = DeepUnityMeta.TensorCS;
 
@@ -838,23 +898,16 @@ namespace DeepUnity
 
             cs.Dispatch(kernel, 1, 1, 1);
 
-            return result.Squeeze();
+            if (!keepDim)
+                result.Squeeze();
+            return result;
         }
         public static TensorGPU Std(TensorGPU tensor, int axis, int correction = 1, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
 
-            int[] newShape;
-            if (keepDim)
-            {
-                newShape = tensor.shape.ToArray();
-            }
-            else
-            {
-                newShape = tensor.shape.ToArray();
-                newShape[axis] = 1;
-            }
-
+            int[] newShape = tensor.shape.ToArray();
+            newShape[axis] = 1;
             TensorGPU result = new TensorGPU(newShape);
 
             ComputeShader cs = DeepUnityMeta.TensorCS;
@@ -882,24 +935,18 @@ namespace DeepUnity
 
             cs.Dispatch(kernel, 1, 1, 1);
 
-            return result.Squeeze();
+            if (!keepDim)
+                result.Squeeze();
+            return result;
         }
         public static TensorGPU Min(TensorGPU tensor, int axis, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
 
-            int[] newShape;
-            if (keepDim)
-            {
-                newShape = tensor.shape.ToArray();
-            }
-            else
-            {
-                newShape = tensor.shape.ToArray();
-                newShape[axis] = 1;
-            }
-
+            int[] newShape = tensor.shape.ToArray();
+            newShape[axis] = 1;
             TensorGPU result = new TensorGPU(newShape);
+
 
             ComputeShader cs = DeepUnityMeta.TensorCS;
 
@@ -924,23 +971,16 @@ namespace DeepUnity
 
             cs.Dispatch(kernel, 1, 1, 1);
 
-            return result.Squeeze();
+            if (!keepDim)
+                result.Squeeze();
+            return result;
         }
         public static TensorGPU Max(TensorGPU tensor, int axis, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
 
-            int[] newShape;
-            if (keepDim)
-            {
-                newShape = tensor.shape.ToArray();
-            }
-            else
-            {
-                newShape = tensor.shape.ToArray();
-                newShape[axis] = 1;
-            }
-
+            int[] newShape = tensor.shape.ToArray();
+            newShape[axis] = 1;
             TensorGPU result = new TensorGPU(newShape);
 
             ComputeShader cs = DeepUnityMeta.TensorCS;
@@ -966,11 +1006,10 @@ namespace DeepUnity
 
             cs.Dispatch(kernel, 1, 1, 1);
 
-            return result.Squeeze();
+            if (!keepDim)
+                result.Squeeze();
+            return result;
         }
-
-
-        // Math operations
         public static TensorGPU Pow(TensorGPU tensor, float power)
         {
             TensorGPU t = new(tensor.shape);
@@ -987,7 +1026,9 @@ namespace DeepUnity
             return t;
         }
 
-        #region Instance
+        #endregion Static operations
+
+        #region Instance operations
         public TensorGPU Reshape(params int[] newShape)
         {
             int count = 1;
@@ -1000,32 +1041,9 @@ namespace DeepUnity
                 throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
 
             TensorGPU result = new TensorGPU(newShape);
-
             float[] tensor_data = new float[Count()];
             data.GetData(tensor_data);
-            float[] reshaped_data = new float[Count()];
-
-            int batch = result.Batch;
-            int channels = result.Channels;
-            int height = result.Height;
-            int width = result.Width;
-
-            int index = 0;
-            for (int b = 0; b < batch; b++)
-            {
-                for (int c = 0; c < channels; c++)
-                {
-                    for (int h = 0; h < height; h++)
-                    {
-                        for (int w = 0; w < width; w++)
-                        {
-                            reshaped_data[b * channels * height * width + c * height * width + h * width + w] = tensor_data[index++];
-                        }
-                    }
-                }
-            }
-
-            result.data.SetData(reshaped_data);
+            result.data.SetData(tensor_data);
             return result;
         }
         public TensorGPU Squeeze(int? axis = null)
@@ -1081,8 +1099,20 @@ namespace DeepUnity
             this.shape = unsqueezedShape.ToArray(); 
             return this;
         }
-        #endregion Instance
+
+        #endregion Instance operations
+
+
         // other
+        public void ForEach(Action<float> action)
+        {
+            float[] dataarr = new float[data.count];
+            data.GetData(dataarr);
+            for (int i = 0; i < dataarr.Length; i++)
+            {
+                action(dataarr[i]);
+            }
+        }
         public int Count(Func<float, bool> predicate = null)
         {         
             if (predicate == null)
