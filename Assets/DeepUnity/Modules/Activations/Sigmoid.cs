@@ -5,21 +5,20 @@ namespace DeepUnity
     [Serializable]
     public class Sigmoid : ActivationBase
     {
-        protected override void Activation(ref Tensor x)
+        protected override Tensor Activation(Tensor x)
         {
-            x = x.Select(x =>
+            return x.Select(x => 
             {
                 float sigmoid = 1f / (1f + MathF.Exp(-x));
                 return sigmoid;
             });
         }
-
-        protected override void Derivative(ref Tensor x)
+        protected override Tensor Derivative(Tensor x)
         {
-            x = x.Select(x =>
+            return x.Select(x =>
             {
                 float sigmoid = 1f / (1f + MathF.Exp(-x));
-                return sigmoid * (1f - sigmoid);
+                return  sigmoid * (1f - sigmoid);
             });
         }
     }

@@ -4,33 +4,22 @@ namespace DeepUnity
     public abstract class ActivationBase : IModule
     {
         private Tensor InputCache;
-        protected abstract void Activation(ref Tensor x);
-        protected abstract void Derivative(ref Tensor x);
+        protected abstract Tensor Activation(Tensor x);
+        protected abstract Tensor Derivative(Tensor y);
 
         public Tensor Predict(Tensor input)
         {
-            Activation(ref input);
-            return input;
+            return Activation(input);
         }
         public Tensor Forward(Tensor input)
         {
             InputCache = Tensor.Identity(input);
-            Activation(ref input);
-            return input;
+            return Activation(input);
 
         }
         public Tensor Backward(Tensor loss)
         {
-            Derivative(ref InputCache);
-            return InputCache * loss;
-        }
-
-        protected static bool IsBatchedInput(Tensor input)
-        {
-            if (input.Rank == 2)
-                return true;
-
-            return false;
+            return Derivative(InputCache) * loss;
         }
     }
 }

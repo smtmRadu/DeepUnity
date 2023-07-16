@@ -18,9 +18,8 @@ namespace DeepUnity
             this.threshold = threshold;
             this.value = value;
         }
-        protected override void Activation(ref Tensor x) => x = x.Select(k => k > threshold ? k : value);
-
-        protected override void Derivative(ref Tensor x) => x = x.Select(k => k > threshold ? 1f : 0f);
+        protected override Tensor Activation(Tensor x) => x.Select(k => k > threshold ? threshold : value);
+        protected override Tensor Derivative(Tensor x) => x.Select(k => k > threshold ? 1f : 0f);
     }
 }
 

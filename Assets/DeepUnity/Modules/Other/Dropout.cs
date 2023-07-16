@@ -21,9 +21,9 @@ namespace DeepUnity
         public Tensor Predict(Tensor input) => input;
         public Tensor Forward(Tensor input)
         {
-            input = input.Select(x => Utils.Random.Bernoulli(dropout) ? 0f : x);
             InputCache = Tensor.Identity(input);
-            return input;
+            
+            return input.Select(x => x = Utils.Random.Bernoulli(dropout) ? 0f : x);
 
         }
         public Tensor Backward(Tensor loss)

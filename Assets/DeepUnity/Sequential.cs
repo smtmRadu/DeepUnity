@@ -49,7 +49,7 @@ namespace DeepUnity
         /// Gets all <typeparamref name="Learnable"/> modules.
         /// </summary>
         /// <returns></returns>
-        public Learnable[] Parameters() => Modules.Where(x => x is Learnable P).Select(x => (Learnable)x).ToArray();
+        public Learnable[] Parameters { get => Modules.Where(x => x is Learnable P).Select(x => (Learnable)x).ToArray(); }
         /// <summary>
         /// Saves the network in Unity Assets folder. Overwrites the network file with the same name.
         /// </summary>

@@ -20,10 +20,16 @@ namespace DeepUnity
 
         // Parameter modules
         public Dense dense;                  
-        public BatchNorm batchnorm;    
-        public Dropout dropout;
+        public BatchNorm batchnorm;         
         public LayerNorm layernorm;
         public Conv2D conv2d;
+
+        // Other modules
+        public Dropout dropout;
+        public Flatten flatten;
+        public Reshape reshape;
+        public AvgPool2D avgPool2d;
+        public MaxPool2D maxPool2d;
 
         // Activation modules
         public Linear linear;
@@ -48,11 +54,11 @@ namespace DeepUnity
             {
                 dense = denseModule;
             }
-            else if(module is BatchNorm batchnormModule)
+            else if (module is BatchNorm batchnormModule)
             {
                 batchnorm = batchnormModule;
             }
-            else if(module is LayerNorm layernormModule)
+            else if (module is LayerNorm layernormModule)
             {
                 layernorm = layernormModule;
             }
@@ -60,31 +66,31 @@ namespace DeepUnity
             {
                 relu = reluModule;
             }
-            else if(module is TanH tanhModule)
+            else if (module is TanH tanhModule)
             {
                 tanh = tanhModule;
             }
-            else if(module is Linear linearModule)
+            else if (module is Linear linearModule)
             {
                 linear = linearModule;
             }
-            else if(module is  Dropout dropoutModule)
+            else if (module is Dropout dropoutModule)
             {
                 dropout = dropoutModule;
             }
-            else if(module is SoftMax softmaxModule)
+            else if (module is SoftMax softmaxModule)
             {
                 softmax = softmaxModule;
             }
-            else if(module is LeakyReLU leakyreluModule)
+            else if (module is LeakyReLU leakyreluModule)
             {
                 leakyrelu = leakyreluModule;
             }
-            else if(module is Mish mishModule)
+            else if (module is Mish mishModule)
             {
                 mish = mishModule;
             }
-            else if(module is Sigmoid sigmoidModule)
+            else if (module is Sigmoid sigmoidModule)
             {
                 sigmoid = sigmoidModule;
             }
@@ -92,17 +98,33 @@ namespace DeepUnity
             {
                 softplus = softplusModule;
             }
-            else if(module is Conv2D conv2dModule)
+            else if (module is Conv2D conv2dModule)
             {
                 conv2d = conv2dModule;
             }
-            else if(module is ELU eluModule)
+            else if (module is ELU eluModule)
             {
                 elu = eluModule;
             }
-            else if(module is Threshold thresholdModule)
+            else if (module is Threshold thresholdModule)
             {
                 threshold = thresholdModule;
+            }
+            else if (module is Reshape reshapeModule)
+            {
+                reshape = reshapeModule;
+            }
+            else if (module is Flatten flattenModule)
+            {
+                flatten = flattenModule;
+            }
+            else if (module is MaxPool2D maxpool2dModule)
+            {
+                maxPool2d = maxpool2dModule;
+            }
+            else if(module is AvgPool2D avgpool2dModule)
+            {
+                avgPool2d = avgpool2dModule;
             }
             else
                 throw new Exception("Unhandled module type while wrapping.");
@@ -175,6 +197,22 @@ namespace DeepUnity
             else if (typeof(Threshold).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.threshold;
+            }
+            else if (typeof(Reshape).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.reshape;
+            }
+            else if (typeof(Flatten).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.flatten;
+            }
+            else if (typeof(MaxPool2D).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.maxPool2d;
+            }
+            else if (typeof(AvgPool2D).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.avgPool2d;
             }
             else
                 throw new Exception("Unhandled module type while unwrapping.");

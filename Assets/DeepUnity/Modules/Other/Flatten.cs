@@ -6,25 +6,35 @@ namespace DeepUnity
     [Serializable]
     public class Flatten : IModule
     {
+        private int[] InputShapeCache { get; set; }
+
         [SerializeField] private int startAxis;
         [SerializeField] private int endAxis;
 
+        /// <summary>
+        /// Use <b>negative</b> axis in order to avoid batch collision.
+        /// </summary>
+        /// <param name="startAxis"></param>
+        /// <param name="endAxis"></param>
         public Flatten(int startAxis, int endAxis)
         {
-            throw new NotImplementedException();
+            this.startAxis = startAxis;
+            this.endAxis = endAxis;
         }
 
         public Tensor Predict(Tensor input)
         {
-            return null;
+            return input.Flatten(startAxis, endAxis);
+
         }
         public Tensor Forward(Tensor input)
         {
-            return null;
+            InputShapeCache = input.Shape;
+            return input.Flatten(startAxis, endAxis);           
         }
         public Tensor Backward(Tensor loss)
         {
-            return null;
+            return loss.Reshape(InputShapeCache);
         }
 
     }

@@ -27,6 +27,21 @@ namespace DeepUnity
 
             return collection;
         }
+        public static List<T> Shuffle<T>(List<T> collection)
+        {
+            lock (RNG)
+            {
+                for (int i = collection.Count - 1; i > 0; i--)
+                {
+                    int r = RNG.Next(i + 1);
+                    T temp = collection[i];
+                    collection[i] = collection[r];
+                    collection[r] = temp;
+                }
+            }
+
+            return collection;
+        }
         public static bool IsValueIn<T>(T value, IEnumerable<T> collection)
         {
             foreach (var item in collection)

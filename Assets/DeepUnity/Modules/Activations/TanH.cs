@@ -5,22 +5,22 @@ namespace DeepUnity
     [Serializable]
     public class TanH : ActivationBase
     {
-        protected override void Activation(ref Tensor x)
+        protected override Tensor Activation(Tensor x)
         {
-            x = x.Select(x =>
+            return x.Select(x =>
             {
                 float e2x = MathF.Exp(2f * x);
                 float tanh = (e2x - 1f) / (e2x + 1f);
                 return tanh;
             });
         }
-        protected override void Derivative(ref Tensor x)
+        protected override Tensor Derivative(Tensor x)
         {
-            x = x.Select(x =>
+            return x.Select(x =>
             {
                 float e2x = MathF.Exp(2f * x);
                 float tanh = (e2x - 1f) / (e2x + 1f);
-                return 1f - tanh * tanh;
+                return  1f - tanh * tanh;
             });
         }
     }

@@ -408,7 +408,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   net: {fileID: 0}
-  hiddenSize: 64
+  hiddenSize: 32
   trainingSamples: 512
   batch_size: 32
   validationSamples: 32
@@ -697,6 +697,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45ec7b8831bf73c4bbed236ccf4948d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  network: {fileID: 0}
+  batch_size: 32
 --- !u!4 &1470265691
 Transform:
   m_ObjectHideFlags: 0

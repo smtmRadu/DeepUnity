@@ -9,6 +9,10 @@ using System.Collections.Generic;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// Axis operations have swapped axis, need to be revised.
+    /// A tensor classed used for custom objectives, that lives in VRAM and runs much faster high computational operations like MatMul.
+    /// </summary>
     [Serializable]
     public class TensorGPU : IDisposable, ISerializationCallbackReceiver, IEquatable<Tensor>, IEquatable<TensorGPU>
     { 
@@ -16,7 +20,11 @@ namespace DeepUnity
         [SerializeField] private float[] serialized_data;
         [SerializeField] private int[] shape;
         private bool disposed = false;
-     
+
+        // Fields that are used for fast value extraction on indexing.
+        private ComputeBuffer valueAtIndex;
+        private float[] valueAtIndexRecv; 
+
         public int Rank
         {
             get
@@ -33,14 +41,6 @@ namespace DeepUnity
         {
             get => shape.ToArray();
         }
-        public int Size(int axis)
-        {
-            if (axis >= 0)
-                return shape[axis];
-            else
-                return shape[shape.Length + axis];
-        }
-
         private int Width
         {
             get
@@ -78,7 +78,58 @@ namespace DeepUnity
                     return shape[shape.Length - 4];
             }
         }
-       
+
+        
+        public float this[int w]
+        {
+            get
+            {
+                if (valueAtIndex == null)
+                {
+                    valueAtIndex = new ComputeBuffer(1, 4);
+                    valueAtIndexRecv = new float[1];
+                }
+                ComputeShader cs = DeepUnityMeta.TensorCS;
+
+                cs.SetBuffer(0, "data1", data);
+                cs.SetBuffer(0, "result", valueAtIndex);
+
+                cs.SetInt("w1", w);
+                cs.SetInt("h1", 1);
+                cs.SetInt("c1", 1);
+                cs.SetInt("b1", 1);
+
+                cs.Dispatch(0, 1, 1, 1);
+
+                valueAtIndex.GetData(valueAtIndexRecv);
+                return valueAtIndexRecv[0];
+            }
+        }
+        public float this[int h, int w]
+        {
+            get
+            {
+                // cs.SetInt("w1", Width);
+                // cs.SetInt("h1", Height);
+                // cs.SetInt("c1", Channels);
+                // cs.SetInt("b1", Batch);
+                return 1f;
+            }
+        }
+        public float this[int c, int h, int w]
+        {
+            get
+            {
+                return 1f;
+            }
+        }
+        public float this[int n, int c, int h, int w]
+        {
+            get
+            {
+                return 1f;
+            }
+        }
 
         // Create
         private TensorGPU(params int[] shape)
@@ -591,10 +642,78 @@ namespace DeepUnity
 
 
         // Operations
+        public int Size(int axis)
+        {
+            if (axis >= 0)
+                return shape[axis];
+            else
+                return shape[shape.Length + axis];
+        }
+        public static TensorGPU Squeeze(TensorGPU tensor, int? axis = null)
+        {
+            if (axis == null)
+            {
+                // Removes all axis with value 1
+                LinkedList<int> squeezedShape = new LinkedList<int>();
+
+                if (tensor.Width > 1)
+                    squeezedShape.AddFirst(tensor.Width);
+
+                if (tensor.Height > 1)
+                    squeezedShape.AddFirst(tensor.Height);
+
+                if (tensor.Channels > 1)
+                    squeezedShape.AddFirst(tensor.Channels);
+
+                if (tensor.Batch > 1)
+                    squeezedShape.AddFirst(tensor.Batch);
+
+                if (squeezedShape.Count == 0)
+                    squeezedShape.AddFirst(tensor.Width);
+
+                TensorGPU result = new(squeezedShape.ToArray());
+                float[] dataarr = new float[tensor.data.count];
+                tensor.data.GetData(dataarr);
+                result.data.SetData(dataarr);
+                return result;
+            }
+            else
+            {
+                int ax = axis.Value;
+                HandleAxis(tensor, ref ax);
+
+
+                // if axis is not 1, tensor remains unchanged
+                if (tensor.shape[ax] != 1)
+                    return Identity(tensor);
+
+                // Esle remove that axis
+                List<int> squeezedShape = tensor.shape.ToList();
+                squeezedShape.RemoveAt(ax);
+
+                TensorGPU result = new(squeezedShape.ToArray());
+                float[] dataarr = new float[tensor.data.count];
+                tensor.data.GetData(dataarr);
+                result.data.SetData(dataarr);
+                return result;
+            }
+
+        }
+        public static TensorGPU Unsqueeze(TensorGPU tensor, int axis)
+        {
+            HandleAxis(tensor, ref axis);
+
+            List<int> unsqueezedShape = tensor.shape.ToList();
+            unsqueezedShape.Insert(axis, 1);
+            TensorGPU result = new(unsqueezedShape.ToArray());
+            float[] dataarr = new float[tensor.data.count];
+            tensor.data.GetData(dataarr);
+            result.data.SetData(dataarr);
+            return result;
+        }
         public static TensorGPU Mean(TensorGPU tensor, int axis, bool keepDim = false)
         {
-            if (axis < 0 || axis >= tensor.Rank)
-                throw new ArgumentOutOfRangeException("Invalid axis value.");
+            HandleAxis(tensor, ref axis);
 
             int[] newShape;
             if (keepDim)
@@ -626,18 +745,17 @@ namespace DeepUnity
             cs.SetInt("hr", result.Height);
             cs.SetInt("cr", result.Channels);
             cs.SetInt("br", result.Batch);
-            cs.SetInt("rr", tensor.Rank);
+            cs.SetInt("rr", result.Rank);
 
             cs.SetInt("axis", axis);
 
             cs.Dispatch(kernel, 1, 1, 1);
 
-            return result;
+            return result.Squeeze();
         }
         public static TensorGPU Sum(TensorGPU tensor, int axis, bool keepDim = false)
         {
-            if (axis < 0 || axis >= tensor.Rank)
-                throw new ArgumentOutOfRangeException("Invalid axis value.");
+            HandleAxis(tensor, ref axis);
 
             int[] newShape;
             if (keepDim)
@@ -649,6 +767,7 @@ namespace DeepUnity
                 newShape = tensor.shape.ToArray();
                 newShape[axis] = 1;
             }
+
 
             TensorGPU result = new TensorGPU(newShape);
 
@@ -669,18 +788,17 @@ namespace DeepUnity
             cs.SetInt("hr", result.Height);
             cs.SetInt("cr", result.Channels);
             cs.SetInt("br", result.Batch);
-            cs.SetInt("rr", tensor.Rank);
+            cs.SetInt("rr", result.Rank);
 
             cs.SetInt("axis", axis);
 
             cs.Dispatch(kernel, 1, 1, 1);
 
-            return result;
+            return result.Squeeze();
         }
         public static TensorGPU Var(TensorGPU tensor, int axis, int correction = 1, bool keepDim = false)
         {
-            if (axis < 0 || axis >= tensor.Rank)
-                throw new ArgumentOutOfRangeException("Invalid axis value.");
+            HandleAxis(tensor, ref axis);
 
             int[] newShape;
             if (keepDim)
@@ -712,20 +830,19 @@ namespace DeepUnity
             cs.SetInt("hr", result.Height);
             cs.SetInt("cr", result.Channels);
             cs.SetInt("br", result.Batch);
-            cs.SetInt("rr", tensor.Rank);
-            
-            
+            cs.SetInt("rr", result.Rank);
+
+
             cs.SetInt("axis", axis);
             cs.SetInt("correction", correction);
 
             cs.Dispatch(kernel, 1, 1, 1);
 
-            return result;
+            return result.Squeeze();
         }
         public static TensorGPU Std(TensorGPU tensor, int axis, int correction = 1, bool keepDim = false)
         {
-            if (axis < 0 || axis >= tensor.Rank)
-                throw new ArgumentOutOfRangeException("Invalid axis value.");
+            HandleAxis(tensor, ref axis);
 
             int[] newShape;
             if (keepDim)
@@ -757,7 +874,7 @@ namespace DeepUnity
             cs.SetInt("hr", result.Height);
             cs.SetInt("cr", result.Channels);
             cs.SetInt("br", result.Batch);
-            cs.SetInt("rr", tensor.Rank);
+            cs.SetInt("rr", result.Rank);
 
 
             cs.SetInt("axis", axis);
@@ -765,12 +882,11 @@ namespace DeepUnity
 
             cs.Dispatch(kernel, 1, 1, 1);
 
-            return result;
+            return result.Squeeze();
         }
         public static TensorGPU Min(TensorGPU tensor, int axis, bool keepDim = false)
         {
-            if (axis < 0 || axis >= tensor.Rank)
-                throw new ArgumentOutOfRangeException("Invalid axis value.");
+            HandleAxis(tensor, ref axis);
 
             int[] newShape;
             if (keepDim)
@@ -802,18 +918,17 @@ namespace DeepUnity
             cs.SetInt("hr", result.Height);
             cs.SetInt("cr", result.Channels);
             cs.SetInt("br", result.Batch);
-            cs.SetInt("rr", tensor.Rank);
+            cs.SetInt("rr", result.Rank);
 
             cs.SetInt("axis", axis);
 
             cs.Dispatch(kernel, 1, 1, 1);
 
-            return result;
+            return result.Squeeze();
         }
         public static TensorGPU Max(TensorGPU tensor, int axis, bool keepDim = false)
         {
-            if (axis < 0 || axis >= tensor.Rank)
-                throw new ArgumentOutOfRangeException("Invalid axis value.");
+            HandleAxis(tensor, ref axis);
 
             int[] newShape;
             if (keepDim)
@@ -845,13 +960,13 @@ namespace DeepUnity
             cs.SetInt("hr", result.Height);
             cs.SetInt("cr", result.Channels);
             cs.SetInt("br", result.Batch);
-            cs.SetInt("rr", tensor.Rank);
+            cs.SetInt("rr", result.Rank);
 
             cs.SetInt("axis", axis);
 
             cs.Dispatch(kernel, 1, 1, 1);
 
-            return result;
+            return result.Squeeze();
         }
 
 
@@ -872,7 +987,101 @@ namespace DeepUnity
             return t;
         }
 
+        #region Instance
+        public TensorGPU Reshape(params int[] newShape)
+        {
+            int count = 1;
+            foreach (var item in newShape)
+            {
+                count *= item;
+            }
 
+            if (count != Count())
+                throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
+
+            TensorGPU result = new TensorGPU(newShape);
+
+            float[] tensor_data = new float[Count()];
+            data.GetData(tensor_data);
+            float[] reshaped_data = new float[Count()];
+
+            int batch = result.Batch;
+            int channels = result.Channels;
+            int height = result.Height;
+            int width = result.Width;
+
+            int index = 0;
+            for (int b = 0; b < batch; b++)
+            {
+                for (int c = 0; c < channels; c++)
+                {
+                    for (int h = 0; h < height; h++)
+                    {
+                        for (int w = 0; w < width; w++)
+                        {
+                            reshaped_data[b * channels * height * width + c * height * width + h * width + w] = tensor_data[index++];
+                        }
+                    }
+                }
+            }
+
+            result.data.SetData(reshaped_data);
+            return result;
+        }
+        public TensorGPU Squeeze(int? axis = null)
+        {
+            if (axis == null)
+            {
+                // Removes all axis with value 1
+                LinkedList<int> squeezedShape = new LinkedList<int>();
+
+                if (Width > 1)
+                    squeezedShape.AddFirst(Width);
+
+                if (Height > 1)
+                    squeezedShape.AddFirst(Height);
+
+                if (Channels > 1)
+                    squeezedShape.AddFirst(Channels);
+
+                if (Batch > 1)
+                    squeezedShape.AddFirst(Batch);
+
+                if (squeezedShape.Count == 0)
+                    squeezedShape.AddFirst(Width);
+
+                shape = squeezedShape.ToArray();
+                return this;
+            }
+            else
+            {
+                int ax = axis.Value;
+                HandleAxis(this, ref ax);
+
+
+                // if axis is not 1, tensor remains unchanged
+                if (this.shape[ax] != 1)
+                    return Identity(this);
+
+                // Esle remove that axis
+                List<int> squeezedShape = this.shape.ToList();
+                squeezedShape.RemoveAt(ax);
+
+                this.shape = squeezedShape.ToArray();
+                return this;
+            }
+
+        }
+        public TensorGPU Unsqueeze(int axis)
+        {
+            HandleAxis(this, ref axis);
+
+            List<int> unsqueezedShape = this.shape.ToList();
+            unsqueezedShape.Insert(axis, 1);
+            this.shape = unsqueezedShape.ToArray(); 
+            return this;
+        }
+        #endregion Instance
         // other
         public int Count(Func<float, bool> predicate = null)
         {         
@@ -1053,6 +1262,27 @@ namespace DeepUnity
                 return new int[] { c, h, w };
             else
                 return new int[] { b, c, h, w };
+        }
+        private static void HandleAxis(TensorGPU tensor, ref int axis)
+        {
+            int rank = tensor.Rank;
+
+            if (rank == 0)
+            {
+                // here are different things
+                if (axis != 0 && axis != -1)
+                    throw new ArgumentOutOfRangeException($"Invalid axis value ({axis}) for a tensor with rank ({tensor.Rank})");
+
+                axis = 0;
+            }
+            else
+            {
+                if (axis >= rank)
+                    throw new ArgumentOutOfRangeException($"Invalid axis value ({axis}) for a tensor with rank ({tensor.Rank})");
+
+                if (axis < 0)
+                    axis = rank + axis;
+            }
         }
     }
 

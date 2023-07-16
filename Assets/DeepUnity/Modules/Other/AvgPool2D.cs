@@ -27,12 +27,15 @@ namespace DeepUnity
 
         public Tensor Predict(Tensor input)
         {
-            int Wout = (int)Math.Floor((input.Width + 2 * padding) / (float)kernel_size + 1f);
-            int Hout = (int)Math.Floor((input.Height + 2 * padding) / (float)kernel_size + 1f);
+            int Wout = (int)Math.Floor((input.Size(-1) + 2 * padding) / (float)kernel_size + 1f);
+            int Hout = (int)Math.Floor((input.Size(-2) + 2 * padding) / (float)kernel_size + 1f);
             // 1. Apply padding
             input = Tensor.MatPad(input, padding, padding_mode);
 
-            float[,,,] pooled_input = new float[input.Batch, input.Channels, Hout, Wout];
+            int batch_size = input.Rank == 4 ? input.Size(-4) : 1;
+            int channel_size = input.Rank >= 3 ? input.Size(-3) : 1;
+
+            float[,,,] pooled_input = new float[batch_size, channel_size, Hout, Wout];
 
             List<float> values_pool = new List<float>();
 
@@ -76,12 +79,15 @@ namespace DeepUnity
         {
             Input_Cache = Tensor.Identity(input);
 
-            int Wout = (int)Math.Floor((input.Width + 2 * padding) / (float)kernel_size + 1f);
-            int Hout = (int)Math.Floor((input.Height + 2 * padding) / (float)kernel_size + 1f);
+            int Wout = (int)Math.Floor((input.Size(-1) + 2 * padding) / (float)kernel_size + 1f);
+            int Hout = (int)Math.Floor((input.Size(-2) + 2 * padding) / (float)kernel_size + 1f);
             // 1. Apply padding
             input = Tensor.MatPad(input, padding, padding_mode);
 
-            float[,,,] pooled_input = new float[input.Batch, input.Channels, Hout, Wout];
+            int batch_size = input.Rank == 4 ? input.Size(-4) : 1;
+            int channel_size = input.Rank >= 3 ? input.Size(-3) : 1;
+
+            float[,,,] pooled_input = new float[batch_size, channel_size, Hout, Wout];
 
             List<float> values_pool = new List<float>();
 
@@ -123,18 +129,26 @@ namespace DeepUnity
         }
         public Tensor Backward(Tensor loss)
         {
+            int Batch = loss.Rank == 4 ? loss.Size(-4) : 1;
+            int Channels = loss.Rank >= 3 ? loss.Size(-3) : 1;
+            int Height = loss.Size(-2);
+            int Width = loss.Size(-1);
+
             // Initialize a tensor for gradients with the same shape as the input tensor
-            float[,,,] gradInput = new float[Input_Cache.Batch, Input_Cache.Channels, Input_Cache.Height, Input_Cache.Height];
-            
-            for (int b = 0; b < loss.Batch; b++)
+            float[,,,] gradInput = new float[Batch, Channels, Height, Height];
+
+
+           
+
+            for (int b = 0; b < Batch; b++)
             {
                 // Foreach channel
-                for (int c = 0; c < loss.Channels; c++)
+                for (int c = 0; c < Channels; c++)
                 {
                     // foreach pool result
-                    for (int i = 0; i < loss.Width; i++)
+                    for (int i = 0; i < Width; i++)
                     {
-                        for (int j = 0; j < loss.Height; j++)
+                        for (int j = 0; j < Height; j++)
                         {
                             // Get the gradient for the current pooled output element
                             float grad = loss[b, c, j, i];

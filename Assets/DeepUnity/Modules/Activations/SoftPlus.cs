@@ -8,18 +8,18 @@ namespace DeepUnity
     {
         [SerializeField] private float beta = 1f;
         public SoftPlus(float beta = 1f) => this.beta = beta;
-        protected override void Activation(ref Tensor x)
+        protected override Tensor Activation(Tensor x)
         {
-            x = x.Select(x =>
+            return x.Select(x =>
             {
                 float ebx = MathF.Exp(beta * x);
                 float log = MathF.Log(1f + ebx);
-                return log / beta;
+                return  log / beta;
             });
         }
-        protected override void Derivative(ref Tensor x)
+        protected override Tensor Derivative(Tensor x)
         {
-            x = x.Select(x =>
+            return x.Select(x =>
             {
                 float embx = MathF.Exp(-beta * x);
                 return 1f / (1 + embx);

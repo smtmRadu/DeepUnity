@@ -16,8 +16,6 @@ public class Tutorial : MonoBehaviour
     private Tensor valid_inputs;
     private Tensor valid_targets;
 
-    private List<float> train_accs = new List<float>();
-
     public void Start()
     {
         if(network == null)
@@ -30,7 +28,7 @@ public class Tutorial : MonoBehaviour
                 new Dense(64, 1));
         }
 
-        optim = new Adam(network.Parameters());
+        optim = new Adam(network.Parameters);
         scheduler = new StepLR(optim, 100);
 
         // Generate dataset - learning x^2 + y^2 function.
@@ -51,7 +49,7 @@ public class Tutorial : MonoBehaviour
 
     public void Update()
     {
-        train_accs.Clear();
+        List<float> epoch_train_accuracies = new List<float>();
 
         // Split dataset into batches
         int batch_size = 32;
@@ -70,14 +68,14 @@ public class Tutorial : MonoBehaviour
             optim.Step();
             
             float train_acc = Metrics.Accuracy(prediction, target_batches[i]);
-            train_accs.Add(train_acc);       
+            epoch_train_accuracies.Add(train_acc);       
         }
 
         scheduler.Step();
         network.Save("tutorial");
 
         float valid_acc = Metrics.Accuracy(network.Predict(valid_inputs), valid_targets);
-        print($"Epoch {Time.frameCount} | Train Accuracy: {train_accs.Average() * 100f}% | Validation Accuracy: {valid_acc * 100f}%");
+        print($"Epoch {Time.frameCount} | Train Accuracy: {epoch_train_accuracies.Average() * 100f}% | Validation Accuracy: {valid_acc * 100f}%");
     }
 }
 

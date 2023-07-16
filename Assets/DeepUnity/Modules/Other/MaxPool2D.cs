@@ -12,7 +12,6 @@ namespace DeepUnity
         [SerializeField] private int padding;
         [SerializeField] private PaddingType padding_mode;
 
-
         /// <summary>
         /// H out = Floor((H in + 2 * padding)/kernel_size + 1)<br />
         /// W out = Floor((W in + 2 * padding)/kernel_size + 1)<br />
@@ -26,12 +25,15 @@ namespace DeepUnity
 
         public Tensor Predict(Tensor input)
         {
-            int Wout = (int)Math.Floor((input.Width + 2 * padding) / (float)kernel_size + 1f);
-            int Hout = (int)Math.Floor((input.Height + 2 * padding) / (float)kernel_size + 1f);
+            int Wout = (int)Math.Floor((input.Size(-1) + 2 * padding) / (float)kernel_size + 1f);
+            int Hout = (int)Math.Floor((input.Size(-2) + 2 * padding) / (float)kernel_size + 1f);
             // 1. Apply padding
             input = Tensor.MatPad(input, padding, padding_mode);
 
-            float[,,,] pooled_input = new float[input.Batch, input.Channels, Hout, Wout];
+            int batch_size = input.Rank == 4 ? input.Size(-4) : 1;
+            int channel_size = input.Rank >= 3 ? input.Size(-3) : 1;
+
+            float[,,,] pooled_input = new float[batch_size, channel_size, Hout, Wout];
 
             List<float> values_pool = new List<float>();
 
@@ -75,12 +77,16 @@ namespace DeepUnity
         {
             Input_Cache = Tensor.Identity(input);
 
-            int Wout = (int)Math.Floor((input.Width + 2 * padding)/ (float)kernel_size + 1f);
-            int Hout = (int)Math.Floor((input.Height + 2 * padding) / (float)kernel_size + 1f);
+            int Wout = (int)Math.Floor((input.Size(-1) + 2 * padding) / (float)kernel_size + 1f);
+            int Hout = (int)Math.Floor((input.Size(-2) + 2 * padding) / (float)kernel_size + 1f);
             // 1. Apply padding
             input = Tensor.MatPad(input, padding, padding_mode);
 
-            float[,,,] pooled_input = new float[input.Batch, input.Channels, Hout, Wout];
+            int batch_size = input.Rank == 4 ? input.Size(-4) : 1;
+            int channel_size = input.Rank >= 3 ? input.Size(-3) : 1;
+
+            float[,,,] pooled_input = new float[batch_size, channel_size, Hout, Wout];
+
             List<float> values_pool = new List<float>();
 
             for (int b = 0; b < pooled_input.GetLength(0); b++)
@@ -104,7 +110,7 @@ namespace DeepUnity
                                         values_pool.Add(input[b, c, j * kernel_size + pj, i * kernel_size + pi]);
                                     }
                                     catch { }
-                                    
+
                                 }
                             }
 
@@ -119,9 +125,53 @@ namespace DeepUnity
 
             return Tensor.Constant(pooled_input);
         }
-        public Tensor Backward(Tensor input)
+        public Tensor Backward(Tensor loss)
         {
-            throw new System.NotImplementedException();
+            int Batch = loss.Rank == 4 ? loss.Size(-4) : 1;
+            int Channels = loss.Rank >= 3 ? loss.Size(-3) : 1;
+            int Height = loss.Size(-2);
+            int Width = loss.Size(-1);
+
+            // Initialize a tensor for gradients with the same shape as the input tensor
+            float[,,,] gradInput = new float[Batch, Channels, Height, Height];
+
+
+
+
+            for (int b = 0; b < Batch; b++)
+            {
+                // Foreach channel
+                for (int c = 0; c < Channels; c++)
+                {
+                    // foreach pool result
+                    for (int i = 0; i < Width; i++)
+                    {
+                        for (int j = 0; j < Height; j++)
+                        {
+                            // Get the gradient for the current pooled output element
+                            float grad = loss[b, c, j, i];
+
+                            // Compute the average gradient for the pool elements
+                            float avgGrad = grad / (kernel_size * kernel_size);
+
+                            // Distribute the average gradient to the corresponding locations in the input tensor
+                            for (int pi = 0; pi < kernel_size; pi++)
+                            {
+                                for (int pj = 0; pj < kernel_size; pj++)
+                                {
+                                    int inputIndexX = i * kernel_size + pi;
+                                    int inputIndexY = j * kernel_size + pj;
+
+                                    // Set the gradient value in the input tensor
+                                    gradInput[b, c, inputIndexY, inputIndexX] = avgGrad;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return Tensor.Constant(gradInput);
         }
     }
 }

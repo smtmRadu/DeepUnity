@@ -55,7 +55,7 @@ namespace DeepUnity
 
         public Tensor Forward(Tensor input)
         {
-            bool isBatched = IsBatchedInput(input);
+            bool isBatched = input.Rank == 2;
 
             int batch_size = isBatched ? input.Size(0) : 1;
             int num_features = isBatched ? input.Size(1) : input.Size(0);
@@ -68,11 +68,11 @@ namespace DeepUnity
             std = Tensor.Sqrt(var + Utils.EPSILON);
             xHat = xCentered / std;
 
-            Tensor expandedGamma = Tensor.Expand(gamma, 0, num_features);
-            expandedGamma = Tensor.Expand(Tensor.Unsqueeze(expandedGamma, 0), 0, batch_size);
+            Tensor expandedGamma = Tensor.Expand(gamma, 0, num_features).Unsqueeze(0);
+            expandedGamma = Tensor.Expand(expandedGamma, 0, batch_size);
 
-            Tensor expandedBeta = Tensor.Expand(beta, 0, num_features);
-            expandedBeta = Tensor.Expand(Tensor.Unsqueeze(expandedBeta, 0), 0, batch_size);
+            Tensor expandedBeta = Tensor.Expand(beta, 0, num_features).Unsqueeze(0);
+            expandedBeta = Tensor.Expand(expandedBeta, 0, batch_size);
             Tensor y = expandedGamma * xHat + expandedBeta;
 
 
@@ -95,10 +95,9 @@ namespace DeepUnity
         }
         public Tensor Backward(Tensor dLdY)
         {
-
-            bool isBatched = IsBatchedInput(dLdY);
+            bool isBatched = dLdY.Rank == 2;
             // dLdY (B, OUT)
-            int m = dLdY.Height;
+            int m = isBatched ? dLdY.Size(-2) : 1;
             var dLdxHat = dLdY * gamma[0];
             var dLdVar = Tensor.Mean(dLdxHat + xCentered * (-1f / 2f) *
                          Tensor.Pow(std + Utils.EPSILON, -3f / 2f),
@@ -123,14 +122,6 @@ namespace DeepUnity
             gradBeta += dLdBeta_across_batch;
 
             return dLdX;
-        }
-
-        protected static bool IsBatchedInput(Tensor input)
-        {
-            if (input.Rank == 2)
-                return true;
-
-            return false;
         }
     }
 }

@@ -41,15 +41,17 @@ namespace kbRadu
                 net = new Sequential(
                  new Dense(2, hiddenSize),
                  new TanH(),
-                 new BatchNorm(hiddenSize),
-                 new Dense(hiddenSize, hiddenSize),
-                 // new LayerNorm(),
+                 //new BatchNorm(hiddenSize),
+                 // new Dropout(0.3f),
+                 new Dense(hiddenSize, hiddenSize, device: Device.CPU),
+                 // new LayerNorm(),              
                  new ReLU(),
+               
                  new Dense(hiddenSize, 1)
-                 );
+                 ); 
             }
 
-            optimizer = new Adamax(net.Parameters());
+            optimizer = new Adamax(net.Parameters);
             scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
 
 
@@ -92,7 +94,7 @@ namespace kbRadu
                     net.Save("test");
                 i = 0;
 
-                if (epoch == 100)
+                if (epoch == 25)
                     Timer.Stop();
 
                 return;
@@ -113,7 +115,7 @@ namespace kbRadu
             // Compute test accuracy
             var testPrediction = net.Predict(validationInputs);
             float testacc = Metrics.Accuracy(testPrediction, validationTargets);
-            for (int j = 0; j < validationInputs.Height; j++)
+            for (int j = 0; j < validationInputs.Size(-2); j++)
             {
                 validationPoints[j] = new Vector3(validationInputs[j, 0], testPrediction[j, 0], validationInputs[j, 1]);
             }

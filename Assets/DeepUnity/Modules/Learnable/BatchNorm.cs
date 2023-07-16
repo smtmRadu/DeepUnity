@@ -40,23 +40,36 @@ namespace DeepUnity
 
         public Tensor Predict(Tensor input)
         {
-            int batch_size = input.Height;
-            var e_mean = Tensor.Expand(Tensor.Unsqueeze(runningMean, 0), 0, batch_size);
-            var e_var = Tensor.Expand(Tensor.Unsqueeze(runningVar, 0), 0, batch_size);
-            var e_gamma = Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size);
-            var e_beta = Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
+            bool isBatched = input.Rank == 2;
 
-            var input_centered = (input - e_mean) / Tensor.Sqrt(e_var + Utils.EPSILON);
-            var output = e_gamma * input_centered + e_beta;
+            if(isBatched)
+            {
+                int batch_size = input.Size(-2);
+                var e_mean = Tensor.Expand(Tensor.Unsqueeze(runningMean, 0), 0, batch_size);
+                var e_var = Tensor.Expand(Tensor.Unsqueeze(runningVar, 0), 0, batch_size);
+                var e_gamma = Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size);
+                var e_beta = Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
 
-            return output;
+                var input_centered = (input - e_mean) / Tensor.Sqrt(e_var + Utils.EPSILON);
+                var output = e_gamma * input_centered + e_beta;
+
+                return output;
+            }
+            else
+            {
+                var input_centered = (input - runningMean) / Tensor.Sqrt(runningVar + Utils.EPSILON);
+                var output = gamma * input_centered + beta;
+
+                return output;
+            }
+            
         }
         public Tensor Forward(Tensor input)
         {
-            if (!IsBatchedInput(input))
-                throw new ArgumentException("Models having BatchNorm layers must be trained using batched input.");
+            if (input.Rank != 2)
+                throw new ArgumentException("Models having BatchNorm layers must be trained using batched input (batch, features)");
 
-            int batch_size = input.Height;
+            int batch_size = input.Size(-2);
 
             // When training (only on mini-batch training), we cache the values for backprop also
             var mu_B = Tensor.Mean(input, 0); // mini-batch means      [features_mean]
@@ -65,17 +78,19 @@ namespace DeepUnity
             // input [batch, features]  - muB or varB [features] -> need expand on axis 0 by batch
 
             // normalize and cache
-            xCentered = input - Tensor.Expand(Tensor.Unsqueeze(mu_B, 0), 0, batch_size);
-            std = Tensor.Sqrt(var_B + Utils.EPSILON);
-            std = Tensor.Expand(Tensor.Unsqueeze(std, 0), 0, batch_size);
+            mu_B.Unsqueeze(0);
+            xCentered = input - Tensor.Expand(mu_B, 0, batch_size);
+            std = Tensor.Sqrt(var_B + Utils.EPSILON).Unsqueeze(0);
+            std = Tensor.Expand(std, 0, batch_size);
             xHat = xCentered / std;
 
             // scale and shift
             var yB = Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size) * xHat + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
 
-            
+
 
             // compute running mean and var
+            mu_B.Squeeze(0);
             runningMean = runningMean * momentum + mu_B * (1f - momentum);
             runningVar = runningVar * momentum + var_B * (1f - momentum);
 
@@ -84,7 +99,7 @@ namespace DeepUnity
         }
         public Tensor Backward(Tensor dLdY)
         {
-            int m = dLdY.Height;
+            int m = dLdY.Size(-2);
 
             // paper algorithm https://arxiv.org/pdf/1502.03167.pdf
 
@@ -112,13 +127,6 @@ namespace DeepUnity
             return dLdX;
         }
 
-        protected static bool IsBatchedInput(Tensor input)
-        {
-            if (input.Rank == 2)
-                return true;
-
-            return false;
-        }
 
 
         // TIPS for improvement

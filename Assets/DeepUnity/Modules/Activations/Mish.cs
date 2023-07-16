@@ -5,19 +5,18 @@ namespace DeepUnity
     [Serializable]
     public class Mish : ActivationBase
     {
-        protected override void Activation(ref Tensor x)
+        protected override Tensor Activation(Tensor x)
         {
-            x = x.Select(x =>
+            return x.Select(x => 
             {
                 float exp = MathF.Exp(x);
                 float mish = x * MathF.Tanh(MathF.Log(1f + exp));
                 return mish;
             });
         }
-
-        protected override void Derivative(ref Tensor x)
+        protected override Tensor Derivative(Tensor x)
         {
-            x = x.Select(x =>
+            return x.Select(x =>
             {
                 float exp = MathF.Exp(x);
                 float sech = 1f / MathF.Cosh(MathF.Log(1f + exp));

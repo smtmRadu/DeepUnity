@@ -1,7 +1,5 @@
 using UnityEngine;
 using DeepUnity;
-using System;
-using System.Collections.Generic;
 
 namespace kbRadu
 {
@@ -13,6 +11,19 @@ namespace kbRadu
 
         private void Start()
         {
+            // Dictionary<Tensor, Tensor> train;
+            // Dictionary<Tensor, Tensor> test;
+            // Datasets.MNIST(out train, out test);
+
+            // TensorGPU x = TensorGPU.Arange(0, 100, 1).Reshape(10, 10);
+            // print(x);
+            // print(TensorGPU.Sum(x, 1));
+            // 
+            // Tensor y = Tensor.Arange(0, 100, 1).Reshape(10, 10);
+            // print(y);
+            // print(Tensor.Sum(y, 1));
+
+            // Datasets.SerializeMNIST();
             //Test_TensorOperaitons();
             //Test_MatMul();
             //Benchmark_Matmul_time();

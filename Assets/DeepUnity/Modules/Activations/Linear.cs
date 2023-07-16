@@ -5,8 +5,8 @@ namespace DeepUnity
     [Serializable]
     public class Linear : ActivationBase
     {
-        protected override void Activation(ref Tensor x) { }
-        protected override void Derivative(ref Tensor x) { }
+        protected override Tensor Activation(Tensor x) => x;
+        protected override Tensor Derivative(Tensor y) => y;
     }
 
 }
