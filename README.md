@@ -1,7 +1,7 @@
 # DeepUnity
 
 # **[In Development]**
-##### For now all modules are functional for sequencial modules and tested. RL is still in testing.
+##### For now all modules are functional and tested (but Conv2D) for sequencial modules. RL is still in testing.
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU support] and deep neural networks, along with reinforcement learning tools.
 
@@ -32,7 +32,7 @@ public class Tutorial : MonoBehaviour
         {
             network = new Sequential(
                 new Dense(2, 64),
-                new TanH(),
+                new Tanh(),
                 new Dense(64, 64),                
                 new ReLU(),
                 new Dense(64, 1));

@@ -20,8 +20,8 @@ namespace DeepUnity
         private Tensor xHat { get; set; }
         private Tensor std { get; set; }
 
-        [SerializeField] private int[] input_shape;
-        [SerializeField] private float momentum;
+        [SerializeField] private int[] inputShape;
+        [SerializeField] private float momentum = 0.1f;
         //[SerializeField] private int step;
 
         // Learnable parameters
@@ -35,20 +35,19 @@ namespace DeepUnity
         /// Output: (Batch, *)     <br />
         /// </summary>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
-        public LayerNorm(int[] input_shape, float momentum = 0.9f)
+        public LayerNorm(params int[] input_shape) : base(Device.CPU)
         {
             gamma = Tensor.Ones(1);
             beta = Tensor.Zeros(1);
 
-            gradGamma = Tensor.Zeros(1);
-            gradBeta = Tensor.Zeros(1);
+            gammaGrad = Tensor.Zeros(1);
+            betaGrad = Tensor.Zeros(1);
 
             runningMean = Tensor.Zeros(1);
             runningVar = Tensor.Ones(1);
 
             // step = 0;
-            this.input_shape = input_shape.ToArray();
-            this.momentum = momentum;
+            this.inputShape = input_shape.ToArray();
         }
         public Tensor Predict(Tensor input)
         {
@@ -60,7 +59,7 @@ namespace DeepUnity
 
         public Tensor Forward(Tensor input)
         {
-            bool isBatched = input.Rank > input_shape.Rank;
+            bool isBatched = input.Rank > inputShape.Rank;
             int batch_size = isBatched? input.Size(0) : 1;
             int num_features = input.Size(-1);
 
@@ -99,7 +98,7 @@ namespace DeepUnity
         }
         public Tensor Backward(Tensor dLdY)
         {
-            bool isBatched = dLdY.Rank > input_shape.Rank;
+            bool isBatched = dLdY.Rank > inputShape.Rank;
             int m = isBatched ? dLdY.Size(0) : 1;
 
             var dLdxHat = dLdY * gamma[0];
@@ -122,8 +121,8 @@ namespace DeepUnity
             float dLdGamma_across_batch = isBatched ? Tensor.Mean(dLdGamma, 0)[0] : dLdGamma[0];
             float dLdBeta_across_batch = isBatched ? Tensor.Mean(dLdBeta, 0)[0] : dLdBeta[0];
 
-            gradGamma += dLdGamma_across_batch;
-            gradBeta += dLdBeta_across_batch;
+            gammaGrad += dLdGamma_across_batch;
+            betaGrad += dLdBeta_across_batch;
 
             return dLdX;
         }

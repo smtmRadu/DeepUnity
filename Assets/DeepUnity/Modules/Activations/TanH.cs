@@ -3,7 +3,7 @@ using System;
 namespace DeepUnity
 {
     [Serializable]
-    public class TanH : ActivationBase
+    public class Tanh : ActivationBase
     {
         protected override Tensor Activation(Tensor x)
         {

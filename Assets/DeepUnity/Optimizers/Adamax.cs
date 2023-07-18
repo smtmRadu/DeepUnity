@@ -70,13 +70,13 @@ namespace DeepUnity
 
                 // Weight decay is not applied on biases
                 if (weightDecay != 0)                
-                    P.gradGamma = P.gradGamma + weightDecay * P.gamma;
+                    P.gammaGrad = P.gammaGrad + weightDecay * P.gamma;
 
-                mGamma[i] = beta1 * mGamma[i] + (1f - beta1) * P.gradGamma;
-                mBeta[i] = beta1 * mBeta[i] + (1f - beta1) * P.gradBeta;
+                mGamma[i] = beta1 * mGamma[i] + (1f - beta1) * P.gammaGrad;
+                mBeta[i] = beta1 * mBeta[i] + (1f - beta1) * P.betaGrad;
 
-                uGamma[i] = Tensor.Maximum(beta2 * uGamma[i], Tensor.Abs(P.gradGamma) + Utils.EPSILON);
-                uBeta[i] = Tensor.Maximum(beta2 * uBeta[i], Tensor.Abs(P.gradBeta) + Utils.EPSILON);
+                uGamma[i] = Tensor.Maximum(beta2 * uGamma[i], Tensor.Abs(P.gammaGrad) + Utils.EPSILON);
+                uBeta[i] = Tensor.Maximum(beta2 * uBeta[i], Tensor.Abs(P.betaGrad) + Utils.EPSILON);
 
                 P.gamma = P.gamma - learningRate * mGamma[i] / ((1f - MathF.Pow(beta1, t)) * uGamma[i]);
                 P.beta = P.beta - learningRate * mBeta[i] / ((1f - MathF.Pow(beta1, t)) * uBeta[i]);

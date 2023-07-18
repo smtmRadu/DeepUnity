@@ -53,11 +53,6 @@ namespace DeepUnity
         {
             Instance.agents[agent] = true;
         }
-
-
-
-
-
         private void Train()
         {
 
@@ -70,7 +65,7 @@ namespace DeepUnity
                 AdvantageEstimate(agent.Trajectory);
 
 
-                // Unzip the memory
+                // Unzip the trajectory
                 List<Tensor> states = agent.Trajectory.states;
                 List<Tensor> continuousActions = agent.Trajectory.continuous_actions;
                 List<Tensor> discreteActions = agent.Trajectory.discrete_actions;
@@ -81,8 +76,9 @@ namespace DeepUnity
                 List<Tensor> advantages = agent.Trajectory.advantages;
                 List<Tensor> returns = agent.Trajectory.returns;
 
+                
 
-                Utils.DebugInFile(agent.Trajectory.ToString());
+                // Utils.DebugInFile(agent.Trajectory.ToString());
 
                 // STEP Norm advantages
                 int n = advantages.Count;
@@ -90,7 +86,6 @@ namespace DeepUnity
                 float var = advantages.Sum(x => (x[0] - mean) * (x[0] - mean) / (n - 1));
                 float std = MathF.Sqrt(var);
                 advantages = advantages.Select(x => (x[0] - mean) / (std + Utils.EPSILON)).Select(x => Tensor.Constant(x)).ToList();
-                
                 
 
                 int noBatches = (int)(hp.bufferSize / (float)hp.batchSize);
@@ -109,16 +104,16 @@ namespace DeepUnity
 
                     for (int b = 0; b < M; b++)
                     { 
-                        Tensor states_batch = Tensor.Concat(null, states_batches[b]);
-                        Tensor advantages_batch = Tensor.Concat(null, advantages_batches[b]);
-                        Tensor returns_batch = Tensor.Concat(null, returns_batches[b]);
+                        Tensor states_batch = Tensor.Cat(null, states_batches[b]);
+                        Tensor advantages_batch = Tensor.Cat(null, advantages_batches[b]);
+                        Tensor returns_batch = Tensor.Cat(null, returns_batches[b]);
 
                         UpdateCritic(states_batch, returns_batch);
                         UpdateContinuousNetwork(
                                 states_batch,
                                 advantages_batch,
-                                Tensor.Concat(null, cont_act_batches[b]),
-                                Tensor.Concat(null, cont_log_probs_batches[b]));
+                                Tensor.Cat(null, cont_act_batches[b]),
+                                Tensor.Cat(null, cont_log_probs_batches[b]));
 
                     }
                    
@@ -133,8 +128,8 @@ namespace DeepUnity
                     }
                 }
 
-
                 agent.Trajectory.Reset();
+
             }
 
 
@@ -145,13 +140,13 @@ namespace DeepUnity
                 agents[key] = false;
             }
 
-            // ac.Save();
+            ac.Save();
         }
 
         private void UpdateCritic(Tensor states_batch, Tensor returns_batch)
         {
             Tensor values = ac.critic.Forward(states_batch);
-            Tensor dLdV = 2f * (values - returns_batch); // derivative of MSE
+            Tensor dLdV = 2f * (values - returns_batch);
 
             ac.criticOptimizer.ZeroGrad();
             ac.critic.Backward(dLdV);
@@ -159,8 +154,8 @@ namespace DeepUnity
             ac.criticOptimizer.Step();
 
 
-            float error = Metrics.Accuracy(values, returns_batch);
-            print($"Critic Accuracy {error * 100f}%");
+            // float error = Metrics.Accuracy(values, returns_batch);
+            // print($"Critic Accuracy {error * 100f}%");
         }
 
         private void UpdateContinuousNetwork(Tensor states, Tensor advantages, Tensor oldActions, Tensor oldLogProbs)
@@ -214,56 +209,64 @@ namespace DeepUnity
 
 
             // d-LClip / dPi[a,s]
-            Tensor dmLdPI = -1f * (dMindX * advantages + dMindY * advantages * dClipdX) * 1f / PIold;
+            Tensor dmLdPi = -1f * (dMindX * advantages + dMindY * advantages * dClipdX) * 1f / PIold;
 
-            // Entropy (no need for continuous actions space)
-            // Tensor entropy = Tensor.Log(MathF.Sqrt(2f * MathF.PI * MathF.E) * sigma);
-            // lClipLoss -= entropy * beta;
+            // Entropy 
+            Tensor entropy = Tensor.Log(MathF.Sqrt(2f * MathF.PI * MathF.E) * sigma);
+            dmLdPi -= entropy * hp.beta;
 
             // d PI[a,t] / d Mu
             Tensor dPidMu = Tensor.Exp(newLogProbs) * (oldActions - mu) / (sigma * sigma);
-            Tensor dLdMu = dmLdPI * dPidMu;
+            Tensor dLdMu = dmLdPi * dPidMu;
 
             ac.muHeadOptimizer.ZeroGrad();
             ac.muHead.Backward(dLdMu);
-            //ac.muHeadOptimizer.ClipGradNorm(0.5f);
+            // ac.muHeadOptimizer.ClipGradNorm(0.5f);
             ac.muHeadOptimizer.Step();
 
 
             // d Pi[a,t] / d Sigma
-            // Tensor dPidSigma = ((actions - mu) * (actions - mu) - sigma * sigma) / Tensor.Pow(sigma, 3f);
-            // Tensor sigmaLoss = dmLdPi * dPidSigma;
-            // 
-            // net.sigmaHeadOptimizer.ZeroGrad();
-            // net.sigmaHead.Backward(sigmaLoss);
-            // net.sigmaHeadOptimizer.Step();
+            Tensor dPidSigma = ((oldActions - mu) * (oldActions - mu) - sigma * sigma) / Tensor.Pow(sigma, 3f);
+            Tensor dLdSigma = dmLdPi * dPidSigma;
+            
+            ac.sigmaHeadOptimizer.ZeroGrad();
+            ac.sigmaHead.Backward(dLdSigma);
+            // ac.sigmaHeadOptimizer.ClipGradNorm(0.5f);
+            ac.sigmaHeadOptimizer.Step();
 
             // Test KL
         }
 
         public void AdvantageEstimate(TrajectoryBuffer trajectory)
         {
-            // as described in the paper
             int T = trajectory.Count;
             for (int timestep = 0; timestep < T; timestep++)
             {
                 float discount = 1f;
                 Tensor v_t = Tensor.Constant(0);
 
-                for(int t = timestep; t < T; t++)
+                
+                for (int t = timestep; t < T; t++)
                 {       
                     v_t += discount * trajectory.rewards[t];
                     discount *= hp.gamma;
 
+                    // if(t - timestep == hp.horizon) goto save v_t and a_t
                 }
-                // horizon ommited for now
 
-                if(trajectory.reachedTerminalState == false)
+                // If the trajectory terminated due to the maximal trajectory length T being reached,
+                // Vwold(st + n) denotes the state value associated with state st+n as predicted by the state value network
+
+                // Otherwise, Vwold(st + n) is set to 0, since this condition indicates that the agent reached a terminal
+                // state within its environment from where onward no future rewards could be accumulated any longer.
+                if (trajectory.reachedTerminalState == false)
                 {
                     v_t += discount * trajectory.values[T - 1];
 
-                    // else Vwold(state[t + n]) = 0
+                    
                 }
+                // else Vwold(state[t + n]) = 0
+
 
                 Tensor a_t = v_t - trajectory.values[timestep];
 

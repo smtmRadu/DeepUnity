@@ -2,7 +2,7 @@ using System;
 
 namespace DeepUnity
 {
-    public delegate Tensor ILoss(Tensor predictions, Tensor targets);
+
 
     /// <summary>
     /// Computes the derivative of the loss function w.r.t output. The value returned can be directly backpropagated.
@@ -10,10 +10,10 @@ namespace DeepUnity
     public static class Loss
     {
         // Derivatives
-        public static Tensor MSE(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => 2f * (p - t));
-        public static Tensor MAE(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => p - t > 0 ? 1f : -1f);
-        public static Tensor CrossEntropy(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => (t - p) / (p * (p - 1f) + Utils.EPSILON));
-        public static Tensor HingeEmbedded(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => 1f - p * t > 0f ? -t : 0f);
+        public static Tensor MSEDerivative(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => 2f * (p - t));
+        public static Tensor MAEDerivative(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => p - t > 0 ? 1f : -1f);
+        public static Tensor CrossEntropyDerivative(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => (t - p) / (p * (p - 1f) + Utils.EPSILON));
+        public static Tensor HingeEmbeddedDerivative(Tensor predicts, Tensor targets) => predicts.Zip(targets, (p, t) => 1f - p * t > 0f ? -t : 0f);
 
     }
     /// <summary>

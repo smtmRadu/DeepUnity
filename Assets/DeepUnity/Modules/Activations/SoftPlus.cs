@@ -4,10 +4,10 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class SoftPlus : ActivationBase
+    public class Softplus : ActivationBase
     {
         [SerializeField] private float beta = 1f;
-        public SoftPlus(float beta = 1f) => this.beta = beta;
+        public Softplus(float beta = 1f) => this.beta = beta;
         protected override Tensor Activation(Tensor x)
         {
             return x.Select(x =>

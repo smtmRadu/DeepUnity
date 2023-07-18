@@ -12,7 +12,7 @@ namespace DeepUnity
         public const float EPSILON = 1e-8f;
         private static System.Random RNG = new System.Random(DateTime.Now.Millisecond);
 
-        public static T[] Shuffle<T>(T[] collection)
+        public static void Shuffle<T>(T[] collection)
         {
             lock (RNG)
             {
@@ -24,10 +24,8 @@ namespace DeepUnity
                     collection[r] = temp;
                 }
             }
-
-            return collection;
         }
-        public static List<T> Shuffle<T>(List<T> collection)
+        public static void Shuffle<T>(List<T> collection)
         {
             lock (RNG)
             {
@@ -39,8 +37,6 @@ namespace DeepUnity
                     collection[r] = temp;
                 }
             }
-
-            return collection;
         }
         public static bool IsValueIn<T>(T value, IEnumerable<T> collection)
         {

@@ -2,7 +2,7 @@ using System;
 namespace DeepUnity
 {
     [Serializable]
-    public class SoftMax : ActivationBase
+    public class Softmax : ActivationBase
     {
         protected override Tensor Activation(Tensor x)
         {

@@ -42,14 +42,14 @@ namespace DeepUnity
 
                     if (weightDecay != 0f)
                     {
-                        P.gradGamma = P.gradGamma + weightDecay * P.gradGamma;
+                        P.gammaGrad = P.gammaGrad + weightDecay * P.gammaGrad;
                     }
 
-                    statesum_W[i] = statesum_W[i] + Tensor.Pow(P.gradGamma, 2f);
-                    statesum_B[i] = statesum_B[i] + Tensor.Pow(P.gradBeta, 2f);
+                    statesum_W[i] = statesum_W[i] + Tensor.Pow(P.gammaGrad, 2f);
+                    statesum_B[i] = statesum_B[i] + Tensor.Pow(P.betaGrad, 2f);
 
-                    P.gamma = P.gamma - gammaBar * (P.gradGamma / (Tensor.Sqrt(statesum_W[i]) + 1e-10f));
-                    P.beta = P.beta - gammaBar * (P.gradBeta / (Tensor.Sqrt(statesum_B[i]) + 1e-10f));
+                    P.gamma = P.gamma - gammaBar * (P.gammaGrad / (Tensor.Sqrt(statesum_W[i]) + 1e-10f));
+                    P.beta = P.beta - gammaBar * (P.betaGrad / (Tensor.Sqrt(statesum_B[i]) + 1e-10f));
                 }
             });
 

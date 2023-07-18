@@ -9,57 +9,47 @@ namespace DeepUnity
     public static class Datasets
     {
         /// <summary>
-        /// dict.Item1 = Input image converted to Tensor(28,28) <br></br>
-        /// dict.Item2 = Prection converted to Tensor(10)
+        /// Item1 = input: Tensor(1,28,28)<br />
+        /// Item2 = target: Tensor(10) -> onehot encoding<br />
         /// </summary>
+        /// <param name="path"></param>
         /// <param name="train"></param>
         /// <param name="test"></param>
- 	    public static void MNIST(out Dictionary<Tensor, Tensor> train, out Dictionary<Tensor, Tensor> test)
+        public static void MNIST(string path, out List<(Tensor, Tensor)> train, out List<(Tensor, Tensor)> test)
         {
             train = new();
             test = new();
 
-            string path_to_deserialize = "Assets/DeepUnity/Datasets/";
 
 
-            string json_train_image = File.ReadAllText(path_to_deserialize + "train_image.txt");
-            string json_train_label = File.ReadAllText(path_to_deserialize + "train_label.txt");
-            string json_test_image = File.ReadAllText(path_to_deserialize + "test_image.txt");
-            string json_test_label = File.ReadAllText(path_to_deserialize + "test_label.txt");
-
-            List<Tensor> collect_train_image = JsonUtility.FromJson<TensorCollection>(json_train_image).ToList();
-            List<Tensor> collect_train_label = JsonUtility.FromJson<TensorCollection>(json_train_label).ToList();
-            List<Tensor> collect_test_label = JsonUtility.FromJson<TensorCollection>(json_test_image).ToList();
-            List<Tensor> collect_test_image = JsonUtility.FromJson<TensorCollection>(json_test_label).ToList();
-
-            for (int i = 0; i < collect_train_image.Count; i++)
-            {
-                train.Add(collect_train_image[i], collect_train_label[i]);
-            }
-
-            for (int i = 0; i < collect_test_image.Count; i++)
-            {
-                train.Add(collect_test_image[i], collect_test_label[i]);
-            }
-
-        }
-        public static void MNIST(out List<(Tensor, Tensor)> train, out List<(Tensor, Tensor)> test)
-        {
-            train = new();
-            test = new();
-
-            string path_to_deserialize = "Assets/DeepUnity/Datasets/MNIST/";
-
-
-            string json_train_image = File.ReadAllText(path_to_deserialize + "train_image.txt");
-            string json_train_label = File.ReadAllText(path_to_deserialize + "train_label.txt");
-            string json_test_image = File.ReadAllText(path_to_deserialize + "test_image.txt");
-            string json_test_label = File.ReadAllText(path_to_deserialize + "test_label.txt");
+            string json_train_image = File.ReadAllText(path + "train_image.txt");
+            string json_train_label = File.ReadAllText(path + "train_label.txt");
+            string json_test_image = File.ReadAllText(path + "test_image.txt");
+            string json_test_label = File.ReadAllText(path + "test_label.txt");
 
             List<Tensor> collect_train_image = JsonUtility.FromJson<TensorCollection>(json_train_image).ToList();
             List<Tensor> collect_train_label = JsonUtility.FromJson<TensorCollection>(json_train_label).ToList();
-            List<Tensor> collect_test_label = JsonUtility.FromJson<TensorCollection>(json_test_image).ToList();
-            List<Tensor> collect_test_image = JsonUtility.FromJson<TensorCollection>(json_test_label).ToList();
+            List<Tensor> collect_test_image = JsonUtility.FromJson<TensorCollection>(json_test_image).ToList();
+            List<Tensor> collect_test_label = JsonUtility.FromJson<TensorCollection>(json_test_label).ToList();
+            
+
+
+            // Debug.Log(collect_train_image.Count());
+            // Debug.Log(collect_train_image.Count(x => x.Shape.SequenceEqual(new int[] { 1, 28, 28 })));
+            // Debug.Log(collect_train_image.Count(x => x.Shape.SequenceEqual(new int[] { 10 })));
+            // 
+            // Debug.Log(collect_test_image.Count()                                                           );
+            // Debug.Log(collect_test_image.Count(x => x.Shape.SequenceEqual(new int[] { 1, 28, 28 }))        );
+            // Debug.Log(collect_test_image.Count(x => x.Shape.SequenceEqual(new int[] { 10 }))        );
+            // 
+            // Debug.Log(collect_train_label.Count());
+            // Debug.Log(collect_train_label.Count(x => x.Shape.SequenceEqual(new int[] { 1, 28, 28 })));
+            // Debug.Log(collect_train_label.Count(x => x.Shape.SequenceEqual(new int[] { 10 })));
+            // 
+            // Debug.Log(collect_test_label.Count());
+            // Debug.Log(collect_test_label.Count(x => x.Shape.SequenceEqual(new int[] { 1, 28, 28 })));
+            // Debug.Log(collect_test_label.Count(x => x.Shape.SequenceEqual(new int[] { 10 })));
+
 
             for (int i = 0; i < collect_train_image.Count; i++)
             {
@@ -71,14 +61,9 @@ namespace DeepUnity
                 train.Add((collect_test_image[i], collect_test_label[i]));
             }
         }
-
-
-
-
-
         private static void SerializeMNIST()
         {
-            Timer.Start();
+            TimerX.Start();
             string trainPath = "C:\\Users\\radup\\OneDrive\\Desktop\\TRAIN\\";
             string testPath = "C:\\Users\\radup\\OneDrive\\Desktop\\TEST\\";
 
@@ -162,7 +147,7 @@ namespace DeepUnity
             test_l.Close();
 
             Debug.Log("MNIST Serialized");
-            Timer.Stop();
+            TimerX.Stop();
         }
         private static Texture2D LoadTexture(string filePath)
         {

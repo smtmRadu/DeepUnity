@@ -8,7 +8,7 @@ namespace DeepUnity
     public class AvgPool2D : IModule
     {
 
-        private Tensor Input_Cache { get; set; }
+        private Tensor InputCache { get; set; }
 
         [SerializeField] private int kernel_size;
         [SerializeField] private int padding;
@@ -77,7 +77,7 @@ namespace DeepUnity
         }
         public Tensor Forward(Tensor input)
         {
-            Input_Cache = Tensor.Identity(input);
+            InputCache = Tensor.Identity(input);
 
             int Wout = (int)Math.Floor((input.Size(-1) + 2 * padding) / (float)kernel_size + 1f);
             int Hout = (int)Math.Floor((input.Size(-2) + 2 * padding) / (float)kernel_size + 1f);

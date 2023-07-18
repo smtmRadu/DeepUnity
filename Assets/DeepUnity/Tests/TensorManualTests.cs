@@ -1,5 +1,8 @@
 using UnityEngine;
 using DeepUnity;
+using Unity.VisualScripting;
+using System.Runtime.Remoting.Channels;
+using System.Threading.Tasks;
 
 namespace kbRadu
 {
@@ -11,39 +14,75 @@ namespace kbRadu
 
         private void Start()
         {
-            Tensor x = Tensor.Arange(0, 100, 1).Reshape(10, 10);
-            Tensor y = Tensor.Arange(0, 100, 1).Reshape(10, 10);
-            Tensor z = Tensor.Arange(0, 100, 1).Reshape(10, 10);
-            // print(x);
-            // print(y);
-            // print(z);
-            print(Tensor.Sum(x, 0));
-            print(Tensor.Sum(x, 1));
-            print(Tensor.Sum(x, 0, true));
-            print(Tensor.Sum(x, 1, true));
-            print(Tensor.Sum(x, -2, true).Expand(-2, x.Size(-2)));
-            print(Tensor.Sum(x, -1, true).Expand(-1, x.Size(-1)));
-            // Dictionary<Tensor, Tensor> train;
-            // Dictionary<Tensor, Tensor> test;
-            // Datasets.MNIST(out train, out test);
-
-            // TensorGPU x = TensorGPU.Arange(0, 100, 1).Reshape(10, 10);
-            // print(x);
-            // print(TensorGPU.Sum(x, 1));
-            // 
-            // Tensor y = Tensor.Arange(0, 100, 1).Reshape(10, 10);
-            // print(y);
-            // print(Tensor.Sum(y, 1));
-
-            // Datasets.SerializeMNIST();
-            //Test_TensorOperaitons();
-            //Test_MatMul();
-            //Benchmark_Matmul_time();
-            //Benchmark_TensorGPUTime();
-            //Matmul_Tensor_vs_TensorGPU();
-            //Matmul_Tensor_cpu_vs_gpu();
+            TensorGPU x = TensorGPU.Random01(5, 2);
+            print(x);
+            print(TensorGPU.Transpose(x, 0, 1));
         }
 
+        void TestConv2d()
+        {
+            Conv2D conv2d = new Conv2D((1, 28, 28), 5, 3);
+
+            Tensor input = Tensor.Random01(1, 1, 28, 28);
+
+            for (int i = 0; i < Runs; i++)
+            {
+                TimerX.Start();
+                var pred = conv2d.Forward(input);
+                var loss = conv2d.Backward(pred);
+                print(input.Shape.ToCommaSeparatedString());
+                print(pred.Shape.ToCommaSeparatedString());
+                print(loss.Shape.ToCommaSeparatedString());
+                TimerX.Stop();
+            }
+
+        }
+        void TestRot180d()
+        {
+            Tensor kernels = Tensor.Random01(64, 1, 3, 3);
+            int outChannels = kernels.Size(-4);
+            int inChannels = kernels.Size(-3);
+            int kernelSize = kernels.Size(-1);
+            Tensor rot180dKernels = Tensor.Zeros(kernels.Shape);
+            TimerX.Start();
+            for (int i = 0; i < Runs; i++)
+            {
+                for (int oc = 0; oc < outChannels; oc++)
+                {
+                    for (int ic = 0; ic < inChannels; ic++)
+                    {
+                        for (int h = 0; h < kernelSize; h++)
+                        {
+                            for (int w = 0; w < kernelSize; w++)
+                            {
+                                rot180dKernels[oc, ic, kernelSize - h - 1, kernelSize - w - 1] = kernels[oc, ic, h, w];
+                            }
+                        }
+                    }
+                }
+            }
+            // for (int i = 0; i < Runs; i++)
+            // {
+            //     Parallel.For(0, outChannels, oc =>
+            //     {
+            //         for (int ic = 0; ic < inChannels; ic++)
+            //         {
+            //             for (int h = 0; h < kernelSize; h++)
+            //             {
+            //                 for (int w = 0; w < kernelSize; w++)
+            //                 {
+            //                     rot180dKernels[oc, ic, kernelSize - h - 1, kernelSize - w - 1] = kernels[oc, ic, h, w];
+            //                 }
+            //             }
+            //         }
+            //     });
+            // }
+            TimerX.Stop();
+            
+           
+            print(kernels);
+            print(rot180dKernels);
+        }
         void Test_MatMulUnbalanced()
         {
             Tensor x = Tensor.Random01(1, 4);
@@ -77,24 +116,24 @@ namespace kbRadu
                 var t1 = Tensor.Random01(MatShape.x, MatShape.y);
                 var t2 = Tensor.Random01(MatShape.x, MatShape.y);
 
-                Timer.Start();
+                TimerX.Start();
                 for (int i = 0; i < Runs; i++)
                 {
                     Tensor.MatMul(t1, t2);
                 }
-                Timer.Stop();
+                TimerX.Stop();
             }
             else
             {
                 var t1 = TensorGPU.Random01(MatShape.x, MatShape.y);
                 var t2 = TensorGPU.Random01(MatShape.x, MatShape.y);
 
-                Timer.Start();
+                TimerX.Start();
                 for (int i = 0; i < Runs; i++)
                 {
                     TensorGPU.MatMul(t1, t2);
                 }
-                Timer.Stop();
+                TimerX.Stop();
             }
 
         }
@@ -104,12 +143,12 @@ namespace kbRadu
             var t2 = TensorGPU.Random01(MatShape.x, MatShape.y);
            
             
-            Timer.Start();
+            TimerX.Start();
             for (int i = 0; i < Runs; i++)
             {
                 TensorGPU.MatMul(t1, t2);
             }
-            Timer.Stop();
+            TimerX.Stop();
 
         }
         void StdTest()
@@ -127,7 +166,6 @@ namespace kbRadu
 
             print(rn.Standardise(Tensor.Random01(10)));
         }
-
         void Test_TensorOperaitons()
         {
             Tensor x = Tensor.Random01(10, 10);

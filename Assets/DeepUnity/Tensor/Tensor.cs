@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.Windows;
 
 namespace DeepUnity
 {
@@ -523,9 +524,9 @@ namespace DeepUnity
                                  sum += left[n, m] * right[m, p];
                              }
                              result[n, p] = sum;
-                         }
-                            
+                         }                         
                     });
+
                 else // base matmul operation
                     Parallel.For(0, N, n =>
                     {
@@ -753,178 +754,144 @@ namespace DeepUnity
 
 
             return MatPad(result, padding - 1, paddingMode);
-        }
+        }     
         /// <summary>
-        /// Perform cross-correlation. <br />
-        /// The output has the same number of channels as the kernels.
+        /// Performs 2D cross-correlation. Inputs must have the same number of dimensions.
         /// </summary>
-        /// <param name="inputs"> (batch, input_channels, height, width]</param>
-        /// <param name="kernels">(output_channels, input_channels, height, width]</param>
-        public static Tensor Correlate2D(Tensor inputs, Tensor kernels, CorrelationMode correlationType)
-        {
-            Tensor output = null;
-
-            // Output shape : [batch, kern.batch, *W, *H] 
-
-            int outputChannels = kernels.Batch;
-            int inputChannels = kernels.Channels;
-
-            int batchSize = inputs.Batch;
-            int inputHeight = inputs.Height;
-            int inputWidth = inputs.Width;
-            int kernelHeight = kernels.Height;
-            int kernelWidth = kernels.Width;
-
-            if (correlationType == CorrelationMode.Valid)
-            {
-
-
-                int outputHeight = inputHeight - kernelHeight + 1;
-                int outputWidth = inputWidth - kernelWidth + 1;
-
-
-                output = Zeros(batchSize, outputChannels, outputHeight, outputWidth);
-
-                Parallel.For(0, batchSize, b =>
-                {
-                    for (int oc = 0; oc < outputChannels; oc++)
-                    {
-                        for (int ic = 0; ic < inputChannels; ic++)
-                        {
-                            for (int h = 0; h < outputHeight; h++)
-                            {
-                                for (int w = 0; w < outputWidth; w++)
-                                {
-                                    float sum = 0f;
-
-                                    for (int j = 0; j < kernelHeight; j++)
-                                    {
-                                        for (int i = 0; i < kernelWidth; i++)
-                                        {
-                                            sum += inputs[b, ic, h + j, w + i] * kernels[oc, ic, j, i];
-                                        }
-                                    }
-
-                                    output[b, oc, h, w] = sum;
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-            else if (correlationType == CorrelationMode.Full)
-            {
-                int outputHeight = inputHeight + kernelHeight - 1;
-                int outputWidth = inputWidth + kernelWidth - 1;
-
-                output = Zeros(batchSize, outputChannels, outputHeight, outputWidth);
-
-                Parallel.For(0, batchSize, b =>
-                {
-                    for (int oc = 0; oc < outputChannels; oc++)
-                    {
-                        for (int ic = 0; ic < inputChannels; ic++)
-                        {
-                            for (int h = 0; h < outputHeight; h++)
-                            {
-                                for (int w = 0; w < outputWidth; w++)
-                                {
-                                    float sum = 0f;
-
-                                    for (int j = 0; j < kernelHeight; j++)
-                                    {
-                                        for (int i = 0; i < kernelWidth; i++)
-                                        {
-                                            int inputRow = h - j;
-                                            int inputCol = w - i;
-
-                                            if (inputRow >= 0 && inputRow < inputHeight && inputCol >= 0 && inputCol < inputWidth)
-                                            {
-                                                sum += inputs[b, ic, inputRow, inputCol] * kernels[oc, ic, j, i];
-                                            }
-                                        }
-                                    }
-
-                                    output[b, oc, h, w] = sum;
-                                }
-                            }
-                        }
-                    }
-                });
-
-            }
-            else if (correlationType == CorrelationMode.Same)
-            {
-                int outputHeight = inputHeight;
-                int outputWidth = inputWidth;
-
-                int paddingHeight = (kernelHeight - 1) / 2;
-                int paddingWidth = (kernelWidth - 1) / 2;
-
-                output = Zeros(batchSize, outputChannels, outputHeight, outputWidth);
-
-                Parallel.For(0, batchSize, b =>
-                {
-                    for (int oc = 0; oc < outputChannels; oc++)
-                    {
-                        for (int ic = 0; ic < inputChannels; ic++)
-                        {
-                            for (int h = 0; h < outputHeight; h++)
-                            {
-                                for (int w = 0; w < outputWidth; w++)
-                                {
-                                    float sum = 0f;
-
-                                    for (int j = 0; j < kernelHeight; j++)
-                                    {
-                                        for (int i = 0; i < kernelWidth; i++)
-                                        {
-                                            int inputRow = h + j - paddingHeight;
-                                            int inputCol = w + i - paddingWidth;
-
-                                            if (inputRow >= 0 && inputRow < inputHeight && inputCol >= 0 && inputCol < inputWidth)
-                                            {
-                                                sum += inputs[b, ic, inputRow, inputCol] * kernels[oc, ic, j, i];
-                                            }
-                                        }
-                                    }
-
-                                    output[b, oc, h, w] = sum;
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            return output;
-        }
-        /// <summary>
-        /// Perform convolution between a batch of channeled input images and a channeled kernel. <br />
-        /// Tensor channels and kernel channels MUST match. Kernel is rotated by 180d, then the method returns corr2D between tensor input and rotated kernel. <br />
-        /// </summary>
-        /// <param name="inputs"> (batch, channels, height, width]</param>
-        /// <param name="kernels">(channels, height, width]</param>
+        /// <param name="input1"></param>
+        /// <param name="input2"></param>
+        /// <param name="mode"></param>
         /// <returns></returns>
-        public static Tensor Convolve2D(Tensor inputs, Tensor kernels, CorrelationMode correlationType)
+        /// <exception cref="ArgumentException"></exception>
+        public static Tensor Correlate2D(Tensor input1, Tensor input2, CorrelationMode mode)
         {
-            // Rotate kernel by 180d
-            int height = kernels.Height;
-            int width = kernels.Width;
-            Tensor rot180Kernel = new(kernels.shape);
+            if (input1.Rank != input2.Rank && input1.Rank != 2)
+                throw new ArgumentException($"Input1({input1.shape.ToCommaSeparatedString()}) and input2({input2.shape.ToCommaSeparatedString()}) must have rank 2.");
 
-            for (int c = 0; c < kernels.Channels; c++)
+            Tensor result = null;
+
+            int h1 = input1.Height;
+            int w1 = input1.Width;
+            int h2 = input2.Height; 
+            int w2 = input2.Width;
+            if(mode == CorrelationMode.Valid)
             {
-                for (int h = 0; h < height; h++)
+                int output_height = h1 - h2 + 1;
+                int output_width = w1 - w2 + 1;
+                result = Zeros(output_height, output_width);
+
+                for (int h = 0; h < output_height; h++)
                 {
-                    for (int w = 0; w < width; w++)
+                    for (int w = 0; w < output_width; w++)
                     {
-                        rot180Kernel[c, height - h - 1, width - w - 1] = kernels[c, h, w];
+                        float sum = 0f;
+
+                        for (int j = 0; j < h2; j++)
+                        {
+                            for (int i = 0; i < w2; i++)
+                            {
+                                sum += input1[h + j, w + i] * input2[j, i];
+                            }
+                        }
+
+                        result[h, w] = sum;
                     }
                 }
             }
+            else if(mode == CorrelationMode.Full)
+            {
+                int outputHeight = h1 + h2 - 1;
+                int outputWidth =  w1 + w2 - 1;
+                result = Zeros(outputHeight, outputWidth);
 
-            return Correlate2D(inputs, rot180Kernel, correlationType);
+                for (int h = 0; h < outputHeight; h++)
+                {
+                    for (int w = 0; w < outputWidth; w++)
+                    {
+                        float sum = 0f;
+
+                        for (int j = 0; j < h2; j++)
+                        {
+                            for (int i = 0; i < w2; i++)
+                            {
+                                int inputRow = h - j;
+                                int inputCol = w - i;
+
+                                if (inputRow >= 0 && inputRow < h1 && inputCol >= 0 && inputCol < w1)
+                                {
+                                    sum += input1[inputRow, inputCol] * input2[j, i];
+                                }
+                            }
+                        }
+
+                        result[h, w] = sum;
+                    }
+                }
+
+            }
+            else if(mode == CorrelationMode.Same)
+            {
+                int outputHeight = h1;
+                int outputWidth = w1 ;
+
+                int paddingHeight = (h2 - 1) / 2;
+                int paddingWidth = (w2 - 1) / 2;
+
+                result = Zeros(outputHeight, outputWidth);
+
+                for (int h = 0; h < outputHeight; h++)
+                {
+                    for (int w = 0; w < outputWidth; w++)
+                    {
+                        float sum = 0f;
+
+                        for (int j = 0; j < h2; j++)
+                        {
+                            for (int i = 0; i < w2; i++)
+                            {
+                                int inputRow = h + j - paddingHeight;
+                                int inputCol = w + i - paddingWidth;
+
+                                if (inputRow >= 0 && inputRow < h1 && inputCol >= 0 && inputCol < w1)
+                                {
+                                    sum += input1[inputRow, inputCol] * input2[j, i];
+                                }
+                            }
+                        }
+
+                        result[h, w] = sum;
+                    }
+                }
+            }
+            return result;
+        }
+        /// <summary>
+        /// Performs 2D cross-correlation but input2 matrix is rotated by 180 degrees. Inputs must have the same number of dimensions.
+        /// </summary>
+        /// <param name="input1"></param>
+        /// <param name="input2"></param>
+        /// <param name="mode"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        public static Tensor Convolve2D(Tensor input1, Tensor input2, CorrelationMode mode)
+        {
+            if (input1.Rank != input2.Rank && input1.Rank != 2)
+                throw new ArgumentException($"Input1({input1.shape.ToCommaSeparatedString()}) and input2({input2.shape.ToCommaSeparatedString()}) must have rank 2.");
+
+            // Rotate input2 by 180d
+            int height = input2.Height;
+            int width = input2.Width;
+            Tensor input2_rot180d = new(input2.shape);
+
+            for (int h = 0; h < height; h++)
+            {
+                for (int w = 0; w < width; w++)
+                {
+                    input2_rot180d[height - h - 1, width - w - 1] = input2[h, w];
+                }
+            }
+
+            return Correlate2D(input1, input2_rot180d, mode);
         }
         /// <summary>
         /// Computes the Element-Wise minimum.
@@ -1145,13 +1112,13 @@ namespace DeepUnity
         }
         /// <summary>
         /// All tensors must have the same shape. <br></br>
-        /// If axis == null, all tensors are unsqueezed(0). <br></br>
+        /// If <b>axis == null</b>, all tensors are Unsqueezed(0). <br></br>
         /// Example: <br></br>
-        /// Join(0, {(2,3),(2,3),(2,3),(2,3)}) => (8,3) <br></br>
-        /// Join(1, {(2,3),(2,3),(2,3),(2,3)}) => (2,12) <br></br>
-        /// Join(null, {(2,3),(2,3),(2,3),(2,3)}) => (4,2,3) <br></br>
+        /// Cat(axis: 0,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (8,3) <br></br>
+        /// Cat(axis: 1,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (2,12) <br></br>
+        /// Cat(axis: null, tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (4,2,3) <br></br>
         /// </summary>
-        public static Tensor Concat(int? axis, params Tensor[] tensors)
+        public static Tensor Cat(int? axis, params Tensor[] tensors)
         {
             if (tensors == null || tensors.Length == 0)
                 throw new ArgumentException("At least one tensor must be provided for concatenation");
@@ -1407,8 +1374,8 @@ namespace DeepUnity
         {
             HandleAxis(tensor, ref axis);
             Tensor[] slices = Split(tensor, axis, 1);
-            slices = Utils.Shuffle(slices).ToArray();
-            return Concat(axis, slices);
+            Utils.Shuffle(slices);
+            return Cat(axis, slices);
         }
         public static Tensor Sum(Tensor tensor, int axis, bool keepDim = false)
         {
@@ -2339,8 +2306,8 @@ namespace DeepUnity
         {
             HandleAxis(this, ref axis);
             Tensor[] slices = Split(axis, 1);
-            slices = Utils.Shuffle(slices).ToArray();
-            return Concat(axis, slices);
+            Utils.Shuffle(slices);
+            return Cat(axis, slices);
         }
         public Tensor Sum(int axis, bool keepDim = false)
         {

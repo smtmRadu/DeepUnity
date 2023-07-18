@@ -10,9 +10,6 @@ namespace DeepUnity
     {
         [Header("Simulation Configurations")]
 
-        [Tooltip("The fixed framerate the simulation is runned, including on usage."), ReadOnly]
-        public int targetFPS = 60;
-
         [Tooltip("Device used for computing high parallelizable operations.")]
         public Device device = Device.CPU;
 
@@ -25,7 +22,7 @@ namespace DeepUnity
         [Tooltip("The max step value determines the maximum length of an agent's episodes/trajectories. Set to a positive integer to limit the episode length to that many steps. Set to 0 for unlimited episode length.")]
         public int maxStep = 65536;
 
-        [Tooltip("Initial learning rate for gradient descent.")]
+        [Tooltip("Initial learning rate for stochastic gradient descent.")]
         public float learningRate = 3e-4f;
 
         [Tooltip("This should always be multiple times smaller than bufferSize. Typical range: (Continuous 512 - 5120) (Discrete 32 - 512)")]
@@ -40,7 +37,7 @@ namespace DeepUnity
         [ReadOnly, Tooltip("Number of hidden layers in the neural network.")]
         public int numLayers = 2;
 
-        [Tooltip("Applies linear decay on learning rate. Default step_size: 10 * . Default decay: 0.99f.")]
+        [Tooltip("Applies linear decay on learning rate (default step_size: 10, default decay: 0.99f).")]
         public bool learningRateSchedule = false;
 
         [Tooltip("Apply normalization to observation inputs and rewards, as well for the advantages.")]
@@ -48,7 +45,6 @@ namespace DeepUnity
 
         [ReadOnly, Tooltip("Display statistics of each episode in the Console.")]
         public bool verbose = false;
-
 
         [Header("PPO-specific Configurations")]
 

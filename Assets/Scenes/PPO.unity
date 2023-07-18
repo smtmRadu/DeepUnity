@@ -376,7 +376,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   name: Behaviour#1
-  model: {fileID: 11400000, guid: 8fe622e539455ed458325add597d75a9, type: 2}
+  model: {fileID: 11400000, guid: 75e0ebc978e44e346a7de31cde13e68a, type: 2}
   spaceSize: 4
   continuousActions: 2
   discreteBranches: 
@@ -396,7 +396,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5970f7530cba1f0499a4a3dbe7d27f96, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  targetFPS: 60
   device: 0
   timeHorizon: 860
   maxStep: 1000
@@ -412,7 +411,7 @@ MonoBehaviour:
   epsilon: 0.2
   gamma: 0.99
   lambda: 0.95
-  numEpoch: 100
+  numEpoch: 8
   betaScheduler: 0
   epsilonScheduler: 0
 --- !u!1 &104508117
@@ -943,7 +942,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1444833900}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 4.84}
+  m_LocalPosition: {x: 0, y: 0, z: 2.51}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

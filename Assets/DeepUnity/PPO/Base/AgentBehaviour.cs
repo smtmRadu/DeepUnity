@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
@@ -21,19 +22,20 @@ namespace DeepUnity
         [SerializeField] public Sequential sigmaHead;
         [SerializeField] public Sequential[] discreteHeads;
 
-        [NonSerialized] public Optimizer criticOptimizer;
-        [NonSerialized] public Optimizer muHeadOptimizer;
-        [NonSerialized] public Optimizer sigmaHeadOptimizer;
-        [NonSerialized] public Optimizer[] discreteHeadsOptimizers;
+        public Optimizer criticOptimizer { get; private set; }
+        public Optimizer muHeadOptimizer { get; private set; }
+        public Optimizer sigmaHeadOptimizer { get; private set; }
+        public Optimizer[] discreteHeadsOptimizers { get; private set; }
 
-        [NonSerialized] public StepLR criticScheduler;
-        [NonSerialized] public StepLR muHeadScheduler;
-        [NonSerialized] public StepLR sigmaHeadScheduler;
-        [NonSerialized] public StepLR[] discreteHeadsSchedulers;
+        public StepLR criticScheduler { get; private set; }
+        public StepLR muHeadScheduler { get; private set; }
+        public StepLR sigmaHeadScheduler { get; private set; }
+        public StepLR[] discreteHeadsSchedulers { get; private set; }
+
 
         public static readonly int default_step_size_StepLR = 10;
         public static readonly float default_gamma_StepLR = 0.99f;
-        public static readonly (float, float) sigma_clip = (0.01f, 5f);
+        public static readonly (float, float) sigma_clip = (0.001f, 5f);
 
         public AgentBehaviour(int stateSize, int continuousActions, int[] discreteBranches, HyperParameters hp, string name)
         {
@@ -59,7 +61,7 @@ namespace DeepUnity
                 new Dense(hp.hiddenUnits, hp.hiddenUnits),
                 new ReLU(),
                 new Dense(hp.hiddenUnits, continuousActions),
-                new TanH());
+                new Tanh());
 
             sigmaHead = new Sequential(
                 new Dense(stateSize, hp.hiddenUnits),
@@ -67,7 +69,7 @@ namespace DeepUnity
                 new Dense(hp.hiddenUnits, hp.hiddenUnits),
                 new ReLU(),
                 new Dense(hp.hiddenUnits, continuousActions),
-                new SoftPlus());
+                new Softplus());
 
             discreteHeads = new Sequential[discreteBranches.Length];
             for (int i = 0; i < discreteHeads.Length; i++)
@@ -78,17 +80,15 @@ namespace DeepUnity
                     new Dense(hp.hiddenUnits, hp.hiddenUnits),
                     new ReLU(),
                     new Dense(hp.hiddenUnits, discreteBranches[i]),
-                    new SoftMax());
+                    new Softmax());
             }
-
-
         }
         public void InitOptimisers(HyperParameters hp)
         {
             if (criticOptimizer != null)
                 return;
 
-            criticOptimizer = new Adam(critic.Parameters, hp.learningRate * 3f);          
+            criticOptimizer = new Adam(critic.Parameters, hp.learningRate);          
             muHeadOptimizer = new Adam(muHead.Parameters, hp.learningRate);            
             sigmaHeadOptimizer = new Adam(sigmaHead.Parameters, hp.learningRate);
 
@@ -104,17 +104,17 @@ namespace DeepUnity
             if (criticScheduler != null)
                 return;
 
-            int ss = hp.learningRateSchedule == true ? default_step_size_StepLR : 1000;
-            float gamma = hp.learningRateSchedule == true ? default_gamma_StepLR : 1f;
+            int step_size = hp.learningRateSchedule ? default_step_size_StepLR : 1000;
+            float gamma = hp.learningRateSchedule ? default_gamma_StepLR : 1f;
 
-            criticScheduler = new StepLR(criticOptimizer, ss, gamma);
-            muHeadScheduler = new StepLR(muHeadOptimizer, ss, gamma);
-            sigmaHeadScheduler = new StepLR(sigmaHeadOptimizer, ss, gamma);
+            criticScheduler = new StepLR(criticOptimizer, step_size, gamma);
+            muHeadScheduler = new StepLR(muHeadOptimizer, step_size, gamma);
+            sigmaHeadScheduler = new StepLR(sigmaHeadOptimizer, step_size, gamma);
 
             discreteHeadsSchedulers = new StepLR[discreteBranches == null ? 0 : discreteBranches.Length];
             for (int i = 0; i < discreteHeads.Length; i++)
             {
-                discreteHeadsSchedulers[i] = new StepLR(discreteHeadsOptimizers[i], ss, gamma);
+                discreteHeadsSchedulers[i] = new StepLR(discreteHeadsOptimizers[i], step_size, gamma);
             }
 
         }
@@ -127,8 +127,7 @@ namespace DeepUnity
         {
             // Sample mu and sigma
             Tensor mu = muHead.Predict(state);
-            Tensor sigma = Tensor.Fill(0.1f, mu.Shape);
-            // sigma = Tensor.Clip(sigma, sigma_clip.Item1, sigma_clip.Item2);
+            Tensor sigma = sigmaHead.Predict(state).Clip(sigma_clip.Item1, sigma_clip.Item2); //Tensor.Fill(0.1f, mu.Shape).Clip(sigma_clip.Item1, sigma_clip.Item2);
 
             // Sample actions
             Tensor actions = mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
@@ -141,12 +140,9 @@ namespace DeepUnity
         public Tensor ContinuousForward(Tensor stateBatch, out Tensor mu, out Tensor sigma)
         {
             mu = muHead.Forward(stateBatch);
-            sigma = Tensor.Fill(0.1f, mu.Shape);
+            sigma = sigmaHead.Forward(stateBatch).Clip(sigma_clip.Item1, sigma_clip.Item2); // Tensor.Fill(0.1f, mu.Shape).Clip(sigma_clip.Item1, sigma_clip.Item2);
 
-            Tensor actions = mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
-
-            return actions;
-
+            return mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
         }
 
 
@@ -161,25 +157,31 @@ namespace DeepUnity
             return null;
         }
 
+        /// <summary>
+        /// Saves the behaviour in the Assets folder, along with the respective neural networks.
+        /// </summary>
         public void Save()
         {
+            if (!Directory.Exists($"Assets/{name}"))
+                Directory.CreateDirectory($"Assets/{name}");
+
             // Save aux networks
-            critic.Save(name + "_critic");
-            muHead.Save(name + "_muHead");
-            sigmaHead.Save(name + "_sigmaHead");
+            critic.Save($"{name}/critic");
+            muHead.Save($"{name}/mu");
+            sigmaHead.Save($"{name}/sigma");
 
             for (int i = 0; i < discreteHeads.Length; i++)
             {
-                discreteHeads[i].Save(name + $"_discreteHead{i}");
+                discreteHeads[i].Save($"{name}/discrete{i}");
             }
 
 
             // Save this wrapper
-            var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>("Assets/" + name + ".asset");
+            var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
             if (instance == null)
             {
                 //create instance
-                AssetDatabase.CreateAsset(this, "Assets/" + name + ".asset");
+                AssetDatabase.CreateAsset(this, $"Assets/{name}/{name}.asset");
                 AssetDatabase.SaveAssets();
             }
 

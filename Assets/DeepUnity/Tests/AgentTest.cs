@@ -22,7 +22,7 @@ namespace kbRadu
             float xmov = actionBuffer.ContinuousActions[0];
             float zmov = actionBuffer.ContinuousActions[1];
 
-            transform.position += new Vector3(xmov, 0, zmov) * Time.deltaTime * speed;
+            transform.position += new Vector3(xmov, 0, zmov) * Time.fixedDeltaTime * speed;
         }
 
         private void OnCollisionEnter(Collision collision)

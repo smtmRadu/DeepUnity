@@ -27,7 +27,9 @@ namespace DeepUnity
         public BehaviourType behaviourType = BehaviourType.Inference;
         public OnEpisodeEndType onEpisodeEnd = OnEpisodeEndType.ResetEnvironment;
 
+
         public TrajectoryBuffer Trajectory { get; private set; }
+        public TimeStep Timestep { get; private set; }
         public HyperParameters Hp { get; private set; }
         public SensorBuffer Observations { get; private set; }
         public ActionBuffer Actions { get; private set; }
@@ -38,13 +40,12 @@ namespace DeepUnity
 
         private List<ISensor> Sensors { get; set; }
         private StateResetter PositionReseter { get; set; }
-        private bool IsEpisodeEnd { get; set; }
+        private bool IsEpisodeEnd { get; set; } = false;
+        private bool FixedUpdateOccured { get; set; } = false;
 
         private void Awake()
         {
             Hp = GetComponent<HyperParameters>();
-
-            Application.targetFrameRate = Hp.targetFPS;           
 
             Sensors = new List<ISensor>();
 
@@ -72,11 +73,9 @@ namespace DeepUnity
 
             OnAfterStart();
         }
-        private void Update()
+        private void FixedUpdate()
         {
-            OnBeforeUpdate();
-
-            // AddReward(-1e-5f);
+            FixedUpdateOccured = true;
 
             switch (behaviourType)
             {
@@ -100,17 +99,37 @@ namespace DeepUnity
                     break;
             }
 
-            StepCount++;          
-            TimestepReward = 0;
-
-            if (StepCount == Hp.maxStep)
+            OnAfterFixedUpdate();
+        }
+        private void Update()
+        {
+            if(FixedUpdateOccured)
             {
-                EndEpisode();
-                Trajectory.reachedTerminalState = false;
+                FixedUpdateOccured = false;
+                StepCount++;
+                
+
+                if (StepCount == Hp.maxStep && !IsEpisodeEnd)
+                {
+                    EndEpisode();
+                    Trajectory.reachedTerminalState = false;                  
+                }
+
+                if(IsEpisodeEnd && behaviourType == BehaviourType.Inference)
+                {
+                    Trainer.Ready(this);
+                }
+
+                Timestep.reward = Tensor.Constant(TimestepReward);
+                if (Hp.normalize)
+                    Timestep.reward = model.rewardStadardizer.Standardise(Timestep.reward);
+
+                Trajectory.Remember(Timestep);
+
+                TimestepReward = 0; // reward[t+1] = 0 -> reset
             }
 
-            if (behaviourType == BehaviourType.Inference && IsEpisodeEnd)
-                Trainer.Ready(this);                    
+            OnAfterUpdate();
         }
         private void LateUpdate()
         {
@@ -137,6 +156,7 @@ namespace DeepUnity
         private void InitBuffers()
         {
             Trajectory = new TrajectoryBuffer();
+            Timestep = new TimeStep();
 
             Observations = new SensorBuffer(model.observationSize);
             Actions = new ActionBuffer(model.continuousDim, model.discreteBranches);
@@ -215,28 +235,20 @@ namespace DeepUnity
             CollectObservations(Observations);
             Sensors.ForEach(x => Observations.AddObservation(x.GetObservations()));
 
-
-            // Store all timestep info
-            Tensor state = Tensor.Constant(Observations.values);
-            Tensor reward = Tensor.Constant(TimestepReward);
+            // Set state[t], action[t], reward[t]
+            Timestep.state = Tensor.Constant(Observations.Observations);
 
             if (Hp.normalize)
-            {
-                state = model.stateStandardizer.Standardise(state);
-                reward = model.rewardStadardizer.Standardise(reward);
-            }
-               
-            Tensor continuous_log_probs;
-            Tensor discrete_log_probs;
-            Tensor continuousAction = model.ContinuousPredict(state, out continuous_log_probs);
-            Tensor discreteAction = model.DiscretePredict(state, out discrete_log_probs);
-            Tensor value = model.Value(state);
-
-            Trajectory.Remember(state, value, reward, continuousAction, continuous_log_probs, discreteAction,  discrete_log_probs);
+                Timestep.state = model.stateStandardizer.Standardise(Timestep.state);
 
 
+            Timestep.value = model.Value(Timestep.state);
+
+            Timestep.continuous_action = model.ContinuousPredict(Timestep.state, out Timestep.continuous_log_prob);
+            Timestep.discrete_action = model.DiscretePredict(Timestep.state, out Timestep.discrete_log_prob);
+            
             // Run agent's actions
-            Actions.ContinuousActions = continuousAction?.ToArray();
+            Actions.ContinuousActions = Timestep.continuous_action?.ToArray();
             Actions.DiscreteActions = null; // need to convert afterwards from tensor of logits [branch, logits] to argmax int[]
             OnActionReceived(Actions);
         }
@@ -245,7 +257,8 @@ namespace DeepUnity
         // User call
         public virtual void OnAfterAwake() { }
         public virtual void OnAfterStart() { }
-        public virtual void OnBeforeUpdate() { }
+        public virtual void OnAfterFixedUpdate() { }
+        public virtual void OnAfterUpdate() { }
         public virtual void OnAfterLateUpdate() { }
         public virtual void OnEpisodeBegin() { }
         public virtual void CollectObservations(SensorBuffer sensorBuffer) { }

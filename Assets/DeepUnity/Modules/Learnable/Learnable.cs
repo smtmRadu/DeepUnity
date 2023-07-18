@@ -4,41 +4,45 @@ namespace DeepUnity
 {
     public abstract class Learnable : ISerializationCallbackReceiver
     {
+        [SerializeField] public Device device;
+
         [SerializeField] public Tensor gamma;
         [SerializeField] public Tensor beta;
 
-        [SerializeField] public Tensor gradGamma;
-        [SerializeField] public Tensor gradBeta;
+        [SerializeField] public Tensor gammaGrad;
+        [SerializeField] public Tensor betaGrad;
+
+       
+        public Learnable(Device device) => this.device = device;
 
         public void ZeroGrad()
         {
-            gradGamma = Tensor.Zeros(gradGamma.Shape);
-            gradBeta = Tensor.Zeros(gradBeta.Shape);
+            gammaGrad = Tensor.Zeros(gammaGrad.Shape);
+            betaGrad = Tensor.Zeros(betaGrad.Shape);
         }
         public void ClipGradValue(float clip_value)
         {
-            Tensor.Clip(gradGamma, -clip_value, clip_value);
-            Tensor.Clip(gradBeta, -clip_value, clip_value);
+            Tensor.Clip(gammaGrad, -clip_value, clip_value);
+            Tensor.Clip(betaGrad, -clip_value, clip_value);
         }
         public void ClipGradNorm(float max_norm)
         {
-            Tensor normG = Tensor.Norm(gradGamma, NormType.ManhattanL1);
+            Tensor normG = Tensor.Norm(gammaGrad, NormType.ManhattanL1);
 
             if (normG[0] > max_norm)
             {
                 float scale = max_norm / normG[0];
-                gradGamma *= scale;
+                gammaGrad *= scale;
             }
 
 
-            Tensor normB = Tensor.Norm(gradBeta, NormType.ManhattanL1);
+            Tensor normB = Tensor.Norm(betaGrad, NormType.ManhattanL1);
 
             if (normB[0] > max_norm)
             {
                 float scale = max_norm / normB[0];
-                gradBeta *= scale;
+                betaGrad *= scale;
             }
-
         }
 
         public void OnBeforeSerialize()
@@ -61,8 +65,8 @@ namespace DeepUnity
                 return;
             }
 
-            this.gradGamma = Tensor.Zeros(gamma.Shape);
-            this.gradBeta = Tensor.Zeros(beta.Shape);
+            this.gammaGrad = Tensor.Zeros(gamma.Shape);
+            this.betaGrad = Tensor.Zeros(beta.Shape);
         }
     }
 }

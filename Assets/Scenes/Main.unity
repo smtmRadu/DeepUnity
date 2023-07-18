@@ -253,7 +253,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5970f7530cba1f0499a4a3dbe7d27f96, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  targetFPS: 60
   device: 0
   timeHorizon: 64
   maxStep: 65536
@@ -394,7 +393,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &621327370
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -408,8 +407,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   net: {fileID: 0}
-  hiddenSize: 16
-  trainingSamples: 512
+  hiddenSize: 64
+  trainingSamples: 256
   batch_size: 32
   validationSamples: 32
   scheduler_step_size: 1000000
@@ -593,7 +592,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &752495706
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -608,7 +607,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   matmulDevice: 0
   MatShape: {x: 1024, y: 1024}
-  Runs: 1
+  Runs: 1000
 --- !u!4 &752495707
 Transform:
   m_ObjectHideFlags: 0
@@ -697,7 +696,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45ec7b8831bf73c4bbed236ccf4948d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  network: {fileID: 0}
+  network: {fileID: 11400000, guid: 0fa25983b98e5b44f8b86d95d844f81b, type: 2}
   batch_size: 32
 --- !u!4 &1470265691
 Transform:
@@ -760,7 +759,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1973326619}
-  - component: {fileID: 1973326618}
+  - component: {fileID: 1973326620}
   m_Layer: 0
   m_Name: Tutorial
   m_TagString: Untagged
@@ -768,19 +767,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 0
---- !u!114 &1973326618
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1973326617}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5d07c697feeb7b64b82367613d65e17e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  network: {fileID: 0}
 --- !u!4 &1973326619
 Transform:
   m_ObjectHideFlags: 0
@@ -796,3 +782,16 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 6
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1973326620
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1973326617}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ddf9847b375bd8e40854575f0799a858, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  network: {fileID: 0}

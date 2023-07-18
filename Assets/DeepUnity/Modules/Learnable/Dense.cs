@@ -6,9 +6,8 @@ namespace DeepUnity
     public class Dense : Learnable, IModule
     {
         private Tensor InputCache { get; set; }
-        private Device device;
 
-        public Dense(int in_features, int out_features, InitType init = InitType.Default, Device device = Device.CPU)
+        public Dense(int in_features, int out_features, InitType init = InitType.Default, Device device = Device.CPU) : base(device)
         {
             switch (init)
             {
@@ -39,11 +38,9 @@ namespace DeepUnity
                     throw new Exception("Unhandled initialization type!");
             }
 
-            this.gradGamma = Tensor.Zeros(out_features, in_features);
-            this.gradBeta = Tensor.Zeros(out_features);
-            this.device = device;
+            gammaGrad = Tensor.Zeros(out_features, in_features);
+            betaGrad = Tensor.Zeros(out_features);
         }
-
         public Tensor Predict(Tensor input)
         {
             // input = (B, IN)
@@ -56,7 +53,7 @@ namespace DeepUnity
 
             bool isBatched = input.Rank == 2;
 
-            if(isBatched)
+            if (isBatched)
             {
                 int batch_size = input.Size(-2);
 
@@ -72,7 +69,7 @@ namespace DeepUnity
                 else
                     return Tensor.MatMulGPU(input, Tensor.Transpose(gamma, 0, 1)) + beta;
             }
-            
+
         }
         public Tensor Forward(Tensor input)
         {
@@ -92,9 +89,9 @@ namespace DeepUnity
             else
             {
                 if (device == Device.CPU)
-                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Unsqueeze(beta, 0);
+                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + beta;
                 else
-                    return Tensor.MatMulGPU(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Unsqueeze(beta, 0);
+                    return Tensor.MatMulGPU(input, Tensor.Transpose(gamma, 0, 1)) + beta;
             }
         }
         public Tensor Backward(Tensor loss)
@@ -109,21 +106,21 @@ namespace DeepUnity
             var transposedLoss = Tensor.Transpose(loss, 0, 1);
 
 
-            Tensor gradW = device == Device.CPU ? 
-                Tensor.MatMul(transposedLoss, InputCache) : 
+            Tensor gradW = device == Device.CPU ?
+                Tensor.MatMul(transposedLoss, InputCache) :
                 Tensor.MatMulGPU(transposedLoss, InputCache);
 
-            Tensor gradB = device == Device.CPU ? 
-                Tensor.MatMul(transposedLoss, Tensor.Ones(batch_size)) : 
+            Tensor gradB = device == Device.CPU ?
+                Tensor.MatMul(transposedLoss, Tensor.Ones(batch_size)) :
                 Tensor.MatMulGPU(transposedLoss, Tensor.Ones(batch_size));
 
             // Update the gradients
-            gradGamma += gradW / batch_size; // (out, in)
-            gradBeta += gradB / batch_size; // (out)
-            
+            gammaGrad += gradW / batch_size; // (out, in)
+            betaGrad += gradB / batch_size; // (out)
+
             // Backpropagate the loss (batch_size, in)
-            return device == Device.CPU ? 
-                Tensor.MatMul(loss, gamma) : 
+            return device == Device.CPU ?
+                Tensor.MatMul(loss, gamma) :
                 Tensor.MatMulGPU(loss, gamma);
         }
 

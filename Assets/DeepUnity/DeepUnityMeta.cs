@@ -23,7 +23,7 @@ namespace DeepUnity
         }
  	   
     }
-    public static class Timer
+    public static class TimerX
     {
         static DateTime start;
         static TimeSpan time;

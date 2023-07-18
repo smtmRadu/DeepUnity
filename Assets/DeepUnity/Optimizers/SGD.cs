@@ -56,41 +56,41 @@ namespace DeepUnity
                 Learnable P = parameters[i];
 
                 if (weightDecay != 0f)
-                    P.gradGamma = P.gradGamma + weightDecay * P.gamma;
+                    P.gammaGrad = P.gammaGrad + weightDecay * P.gamma;
 
                 if(momentum != 0f)
                 {
                     if (t > 1)
                     {
-                        bGamma[i] = bGamma[i] + (1f - dampening) * P.gradGamma;
-                        bBeta[i] = bBeta[i] + (1f - dampening) * P.gradBeta;
+                        bGamma[i] = bGamma[i] + (1f - dampening) * P.gammaGrad;
+                        bBeta[i] = bBeta[i] + (1f - dampening) * P.betaGrad;
                     }
                     else
                     {
-                        bGamma[i] = P.gradGamma;
-                        bBeta[i] = P.gradBeta;
+                        bGamma[i] = P.gammaGrad;
+                        bBeta[i] = P.betaGrad;
                     }
                     if(nesterov)
                     {
-                        P.gradGamma = P.gradGamma + momentum * bGamma[i];
-                        P.gradBeta = P.gradBeta + momentum * bBeta[i];
+                        P.gammaGrad = P.gammaGrad + momentum * bGamma[i];
+                        P.betaGrad = P.betaGrad + momentum * bBeta[i];
                     }
                     else
                     {
-                        P.gradGamma = Tensor.Identity(bGamma[i]);
-                        P.gradBeta = Tensor.Identity(bBeta[i]);
+                        P.gammaGrad = Tensor.Identity(bGamma[i]);
+                        P.betaGrad = Tensor.Identity(bBeta[i]);
                     }
 
                 }
                 if(maximize)
                 {
-                    P.gamma = P.gamma + learningRate * P.gradGamma;
-                    P.beta = P.beta + learningRate * P.gradBeta;
+                    P.gamma = P.gamma + learningRate * P.gammaGrad;
+                    P.beta = P.beta + learningRate * P.betaGrad;
                 }
                 else
                 {
-                    P.gamma = P.gamma - learningRate * P.gradGamma;
-                    P.beta = P.beta - learningRate * P.gradBeta;
+                    P.gamma = P.gamma - learningRate * P.gammaGrad;
+                    P.beta = P.beta - learningRate * P.betaGrad;
                 }
             });
         }

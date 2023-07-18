@@ -78,8 +78,6 @@ namespace kbRadu
 
                 Tensor.MatMul(t1, t2);
                 Tensor.MatPad(t1, 2, PaddingType.Mirror);
-                Tensor.Correlate2D(t1, t2, CorrelationMode.Valid);
-                Tensor.Convolve2D(t1, t2, CorrelationMode.Full);
             }
             catch
             {

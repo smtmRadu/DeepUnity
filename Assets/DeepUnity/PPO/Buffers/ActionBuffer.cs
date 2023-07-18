@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using Unity.VisualScripting;
 
@@ -10,9 +11,14 @@ namespace DeepUnity
 
         public ActionBuffer(int continuousDim, int[] discreteBranches)
         {
+            if (continuousDim < 0)
+                throw new ArgumentException("Cannot have a negative number of continuous actions");
+
+            if (discreteBranches != null && discreteBranches.Any(x => x < 2))
+                throw new ArgumentException("Cannot have a discrete branch that have less than 2 different actions.");
+
             ContinuousActions = new float[continuousDim];
-            DiscreteActions = discreteBranches == null? new int[0] : new int[discreteBranches.Length];
-           
+            DiscreteActions = discreteBranches == null? new int[0] : new int[discreteBranches.Length];           
         }
         public void Clear()
         {
@@ -21,7 +27,7 @@ namespace DeepUnity
         }
         public override string ToString()
         {
-            return $"(ContinuousActions {ContinuousActions?.ToCommaSeparatedString()} | DiscreteActions {DiscreteActions?.ToCommaSeparatedString()})";
+            return $"[ContinuousActions [{ContinuousActions?.ToCommaSeparatedString()}] | DiscreteActions [{DiscreteActions?.ToCommaSeparatedString()}]]";
         }
     }
 }

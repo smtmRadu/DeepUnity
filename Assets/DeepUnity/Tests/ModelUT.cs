@@ -2,6 +2,7 @@ using DeepUnity;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace kbRadu
 {
@@ -41,24 +42,12 @@ namespace kbRadu
             {
                 net = new Sequential(
                  new Dense(2, hiddenSize),
-                 new BatchNorm1D(hiddenSize, 0.0612f),
+                 new LayerNorm(64),
                  new ReLU(),
-                 
-                 
-
-
+            
                  new Dense(hiddenSize, hiddenSize),
-                 
-                 //new LayerNorm(new int[] { 64 }),
                  new ReLU(),
-                 
-
-                 // new Dropout(0.3f),
-
-
-
-                 new Dense(hiddenSize, 1),
-                 new Linear()
+                 new Dense(hiddenSize, 1)
                  ); 
             }
 
@@ -74,7 +63,7 @@ namespace kbRadu
             Tensor x2 = Tensor.RandomNormal((0, 1), trainingSamples, 1) * dataScale;
             Tensor y = Tensor.Sqrt(Tensor.Pow(x1, 2) + Tensor.Pow(x2, 2));
 
-            trainXbatches = Tensor.Split(Tensor.Concat(1, x1, x2), 0, batch_size);
+            trainXbatches = Tensor.Split(Tensor.Cat(1, x1, x2), 0, batch_size);
             trainYbatches = Tensor.Split(y, 0, batch_size);
 
             // Prepare test batches
@@ -82,10 +71,10 @@ namespace kbRadu
             x2 = Tensor.RandomNormal((0, 1), validationSamples, 1) * dataScale;
             y = Tensor.Sqrt(Tensor.Pow(x1, 2) + Tensor.Pow(x2, 2));
 
-            validationInputs = Tensor.Concat(1, x1, x2);
+            validationInputs = Tensor.Cat(1, x1, x2);
             validationTargets = y;
 
-            Timer.Start();
+            TimerX.Start();
         }
 
 
@@ -106,12 +95,12 @@ namespace kbRadu
                 i = 0;
 
                 if (epoch == 25)
-                    Timer.Stop();
+                    TimerX.Stop();
 
                 return;
             }
             var trainPrediction = net.Forward(trainXbatches[i]);
-            var loss = Loss.MSE(trainPrediction, trainYbatches[i]);
+            var loss = Loss.MSEDerivative(trainPrediction, trainYbatches[i]);
 
             optimizer.ZeroGrad();
             net.Backward(loss);

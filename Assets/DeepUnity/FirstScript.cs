@@ -3,9 +3,9 @@ using DeepUnity;
 using System.Collections.Generic;
 using System.Linq;
 
-public class Tutorial : MonoBehaviour
+public class FirstScript : MonoBehaviour
 {
-    [SerializeField] 
+    [SerializeField]
     private Sequential network;
     private Optimizer optim;
     private StepLR scheduler;
@@ -18,12 +18,12 @@ public class Tutorial : MonoBehaviour
 
     public void Start()
     {
-        if(network == null)
+        if (network == null)
         {
             network = new Sequential(
                 new Dense(2, 64),
-                new TanH(),
-                new Dense(64, 64),                
+                new Tanh(),
+                new Dense(64, 64),
                 new ReLU(),
                 new Dense(64, 1));
         }
@@ -31,19 +31,20 @@ public class Tutorial : MonoBehaviour
         optim = new Adam(network.Parameters);
         scheduler = new StepLR(optim, 100);
 
-        // Generate dataset - learning x^2 + y^2 function.
+        // Learning z = x^2 + y^2 function.
+        // Generate dataset
         int data_size = 1024;
         Tensor x = Tensor.RandomNormal((0, 0.5f), data_size, 1);
         Tensor y = Tensor.RandomNormal((0, 0.5f), data_size, 1);
-        train_inputs = Tensor.Concat(1, x, y);
-        train_targets = x.Zip(y, (x, y) => x * x + y * y);
+        train_inputs = Tensor.Cat(1, x, y);
+        train_targets = x.Zip(y, (a, b) => a * a + b * b);
 
         // Generate validation set
         int valid_size = 64;
         x = Tensor.RandomNormal((0, 0.5f), valid_size, 1);
         y = Tensor.RandomNormal((0, 0.5f), valid_size, 1);
-        valid_inputs = Tensor.Concat(1, x, y);
-        valid_targets = x.Zip(y, (x, y) => x * x + y * y);
+        valid_inputs = Tensor.Cat(1, x, y);
+        valid_targets = x.Zip(y, (a, b) => a * a + b * b);
 
     }
 
@@ -60,23 +61,21 @@ public class Tutorial : MonoBehaviour
         for (int i = 0; i < input_batches.Length; i++)
         {
             Tensor prediction = network.Forward(input_batches[i]);
-            Tensor loss = Loss.MSE(prediction, target_batches[i]);
+            Tensor loss = Loss.MSEDerivative(prediction, target_batches[i]);
 
             optim.ZeroGrad();
             network.Backward(loss);
             optim.ClipGradNorm(0.5f);
             optim.Step();
-            
+
             float train_acc = Metrics.Accuracy(prediction, target_batches[i]);
-            epoch_train_accuracies.Add(train_acc);       
+            epoch_train_accuracies.Add(train_acc);
         }
 
         scheduler.Step();
-        network.Save("tutorial");
+        network.Save("tutorial_model");
 
         float valid_acc = Metrics.Accuracy(network.Predict(valid_inputs), valid_targets);
         print($"[Epoch {Time.frameCount} | Train Accuracy: {epoch_train_accuracies.Average() * 100f}% | Validation Accuracy: {valid_acc * 100f}%]");
     }
 }
-
-

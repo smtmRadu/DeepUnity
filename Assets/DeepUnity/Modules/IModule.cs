@@ -20,7 +20,7 @@ namespace DeepUnity
 
         // Parameter modules
         public Dense dense;                  
-        public BatchNorm1D batchnorm;         
+        public BatchNorm1D batchnorm1d;         
         public LayerNorm layernorm;
         public Conv2D conv2d;
 
@@ -34,14 +34,15 @@ namespace DeepUnity
         // Activation modules
         public Linear linear;
         public ReLU relu;
-        public TanH tanh;
-        public SoftMax softmax;
+        public Tanh tanh;
+        public Softmax softmax;
         public LeakyReLU leakyrelu;
         public Sigmoid sigmoid;
-        public SoftPlus softplus;
+        public Softplus softplus;
         public Mish mish;
         public ELU elu;
         public Threshold threshold;
+        public HardTanh hardtanh;
         
         
         
@@ -56,7 +57,7 @@ namespace DeepUnity
             }
             else if (module is BatchNorm1D batchnormModule)
             {
-                batchnorm = batchnormModule;
+                batchnorm1d = batchnormModule;
             }
             else if (module is LayerNorm layernormModule)
             {
@@ -66,7 +67,7 @@ namespace DeepUnity
             {
                 relu = reluModule;
             }
-            else if (module is TanH tanhModule)
+            else if (module is Tanh tanhModule)
             {
                 tanh = tanhModule;
             }
@@ -78,7 +79,7 @@ namespace DeepUnity
             {
                 dropout = dropoutModule;
             }
-            else if (module is SoftMax softmaxModule)
+            else if (module is Softmax softmaxModule)
             {
                 softmax = softmaxModule;
             }
@@ -94,7 +95,7 @@ namespace DeepUnity
             {
                 sigmoid = sigmoidModule;
             }
-            else if (module is SoftPlus softplusModule)
+            else if (module is Softplus softplusModule)
             {
                 softplus = softplusModule;
             }
@@ -126,6 +127,10 @@ namespace DeepUnity
             {
                 avgPool2d = avgpool2dModule;
             }
+            else if (module is HardTanh hardtanhModule)
+            {
+                hardtanh = hardtanhModule;
+            }
             else
                 throw new Exception("Unhandled module type while wrapping.");
         }
@@ -144,7 +149,7 @@ namespace DeepUnity
             }
             else if (typeof(BatchNorm1D).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.batchnorm;
+                module = moduleWrapper.batchnorm1d;
             }
             else if (typeof(LayerNorm).Name.Equals(moduleWrapper.name))
             {
@@ -154,7 +159,7 @@ namespace DeepUnity
             {
                 module = moduleWrapper.relu;
             }
-            else if(typeof(TanH).Name.Equals(moduleWrapper.name))
+            else if(typeof(Tanh).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.tanh;
             }
@@ -166,7 +171,7 @@ namespace DeepUnity
             {
                 module = moduleWrapper.dropout;
             }
-            else if(typeof(SoftMax).Name.Equals(moduleWrapper.name))
+            else if(typeof(Softmax).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.softmax;
             }
@@ -182,7 +187,7 @@ namespace DeepUnity
             {
                 module = moduleWrapper.mish;
             }
-            else if (typeof(SoftPlus).Name.Equals(moduleWrapper.name))
+            else if (typeof(Softplus).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.softplus;
             }
@@ -213,6 +218,10 @@ namespace DeepUnity
             else if (typeof(AvgPool2D).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.avgPool2d;
+            }
+            else if (typeof(HardTanh).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.hardtanh;
             }
             else
                 throw new Exception("Unhandled module type while unwrapping.");

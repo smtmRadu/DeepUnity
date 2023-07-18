@@ -26,15 +26,15 @@ namespace DeepUnity
         /// Output: (batch, features)
         /// </summary>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
-        public BatchNorm1D(int num_features, float momentum = 0.1f)
+        public BatchNorm1D(int num_features, float momentum = 0.1f) : base(Device.CPU)
         {
             this.momentum = momentum;
 
             gamma = Tensor.Ones(num_features);
             beta = Tensor.Zeros(num_features);
 
-            gradGamma = Tensor.Zeros(num_features);
-            gradBeta = Tensor.Zeros(num_features);
+            gammaGrad = Tensor.Zeros(num_features);
+            betaGrad = Tensor.Zeros(num_features);
 
             runningVar = Tensor.Ones(num_features);
             runningMean = Tensor.Zeros(num_features);          
@@ -128,8 +128,8 @@ namespace DeepUnity
             var dLdGamma = Tensor.Mean(dLdY * xHat, 0);
             var dLdBeta = Tensor.Mean(dLdY, 0);
 
-            gradGamma += dLdGamma;
-            gradBeta += dLdBeta;
+            gammaGrad += dLdGamma;
+            betaGrad += dLdBeta;
 
             return dLdX;
         }

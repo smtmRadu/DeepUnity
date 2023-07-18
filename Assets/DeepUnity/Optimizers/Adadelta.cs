@@ -54,14 +54,14 @@ namespace DeepUnity
                 if (parameters[i] is Learnable P)
                 {
                     if (weightDecay != 0f)
-                        P.gradGamma = P.gradGamma + weightDecay * P.gamma;
+                        P.gammaGrad = P.gammaGrad + weightDecay * P.gamma;
 
-                    vGamma[i] = vGamma[i] * rho + Tensor.Pow(P.gradGamma, 2f) * (1f - rho);
-                    vBeta[i] = vBeta[i] * rho + Tensor.Pow(P.gradBeta, 2f) * (1f - rho);
+                    vGamma[i] = vGamma[i] * rho + Tensor.Pow(P.gammaGrad, 2f) * (1f - rho);
+                    vBeta[i] = vBeta[i] * rho + Tensor.Pow(P.betaGrad, 2f) * (1f - rho);
 
                     // In Adadelta, i use v for square avg and u for accumulate variables
-                    var dxGamma = Tensor.Sqrt(uGamma[i] + 1e-6f) / Tensor.Sqrt(vGamma[i] + 1e-6f) * P.gradGamma;
-                    var dxBeta = Tensor.Sqrt(uBeta[i] + 1e-6f) / Tensor.Sqrt(vBeta[i] + 1e-6f) * P.gradBeta;
+                    var dxGamma = Tensor.Sqrt(uGamma[i] + 1e-6f) / Tensor.Sqrt(vGamma[i] + 1e-6f) * P.gammaGrad;
+                    var dxBeta = Tensor.Sqrt(uBeta[i] + 1e-6f) / Tensor.Sqrt(vBeta[i] + 1e-6f) * P.betaGrad;
 
                     uGamma[i] = uGamma[i] * rho + Tensor.Pow(dxGamma, 2f) * (1f - rho);
                     uBeta[i] = uBeta[i] * rho + Tensor.Pow(dxBeta, 2f) * (1f - rho);

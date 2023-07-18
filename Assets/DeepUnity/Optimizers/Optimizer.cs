@@ -62,8 +62,8 @@ namespace DeepUnity
             int index = 0;
             foreach (var param in parameters)
             {
-                float[] gradG = param.gradGamma.ToArray();
-                float[] gradB = param.gradBeta.ToArray();
+                float[] gradG = param.gammaGrad.ToArray();
+                float[] gradB = param.betaGrad.ToArray();
 
                 for (int i = 0; i < gradG.Length; i++)
                 {
@@ -85,8 +85,8 @@ namespace DeepUnity
 
             foreach (var item in parameters)
             {
-                item.gradGamma *= scale;
-                item.gradBeta *= scale;
+                item.gammaGrad *= scale;
+                item.betaGrad *= scale;
             }
             
         }

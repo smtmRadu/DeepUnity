@@ -2,7 +2,8 @@
 
 #define FLOAT_MIN -340282346638528859811704183484516925440.0000000000000000f
 #define FLOAT_MAX 340282346638528859811704183484516925440.0000000000000000f
-#define PI 3.14159265358979323846264338327950288
+#define PI 3.14159274F
+#define E 2.71828175F
 #define RANDOM_IA 16807
 #define RANDOM_IM 2147483647
 #define RANDOM_AM (1.0f/float(RANDOM_IM))
@@ -36,8 +37,11 @@ int rr = 0;
 // Additional fields used for operations
 int seed;
 int axis;
+int axis0;
+int axis1;
 float value;
 float power;
+float base;
 float minvalue;
 float maxvalue;
 int split_size;
@@ -452,6 +456,75 @@ void MatMul(int3 id : SV_DispatchThreadID)
 }
 
 
+
+#pragma kernel Transpose
+[numthreads(1, 1, 1)]
+void Transpose(int3 id : SV_DispatchThreadID)
+{
+    int ax0 = axisToDim(axis0, r1);
+    int ax1 = axisToDim(axis1, r1);
+    int temp;
+    for (int l = 0; l < b1; l++)
+    {
+        for (int k = 0; k < c1; k++)
+        {
+            for (int j = 0; j < h1; j++)
+            {
+                for (int i = 0; i < w1; i++)
+                {
+                    int tranposedIndices[] = {l, k, j, i};
+                    temp = tranposedIndices[ax0];
+                    tranposedIndices[ax0] = tranposedIndices[ax1];
+                    tranposedIndices[ax1] = temp;
+                    
+                    float val = data1_get(l, k, j, i);
+                    result_set(tranposedIndices[0], tranposedIndices[1], tranposedIndices[2], tranposedIndices[3], val);
+                }
+            }
+        }
+    }
+}
+#pragma kernel Expand
+[numthreads(1,1,1)]
+void Expand(int3 id : SV_DispatchThreadID)
+{
+    int a = axisToDim(axis, r1);
+    
+    for (int t = 0; t < times; t++)
+    {
+        for (int l = 0; l < b1; l++)
+        {
+            for (int k = 0; k < c1; k++)
+            {
+                for (int j = 0; j < h1; j++)
+                {
+                    for (int i = 0; i < w1; i++)
+                    {
+                        float val = data1_get(l, k, j, i);
+                        switch (a)
+                        {                        
+                            case 3:                             
+                                result_set(l, k, j, t * w1 + i, val);
+                                break;
+                            case 2:
+                                result_set(l, k, t * h1 + j, i, val);
+                                break;
+                            case 1:
+                                result_set(l, t * c1 + k, j, i, val);
+                                break;
+                            case 0:
+                                result_set(t * b1 + l, k, j, i, val);
+                                break;
+                                       
+                        }
+                    }
+                }
+            }
+        }
+    }
+       
+
+}
 
 // Operations on matrix
 #pragma kernel Mean
@@ -1069,7 +1142,12 @@ void Log(int3 id : SV_DispatchThreadID)
     
     for (int i = id.x; i < count; i += THREADS_NUM)
     {
-        result[i] = log(data1[i]);
+        if(base == E)
+            result[i] = log(data1[i]);
+        else if(base == 2.0f)
+            result[i] = log2(data1[i]);
+        else if(base == 10.0f)
+            result[i] = log10(data1[i]);
     }
 }
 
@@ -1130,5 +1208,20 @@ void Abs(int3 id : SV_DispatchThreadID)
     for (int i = id.x; i < count; i += THREADS_NUM)
     {
         result[i] = abs(data1[i]);
+    }
+}
+
+#pragma kernel Clip
+[numthreads(THREADS_NUM, 1, 1)]
+void Clip(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (int i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = clamp(data1[i], minvalue, maxvalue);
     }
 }

@@ -723,7 +723,6 @@ namespace DeepUnity
 
         }
 
-
         #region Static operations
         public int Size(int axis)
         {
@@ -793,7 +792,143 @@ namespace DeepUnity
             tensor.data.GetData(dataarr);
             result.data.SetData(dataarr);
             return result;
+        }      
+        public static TensorGPU Flatten(TensorGPU tensor, int startAxis = 0, int endAxis = -1)
+        {
+            if (startAxis > endAxis)
+                throw new Exception($"Start axis ({startAxis}) must be greater or equal to the end axis ({endAxis}) when flattening.");
+
+            HandleAxis(tensor, ref startAxis);
+            HandleAxis(tensor, ref endAxis);
+
+            List<int> newShape = new();
+
+            for (int i = 0; i < startAxis; i++)
+            {
+                newShape.Add(tensor.shape[i]);
+            }
+            int mergedDim = 1;
+            for (int i = startAxis; i <= endAxis; i++)
+            {
+                mergedDim *= tensor.shape[i];
+            }
+            newShape.Add(mergedDim);
+            for (int i = endAxis + 1; i < tensor.shape.Length; i++)
+            {
+                newShape.Add(tensor.shape[i]);
+            }
+
+            TensorGPU result = new TensorGPU(newShape.ToArray());
+            result.data.SetData(tensor.ToArray());
+            return result;
         }
+        public static TensorGPU Concat(int? axis, params TensorGPU[] tensors)
+        {
+            Tensor result = Tensor.Cat(axis, tensors.Select(x => Tensor.Identity(x)).ToArray());
+            return TensorGPU.Identity(result);
+        }
+        public static TensorGPU Expand(TensorGPU tensor, int axis, int times)
+        {
+            if (times < 1)
+                throw new ArgumentException("When expanding a tensor, times cannot be < 1");
+
+            if (times == 1)
+                return Identity(tensor);
+
+            HandleAxis(tensor, ref axis);
+
+            Dim dim = AxisToDim(tensor, axis);
+            int[] shapex = null;
+            switch (dim)
+            {
+                case Dim.width:
+                    shapex = CreateShape(tensor.Rank, tensor.Batch, tensor.Channels, tensor.Height, tensor.Width * times);
+                    break;
+                case Dim.height:
+                    shapex = CreateShape(tensor.Rank, tensor.Batch, tensor.Channels, tensor.Height * times, tensor.Width);
+                    break;
+                case Dim.channel:
+                    shapex = CreateShape(tensor.Rank, tensor.Batch, tensor.Channels * times, tensor.Height, tensor.Width);
+                    break;
+                case Dim.batch:
+                    shapex = CreateShape(tensor.Rank, tensor.Batch * times, tensor.Channels, tensor.Height, tensor.Width);
+                    break;
+
+            }
+            TensorGPU result = new(shapex);
+
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("Expand");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "result", result.data);
+
+            cs.SetInt("w1", tensor.Width);
+            cs.SetInt("h1", tensor.Height);
+            cs.SetInt("c1", tensor.Channels);
+            cs.SetInt("b1", tensor.Batch);
+            cs.SetInt("r1", tensor.Rank);
+
+            cs.SetInt("wr", result.Width);
+            cs.SetInt("hr", result.Height);
+            cs.SetInt("cr", result.Channels);
+            cs.SetInt("br", result.Batch);
+            cs.SetInt("rr", result.Rank);
+
+            cs.SetInt("axis", axis);
+            cs.SetInt("times", times);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+
+            return result;
+        }
+        public static TensorGPU Transpose(TensorGPU tensor, int axis0, int axis1)
+        {
+            HandleAxis(tensor, ref axis0);
+            HandleAxis(tensor, ref axis1);
+
+            if (axis0 == axis1)
+                return Identity(tensor);
+
+            int axis0_index = (int)AxisToDim(tensor, axis0);
+            int axis1_index = (int)AxisToDim(tensor, axis1);
+            int[] permutation = new int[] { tensor.Batch, tensor.Channels, tensor.Height, tensor.Width };
+
+            var temp = permutation[axis0_index];
+            permutation[axis0_index] = permutation[axis1_index];
+            permutation[axis1_index] = temp;
+
+            TensorGPU result = new(CreateShape(tensor.Rank, permutation[0], permutation[1], permutation[2], permutation[3]));
+
+
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Transpose");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "result", result.data);
+
+            cs.SetInt("w1", tensor.Width);
+            cs.SetInt("h1", tensor.Height);
+            cs.SetInt("c1", tensor.Channels);
+            cs.SetInt("b1", tensor.Batch);
+            cs.SetInt("r1", tensor.Rank);
+
+            cs.SetInt("wr", result.Width);
+            cs.SetInt("hr", result.Height);
+            cs.SetInt("cr", result.Channels);
+            cs.SetInt("br", result.Batch);
+            cs.SetInt("rr", result.Rank);
+
+            cs.SetInt("axis0", axis0);
+            cs.SetInt("axis1", axis1);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+
+            return result;
+        }
+        // Split
+        // Shuffle
         public static TensorGPU Mean(TensorGPU tensor, int axis, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
@@ -1025,8 +1160,113 @@ namespace DeepUnity
 
             return t;
         }
+        public static TensorGPU Sqrt(TensorGPU tensor)
+        {
+            TensorGPU t = new(tensor.shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Sqrt");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "result", t.data);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+
+            return t;
+        }
+        public static TensorGPU Exp(TensorGPU tensor)
+        {
+            TensorGPU t = new(tensor.shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Exp");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "result", t.data);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+
+            return t;
+        }
+        public static TensorGPU Log(TensorGPU tensor, float @base = MathF.E)
+        {
+            if (@base != MathF.E && @base != 2f && @base != 10f)
+                throw new ArgumentException("Supported base value for Log() is E, 2 or 10.");
+
+            TensorGPU t = new(tensor.shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Log");
+
+            cs.SetFloat("base", @base);
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "result", t.data);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+
+            return t;
+        }
+        public static TensorGPU Abs(TensorGPU tensor)
+        {
+            TensorGPU t = new(tensor.shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Abs");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "result", t.data);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+
+            return t;
+        }
+        public static TensorGPU Sin(TensorGPU tensor)
+        {
+            TensorGPU t = new(tensor.shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Sin");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "result", t.data);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+
+            return t;
+        }
+        public static TensorGPU Cos(TensorGPU tensor)
+        {
+            TensorGPU t = new(tensor.shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Cos");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "result", t.data);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+
+            return t;
+        }
+        public static TensorGPU Clip(TensorGPU tensor, float min, float max)
+        {
+            TensorGPU t = new(tensor.shape);
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Clip");
+
+            cs.SetFloat("minvalue", min);
+            cs.SetFloat("maxvalue", max);
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "result", t.data);
+
+            cs.Dispatch(kernel, 1, 1, 1);
+
+            return t;
+        }
 
         #endregion Static operations
+
 
         #region Instance operations
         public TensorGPU Reshape(params int[] newShape)
@@ -1185,8 +1425,9 @@ namespace DeepUnity
 
             StringBuilder sb = new();
 
-            sb.Append("Tensor ");
-            sb.Append($"[{shape.ToCommaSeparatedString()}]");
+            sb.Append($"Tensor({shape.ToCommaSeparatedString()}) [GPU]");
+
+            
 
 
             sb.Append("\n[");
@@ -1281,18 +1522,7 @@ namespace DeepUnity
             TensorGPUDisposer.tensors.AddLast(this);
         }
 
-        // inside use
-        private static int[] CreateShape(int rank, int b, int c, int h, int w)
-        {
-            if (rank < 2)
-                return new int[] { w };
-            else if (rank < 3)
-                return new int[] { h, w };
-            else if (rank < 4)
-                return new int[] { c, h, w };
-            else
-                return new int[] { b, c, h, w };
-        }
+        // inside use      
         private static void HandleAxis(TensorGPU tensor, ref int axis)
         {
             int rank = tensor.Rank;
@@ -1313,6 +1543,37 @@ namespace DeepUnity
                 if (axis < 0)
                     axis = rank + axis;
             }
+        }
+        private static Dim AxisToDim(TensorGPU t, int axis)
+        {
+            // Returns the index in the full shape array of the axis. ([0,1,2,3])
+            // Used only for methods along the axis, that uses full shape call.
+            int rank = t.Rank;
+
+            if (axis > rank)
+                throw new ArgumentException($"Cannot use axis {axis} for a tensor of rank {rank}.");
+
+            // check for rank 0
+            if (rank == 0 && (axis == 0 || axis == -1))
+                return (Dim)3;
+
+            // check for negative axis as well
+            if (axis >= 0)
+                return (Dim)4 - rank + axis;
+            else
+                return (Dim)4 + axis;
+
+        }
+        private static int[] CreateShape(int rank, int b, int c, int h, int w)
+        {
+            if (rank < 2)
+                return new int[] { w };
+            else if (rank < 3)
+                return new int[] { h, w };
+            else if (rank < 4)
+                return new int[] { c, h, w };
+            else
+                return new int[] { b, c, h, w };
         }
     }
 
