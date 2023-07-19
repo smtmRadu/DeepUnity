@@ -1,5 +1,3 @@
-using UnityEngine;
-
 namespace DeepUnity
 {
     public class InputException : System.Exception

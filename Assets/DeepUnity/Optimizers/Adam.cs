@@ -1,4 +1,5 @@
 using System;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity
@@ -34,6 +35,8 @@ namespace DeepUnity
             {
                 Learnable P = parameters[i];
 
+                // if (P.device == Device.GPU)
+                //     continue;
 
                 mGamma[i] = Tensor.Zeros(P.gamma.Shape);
                 mBeta[i] = Tensor.Zeros(P.beta.Shape);
@@ -51,6 +54,9 @@ namespace DeepUnity
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
                 Learnable P = parameters[i];
+
+                // if(P.device == Device.GPU)
+                //     return;
 
                 Tensor mHat;
                 Tensor vHat;
@@ -85,9 +91,7 @@ namespace DeepUnity
 
                 // Update parameters 
                 P.beta = P.beta - learningRate * mHat / (Tensor.Sqrt(vHat) + Utils.EPSILON);
-
-                
-                
+             
             });
 
         }

@@ -7,6 +7,14 @@ namespace DeepUnity
     {
         private Tensor InputCache { get; set; }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="in_features"></param>
+        /// <param name="out_features"></param>
+        /// <param name="init"></param>
+        /// <param name="device">MatMul operation running on CPU or GPU.</param>
+        /// <exception cref="Exception"></exception>
         public Dense(int in_features, int out_features, InitType init = InitType.Default, Device device = Device.CPU) : base(device)
         {
             switch (init)
@@ -110,9 +118,7 @@ namespace DeepUnity
                 Tensor.MatMul(transposedLoss, InputCache) :
                 Tensor.MatMulGPU(transposedLoss, InputCache);
 
-            Tensor gradB = device == Device.CPU ?
-                Tensor.MatMul(transposedLoss, Tensor.Ones(batch_size)) :
-                Tensor.MatMulGPU(transposedLoss, Tensor.Ones(batch_size));
+            Tensor gradB = Tensor.MatMul(transposedLoss, Tensor.Ones(batch_size));
 
             // Update the gradients
             gammaGrad += gradW / batch_size; // (out, in)

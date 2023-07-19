@@ -99,7 +99,7 @@ namespace DeepUnity
     /// [Deprecated]
     /// </summary>
     [Serializable]
-    public class OptimizerWrapper
+    internal class OptimizerWrapper
     {
         public string name;
 

@@ -31,8 +31,7 @@ namespace DeepUnity
         }
         public int[] Shape
         {
-            get => shape.ToArray();
-            
+            get => shape.ToArray();         
         }
         private int Width
         {
@@ -98,13 +97,13 @@ namespace DeepUnity
         private Tensor(params int[] shape)
         {
             if (shape == null)
-                throw new ArgumentException("Tensor cannot be instantiated with null ");
+                throw new ShapeException("Tensor cannot be instantiated with null shape");
             if (shape.Length == 0)
-                throw new ArgumentException("Tensor cannot be instantiated with a shape of length 0");
+                throw new ShapeException("Tensor cannot be instantiated with a shape of length 0");
             if (shape.Length > 4)
-                throw new ArgumentException("Tensor cannot be instantiated with more than 4 dimensions.");
+                throw new ShapeException("Tensor cannot be instantiated with more than 4 dimensions.");
             if (shape.Any(x => x < 1))
-                throw new ArgumentException("Tensor cannot be instantiated with a dimension < 1.");
+                throw new ShapeException("Tensor cannot be instantiated with a dimension < 1.");
 
             int size = 1;
             foreach (var item in shape)
@@ -942,12 +941,12 @@ namespace DeepUnity
         /// Computed the norm of the tensor.
         /// </summary>
         /// <param name="tensor"></param>
-        /// <param name="normType"></param>
+        /// <param name="norm"></param>
         /// <returns><see cref="Tensor"/> (1)</returns>
         /// <exception cref="Exception"></exception>
-        public static Tensor Norm(Tensor tensor, NormType normType = NormType.EuclideanL2)
+        public static Tensor Norm(Tensor tensor, NormType norm = NormType.EuclideanL2)
         {
-            switch (normType)
+            switch (norm)
             {
                 case NormType.NonZeroL0:
                     int nonzeros = tensor.Count(x => x != 0);

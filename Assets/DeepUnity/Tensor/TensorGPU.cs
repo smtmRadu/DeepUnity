@@ -241,13 +241,13 @@ namespace DeepUnity
         private TensorGPU(params int[] shape)
         {
             if (shape == null)
-                throw new ArgumentException("Tensor cannot be instantiated with null ");
+                throw new ShapeException("Tensor cannot be instantiated with null shape");
             if (shape.Length == 0)
-                throw new ArgumentException("Tensor cannot be instantiated with a shape of length 0");
+                throw new ShapeException("Tensor cannot be instantiated with a shape of length 0");
             if (shape.Length > 4)
-                throw new ArgumentException("Tensor cannot be instantiated with more than 4 dimensions.");
+                throw new ShapeException("Tensor cannot be instantiated with more than 4 dimensions.");
             if (shape.Any(x => x < 1))
-                throw new ArgumentException("Tensor cannot be instantiated with a dimension < 1.");
+                throw new ShapeException("Tensor cannot be instantiated with a dimension < 1.");
 
             int size = 1;
             foreach (var item in shape)
@@ -261,6 +261,12 @@ namespace DeepUnity
 
             this.shape = shape.ToArray();
             this.data = new ComputeBuffer(size, 4);
+
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+
+            int kernel = cs.FindKernel("Zeros");
+            cs.SetBuffer(kernel, "result", this.data);
+            cs.Dispatch(kernel, 1, 1, 1);
 
             TensorGPUDisposer.tensors.AddLast(this);
             GC.Collect();
@@ -722,6 +728,11 @@ namespace DeepUnity
             return result;
 
         }
+        public static TensorGPU Norm(TensorGPU tensor, NormType norm = NormType.EuclideanL2)
+        {
+            throw new NotImplementedException();
+        }
+
 
         #region Static operations
         public int Size(int axis)
@@ -1264,6 +1275,7 @@ namespace DeepUnity
 
             return t;
         }
+       
 
         #endregion Static operations
 

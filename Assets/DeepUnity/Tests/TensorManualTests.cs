@@ -1,24 +1,61 @@
 using UnityEngine;
 using DeepUnity;
 using Unity.VisualScripting;
-using System.Runtime.Remoting.Channels;
-using System.Threading.Tasks;
 
 namespace kbRadu
 {
     public class TensorManualTests : MonoBehaviour
     {
-        public Device matmulDevice;
+        public Device TestDevice;
         public Vector2Int MatShape = new Vector2Int(64, 64);
         public int Runs = 100;
 
         private void Start()
         {
-            TensorGPU x = TensorGPU.Random01(5, 2);
-            print(x);
-            print(TensorGPU.Transpose(x, 0, 1));
+            // CPUvsGPU();
+            TestDense();
+            
         }
 
+        void CPUvsGPU_Speed()
+        {
+            if(TestDevice == Device.CPU)
+            {
+                Tensor x = Tensor.Random01(10, 100);
+
+                TimerX.Start();
+                for (int i = 0; i < Runs; i++)
+                {
+                    Tensor.Expand(x, 1, 10);
+                }
+                TimerX.Stop();
+            }
+            else
+            {
+                TensorGPU x = TensorGPU.Random01(10, 100);
+
+                TimerX.Start();
+                for (int i = 0; i < Runs; i++)
+                {
+                    TensorGPU.Expand(x, 1, 10);
+                }
+                TimerX.Stop();
+            }
+        }
+
+        void TestDense()
+        {
+            Dense dense = new Dense(MatShape.x, MatShape.y, device: TestDevice);
+            
+            Tensor input = Tensor.Random01(8, MatShape.x);
+            TimerX.Start();
+            for (int i = 0; i < Runs; i++)
+            {            
+                var pred = dense.Forward(input);
+                var loss = dense.Backward(pred);
+            }
+            TimerX.Stop();
+        }
         void TestConv2d()
         {
             Conv2D conv2d = new Conv2D((1, 28, 28), 5, 3);
@@ -111,7 +148,7 @@ namespace kbRadu
         }
         void Benchmark_Matmul_time()
         {
-            if(matmulDevice == Device.CPU)
+            if(TestDevice == Device.CPU)
             {
                 var t1 = Tensor.Random01(MatShape.x, MatShape.y);
                 var t2 = Tensor.Random01(MatShape.x, MatShape.y);

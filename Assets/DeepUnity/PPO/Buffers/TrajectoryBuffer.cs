@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity
@@ -37,7 +38,24 @@ namespace DeepUnity
             advantages = new List<Tensor>();
             returns = new List<Tensor>();
         }
-        
+
+        /// <summary>
+        /// Checks if the Count > 1. 
+        /// Checks if no_states == no_values == no_rewards == ... (but no_advantages & no_returns)
+        /// </summary>    
+        public bool IsConsistent()
+        {
+            if (Count == 1)
+                return false;
+
+            if (states.Count == values.Count && values.Count == rewards.Count)
+                return true;
+
+            Debug.Log("Incosistent trajectory deleted.");
+            return false;
+
+            
+        }
         public void Remember(TimeStep t)
         {
             states.Add(t.state);
@@ -47,7 +65,6 @@ namespace DeepUnity
             continuous_log_probs.Add(t.continuous_log_prob);
             discrete_actions.Add(t.discrete_action);
             discrete_log_probs.Add(t.discrete_log_prob);
-            t.Reset();
         }
        
         public void Reset()
@@ -64,6 +81,10 @@ namespace DeepUnity
             advantages.Clear();
         }
 
+        public void DebugInFile()
+        {
+            Utils.DebugInFile(this.ToString(), true);
+        }
         public override string ToString()
         {
             StringBuilder sb = new StringBuilder();
@@ -71,12 +92,37 @@ namespace DeepUnity
             sb.AppendLine("{");
             for (int i = 0; i < Count; i++)
             {
-                sb.AppendLine(
-                    $"\tFrame {i} " +
-                    $"| Reward: {rewards[i][0]} " +
-                    $"| Return: {returns[i][0]} " +
-                    $"| Advantage: {advantages[i][0]} " +                
-                    $"| Value: {values[i][0]}");
+                try
+                {
+                    sb.Append($"\tFrame {i}");
+                }
+                catch { }
+                // try
+                // {
+                //     sb.Append($"| State: {states[i]} ");
+                // }
+                // catch { }
+                try
+                {
+                    sb.Append($"| Reward: {rewards[i][0]} ");
+                }
+                catch { }
+                try
+                {
+                    sb.Append($"| Return: {returns[i][0]}");
+                }
+                catch { }
+                try
+                {
+                    sb.Append($"| Advantage: {advantages[i][0]}");
+                }
+                catch { }
+                try
+                {
+                    sb.Append($"| Value: {values[i][0]}");
+                }
+                catch { }
+                sb.Append("\n");
             }
             sb.AppendLine("}");
             return sb.ToString();
@@ -94,16 +140,14 @@ namespace DeepUnity
         public Tensor reward;
         public Tensor value;
 
-
-        public void Reset()
+        public void Check()
         {
-            state = null;
-            continuous_action = null;
-            continuous_log_prob = null;
-            discrete_action = null;
-            discrete_log_prob = null;
-            reward = null;
-            value = null;
+            if (state == null)
+                Debug.Log("Timstep incomplete state missing");
+            if(reward == null)
+                Debug.Log("Timstep incomplete reward missing");
+            if (value == null)
+                Debug.Log("Timstep incomplete value missing");
         }
     }
 }

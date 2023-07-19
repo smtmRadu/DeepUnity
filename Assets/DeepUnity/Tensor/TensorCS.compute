@@ -138,6 +138,22 @@ void SetAtIndex(int3 id : SV_DispatchThreadID)
 }
 
 // Create
+#pragma kernel Zeros
+[numthreads(1,1,1)]
+void Zeros(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+
+    for (int i = 0; i < count; i++)
+    {
+        result[i] = 0.0f;
+
+    }
+    
+}
 #pragma kernel Ones
 [numthreads(1, 1, 1)]
 void Ones(int3 id : SV_DispatchThreadID)

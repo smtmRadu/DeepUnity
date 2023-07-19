@@ -21,8 +21,7 @@ namespace DeepUnity
         private Tensor std { get; set; }
 
         [SerializeField] private int[] inputShape;
-        [SerializeField] private float momentum = 0.1f;
-        //[SerializeField] private int step;
+        [SerializeField] private int step;
 
         // Learnable parameters
         [SerializeField] private Tensor runningMean;
@@ -34,6 +33,7 @@ namespace DeepUnity
         /// Input: (Batch, *)      <br />
         /// Output: (Batch, *)     <br />
         /// </summary>
+        /// <param name="input_shape">Shape of the input, excepting the batch.</param>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
         public LayerNorm(params int[] input_shape) : base(Device.CPU)
         {
@@ -46,7 +46,7 @@ namespace DeepUnity
             runningMean = Tensor.Zeros(1);
             runningVar = Tensor.Ones(1);
 
-            // step = 0;
+            step = 0;
             this.inputShape = input_shape.ToArray();
         }
         public Tensor Predict(Tensor input)
@@ -80,17 +80,19 @@ namespace DeepUnity
 
 
             float mu_across_batch = isBatched ? Tensor.Mean(mu, 0)[0] : mu[0];
-            float var_across_batch = isBatched ? Tensor.Mean(var, 0)[0] : var[0];
-
             
+
+
             // Sharing consistance update approach
             // step += batch_size;
             // float d1 = mu_across_batch - runningMean[0];
             // runningMean += d1 / step;
             // float d2 = mu_across_batch - runningMean[0];
             // runningVar = (runningVar * (step - batch_size) + d1 * d2) / step;
-            
+
+            // Momentum approach
             float momentum = 0.9f;
+            float var_across_batch = isBatched ? Tensor.Mean(var, 0)[0] : var[0];
             runningMean = runningMean * momentum + mu_across_batch * (1f - momentum);
             runningVar = runningVar * momentum + var_across_batch * (1f - momentum);
 

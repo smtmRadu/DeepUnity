@@ -26,7 +26,7 @@ namespace DeepUnity
         /// Output: (batch, features)
         /// </summary>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
-        public BatchNorm1D(int num_features, float momentum = 0.1f) : base(Device.CPU)
+        public BatchNorm1D(int num_features, float momentum = 0.9f) : base(Device.CPU)
         {
             this.momentum = momentum;
 

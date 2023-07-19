@@ -8,7 +8,9 @@ namespace kbRadu
 {
     public class ModelUT : MonoBehaviour
     {
+        public Device device;
         public Sequential net;
+        public bool save;
         public Optimizer optimizer;
         public StepLR scheduler;
         public int hiddenSize = 64;
@@ -37,21 +39,19 @@ namespace kbRadu
 
         public void Start()
         {
-            // batchnorm & layer norm placed on the middle layer
             if (net == null)
             {
                 net = new Sequential(
-                 new Dense(2, hiddenSize),
-                 new LayerNorm(64),
+                 new Dense(2, hiddenSize,device: device),
+                 new LayerNorm(hiddenSize),
                  new ReLU(),
-            
-                 new Dense(hiddenSize, hiddenSize),
+                 new Dense(hiddenSize, hiddenSize, device: device),
                  new ReLU(),
-                 new Dense(hiddenSize, 1)
-                 ); 
+                 new Dense(hiddenSize, 1, device: device)
+                 );; 
             }
 
-            optimizer = new Adamax(net.Parameters);
+            optimizer = new Adam(net.Parameters);
             scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
 
 
@@ -90,8 +90,8 @@ namespace kbRadu
                 trainAcc.Clear();
                 validationAcc.Clear();
                 scheduler.Step();
-                // if (epoch % 10 == 0)
-                //     net.Save("test");
+                if (save && epoch % 10 == 0)
+                     net.Save("test");
                 i = 0;
 
                 if (epoch == 25)
@@ -104,7 +104,7 @@ namespace kbRadu
 
             optimizer.ZeroGrad();
             net.Backward(loss);
-            optimizer.ClipGradNorm(0.5f);
+            //optimizer.ClipGradNorm(0.5f);
             optimizer.Step();
             
 

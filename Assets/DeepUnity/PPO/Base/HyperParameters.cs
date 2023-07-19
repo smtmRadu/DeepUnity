@@ -7,20 +7,31 @@ namespace DeepUnity
 {
     [DisallowMultipleComponent, AddComponentMenu("DeepUnity/HyperParameters"), Serializable]
     public class HyperParameters : MonoBehaviour
-    {
-        [Header("Simulation Configurations")]
-
+    { 
+        [Header("Models Configurations (on create)")]
+        
         [Tooltip("Device used for computing high parallelizable operations.")]
         public Device device = Device.CPU;
 
+        [Tooltip("Number of units in the hidden layers of the neural network.")]
+        public int hiddenUnits = 64;
 
-        [Header("Trainer Configurations")]
+        [ReadOnly, Tooltip("Number of hidden layers in the neural network.")]
+        public int numLayers = 2;
+
+        [Header("Training Configurations")]
+
+        [Min(30), Tooltip("The framerate at which the simulation is runned (FixedUpdate() calls per second).")]
+        public int targetFPS = 50;
 
         [ReadOnly, Tooltip("How many steps of experience to collect per-agent before adding it to the experience buffer.")]
         public int timeHorizon = 64;
 
+        [Tooltip("Total number of steps (i.e., observation collected and action taken) that must be taken in the environment (or across all environments if using multiple in parallel) before ending the training process.")]
+        public int maxSteps = 500_000;
+
         [Tooltip("The max step value determines the maximum length of an agent's episodes/trajectories. Set to a positive integer to limit the episode length to that many steps. Set to 0 for unlimited episode length.")]
-        public int maxStep = 65536;
+        public int maxEpisodeSteps = 3000;
 
         [Tooltip("Initial learning rate for stochastic gradient descent.")]
         public float learningRate = 3e-4f;
@@ -29,22 +40,19 @@ namespace DeepUnity
         public int batchSize = 256;
 
         [ReadOnly, Tooltip("Typical range 2048 - 409600")]
-        public int bufferSize = 2048;
-
-        [Tooltip("Number of units in the hidden layers of the neural network.")]
-        public int hiddenUnits = 64;
-
-        [ReadOnly, Tooltip("Number of hidden layers in the neural network.")]
-        public int numLayers = 2;
+        public int bufferSize = 10240;
 
         [Tooltip("Applies linear decay on learning rate (default step_size: 10, default decay: 0.99f).")]
         public bool learningRateSchedule = false;
 
         [Tooltip("Apply normalization to observation inputs and rewards, as well for the advantages.")]
-        public bool normalize = true;
+        public bool normalize = false;
 
-        [ReadOnly, Tooltip("Display statistics of each episode in the Console.")]
-        public bool verbose = false;
+        [Tooltip("Display statistics of each episode in the Console.")]
+        public bool verbose = true;
+
+        [Tooltip("Debug all timesteps in an output file.")]
+        public bool debug = false;
 
         [Header("PPO-specific Configurations")]
 
@@ -61,7 +69,7 @@ namespace DeepUnity
         public float lambda = 0.95f;
 
         [Tooltip("Number of epochs per buffer.")]
-        public int numEpoch = 3;
+        public int numEpoch = 10;
 
         [ReadOnly, Tooltip("Applies linear decay on beta.")]
         public bool betaScheduler = false;
@@ -77,6 +85,14 @@ namespace DeepUnity
         public override void OnInspectorGUI()
         {
             List<string> dontDrawMe = new List<string>() { "m_Script" };
+
+            // var thiscript = target as HyperParameters;
+            // 
+            // SerializedProperty staticSig = serializedObject.FindProperty("staticSigma");
+            // if(staticSig.boolValue == false)
+            // {
+            //     dontDrawMe.Add("sigma");
+            // }
 
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
             serializedObject.ApplyModifiedProperties();

@@ -7,9 +7,9 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class AgentBehaviour : ScriptableObject
+    public class Model : ScriptableObject
     {
-        [SerializeField] public new string name;
+        [SerializeField] public string behaviourName;
         [SerializeField] public int observationSize;
         [SerializeField] public int continuousDim;
         [SerializeField] public int[] discreteBranches;
@@ -37,9 +37,9 @@ namespace DeepUnity
         public static readonly float default_gamma_StepLR = 0.99f;
         public static readonly (float, float) sigma_clip = (0.001f, 5f);
 
-        public AgentBehaviour(int stateSize, int continuousActions, int[] discreteBranches, HyperParameters hp, string name)
+        public Model(int stateSize, int continuousActions, int[] discreteBranches, HyperParameters hp, string name)
         {
-            this.name = name;
+            this.behaviourName = name;
             this.observationSize = stateSize;
             this.continuousDim = continuousActions;
 
@@ -50,7 +50,7 @@ namespace DeepUnity
             critic = new Sequential(
                 new Dense(stateSize, hp.hiddenUnits),
                 new ReLU(),
-                new Dense(hp.hiddenUnits, hp.hiddenUnits),
+                new Dense(hp.hiddenUnits, hp.hiddenUnits, device: hp.device),
                 new ReLU(),
                 new Dense(hp.hiddenUnits, 1),
                 new Linear());
@@ -58,7 +58,7 @@ namespace DeepUnity
             muHead = new Sequential(
                 new Dense(stateSize, hp.hiddenUnits),
                 new ReLU(),
-                new Dense(hp.hiddenUnits, hp.hiddenUnits),
+                new Dense(hp.hiddenUnits, hp.hiddenUnits, device: hp.device),
                 new ReLU(),
                 new Dense(hp.hiddenUnits, continuousActions),
                 new Tanh());
@@ -66,7 +66,7 @@ namespace DeepUnity
             sigmaHead = new Sequential(
                 new Dense(stateSize, hp.hiddenUnits),
                 new ReLU(),
-                new Dense(hp.hiddenUnits, hp.hiddenUnits),
+                new Dense(hp.hiddenUnits, hp.hiddenUnits, device: hp.device),
                 new ReLU(),
                 new Dense(hp.hiddenUnits, continuousActions),
                 new Softplus());
@@ -104,6 +104,13 @@ namespace DeepUnity
             if (criticScheduler != null)
                 return;
 
+            /*
+             int max_step = 500_000;
+             int step_size = 10;
+             int no_epochs = 8;
+             
+             */
+
             int step_size = hp.learningRateSchedule ? default_step_size_StepLR : 1000;
             float gamma = hp.learningRateSchedule ? default_gamma_StepLR : 1f;
 
@@ -127,7 +134,8 @@ namespace DeepUnity
         {
             // Sample mu and sigma
             Tensor mu = muHead.Predict(state);
-            Tensor sigma = sigmaHead.Predict(state).Clip(sigma_clip.Item1, sigma_clip.Item2); //Tensor.Fill(0.1f, mu.Shape).Clip(sigma_clip.Item1, sigma_clip.Item2);
+            //Tensor sigma = sigmaHead.Predict(state).Clip(sigma_clip.Item1, sigma_clip.Item2);
+            Tensor sigma = Tensor.Fill(0.1f, mu.Shape); // (static sigma 0.1)
 
             // Sample actions
             Tensor actions = mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
@@ -140,7 +148,8 @@ namespace DeepUnity
         public Tensor ContinuousForward(Tensor stateBatch, out Tensor mu, out Tensor sigma)
         {
             mu = muHead.Forward(stateBatch);
-            sigma = sigmaHead.Forward(stateBatch).Clip(sigma_clip.Item1, sigma_clip.Item2); // Tensor.Fill(0.1f, mu.Shape).Clip(sigma_clip.Item1, sigma_clip.Item2);
+            //sigma = sigmaHead.Forward(stateBatch).Clip(sigma_clip.Item1, sigma_clip.Item2);
+            sigma = Tensor.Fill(0.1f, mu.Shape); // (static sigma 0.1)
 
             return mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
         }
@@ -162,26 +171,26 @@ namespace DeepUnity
         /// </summary>
         public void Save()
         {
-            if (!Directory.Exists($"Assets/{name}"))
-                Directory.CreateDirectory($"Assets/{name}");
+            if (!Directory.Exists($"Assets/{behaviourName}"))
+                Directory.CreateDirectory($"Assets/{behaviourName}");
 
             // Save aux networks
-            critic.Save($"{name}/critic");
-            muHead.Save($"{name}/mu");
-            sigmaHead.Save($"{name}/sigma");
+            critic.Save($"{behaviourName}/critic");
+            muHead.Save($"{behaviourName}/mu");
+            sigmaHead.Save($"{behaviourName}/sigma");
 
             for (int i = 0; i < discreteHeads.Length; i++)
             {
-                discreteHeads[i].Save($"{name}/discrete{i}");
+                discreteHeads[i].Save($"{behaviourName}/discrete{i}");
             }
 
 
             // Save this wrapper
-            var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
+            var instance = AssetDatabase.LoadAssetAtPath<Model>($"Assets/{behaviourName}/{behaviourName}.asset");
             if (instance == null)
             {
                 //create instance
-                AssetDatabase.CreateAsset(this, $"Assets/{name}/{name}.asset");
+                AssetDatabase.CreateAsset(this, $"Assets/{behaviourName}/{behaviourName}.asset");
                 AssetDatabase.SaveAssets();
             }
 

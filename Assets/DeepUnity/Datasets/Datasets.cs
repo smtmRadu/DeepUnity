@@ -20,36 +20,15 @@ namespace DeepUnity
             train = new();
             test = new();
 
-
-
-            string json_train_image = File.ReadAllText(path + "train_image.txt");
+            string json_train_image = File.ReadAllText(path + "train_input.txt");
             string json_train_label = File.ReadAllText(path + "train_label.txt");
-            string json_test_image = File.ReadAllText(path + "test_image.txt");
+            string json_test_image = File.ReadAllText(path + "test_input.txt");
             string json_test_label = File.ReadAllText(path + "test_label.txt");
 
             List<Tensor> collect_train_image = JsonUtility.FromJson<TensorCollection>(json_train_image).ToList();
             List<Tensor> collect_train_label = JsonUtility.FromJson<TensorCollection>(json_train_label).ToList();
             List<Tensor> collect_test_image = JsonUtility.FromJson<TensorCollection>(json_test_image).ToList();
             List<Tensor> collect_test_label = JsonUtility.FromJson<TensorCollection>(json_test_label).ToList();
-            
-
-
-            // Debug.Log(collect_train_image.Count());
-            // Debug.Log(collect_train_image.Count(x => x.Shape.SequenceEqual(new int[] { 1, 28, 28 })));
-            // Debug.Log(collect_train_image.Count(x => x.Shape.SequenceEqual(new int[] { 10 })));
-            // 
-            // Debug.Log(collect_test_image.Count()                                                           );
-            // Debug.Log(collect_test_image.Count(x => x.Shape.SequenceEqual(new int[] { 1, 28, 28 }))        );
-            // Debug.Log(collect_test_image.Count(x => x.Shape.SequenceEqual(new int[] { 10 }))        );
-            // 
-            // Debug.Log(collect_train_label.Count());
-            // Debug.Log(collect_train_label.Count(x => x.Shape.SequenceEqual(new int[] { 1, 28, 28 })));
-            // Debug.Log(collect_train_label.Count(x => x.Shape.SequenceEqual(new int[] { 10 })));
-            // 
-            // Debug.Log(collect_test_label.Count());
-            // Debug.Log(collect_test_label.Count(x => x.Shape.SequenceEqual(new int[] { 1, 28, 28 })));
-            // Debug.Log(collect_test_label.Count(x => x.Shape.SequenceEqual(new int[] { 10 })));
-
 
             for (int i = 0; i < collect_train_image.Count; i++)
             {
@@ -74,9 +53,6 @@ namespace DeepUnity
             TensorCollection test_image = new();
             TensorCollection test_label = new();
         
-
-
-
             for (int i = 0; i < 10; i++)
             {
                 string[] trainPaths = Directory.GetFiles(trainPath + i, "*.png", SearchOption.TopDirectoryOnly);
@@ -146,7 +122,7 @@ namespace DeepUnity
             test_i.Close();
             test_l.Close();
 
-            Debug.Log("MNIST Serialized");
+            Debug.Log("MNIST Serialized.");
             TimerX.Stop();
         }
         private static Texture2D LoadTexture(string filePath)

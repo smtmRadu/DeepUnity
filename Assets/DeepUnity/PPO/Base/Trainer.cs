@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.VisualScripting;
+using UnityEditor;
 using UnityEngine;
 
 
@@ -13,7 +14,8 @@ namespace DeepUnity
 
         private Dictionary<Agent, bool> agents;
         private HyperParameters hp;
-        private AgentBehaviour ac;
+        private Model ac;
+        [SerializeField] private int StepCount;
 
         private void Awake()
         {
@@ -29,9 +31,17 @@ namespace DeepUnity
         private void LateUpdate()
         {
             // check if there are any ready agents
-            if(agents.Values.Contains(true))
+            if (Instance.agents.Values.Contains(true))
+            {
                 Train();
 
+                if (Instance.StepCount > Instance.hp.maxSteps)
+                {
+                    Debug.Log($"Training session finnished. The total of max steps {hp.maxSteps} reached.");
+                    EditorApplication.isPlaying = false;
+                }
+            }
+           
         }
         public static void Subscribe(Agent agent)
         {
@@ -45,6 +55,8 @@ namespace DeepUnity
 
                 Instance.ac.InitOptimisers(Instance.hp);
                 Instance.ac.InitSchedulers(Instance.hp);
+
+                Instance.StepCount = 0;
             }
 
             Instance.agents.Add(agent, false);
@@ -53,16 +65,30 @@ namespace DeepUnity
         {
             Instance.agents[agent] = true;
         }
+        public static void AddSteps(int stepcount)
+        {
+            Instance.StepCount += stepcount;
+        }
         private void Train()
         {
 
             foreach (var kv in agents)
             {
                 if (kv.Value == false)
-                    return;
+                    continue;
 
                 Agent agent = kv.Key;
-                AdvantageEstimate(agent.Trajectory);
+               
+                if(!agent.Trajectory.IsConsistent())
+                {
+                    agent.Trajectory.Reset();
+                    continue;
+                }             
+
+                ComputeAdvantageEstimatesAndQValues(agent.Trajectory);
+
+                if(hp.debug)
+                    agent.Trajectory.DebugInFile();
 
 
                 // Unzip the trajectory
@@ -76,10 +102,8 @@ namespace DeepUnity
                 List<Tensor> advantages = agent.Trajectory.advantages;
                 List<Tensor> returns = agent.Trajectory.returns;
 
-                
-
-                // Utils.DebugInFile(agent.Trajectory.ToString());
-
+               
+    
                 // STEP Norm advantages
                 int n = advantages.Count;
                 float mean = advantages.Average(x => x[0]);
@@ -91,7 +115,7 @@ namespace DeepUnity
                 int noBatches = (int)(hp.bufferSize / (float)hp.batchSize);
                 for (int e = 0; e < hp.numEpoch; e++)
                 {
-                    // shuffle the training data lists together
+                    // shuffle the trajectory lists together
 
                     // split traindata to minibatches
                     List<Tensor[]> states_batches = Utils.Split(states, hp.batchSize);
@@ -107,17 +131,18 @@ namespace DeepUnity
                         Tensor states_batch = Tensor.Cat(null, states_batches[b]);
                         Tensor advantages_batch = Tensor.Cat(null, advantages_batches[b]);
                         Tensor returns_batch = Tensor.Cat(null, returns_batches[b]);
+                        Tensor cont_act_batch = Tensor.Cat(null, cont_act_batches[b]);
+                        Tensor cont_log_probs_batch = Tensor.Cat(null, cont_log_probs_batches[b]);
 
                         UpdateCritic(states_batch, returns_batch);
                         UpdateContinuousNetwork(
                                 states_batch,
                                 advantages_batch,
-                                Tensor.Cat(null, cont_act_batches[b]),
-                                Tensor.Cat(null, cont_log_probs_batches[b]));
+                                cont_act_batch,
+                                cont_log_probs_batch);
 
                     }
                    
-
                     // Step schedulers after each epoch
                     ac.criticScheduler.Step();
                     ac.muHeadScheduler.Step();
@@ -129,17 +154,17 @@ namespace DeepUnity
                 }
 
                 agent.Trajectory.Reset();
-
             }
 
 
-            // Set agents states to unready
+            // Set agents states to unready (this remains like this due to foreach problems when modifing the dict)
             var keys = agents.Keys.ToList();
             foreach (var key in keys)
             {
                 agents[key] = false;
             }
 
+            
             ac.Save();
         }
 
@@ -169,6 +194,7 @@ namespace DeepUnity
             Tensor mu;
             Tensor sigma;
             Instance.ac.ContinuousForward(states, out mu, out sigma);
+            Tensor sigmaSqr = sigma * sigma;
 
             Tensor newLogProbs = Tensor.LogDensity(oldActions, mu, sigma);
 
@@ -216,7 +242,7 @@ namespace DeepUnity
             dmLdPi -= entropy * hp.beta;
 
             // d PI[a,t] / d Mu
-            Tensor dPidMu = Tensor.Exp(newLogProbs) * (oldActions - mu) / (sigma * sigma);
+            Tensor dPidMu = Tensor.Exp(newLogProbs) * (oldActions - mu) / (sigmaSqr);
             Tensor dLdMu = dmLdPi * dPidMu;
 
             ac.muHeadOptimizer.ZeroGrad();
@@ -226,20 +252,25 @@ namespace DeepUnity
 
 
             // d Pi[a,t] / d Sigma
-            Tensor dPidSigma = ((oldActions - mu) * (oldActions - mu) - sigma * sigma) / Tensor.Pow(sigma, 3f);
-            Tensor dLdSigma = dmLdPi * dPidSigma;
-            
-            ac.sigmaHeadOptimizer.ZeroGrad();
-            ac.sigmaHead.Backward(dLdSigma);
-            // ac.sigmaHeadOptimizer.ClipGradNorm(0.5f);
-            ac.sigmaHeadOptimizer.Step();
+            // Tensor dPidSigma = ((oldActions - mu) * (oldActions - mu) - sigmaSqr) / (sigmaSqr * sigma);
+            // Tensor dLdSigma = dmLdPi * dPidSigma;
+            // 
+            // ac.sigmaHeadOptimizer.ZeroGrad();
+            // ac.sigmaHead.Backward(dLdSigma);
+            // // ac.sigmaHeadOptimizer.ClipGradNorm(0.5f);
+            // ac.sigmaHeadOptimizer.Step();
 
             // Test KL
         }
+        private void UpdateDiscreteNetworks(Tensor states, Tensor advantages, Tensor oldActions, Tensor oldLogProbs)
+        {
 
-        public void AdvantageEstimate(TrajectoryBuffer trajectory)
+        }
+
+        public void ComputeAdvantageEstimatesAndQValues(TrajectoryBuffer trajectory)
         {
             int T = trajectory.Count;
+            
             for (int timestep = 0; timestep < T; timestep++)
             {
                 float discount = 1f;
