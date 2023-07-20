@@ -53,6 +53,10 @@ namespace DeepUnity
             int totalCount = 0;
             foreach (var param in parameters)
             {
+                if(param is RNNCell)
+                {
+                    throw new NotImplementedException("Not implemented GlobalCLipGradNorm when RNNCells are involved");
+                }
                 totalCount += param.gamma.Count();
                 totalCount += param.beta.Count();
             }

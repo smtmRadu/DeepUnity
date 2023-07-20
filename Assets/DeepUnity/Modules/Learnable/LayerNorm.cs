@@ -10,7 +10,7 @@ using UnityEngine.Windows;
 namespace DeepUnity
 {
     [Serializable]
-    public class LayerNorm: Learnable, IModule
+    public class LayerNorm: Learnable, IModule, IModuleRNN
     {
         // Epsilon should be 1e-5f as default, but i keep it on default 1e-8f
         // Just a good reference paper to learn from, i made this just by adapting batchnorm layer.
@@ -30,13 +30,18 @@ namespace DeepUnity
 
         /// <summary>
         /// <b>Placed before the non-linear activation function. </b>    <br />
-        /// Input: (Batch, *)      <br />
-        /// Output: (Batch, *)     <br />
+        /// Input: (B, *) or (*) for unbatched input.<br />
+        /// Output: (B, *) or (*) for unbatched input.<br />
+        /// where B = batch_size and * = input_shape.<br />
+        /// <b>Applies normalization over the last dimension of the input.</b> 
         /// </summary>
         /// <param name="input_shape">Shape of the input, excepting the batch.</param>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
         public LayerNorm(params int[] input_shape) : base(Device.CPU)
         {
+            if (input_shape == null || input_shape.Length == 0)
+                throw new ShapeException("Please specify the input_shape when creating a LayerNorm module.");
+
             gamma = Tensor.Ones(1);
             beta = Tensor.Zeros(1);
 

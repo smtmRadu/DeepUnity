@@ -76,23 +76,27 @@ namespace DeepUnity
                 // P.gamma = P.gamma - learningRate * P.gradGamma / (Tensor.Sqrt(v_dGamma[i]) + Utils.EPSILON);
                 // P.beta = P.beta - learningRate * P.gradBeta / (Tensor.Sqrt(v_dBeta[i]) + Utils.EPSILON);
 
+                if (parameters[i] is RNNCell R)
+                {
+                    throw new NotImplementedException("RNNCell optimization not implemented yet.");
 
-                if (parameters[i] is Learnable P)
+                }
+                else  if (parameters[i] is Learnable L)
                 {
                     if (weightDecay != 0)
-                        P.gammaGrad = P.gammaGrad + weightDecay * P.gamma;
+                        L.gammaGrad = L.gammaGrad + weightDecay * L.gamma;
 
 
-                    vGamma[i] = alpha * vGamma[i] + (1f - alpha) * Tensor.Pow(P.gammaGrad, 2f);
-                    vBeta[i] = alpha * vBeta[i] + (1f - alpha) * Tensor.Pow(P.betaGrad, 2f);
+                    vGamma[i] = alpha * vGamma[i] + (1f - alpha) * Tensor.Pow(L.gammaGrad, 2f);
+                    vBeta[i] = alpha * vBeta[i] + (1f - alpha) * Tensor.Pow(L.betaGrad, 2f);
                 
                     var vBarGamma = Tensor.Identity(vGamma[i]);
                     var vBarBeta = Tensor.Identity(vBeta[i]);
                 
                     if (centered)
                     {
-                        gaveGamma[i] = gaveGamma[i] * alpha + (1f - alpha) * P.gammaGrad;
-                        gaveBeta[i] = gaveBeta[i] * alpha + (1f - alpha) * P.betaGrad;
+                        gaveGamma[i] = gaveGamma[i] * alpha + (1f - alpha) * L.gammaGrad;
+                        gaveBeta[i] = gaveBeta[i] * alpha + (1f - alpha) * L.betaGrad;
                 
                         vBarGamma = vBarGamma - Tensor.Pow(gaveGamma[i], 2f);
                         vBarBeta = vBarBeta - Tensor.Pow(gaveBeta[i], 2f);
@@ -100,16 +104,16 @@ namespace DeepUnity
                 
                     if (momentum > 0f)
                     {
-                        buffGamma[i] = momentum * buffGamma[i] + P.gammaGrad / (Tensor.Sqrt(vBarGamma) + Utils.EPSILON);
-                        buffBeta[i] = momentum * buffBeta[i] + P.betaGrad / (Tensor.Sqrt(vBarBeta) + Utils.EPSILON);
+                        buffGamma[i] = momentum * buffGamma[i] + L.gammaGrad / (Tensor.Sqrt(vBarGamma) + Utils.EPSILON);
+                        buffBeta[i] = momentum * buffBeta[i] + L.betaGrad / (Tensor.Sqrt(vBarBeta) + Utils.EPSILON);
                 
-                        P.gamma = P.gamma - learningRate * buffGamma[i];
-                        P.beta = P.beta - learningRate * buffBeta[i];
+                        L.gamma = L.gamma - learningRate * buffGamma[i];
+                        L.beta = L.beta - learningRate * buffBeta[i];
                     }
                     else
                     {
-                        P.gamma = P.gamma - learningRate * P.gammaGrad / (Tensor.Sqrt(vBarGamma) + Utils.EPSILON);
-                        P.beta = P.beta - learningRate * P.betaGrad / (Tensor.Sqrt(vBarBeta) + Utils.EPSILON);
+                        L.gamma = L.gamma - learningRate * L.gammaGrad / (Tensor.Sqrt(vBarGamma) + Utils.EPSILON);
+                        L.beta = L.beta - learningRate * L.betaGrad / (Tensor.Sqrt(vBarBeta) + Utils.EPSILON);
                     }
                 }
             });

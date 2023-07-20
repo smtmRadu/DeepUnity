@@ -6,13 +6,12 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class Sequential : ScriptableObject, IModule, ISerializationCallbackReceiver
-    {
-        [SerializeField] private ModuleWrapper[] serializedModules;
-        [NonSerialized]  private IModule[] Modules;
+    public class Sequential : ScriptableObject, ISerializationCallbackReceiver
+    {       
+        [NonSerialized]  private IModule[] modules;
+        [SerializeField] private IModuleWrapper[] serializedModules;
 
-
-        public Sequential(params IModule[] modules) => Modules = modules;
+        public Sequential(params IModule[] modules) => this.modules = modules;
 
         /// <summary>
         /// Forwards the input without caching.
@@ -21,7 +20,7 @@ namespace DeepUnity
         /// <returns>output</returns>
         public Tensor Predict(Tensor input)
         {
-            foreach (var module in Modules)
+            foreach (var module in modules)
             {
                 input = module.Predict(input);
             }
@@ -34,7 +33,7 @@ namespace DeepUnity
         /// <returns>output</returns>
         public Tensor Forward(Tensor input)
         {
-            foreach (var module in Modules)
+            foreach (var module in modules)
             {
                 input = module.Forward(input);
             }
@@ -45,13 +44,13 @@ namespace DeepUnity
         /// </summary>
         /// <param name="loss">Derivative of the loss function w.r.t output. (dLdY)</param>
         /// <returns></returns>
-        public Tensor Backward(Tensor loss)
+        public void Backward(Tensor loss)
         {
-            for (int i = Modules.Length - 1; i >= 0; i--)
+            for (int i = modules.Length - 1; i >= 0; i--)
             {
-                loss = Modules[i].Backward(loss);
+                loss = modules[i].Backward(loss);
             }
-            return loss;
+            // return loss;
         }
 
 
@@ -59,7 +58,7 @@ namespace DeepUnity
         /// Gets all <typeparamref name="Learnable"/> modules.
         /// </summary>
         /// <returns></returns>
-        public Learnable[] Parameters { get => Modules.Where(x => x is Learnable P).Select(x => (Learnable)x).ToArray(); }
+        public Learnable[] Parameters { get => modules.Where(x => x is Learnable P).Select(x => (Learnable)x).ToArray(); }
 
         /// <summary>
         /// Save path: "Assets/". Creates/Overwrites model on the same path.
@@ -76,11 +75,11 @@ namespace DeepUnity
         }
         public void OnBeforeSerialize()
         {
-            serializedModules = Modules.Select(x => ModuleWrapper.Wrap(x)).ToArray();
+            serializedModules = modules.Select(x => IModuleWrapper.Wrap(x)).ToArray();
         }
         public void OnAfterDeserialize()
         {
-            Modules = serializedModules.Select(x => ModuleWrapper.Unwrap(x)).ToArray();
+            modules = serializedModules.Select(x => IModuleWrapper.Unwrap(x)).ToArray();
         }
     }
 }

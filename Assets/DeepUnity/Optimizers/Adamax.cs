@@ -66,21 +66,27 @@ namespace DeepUnity
                 //     P.beta = P.beta - (learningRate / (1f - MathF.Pow(beta1, t))) * m_B[i] / u_B[i];
                 // }
 
-                Learnable P = parameters[i];
+                if (parameters[i] is RNNCell R)
+                {
 
-                // Weight decay is not applied on biases
-                if (weightDecay != 0)                
-                    P.gammaGrad = P.gammaGrad + weightDecay * P.gamma;
+                    throw new NotImplementedException("RNNCell optimization not implemented yet.");
+                }
+                else if (parameters[i] is Learnable L)
+                {
 
-                mGamma[i] = beta1 * mGamma[i] + (1f - beta1) * P.gammaGrad;
-                mBeta[i] = beta1 * mBeta[i] + (1f - beta1) * P.betaGrad;
+                    // Weight decay is not applied on biases
+                    if (weightDecay != 0)
+                        L.gammaGrad = L.gammaGrad + weightDecay * L.gamma;
 
-                uGamma[i] = Tensor.Maximum(beta2 * uGamma[i], Tensor.Abs(P.gammaGrad) + Utils.EPSILON);
-                uBeta[i] = Tensor.Maximum(beta2 * uBeta[i], Tensor.Abs(P.betaGrad) + Utils.EPSILON);
+                    mGamma[i] = beta1 * mGamma[i] + (1f - beta1) * L.gammaGrad;
+                    mBeta[i] = beta1 * mBeta[i] + (1f - beta1) * L.betaGrad;
 
-                P.gamma = P.gamma - learningRate * mGamma[i] / ((1f - MathF.Pow(beta1, t)) * uGamma[i]);
-                P.beta = P.beta - learningRate * mBeta[i] / ((1f - MathF.Pow(beta1, t)) * uBeta[i]);
+                    uGamma[i] = Tensor.Maximum(beta2 * uGamma[i], Tensor.Abs(L.gammaGrad) + Utils.EPSILON);
+                    uBeta[i] = Tensor.Maximum(beta2 * uBeta[i], Tensor.Abs(L.betaGrad) + Utils.EPSILON);
 
+                    L.gamma = L.gamma - learningRate * mGamma[i] / ((1f - MathF.Pow(beta1, t)) * uGamma[i]);
+                    L.beta = L.beta - learningRate * mBeta[i] / ((1f - MathF.Pow(beta1, t)) * uBeta[i]);
+                }
             });
 
 

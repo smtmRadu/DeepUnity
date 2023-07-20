@@ -408,10 +408,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b84b8b2bedacc4a45b998f855a119d27, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  device: 1
+  device: 0
   net: {fileID: 0}
   save: 1
-  hiddenSize: 128
+  hiddenSize: 32
   trainingSamples: 256
   batch_size: 32
   validationSamples: 32
@@ -419,6 +419,7 @@ MonoBehaviour:
   scheduler_gamma: 1
   rotationSpeed: 0.35
   dataScale: 0.15
+  timerStopEpoch: 25
   drawScale: 200
 --- !u!4 &621327371
 Transform:
@@ -596,7 +597,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &752495706
 MonoBehaviour:
   m_ObjectHideFlags: 0

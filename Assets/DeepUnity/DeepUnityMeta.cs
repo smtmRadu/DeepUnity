@@ -73,6 +73,7 @@ namespace DeepUnity
         Xavier,
         Normal,
         Uniform,
+        [Tooltip("[DO NOT USE] A hardcoded value set for the parameters. Used on development.")]
         Debug,
     }
     public enum Device
@@ -107,9 +108,12 @@ namespace DeepUnity
         Full,
         Same
     }
-    public enum RNNnonLinearity
+    /// <summary>
+    /// Nonlinearity used for RNNCells.
+    /// </summary>
+    public enum NonLinearity
     {
-        TanH,
+        Tanh,
         ReLU
     }
 }

@@ -12,15 +12,15 @@ namespace DeepUnity
     }
 
     [Serializable]
-    public class ModuleWrapper
+    public class IModuleWrapper
     {
         public string name;
 
         [Header("These modules have save-able fields.")]
 
-        // Parameter modules
+        // Learnable modules
         public Dense dense;                  
-        public BatchNorm1D batchnorm1d;         
+        public BatchNorm batchnorm1d;         
         public LayerNorm layernorm;
         public Conv2D conv2d;
 
@@ -31,7 +31,7 @@ namespace DeepUnity
         public AvgPool2D avgPool2d;
         public MaxPool2D maxPool2d;
 
-        // Activation modules
+        // Activations modules
         public Linear linear;
         public ReLU relu;
         public Tanh tanh;
@@ -47,7 +47,7 @@ namespace DeepUnity
         
         
 
-        private ModuleWrapper(IModule module)
+        private IModuleWrapper(IModule module)
         {
             name = module.GetType().Name;
 
@@ -55,7 +55,7 @@ namespace DeepUnity
             {
                 dense = denseModule;
             }
-            else if (module is BatchNorm1D batchnormModule)
+            else if (module is BatchNorm batchnormModule)
             {
                 batchnorm1d = batchnormModule;
             }
@@ -135,11 +135,11 @@ namespace DeepUnity
                 throw new Exception("Unhandled module type while wrapping.");
         }
 
-        public static ModuleWrapper Wrap(IModule module)
+        public static IModuleWrapper Wrap(IModule module)
         {
-            return new ModuleWrapper(module);
+            return new IModuleWrapper(module);
         }
-        public static IModule Unwrap(ModuleWrapper moduleWrapper)
+        public static IModule Unwrap(IModuleWrapper moduleWrapper)
         {
             IModule module = null;
 
@@ -147,7 +147,7 @@ namespace DeepUnity
             {
                 module = moduleWrapper.dense;
             }
-            else if (typeof(BatchNorm1D).Name.Equals(moduleWrapper.name))
+            else if (typeof(BatchNorm).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.batchnorm1d;
             }

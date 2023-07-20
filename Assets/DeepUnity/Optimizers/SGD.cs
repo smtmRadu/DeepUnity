@@ -53,45 +53,54 @@ namespace DeepUnity
                 // }
 
                 // pytorch implementation
-                Learnable P = parameters[i];
-
-                if (weightDecay != 0f)
-                    P.gammaGrad = P.gammaGrad + weightDecay * P.gamma;
-
-                if(momentum != 0f)
+                if (parameters[i] is RNNCell R)
                 {
-                    if (t > 1)
+                    throw new NotImplementedException("RNNCell optimization not implemented yet.");
+
+                }
+                else if (parameters[i] is Learnable P)
+                {
+                    if (weightDecay != 0f)
+                        P.gammaGrad = P.gammaGrad + weightDecay * P.gamma;
+
+                    if (momentum != 0f)
                     {
-                        bGamma[i] = bGamma[i] + (1f - dampening) * P.gammaGrad;
-                        bBeta[i] = bBeta[i] + (1f - dampening) * P.betaGrad;
+                        if (t > 1)
+                        {
+                            bGamma[i] = bGamma[i] + (1f - dampening) * P.gammaGrad;
+                            bBeta[i] = bBeta[i] + (1f - dampening) * P.betaGrad;
+                        }
+                        else
+                        {
+                            bGamma[i] = P.gammaGrad;
+                            bBeta[i] = P.betaGrad;
+                        }
+                        if (nesterov)
+                        {
+                            P.gammaGrad = P.gammaGrad + momentum * bGamma[i];
+                            P.betaGrad = P.betaGrad + momentum * bBeta[i];
+                        }
+                        else
+                        {
+                            P.gammaGrad = Tensor.Identity(bGamma[i]);
+                            P.betaGrad = Tensor.Identity(bBeta[i]);
+                        }
+
+                    }
+                    if (maximize)
+                    {
+                        P.gamma = P.gamma + learningRate * P.gammaGrad;
+                        P.beta = P.beta + learningRate * P.betaGrad;
                     }
                     else
                     {
-                        bGamma[i] = P.gammaGrad;
-                        bBeta[i] = P.betaGrad;
+                        P.gamma = P.gamma - learningRate * P.gammaGrad;
+                        P.beta = P.beta - learningRate * P.betaGrad;
                     }
-                    if(nesterov)
-                    {
-                        P.gammaGrad = P.gammaGrad + momentum * bGamma[i];
-                        P.betaGrad = P.betaGrad + momentum * bBeta[i];
-                    }
-                    else
-                    {
-                        P.gammaGrad = Tensor.Identity(bGamma[i]);
-                        P.betaGrad = Tensor.Identity(bBeta[i]);
-                    }
+                }
+                    
 
-                }
-                if(maximize)
-                {
-                    P.gamma = P.gamma + learningRate * P.gammaGrad;
-                    P.beta = P.beta + learningRate * P.betaGrad;
-                }
-                else
-                {
-                    P.gamma = P.gamma - learningRate * P.gammaGrad;
-                    P.beta = P.beta - learningRate * P.betaGrad;
-                }
+                
             });
         }
     }

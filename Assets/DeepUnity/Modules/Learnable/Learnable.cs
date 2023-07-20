@@ -11,79 +11,75 @@ namespace DeepUnity
         [NonSerialized] public Tensor gammaGrad;
         [NonSerialized] public Tensor betaGrad;
 
-        // [SerializeField] protected TensorGPU gammaGPU;
-        // [SerializeField] protected TensorGPU betaGPU;
-        // [SerializeField] protected TensorGPU gammaGradGPU;
-        // [SerializeField] protected TensorGPU betaGradGPU;
         public Learnable(Device device) => this.device = device;
 
         public void ZeroGrad()
         {
-            gammaGrad = Tensor.Zeros(gammaGrad.Shape);
-            betaGrad = Tensor.Zeros(betaGrad.Shape);
-            
-            // else
-            // {
-            //     gammaGradGPU = TensorGPU.Zeros(gammaGradGPU.Shape);
-            //     betaGradGPU = TensorGPU.Zeros(betaGradGPU.Shape);
-            // }          
+            if (this is RNNCell R)
+            {
+                R.weightIHGrad = Tensor.Zeros(R.weightIHGrad.Shape);
+                R.weightHHGrad = Tensor.Zeros(R.weightHHGrad.Shape);
+                R.biasIHGrad = Tensor.Zeros(R.biasIHGrad.Shape);
+                R.biasHHGrad = Tensor.Zeros(R.biasHHGrad.Shape);
+            }
+            else
+            {
+                gammaGrad = Tensor.Zeros(gammaGrad.Shape);
+                betaGrad = Tensor.Zeros(betaGrad.Shape);
+            }
+
+                   
         }
         public void ClipGradValue(float clip_value)
         {
-  
-            Tensor.Clip(gammaGrad, -clip_value, clip_value);
-            Tensor.Clip(betaGrad, -clip_value, clip_value);
-            
-            // else
-            // {
-            //     TensorGPU.Clip(gammaGradGPU, -clip_value, clip_value);
-            //     TensorGPU.Clip(betaGradGPU, -clip_value, clip_value);
-            // }
+            if (this is RNNCell R)
+            {
+                Tensor.Clip(R.weightIHGrad, -clip_value, clip_value);
+                Tensor.Clip(R.weightHHGrad, -clip_value, clip_value);
+                Tensor.Clip(R.biasIHGrad, -clip_value, clip_value);
+                Tensor.Clip(R.biasHHGrad, -clip_value, clip_value);
+            }
+            else
+            {
+                Tensor.Clip(gammaGrad, -clip_value, clip_value);
+                Tensor.Clip(betaGrad, -clip_value, clip_value);
+            }
+           
         }
         public void ClipGradNorm(float max_norm)
         {
-            Tensor normG = Tensor.Norm(gammaGrad, NormType.ManhattanL1);
-
-            if (normG[0] > max_norm)
+            if (this is RNNCell R)
             {
-                float scale = max_norm / normG[0];
-                gammaGrad *= scale;
+                throw new NotImplementedException("RNNCell ClipGradNorm not implemented yet");
             }
-
-
-            Tensor normB = Tensor.Norm(betaGrad, NormType.ManhattanL1);
-
-            if (normB[0] > max_norm)
+            else
             {
-                float scale = max_norm / normB[0];
-                betaGrad *= scale;
+                Tensor normG = Tensor.Norm(gammaGrad, NormType.ManhattanL1);
+
+                if (normG[0] > max_norm)
+                {
+                    float scale = max_norm / normG[0];
+                    gammaGrad *= scale;
+                }
+
+
+                Tensor normB = Tensor.Norm(betaGrad, NormType.ManhattanL1);
+
+                if (normB[0] > max_norm)
+                {
+                    float scale = max_norm / normB[0];
+                    betaGrad *= scale;
+                }
             }
-            // else
-            // {
-            //     TensorGPU normG = TensorGPU.Norm(gammaGradGPU, NormType.ManhattanL1);
-            // 
-            //     if (normG[0] > max_norm)
-            //     {
-            //         float scale = max_norm / normG[0];
-            //         gammaGradGPU *= scale;
-            //     }
-            // 
-            // 
-            //     TensorGPU normB = TensorGPU.Norm(betaGradGPU, NormType.ManhattanL1);
-            // 
-            //     if (normB[0] > max_norm)
-            //     {
-            //         float scale = max_norm / normB[0];
-            //         betaGradGPU *= scale;
-            //     }
-            // }
+            
+            
             
         }
-        public void OnBeforeSerialize()
+        public virtual void OnBeforeSerialize()
         {
 
         }
-        public void OnAfterDeserialize()
+        public virtual void OnAfterDeserialize()
         {
             // This function is actually having 2 workers on serialization.
             // If shape int[] was not deserialized, we need to break this worker.
@@ -94,31 +90,17 @@ namespace DeepUnity
                 // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
                 var x = gamma.Shape;
                 if (x == null || x.Length == 0)
-                    throw new System.Exception("Is not even important...");
+                    throw new Exception("Is not even important...");
             
-                // else
-                // {
-                //     // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
-                //     var x = gammaGPU.Shape;
-                //     if (x == null || x.Length == 0)
-                //         throw new System.Exception("Is not even important...");
-                // }
-                
             }
             catch
             {
                 return;
             }
 
-
-            this.gammaGrad = Tensor.Zeros(gamma.Shape);
+            // do not check if gamma is != null...
+            this.gammaGrad = Tensor.Zeros(gamma.Shape); 
             this.betaGrad = Tensor.Zeros(beta.Shape);
-
-            // else
-            // {
-            //     this.gammaGradGPU = TensorGPU.Zeros(gammaGPU.Shape);
-            //     this.betaGradGPU = TensorGPU.Zeros(betaGPU.Shape);
-            // }
          
         }
     }

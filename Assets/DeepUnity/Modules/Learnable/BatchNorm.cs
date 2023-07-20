@@ -4,7 +4,7 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class BatchNorm1D : Learnable, IModule
+    public class BatchNorm : Learnable, IModule
     {
         // https://arxiv.org/pdf/1502.03167.pdf
 
@@ -22,11 +22,12 @@ namespace DeepUnity
 
         /// <summary>
         /// <b>Placed before or after the non-linear activation function.</b>    <br />
-        /// Input: (batch, features)
-        /// Output: (batch, features)
+        /// Input: (B, H) or (H) for unbatched input.<br></br>
+        /// Output: (B, H) or (H) for unbatched input.<br></br>
+        /// where B = batch_size and H = num_features.
         /// </summary>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
-        public BatchNorm1D(int num_features, float momentum = 0.9f) : base(Device.CPU)
+        public BatchNorm(int num_features, float momentum = 0.9f) : base(Device.CPU)
         {
             this.momentum = momentum;
 

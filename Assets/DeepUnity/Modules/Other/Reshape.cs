@@ -1,5 +1,5 @@
-using System.Collections.Generic;
 using System.Linq;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity
@@ -10,12 +10,27 @@ namespace DeepUnity
         [SerializeField] private int[] outputShape;
 
         /// <summary>
-        /// Batch is not included in the shape args.
+        /// Input: (B, *) or (*) for unbatched input. <br></br>
+        /// Output: (B, *') or (*') for unbatched input. <br></br>
+        /// where * = input_shape and *' = output_shape.
         /// </summary>
         /// <param name="input_shape"></param>
         /// <param name="output_shape"></param>
-        public Reshape(IEnumerable<int> input_shape, IEnumerable<int> output_shape)
+        public Reshape(int[] input_shape, int[] output_shape)
         {
+            int count = 1;
+            foreach (var item in input_shape)
+            {
+                count *= item;
+            }
+            int count2 = 1;
+            foreach (var item2 in output_shape)
+            {
+                count2*= item2;
+            }
+            if (count != count2)
+                throw new ShapeException($"Input_shape({input_shape.ToCommaSeparatedString()}) and output_shape({output_shape.ToCommaSeparatedString()}) paramters are not valid for tensor reshaping.");
+
             this.inputShape = input_shape.ToArray();
             this.outputShape = output_shape.ToArray();
         }

@@ -7,7 +7,7 @@ namespace DeepUnity
     /// Always placed after a non-linear activation function.
     /// </summary>
     [Serializable]
-    public class Dropout : IModule
+    public class Dropout : IModule, IModuleRNN
     {
         [SerializeField] private float dropout;
         public Tensor InputCache { get; set; }
@@ -16,7 +16,14 @@ namespace DeepUnity
         /// <b>Placed after the non-linear activation function.</b>
         /// </summary>
         /// <param name="dropout"> Low value: weak dropout | High value: strong dropout</param>
-        public Dropout(float dropout = 0.5f) => this.dropout = dropout;
+        public Dropout(float dropout = 0.5f)
+        {
+            if(dropout < Utils.EPSILON || dropout > 1f - Utils.EPSILON)
+            {
+                throw new ArgumentException("Dropout value must be in range (0,1) when creating a Dropout layer module.");
+            }
+            this.dropout = dropout;
+        }
 
         public Tensor Predict(Tensor input) => input;
         public Tensor Forward(Tensor input)

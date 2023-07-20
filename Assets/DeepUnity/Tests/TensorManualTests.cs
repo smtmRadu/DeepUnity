@@ -14,7 +14,7 @@ namespace kbRadu
         private void Start()
         {
             // DenseVSDenseGPU_Benchmark();
-            //DenseTest();
+            DenseTest();
             // CPUvsGPU();
             // TestDense();
            

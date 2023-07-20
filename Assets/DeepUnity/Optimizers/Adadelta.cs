@@ -51,7 +51,12 @@ namespace DeepUnity
 
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
-                if (parameters[i] is Learnable P)
+                if (parameters[i] is RNNCell R)
+                {
+                    throw new NotImplementedException("RNNCell optimization not implemented yet.");
+
+                }
+                else if (parameters[i] is Learnable P)
                 {
                     if (weightDecay != 0f)
                         P.gammaGrad = P.gammaGrad + weightDecay * P.gamma;

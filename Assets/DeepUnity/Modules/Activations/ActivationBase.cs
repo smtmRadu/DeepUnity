@@ -3,7 +3,7 @@ namespace DeepUnity
 {
     public abstract class ActivationBase : IModule
     {
-        private Tensor InputCache;
+        private Tensor InputCache { get;set; }
         protected abstract Tensor Activation(Tensor x);
         protected abstract Tensor Derivative(Tensor y);
 

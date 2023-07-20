@@ -33,11 +33,6 @@ namespace DeepUnity
         {
             get => shape.ToArray();         
         }
-        public float[] Data
-        {
-            get => data;
-            set => data = value;
-        }
         private int Width
         {
             get
@@ -520,23 +515,22 @@ namespace DeepUnity
                 if (J == 1 && K == 1)
                     Parallel.For(0, N, n =>
                     {
-                         for (int p = 0; p < P; p++)
-                         {
-                             float sum = 0f;
-                             for (int m = 0; m < M; m++)
-                             {
-                                 sum += left[n, m] * right[m, p];
-                             }
-                             result[n, p] = sum;
-                         }                         
-                    });
-
-                else // base matmul operation
-                    Parallel.For(0, N, n =>
-                    {
-                        for (int j = 0; j < J; j++)
+                        for (int p = 0; p < P; p++)
                         {
-                            for (int k = 0; k < K; k++)
+                            float sum = 0f;
+                            for (int m = 0; m < M; m++)
+                            {
+                                sum += left[n, m] * right[m, p];
+                            }
+                            result[n, p] = sum;
+                        }
+                    });
+                else if (J > 1)
+                    Parallel.For(0, J, j =>
+                    {
+                        for (int k = 0; k < K; k++)
+                        {
+                            for (int n = 0; n < N; n++)
                             {
                                 for (int p = 0; p < P; p++)
                                 {
@@ -550,6 +544,42 @@ namespace DeepUnity
                             }
                         }
                     });
+                else // if (K > 1) no batch case
+                    Parallel.For(0, K, k =>
+                    {
+                        for (int n = 0; n < N; n++)
+                        {
+                            for (int p = 0; p < P; p++)
+                            {
+                                float sum = 0f;
+                                for (int m = 0; m < M; m++)
+                                {
+                                    sum += left[0, n, m] * right[k, m, p];
+                                }
+                                result[k, n, p] = sum;
+                            }
+                        }
+
+                    });
+                    // // base matmul operation
+                    // Parallel.For(0, N, n =>
+                    // {
+                    //     for (int j = 0; j < J; j++)
+                    //     {
+                    //         for (int k = 0; k < K; k++)
+                    //         {
+                    //             for (int p = 0; p < P; p++)
+                    //             {
+                    //                 float sum = 0f;
+                    //                 for (int m = 0; m < M; m++)
+                    //                 {
+                    //                     sum += left[j, 0, n, m] * right[k, m, p];
+                    //                 }
+                    //                 result[j, k, n, p] = sum;
+                    //             }
+                    //         }
+                    //     }
+                    // });
             }
 
 

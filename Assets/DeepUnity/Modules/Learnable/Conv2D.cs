@@ -29,8 +29,9 @@ namespace DeepUnity
 
 
         /// <summary>
-        /// input: (<b>batch</b>, <b>in_channels</b>, <b>height</b>, <b>width</b>) <br/>
-        /// output: (<b>batch</b>, <b>out_channels</b>, <b>height - kernel_size + 1</b>, <b>width - kernel_size + 1</b>)
+        /// Input: (<b>B</b>, <b>C_in</b>, <b>H</b>, <b>W</b>) or (<b>C_in</b>, <b>H</b>, <b>W</b>) for unbatched input.<br/>
+        /// Output: (<b>B</b>, <b>C_out</b>, <b>H - K + 1</b>, <b>W - K + 1</b>) or (<b>C_out</b>, <b>H - K + 1</b>, <b>W - K + 1</b>) for unbatched input.<br></br>
+        /// where B = batch_size, C_in = in_channels, C_out = out_channels and K = kernel_size.
         /// </summary>
         /// <param name="input_shape">(C_in, H, W)</param>
         /// <param name="out_channels">C_out</param>
@@ -81,9 +82,7 @@ namespace DeepUnity
         {
             InputCache = Tensor.Identity(input);
 
-            bool isBatched = input.Rank == 4;
-            int batch_size = isBatched ? input.Size(-4) : 1;
-            return Correlate2D_input_kernels(input, gamma, CorrelationMode.Valid) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
+            return Predict(input);
         }
 
         /// <param name="loss">(B, C_out, H - K + 1, W - K + 1)</param>

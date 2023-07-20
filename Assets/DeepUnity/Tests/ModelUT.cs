@@ -1,4 +1,5 @@
 using DeepUnity;
+using JetBrains.Annotations;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -24,6 +25,9 @@ namespace kbRadu
         public float rotationSpeed = 0.4f;
         public float dataScale = 1f;
 
+        [Space]
+        public int timerStopEpoch = 50;
+
         private Tensor[] trainXbatches;
         private Tensor[] trainYbatches;
 
@@ -43,7 +47,9 @@ namespace kbRadu
             {
                 net = new Sequential(
                  new Dense(2, hiddenSize),
-                 new LayerNorm(hiddenSize),
+                 // new LayerNorm(hiddenSize),
+                 new ReLU(),
+                 new Dense(hiddenSize, hiddenSize, device: device),
                  new ReLU(),
                  new Dense(hiddenSize, hiddenSize, device: device),
                  new ReLU(),
@@ -94,7 +100,7 @@ namespace kbRadu
                      net.Save("test");
                 i = 0;
 
-                if (epoch == 50)
+                if (epoch == timerStopEpoch)
                     TimerX.Stop();
 
                 return;

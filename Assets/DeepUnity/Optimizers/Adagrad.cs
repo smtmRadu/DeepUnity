@@ -36,20 +36,25 @@ namespace DeepUnity
 
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
-                if (parameters[i] is Learnable P)
+                if (parameters[i] is RNNCell R)
+                {
+
+                    throw new NotImplementedException("RNNCell optimization not implemented yet.");
+                }
+                else if (parameters[i] is Learnable L)
                 {
                     var gammaBar = learningRate / (1 + (t - 1) * learningRateDecay);
 
                     if (weightDecay != 0f)
                     {
-                        P.gammaGrad = P.gammaGrad + weightDecay * P.gammaGrad;
+                        L.gammaGrad = L.gammaGrad + weightDecay * L.gammaGrad;
                     }
 
-                    statesum_W[i] = statesum_W[i] + Tensor.Pow(P.gammaGrad, 2f);
-                    statesum_B[i] = statesum_B[i] + Tensor.Pow(P.betaGrad, 2f);
+                    statesum_W[i] = statesum_W[i] + Tensor.Pow(L.gammaGrad, 2f);
+                    statesum_B[i] = statesum_B[i] + Tensor.Pow(L.betaGrad, 2f);
 
-                    P.gamma = P.gamma - gammaBar * (P.gammaGrad / (Tensor.Sqrt(statesum_W[i]) + 1e-10f));
-                    P.beta = P.beta - gammaBar * (P.betaGrad / (Tensor.Sqrt(statesum_B[i]) + 1e-10f));
+                    L.gamma = L.gamma - gammaBar * (L.gammaGrad / (Tensor.Sqrt(statesum_W[i]) + 1e-10f));
+                    L.beta = L.beta - gammaBar * (L.betaGrad / (Tensor.Sqrt(statesum_B[i]) + 1e-10f));
                 }
             });
 
