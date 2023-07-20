@@ -88,14 +88,14 @@ public class FirstScript : MonoBehaviour
 ```
 ### Reinforcement Learning [In Development]
 In order to work with Reinforcement Learning tools, you must create a 2D or 3D agent using Unity provided GameObjects and Coomponents. The setup flow works similary to ML Agents (but with some restrictions described in the diagram below), so you must create a new behaviour script (e.g. _MoveToGoal_) that must inherit the **Agent** class. Attach the new behaviour script to the agent (automatically is attached a **HyperParameters** script). Choose the space size and number of actions, then override the following methods in the behavior script:
-- __CollectObservations()__
-- __OnActionReceived()__
+- _CollectObservations()_
+- _OnActionReceived()_
 - _Heuristic()_ [Optional]
 - _OnEpisodeBegin()_ [Optional]
 
 Also in order to decide the reward function and episode terminal state, use the following calls:
--  __AddReward(*reward*)__ 
--  __EndEpsiode()__ 
+-  _AddReward(*reward*)_
+-  _EndEpsiode()_ 
 #### Behaviour script overriding example
 ```csharp
 using UnityEngine;
@@ -105,7 +105,7 @@ public class MoveToGoal : Agent
 {
     [Header("Properties")]
     public float speed = 10f;
-    public Transform target; // referenced manually
+    public Transform target;
 
     public override void FixedUpdate()
     {
@@ -171,7 +171,7 @@ public class MoveToGoal : Agent
 ```
 _This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that can move forward, backward, left or right, and must reach a randomly positioned target. The agent is rewarded by 1 point if it touches the target, or penalized by 1 point if it touches a wall. The agent is penalized constantly by 0.001 points at each time step, to encourage the agent reaching the target as fast as possible._
 
-![rl]("Assets\DeepUnity\Documentation\RL_order_of_execution.png")
+![rl]("https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_order_of_execution.png")
 
 #### Notes
 - The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. In order to override them, call the their **base** each time.

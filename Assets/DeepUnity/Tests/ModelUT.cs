@@ -42,12 +42,12 @@ namespace kbRadu
             if (net == null)
             {
                 net = new Sequential(
-                 new Dense(2, hiddenSize,device: device),
+                 new Dense(2, hiddenSize),
                  new LayerNorm(hiddenSize),
                  new ReLU(),
                  new Dense(hiddenSize, hiddenSize, device: device),
                  new ReLU(),
-                 new Dense(hiddenSize, 1, device: device)
+                 new Dense(hiddenSize, 1)
                  );; 
             }
 
@@ -94,7 +94,7 @@ namespace kbRadu
                      net.Save("test");
                 i = 0;
 
-                if (epoch == 25)
+                if (epoch == 50)
                     TimerX.Stop();
 
                 return;

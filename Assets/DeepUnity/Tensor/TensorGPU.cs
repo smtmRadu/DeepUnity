@@ -10,8 +10,7 @@ using System.Collections.Generic;
 namespace DeepUnity
 {
     /// <summary>
-    /// Axis operations have swapped axis, need to be revised.
-    /// A tensor classed used for custom objectives, that lives in VRAM and runs much faster high computational operations like MatMul.
+    /// [Deprecated] A tensor used for custom objectives, that lives in VRAM and runs much faster high computational operations like MatMul.
     /// </summary>
     [Serializable]
     public class TensorGPU : IDisposable, ISerializationCallbackReceiver, IEquatable<Tensor>, IEquatable<TensorGPU>

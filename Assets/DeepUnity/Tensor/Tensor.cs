@@ -33,6 +33,11 @@ namespace DeepUnity
         {
             get => shape.ToArray();         
         }
+        public float[] Data
+        {
+            get => data;
+            set => data = value;
+        }
         private int Width
         {
             get
@@ -441,9 +446,9 @@ namespace DeepUnity
             int right_rank = right.Rank;
 
             if (left_rank == 1 && right_rank == 1)
-                return left * right;
-                       
-            if(left_rank == 1 && left.Width != right.Height)
+                throw new ArgumentException($"At least one of the tensors must have a shape > 1 for matrix multiplication");
+
+            if (left_rank == 1 && left.Width != right.Height)
                 throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
 
             if(right_rank == 1 && left.Width != right.Width)
@@ -573,7 +578,7 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
-        /// [Deprecated] Matrix multiplication but on GPU. Efficient for matrices > 64x64 
+        /// Matrix multiplication but operations are computed on GPU. Efficient for matrices large matrices, like > 64x64. 
         /// left <b>(j, 1, n, m)</b> * right <b>(k, m, p)</b> => out <b>(j, k, n, p)</b>
         /// </summary>
         public static Tensor MatMulGPU(Tensor left, Tensor right)
@@ -581,8 +586,9 @@ namespace DeepUnity
             int left_rank = left.Rank;
             int right_rank = right.Rank;
 
+            // Special cases .. that will maybe be forbidden in the future
             if (left_rank == 1 && right_rank == 1)
-                return left * right;
+                throw new ArgumentException($"At least one of the tensors must have a shape > 1 for matrix multiplication");
 
             if (left_rank == 1 && left.Width != right.Height)
                 throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");

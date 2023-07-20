@@ -8,6 +8,7 @@ namespace DeepUnity
     public static class DeepUnityMeta
     {
         internal readonly static ComputeShader TensorCS;
+        internal readonly static ComputeShader DenseCS;
         internal readonly static int THREADS_NUM = 256;
 
         static DeepUnityMeta()
@@ -17,6 +18,10 @@ namespace DeepUnity
                 var csguid = AssetDatabase.FindAssets("TensorCS")[0];
                 var cspath = AssetDatabase.GUIDToAssetPath(csguid);
                 TensorCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+
+                csguid = AssetDatabase.FindAssets("DenseCS")[0];
+                cspath = AssetDatabase.GUIDToAssetPath(csguid);
+                DenseCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
 
             }
             catch { }
@@ -68,6 +73,7 @@ namespace DeepUnity
         Xavier,
         Normal,
         Uniform,
+        Debug,
     }
     public enum Device
     {

@@ -8,15 +8,159 @@ namespace kbRadu
     {
         public Device TestDevice;
         public Vector2Int MatShape = new Vector2Int(64, 64);
+        public int batchSize = 32;
         public int Runs = 100;
 
         private void Start()
         {
+            // DenseVSDenseGPU_Benchmark();
+            //DenseTest();
             // CPUvsGPU();
-            TestDense();
-            
+            // TestDense();
+           
         }
 
+        void DenseTest()
+        {
+           
+            Tensor input = Tensor.Fill(2, 32, 64);
+
+            print("64x64 CPU");
+            Dense dense = new Dense(64, 64, init: InitType.Debug, device: Device.CPU);
+            var outp = dense.Forward(input);
+            print(outp);
+            var loss = dense.Backward(outp);
+            print(loss);
+
+            print("GammaGrad: " + dense.gammaGrad);
+            print("BetaGrad: " + dense.betaGrad);
+
+            print("64x64 GPU");
+            dense = new Dense(64, 64, init: InitType.Debug, device: Device.GPU);
+            outp = dense.Forward(input);
+            print("output" + outp);
+            loss = dense.Backward(outp);
+            print("back" + loss);
+            print("GammaGrad: " + dense.gammaGrad);
+            print("BetaGrad: " + dense.betaGrad);
+
+            print("64x1 CPU");
+            dense = new Dense(64, 1, init: InitType.Debug, device: Device.CPU);
+            outp = dense.Forward(input);
+            print("output" + outp);
+            loss = dense.Backward(outp);
+            print("back" + loss);
+            print("GammaGrad: " + dense.gammaGrad);
+            print("BetaGrad: " + dense.betaGrad);
+
+            print("64x1 GPU");
+            dense = new Dense(64, 1, init: InitType.Debug, device: Device.GPU);
+            outp = dense.Forward(input);
+            print("output" + outp);
+            loss = dense.Backward(outp);
+            print("back" + loss);
+            print("GammaGrad: " + dense.gammaGrad);
+            print("BetaGrad: " + dense.betaGrad); ;
+
+
+
+
+
+            input = Tensor.Fill(2, batchSize, 1);
+            print("1x64 CPU");
+            dense = new Dense(1, 64, init: InitType.Debug, device: Device.CPU);
+            outp = dense.Forward(input);
+            print("output" + outp);
+            loss = dense.Backward(outp);
+            print("back" + loss);
+            print("GammaGrad: " + dense.gammaGrad);
+            print("BetaGrad: " + dense.betaGrad);
+
+            print("1x64 GPU");
+            dense = new Dense(1, 64, init: InitType.Debug, device: Device.GPU);
+            outp = dense.Forward(input);
+            print("output" + outp);
+            loss = dense.Backward(outp);
+            print("back" + loss);
+            print("GammaGrad: " + dense.gammaGrad);
+            print("BetaGrad: " + dense.betaGrad);
+
+            print("-------no batch---------------------");
+
+            input = Tensor.Fill(2, 64);
+            print("64x64 CPU");
+            dense = new Dense(64, 64, init: InitType.Debug, device: Device.CPU);
+            outp = dense.Forward(input);
+            print("output" + outp);
+            loss = dense.Backward(outp);
+            print("back" + loss);
+            print("GammaGrad: " + dense.gammaGrad);
+            print("BetaGrad: " + dense.betaGrad);
+
+            print("64x64 GPU");
+            dense = new Dense(64, 64, init: InitType.Debug, device: Device.GPU);
+            outp = dense.Forward(input);
+            print("output" + outp);
+            loss = dense.Backward(outp);
+            print("back" + loss);
+            print("GammaGrad: " + dense.gammaGrad);
+            print("BetaGrad: " + dense.betaGrad);
+
+
+
+
+            print("64x1 CPU");
+            dense = new Dense(64, 1, init: InitType.Debug, device: Device.CPU);
+            outp = dense.Forward(input);
+            print("output" + outp);
+            loss = dense.Backward(outp);
+            print("back" + loss);
+            print("GammaGrad: " + dense.gammaGrad);
+            print("BetaGrad: " + dense.betaGrad);
+
+            print("64x1 GPU");
+            dense = new Dense(64, 1, init: InitType.Debug, device: Device.GPU);
+            outp = dense.Forward(input);
+            print("output" + outp);
+            loss = dense.Backward(outp);
+            print("back" + loss);
+            print("GammaGrad: " + dense.gammaGrad);
+            print("BetaGrad: " + dense.betaGrad);
+
+
+            input = Tensor.Fill(2, 1);
+            print("1x64 CPU");
+            dense = new Dense(1, 64, init: InitType.Debug, device: Device.CPU);
+            outp = dense.Forward(input);
+            print("output" + outp);
+            loss = dense.Backward(outp);
+            print("back" + loss);
+            print("GammaGrad: " + dense.gammaGrad);
+            print("BetaGrad: " + dense.betaGrad);
+
+            print("1x64 GPU");
+            dense = new Dense(1, 64, init: InitType.Debug, device: Device.CPU);
+            outp = dense.Forward(input);
+            print("output" + outp);
+            loss = dense.Backward(outp);
+            print("back" + loss);
+            print("GammaGrad: " + dense.gammaGrad);
+            print("BetaGrad: " + dense.betaGrad);
+        }
+        void DenseVSDenseGPU_Benchmark()
+        {
+            Tensor input = Tensor.Fill(2, batchSize, MatShape.x);
+
+
+            Dense dense = new Dense(MatShape.x, MatShape.y, init: InitType.Debug, device: TestDevice);
+            TimerX.Start();
+            for (int i = 0; i < Runs; i++)
+            {
+                var outp = dense.Forward(input);
+                dense.Backward(outp);
+            }
+            TimerX.Stop();
+        }
         void CPUvsGPU_Speed()
         {
             if(TestDevice == Device.CPU)

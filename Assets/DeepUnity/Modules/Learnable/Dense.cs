@@ -1,5 +1,5 @@
 using System;
-
+using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
@@ -42,6 +42,10 @@ namespace DeepUnity
                     gamma = Tensor.RandomRange((-1, 1), out_features, in_features);
                     beta = Tensor.Zeros(out_features);
                     break;
+                case InitType.Debug:
+                    gamma = Tensor.Fill(1.5f, out_features, in_features);
+                    beta = Tensor.Fill(2f, out_features);
+                    break;
                 default:
                     throw new Exception("Unhandled initialization type!");
             }
@@ -58,48 +62,124 @@ namespace DeepUnity
             // input = (batch_size, in_features)
             // gamma = (out_features, in_features)
             // out = (out_features, batch_size)
+            int batch_size = input.Rank == 2 ? input.Size(-2) : 1;
 
-            bool isBatched = input.Rank == 2;
-
-            if (isBatched)
+            if (device == Device.CPU)
             {
-                int batch_size = input.Size(-2);
-
-                if (device == Device.CPU)
-                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
+                if (batch_size == 1)
+                {
+                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + beta;
+                }
                 else
-                    return Tensor.MatMulGPU(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
+                {
+                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
+                }
             }
             else
             {
-                if (device == Device.CPU)
-                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + beta;
-                else
-                    return Tensor.MatMulGPU(input, Tensor.Transpose(gamma, 0, 1)) + beta;
-            }
+                Tensor output = Tensor.Zeros(batch_size, beta.Size(-1));
 
+                ComputeShader cs = DeepUnityMeta.DenseCS;
+
+                ComputeBuffer inputBuffer = new ComputeBuffer(input.Count(), 4);
+                inputBuffer.SetData(input.Data);
+                cs.SetBuffer(0, "input", inputBuffer);
+
+                ComputeBuffer tranposedGammaBuffer = new ComputeBuffer(gamma.Count(), 4);
+                tranposedGammaBuffer.SetData(Tensor.Transpose(gamma, 0, 1).Data);
+                cs.SetBuffer(0, "transposed_gamma", tranposedGammaBuffer);
+
+                ComputeBuffer betaBuffer = new ComputeBuffer(beta.Count(), 4);
+                betaBuffer.SetData(beta.Data);
+                cs.SetBuffer(0, "beta", betaBuffer);
+
+                ComputeBuffer outputBuffer = new ComputeBuffer(output.Count(), 4);
+                outputBuffer.SetData(output.Data);
+                cs.SetBuffer(0, "output", outputBuffer);
+
+                cs.SetInt("batch_size", batch_size);
+                cs.SetInt("in_features", gamma.Size(-1));
+                cs.SetInt("out_features", beta.Size(-1));
+                cs.SetInt("gamma_rank", gamma.Rank);
+                cs.SetInt("input_rank", input.Rank);
+
+                cs.Dispatch(0,
+                    (output.Size(-1) + 32 - 1) / 32,
+                    (output.Size(-2) + 32 - 1) / 32,
+                    1);
+
+                outputBuffer.GetData(output.Data);
+
+
+                inputBuffer.Release();
+                tranposedGammaBuffer.Release();
+                betaBuffer.Release();
+                outputBuffer.Release();
+
+                // output.Squeeze(); do not squeeze
+                return output.Squeeze(-2);
+            }
         }
         public Tensor Forward(Tensor input)
         {
             InputCache = Tensor.Identity(input);
 
-            bool isBatched = input.Rank == 2;
+            int batch_size = input.Rank == 2 ? input.Size(-2) : 1;
 
-            if (isBatched)
+            if (device == Device.CPU)
             {
-                int batch_size = input.Size(-2);
-
-                if (device == Device.CPU)
-                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
+                if (batch_size == 1)
+                {
+                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + beta;
+                }
                 else
-                    return Tensor.MatMulGPU(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
+                {
+                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
+                }
             }
             else
             {
-                if (device == Device.CPU)
-                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + beta;
-                else
-                    return Tensor.MatMulGPU(input, Tensor.Transpose(gamma, 0, 1)) + beta;
+                Tensor output = Tensor.Zeros(batch_size, beta.Size(-1));
+
+                ComputeShader cs = DeepUnityMeta.DenseCS;
+
+                ComputeBuffer inputBuffer = new ComputeBuffer(input.Count(), 4);
+                inputBuffer.SetData(input.Data);
+                cs.SetBuffer(0, "input", inputBuffer);
+
+                ComputeBuffer tranposedGammaBuffer = new ComputeBuffer(gamma.Count(), 4);
+                tranposedGammaBuffer.SetData(Tensor.Transpose(gamma, 0, 1).Data);
+                cs.SetBuffer(0, "transposed_gamma", tranposedGammaBuffer);
+
+                ComputeBuffer betaBuffer = new ComputeBuffer(beta.Count(), 4);
+                betaBuffer.SetData(beta.Data);
+                cs.SetBuffer(0, "beta", betaBuffer);
+
+                ComputeBuffer outputBuffer = new ComputeBuffer(output.Count(), 4);
+                outputBuffer.SetData(output.Data);
+                cs.SetBuffer(0, "output", outputBuffer);
+
+                cs.SetInt("batch_size", batch_size);
+                cs.SetInt("in_features", gamma.Size(-1));
+                cs.SetInt("out_features", beta.Size(-1));
+                cs.SetInt("gamma_rank", gamma.Rank);
+                cs.SetInt("input_rank", input.Rank);
+
+                cs.Dispatch(0,
+                    (output.Size(-1) + 31) / 32,
+                    (output.Size(-2) + 31) / 32,
+                    1);
+
+                outputBuffer.GetData(output.Data);
+                
+
+                inputBuffer.Release();
+                tranposedGammaBuffer.Release();
+                betaBuffer.Release();
+                outputBuffer.Release();
+
+                // output.Squeeze(); do not squeeze
+                return output.Squeeze(-2);
             }
         }
         public Tensor Backward(Tensor loss)
@@ -109,27 +189,71 @@ namespace DeepUnity
             // tloss = (OUT, B)
 
             //gradGamma(OUT, IN)
-            bool isBatched = loss.Rank == 2;
-            int batch_size = isBatched ? loss.Size(-2) : 1;
-            var transposedLoss = Tensor.Transpose(loss, 0, 1);
+            int batch_size = loss.Rank == 2 ? loss.Size(-2) : 1;
+            if(batch_size == 1)
+            {
+                loss.Unsqueeze(0);
+                InputCache.Unsqueeze(0);
+            }
+            Tensor transposedLoss = Tensor.Transpose(loss, 0, 1);
 
+            if(device == Device.CPU)
+            {
+                Tensor gradW = Tensor.MatMul(transposedLoss, InputCache);
+                Tensor gradB = Tensor.MatMul(transposedLoss, Tensor.Ones(batch_size));
 
-            Tensor gradW = device == Device.CPU ?
-                Tensor.MatMul(transposedLoss, InputCache) :
-                Tensor.MatMulGPU(transposedLoss, InputCache);
+                // Update the gradients
+                gammaGrad += gradW / batch_size; // (out, in)
+                betaGrad += gradB / batch_size; // (out)
 
-            Tensor gradB = Tensor.MatMul(transposedLoss, Tensor.Ones(batch_size));
+                // Backpropagate the loss (batch_size, in)
+                return Tensor.MatMul(loss, gamma).Squeeze(-2);
+            }
+            else
+            {
+                // dLoss w.r.t input
+                Tensor output = Tensor.Zeros(batch_size, gamma.Size(-1));
+                ComputeShader cs = DeepUnityMeta.DenseCS;
 
-            // Update the gradients
-            gammaGrad += gradW / batch_size; // (out, in)
-            betaGrad += gradB / batch_size; // (out)
+                ComputeBuffer transposedLossBuffer = new ComputeBuffer(transposedLoss.Count(), 4);
+                transposedLossBuffer.SetData(transposedLoss.Data);
+                cs.SetBuffer(1, "transposed_loss", transposedLossBuffer);
 
-            // Backpropagate the loss (batch_size, in)
-            return device == Device.CPU ?
-                Tensor.MatMul(loss, gamma) :
-                Tensor.MatMulGPU(loss, gamma);
+                ComputeBuffer inputCacheBuffer = new ComputeBuffer(InputCache.Count(), 4);
+                inputCacheBuffer.SetData(InputCache.Data);
+                cs.SetBuffer(1, "input", inputCacheBuffer);
+
+                ComputeBuffer gammaGradBuffer = new ComputeBuffer(gammaGrad.Count(), 4);
+                gammaGradBuffer.SetData(gammaGrad.Data);
+                cs.SetBuffer(1, "gamma_grad", gammaGradBuffer);
+
+                ComputeBuffer betaGradBuffer = new ComputeBuffer(betaGrad.Count(), 4);
+                betaGradBuffer.SetData(betaGrad.Data);
+                cs.SetBuffer(1, "beta_grad", betaGradBuffer);
+
+                cs.SetInt("batch_size", batch_size);
+                cs.SetInt("in_features", gamma.Size(-1));
+                cs.SetInt("out_features", beta.Size(-1));
+                cs.SetInt("input_rank", InputCache.Rank);
+
+                cs.Dispatch(1,
+                    (gammaGrad.Size(-1) + 31) / 32,
+                    (gammaGrad.Size(-2) + 31) / 32,
+                    1);
+
+                gammaGradBuffer.GetData(gammaGrad.Data);
+                betaGradBuffer.GetData(betaGrad.Data);
+
+                transposedLossBuffer.Release();
+                inputCacheBuffer.Release();
+                gammaGradBuffer.Release();
+                betaGradBuffer.Release();
+
+                // Backpropagate the loss (batch_size, in)
+                return Tensor.MatMulGPU(loss, gamma).Squeeze(-2);
+            }
+           
         }
-
     }
 
 }
