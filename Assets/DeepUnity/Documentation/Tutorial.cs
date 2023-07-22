@@ -3,8 +3,9 @@ using DeepUnity;
 using System.Collections.Generic;
 using System.Linq;
 
-public class FirstScript : MonoBehaviour
+public class Tutorial : MonoBehaviour
 {
+    [Header("Learning z = x^2 + y^2.")]
     [SerializeField]
     private Sequential network;
     private Optimizer optim;
@@ -34,15 +35,15 @@ public class FirstScript : MonoBehaviour
         // Learning z = x^2 + y^2 function.
         // Generate dataset
         int data_size = 1024;
-        Tensor x = Tensor.RandomNormal((0, 0.5f), data_size, 1);
-        Tensor y = Tensor.RandomNormal((0, 0.5f), data_size, 1);
+        Tensor x = Tensor.RandomNormal(data_size, 1);
+        Tensor y = Tensor.RandomNormal(data_size, 1);
         train_inputs = Tensor.Cat(1, x, y);
         train_targets = x.Zip(y, (a, b) => a * a + b * b);
 
         // Generate validation set
         int valid_size = 64;
-        x = Tensor.RandomNormal((0, 0.5f), valid_size, 1);
-        y = Tensor.RandomNormal((0, 0.5f), valid_size, 1);
+        x = Tensor.RandomNormal(valid_size, 1);
+        y = Tensor.RandomNormal(valid_size, 1);
         valid_inputs = Tensor.Cat(1, x, y);
         valid_targets = x.Zip(y, (a, b) => a * a + b * b);
 

@@ -20,6 +20,7 @@ namespace DeepUnity
         private readonly Tensor[] vBeta;
 
 
+
         public Adam(Learnable[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float weightDecay = 0f) :base(parameters, lr, weightDecay)
         {
             this.beta1 = beta1;
@@ -34,9 +35,6 @@ namespace DeepUnity
             for (int i = 0; i < parameters.Length; i++)
             {
                 Learnable P = parameters[i];
-
-                // if (P.device == Device.GPU)
-                //     continue;
 
                 mGamma[i] = Tensor.Zeros(P.gamma.Shape);
                 mBeta[i] = Tensor.Zeros(P.beta.Shape);
@@ -53,12 +51,7 @@ namespace DeepUnity
 
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
-                if (parameters[i] is RNNCell R)
-                {
-                    throw new NotImplementedException("RNNCell optimization not implemented yet.");
-
-                }
-                else if (parameters[i] is Learnable P)
+                if (parameters[i] is Learnable P)
                 {
                     Tensor mHat;
                     Tensor vHat;
@@ -94,8 +87,12 @@ namespace DeepUnity
                     // Update parameters 
                     P.beta = P.beta - learningRate * mHat / (Tensor.Sqrt(vHat) + Utils.EPSILON);
                 }
-               
-             
+
+                if (parameters[i] is RNNCell R)
+                {
+                    R.recurrentGamma = -learningRate * 10f * R.recurrentGammaGrad;
+                    R.recurrentBeta = -learningRate * 10f * R.recurrentBetaGrad;
+                }
             });
 
         }

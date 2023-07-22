@@ -1,5 +1,3 @@
-using System;
-
 namespace DeepUnity
 {
     public interface IModuleRNN
@@ -7,7 +5,7 @@ namespace DeepUnity
         public Tensor Backward(Tensor loss);
     }
 
-    [Serializable]
+    [System.Serializable]
     public class IModuleRNNWrapper
     {
         public string name;
@@ -33,7 +31,7 @@ namespace DeepUnity
                 layernorm = layerNormModule;
             }
             else
-                throw new Exception("Unhandled rnn module type while wrapping.");
+                throw new System.Exception("Unhandled rnn module type while wrapping.");
         }
 
         public static IModuleRNNWrapper Wrap(IModuleRNN module)

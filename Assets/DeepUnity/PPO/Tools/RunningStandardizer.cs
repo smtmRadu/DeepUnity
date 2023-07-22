@@ -6,7 +6,7 @@ namespace DeepUnity
     [Serializable]
     public class RunningStandardizer
     {
-        [SerializeField] private int step;
+        [SerializeField] private ulong step;
         [SerializeField] private Tensor mean; 
         [SerializeField] private Tensor variance;
 

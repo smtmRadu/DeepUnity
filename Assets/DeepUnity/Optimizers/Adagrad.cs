@@ -36,12 +36,7 @@ namespace DeepUnity
 
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
-                if (parameters[i] is RNNCell R)
-                {
-
-                    throw new NotImplementedException("RNNCell optimization not implemented yet.");
-                }
-                else if (parameters[i] is Learnable L)
+                if (parameters[i] is Learnable L)
                 {
                     var gammaBar = learningRate / (1 + (t - 1) * learningRateDecay);
 
@@ -55,6 +50,11 @@ namespace DeepUnity
 
                     L.gamma = L.gamma - gammaBar * (L.gammaGrad / (Tensor.Sqrt(statesum_W[i]) + 1e-10f));
                     L.beta = L.beta - gammaBar * (L.betaGrad / (Tensor.Sqrt(statesum_B[i]) + 1e-10f));
+                }
+                if (parameters[i] is RNNCell R)
+                {
+                    R.recurrentGamma = -learningRate * R.recurrentGammaGrad;
+                    R.recurrentBeta = -learningRate * R.recurrentBetaGrad;
                 }
             });
 

@@ -53,12 +53,7 @@ namespace DeepUnity
                 // }
 
                 // pytorch implementation
-                if (parameters[i] is RNNCell R)
-                {
-                    throw new NotImplementedException("RNNCell optimization not implemented yet.");
-
-                }
-                else if (parameters[i] is Learnable P)
+                if (parameters[i] is Learnable P)
                 {
                     if (weightDecay != 0f)
                         P.gammaGrad = P.gammaGrad + weightDecay * P.gamma;
@@ -98,9 +93,11 @@ namespace DeepUnity
                         P.beta = P.beta - learningRate * P.betaGrad;
                     }
                 }
-                    
-
-                
+                if (parameters[i] is RNNCell R)
+                {
+                    R.recurrentGamma = -learningRate * R.recurrentGammaGrad;
+                    R.recurrentBeta = -learningRate * R.recurrentBetaGrad;
+                }
             });
         }
     }

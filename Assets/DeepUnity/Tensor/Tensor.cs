@@ -97,9 +97,9 @@ namespace DeepUnity
         private Tensor(params int[] shape)
         {
             if (shape == null)
-                throw new ShapeException("Tensor cannot be instantiated with null shape");
+                throw new ShapeException("Tensor cannot be instantiated with null shape.");
             if (shape.Length == 0)
-                throw new ShapeException("Tensor cannot be instantiated with a shape of length 0");
+                throw new ShapeException("Tensor cannot be instantiated with a shape of length 0.");
             if (shape.Length > 4)
                 throw new ShapeException("Tensor cannot be instantiated with more than 4 dimensions.");
             if (shape.Any(x => x < 1))
@@ -280,6 +280,15 @@ namespace DeepUnity
             }
             return t;
         }
+        public static Tensor RandomNormal(params int[] shape)
+        {
+            Tensor t = new(shape);
+            for (int i = 0; i < t.data.Length; i++)
+            {
+                t.data[i] = Utils.Random.Gaussian();
+            }
+            return t;
+        }
         public static Tensor RandomNormal((float, float) mean_sd, params int[] shape)
         {
             Tensor t = new(shape);
@@ -372,7 +381,7 @@ namespace DeepUnity
         public static Tensor operator +(Tensor left, Tensor right)
         {
             if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left[{left.shape.ToCommaSeparatedString()}] and right[{right.shape.ToCommaSeparatedString()}] tensors must have similar shape for Element-wise addition (+).");
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise addition (+).");
 
             Tensor result = new(left.shape);
 
@@ -387,7 +396,7 @@ namespace DeepUnity
         public static Tensor operator -(Tensor left, Tensor right)
         {
             if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left[{left.shape.ToCommaSeparatedString()}] and right[{right.shape.ToCommaSeparatedString()}] tensors must have similar shape for Element-wise subtraction (-).");
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise subtraction (-).");
 
             Tensor result = new(left.shape);
             for (int i = 0; i < result.data.Length; i++)
@@ -400,7 +409,7 @@ namespace DeepUnity
         public static Tensor operator *(Tensor left, Tensor right)
         {
            if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left[{left.shape.ToCommaSeparatedString()}] and right[{right.shape.ToCommaSeparatedString()}] tensors must have similar shape for Element-wise multiplication (*).");
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise multiplication (*).");
 
             Tensor result = new(left.shape);
 
@@ -415,7 +424,7 @@ namespace DeepUnity
         public static Tensor operator /(Tensor left, Tensor right)
         {
             if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left[{left.shape.ToCommaSeparatedString()}] and right[{right.shape.ToCommaSeparatedString()}] tensors must have similar shape for Element-wise division (/).");
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise division (/).");
 
             Tensor result = new(left.shape);
 
@@ -938,7 +947,7 @@ namespace DeepUnity
         public static Tensor Minimum(Tensor left, Tensor right)
         {
             if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left[{left.shape.ToCommaSeparatedString()}] and right[{right.shape.ToCommaSeparatedString()}] tensors must have different shape for Min operation.");
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and right({right.shape.ToCommaSeparatedString()}) tensors must have different shape for Min operation.");
 
 
             Tensor result = new(left.shape);
@@ -960,7 +969,7 @@ namespace DeepUnity
         public static Tensor Maximum(Tensor left, Tensor right)
         {
             if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left[{left.shape.ToCommaSeparatedString()}] and right[{right.shape.ToCommaSeparatedString()}] tensors must have different shape for Max operation.");
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and right({right.shape.ToCommaSeparatedString()}) tensors must have different shape for Max operation.");
 
 
 
@@ -1045,6 +1054,7 @@ namespace DeepUnity
             return Tensor.Log((sig2 / (sig1 + Utils.EPSILON)) + Utils.EPSILON) +
                 (var1 + (mu1 - mu2) * (mu1 - mu2)) / (2f * var2) - 0.5f;
         }
+
         #endregion Special
 
 

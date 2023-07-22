@@ -1,23 +1,54 @@
 using UnityEngine;
 using DeepUnity;
 using Unity.VisualScripting;
-
+using System.Collections.Generic;
 namespace kbRadu
 {
-    public class TensorManualTests : MonoBehaviour
+    public class UnitTests : MonoBehaviour
     {
         public Device TestDevice;
         public Vector2Int MatShape = new Vector2Int(64, 64);
         public int batchSize = 32;
         public int Runs = 100;
-
+        public RNN rnn_network;
         private void Start()
         {
-            // DenseVSDenseGPU_Benchmark();
-            DenseTest();
-            // CPUvsGPU();
-            // TestDense();
-           
+
+
+            print("Test finnished");
+        }
+
+        void TestRNNCell()
+        {
+            var rnn = new RNNCell(10, 20);
+            var input = Tensor.RandomNormal(6, 3, 10).Split(0, 1);
+            var hx = Tensor.RandomNormal(3, 20);
+            var output = new List<Tensor>();
+            for (int i = 0; i < 6; i++)
+            {
+                hx = rnn.Forward(input[i].Squeeze(0), hx);
+                output.Add(hx);
+            }
+
+            for (int i = 5; i >= 0; i--)
+            {
+                rnn.Backward(output[i]);
+            }
+            
+
+            // print(output.ToLineSeparatedString());
+        }
+        void TestRNN()
+        {
+            rnn_network = new RNN(10, 20, 2);
+            var input = Tensor.RandomNormal(6, 3, 10); // (L, B, H_in) 
+            var h0 = Tensor.RandomNormal(2, 3, 20);  // (num_layers, B, H_out)
+            var output = rnn_network.Forward(input, h0);
+            rnn_network.Backward(output.Item1);
+
+            rnn_network.Save("Some rnn");
+            // print("output" + output.Item1);
+            // print("h_n" + output.Item2);
         }
 
         void DenseTest()

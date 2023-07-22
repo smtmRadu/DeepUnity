@@ -23,17 +23,17 @@ float gamma_get(int h, int w)
 {
     return gamma[h * in_features + w];
 }
-void gamma_grad_set(int h, int w, float val)
+void gamma_grad_add(int h, int w, float val)
 {
-    gamma_grad[h * in_features + w] = val;
+    gamma_grad[h * in_features + w] += val;
 }
 float beta_get(int w)
 {
     return beta[w];
 }
-void beta_grad_set(int w, int val)
+void beta_grad_add(int w, int val)
 {
-    beta_grad[w] = val;
+    beta_grad[w] += val;
 }
 float input_get(int h, int w)
 {
@@ -147,7 +147,7 @@ void ComputeGradients(int3 id : SV_DispatchThreadID)
                 sum += transposed_loss_get(id.y, m) * input_get(m, id.x);
             }
         
-            gamma_grad_set(id.y, id.x, sum / batch_size);
+            gamma_grad_add(id.y, id.x, sum / batch_size);
         // }
     }
     
@@ -166,6 +166,6 @@ void ComputeGradients(int3 id : SV_DispatchThreadID)
             float r = 1;
             sum += l * r;
         }      
-        beta_grad_set(id.y, sum / batch_size);
+        beta_grad_add(id.y, sum / batch_size);
     }
 }

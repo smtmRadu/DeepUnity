@@ -14,14 +14,14 @@ namespace DeepUnity
 
         public float learningRate;
         protected float weightDecay;
-        protected int t; // step counter
+        protected ulong t; // step counter
 
         protected Optimizer(Learnable[] param, float lr, float L2Penalty)
         {
             parameters = param;
             learningRate = lr;
             weightDecay = L2Penalty;
-            t = 0;       
+            t = 0UL;       
         }
         public abstract void Step();
 
@@ -53,12 +53,14 @@ namespace DeepUnity
             int totalCount = 0;
             foreach (var param in parameters)
             {
-                if(param is RNNCell)
-                {
-                    throw new NotImplementedException("Not implemented GlobalCLipGradNorm when RNNCells are involved");
-                }
                 totalCount += param.gamma.Count();
                 totalCount += param.beta.Count();
+
+                if (param is RNNCell r)
+                {
+                    totalCount += r.recurrentGamma.Count();
+                    totalCount += r.recurrentBeta.Count();
+                }
             }
 
             // Concatenate all gradients in a single tensor vector
@@ -77,6 +79,21 @@ namespace DeepUnity
                 {
                     vector[index++] = gradB[i];
                 }
+
+                if(param is RNNCell r)
+                {
+                    float[] rgradG = r.recurrentGammaGrad.ToArray();
+                    float[] rgradB = r.recurrentBetaGrad.ToArray();
+
+                    for (int i = 0; i < gradG.Length; i++)
+                    {
+                        vector[index++] = rgradG[i];
+                    }
+                    for (int i = 0; i < gradB.Length; i++)
+                    {
+                        vector[index++] = rgradB[i];
+                    }
+                }
             }
 
             // Compute norm
@@ -91,7 +108,15 @@ namespace DeepUnity
             {
                 item.gammaGrad *= scale;
                 item.betaGrad *= scale;
+
+                if(item is RNNCell r)
+                {
+                    r.recurrentGammaGrad *= scale;
+                    r.recurrentBetaGrad *= scale;
+                }
             }
+
+            
             
         }
 

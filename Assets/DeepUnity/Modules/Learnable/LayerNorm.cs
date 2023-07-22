@@ -1,11 +1,7 @@
-using kbRadu;
 using System;
-using System.Collections.Generic;
-using System.Drawing.Printing;
 using System.Linq;
-using Unity.VisualScripting;
 using UnityEngine;
-using UnityEngine.Windows;
+
 
 namespace DeepUnity
 {
@@ -21,7 +17,7 @@ namespace DeepUnity
         private Tensor std { get; set; }
 
         [SerializeField] private int[] inputShape;
-        [SerializeField] private int step;
+        [SerializeField] private ulong step;
 
         // Learnable parameters
         [SerializeField] private Tensor runningMean;
@@ -51,7 +47,7 @@ namespace DeepUnity
             runningMean = Tensor.Zeros(1);
             runningVar = Tensor.Ones(1);
 
-            step = 0;
+            step = 0UL;
             this.inputShape = input_shape.ToArray();
         }
         public Tensor Predict(Tensor input)
@@ -85,21 +81,19 @@ namespace DeepUnity
 
 
             float mu_across_batch = isBatched ? Tensor.Mean(mu, 0)[0] : mu[0];
-            
-
-
-            // Sharing consistance update approach
-            // step += batch_size;
-            // float d1 = mu_across_batch - runningMean[0];
-            // runningMean += d1 / step;
-            // float d2 = mu_across_batch - runningMean[0];
-            // runningVar = (runningVar * (step - batch_size) + d1 * d2) / step;
-
-            // Momentum approach
-            float momentum = 0.9f;
             float var_across_batch = isBatched ? Tensor.Mean(var, 0)[0] : var[0];
-            runningMean = runningMean * momentum + mu_across_batch * (1f - momentum);
-            runningVar = runningVar * momentum + var_across_batch * (1f - momentum);
+
+            ulong total_samples = (ulong)batch_size + step;
+            float weight_old = (float)(step / (double)total_samples);
+            float weight_new = (float)(batch_size / (double)total_samples);
+            runningMean = runningMean * weight_old + mu_across_batch * weight_new;
+            runningVar = runningVar * weight_old + var_across_batch * weight_new;
+            step = total_samples;
+
+            // Momentum approach (used only in batch_norm)
+            // float momentum = 0.9f;
+            // runningMean = runningMean * momentum + mu_across_batch * (1f - momentum);
+            // runningVar = runningVar * momentum + var_across_batch * (1f - momentum);
 
             return y;
         }

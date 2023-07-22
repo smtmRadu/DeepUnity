@@ -20,11 +20,12 @@ namespace DeepUnity
         /// <returns>output</returns>
         public Tensor Predict(Tensor input)
         {
+            Tensor inputclone = Tensor.Identity(input);
             foreach (var module in modules)
             {
-                input = module.Predict(input);
+                inputclone = module.Predict(inputclone);
             }
-            return input;
+            return inputclone;
         }
         /// <summary>
         /// Forwards the inputs and every module caches it.
@@ -33,11 +34,12 @@ namespace DeepUnity
         /// <returns>output</returns>
         public Tensor Forward(Tensor input)
         {
+            Tensor inputclone = Tensor.Identity(input);
             foreach (var module in modules)
             {
-                input = module.Forward(input);
+                inputclone = module.Forward(inputclone);
             }
-            return input;
+            return inputclone;
         }
         /// <summary>
         /// Backpropagates the loss derivative w.r.t outputs and computes the gradients.
@@ -46,11 +48,11 @@ namespace DeepUnity
         /// <returns></returns>
         public void Backward(Tensor loss)
         {
+            Tensor lossclone = Tensor.Identity(loss);
             for (int i = modules.Length - 1; i >= 0; i--)
             {
-                loss = modules[i].Backward(loss);
+                lossclone = modules[i].Backward(lossclone);
             }
-            // return loss;
         }
 
 

@@ -66,14 +66,8 @@ namespace DeepUnity
                 //     P.beta = P.beta - (learningRate / (1f - MathF.Pow(beta1, t))) * m_B[i] / u_B[i];
                 // }
 
-                if (parameters[i] is RNNCell R)
+                if (parameters[i] is Learnable L)
                 {
-
-                    throw new NotImplementedException("RNNCell optimization not implemented yet.");
-                }
-                else if (parameters[i] is Learnable L)
-                {
-
                     // Weight decay is not applied on biases
                     if (weightDecay != 0)
                         L.gammaGrad = L.gammaGrad + weightDecay * L.gamma;
@@ -86,6 +80,11 @@ namespace DeepUnity
 
                     L.gamma = L.gamma - learningRate * mGamma[i] / ((1f - MathF.Pow(beta1, t)) * uGamma[i]);
                     L.beta = L.beta - learningRate * mBeta[i] / ((1f - MathF.Pow(beta1, t)) * uBeta[i]);
+                }
+                if (parameters[i] is RNNCell R)
+                {
+                    R.recurrentGamma = -learningRate * 5f * R.recurrentGammaGrad;
+                    R.recurrentBeta = -learningRate * 5f * R.recurrentBetaGrad;
                 }
             });
 

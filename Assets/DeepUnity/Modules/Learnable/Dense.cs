@@ -147,8 +147,8 @@ namespace DeepUnity
             if(device == Device.CPU)
             {
                 // compute the gradients
-                gammaGrad = Tensor.MatMul(transposedLoss, InputCache) / batch_size;
-                betaGrad = Tensor.MatMul(transposedLoss, Tensor.Ones(batch_size)) / batch_size;
+                gammaGrad += Tensor.MatMul(transposedLoss, InputCache) / batch_size;
+                betaGrad += Tensor.Mean(transposedLoss, axis: 1) / batch_size; // Tensor.MatMul(transposedLoss, Tensor.Ones(batch_size)) / batch_size;
 
                 // Backpropagate the loss (batch_size, in)
                 return Tensor.MatMul(loss, gamma).Squeeze(-2);
@@ -167,11 +167,11 @@ namespace DeepUnity
                 cs.SetBuffer(1, "input", inputCacheBuffer);
 
                 ComputeBuffer gammaGradBuffer = new ComputeBuffer(gammaGrad.Count(), 4);
-                gammaGradBuffer.SetData(new float[gammaGrad.Count()]); // are set to 0
+                gammaGradBuffer.SetData(gammaGrad.ToArray()); // are set to 0
                 cs.SetBuffer(1, "gamma_grad", gammaGradBuffer);
 
                 ComputeBuffer betaGradBuffer = new ComputeBuffer(betaGrad.Count(), 4);
-                betaGradBuffer.SetData(new float[betaGrad.Count()]); // are set to 0
+                betaGradBuffer.SetData(betaGrad.ToArray()); // are set to 0
                 cs.SetBuffer(1, "beta_grad", betaGradBuffer);
 
                 cs.SetInt("batch_size", batch_size);
