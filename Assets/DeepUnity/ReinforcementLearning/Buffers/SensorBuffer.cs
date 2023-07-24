@@ -9,24 +9,24 @@ namespace DeepUnity
 {
     public class SensorBuffer
     {
-        public int Capacity => Observations.Length;
+        public int Capacity => Observations.Count();
 
-        public float[] Observations;
+        public Tensor Observations;
         private int position_index;
        
  	    public SensorBuffer(int capacity)
         {
-            Observations = Enumerable.Repeat(float.NaN, capacity).ToArray();
+            Observations = Tensor.Zeros(capacity).Select(x => float.NaN);
             position_index = 0;
         }
         public void Clear()
         {
-            Observations = Enumerable.Repeat(float.NaN, Observations.Length).ToArray();
+            Observations = Observations.Select(x => float.NaN);
             position_index = 0;
         }
         public override string ToString()
         {
-            return $"[Observations [{Observations.ToCommaSeparatedString()}]]";
+            return $"[Observations [{Observations.ToArray().ToCommaSeparatedString()}]]";
 
         }
 

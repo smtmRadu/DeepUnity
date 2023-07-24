@@ -6,11 +6,12 @@ using System.Collections.Generic;
 using UnityEngine.Windows;
 using Unity.VisualScripting;
 using System.Drawing.Printing;
+using System.Text;
 
 namespace DeepUnity
 {
     [SerializeField]
-    public class RNN : ScriptableObject, ISerializationCallbackReceiver
+    public class RNN : ScriptableObject, IModel
     {
         [NonSerialized] private IModuleRNN[] modules;
         [SerializeField] private bool batchFirst;
@@ -260,7 +261,10 @@ namespace DeepUnity
         /// Gets all <typeparamref name="RNNCell"/> modules.
         /// </summary>
         /// <returns></returns>
-        public Learnable[] Parameters { get => modules.Where(x => x is Learnable).Select(x => (Learnable) x).ToArray(); }
+        public Learnable[] Parameters() 
+        { 
+            return modules.Where(x => x is Learnable).Select(x => (Learnable) x).ToArray(); 
+        }
 
         /// <summary>
         /// Save path: "Assets/". Creates/Overwrites model on the same path.
@@ -274,6 +278,19 @@ namespace DeepUnity
 
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssetIfDirty(this);
+        }
+        public string Summary()
+        {
+            StringBuilder stringBuilder = new StringBuilder();
+
+            stringBuilder.AppendLine("Model: Sequencial");
+            stringBuilder.AppendLine($"Layers : {modules.Length}");
+            foreach (var module in modules)
+            {
+                stringBuilder.AppendLine($"         {module.GetType().Name}");
+            }
+            stringBuilder.AppendLine($"Parameters: {modules.Where(x => x is Learnable).Select(x => (Learnable)x).Sum(x => x.ParametersCount())}");
+            return stringBuilder.ToString();
         }
         public void OnBeforeSerialize()
         {

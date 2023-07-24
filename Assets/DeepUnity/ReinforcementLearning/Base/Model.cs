@@ -88,14 +88,14 @@ namespace DeepUnity
             if (criticOptimizer != null)
                 return;
 
-            criticOptimizer = new Adam(critic.Parameters, hp.learningRate);          
-            muHeadOptimizer = new Adam(muHead.Parameters, hp.learningRate);            
-            sigmaHeadOptimizer = new Adam(sigmaHead.Parameters, hp.learningRate);
+            criticOptimizer = new Adam(critic.Parameters(), hp.learningRate);          
+            muHeadOptimizer = new Adam(muHead.Parameters(), hp.learningRate);            
+            sigmaHeadOptimizer = new Adam(sigmaHead.Parameters(), hp.learningRate);
 
             discreteHeadsOptimizers = new Optimizer[discreteBranches == null? 0 : discreteBranches.Length];
             for (int i = 0; i < discreteHeads.Length; i++)
             {
-                discreteHeadsOptimizers[i] = new Adam(discreteHeads[i].Parameters, hp.learningRate);
+                discreteHeadsOptimizers[i] = new Adam(discreteHeads[i].Parameters(), hp.learningRate);
             }
 
         }

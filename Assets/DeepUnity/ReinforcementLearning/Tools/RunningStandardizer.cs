@@ -1,4 +1,5 @@
 using System;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity
@@ -21,6 +22,9 @@ namespace DeepUnity
 
         public Tensor Standardise(Tensor tuple, bool update = true)
         {
+            if (tuple.Rank != 1)
+                throw new Exception($"Allowed inputs for standardization are Tensor({mean.Shape.ToCommaSeparatedString()})");
+
             if (update)
                 Update(tuple);
 
@@ -28,8 +32,12 @@ namespace DeepUnity
         }
         private void Update(Tensor tuple)
         {
-            step++;
+            //float weightOld = (float)((double)step/(step + 1ul));
+            //float weightNew = (float)(1.0/(step + 1ul));
+            //mean = mean * weightOld + tuple * weightNew;
+            //variance = variance * weightOld + tuple * weightNew;
 
+            step++;
             Tensor d1 = tuple - mean;
             mean += d1 / step;
             Tensor d2 = tuple - mean;

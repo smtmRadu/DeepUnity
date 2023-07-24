@@ -38,7 +38,7 @@ namespace DeepUnity
                 }
             }
         }
-        public static bool IsValueIn<T>(T value, IEnumerable<T> collection)
+        public static bool Contains<T>(T value, IEnumerable<T> collection)
         {
             foreach (var item in collection)
             {
@@ -167,10 +167,10 @@ namespace DeepUnity
 
             return slices;
         }
-        public static class Numerics
-        {
 
-            
+
+        public static class Numerics
+        {            
             public static float LogDensity(float x, float mu, float sigma)
             {
                 //* https://stats.stackexchange.com/questions/404191/what-is-the-log-of-the-pdf-for-a-normal-distribution *//

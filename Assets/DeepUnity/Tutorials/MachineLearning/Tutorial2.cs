@@ -54,7 +54,7 @@ public class Tutorial2 : MonoBehaviour
              );; 
         }
 
-        optimizer = new Adam(net.Parameters);
+        optimizer = new Adam(net.Parameters());
         scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
 
 

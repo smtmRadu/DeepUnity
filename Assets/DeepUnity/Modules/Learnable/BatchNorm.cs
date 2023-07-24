@@ -22,8 +22,8 @@ namespace DeepUnity
 
         /// <summary>
         /// <b>Placed before or after the non-linear activation function.</b>    <br />
-        /// Input: (B, H) or (H) for unbatched input.<br></br>
-        /// Output: (B, H) or (H) for unbatched input.<br></br>
+        /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br></br>
+        /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br></br>
         /// where B = batch_size and H = num_features.
         /// </summary>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>

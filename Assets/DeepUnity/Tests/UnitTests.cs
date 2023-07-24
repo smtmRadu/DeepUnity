@@ -11,11 +11,65 @@ namespace kbRadu
         public int batchSize = 32;
         public int Runs = 100;
         public RNN rnn_network;
+        public Sequential dnn_network;
+
+        public Sprite sprite;
         private void Start()
         {
+            MNISTForwardBenchmark();
+            // MaxPoolBenchmark();        
+            //TestMaxPool();
+        }
 
+        void MNISTForwardBenchmark()
+        {
+            var network = new Sequential(
+                new Conv2D((1, 28, 28), 5, 3),                    // outs (5, 26, 26)
+                new ReLU(),
+                new MaxPool2D(2),                               // outs (5, 13, 13)
 
-            print("Test finnished");
+                new Conv2D((5, 13, 13), 10, 3)    ,            // outs (10, 11, 11)
+                 new ReLU(),
+                new MaxPool2D(2),                               // outs (10, 5, 5)
+
+                new Flatten(-3, -1),                            // outs (250)
+                new Dense(250, 128, device: TestDevice),
+                new Dropout(0.2f),
+                new Dense(128, 10),
+                new Softmax()
+                );
+
+            TimerX.Start();
+            for (int i = 0; i < Runs; i++)
+            {
+                var output = network.Forward(Tensor.Random01(32, 1, 28, 28));
+                network.Backward(output);
+            }
+            
+            TimerX.Stop();
+        }
+        void MaxPoolBenchmark()
+        {
+            Tensor input = Tensor.Random01(batchSize, 1, MatShape.x, MatShape.y);
+
+            MaxPool2D mp = new MaxPool2D(5);
+
+            TimerX.Start();
+            for (int i = 0; i < Runs; i++)
+            {
+                mp.Predict(input);
+            }
+            TimerX.Stop();
+        }
+        void TestMaxPool()
+        {
+            Tensor input = Tensor.Random01(2, 26, 26);
+            print(input);
+            MaxPool2D mp = new MaxPool2D(2);
+            Tensor output = mp.Forward(input);
+            print(output);
+            mp.Backward(output);
+            
         }
 
         void TestRNNCell()

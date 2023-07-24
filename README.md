@@ -97,6 +97,7 @@ In order to work with Reinforcement Learning tools, you must create a 2D or 3D a
 Also in order to decide the reward function and episode terminal state, use the following calls:
 -  _AddReward(*reward*)_
 -  _EndEpsiode()_ 
+-  _RequestAction()_ [Optional]
 #### Behaviour script overriding example
 ```csharp
 using UnityEngine;
@@ -166,16 +167,13 @@ public class MoveToGoal : Agent
         }
     }
 }
-
-
-
 ```
-_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that can move forward, backward, left or right, and must reach a randomly positioned target. The agent is rewarded by 1 point if it touches the target, or penalized by 1 point if it touches a wall. The agent is penalized constantly by 0.001 points at each time step, to encourage the agent reaching the target as fast as possible._
+_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (each frame), and must reach a randomly positioned target. The agent is rewarded by 1 point if it touches the target, or penalized by 1 point if it touches a wall. The agent is penalized constantly by 0.001 points at each time step, to encourage the agent reaching the target as fast as possible._
 
 ![rl](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_schema.jpg?raw=true)
 
 #### Notes
 - The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. In order to override them, call the their **base** *[first]* each time.
-- Call _AddReward()_ and _EndEpisode()_ only inside **FixedUpdate()**, or any **OnTriggerXXX()**/**OnCollisionXXX()** methods.
+- Call _AddReward()_, _EndEpisode()_ and _RequestAction()_ only inside **FixedUpdate()**, or any **OnTriggerXXX()**/**OnCollisionXXX()** methods.
 
 

@@ -16,9 +16,13 @@ namespace DeepUnity
         /// <param name="out_features"></param>
         /// <param name="init"></param>
         /// <param name="device">If Dense module is a middle layer, larger than (64, 64), it is recommended to run it on GPU. </param>
-        /// <exception cref="Exception"></exception>
         public Dense(int in_features, int out_features, InitType init = InitType.Default, Device device = Device.CPU) : base(device)
         {
+            if (in_features < 1)
+                throw new ArgumentException("In_features cannot be less than 1.");
+            if (out_features < 1)
+                throw new ArgumentException("Out_features cannot be less than 1.");
+
             switch (init)
             {
                 case InitType.Default:
@@ -49,7 +53,7 @@ namespace DeepUnity
                     beta = Tensor.Fill(-2f, out_features);
                     break;
                 default:
-                    throw new Exception("Unhandled initialization type!");
+                    throw new NotImplementedException("Unhandled initialization type!");
             }
 
             gammaGrad = Tensor.Zeros(out_features, in_features);
@@ -57,6 +61,9 @@ namespace DeepUnity
         }
         public Tensor Predict(Tensor input)
         {
+            if (input.Size(-1) != gamma.Size(-1))
+                throw new ShapeException($"Input ({input.Size(-1)}) shape in Dense layer must be ({gamma.Size(-1)}).");
+
             // input = (B, IN)
             // gamma = (OUT, IN)
 

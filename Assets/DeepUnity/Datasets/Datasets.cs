@@ -10,12 +10,13 @@ namespace DeepUnity
         /// <summary>
         /// Item1 = input: Tensor(1,28,28)<br />
         /// Item2 = target: Tensor(10) -> onehot encoding<br />
-        /// "train_input.txt"<br />
-        /// "train_label.txt"<br />
-        /// "test_input.txt"<br />
-        /// "test_label.txt"<br />
+        /// Files used: <br></br>
+        ///     "train_input.txt"<br />
+        ///     "train_label.txt"<br />
+        ///     "test_input.txt"<br />
+        ///     "test_label.txt"<br />
         /// </summary>
-        /// <param name="path"></param>
+        /// <param name="path">Example: C:\\Users\\Desktop</param>
         /// <param name="train"></param>
         /// <param name="test"></param>
         public static void MNIST(string path, out List<(Tensor, Tensor)> train, out List<(Tensor, Tensor)> test)
@@ -23,10 +24,10 @@ namespace DeepUnity
             train = new();
             test = new();
 
-            string json_train_image = File.ReadAllText(path + "train_input.txt");
-            string json_train_label = File.ReadAllText(path + "train_label.txt");
-            string json_test_image = File.ReadAllText(path +  "test_input.txt");
-            string json_test_label = File.ReadAllText(path +  "test_label.txt");
+            string json_train_image = File.ReadAllText(path + "\\train_input.txt");
+            string json_train_label = File.ReadAllText(path + "\\train_label.txt");
+            string json_test_image = File.ReadAllText(path +  "\\test_input.txt");
+            string json_test_label = File.ReadAllText(path +  "\\test_label.txt");
 
             List<Tensor> collect_train_image = JsonUtility.FromJson<TensorCollection>(json_train_image).ToList();
             List<Tensor> collect_train_label = JsonUtility.FromJson<TensorCollection>(json_train_label).ToList();

@@ -83,7 +83,7 @@ namespace DeepUnity
         public float this[int c, int h, int w]
         {
             get => data[c * Height * Width + h * Width + w];
-            set => data[c * Height * Width * h * Width + w] = value;
+            set => data[c * Height * Width + h * Width + w] = value;
         }
         public float this[int n, int c, int h, int w]
         {
@@ -249,6 +249,48 @@ namespace DeepUnity
 
             return t;
         }
+        /// <summary>
+        /// Output: (4, H, W) or (1, H, W) if grayscale = true. <br></br>
+        /// where H = texture height and W = texture width
+        /// </summary>
+        /// <param name="texture"></param>
+        /// <param name="grayscale"></param>
+        /// <returns></returns>
+        public static Tensor Constant(Texture2D texture, bool grayscale = false)
+        {
+            int width = texture.width;
+            int height = texture.height;
+            int channels = grayscale ? 1 : 4;
+            Color[] colors = texture.GetPixels();
+            Tensor result = Tensor.Zeros(channels, height, width);
+
+            if (grayscale)
+            {
+                for (int j = 0; j < height; j++)
+                {
+                    for (int i = 0; i < width; i++)
+                    {
+                        int invertedJ = height - 1 - j; // Calculate the inverted row index
+                        result[0, invertedJ, i] = colors[j * width + i].grayscale;
+                    }
+                }
+            }
+            else
+            {
+                for (int j = 0; j < height; j++)
+                {
+                    for (int i = 0; i < width; i++)
+                    {
+                        int invertedJ = height - 1 - j; // Calculate the inverted row index
+                        result[0, invertedJ, i] = colors[j * width + i].r;
+                        result[1, invertedJ, i] = colors[j * width + i].g;
+                        result[2, invertedJ, i] = colors[j * width + i].b;
+                        result[3, invertedJ, i] = colors[j * width + i].a;
+                    }
+                }
+            }
+            return result;
+        }
         public static Tensor Zeros(params int[] shape)
         {
             return new(shape);
@@ -307,6 +349,7 @@ namespace DeepUnity
             }
             return t;
         }
+       
 
         #endregion
 
@@ -442,8 +485,10 @@ namespace DeepUnity
         #region Special
 
         /// <summary>
-        /// left <b>(j, 1, n, m)</b> * right <b>(k, m, p)</b> => out <b>(j, k, n, p)</b>
+        /// Left: <b>(J, 1, N, M)</b> <br></br>
+        /// Right: <b>(K, N, M)</b> <br></br>
         /// </summary>
+        /// <returns>Output: <b>(J, K, N, P)</b></returns>
         public static Tensor MatMul(Tensor left, Tensor right)
         {
             int left_rank = left.Rank;
@@ -617,9 +662,11 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
-        /// Matrix multiplication but operations are computed on GPU. Efficient for matrices large matrices, like > 64x64. 
-        /// left <b>(j, 1, n, m)</b> * right <b>(k, m, p)</b> => out <b>(j, k, n, p)</b>
+        /// Matrix multiplication but operations are computed on GPU. Efficient for matrices large matrices (larger than 64x64). <br></br>
+        /// Left: <b>(J, 1, N, M)</b> <br></br>
+        /// Right: <b>(K, N, M)</b> <br></br>
         /// </summary>
+        /// <returns>Output: <b>(J, K, N, P)</b></returns>
         public static Tensor MatMulGPU(Tensor left, Tensor right)
         {
             int left_rank = left.Rank;
@@ -739,13 +786,16 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
-        /// Pad(tensor(b, k, n, m), padding: p) => tensor(b, k, n + p * 2, m + p * 2) 
+        /// Input: <b>(B, C, H, W)</b> <br></br>
+        ///
+        /// where B = batch_size, C = channels, H = height, W = width.
         /// </summary>
-        /// <returns></returns>
+        /// <returns> Output: <b>(B, C, H + P * 2, W + P * 2)</b> <br></br>
+        /// where P = padding</returns>
         public static Tensor MatPad(Tensor tensor, int padding, PaddingType paddingMode)
         {
             if (padding == 0)
-                return tensor;
+                return Identity(tensor);
 
             int w = tensor.Width + 2;
             int h = tensor.Height + 2;

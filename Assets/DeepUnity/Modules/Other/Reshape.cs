@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using Unity.VisualScripting;
 using UnityEngine;
@@ -10,14 +11,20 @@ namespace DeepUnity
         [SerializeField] private int[] outputShape;
 
         /// <summary>
-        /// Input: (B, *) or (*) for unbatched input. <br></br>
-        /// Output: (B, *') or (*') for unbatched input. <br></br>
+        /// Input: <b>(B, *)</b> or <b>(*)</b> for unbatched input. <br></br>
+        /// Output: <b>(B, *')</b> or <b>(*')</b> for unbatched input. <br></br>
         /// where * = input_shape and *' = output_shape.
         /// </summary>
         /// <param name="input_shape"></param>
         /// <param name="output_shape"></param>
         public Reshape(int[] input_shape, int[] output_shape)
         {
+            if (input_shape == null || input_shape.Length == 0)
+                throw new ArgumentException("Input_shape cannot be null or have a length of 0.");
+
+            if (output_shape == null || output_shape.Length == 0)
+                throw new ArgumentException("Output_shape cannot be null or have a length of 0.");
+
             int count = 1;
             foreach (var item in input_shape)
             {

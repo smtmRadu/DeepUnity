@@ -73,6 +73,10 @@ namespace DeepUnity
                 }
             }
         }
+        public virtual int ParametersCount()
+        {
+            return gamma.Count() + beta.Count();
+        }
         public virtual void OnBeforeSerialize()
         {
 

@@ -7,9 +7,9 @@ using UnityEngine;
 
 public class Tutorial3 : MonoBehaviour
 {
-    [Header("Learning digit recognition.")]
+    [Header("Learning MNIST digit recognition.")]
     [SerializeField] Sequential network; 
-    [SerializeField] private int batch_size = 32;
+    [SerializeField] private int batch_size = 64;
 
     [Header("Test")]
     [SerializeField] RenderTexture renderTexture;
@@ -25,30 +25,38 @@ public class Tutorial3 : MonoBehaviour
     List<(Tensor, Tensor)[]> train_batches;
     public void Start()
     {
-        Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop\\", out train, out test);
+        Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out train, out test);
         Debug.Log("MNIST Dataset loaded.");
 
         if (network == null)
         {
-            network = new Sequential(
-                new Conv2D((1,28,28), 5, 3),
-                new Sigmoid(),
-                new Flatten(-3, -1),
-                new Dense(5 * 26 * 26, 100, device: Device.GPU),
-                new Sigmoid(),
-                new Dense(100, 10),
-                new Softmax());
-
+            // Original
             // network = new Sequential(
-            //     new Flatten(-3, -1),
-            //     new ReLU(),
-            //     new Dense(784, 200),
-            //     new ReLU(),
-            //     new Dense(200, 10),
-            //     new Softmax());
+            //      new Conv2D((1, 28, 28), 5, 3),                  
+            //      new ReLU(),
+            //      new MaxPool2D(2),                               
+            //      new Conv2D((5, 13, 13), 10, 3),                
+            //      new ReLU(),
+            //      new MaxPool2D(2),                               
+            //      new Flatten(-3, -1),                            
+            //      new Dense(250, 128, device: Device.GPU),
+            //      new Dropout(0.2f),
+            //      new Dense(128, 10),
+            //      new Softmax()
+            //      );
+
+            network = new Sequential(
+                new Conv2D((1, 28, 28), 5, 3),
+                new ReLU(),
+                new Flatten(),
+                new Dense(5 * 26 * 26, 64, device: Device.GPU),
+                new ReLU(),
+                new Dense(64, 10),
+                new Softmax()
+                );
         }
 
-        optim = new Adam(network.Parameters);
+        optim = new Adam(network.Parameters());
 
         Utils.Shuffle(train);
         train_batches = Utils.Split(train, batch_size);
@@ -82,7 +90,7 @@ public class Tutorial3 : MonoBehaviour
 
         float train_acc = Metrics.Accuracy(prediction, target);
 
-        Debug.Log($"Batch {batch_index++} | Accuracy {train_acc * 100}%");
+        Debug.Log($"Batch {batch_index++}/{train_batches.Count} | Accuracy {train_acc * 100}%");
 
 
         // Tensor valid_input = Tensor.Concat(null, test.Select(x => x.Item1).ToArray());

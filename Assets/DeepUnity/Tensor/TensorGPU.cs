@@ -20,10 +20,10 @@ namespace DeepUnity
         [SerializeField] private int[] shape;
         private bool disposed = false;
 
-        // Fields that are used for fast value extraction on indexing.
+        // Fields that are used for fast value extraction on indexing. ..
         private ComputeBuffer valueAtIndex;
         private float[] valueAtIndexRecv; 
-
+        // .. From VRAM TO RAM
         public int Rank
         {
             get

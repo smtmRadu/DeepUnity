@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Remoting.Channels;
 using System.Threading.Tasks;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEngine.Windows;
@@ -29,9 +30,15 @@ namespace DeepUnity
 
 
         /// <summary>
-        /// Input: (<b>B</b>, <b>C_in</b>, <b>H</b>, <b>W</b>) or (<b>C_in</b>, <b>H</b>, <b>W</b>) for unbatched input.<br/>
-        /// Output: (<b>B</b>, <b>C_out</b>, <b>H - K + 1</b>, <b>W - K + 1</b>) or (<b>C_out</b>, <b>H - K + 1</b>, <b>W - K + 1</b>) for unbatched input.<br></br>
-        /// where B = batch_size, C_in = in_channels, C_out = out_channels and K = kernel_size.
+        /// Input: (<b>B</b>, <b>C_in</b>, <b>H_in</b>, <b>W_in</b>) or (<b>C_in</b>, <b>H_in</b>, <b>W_in</b>) for unbatched input.<br/>
+        /// Output: <b>(B, C_out, H_out, W_out)</b> or <b>(C_out, H_out, W_out)</b> <br></br>
+        /// <br></br>
+        /// where <br></br>
+        /// B = batch_size <br></br>
+        /// C_in = in_channels <br></br> 
+        /// C_out = out_channels, <br></br>
+        /// H_out = H_in - kernel_size + 1 <br></br> 
+        /// W_out = W_in - kernel_size + 1
         /// </summary>
         /// <param name="input_shape">(C_in, H, W)</param>
         /// <param name="out_channels">C_out</param>
@@ -71,8 +78,11 @@ namespace DeepUnity
         /// <returns></returns>
         public Tensor Predict(Tensor input)
         {
-            bool isBatched = input.Rank == 4;
-            int batch_size = isBatched ? gamma.Size(-4) : 1;
+            if(input.Size(-3) != inputShape[0] || input.Size(-2) != inputShape[1] || input.Size(-1) != inputShape[2])
+                throw new ShapeException($"Input shape ({input.Size(-3)}{input.Size(-2)}{input.Size(-1)}) received in Conv2D module must be ({inputShape.ToCommaSeparatedString()})");
+
+            int batch_size = input.Rank == 4 ? input.Size(-4) : 1;
+
             return Correlate2D_input_kernels(input, gamma, CorrelationMode.Valid) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
         }
 

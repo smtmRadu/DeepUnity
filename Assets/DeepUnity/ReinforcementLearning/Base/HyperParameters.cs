@@ -45,7 +45,7 @@ namespace DeepUnity
         [Tooltip("Applies linear decay on learning rate (default step_size: 10, default decay: 0.99f).")]
         public bool learningRateSchedule = false;
 
-        [Tooltip("Apply normalization to observation inputs and rewards, as well for the advantages.")]
+        [Tooltip("Apply normalization to observation inputs and rewards.")]
         public bool normalize = false;
 
         [Tooltip("Display statistics of each episode in the Console.")]
@@ -65,7 +65,7 @@ namespace DeepUnity
         [Tooltip("Discount factor.")]
         public float gamma = 0.99f;
 
-        [Tooltip("GAE factor.")]
+        [ReadOnly, Tooltip("GAE factor.")]
         public float lambda = 0.95f;
 
         [Tooltip("Number of epochs per buffer.")]

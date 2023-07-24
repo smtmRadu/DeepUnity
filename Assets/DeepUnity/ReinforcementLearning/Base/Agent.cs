@@ -1,7 +1,11 @@
+using System;
 using System.Collections.Generic;
+using System.Drawing;
+using System.Linq.Expressions;
 using System.Text;
 using Unity.VisualScripting;
 using UnityEditor;
+using UnityEditor.EditorTools;
 using UnityEngine;
 
 /*
@@ -17,16 +21,17 @@ namespace DeepUnity
     public class Agent : MonoBehaviour
     {
         public Model model;
+        [SerializeField] private BehaviourType behaviourType = BehaviourType.Inference;
 
         [Space]
-        public int spaceSize = 2;
-        [Min(0)]public int continuousActions = 2;
-        public int[] discreteBranches = new int[0];
+        [SerializeField] private int spaceSize = 2;
+        [SerializeField, Min(0)] private int continuousActions = 2;
+        [SerializeField] private int[] discreteBranches = new int[0];
 
-        [Space]      
-        public BehaviourType behaviourType = BehaviourType.Inference;
-        public OnEpisodeEndType onEpisodeEnd = OnEpisodeEndType.ResetEnvironment;
-
+        [Space]         
+        [SerializeField] private OnEpisodeEndType onEpisodeEnd = OnEpisodeEndType.ResetEnvironment;
+        [SerializeField, Tooltip("Request an action at each fixed timestep/frame.")] private bool autoRequestAction = true;
+        [SerializeField, Tooltip("Auto use the sensors information attached to this agent.")] private bool useSensors = true;
         
         public HyperParameters Hp { get; private set; }
         private List<ISensor> Sensors { get; set; }
@@ -41,6 +46,7 @@ namespace DeepUnity
         public float CumulativeReward { get; private set; }       
         private bool IsEpisodeEnd { get; set; } = false;
         private bool FixedUpdateOccured { get; set; } = false;
+        private bool ActionRequested { get; set; } = false;
 
         public virtual void Awake()
         {
@@ -69,71 +75,81 @@ namespace DeepUnity
         public virtual void FixedUpdate()
         {
             FixedUpdateOccured = true;
+            if (autoRequestAction)
+                RequestAction();
         }
         public virtual void Update()
-        {          
-            if (FixedUpdateOccured)
+        {
+            if (!FixedUpdateOccured)
+                return;
+
+            if (!ActionRequested)
+                return;
+
+
+
+            switch (behaviourType)
             {
-                switch (behaviourType)
-                {
-                    case BehaviourType.Inference:
-                        InferenceBehavior();
-                        break;
+                case BehaviourType.Inference:
+                    InferenceBehavior();
+                    break;
 
-                    case BehaviourType.Inactive:
-                        break;
+                case BehaviourType.Inactive:
+                    break;
 
-                    case BehaviourType.Active:
-                        ActiveBehavior();
-                        break;
+                case BehaviourType.Active:
+                    ActiveBehavior();
+                    break;
 
-                    case BehaviourType.Heuristic:
-                        ManualBehavior();
-                        break;
+                case BehaviourType.Heuristic:
+                    ManualBehavior();
+                    break;
 
-                    case BehaviourType.Test:
-                        ActiveBehavior();
-                        break;
-                }
-
-
-
-                StepCount++;
-
-                if (StepCount == Hp.maxEpisodeSteps && !IsEpisodeEnd)
-                {
-                    EndEpisode();
-                    Trajectory.reachedTerminalState = false;                  
-                }
-
-                if(IsEpisodeEnd && behaviourType == BehaviourType.Inference)
-                {
-                    Trainer.Ready(this);
-                }
-
-                Timestep.reward = Tensor.Constant(TimestepReward);
-
-                if (Hp.normalize)
-                    Timestep.reward = model.rewardStadardizer.Standardise(Timestep.reward);
-
-                Trajectory.Remember(Timestep);
-                Timestep = new TimeStep();
-
+                case BehaviourType.Test:
+                    ActiveBehavior();
+                    break;
             }
 
+
+
+            StepCount++;
+
+            if (StepCount == Hp.maxEpisodeSteps && !IsEpisodeEnd)
+            {
+                EndEpisode();
+                Trajectory.reachedTerminalState = false;                  
+            }
+
+            if(IsEpisodeEnd && behaviourType == BehaviourType.Inference)
+            {
+                Trainer.Ready(this);
+            }
+
+            Timestep.reward = Tensor.Constant(TimestepReward);
+
+            if (Hp.normalize)
+                Timestep.reward = model.rewardStadardizer.Standardise(Timestep.reward);
+
+            Trajectory.Remember(Timestep);
+            Timestep = new TimeStep();
         }
         public virtual void LateUpdate()
         {
-            if(FixedUpdateOccured && IsEpisodeEnd)
+            if(FixedUpdateOccured && ActionRequested)
             {
-               
-                IsEpisodeEnd = false;
-                ResetEpisode();
-                TimestepReward = 0; // reward[t+1] = 0 -> reset
+                FixedUpdateOccured = false;             
+                ActionRequested = false;
 
-                FixedUpdateOccured = false;
-            }
-           
+                if(IsEpisodeEnd)
+                {
+                    IsEpisodeEnd = false;
+
+                    ResetEpisode();
+                    OnEpisodeBegin();
+                    TimestepReward = 0; // reward[t+1] = 0 -> reset
+                }
+               
+            }          
         }
 
         // Setup
@@ -147,16 +163,24 @@ namespace DeepUnity
             else
             {
                 string[] modelFoundGUID = AssetDatabase.FindAssets(GetType().Name);
-                if (modelFoundGUID.Length > 0)
-                {
-                    string modelFoundPath = AssetDatabase.GUIDToAssetPath(modelFoundGUID[0]);
-                    model = AssetDatabase.LoadAssetAtPath<Model>(modelFoundPath);
-                    Debug.Log($"{GetType().Name} model auto-loaded from project Assets.");
-                }
-                else
+
+                if(modelFoundGUID.Length == 0)
                 {
                     model = new Model(spaceSize, continuousActions, discreteBranches, Hp, GetType().Name);
-                }           
+                    return;
+                }
+                string modelFoundPath = AssetDatabase.GUIDToAssetPath(modelFoundGUID[0]);
+
+                if (modelFoundPath.EndsWith(".cs"))
+                {
+                    model = new Model(spaceSize, continuousActions, discreteBranches, Hp, GetType().Name);
+                    return;
+                }
+                
+
+                model = AssetDatabase.LoadAssetAtPath<Model>(modelFoundPath);
+                Debug.Log($"<b>{GetType().Name}<b/> model auto-loaded from project Assets.");
+
             }
         }
         private void InitBuffers()
@@ -183,11 +207,12 @@ namespace DeepUnity
         // Loop
         private void ActiveBehavior()
         {
+            throw new NotImplementedException();
             // Observations.Clear();
             // Actions.Clear();
             // 
             // CollectObservations(Observations);
-            // Sensors.ForEach(x => Observations.AddObservation(x.GetObservations()));
+            // if(useSensors) Sensors.ForEach(x => Observations.AddObservation(x.GetObservations()));
             // 
             // Tensor state = Tensor.Constant(Observations.values);
             // 
@@ -214,10 +239,10 @@ namespace DeepUnity
             Observations.Clear();
             Actions.Clear();
             CollectObservations(Observations);
-            Sensors.ForEach(x => Observations.AddObservation(x.GetObservations()));
+            if(useSensors) Sensors.ForEach(x => Observations.AddObservation(x.GetObservations()));
 
             // Set state[t], action[t], reward[t]
-            Timestep.state = Tensor.Constant(Observations.Observations);
+            Timestep.state = Tensor.Identity(Observations.Observations);
 
             if (Hp.normalize)
                 Timestep.state = model.stateStandardizer.Standardise(Timestep.state);
@@ -239,7 +264,17 @@ namespace DeepUnity
         public virtual void CollectObservations(SensorBuffer sensorBuffer) { }
         public virtual void OnActionReceived(ActionBuffer actionBuffer) { } 
         public virtual void Heuristic(ActionBuffer actionBuffer) { }
+        /// <summary>
+        /// Called only on <b>FixedUpdate()</b>, <b>OnTriggerXXX()</b> or <b>OnCollisionXXX()</b>.
+        /// </summary>
+        public void RequestAction() => ActionRequested = true;
+        /// <summary>
+        /// Called only on <b>FixedUpdate()</b>, <b>OnTriggerXXX()</b> or <b>OnCollisionXXX()</b>.
+        /// </summary>
         public void EndEpisode() => IsEpisodeEnd = true;
+        /// <summary>
+        /// Called only on <b>FixedUpdate()</b>, <b>OnTriggerXXX()</b> or <b>OnCollisionXXX()</b>.
+        /// </summary>
         public void AddReward(float reward)
         {
             TimestepReward += reward;
@@ -276,22 +311,20 @@ namespace DeepUnity
             CumulativeReward = 0;
             StepCount = 0;
             CompletedEpisodes++;
-
-            OnEpisodeBegin();
         }
     }
 
     public enum BehaviourType
     {
-        [Tooltip("Complete inactive.")]
+        [Tooltip("Latent behaviour. Learning: NO. Scene resets: NO.")]
         Inactive,
-        [Tooltip("Active behavior. No learning. No scene reset.")]
+        [Tooltip("Active behaviour. Learning: NO. Scene resets: NO.")]
         Active,
-        [Tooltip("Learning. Scene resets.")]
+        [Tooltip("Exploring behaviour. Learning: YES. Scene resets: YES.")]
         Inference,
-        [Tooltip("Manual control. No learning. Scene resets.")]
+        [Tooltip("Manual control. Learning: NO. Scene resets: YES.")]
         Heuristic,
-        [Tooltip("Active behavior. No Learning. Scene resets.")]
+        [Tooltip("Active behavior. Learning: NO. Scene resets: YES.")]
         Test
     }
 

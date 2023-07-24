@@ -29,7 +29,7 @@ public class Tutorial : MonoBehaviour
                 new Dense(64, 1));
         }
 
-        optim = new Adam(network.Parameters);
+        optim = new Adam(network.Parameters());
         scheduler = new StepLR(optim, 100);
 
         // Learning z = x^2 + y^2 function.
