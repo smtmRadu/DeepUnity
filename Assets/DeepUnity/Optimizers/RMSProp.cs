@@ -24,7 +24,7 @@ namespace DeepUnity
         [NonSerialized] public Tensor[] gaveGamma;
         [NonSerialized] public Tensor[] gaveBeta;
 
-        public RMSProp(Learnable[] parameters, float lr = 0.01f, float alpha = 0.99f, float momentum = 0.0f, float weightDecay = 0f, bool centered = false) : base(parameters,lr, weightDecay)
+        public RMSProp(Learnable[] parameters, float lr = 0.01f, float alpha = 0.99f, float momentum = 0.9f, float weightDecay = 0f, bool centered = false) : base(parameters,lr, weightDecay)
         {
             this.alpha = alpha;
             this.momentum = momentum;

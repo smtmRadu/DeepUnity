@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using UnityEditor.XR;
 using UnityEngine;
 
 namespace DeepUnity
@@ -19,30 +20,41 @@ namespace DeepUnity
         /// <param name="path">Example: C:\\Users\\Desktop</param>
         /// <param name="train"></param>
         /// <param name="test"></param>
-        public static void MNIST(string path, out List<(Tensor, Tensor)> train, out List<(Tensor, Tensor)> test)
+        public static void MNIST(string path, out List<(Tensor, Tensor)> train, out List<(Tensor, Tensor)> test, DatasetSettings whatToLoad = DatasetSettings.LoadAll)
         {
             train = new();
             test = new();
 
-            string json_train_image = File.ReadAllText(path + "\\train_input.txt");
-            string json_train_label = File.ReadAllText(path + "\\train_label.txt");
-            string json_test_image = File.ReadAllText(path +  "\\test_input.txt");
-            string json_test_label = File.ReadAllText(path +  "\\test_label.txt");
-
-            List<Tensor> collect_train_image = JsonUtility.FromJson<TensorCollection>(json_train_image).ToList();
-            List<Tensor> collect_train_label = JsonUtility.FromJson<TensorCollection>(json_train_label).ToList();
-            List<Tensor> collect_test_image = JsonUtility.FromJson<TensorCollection>(json_test_image).ToList();
-            List<Tensor> collect_test_label = JsonUtility.FromJson<TensorCollection>(json_test_label).ToList();
-
-            for (int i = 0; i < collect_train_image.Count; i++)
+            string json_train_image = null;
+            string json_train_label = null;
+            string json_test_image = null;
+            string json_test_label = null;
+            List<Tensor> collect_train_image = null;
+            List<Tensor> collect_train_label = null;
+            List<Tensor> collect_test_image = null;
+            List<Tensor> collect_test_label = null;
+            if (whatToLoad == DatasetSettings.LoadAll || whatToLoad == DatasetSettings.LoadTrainOnly) 
             {
-                train.Add((collect_train_image[i], collect_train_label[i]));
+                json_train_image = File.ReadAllText(path + "\\train_input.txt");
+                json_train_label = File.ReadAllText(path + "\\train_label.txt");
+                collect_train_image = JsonUtility.FromJson<TensorCollection>(json_train_image).ToList();
+                collect_train_label = JsonUtility.FromJson<TensorCollection>(json_train_label).ToList();
+                for (int i = 0; i < collect_train_image.Count; i++)
+                {
+                    train.Add((collect_train_image[i], collect_train_label[i]));
+                }
             }
-
-            for (int i = 0; i < collect_test_image.Count; i++)
+            if (whatToLoad == DatasetSettings.LoadAll || whatToLoad == DatasetSettings.LoadTestOnly)
             {
-                train.Add((collect_test_image[i], collect_test_label[i]));
-            }
+                json_test_image = File.ReadAllText(path + "\\test_input.txt");
+                json_test_label = File.ReadAllText(path + "\\test_label.txt");
+                collect_test_image = JsonUtility.FromJson<TensorCollection>(json_test_image).ToList();
+                collect_test_label = JsonUtility.FromJson<TensorCollection>(json_test_label).ToList();
+                for (int i = 0; i < collect_test_image.Count; i++)
+                {
+                    test.Add((collect_test_image[i], collect_test_label[i]));
+                }
+            }            
         }
         private static void SerializeMNIST()
         {
@@ -146,6 +158,7 @@ namespace DeepUnity
         
     }
 
+   
    
 }
 

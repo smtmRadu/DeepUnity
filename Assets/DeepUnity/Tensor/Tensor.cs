@@ -250,13 +250,17 @@ namespace DeepUnity
             return t;
         }
         /// <summary>
-        /// Output: (4, H, W) or (1, H, W) if grayscale = true. <br></br>
-        /// where H = texture height and W = texture width
+        /// Output: (C_color, H, W) or (C_gray, H, W) when <paramref name="grayscale"/> = true <br></br>
+        /// where <br></br>
+        /// C_color = 3 if <paramref name="transparency"/> = false or 4 if <paramref name="transparency"/> = true.<br></br>
+        /// C_gray = 1 if <paramref name="transparency"/> = false or 2 if <paramref name="transparency"/> = true. <br></br>
+        /// H = texture.height <br></br>
+        /// W = texture.width <br></br>
         /// </summary>
         /// <param name="texture"></param>
         /// <param name="grayscale"></param>
         /// <returns></returns>
-        public static Tensor Constant(Texture2D texture, bool grayscale = false)
+        public static Tensor Constant(Texture2D texture, bool grayscale = false, bool transparency = false)
         {
             int width = texture.width;
             int height = texture.height;
@@ -290,6 +294,26 @@ namespace DeepUnity
                 }
             }
             return result;
+        }
+        /// <summary>
+        /// <b>Extracts the data from a ComputeBuffer into a 1 dimensional tensor.</b> <br></br>
+        /// Output: (L) <br></br>
+        /// where L = computeBuffer.count
+        /// </summary>
+        /// <param name="computeBuffer"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        public static Tensor Constant(ComputeBuffer computeBuffer)
+        {
+            if (computeBuffer.stride != sizeof(float))
+                throw new ArgumentException("ComputeBuffer stride must be equal to sizeof(float).");
+
+            float[] data = new float[computeBuffer.count];
+            computeBuffer.GetData(data);
+            Tensor result = new Tensor(data.Length);
+            result.data = data;
+            return result;
+
         }
         public static Tensor Zeros(params int[] shape)
         {
@@ -1157,7 +1181,8 @@ namespace DeepUnity
 
                 // Esle remove that axis
                 List<int> newShape = tensor.shape.ToList();
-                newShape.RemoveAt(ax);
+                if(newShape.Count > 1)
+                    newShape.RemoveAt(ax);
 
                 Tensor result = new(newShape.ToArray());
                 Array.Copy(tensor.data, result.data, tensor.data.Length);
@@ -1176,7 +1201,7 @@ namespace DeepUnity
             Array.Copy(tensor.data, result.data, tensor.data.Length);
             return result;
         }     
-        public static Tensor Flatten(Tensor tensor, int startAxis = 0, int endAxis = -1)
+        public static Tensor Flatten(Tensor tensor, int startAxis, int endAxis)
         {
             if (startAxis > endAxis)
                 throw new Exception($"Start axis ({startAxis}) must be greater or equal to the end axis ({endAxis}) when flattening.");
@@ -1472,6 +1497,13 @@ namespace DeepUnity
             Utils.Shuffle(slices);
             return Cat(axis, slices);
         }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <param name="keepDim">If false, squeezes the tensor on <paramref name="axis"/>.</param>
+        /// <returns></returns>
         public static Tensor Sum(Tensor tensor, int axis, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
@@ -1578,9 +1610,16 @@ namespace DeepUnity
                 }
             }
             if(!keepDim)
-                result.Squeeze();
+                result.Squeeze(axis);
             return result;
         }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <param name="keepDim">If false, squeezes the tensor on <paramref name="axis"/>.</param>
+        /// <returns></returns>
         public static Tensor Mean(Tensor tensor, int axis, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
@@ -1692,9 +1731,16 @@ namespace DeepUnity
                 }
             }
             if(!keepDim)
-                result.Squeeze();
+                result.Squeeze(axis);
             return result;
         }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <param name="keepDim">If false, squeezes the tensor on <paramref name="axis"/>.</param>
+        /// <returns></returns>
         public static Tensor Var(Tensor tensor, int axis, int correction = 1, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
@@ -1817,14 +1863,28 @@ namespace DeepUnity
             }
 
             if(!keepDim)
-                result.Squeeze();
+                result.Squeeze(axis);
             return result;
         }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <param name="keepDim">If false, squeezes the tensor on <paramref name="axis"/>.</param>
+        /// <returns></returns>
         public static Tensor Std(Tensor tensor, int axis, int correction = 1, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
             return Sqrt(Var(tensor, axis, correction, keepDim));
         }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <param name="keepDim">If false, squeezes the tensor on <paramref name="axis"/>.</param>
+        /// <returns></returns>
         public static Tensor Min(Tensor tensor, int axis, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
@@ -1932,9 +1992,16 @@ namespace DeepUnity
             }
 
             if (!keepDim)
-                result.Squeeze();
+                result.Squeeze(axis);
             return result;
         }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <param name="keepDim">If false, squeezes the tensor on <paramref name="axis"/>.</param>
+        /// <returns></returns>
         public static Tensor Max(Tensor tensor, int axis, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
@@ -2042,7 +2109,7 @@ namespace DeepUnity
             }
 
             if (!keepDim)
-                result.Squeeze();
+                result.Squeeze(axis);
             return result;
 
         }
@@ -2195,11 +2262,15 @@ namespace DeepUnity
                 if (shape[ax] != 1)
                     return this;
 
-                // Esle remove that axis
-                List<int> newShape = shape.ToList();
-                newShape.RemoveAt(ax);
+                // Else remove that axis
+                if(shape.Length > 1)
+                {
+                    List<int> newShape = shape.ToList();
+                    newShape.RemoveAt(ax);
 
-                this.shape = newShape.ToArray();
+                    this.shape = newShape.ToArray();
+                }
+               
             }
 
             return this;
@@ -2215,820 +2286,82 @@ namespace DeepUnity
 
             return this;
         }
-        public Tensor Flatten(int startAxis = 0, int endAxis = -1)
+        // Deprecated due the fact instance operations modify the current object.
+        private Tensor Flatten(int startAxis, int endAxis)
         {
-            if (startAxis > endAxis)
-                throw new Exception($"Start axis ({startAxis}) must be greater or equal to the end axis ({endAxis}) when flattening.");
-
-            HandleAxis(this, ref startAxis);
-            HandleAxis(this, ref endAxis);
-
-           
-
-            List<int> newShape = new();
-
-            for (int i = 0; i < startAxis; i++)
-            {
-                newShape.Add(shape[i]);
-            }
-            int mergedDim = 1;
-            for (int i = startAxis; i <= endAxis; i++)
-            {
-                mergedDim *= shape[i];
-            }
-            newShape.Add(mergedDim);
-            for (int i = endAxis + 1; i <shape.Length; i++)
-            {
-                newShape.Add(shape[i]);
-            }
-
-            this.shape = newShape.ToArray();
-            return this;
+            return Flatten(this, startAxis, endAxis);
         }
-        public Tensor Expand(int axis, int times)
+        private Tensor Expand(int axis, int times)
         {
-            if (times < 1)
-                throw new ArgumentException("When expanding a tensor, times cannot be < 1");
-
-            if (times == 1)
-                return this;
-
-            HandleAxis(this, ref axis);
-
-            Dim dim = AxisToDim(this, axis);
-
-            int[] shapex = null;
-            switch (dim)
-            {
-                case Dim.width:
-                    shapex = CreateShape(Rank, Batch, Channels, Height, Width * times);
-                    break;
-                case Dim.height:
-                    shapex = CreateShape(Rank, Batch, Channels, Height * times, Width);
-                    break;
-                case Dim.channel:
-                    shapex = CreateShape(Rank, Batch, Channels * times, Height, Width);
-                    break;
-                case Dim.batch:
-                    shapex = CreateShape(Rank, Batch * times, Channels, Height, Width);
-                    break;
-            }
-
-            Tensor result = new Tensor(shapex);
-
-            for (int t = 0; t < times; t++)
-            {
-                for (int l = 0; l < Batch; l++)
-                {
-                    for (int k = 0; k < Channels; k++)
-                    {
-                        for (int j = 0; j < Height; j++)
-                        {
-                            for (int i = 0; i < Width; i++)
-                            {
-                                switch (dim)
-                                {
-                                    case Dim.width:
-                                        result[l, k, j, t * Width + i] = this[l, k, j, i];
-                                        break;
-                                    case Dim.height:
-                                        result[l, k, t * Height + j, i] = this[l, k, j, i];
-                                        break;
-                                    case Dim.channel:
-                                        result[l, t * Channels + k, j, i] = this[l, k, j, i];
-                                        break;
-                                    case Dim.batch:
-                                        result[t * Batch + l, k, j, i] = this[l, k, j, i];
-                                        break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            return result;
+            return Expand(this, axis, times);
         }
-        public Tensor Transpose(int axis0, int axis1)
+        private Tensor Transpose(int axis0, int axis1)
         {
-            HandleAxis(this, ref axis0);
-            HandleAxis(this, ref axis1);
-            if (axis0 == axis1)
-                return this;
-
-            int axis0Dim = (int)AxisToDim(this, axis0);
-            int axis1Dim = (int)AxisToDim(this, axis1);
-
-            int[] permutation = new int[] { Batch, Channels, Height, Width };
-            var temp = permutation[axis0Dim];
-            permutation[axis0Dim] = permutation[axis1Dim];
-            permutation[axis1Dim] = temp;
-
-            Tensor result = new Tensor(CreateShape(Rank, permutation[0], permutation[1], permutation[2], permutation[3]));
-
-            for (int l = 0; l < Batch; l++)
-            {
-                for (int k = 0; k < Channels; k++)
-                {
-                    for (int j = 0; j < Height; j++)
-                    {
-                        for (int i = 0; i < Width; i++)
-                        {
-                            int[] transposedIndices = new int[] { l, k, j, i };
-                            temp = transposedIndices[axis0Dim];
-                            transposedIndices[axis0Dim] = transposedIndices[axis1Dim];
-                            transposedIndices[axis1Dim] = temp;
-
-                            result[transposedIndices[0], transposedIndices[1], transposedIndices[2], transposedIndices[3]] = this[l, k, j, i];
-                        }
-                    }
-                }
-            }
-
-            return result;
+            return Transpose(this, axis0, axis1);
         }
-        public Tensor[] Split(int axis, int split_size)
+        private Tensor[] Split(int axis, int split_size)
         {
-            HandleAxis(this, ref axis);
-            Dim dim = AxisToDim(this, axis);
-            int[] stackShape = new int[] { Batch, Channels, Height, Width };
-            List<Tensor> slices = new List<Tensor>();
-
-            int dimLength = stackShape[(int)dim];
-            int dimPos = 0;
-            while (dimPos < dimLength)
-            {
-                int dimCopySize = Math.Min(split_size, dimLength - dimPos);
-                int[] sliceShape = stackShape.ToArray();
-                sliceShape[(int)dim] = dimCopySize;
-                Tensor slice = new Tensor(CreateShape(Rank, sliceShape[0], sliceShape[1], sliceShape[2], sliceShape[3]));
-
-                for (int l = 0; l < slice.Batch; l++)
-                {
-                    for (int k = 0; k < slice.Channels; k++)
-                    {
-                        for (int j = 0; j < slice.Height; j++)
-                        {
-                            for (int i = 0; i < slice.Width; i++)
-                            {
-                                switch (dim)
-                                {
-                                    case Dim.width:
-                                        slice[l, k, j, i] = this[l, k, j, dimPos + i];
-                                        break;
-                                    case Dim.height:
-                                        slice[l, k, j, i] = this[l, k, j + dimPos, i];
-                                        break;
-                                    case Dim.channel:
-                                        slice[l, k, j, i] = this[l, k + dimPos, j, i];
-                                        break;
-                                    case Dim.batch:
-                                        slice[l, k, j, i] = this[l + dimPos, k, j, i];
-                                        break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                slices.Add(slice);
-                dimPos += split_size;
-            }
-
-            return slices.ToArray();
+            return Split(this, axis, split_size);
         }
-        public Tensor Shuffle(int axis)
+        private Tensor Shuffle(int axis)
         {
-            HandleAxis(this, ref axis);
-            Tensor[] slices = Split(axis, 1);
-            Utils.Shuffle(slices);
-            return Cat(axis, slices);
+            return Shuffle(this, axis);
         }
-        public Tensor Sum(int axis, bool keepDim = false)
+        private Tensor Sum(int axis, bool keepDim = false)
         {
-            HandleAxis(this, ref axis);
-
-            int batch = Batch;
-            int channels = Channels;
-            int height = Height;
-            int width = Width;
-
-            Dim dimIndex = AxisToDim(this, axis);
-
-            int[] newShape = shape.ToArray();
-            newShape[axis] = 1; // keepDim = true? newShape[axis] : 1
-            Tensor result = new(newShape);
-
-            if (dimIndex == Dim.width)
-            {
-                for (int l = 0; l < batch; l++)
-                {
-                    for (int k = 0; k < channels; k++)
-                    {
-                        for (int j = 0; j < height; j++)
-                        {
-                            float sum = 0f;
-                            for (int i = 0; i < width; i++)
-                            {
-                                sum += this[l, k, j, i];
-                            }
-                            result[l, k, j, 0] = sum;
-
-                            // for (int i = 0; i < newShape[axis]; i++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
-                        }
-                    }
-                }
-            }
-            else if (dimIndex == Dim.height)
-            {
-                for (int l = 0; l < batch; l++)
-                {
-                    for (int k = 0; k < channels; k++)
-                    {
-                        for (int i = 0; i < width; i++)
-                        {
-                            float sum = 0f;
-                            for (int j = 0; j < height; j++)
-                            {
-                                sum += this[l, k, j, i];
-                            }
-                            result[l, k, 0, i] = sum;
-                            // for (int j = 0; j < newShape[axis]; j++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
-                        }
-                    }
-                }
-            }
-            else if (dimIndex == Dim.channel)
-            {
-                for (int l = 0; l < batch; l++)
-                {
-                    for (int j = 0; j < height; j++)
-                    {
-                        for (int i = 0; i < width; i++)
-                        {
-                            float sum = 0f;
-
-                            for (int k = 0; k < channels; k++)
-                            {
-                                sum += this[l, k, j, i];
-                            }
-                            result[l, 0, j, i] = sum;
-                            // for (int k = 0; k < newShape[axis]; k++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
-                        }
-                    }
-                }
-            }
-            else if (dimIndex == Dim.batch)
-            {
-                for (int k = 0; k < channels; k++)
-                {
-                    for (int j = 0; j < height; j++)
-                    {
-                        for (int i = 0; i < width; i++)
-                        {
-                            float sum = 0f;
-                            for (int l = 0; l < batch; l++)
-                            {
-                                sum += this[l, k, j, i];
-                            }
-                            result[0, k, j, i] = sum;
-                            // for (int l = 0; l < newShape[axis]; l++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
-                        }
-                    }
-                }
-            }
-            if (!keepDim)
-                result.Squeeze();
-            return result;
+            return Sum(this, axis, keepDim);
         }
-        public Tensor Mean(int axis, bool keepDim = false)
+        private Tensor Mean(int axis, bool keepDim = false)
         {
-            HandleAxis(this, ref axis);
-
-            int batch = Batch;
-            int channels = Channels;
-            int height = Height;
-            int width = Width;
-
-            Dim dimIndex = AxisToDim(this, axis);
-
-            int[] newShape = shape.ToArray();
-            newShape[axis] = 1; // keepDim = true? newShape[axis] : 1
-            Tensor result = new(newShape);
-
-            if (dimIndex == Dim.width)
-            {
-                for (int l = 0; l < batch; l++)
-                {
-                    for (int k = 0; k < channels; k++)
-                    {
-                        for (int j = 0; j < height; j++)
-                        {
-                            float sum = 0f;
-                            for (int i = 0; i < width; i++)
-                            {
-                                sum += this[l, k, j, i];
-                            }
-                            sum /= width;
-                            result[l, k, j, 0] = sum;
-
-                            // for (int i = 0; i < newShape[axis]; i++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
-                        }
-                    }
-                }
-            }
-            else if (dimIndex == Dim.height)
-            {
-                for (int l = 0; l < batch; l++)
-                {
-                    for (int k = 0; k < channels; k++)
-                    {
-                        for (int i = 0; i < width; i++)
-                        {
-                            float sum = 0f;
-                            for (int j = 0; j < height; j++)
-                            {
-                                sum += this[l, k, j, i];
-                            }
-                            sum /= height;
-                            result[l, k, 0, i] = sum;
-                            // for (int j = 0; j < newShape[axis]; j++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
-                        }
-                    }
-                }
-            }
-            else if (dimIndex == Dim.channel)
-            {
-                for (int l = 0; l < batch; l++)
-                {
-                    for (int j = 0; j < height; j++)
-                    {
-                        for (int i = 0; i < width; i++)
-                        {
-                            float sum = 0f;
-
-                            for (int k = 0; k < channels; k++)
-                            {
-                                sum += this[l, k, j, i];
-                            }
-                            sum /= channels;
-                            result[l, 0, j, i] = sum;
-                            // for (int k = 0; k < newShape[axis]; k++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
-                        }
-                    }
-                }
-            }
-            else if (dimIndex == Dim.batch)
-            {
-                for (int k = 0; k < channels; k++)
-                {
-                    for (int j = 0; j < height; j++)
-                    {
-                        for (int i = 0; i < width; i++)
-                        {
-                            float sum = 0f;
-                            for (int l = 0; l < batch; l++)
-                            {
-                                sum += this[l, k, j, i];
-                            }
-                            sum /= height;
-                            result[0, k, j, i] = sum;
-                            // for (int l = 0; l < newShape[axis]; l++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
-                        }
-                    }
-                }
-            }
-            if (!keepDim)
-                result.Squeeze();
-            return result;
+            return Mean(this, axis, keepDim);
+        }      
+        private Tensor Var(int axis, int correction = 1, bool keepDim = false)
+        {
+            return Var(this, axis, correction, keepDim);
         }
-        public Tensor Var(int axis, int correction = 1, bool keepDim = false)
+        private Tensor Std(int axis, int correction = 1, bool keepDim = false)
         {
-            HandleAxis(this, ref axis);
-            Dim dim = AxisToDim(this, axis);
-
-            int[] newShape = shape.ToArray();
-            newShape[axis] = 1;
-            Tensor result = new Tensor(newShape);
-
-            if (dim == Dim.width)
-            {
-                for (int l = 0; l < Batch; l++)
-                {
-                    for (int k = 0; k < Channels; k++)
-                    {
-                        for (int j = 0; j < Height; j++)
-                        {
-                            float sum = 0f;
-                            float sumSqr = 0f;
-                            for (int i = 0; i < Width; i++)
-                            {
-                                float value = this[l, k, j, i];
-                                sum += value;
-                                sumSqr += value * value;
-                            }
-                            float vr = (sumSqr - (sum * sum) / Width) / (Width - correction);
-                            result[l, k, j, 0] = vr;
-                            // for (int i = 0; i < newShape[axis]; i++)
-                            // {
-                            //     result[l, k, j, i] = vr;
-                            // }
-                        }
-                    }
-                }
-            }
-            else if (dim == Dim.height)
-            {
-                for (int l = 0; l < Batch; l++)
-                {
-                    for (int k = 0; k < Channels; k++)
-                    {
-                        for (int i = 0; i < Width; i++)
-                        {
-                            float sum = 0f;
-                            float sumSqr = 0f;
-                            for (int j = 0; j < Height; j++)
-                            {
-                                float value = this[l, k, j, i];
-                                sum += value;
-                                sumSqr += value * value;
-                            }
-                            float vr = (sumSqr - (sum * sum) / Height) / (Height - correction);
-                            result[l, k, 0, i] = vr;
-                            // for (int j = 0; j < newShape[axis]; j++)
-                            // {
-                            //     result[l, k, j, i] = vr;
-                            // }
-                        }
-                    }
-                }
-            }
-            else if (dim == Dim.channel)
-            {
-                for (int l = 0; l < Batch; l++)
-                {
-                    for (int j = 0; j < Height; j++)
-                    {
-                        for (int i = 0; i < Width; i++)
-                        {
-                            float sum = 0f;
-                            float sumSqr = 0f;
-                            for (int k = 0; k < Channels; k++)
-                            {
-                                float value = this[l, k, j, i];
-                                sum += value;
-                                sumSqr += value * value;
-                            }
-
-                            float vr = (sumSqr - (sum * sum) / Channels) / (Channels - correction);
-                            result[l, 0, j, i] = vr;
-                            // for (int k = 0; k < newShape[axis]; k++)
-                            // {
-                            //     result[l, k, j, i] = vr;
-                            // }
-                        }
-                    }
-                }
-            }
-            else if (dim == Dim.batch)
-            {
-                for (int k = 0; k < Channels; k++)
-                {
-                    for (int j = 0; j < Height; j++)
-                    {
-                        for (int i = 0; i < Width; i++)
-                        {
-                            float sum = 0f;
-                            float sumSqr = 0f;
-                            for (int l = 0; l < Batch; l++)
-                            {
-                                float value = this[l, k, j, i];
-                                sum += value;
-                                sumSqr += value * value;
-                            }
-                            float vr = (sumSqr - (sum * sum) / Batch) / (Batch - correction);
-                            result[0, k, j, i] = vr;
-                            // for (int l = 0; l < newShape[axis]; l++)
-                            // {
-                            //     result[l, k, j, i] = vr;
-                            // }
-                        }
-                    }
-                }
-            }
-
-            if (!keepDim)
-                result.Squeeze();
-            return result;
+            return Std(this, axis, correction, keepDim);
         }
-        public Tensor Std(int axis, int correction = 1, bool keepDim = false)
+        private Tensor Min(int axis, bool keepDim = false)
         {
-            HandleAxis(this, ref axis);
-            return Sqrt(Var(axis, correction, keepDim));
+            return Min(this, axis, keepDim);
         }
-        public Tensor Min(int axis, bool keepDim = false)
+        private Tensor Max(int axis, bool keepDim = false)
         {
-            HandleAxis(this, ref axis);
-
-            Dim dim = AxisToDim(this, axis);
-
-
-            int[] newShape = shape.ToArray();
-            newShape[axis] = 1;
-            Tensor result = new Tensor(newShape);
-
-            if (dim == Dim.width)
-            {
-                for (int l = 0; l < Batch; l++)
-                {
-                    for (int k = 0; k < Channels; k++)
-                    {
-                        for (int j = 0; j < Height; j++)
-                        {
-                            float min = float.MaxValue;
-                            for (int i = 0; i < Width; i++)
-                            {
-                                min = MathF.Min(min, this[l, k, j, i]);
-                            }
-                            result[l, k, j, 0] = min;
-                            // for (int i = 0; i < result.Width; i++)
-                            // {
-                            //     result[l, k, j, i] = min;
-                            // }
-                        }
-                    }
-                }
-            }
-            else if (dim == Dim.height)
-            {
-                for (int l = 0; l < Batch; l++)
-                {
-                    for (int k = 0; k < Channels; k++)
-                    {
-                        for (int i = 0; i < Width; i++)
-                        {
-                            float min = float.MaxValue;
-                            for (int j = 0; j < Height; j++)
-                            {
-                                min = MathF.Min(min, this[l, k, j, i]);
-                            }
-                            result[l, k, 0, i] = min;
-                            //for (int j = 0; j < result.Height; j++)
-                            //{
-                            //    result[l, k, j, i] = min;
-                            //}
-                        }
-                    }
-                }
-            }
-            else if (dim == Dim.channel)
-            {
-                for (int l = 0; l < Batch; l++)
-                {
-                    for (int j = 0; j < Height; j++)
-                    {
-                        for (int i = 0; i < Width; i++)
-                        {
-                            float min = float.MaxValue;
-                            for (int k = 0; k < Channels; k++)
-                            {
-                                min = MathF.Min(min, this[l, k, j, i]);
-                            }
-                            result[l, 0, j, i] = min;
-                            // for (int k = 0; k < result.Channels; k++)
-                            // {
-                            //     result[l, k, j, i] = min;
-                            // }
-                        }
-                    }
-                }
-            }
-            else if (dim == Dim.batch)
-            {
-                for (int k = 0; k < Channels; k++)
-                {
-                    for (int j = 0; j < Height; j++)
-                    {
-                        for (int i = 0; i < Width; i++)
-                        {
-                            float min = float.MaxValue;
-                            for (int l = 0; l < Batch; l++)
-                            {
-                                min = MathF.Min(min, this[l, k, j, i]);
-                            }
-                            result[0, k, j, i] = min;
-                            // for (int l = 0; l < result.Batch; l++)
-                            // {
-                            //     result[l, k, j, i] = min;
-                            // }
-                        }
-                    }
-                }
-            }
-
-            if (!keepDim)
-                result.Squeeze();
-            return result;
+            return Max(this, axis, keepDim);
         }
-        public Tensor Max(int axis, bool keepDim = false)
+        private Tensor Pow(float power)
         {
-            HandleAxis(this, ref axis);
-
-            Dim dim = AxisToDim(this, axis);
-
-            int[] newShape = shape.ToArray();
-            newShape[axis] = 1;
-            Tensor result = new Tensor(newShape);
-
-            if (dim == Dim.width)
-            {
-                for (int l = 0; l < Batch; l++)
-                {
-                    for (int k = 0; k < Channels; k++)
-                    {
-                        for (int j = 0; j < Height; j++)
-                        {
-                            float max = float.MinValue;
-                            for (int i = 0; i < Width; i++)
-                            {
-                                max = MathF.Max(max, this[l, k, j, i]);
-                            }
-                            result[l, k, j, 0] = max;
-                            // for (int i = 0; i < result.Width; i++)
-                            // {
-                            //     result[l, k, j, i] = max;
-                            // }
-                        }
-                    }
-                }
-            }
-            else if (dim == Dim.height)
-            {
-                for (int l = 0; l < Batch; l++)
-                {
-                    for (int k = 0; k < Channels; k++)
-                    {
-                        for (int i = 0; i < Width; i++)
-                        {
-                            float max = float.MinValue;
-                            for (int j = 0; j < Height; j++)
-                            {
-                                max = MathF.Max(max, this[l, k, j, i]);
-                            }
-                            result[l, k, 0, i] = max;
-                            // for (int j = 0; j < result.Height; j++)
-                            // {
-                            //     result[l, k, j, i] = max;
-                            // }
-                        }
-                    }
-                }
-            }
-            else if (dim == Dim.channel)
-            {
-                for (int l = 0; l < Batch; l++)
-                {
-                    for (int j = 0; j < Height; j++)
-                    {
-                        for (int i = 0; i < Width; i++)
-                        {
-                            float max = float.MinValue;
-                            for (int k = 0; k < Channels; k++)
-                            {
-                                max = MathF.Max(max, this[l, k, j, i]);
-                            }
-                            result[l, 0, j, i] = max;
-                            // for (int k = 0; k < result.Channels; k++)
-                            // {
-                            //     result[l, k, j, i] = max;
-                            // }
-                        }
-                    }
-                }
-            }
-            else if (dim == Dim.batch)
-            {
-                for (int k = 0; k < Channels; k++)
-                {
-                    for (int j = 0; j < Height; j++)
-                    {
-                        for (int i = 0; i < Width; i++)
-                        {
-                            float max = float.MinValue;
-                            for (int l = 0; l < Batch; l++)
-                            {
-                                max = MathF.Max(max, this[l, k, j, i]);
-                            }
-                            result[0, k, j, i] = max;
-                            // for (int l = 0; l < result.Batch; l++)
-                            // {
-                            //     result[l, k, j, i] = max;
-                            // }
-                        }
-                    }
-                }
-            }
-
-            if (!keepDim)
-                result.Squeeze();
-            return result;
+            return Pow(this, power);
         }
-        public Tensor Pow(float power)
+        private Tensor Sqrt()
         {
-
-            for (int i = 0; i < data.Length; i++)
-            {
-                data[i] = MathF.Pow(data[i], power);
-            }
-
-            return this;
+            return Sqrt(this);
         }
-        public Tensor Sqrt()
+        private Tensor Exp()
         {
-            for (int i = 0; i < data.Length; i++)
-            {
-                data[i] = MathF.Sqrt(data[i]);
-            }
-
-            return this;
+            return Exp(this);
         }
-        public Tensor Exp()
+        private Tensor Log(float @base = MathF.E)
         {
-            for (int i = 0; i < data.Length; i++)
-            {
-                data[i] = MathF.Exp(data[i]);
-            }
-
-            return this;
+            return Log(this, @base);
         }
-        public Tensor Log(float @base = MathF.E)
+        private Tensor Abs()
         {
-            for (int i = 0; i < data.Length; i++)
-            {
-                data[i] = MathF.Log(data[i], @base);
-            }
-
-            return this;
+            return Abs(this);
         }
-        public Tensor Abs()
+        private Tensor Sin()
         {
-            for (int i = 0; i < data.Length; i++)
-            {
-                data[i] = MathF.Abs(data[i]);
-            }
-
-            return this;
+            return Sin(this);
         }
-        public Tensor Sin()
+        private Tensor Cos()
         {
-            for (int i = 0; i < data.Length; i++)
-            {
-                data[i] = MathF.Sin(data[i]);
-            }
-
-            return this;
+            return Cos(this);
         }
-        public Tensor Cos()
+        private Tensor Clip(float min, float max)
         {
-            for (int i = 0; i < data.Length; i++)
-            {
-                data[i] = MathF.Cos(data[i]);
-            }
-
-            return this;
-        }
-        public Tensor Clip(float min, float max)
-        {
-            for (int i = 0; i < data.Length; i++)
-            {
-                data[i] = Math.Clamp(data[i], min, max);
-            }
-
-            return this;
+            return Clip(this, min, max);
         }
 
         #endregion Instance

@@ -115,40 +115,13 @@ void ComputeGradients(int3 id : SV_DispatchThreadID)
     
     if(id.x < in_features && id.y < out_features)
     {
-        // if (input_rank == 1)
-        // {
-        //     float sum = 0.f;
-        //     for (int m = 0; m < batch_size; m++)
-        //     {
-        //         float l = transposed_loss_get(id.y, m);
-        //         float r = input_get(0, m);
-        //         sum += l * r;
-        //     }
-        // 
-        //     gamma_grad_add(0, id.y, sum / batch_size);
-        // }
-        // else if (loss_rank == 1)
-        // {
-        //     float sum = 0.f;
-        //     for (int m = 0; m < batch_size; m++)
-        //     {
-        //         float l = transposed_loss_get(0, m);
-        //         float r = input_get(m, id.x);
-        //         sum += l * r;
-        //     }
-        // 
-        //     gamma_grad_add(0, id.x, sum / batch_size);
-        // }
-        // else
-        // {
-            float sum = 0.f;
-            for (int m = 0; m < batch_size; m++)
-            {
-                sum += transposed_loss_get(id.y, m) * input_get(m, id.x);
-            }
+         float sum = 0.f;
+         for (int m = 0; m < batch_size; m++)
+         {
+             sum += transposed_loss_get(id.y, m) * input_get(m, id.x);
+         }
         
-            gamma_grad_add(id.y, id.x, sum / batch_size);
-        // }
+         gamma_grad_add(id.y, id.x, sum / batch_size);
     }
     
     

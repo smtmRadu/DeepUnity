@@ -44,17 +44,7 @@ namespace DeepUnity
 
         public Tensor Predict(Tensor input)
         {
-            bool isBatched = !input.Shape.SequenceEqual(this.inputShape);
-
-            if(isBatched)
-            {
-                int[] batch_size = new int[] { input.Size(0) };
-                return input.Reshape(batch_size.Concat(outputShape).ToArray());
-            }
-            else
-            {
-                return input.Reshape(outputShape);
-            }
+            return Forward(input);
         }
         public Tensor Forward(Tensor input)
         {
@@ -63,11 +53,11 @@ namespace DeepUnity
             if (isBatched)
             {
                 int[] batch_size = new int[] { input.Size(0) };
-                return input.Reshape(batch_size.Concat(outputShape).ToArray());
+                return Tensor.Reshape(input, batch_size.Concat(outputShape).ToArray());
             }
             else
             {
-                return input.Reshape(outputShape);
+                return Tensor.Reshape(input, outputShape);
             }
         }
         public Tensor Backward(Tensor loss)
@@ -77,11 +67,11 @@ namespace DeepUnity
             if (isBatched)
             {
                 int[] batch_size = new int[] { loss.Size(0) };
-                return loss.Reshape(batch_size.Concat(inputShape).ToArray());
+                return Tensor.Reshape(loss, batch_size.Concat(inputShape).ToArray());
             }
             else
             {
-                return loss.Reshape(inputShape);
+                return Tensor.Reshape(loss, inputShape);
             }
         }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Unity.VisualScripting;
 using UnityEngine;
 
 
@@ -12,12 +13,13 @@ namespace DeepUnity
         // Just a good reference paper to learn from, i made this just by adapting batchnorm layer.
         /// https://proceedings.neurips.cc/paper_files/paper/2019/file/2f4fe03d77724a7217006e5d16728874-Paper.pdf
         
+        // These caches a flattened shape of the input value
         private Tensor xCentered { get; set; }
         private Tensor xHat { get; set; }
         private Tensor std { get; set; }
 
         [SerializeField] private int[] inputShape;
-        [SerializeField] private ulong step;
+        [SerializeField] private int step;
 
         // Learnable parameters
         [SerializeField] private Tensor runningMean;
@@ -29,10 +31,9 @@ namespace DeepUnity
         /// Input: (B, *) or (*) for unbatched input.<br />
         /// Output: (B, *) or (*) for unbatched input.<br />
         /// where B = batch_size and * = input_shape.<br />
-        /// <b>Applies normalization over the last dimension of the input.</b> 
+        /// <b>Applies normalization over all dimensions (*) of the input.</b> 
         /// </summary>
         /// <param name="input_shape">Shape of the input, excepting the batch.</param>
-        /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
         public LayerNorm(params int[] input_shape) : base(Device.CPU)
         {
             if (input_shape == null || input_shape.Length == 0)
@@ -47,11 +48,14 @@ namespace DeepUnity
             runningMean = Tensor.Zeros(1);
             runningVar = Tensor.Ones(1);
 
-            step = 0UL;
+            step = 0;
             this.inputShape = input_shape.ToArray();
         }
         public Tensor Predict(Tensor input)
         {
+            if (input.Rank > inputShape.Rank) // squeeze the batch dim if is 1
+                input.Squeeze(0);
+
             var input_centered = (input - runningMean[0]) / MathF.Sqrt(runningVar[0] + Utils.EPSILON);
             var output = gamma[0] * input_centered + beta[0];
 
@@ -62,70 +66,55 @@ namespace DeepUnity
         {
             bool isBatched = input.Rank > inputShape.Rank;
             int batch_size = isBatched? input.Size(0) : 1;
-            int num_features = input.Size(-1);
 
+            // This applyes a mean over everything, even the batch.. which is actually ok. I had to 
+            // do layernorm over each batch element separately but it works ok like this i think.
 
-            Tensor mu = Tensor.Mean(input, -1, keepDim: true).Expand(-1, input.Size(-1));
-            Tensor var = Tensor.Var(input, -1, keepDim: true).Expand(-1, input.Size(-1));
+            Tensor input_flat = Tensor.Reshape(input, input.Count());
 
-            xCentered = input - mu;
-            std = Tensor.Sqrt(var + Utils.EPSILON);
+            Tensor mu_flat = Tensor.Mean(input_flat, 0);
+            Tensor var_flat = Tensor.Var(input_flat, 0);
+            mu_flat = Tensor.Expand(mu_flat, 0, input.Count());
+            var_flat = Tensor.Expand(var_flat, 0, input.Count());
+
+            xCentered = input_flat - mu_flat;
+            std = Tensor.Sqrt(var_flat + Utils.EPSILON);
             xHat = xCentered / std;
 
-            Tensor expandedGamma = Tensor.Expand(gamma, 0, num_features).Unsqueeze(0);
-            expandedGamma = Tensor.Expand(expandedGamma, 0, batch_size);
+            Tensor y = gamma[0] * xHat + beta[0];
+            
 
-            Tensor expandedBeta = Tensor.Expand(beta, 0, num_features).Unsqueeze(0);
-            expandedBeta = Tensor.Expand(expandedBeta, 0, batch_size);
-            Tensor y = expandedGamma * xHat + expandedBeta;
-
-
-            float mu_across_batch = isBatched ? Tensor.Mean(mu, 0)[0] : mu[0];
-            float var_across_batch = isBatched ? Tensor.Mean(var, 0)[0] : var[0];
-
-            ulong total_samples = (ulong)batch_size + step;
-            float weight_old = (float)(step / (double)total_samples);
-            float weight_new = (float)(batch_size / (double)total_samples);
-            runningMean = runningMean * weight_old + mu_across_batch * weight_new;
-            runningVar = runningVar * weight_old + var_across_batch * weight_new;
+            // Update running mean and running var
+            int total_samples = batch_size + step;
+            float weight_old = step / (float)total_samples;
+            float weight_new = batch_size / (float)total_samples;
+            Tensor newRunningMean = runningMean * weight_old + Tensor.Mean(mu_flat, 0) * weight_new;
+            Tensor newRunningVar = runningVar * weight_old + Tensor.Mean(var_flat, 0) * weight_new;
+            runningMean = newRunningMean;
+            runningVar = newRunningVar;
             step = total_samples;
 
-            // Momentum approach (used only in batch_norm)
-            // float momentum = 0.9f;
-            // runningMean = runningMean * momentum + mu_across_batch * (1f - momentum);
-            // runningVar = runningVar * momentum + var_across_batch * (1f - momentum);
 
-            return y;
+            return y.Reshape(input.Shape);
         }
         public Tensor Backward(Tensor dLdY)
         {
             bool isBatched = dLdY.Rank > inputShape.Rank;
             int m = isBatched ? dLdY.Size(0) : 1;
 
-            var dLdxHat = dLdY * gamma[0];
-            var dLdVar = Tensor.Mean(dLdxHat + xCentered * (-1f / 2f) *
-                         Tensor.Pow(std + Utils.EPSILON, -3f / 2f),
-                         -1, true).Expand(-1, dLdY.Size(-1));
+            Tensor flattened_dLdY = Tensor.Reshape(dLdY, dLdY.Count());
 
-            var dLdMu = Tensor.Mean(dLdxHat * -1f / (std + Utils.EPSILON) +
-                        dLdVar * -2f * xCentered / m,
-                        -1, true).Expand(-1, dLdY.Size(-1));
+            var dLdxHat = flattened_dLdY * gamma[0];
+            var dLdVar = dLdxHat * xCentered * (-1f / 2f) * Tensor.Pow(std + Utils.EPSILON, -3f / 2f);
+            var dLdMu = dLdxHat * -1f / (std + Utils.EPSILON) + dLdVar * -2f * xCentered / m;
+            var dLdX = dLdxHat * 1f / Tensor.Sqrt(std + Utils.EPSILON) + dLdVar * 2f * xCentered / m + dLdMu * (1f / m);
+            var dLdGamma = Tensor.Mean(flattened_dLdY + xCentered, 0);
+            var dLdBeta = Tensor.Mean(flattened_dLdY, 0);
 
-            var dLdX = dLdxHat * 1f / Tensor.Sqrt(std + Utils.EPSILON) +
-                       dLdVar * 2f * xCentered / m + dLdMu * (1f / m);
+            gammaGrad += dLdGamma;
+            betaGrad += dLdBeta;
 
-            // mean along the layer
-            var dLdGamma = Tensor.Mean(dLdY + xCentered, -1);
-            var dLdBeta = Tensor.Mean(dLdY, -1);
-
-            // mean along the batch
-            float dLdGamma_across_batch = isBatched ? Tensor.Mean(dLdGamma, 0)[0] : dLdGamma[0];
-            float dLdBeta_across_batch = isBatched ? Tensor.Mean(dLdBeta, 0)[0] : dLdBeta[0];
-
-            gammaGrad += dLdGamma_across_batch;
-            betaGrad += dLdBeta_across_batch;
-
-            return dLdX;
+             return dLdX.Reshape(dLdY.Shape);
         }
     }
 }

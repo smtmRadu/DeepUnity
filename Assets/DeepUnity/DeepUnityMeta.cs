@@ -9,6 +9,7 @@ namespace DeepUnity
     {
         internal readonly static ComputeShader TensorCS;
         internal readonly static ComputeShader DenseCS;
+        internal readonly static ComputeShader Conv2DCS;
         internal readonly static int THREADS_NUM = 256;
 
         static DeepUnityMeta()
@@ -23,6 +24,9 @@ namespace DeepUnity
                 cspath = AssetDatabase.GUIDToAssetPath(csguid);
                 DenseCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
 
+                csguid = AssetDatabase.FindAssets("Conv2DCS")[0];
+                cspath = AssetDatabase.GUIDToAssetPath(csguid);
+                Conv2DCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
             }
             catch { }
         }
@@ -115,6 +119,13 @@ namespace DeepUnity
     {
         Tanh,
         ReLU
+    }
+
+    public enum DatasetSettings
+    {
+        LoadAll,
+        LoadTrainOnly,
+        LoadTestOnly
     }
 }
 

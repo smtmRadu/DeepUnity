@@ -16,7 +16,7 @@ namespace DeepUnity
         [NonSerialized] public Tensor[] bGamma;
         [NonSerialized] public Tensor[] bBeta;
 
-        public SGD(Learnable[] parameters, float lr, float momentum = 0f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false) : base(parameters, lr, weightDecay)
+        public SGD(Learnable[] parameters, float lr, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false) : base(parameters, lr, weightDecay)
         {
             this.momentum = momentum;
             this.dampening = dampening;

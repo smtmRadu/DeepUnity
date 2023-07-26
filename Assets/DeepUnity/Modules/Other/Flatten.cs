@@ -51,17 +51,17 @@ namespace DeepUnity
 
         public Tensor Predict(Tensor input)
         {
-            return input.Flatten(startAxis, endAxis);
+            return Tensor.Flatten(input, startAxis, endAxis);
 
         }
         public Tensor Forward(Tensor input)
         {
             InputShapeCache = input.Shape;
-            return input.Flatten(startAxis, endAxis);           
+            return Tensor.Flatten(input, startAxis, endAxis);
         }
         public Tensor Backward(Tensor loss)
         {
-            return loss.Reshape(InputShapeCache);
+            return Tensor.Reshape(loss, InputShapeCache);
         }
 
     }

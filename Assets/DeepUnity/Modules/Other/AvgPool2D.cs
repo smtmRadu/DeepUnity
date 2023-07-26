@@ -7,6 +7,7 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    [Serializable]
     public class AvgPool2D : IModule
     {
 

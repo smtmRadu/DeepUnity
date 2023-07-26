@@ -16,7 +16,18 @@ namespace kbRadu
         public Sprite sprite;
         private void Start()
         {
-            MNISTForwardBenchmark();
+            // Conv2DBenchmark();
+            // Conv2DTest();
+            // Conv2DLearnTest();
+            // CorrelationTest();
+
+            // DenseTest();
+            // foreach (var module in dnn_network.modules)
+            // {
+            //     if(module != null)
+            //         print(module.GetType().Name);   
+            // }
+            // MNISTForwardBenchmark();
             // MaxPoolBenchmark();        
             //TestMaxPool();
         }
@@ -75,7 +86,7 @@ namespace kbRadu
         void TestRNNCell()
         {
             var rnn = new RNNCell(10, 20);
-            var input = Tensor.RandomNormal(6, 3, 10).Split(0, 1);
+            var input = Tensor.Split(Tensor.RandomNormal(6, 3, 10), 0, 1);
             var hx = Tensor.RandomNormal(3, 20);
             var output = new List<Tensor>();
             for (int i = 0; i < 6; i++)
@@ -104,6 +115,73 @@ namespace kbRadu
             // print("output" + output.Item1);
             // print("h_n" + output.Item2);
         }
+
+        void Conv2DLearnTest() 
+        {
+            Conv2D conv2d = new Conv2D((3, 28, 28), 1, 3, device: TestDevice);
+            Tensor input = Tensor.RandomNormal(3, 28, 28);
+            Tensor target = Tensor.RandomNormal(1, 26, 26);
+            Optimizer optim = new Adam(new Learnable[] { conv2d }, lr:0.001f);
+
+            TimerX.Start();
+            for (int i = 0; i < Runs; i++)
+            {
+                var pred = conv2d.Forward(input);
+                var loss = (pred - target) * (pred - target);
+                var lossderiv = (pred - target) * 2;
+                conv2d.Backward(lossderiv);
+                optim.Step();
+                print("Loss: " + Tensor.Mean(loss.Reshape(loss.Count()),0)[0]);
+            }
+            TimerX.Stop();
+        }
+        void CorrelationTest()
+        {
+            Tensor input = Tensor.Constant(new float[,] { { 1, 6, 2 }, { 5, 3, 1 }, { 7, 0, 4 } });
+            Tensor kernel = Tensor.Constant(new float[,] {{ 1, 2 }, { -1, 0 } });
+            print(input);
+            print(kernel);
+            print(Tensor.Correlate2D(input, kernel, CorrelationMode.Valid));
+            print(Tensor.Convolve2D(input, kernel, CorrelationMode.Valid));
+        }
+        void Conv2DTest()
+        {
+            Conv2D conv = new Conv2D((1, 4, 4), 3, 2, device: Device.CPU);
+            Tensor input = Tensor.Random01(3, 1, 4, 4);
+
+
+            Tensor outputCPU = conv.Forward(input);
+            Tensor lossCPU = conv.Backward(outputCPU);
+            print(outputCPU);
+            print(lossCPU);
+            print("gammaGrad " + conv.gammaGrad);
+
+            conv.gammaGrad = Tensor.Zeros(conv.gammaGrad.Shape);
+            conv.betaGrad = Tensor.Zeros(conv.betaGrad.Shape);
+
+            conv.device = Device.GPU;
+            Tensor outputGPU = conv.Forward(input);
+            Tensor lossGPU = conv.Backward(outputGPU);
+            print(outputGPU);
+            print(lossGPU);
+            print("gammaGrad " + conv.gammaGrad);
+
+
+        }
+        void Conv2DBenchmark()
+        {
+            Conv2D c = new Conv2D((1, 28, 28), 64, 3, device: TestDevice);
+
+            Tensor input = Tensor.Random01(32, 1, 28, 28);
+            TimerX.Start();
+            for (int i = 0; i < Runs; i++)
+            {
+                var outp = c.Forward(input);
+                c.Backward(outp); 
+            }
+            TimerX.Stop();
+        }
+
 
         void DenseTest()
         {

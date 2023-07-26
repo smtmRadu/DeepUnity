@@ -220,7 +220,7 @@ namespace DeepUnity
             {
                 if (batchFirst) // (B, L, H_out)
                 {
-                    loss_sequence = loss_clone.Split(-2, 1);
+                    loss_sequence = Tensor.Split(loss_clone, -2, 1);
                     for (int i = 0; i < loss_sequence.Length; i++)
                     {
                         loss_sequence[i].Squeeze(-2);
@@ -228,7 +228,7 @@ namespace DeepUnity
                 }
                 else // (L, B, H_out)
                 {
-                    loss_sequence = loss_clone.Split(-3, 1);
+                    loss_sequence = Tensor.Split(loss_clone, -3, 1);
                     for (int i = 0; i < loss_sequence.Length; i++)
                     {
                         loss_sequence[i].Squeeze(-3);
@@ -237,7 +237,7 @@ namespace DeepUnity
             }
             else
             {
-                loss_sequence = loss_clone.Split(-2, 1);
+                loss_sequence = Tensor.Split(loss_clone,-2, 1);
                 for (int i = 0; i < loss_sequence.Length; i++)
                 {
                     loss_sequence[i].Squeeze(-2);

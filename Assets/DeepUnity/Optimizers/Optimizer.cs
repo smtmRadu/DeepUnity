@@ -14,14 +14,14 @@ namespace DeepUnity
 
         public float learningRate;
         protected float weightDecay;
-        protected ulong t; // step counter
+        protected int t; // step counter
 
         protected Optimizer(Learnable[] param, float lr, float L2Penalty)
         {
             parameters = param;
             learningRate = lr;
             weightDecay = L2Penalty;
-            t = 0UL;       
+            t = 0;       
         }
         public abstract void Step();
 

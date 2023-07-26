@@ -64,6 +64,9 @@ namespace DeepUnity
             if (input.Size(-1) != gamma.Size(-1))
                 throw new ShapeException($"Input ({input.Size(-1)}) shape in Dense layer must be ({gamma.Size(-1)}).");
 
+            if (input.Rank == 2) // squeeze the batch dim if is 1
+                input.Squeeze(-2);
+
             // input = (B, IN)
             // gamma = (OUT, IN)
 
@@ -86,9 +89,7 @@ namespace DeepUnity
             }
             else
             {
-                // Tensor output = Tensor.Zeros(batch_size, beta.Size(-1));
-                float[] output_data = new float[batch_size * beta.Size(-1)];
-
+                
                 ComputeShader cs = DeepUnityMeta.DenseCS;
 
                 ComputeBuffer inputBuffer = new ComputeBuffer(input.Count(), 4);
@@ -103,8 +104,8 @@ namespace DeepUnity
                 betaBuffer.SetData(beta.ToArray());
                 cs.SetBuffer(0, "beta", betaBuffer);
 
-                ComputeBuffer outputBuffer = new ComputeBuffer(output_data.Length, 4);
-                outputBuffer.SetData(output_data);
+                ComputeBuffer outputBuffer = new ComputeBuffer(batch_size * beta.Size(-1), 4);
+                // outputBuffer.SetData(zero_values); // we do not need this because the values are set (not added) to the rw structrured buffer.
                 cs.SetBuffer(0, "output", outputBuffer);
 
                 cs.SetInt("batch_size", batch_size);
@@ -118,16 +119,14 @@ namespace DeepUnity
                     (batch_size + 32 - 1) / 32,
                     1);
 
-
-                outputBuffer.GetData(output_data);
-
+                Tensor result = Tensor.Constant(outputBuffer);
 
                 inputBuffer.Release();
                 tranposedGammaBuffer.Release();
                 betaBuffer.Release();
                 outputBuffer.Release();
 
-                return Tensor.Constant(output_data).Reshape(batch_size, beta.Size(-1)).Squeeze(-2);
+                return result.Reshape(batch_size, beta.Size(-1)).Squeeze(-2);
             }
         }
         public Tensor Forward(Tensor input)
@@ -155,7 +154,7 @@ namespace DeepUnity
             {
                 // compute the gradients
                 gammaGrad += Tensor.MatMul(transposedLoss, InputCache) / batch_size;
-                betaGrad += Tensor.Mean(transposedLoss, axis: 1) / batch_size; // Tensor.MatMul(transposedLoss, Tensor.Ones(batch_size)) / batch_size;
+                betaGrad += Tensor.Mean(transposedLoss, axis: 1); // Tensor.MatMul(transposedLoss, Tensor.Ones(batch_size)) / batch_size;
 
                 // Backpropagate the loss (batch_size, in)
                 return Tensor.MatMul(loss, gamma).Squeeze(-2);
@@ -174,11 +173,11 @@ namespace DeepUnity
                 cs.SetBuffer(1, "input", inputCacheBuffer);
 
                 ComputeBuffer gammaGradBuffer = new ComputeBuffer(gammaGrad.Count(), 4);
-                gammaGradBuffer.SetData(gammaGrad.ToArray()); // are set to 0
+                gammaGradBuffer.SetData(gammaGrad.ToArray());
                 cs.SetBuffer(1, "gamma_grad", gammaGradBuffer);
 
                 ComputeBuffer betaGradBuffer = new ComputeBuffer(betaGrad.Count(), 4);
-                betaGradBuffer.SetData(betaGrad.ToArray()); // are set to 0
+                betaGradBuffer.SetData(betaGrad.ToArray());
                 cs.SetBuffer(1, "beta_grad", betaGradBuffer);
 
                 cs.SetInt("batch_size", batch_size);
@@ -191,12 +190,8 @@ namespace DeepUnity
                     (gammaGrad.Size(-2) + 31) / 32,
                     1);
 
-                float[] gradGamma_data_arr = new float[gammaGrad.Count()];
-                float[] gradBeta_data_arr = new float[betaGrad.Count()];
-                gammaGradBuffer.GetData(gradGamma_data_arr);
-                betaGradBuffer.GetData(gradBeta_data_arr);
-                gammaGrad = Tensor.Constant(gradGamma_data_arr).Reshape(gammaGrad.Shape);
-                betaGrad = Tensor.Constant(gradBeta_data_arr).Reshape(betaGrad.Shape);
+                gammaGrad = Tensor.Constant(gammaGradBuffer).Reshape(gammaGrad.Shape);
+                betaGrad = Tensor.Constant(betaGradBuffer).Reshape(betaGrad.Shape);
 
                 transposedLossBuffer.Release();
                 inputCacheBuffer.Release();

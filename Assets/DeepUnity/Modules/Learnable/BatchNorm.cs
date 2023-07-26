@@ -45,7 +45,10 @@ namespace DeepUnity
         {
             bool isBatched = input.Rank == 2;
 
-            if(isBatched)
+            if (input.Rank == 2) // squeeze the batch dim if is 1
+                input.Squeeze(-2);
+
+            if (isBatched)
             {
                 int batch_size = input.Size(0);
                 var e_mean = Tensor.Expand(Tensor.Unsqueeze(runningMean, 0), 0, batch_size);
@@ -69,8 +72,8 @@ namespace DeepUnity
         }
         public Tensor Forward(Tensor input)
         {
-            if (input.Rank != 2)
-                throw new ArgumentException("Models having BatchNorm layers must be trained using batched input (batch, features)");
+            if (input.Rank != 2 || input.Size(-2) < 2)
+                throw new ArgumentException("Models having BatchNorm layers must be trained using batched input (batch, features), where batch is > 1.");
 
             int batch_size = input.Size(0);
 
@@ -111,15 +114,15 @@ namespace DeepUnity
 
             var dLdVarB = Tensor.Mean(
                          dLdxHat * xCentered * (-1f / 2f) * Tensor.Pow(std + Utils.EPSILON, -3f / 2f),
-                         axis: 0, 
-                         keepDim: true).
-                         Expand(0, m);
+                         axis: 0,
+                         keepDim: true); 
+            dLdVarB = Tensor.Expand(dLdVarB, 0, m);
 
             var dLdMuB = Tensor.Mean(
-                         dLdxHat * -1f / (std + Utils.EPSILON) + dLdVarB * -2f * xCentered / m, 
-                         axis: 0, 
-                         keepDim: true).
-                         Expand(0, m);
+                         dLdxHat * -1f / (std + Utils.EPSILON) + dLdVarB * -2f * xCentered / m,
+                         axis: 0,
+                         keepDim: true);
+            dLdMuB = Tensor.Expand(dLdMuB, 0, m);
 
             var dLdX = dLdxHat * 1f / Tensor.Sqrt(std + Utils.EPSILON) +
                        dLdVarB * 2f * xCentered / m +

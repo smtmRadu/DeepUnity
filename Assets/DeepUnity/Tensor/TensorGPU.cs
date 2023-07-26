@@ -781,7 +781,8 @@ namespace DeepUnity
 
                 // Esle remove that axis
                 List<int> squeezedShape = tensor.shape.ToList();
-                squeezedShape.RemoveAt(ax);
+                if(squeezedShape.Count > 1)
+                    squeezedShape.RemoveAt(ax);
 
                 TensorGPU result = new(squeezedShape.ToArray());
                 float[] dataarr = new float[tensor.data.count];
@@ -971,7 +972,7 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-                result.Squeeze();
+                result.Squeeze(axis);
             return result;
         }
         public static TensorGPU Sum(TensorGPU tensor, int axis, bool keepDim = false)
@@ -1006,7 +1007,7 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-                result.Squeeze();
+                result.Squeeze(axis);
             return result;
         }
         public static TensorGPU Var(TensorGPU tensor, int axis, int correction = 1, bool keepDim = false)
@@ -1044,7 +1045,7 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-                result.Squeeze();
+                result.Squeeze(axis);
             return result;
         }
         public static TensorGPU Std(TensorGPU tensor, int axis, int correction = 1, bool keepDim = false)
@@ -1081,7 +1082,7 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-                result.Squeeze();
+                result.Squeeze(axis);
             return result;
         }
         public static TensorGPU Min(TensorGPU tensor, int axis, bool keepDim = false)
@@ -1117,7 +1118,7 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-                result.Squeeze();
+                result.Squeeze(axis);
             return result;
         }
         public static TensorGPU Max(TensorGPU tensor, int axis, bool keepDim = false)
@@ -1152,7 +1153,7 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-                result.Squeeze();
+                result.Squeeze(axis);
             return result;
         }
         public static TensorGPU Pow(TensorGPU tensor, float power)
@@ -1334,7 +1335,8 @@ namespace DeepUnity
 
                 // Esle remove that axis
                 List<int> squeezedShape = this.shape.ToList();
-                squeezedShape.RemoveAt(ax);
+                if(squeezedShape.Count > 1)
+                    squeezedShape.RemoveAt(ax);
 
                 this.shape = squeezedShape.ToArray();
                 return this;

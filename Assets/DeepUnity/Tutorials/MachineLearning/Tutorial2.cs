@@ -44,9 +44,10 @@ public class Tutorial2 : MonoBehaviour
         {
             net = new Sequential(
              new Dense(2, hiddenSize),
-             new LayerNorm(hiddenSize),
+             new BatchNorm(hiddenSize),          
              new ReLU(),
              new Dense(hiddenSize, hiddenSize, device: device),
+             new LayerNorm(hiddenSize),
              new ReLU(),
              new Dense(hiddenSize, hiddenSize, device: device),
              new ReLU(),

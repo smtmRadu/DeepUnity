@@ -8,6 +8,7 @@ using Unity.VisualScripting;
 using UnityEngine;
 namespace DeepUnity
 {
+    [SerializeField]
     public class MaxPool2D : IModule
     {
         private Tensor InputCache { get; set; }

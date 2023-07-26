@@ -9,7 +9,7 @@ namespace DeepUnity
     [Serializable]
     public class Sequential : ScriptableObject, IModel
     {
-        [NonSerialized] private IModule[] modules;
+        [NonSerialized] public IModule[] modules;
         [SerializeField] private IModuleWrapper[] serializedModules;
 
         public Sequential(params IModule[] modules) => this.modules = modules;
@@ -21,12 +21,11 @@ namespace DeepUnity
         /// <returns>output</returns>
         public Tensor Predict(Tensor input)
         {
-            Tensor inputclone = Tensor.Identity(input);
             foreach (var module in modules)
             {
-                inputclone = module.Predict(inputclone);
+                input = module.Predict(input);
             }
-            return inputclone;
+            return input;
         }
         /// <summary>
         /// Forwards the inputs and every module caches it.
@@ -35,12 +34,11 @@ namespace DeepUnity
         /// <returns>output</returns>
         public Tensor Forward(Tensor input)
         {
-            Tensor inputclone = Tensor.Identity(input);
             foreach (var module in modules)
             {
-                inputclone = module.Forward(inputclone);
+                input = module.Forward(input);
             }
-            return inputclone;
+            return input;
         }
         /// <summary>
         /// Backpropagates the loss derivative w.r.t outputs and computes the gradients.
@@ -49,10 +47,9 @@ namespace DeepUnity
         /// <returns></returns>
         public void Backward(Tensor loss)
         {
-            Tensor lossclone = Tensor.Identity(loss);
             for (int i = modules.Length - 1; i >= 0; i--)
             {
-                lossclone = modules[i].Backward(lossclone);
+                loss = modules[i].Backward(loss);
             }
         }
 
@@ -66,14 +63,22 @@ namespace DeepUnity
             return modules.Where(x => x is Learnable P).Select(x => (Learnable)x).ToArray(); 
         }
         /// <summary>
-        /// Save path: "Assets/". Creates/Overwrites model on the same path.
+        /// Whenever loading models from desktop, make sure to fix object name (on asset). <br></br>
+        /// Save path: "Assets/". Creates/Overwrites model on the same path. <br></br>
         /// For specific existing folder saving, <b><paramref name="name"/> = "folder_name/model_name"</b>
         /// </summary>
         public void Save(string name)
-        {   
+        {
             var instance = AssetDatabase.LoadAssetAtPath<Sequential>("Assets/" + name + ".asset");
             if (instance == null)
-                AssetDatabase.CreateAsset(this, "Assets/" + name + ".asset");
+            {
+                try
+                {
+                    AssetDatabase.CreateAsset(this, "Assets/" + name + ".asset");
+                }
+                catch { }
+            }
+               
 
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssetIfDirty(this);
