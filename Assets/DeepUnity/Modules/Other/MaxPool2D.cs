@@ -1,14 +1,12 @@
 using System;
-using System.CodeDom;
 using System.Collections.Generic;
-using System.Drawing.Printing;
 using System.Linq;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
 namespace DeepUnity
 {
-    [SerializeField]
+    [Serializable]
     public class MaxPool2D : IModule
     {
         private Tensor InputCache { get; set; }
@@ -21,8 +19,8 @@ namespace DeepUnity
         /// Input: <b>(B, C, H_in, W_in)</b> or <b>(C, H_in, W_in)</b> <br></br>
         /// Output: <b>(B, C, H_out, W_out)</b> or <b>(C, H_out, W_out)</b> <br></br>
         /// where <br></br>
-        /// H_out = Floor((H_in + 2 * padding - kernel_size - 1) / kernel_size + 1)<br />
-        /// W_out = Floor((W_in + 2 * padding - kernel_size - 1) / kernel_size + 1)<br />
+        /// H_out = Floor((H_in + 2 * padding - kernel_size - 1) / kernel_size + 1),<br />
+        /// W_out = Floor((W_in + 2 * padding - kernel_size - 1) / kernel_size + 1).<br />
         /// </summary>
         public MaxPool2D(int kernel_size, int padding = 0, PaddingType padding_mode = PaddingType.Mirror)
         {
@@ -127,7 +125,7 @@ namespace DeepUnity
             }
 
             if (input.Rank == 3)
-                pooled_input.Squeeze(0); // remove the Batch dimension
+                pooled_input = pooled_input.Squeeze(0); // remove the Batch dimension
 
             return pooled_input;
         }

@@ -74,6 +74,9 @@ namespace DeepUnity
 
 
 
+
+
+
         /// <summary>
         /// input:  <b>(L, H_in)</b> for unbatched input, <b>(L, B, H_in)</b> when batch_first = false or <b>(B, L, H_in)</b> when batch_first = true. <br></br>
         /// h_0:    <b>(num_layers, H_out)</b> for unbatched input, or <b>(num_layers, B, H_out)</b>. <br></br>
@@ -108,7 +111,7 @@ namespace DeepUnity
                     input_sequence = Tensor.Split(input_clone, -2, 1);
                     for (int i = 0; i < input_sequence.Length; i++)
                     {
-                        input_sequence[i].Squeeze(-2);
+                        input_sequence[i] = input_sequence[i].Squeeze(-2);
                     }
                 }
                 else // (L, B, H_in)
@@ -116,7 +119,7 @@ namespace DeepUnity
                     input_sequence = Tensor.Split(input_clone, -3, 1);
                     for (int i = 0; i < input_sequence.Length; i++)
                     {
-                        input_sequence[i].Squeeze(-3);
+                        input_sequence[i] = input_sequence[i].Squeeze(-3);
                     }
 
                 }
@@ -124,7 +127,7 @@ namespace DeepUnity
                 h_0_per_layers = Tensor.Split(h_0_clone, -3, 1);
                 for (int i = 0; i < h_0_per_layers.Length; i++)
                 {
-                    h_0_per_layers[i].Squeeze(-3);
+                    h_0_per_layers[i] = h_0_per_layers[i].Squeeze(-3);
                 }
             }
             else
@@ -132,12 +135,12 @@ namespace DeepUnity
                 input_sequence = Tensor.Split(input_clone, -2, 1);
                 for (int i = 0; i < input_sequence.Length; i++)
                 {
-                    input_sequence[i].Squeeze(-2);
+                    input_sequence[i] = input_sequence[i].Squeeze(-2);
                 }
                 h_0_per_layers = Tensor.Split(h_0_clone, -2, 1);
                 for (int i = 0; i < h_0_per_layers.Length; i++)
                 {
-                    h_0_per_layers[i].Squeeze(-2);
+                    h_0_per_layers[i] = h_0_per_layers[i].Squeeze(-2);
                 }
 
             }
@@ -191,7 +194,7 @@ namespace DeepUnity
             {
                 for (int i = 0; i < input_sequence.Length; i++)
                 {
-                    input_sequence[i].Unsqueeze(1);
+                    input_sequence[i] = input_sequence[i].Unsqueeze(1);
                 }
                 output = Tensor.Cat(1, input_sequence);
                 
@@ -205,14 +208,14 @@ namespace DeepUnity
         }
 
         /// <summary>
-        /// loss: <b>(L, H_out)</b> for unbatched input, or <b>(L, B, H_out)</b> when batch_first = false or <b>(B, L, H_out)</b> when batch_first = true. <br></br>
+        /// loss w.r.t outputs: <b>(L, H_out)</b> for unbatched input, or <b>(L, B, H_out)</b> when batch_first = false or <b>(B, L, H_out)</b> when batch_first = true. <br></br>
         /// </summary>
-        /// <param name="loss"></param>
-        public void Backward(Tensor loss)
+        /// <param name="lossDerivative"></param>
+        public void Backward(Tensor lossDerivative)
         {
-            Tensor loss_clone = Tensor.Identity(loss);
+            Tensor loss_clone = Tensor.Identity(lossDerivative);
             // loss (L, B, H_out)/(B, L, H_Out) or (L, H_out)
-            bool isBatched = loss.Rank == 3;
+            bool isBatched = lossDerivative.Rank == 3;
 
             // Split the loss into an array of sequences
             Tensor[] loss_sequence = null;
@@ -223,7 +226,7 @@ namespace DeepUnity
                     loss_sequence = Tensor.Split(loss_clone, -2, 1);
                     for (int i = 0; i < loss_sequence.Length; i++)
                     {
-                        loss_sequence[i].Squeeze(-2);
+                        loss_sequence[i] = loss_sequence[i].Squeeze(-2);
                     }
                 }
                 else // (L, B, H_out)
@@ -231,7 +234,7 @@ namespace DeepUnity
                     loss_sequence = Tensor.Split(loss_clone, -3, 1);
                     for (int i = 0; i < loss_sequence.Length; i++)
                     {
-                        loss_sequence[i].Squeeze(-3);
+                        loss_sequence[i] = loss_sequence[i].Squeeze(-3);
                     }
                 }
             }
@@ -240,7 +243,7 @@ namespace DeepUnity
                 loss_sequence = Tensor.Split(loss_clone,-2, 1);
                 for (int i = 0; i < loss_sequence.Length; i++)
                 {
-                    loss_sequence[i].Squeeze(-2);
+                    loss_sequence[i] = loss_sequence[i].Squeeze(-2);
                 }
             }
            
@@ -257,14 +260,17 @@ namespace DeepUnity
             }
         }
 
+        public void Backward(Loss loss) => Backward(loss.Derivative);
+
+
+
+
+
         /// <summary>
-        /// Gets all <typeparamref name="RNNCell"/> modules.
+        /// Gets all <typeparamref name="Learnable"/> modules.
         /// </summary>
         /// <returns></returns>
-        public Learnable[] Parameters() 
-        { 
-            return modules.Where(x => x is Learnable).Select(x => (Learnable) x).ToArray(); 
-        }
+        public Learnable[] Parameters { get => modules.Where(x => x is Learnable P).Select(x => (Learnable)x).ToArray(); }
 
         /// <summary>
         /// Save path: "Assets/". Creates/Overwrites model on the same path.

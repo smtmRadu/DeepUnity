@@ -3,9 +3,6 @@ using UnityEngine;
 
 namespace DeepUnity
 {
-    /// <summary>
-    /// Always placed after a non-linear activation function.
-    /// </summary>
     [Serializable]
     public class Dropout : IModule, IModuleRNN
     {

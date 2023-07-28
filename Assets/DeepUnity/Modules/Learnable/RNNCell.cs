@@ -124,8 +124,8 @@ namespace DeepUnity
             
             if (batch_size == 1)
             {
-                h_n_grad.Unsqueeze(0);
-                InputCache_t.Unsqueeze(0);
+                h_n_grad = h_n_grad.Unsqueeze(0);
+                InputCache_t = InputCache_t.Unsqueeze(0);
             }
             // loss (B, H_out)
             // lossT (H_out, B)

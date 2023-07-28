@@ -36,7 +36,7 @@ namespace DeepUnity
             if (whatToLoad == DatasetSettings.LoadAll || whatToLoad == DatasetSettings.LoadTrainOnly) 
             {
                 json_train_image = File.ReadAllText(path + "\\train_input.txt");
-                json_train_label = File.ReadAllText(path + "\\train_label.txt");
+                json_train_label = File.ReadAllText(path + "\\train_target.txt");
                 collect_train_image = JsonUtility.FromJson<TensorCollection>(json_train_image).ToList();
                 collect_train_label = JsonUtility.FromJson<TensorCollection>(json_train_label).ToList();
                 for (int i = 0; i < collect_train_image.Count; i++)
@@ -47,7 +47,7 @@ namespace DeepUnity
             if (whatToLoad == DatasetSettings.LoadAll || whatToLoad == DatasetSettings.LoadTestOnly)
             {
                 json_test_image = File.ReadAllText(path + "\\test_input.txt");
-                json_test_label = File.ReadAllText(path + "\\test_label.txt");
+                json_test_label = File.ReadAllText(path + "\\test_target.txt");
                 collect_test_image = JsonUtility.FromJson<TensorCollection>(json_test_image).ToList();
                 collect_test_label = JsonUtility.FromJson<TensorCollection>(json_test_label).ToList();
                 for (int i = 0; i < collect_test_image.Count; i++)
@@ -56,7 +56,7 @@ namespace DeepUnity
                 }
             }            
         }
-        private static void SerializeMNIST()
+        public static void SerializeMNIST()
         {
             TimerX.Start();
             string trainPath = "C:\\Users\\radup\\OneDrive\\Desktop\\TRAIN\\";
@@ -76,9 +76,7 @@ namespace DeepUnity
 
                 foreach (var tp in trainPaths)
                 {
-                    float[] pixels = LoadTexture(tp).GetPixels().Select(x => x.grayscale).ToArray();
-
-                    Tensor image = Tensor.Constant(pixels).Reshape(1,28,28);
+                    Tensor image = Tensor.Constant(LoadTexture(tp), true);
 
                     float[] number = new float[10];
                     number[i] = 1;
@@ -90,9 +88,8 @@ namespace DeepUnity
                 }
                 foreach (var vp in testPaths)
                 {
-                    float[] pixels = LoadTexture(vp).GetPixels().Select(x => x.grayscale).ToArray();
+                    Tensor image = Tensor.Constant(LoadTexture(vp), true);
 
-                    Tensor image = Tensor.Constant(pixels).Reshape(1,28,28);
 
                     float[] number = new float[10];
                     number[i] = 1;
@@ -111,10 +108,10 @@ namespace DeepUnity
             string test_img = JsonUtility.ToJson(test_image);
             string test_lbl = JsonUtility.ToJson(test_label);
 
-            FileStream train_i = File.Open(path_to_serialize + "train_image.txt", FileMode.OpenOrCreate);
-            FileStream train_l = File.Open(path_to_serialize + "train_label.txt", FileMode.OpenOrCreate) ;
-            FileStream test_i = File.Open(path_to_serialize + "test_image.txt", FileMode.OpenOrCreate);
-            FileStream test_l = File.Open(path_to_serialize + "test_label.txt", FileMode.OpenOrCreate);
+            FileStream train_i = File.Open(path_to_serialize + "train_input.txt", FileMode.OpenOrCreate);
+            FileStream train_l = File.Open(path_to_serialize + "train_target.txt", FileMode.OpenOrCreate) ;
+            FileStream test_i = File.Open(path_to_serialize + "test_input.txt", FileMode.OpenOrCreate);
+            FileStream test_l = File.Open(path_to_serialize + "test_target.txt", FileMode.OpenOrCreate);
 
             
             StreamWriter train_1_sw = new StreamWriter (train_i);

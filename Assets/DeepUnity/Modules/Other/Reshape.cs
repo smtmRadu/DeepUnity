@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    [Serializable]
     public class Reshape : IModule
     {
         [SerializeField] private int[] inputShape;

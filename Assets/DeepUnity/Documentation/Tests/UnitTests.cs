@@ -2,6 +2,7 @@ using UnityEngine;
 using DeepUnity;
 using Unity.VisualScripting;
 using System.Collections.Generic;
+
 namespace kbRadu
 {
     public class UnitTests : MonoBehaviour
@@ -13,12 +14,12 @@ namespace kbRadu
         public RNN rnn_network;
         public Sequential dnn_network;
 
-        public Sprite sprite;
+        public PerformanceGraph graph;
         private void Start()
         {
             // Conv2DBenchmark();
             // Conv2DTest();
-            // Conv2DLearnTest();
+            Conv2DLearnTest();
             // CorrelationTest();
 
             // DenseTest();
@@ -116,24 +117,44 @@ namespace kbRadu
             // print("h_n" + output.Item2);
         }
 
+
+        Conv2D conv2d;
+        Tensor input;
+        Tensor target;
+        Optimizer optim;
         void Conv2DLearnTest() 
         {
-            Conv2D conv2d = new Conv2D((3, 28, 28), 1, 3, device: TestDevice);
-            Tensor input = Tensor.RandomNormal(3, 28, 28);
-            Tensor target = Tensor.RandomNormal(1, 26, 26);
-            Optimizer optim = new Adam(new Learnable[] { conv2d }, lr:0.001f);
+            conv2d = new Conv2D((1, 28, 28), 5, 3, device: TestDevice);
+            input = Tensor.RandomNormal(batchSize, 1, 28, 28);
+            target = Tensor.RandomNormal(batchSize, 5, 26, 26);
+            optim = new Adam(new Learnable[] { conv2d }, lr: 0.0001f);
+            graph = new PerformanceGraph();
+            // TimerX.Start();
+            // for (int i = 0; i < Runs; i++)
+            // {
+            //     var pred = conv2d.Forward(input);
+            //     var loss = (pred - target) * (pred - target);
+            //     var lossderiv = (pred - target) * 2;
+            //     conv2d.Backward(lossderiv);
+            //     optim.Step();
+            //     print("Loss: " + loss.Flatten(0, 3).Mean(0)[0]);
+            // }
+            // TimerX.Stop();
+        }
 
-            TimerX.Start();
-            for (int i = 0; i < Runs; i++)
-            {
-                var pred = conv2d.Forward(input);
-                var loss = (pred - target) * (pred - target);
-                var lossderiv = (pred - target) * 2;
-                conv2d.Backward(lossderiv);
-                optim.Step();
-                print("Loss: " + Tensor.Mean(loss.Reshape(loss.Count()),0)[0]);
-            }
-            TimerX.Stop();
+
+        void Update()
+        {
+            var pred = conv2d.Forward(input);
+            var loss = (pred - target) * (pred - target);
+            var lossderiv = (pred - target) * 2;
+            conv2d.Backward(lossderiv);
+            optim.Step();
+            float losss = loss.Flatten(0, 3).Mean(0)[0];
+
+            print($"Epoch {Time.frameCount} | Loss: " + losss);
+            graph.Append(losss);
+            
         }
         void CorrelationTest()
         {

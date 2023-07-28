@@ -14,56 +14,53 @@ namespace DeepUnity
 
         public Sequential(params IModule[] modules) => this.modules = modules;
 
-        /// <summary>
-        /// Forwards the input without caching.
-        /// </summary>
-        /// <param name="input"></param>
-        /// <returns>output</returns>
+
+
+
         public Tensor Predict(Tensor input)
         {
-            foreach (var module in modules)
+            Tensor output = modules[0].Predict(input);
+            for (int i = 1; i < modules.Length; i++)
             {
-                input = module.Predict(input);
+                output = modules[i].Predict(output);
             }
-            return input;
+            return output;
         }
-        /// <summary>
-        /// Forwards the inputs and every module caches it.
-        /// </summary>
-        /// <param name="input"></param>
-        /// <returns>output</returns>
         public Tensor Forward(Tensor input)
         {
-            foreach (var module in modules)
+            Tensor output = modules[0].Forward(input);
+            for (int i = 1; i < modules.Length; i++)
             {
-                input = module.Forward(input);
+                output = modules[i].Forward(output);
             }
-            return input;
-        }
+            return output;
+        }     
+        public void Backward(Loss loss) => Backward(loss.Derivative);
         /// <summary>
         /// Backpropagates the loss derivative w.r.t outputs and computes the gradients.
         /// </summary>
-        /// <param name="loss">Derivative of the loss function w.r.t output. (dLdY)</param>
+        /// <param name="lossDerivative">Derivative of the loss function w.r.t output (dLdY).</param>
         /// <returns></returns>
-        public void Backward(Tensor loss)
+        public void Backward(Tensor lossDerivative)
         {
-            for (int i = modules.Length - 1; i >= 0; i--)
+            Tensor loss = modules[modules.Length - 1].Backward(lossDerivative);
+            for (int i = modules.Length - 2; i >= 0; i--)
             {
                 loss = modules[i].Backward(loss);
             }
         }
 
 
+
+
         /// <summary>
         /// Gets all <typeparamref name="Learnable"/> modules.
         /// </summary>
         /// <returns></returns>
-        public Learnable[] Parameters()
-        {
-            return modules.Where(x => x is Learnable P).Select(x => (Learnable)x).ToArray(); 
-        }
+        public Learnable[] Parameters { get => modules.Where(x => x is Learnable P).Select(x => (Learnable)x).ToArray(); }
+
         /// <summary>
-        /// Whenever loading models from desktop, make sure to fix object name (on asset). <br></br>
+        /// <b>The name of the asset is unmodifiable.</b> <br></br>
         /// Save path: "Assets/". Creates/Overwrites model on the same path. <br></br>
         /// For specific existing folder saving, <b><paramref name="name"/> = "folder_name/model_name"</b>
         /// </summary>

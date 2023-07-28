@@ -126,6 +126,9 @@ namespace DeepUnity
         /// <returns></returns>
         public Tensor Predict(Tensor input)
         {
+            if (input.Rank < 3)
+                throw new ShapeException("The input in Conv2D module must be (B, C, H, W) or (C, H, W) for unbatched input.");
+
             if(input.Size(-3) != inputShape[0] || input.Size(-2) != inputShape[1] || input.Size(-1) != inputShape[2])
                 throw new ShapeException($"Input shape ({input.Size(-3)}{input.Size(-2)}{input.Size(-1)}) received in Conv2D module must be ({inputShape.ToCommaSeparatedString()})");
 

@@ -24,7 +24,9 @@ namespace DeepUnity
         /// <b>Placed before or after the non-linear activation function.</b>    <br />
         /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br></br>
         /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br></br>
-        /// where B = batch_size and H = num_features.
+        /// where <br></br>
+        /// B = batch_size, <br></br> 
+        /// H = num_features.
         /// </summary>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
         public BatchNorm(int num_features, float momentum = 0.9f) : base(Device.CPU)
@@ -46,7 +48,7 @@ namespace DeepUnity
             bool isBatched = input.Rank == 2;
 
             if (input.Rank == 2) // squeeze the batch dim if is 1
-                input.Squeeze(-2);
+                input = input.Squeeze(-2);
 
             if (isBatched)
             {
@@ -84,7 +86,7 @@ namespace DeepUnity
             // input [batch, features]  - muB or varB [features] -> need expand on axis 0 by batch
 
             // normalize and cache
-            mu_B.Unsqueeze(0);
+            mu_B = mu_B.Unsqueeze(0);
             xCentered = input - Tensor.Expand(mu_B, 0, batch_size);
             std = Tensor.Sqrt(var_B + Utils.EPSILON).Unsqueeze(0);
             std = Tensor.Expand(std, 0, batch_size);
@@ -97,7 +99,7 @@ namespace DeepUnity
 
 
             // compute running mean and var
-            mu_B.Squeeze(0);
+            mu_B = mu_B.Squeeze(0);
             runningMean = runningMean * momentum + mu_B * (1f - momentum);
             runningVar = runningVar * momentum + var_B * (1f - momentum);
 

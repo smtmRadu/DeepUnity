@@ -5,6 +5,14 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// Notes and bugs:
+    /// 1. Do not rename any Sequencial or RNN asset (even repair doesn t work for now).
+    /// 2. Do not use TensorGPU (it was experimental).
+    /// 3. Do not use RL because is in development.
+    /// 4. CamSensor requires a different architecture containing Conv2D modules in order for max efficiency.
+    /// 
+    /// </summary>
     public static class DeepUnityMeta
     {
         internal readonly static ComputeShader TensorCS;

@@ -32,7 +32,6 @@ namespace DeepUnity
         public MaxPool2D maxPool2d;
 
         // Activations modules
-        public Linear linear;
         public ReLU relu;
         public Tanh tanh;
         public Softmax softmax;
@@ -70,10 +69,6 @@ namespace DeepUnity
             else if (module is Tanh tanhModule)
             {
                 tanh = tanhModule;
-            }
-            else if (module is Linear linearModule)
-            {
-                linear = linearModule;
             }
             else if (module is Dropout dropoutModule)
             {
@@ -162,10 +157,6 @@ namespace DeepUnity
             else if(typeof(Tanh).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.tanh;
-            }
-            else if(typeof(Linear).Name.Equals(moduleWrapper.name))
-            {
-                module = moduleWrapper.linear;
             }
             else if(typeof(Dropout).Name.Equals(moduleWrapper.name))
             {

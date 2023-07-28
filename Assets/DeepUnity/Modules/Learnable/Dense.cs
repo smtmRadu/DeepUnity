@@ -65,7 +65,7 @@ namespace DeepUnity
                 throw new ShapeException($"Input ({input.Size(-1)}) shape in Dense layer must be ({gamma.Size(-1)}).");
 
             if (input.Rank == 2) // squeeze the batch dim if is 1
-                input.Squeeze(-2);
+                input = input.Squeeze(-2);
 
             // input = (B, IN)
             // gamma = (OUT, IN)
@@ -145,8 +145,8 @@ namespace DeepUnity
             int batch_size = loss.Rank == 2 ? loss.Size(-2) : 1;
             if(batch_size == 1)
             {
-                loss.Unsqueeze(0);
-                InputCache.Unsqueeze(0);
+                loss = loss.Unsqueeze(0);
+                InputCache = InputCache.Unsqueeze(0);
             }
             Tensor transposedLoss = Tensor.Transpose(loss, 0, 1);
 

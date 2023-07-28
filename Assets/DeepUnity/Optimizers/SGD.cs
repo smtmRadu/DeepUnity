@@ -4,17 +4,17 @@ namespace DeepUnity
 {
     // https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/experimental/SGD
     // https://pytorch.org/docs/stable/generated/torch.optim.SGD.html
-    [Serializable]
+
     public sealed class SGD : Optimizer
     {
-        [SerializeField] private float momentum;
-        [SerializeField] private float dampening;
-        [SerializeField] private bool nesterov;
-        [SerializeField] private bool maximize;
+        [SerializeField] private readonly float momentum;
+        [SerializeField] private readonly float dampening;
+        [SerializeField] private readonly bool nesterov;
+        [SerializeField] private readonly bool maximize;
 
         // Momentum buffer
-        [NonSerialized] public Tensor[] bGamma;
-        [NonSerialized] public Tensor[] bBeta;
+        [NonSerialized] private readonly Tensor[] bGamma;
+        [NonSerialized] private readonly Tensor[] bBeta;
 
         public SGD(Learnable[] parameters, float lr, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false) : base(parameters, lr, weightDecay)
         {
@@ -45,11 +45,11 @@ namespace DeepUnity
                 // Classic sgd (uses lr: 0.01f as default);
                 // if (parameters[i] is Learnable P)
                 // {
-                //     m_W[i] = m_W[i] * momentum - P.gradGamma * learningRate;
-                //     m_B[i] = m_B[i] * momentum - P.gradBeta * learningRate;
+                //     bGamma[i] = bGamma[i] * momentum + P.gammaGrad * learningRate;
+                //     bBeta[i] = bBeta[i] * momentum + P.betaGrad * learningRate;
                 // 
-                //     P.gamma = P.gamma * (1f - weightDecay) + m_W[i];
-                //     P.beta = P.beta + m_B[i];
+                //     P.gamma = P.gamma * (1f - weightDecay) - bGamma[i];
+                //     P.beta = P.beta - bBeta[i];
                 // }
 
                 // pytorch implementation
@@ -62,13 +62,13 @@ namespace DeepUnity
                     {
                         if (t > 1)
                         {
-                            bGamma[i] = bGamma[i] + (1f - dampening) * P.gammaGrad;
-                            bBeta[i] = bBeta[i] + (1f - dampening) * P.betaGrad;
+                            bGamma[i] = momentum * bGamma[i] + (1f - dampening) * P.gammaGrad;
+                            bBeta[i] = momentum * bBeta[i] + (1f - dampening) * P.betaGrad;
                         }
                         else
                         {
-                            bGamma[i] = P.gammaGrad;
-                            bBeta[i] = P.betaGrad;
+                            bGamma[i] = Tensor.Identity(P.gammaGrad);
+                            bBeta[i] = Tensor.Identity(P.betaGrad);
                         }
                         if (nesterov)
                         {
@@ -93,6 +93,7 @@ namespace DeepUnity
                         P.beta = P.beta - learningRate * P.betaGrad;
                     }
                 }
+
                 if (parameters[i] is RNNCell R)
                 {
                     R.recurrentGamma = -learningRate * R.recurrentGammaGrad;

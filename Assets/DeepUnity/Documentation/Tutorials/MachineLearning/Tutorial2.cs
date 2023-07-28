@@ -8,6 +8,8 @@ public class Tutorial2 : MonoBehaviour
     [Header("Learning z = x^2 + y^2. Visible on Gizmos.")]
     public Device device;
     public Sequential net;
+    public PerformanceGraph LossGraph = new PerformanceGraph();
+    public int Optimizer = 0; // 0 = adam, 1 = sgd
     public bool save;
     public Optimizer optimizer;
     public StepLR scheduler;
@@ -44,10 +46,10 @@ public class Tutorial2 : MonoBehaviour
         {
             net = new Sequential(
              new Dense(2, hiddenSize),
-             new BatchNorm(hiddenSize),          
+             //new LayerNorm(hiddenSize),                
              new ReLU(),
-             new Dense(hiddenSize, hiddenSize, device: device),
-             new LayerNorm(hiddenSize),
+             // new BatchNorm(hiddenSize),
+             new Dense(hiddenSize, hiddenSize, device: device),          
              new ReLU(),
              new Dense(hiddenSize, hiddenSize, device: device),
              new ReLU(),
@@ -55,7 +57,7 @@ public class Tutorial2 : MonoBehaviour
              );; 
         }
 
-        optimizer = new Adam(net.Parameters());
+        optimizer = Optimizer == 0? new Adam(net.Parameters) : new SGD(net.Parameters,0.1f);
         scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
 
 
@@ -104,16 +106,16 @@ public class Tutorial2 : MonoBehaviour
             return;
         }
         var trainPrediction = net.Forward(trainXbatches[i]);
-        var loss = Loss.MSEDerivative(trainPrediction, trainYbatches[i]);
-
+        Loss loss = Loss.MSE(trainPrediction, trainYbatches[i]);
+        LossGraph.Append(loss.Item.Mean(0)[0]);
         optimizer.ZeroGrad();
-        net.Backward(loss);
-        //optimizer.ClipGradNorm(0.5f);
+        net.Backward(loss.Derivative);
         optimizer.Step();
         
 
         // Compute train accuracy
         float trainacc = Metrics.Accuracy(trainPrediction, trainYbatches[i]);
+        
         trainAcc.Add(trainacc);
 
         // Compute test accuracy

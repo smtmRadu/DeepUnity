@@ -117,21 +117,6 @@ namespace DeepUnity
             this.shape = shape.ToArray();
             data = new float[size];
         }
-        public static Tensor Reshape(Tensor tensor, params int[] newShape)
-        {
-            int count = 1;
-            foreach (var item in newShape)
-            {
-                count *= item;
-            }
-            if (count != tensor.Count())
-                throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
-
-            // if new shape is broader than the original shape
-            Tensor result = new Tensor(newShape);
-            Array.Copy(tensor.data, result.data, tensor.data.Length);
-            return result;
-        }
         public static Tensor Identity(Tensor other)
         {
             Tensor clone = new(other.shape);              
@@ -1133,10 +1118,89 @@ namespace DeepUnity
 
 
         #region Static operations
+        /// <summary>
+        /// Returns the dimension of the tensor along the specified axis.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <returns></returns>
         public static int Size(Tensor tensor, int axis)
         {
             HandleAxis(tensor, ref axis);
             return tensor.shape[axis];
+        }
+        /// <summary>
+        /// Finds the indexes of the largest element in the tensor.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns>int[] containing the position indexes.</returns>
+        public static int[] ArgMax(Tensor tensor)
+        {
+            int bIndex = -1;
+            int cIndex = -1;
+            int hIndex = -1;
+            int wIndex = -1;
+
+            int b = tensor.Batch;
+            int c = tensor.Channels;
+            int h = tensor.Height;
+            int w = tensor.Width;
+
+            float maxValue = float.MinValue;
+            for (int l = 0; l < b; l++)
+            {
+                for (int k = 0; k < c; k++)
+                {
+                    for (int j = 0; j < h; j++)
+                    {
+                        for (int i = 0; i < w; i++)
+                        {
+                            float currentValue = tensor[l, k, j, i];
+                            if (currentValue > maxValue)
+                            {
+                                maxValue = currentValue;
+                                bIndex = l;
+                                cIndex = k;
+                                hIndex = j;
+                                wIndex = i;
+                            }
+                        }
+                    }
+                }
+            }
+            List<int> indexes = new() { wIndex };
+            if (tensor.Rank > 1)
+                indexes.Insert(0, hIndex);
+
+            if (tensor.Rank > 2)
+                indexes.Insert(0, cIndex);
+
+            if (tensor.Rank > 3)
+                indexes.Insert(0, bIndex);
+
+            return indexes.ToArray();
+        }
+        /// <summary>
+        /// Changes the shape of the tensor. Pi(shape) must be equal to Pi(<paramref name="newShape"/>)
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="newShape"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        public static Tensor Reshape(Tensor tensor, params int[] newShape)
+        {
+            int count = 1;
+            foreach (var item in newShape)
+            {
+                count *= item;
+            }
+            if (count != tensor.Count())
+                throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
+
+            // if new shape is broader than the original shape
+            Tensor result = new Tensor(newShape);
+            Array.Copy(tensor.data, result.data, tensor.data.Length);
+            return result;
         }
         /// <summary>
         /// If axis is null, removes all dimensions equal to 1.
@@ -1438,6 +1502,16 @@ namespace DeepUnity
             }
             return result;
         }
+        /// <summary>
+        /// Splits the tensor into multiple tensors along the specified axis. The resulting tensors are having the same rank as the main tensor. <br></br>
+        /// Examples: <br></br>
+        /// tensor = (4, 8, 8), axis = 0, split_size = 1 => [(1, 8, 8), (1, 8, 8), (1, 8, 8), (1, 8, 8)] <br></br>
+        /// tensor = (16, 5, 8), axus = 1, split_size = 3 => [(16, 3, 8), (16, 2, 8)] <br></br>
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <param name="split_size"></param>
+        /// <returns></returns>
         public static Tensor[] Split(Tensor tensor, int axis, int split_size)
         {
             HandleAxis(tensor, ref axis);
@@ -1490,6 +1564,12 @@ namespace DeepUnity
 
             return slices.ToArray();
         }
+        /// <summary>
+        /// Shuffles the elements along the specified axis.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <returns></returns>
         public static Tensor Shuffle(Tensor tensor, int axis)
         {
             HandleAxis(tensor, ref axis);
@@ -1498,7 +1578,7 @@ namespace DeepUnity
             return Cat(axis, slices);
         }
         /// <summary>
-        /// 
+        /// /// Computes the mean along the speficied axis.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>
@@ -1609,12 +1689,12 @@ namespace DeepUnity
                     }
                 }
             }
-            if(!keepDim)
-                result.Squeeze(axis);
+            if (!keepDim)
+                FastSqueeze(result, axis);
             return result;
         }
         /// <summary>
-        /// 
+        /// /// Computes the mean along the speficied axis.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>
@@ -1731,11 +1811,11 @@ namespace DeepUnity
                 }
             }
             if(!keepDim)
-                result.Squeeze(axis);
+                FastSqueeze(result, axis);
             return result;
         }
         /// <summary>
-        /// 
+        /// Computes the variance along the speficied axis.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>
@@ -1863,11 +1943,11 @@ namespace DeepUnity
             }
 
             if(!keepDim)
-                result.Squeeze(axis);
+                FastSqueeze(result, axis);
             return result;
         }
         /// <summary>
-        /// 
+        /// Computes the standard deviation along the speficied axis.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>
@@ -1879,7 +1959,7 @@ namespace DeepUnity
             return Sqrt(Var(tensor, axis, correction, keepDim));
         }
         /// <summary>
-        /// 
+        /// Computes the min element along the speficied axis.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>
@@ -1992,11 +2072,11 @@ namespace DeepUnity
             }
 
             if (!keepDim)
-                result.Squeeze(axis);
+                FastSqueeze(result, axis);
             return result;
         }
         /// <summary>
-        /// 
+        /// Computes the max element along the speficied axis.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>
@@ -2109,7 +2189,7 @@ namespace DeepUnity
             }
 
             if (!keepDim)
-                result.Squeeze(axis);
+                FastSqueeze(result, axis);
             return result;
 
         }
@@ -2210,156 +2290,95 @@ namespace DeepUnity
             HandleAxis(this, ref axis);
             return shape[axis];
         }
+        public int[] ArgMax()
+        {
+            return Tensor.ArgMax(this);
+        }
         public Tensor Reshape(params int[] newShape)
         {
-            int count = 1;
-            foreach (var item in newShape)
-            {
-                count *= item;
-            }
-
-            if (count != Count())
-                throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
-
-            this.shape = newShape;
-            return this;
+            return Tensor.Reshape(this, newShape);
         }
-        /// <summary>
-        /// If axis is null, removes all dimensions equal to 1.
-        /// </summary>
-        /// <param name="tensor"></param>
-        /// <param name="axis"></param>
-        /// <returns></returns>
         public Tensor Squeeze(int? axis = null)
         {
-            if (axis == null)
-            {
-                // Removes all axis with value 1
-                LinkedList<int> squeezedShape = new LinkedList<int>();
-
-                if (Width > 1)
-                    squeezedShape.AddFirst(Width);
-
-                if (Height > 1)
-                    squeezedShape.AddFirst(Height);
-
-                if (Channels > 1)
-                    squeezedShape.AddFirst(Channels);
-
-                if (Batch > 1)
-                    squeezedShape.AddFirst(Batch);
-
-                if (squeezedShape.Count == 0)
-                    squeezedShape.AddFirst(Width);
-
-                this.shape = squeezedShape.ToArray();
-            }
-            else
-            {
-                int ax = axis.Value;
-                HandleAxis(this, ref ax);
-                // if axis is not 1, tensor remains unchanged
-                if (shape[ax] != 1)
-                    return this;
-
-                // Else remove that axis
-                if(shape.Length > 1)
-                {
-                    List<int> newShape = shape.ToList();
-                    newShape.RemoveAt(ax);
-
-                    this.shape = newShape.ToArray();
-                }
-               
-            }
-
-            return this;
+            return Tensor.Squeeze(this, axis);
         }
         public Tensor Unsqueeze(int axis)
         {
-            HandleAxis(this, ref axis);
-
-
-            List<int> unsqueezedShape = shape.ToList();
-            unsqueezedShape.Insert(axis, 1);
-            this.shape = unsqueezedShape.ToArray();
-
-            return this;
+            return Tensor.Unsqueeze(this, axis);
         }
-        // Deprecated due the fact instance operations modify the current object.
-        private Tensor Flatten(int startAxis, int endAxis)
+        public Tensor Flatten(int startAxis, int endAxis)
         {
             return Flatten(this, startAxis, endAxis);
         }
-        private Tensor Expand(int axis, int times)
+        public Tensor Expand(int axis, int times)
         {
             return Expand(this, axis, times);
         }
-        private Tensor Transpose(int axis0, int axis1)
+        public Tensor Transpose(int axis0, int axis1)
         {
             return Transpose(this, axis0, axis1);
         }
-        private Tensor[] Split(int axis, int split_size)
+        public Tensor[] Split(int axis, int split_size)
         {
             return Split(this, axis, split_size);
         }
-        private Tensor Shuffle(int axis)
+        public Tensor Shuffle(int axis)
         {
             return Shuffle(this, axis);
         }
-        private Tensor Sum(int axis, bool keepDim = false)
+        public Tensor Sum(int axis, bool keepDim = false)
         {
             return Sum(this, axis, keepDim);
         }
-        private Tensor Mean(int axis, bool keepDim = false)
+        public Tensor Mean(int axis, bool keepDim = false)
         {
             return Mean(this, axis, keepDim);
         }      
-        private Tensor Var(int axis, int correction = 1, bool keepDim = false)
+        public Tensor Var(int axis, int correction = 1, bool keepDim = false)
         {
             return Var(this, axis, correction, keepDim);
         }
-        private Tensor Std(int axis, int correction = 1, bool keepDim = false)
+        public Tensor Std(int axis, int correction = 1, bool keepDim = false)
         {
             return Std(this, axis, correction, keepDim);
         }
-        private Tensor Min(int axis, bool keepDim = false)
+        public Tensor Min(int axis, bool keepDim = false)
         {
             return Min(this, axis, keepDim);
         }
-        private Tensor Max(int axis, bool keepDim = false)
+        public Tensor Max(int axis, bool keepDim = false)
         {
             return Max(this, axis, keepDim);
         }
-        private Tensor Pow(float power)
+        public Tensor Pow(float power)
         {
             return Pow(this, power);
         }
-        private Tensor Sqrt()
+        public Tensor Sqrt()
         {
             return Sqrt(this);
         }
-        private Tensor Exp()
+        public Tensor Exp()
         {
             return Exp(this);
         }
-        private Tensor Log(float @base = MathF.E)
+        public Tensor Log(float @base = MathF.E)
         {
             return Log(this, @base);
         }
-        private Tensor Abs()
+        public Tensor Abs()
         {
             return Abs(this);
         }
-        private Tensor Sin()
+        public Tensor Sin()
         {
             return Sin(this);
         }
-        private Tensor Cos()
+        public Tensor Cos()
         {
             return Cos(this);
         }
-        private Tensor Clip(float min, float max)
+        public Tensor Clip(float min, float max)
         {
             return Clip(this, min, max);
         }
@@ -2368,13 +2387,6 @@ namespace DeepUnity
 
 
         #region LINQ
-        public void ForEach(Action<float> action)
-        {
-            for (int i = 0; i < data.Length; i++)
-            {
-                action(data[i]);
-            }
-        }
         public Tensor Select(Func<float, float> selector)
         {
             Tensor result = new(shape);
@@ -2550,6 +2562,54 @@ namespace DeepUnity
                 if (axis < 0)
                    axis = rank + axis;
             }     
+        }
+        /// <summary>
+        /// Squeezes the tensor received as parameter.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        private static void FastSqueeze(Tensor tensor, int? axis = null)
+        {
+            if (axis == null)
+            {
+                // Removes all axis with value 1
+                LinkedList<int> squeezedShape = new LinkedList<int>();
+
+                if (tensor.Width > 1)
+                    squeezedShape.AddFirst(tensor.Width);
+
+                if (tensor.Height > 1)
+                    squeezedShape.AddFirst(tensor.Height);
+
+                if (tensor.Channels > 1)
+                    squeezedShape.AddFirst(tensor.Channels);
+
+                if (tensor.Batch > 1)
+                    squeezedShape.AddFirst(tensor.Batch);
+
+                if (squeezedShape.Count == 0)
+                    squeezedShape.AddFirst(tensor.Width);
+
+                tensor.shape = squeezedShape.ToArray();
+            }
+            else
+            {
+                int ax = axis.Value;
+                HandleAxis(tensor, ref ax);
+                // if axis is not 1, tensor remains unchanged
+                if (tensor.shape[ax] != 1)
+                    return;
+
+                // Else remove that axis
+                if (tensor.shape.Length > 1)
+                {
+                    List<int> newShape = tensor.shape.ToList();
+                    newShape.RemoveAt(ax);
+
+                    tensor.shape = newShape.ToArray();
+                }
+
+            }
         }
         private static Dim AxisToDim(Tensor t, int axis)
         {

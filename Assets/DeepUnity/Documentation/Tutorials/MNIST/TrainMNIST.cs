@@ -6,9 +6,12 @@ using UnityEngine;
 public class TrainMNIST : MonoBehaviour
 {
     [SerializeField] Sequential network;
+    [SerializeField] new string name = "MNIST_MODEL";
+    [SerializeField] private float start_lr = 0.0002f;
     [SerializeField] private int batch_size = 64;
 
     Optimizer optim;
+    StepLR scheduler;
     List<(Tensor, Tensor)> train = new();
     List<(Tensor, Tensor)[]> train_batches;
     int epochIndex = 1;
@@ -22,29 +25,30 @@ public class TrainMNIST : MonoBehaviour
 
         if (network == null)
         {
-            // network = new Sequential(
-            //      new Conv2D((1, 28, 28), 5, 3, Device.GPU),                  
-            //      new ReLU(),
-            //      new MaxPool2D(2),                               
-            //      new Conv2D((5, 13, 13), 10, 3, Device.GPU),                
-            //      new ReLU(),
-            //      new MaxPool2D(2),                               
-            //      new Flatten(-3, -1),                            
-            //      new Dense(250, 128, device: Device.GPU),
-            //      new Dropout(0.2f),
-            //      new Dense(128, 10),
-            //      new Softmax()
-            //      );
-
             network = new Sequential(
-                new Conv2D((1, 28, 28), 1, 3, Device.GPU),
-                new ReLU(),
-                new Flatten(),
-                new Dense(1 * 26 * 26, 64, device: Device.GPU),
-                new ReLU(),
-                new Dense(64, 10),
-                new Softmax()
-                );
+                 new Conv2D((1, 28, 28), 5, 3, Device.GPU),                  
+                 new ReLU(),
+                 new MaxPool2D(2),                               
+                 new Conv2D((5, 13, 13), 10, 3, Device.GPU),                
+                 new ReLU(),
+                 new MaxPool2D(2),                               
+                 new Flatten(-3, -1),                            
+                 new Dense(250, 128, device: Device.GPU),
+                 new Dropout(0.2f),
+                 new Dense(128, 10),
+                 new Softmax()
+                 );
+
+
+            // network = new Sequential(
+            //     new Conv2D((1, 28, 28), 5, 3, Device.GPU),
+            //     new Sigmoid(),
+            //     new Flatten(),
+            //     new Dense(5 * 26 * 26, 100, device: Device.GPU),
+            //     new Sigmoid(),
+            //     new Dense(100, 10),
+            //     new Softmax()
+            //     );
 
             // network = new Sequential(
             //     new Flatten(),
@@ -52,9 +56,12 @@ public class TrainMNIST : MonoBehaviour
             //     new ReLU(),
             //     new Dense(64, 10),
             //     new Softmax());
+
+            Debug.Log("Network created.");
         }
 
-        optim = new Adam(network.Parameters(), 0.01f);
+        optim = new Adamax(network.Parameters, lr: start_lr);
+        scheduler = new StepLR(optim, 1, 0.5f);
 
         Utils.Shuffle(train);
         train_batches = Utils.Split(train, batch_size);
@@ -65,12 +72,19 @@ public class TrainMNIST : MonoBehaviour
 
     public void Update()
     {
+        if(batch_index % 100 == 0)
+        {
+            network.Save(name);
+        }
         if (batch_index == train_batches.Count - 1)
         {
             batch_index = 0;
-            print($"Epoch {epochIndex++}");
-            network.Save("MNIST_Model");
+            
+            network.Save(name);
             Utils.Shuffle(train);
+            scheduler.Step();
+
+            print($"Epoch {epochIndex++} | LR: {scheduler.CurrentLR}");
         }
 
 
@@ -80,10 +94,10 @@ public class TrainMNIST : MonoBehaviour
         Tensor target = Tensor.Cat(null, train_batch.Select(x => x.Item2).ToArray());
 
         Tensor prediction = network.Forward(input);
-        Tensor dLossDoutput = Loss.CrossEntropyDerivative(prediction, target);
+        Loss loss = Loss.CrossEntropy(prediction, target);
 
         optim.ZeroGrad();
-        network.Backward(dLossDoutput);
+        network.Backward(loss);
         optim.Step();
 
 

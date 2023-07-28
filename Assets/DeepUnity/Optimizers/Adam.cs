@@ -1,5 +1,4 @@
 using System;
-using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity
@@ -8,8 +7,8 @@ namespace DeepUnity
 
     public sealed class Adam : Optimizer
     {
-        [SerializeField] private float beta1;
-        [SerializeField] private float beta2;
+        [SerializeField] private readonly float beta1;
+        [SerializeField] private readonly float beta2;
 
         // 1st momentum buffer
         private readonly Tensor[] mGamma;

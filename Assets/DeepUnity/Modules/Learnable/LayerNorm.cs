@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using Unity.VisualScripting;
 using UnityEngine;
 
 
@@ -30,7 +29,9 @@ namespace DeepUnity
         /// <b>Placed before the non-linear activation function. </b>    <br />
         /// Input: (B, *) or (*) for unbatched input.<br />
         /// Output: (B, *) or (*) for unbatched input.<br />
-        /// where B = batch_size and * = input_shape.<br />
+        /// where <br></br>
+        /// B = batch_size, <br></br> 
+        /// * = input_shape.<br />
         /// <b>Applies normalization over all dimensions (*) of the input.</b> 
         /// </summary>
         /// <param name="input_shape">Shape of the input, excepting the batch.</param>
@@ -54,7 +55,7 @@ namespace DeepUnity
         public Tensor Predict(Tensor input)
         {
             if (input.Rank > inputShape.Rank) // squeeze the batch dim if is 1
-                input.Squeeze(0);
+                input = input.Squeeze(0);
 
             var input_centered = (input - runningMean[0]) / MathF.Sqrt(runningVar[0] + Utils.EPSILON);
             var output = gamma[0] * input_centered + beta[0];

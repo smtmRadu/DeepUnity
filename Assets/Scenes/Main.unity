@@ -442,7 +442,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &621327370
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -456,8 +456,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   device: 1
-  net: {fileID: 11400000, guid: f1f489eb95e6bf7499f7a04535f8041e, type: 2}
-  save: 0
+  net: {fileID: 11400000, guid: c47ab6d1bb4f0284fa03c74b409e5d4c, type: 2}
+  LossGraph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+  Optimizer: 0
+  save: 1
   hiddenSize: 32
   trainingSamples: 256
   batch_size: 32
@@ -659,11 +669,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   TestDevice: 1
   MatShape: {x: 640, y: 480}
-  batchSize: 32
+  batchSize: 2
   Runs: 100
   rnn_network: {fileID: 11400000, guid: 7fb1cc86ea6c8bd44980b4c2cc2966ca, type: 2}
   dnn_network: {fileID: 11400000, guid: 2e5f4d2620bc7014bbe094c1a93166f3, type: 2}
-  sprite: {fileID: 21300000, guid: d2d5fed8482a00a43abbe23290551897, type: 3}
+  graph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
 --- !u!4 &752495707
 Transform:
   m_ObjectHideFlags: 0
@@ -761,6 +779,33 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   network: {fileID: 0}
+  lossGraph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+  trainAccuracyGraph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+  validationAccuracyGraph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
 --- !u!1 &2113867231
 GameObject:
   m_ObjectHideFlags: 0
