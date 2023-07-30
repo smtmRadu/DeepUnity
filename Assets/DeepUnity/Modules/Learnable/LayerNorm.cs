@@ -6,7 +6,7 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class LayerNorm: Learnable, IModule, IModuleRNN
+    public class LayerNorm: Learnable, IModule, IModuleS
     {
         // Epsilon should be 1e-5f as default, but i keep it on default 1e-8f
         // Just a good reference paper to learn from, i made this just by adapting batchnorm layer.
@@ -29,6 +29,7 @@ namespace DeepUnity
         /// <b>Placed before the non-linear activation function. </b>    <br />
         /// Input: (B, *) or (*) for unbatched input.<br />
         /// Output: (B, *) or (*) for unbatched input.<br />
+        /// <br></br>
         /// where <br></br>
         /// B = batch_size, <br></br> 
         /// * = input_shape.<br />
@@ -54,9 +55,6 @@ namespace DeepUnity
         }
         public Tensor Predict(Tensor input)
         {
-            if (input.Rank > inputShape.Rank) // squeeze the batch dim if is 1
-                input = input.Squeeze(0);
-
             var input_centered = (input - runningMean[0]) / MathF.Sqrt(runningVar[0] + Utils.EPSILON);
             var output = gamma[0] * input_centered + beta[0];
 
@@ -89,10 +87,8 @@ namespace DeepUnity
             int total_samples = batch_size + step;
             float weight_old = step / (float)total_samples;
             float weight_new = batch_size / (float)total_samples;
-            Tensor newRunningMean = runningMean * weight_old + Tensor.Mean(mu_flat, 0) * weight_new;
-            Tensor newRunningVar = runningVar * weight_old + Tensor.Mean(var_flat, 0) * weight_new;
-            runningMean = newRunningMean;
-            runningVar = newRunningVar;
+            runningMean = runningMean * weight_old + Tensor.Mean(mu_flat, 0) * weight_new;
+            runningVar = runningVar * weight_old + Tensor.Mean(var_flat, 0) * weight_new;
             step = total_samples;
 
 

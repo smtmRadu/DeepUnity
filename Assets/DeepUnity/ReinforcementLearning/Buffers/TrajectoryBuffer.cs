@@ -39,23 +39,6 @@ namespace DeepUnity
             returns = new List<Tensor>();
         }
 
-        /// <summary>
-        /// Checks if the Count > 1. 
-        /// Checks if no_states == no_values == no_rewards == ... (but no_advantages & no_returns)
-        /// </summary>    
-        public bool IsConsistent()
-        {
-            if (Count == 1)
-                return false;
-
-            if (states.Count == values.Count && values.Count == rewards.Count)
-                return true;
-
-            Debug.Log("Incosistent trajectory deleted.");
-            return false;
-
-            
-        }
         public void Remember(TimeStep t)
         {
             states.Add(t.state);
@@ -94,7 +77,7 @@ namespace DeepUnity
             {
                 try
                 {
-                    sb.Append($"\tFrame {i}");
+                    sb.Append($"\tFrame {i.ToString("000")}");
                 }
                 catch { }
                 // try
@@ -104,22 +87,22 @@ namespace DeepUnity
                 // catch { }
                 try
                 {
-                    sb.Append($"| Reward: {rewards[i][0]} ");
+                    sb.Append($"| Reward: {rewards[i][0].ToString("0.000")} ");
                 }
                 catch { }
                 try
                 {
-                    sb.Append($"| Return: {returns[i][0]}");
+                    sb.Append($"| Return: {returns[i][0].ToString("0.000")}");
                 }
                 catch { }
                 try
                 {
-                    sb.Append($"| Advantage: {advantages[i][0]}");
+                    sb.Append($"| Advantage: {advantages[i][0].ToString("0.000")}");
                 }
                 catch { }
                 try
                 {
-                    sb.Append($"| Value: {values[i][0]}");
+                    sb.Append($"| Value: {values[i][0].ToString("0.000")}");
                 }
                 catch { }
                 sb.Append("\n");

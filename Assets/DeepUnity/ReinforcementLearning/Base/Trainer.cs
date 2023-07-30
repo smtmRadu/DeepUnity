@@ -14,6 +14,7 @@ namespace DeepUnity
 
         private Dictionary<Agent, bool> agents;
         private HyperParameters hp;
+        private AgentPerformanceTracker performanceTracker;
         private Model ac;
         [SerializeField] private int StepCount;
 
@@ -32,16 +33,8 @@ namespace DeepUnity
         {
             // check if there are any ready agents
             if (Instance.agents.Values.Contains(true))
-            {
                 Train();
 
-                if (Instance.StepCount > Instance.hp.maxSteps)
-                {
-                    Debug.Log($"Training session finnished. The total of max steps {hp.maxSteps} reached.");
-                    EditorApplication.isPlaying = false;
-                }
-            }
-           
         }
         public static void Subscribe(Agent agent)
         {
@@ -52,6 +45,7 @@ namespace DeepUnity
                 Instance.agents = new();
                 Instance.ac = agent.model;
                 Instance.hp = agent.Hp;
+                Instance.performanceTracker = agent.PerformanceTracker;
 
                 Instance.ac.InitOptimisers(Instance.hp);
                 Instance.ac.InitSchedulers(Instance.hp);
@@ -65,10 +59,6 @@ namespace DeepUnity
         {
             Instance.agents[agent] = true;
         }
-        public static void AddSteps(int stepcount)
-        {
-            Instance.StepCount += stepcount;
-        }
         private void Train()
         {
 
@@ -78,17 +68,19 @@ namespace DeepUnity
                     continue;
 
                 Agent agent = kv.Key;
-               
-                if(!agent.Trajectory.IsConsistent())
-                {
-                    agent.Trajectory.Reset();
-                    continue;
-                }             
 
+                // if(agent.Trajectory.Count == 1)
+                // {
+                //     agent.Trajectory.Reset();
+                //     continue;
+                // }
+               
                 ComputeAdvantageEstimatesAndQValues(agent.Trajectory);
 
                 if(hp.debug)
                     agent.Trajectory.DebugInFile();
+
+                performanceTracker.rewards.Append(agent.Trajectory.rewards.Sum(x => x[0]));
 
 
                 // Unzip the trajectory
@@ -171,16 +163,18 @@ namespace DeepUnity
         private void UpdateCritic(Tensor states_batch, Tensor returns_batch)
         {
             Tensor values = ac.critic.Forward(states_batch);
-            Tensor dLdV = 2f * (values - returns_batch);
+            Loss dLdV = Loss.MSE(values, returns_batch);
 
             ac.criticOptimizer.ZeroGrad();
             ac.critic.Backward(dLdV);
             //ac.criticOptimizer.ClipGradNorm(0.5f);
             ac.criticOptimizer.Step();
 
-
-            // float error = Metrics.Accuracy(values, returns_batch);
-            // print($"Critic Accuracy {error * 100f}%");
+            if(performanceTracker != null)
+            {
+                float criticLoss = dLdV.Item.Mean(0)[0];
+                performanceTracker.criticLoss.Append(criticLoss);
+            }
         }
 
         private void UpdateContinuousNetwork(Tensor states, Tensor advantages, Tensor oldActions, Tensor oldLogProbs)

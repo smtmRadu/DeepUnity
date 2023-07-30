@@ -9,22 +9,22 @@ namespace DeepUnity
     {
         [SerializeField] private float learningRateDecay;
 
-        [NonSerialized] public Tensor[] statesum_W;
-        [NonSerialized] public Tensor[] statesum_B;
+        [NonSerialized] public Tensor[] stateSum_W;
+        [NonSerialized] public Tensor[] stateSum_B;
 
         public Adagrad(Learnable[] parameters, float lr = 0.01f, float lrDecay = 0f, float weightDecay = 0f) : base(parameters, lr, weightDecay)
         {
             this.learningRateDecay = lrDecay;
 
-            statesum_W = new Tensor[parameters.Length];
-            statesum_B = new Tensor[parameters.Length];
+            stateSum_W = new Tensor[parameters.Length];
+            stateSum_B = new Tensor[parameters.Length];
 
             for (int i = 0; i < parameters.Length; i++)
             {
                 if (parameters[i] is Learnable P)
                 {
-                    statesum_W[i] = Tensor.Zeros(P.gamma.Shape);
-                    statesum_B[i] = Tensor.Zeros(P.beta.Shape);
+                    stateSum_W[i] = Tensor.Zeros(P.gamma.Shape);
+                    stateSum_B[i] = Tensor.Zeros(P.beta.Shape);
 
                 }
             }
@@ -45,11 +45,11 @@ namespace DeepUnity
                         L.gammaGrad = L.gammaGrad + weightDecay * L.gammaGrad;
                     }
 
-                    statesum_W[i] = statesum_W[i] + Tensor.Pow(L.gammaGrad, 2f);
-                    statesum_B[i] = statesum_B[i] + Tensor.Pow(L.betaGrad, 2f);
+                    stateSum_W[i] = stateSum_W[i] + Tensor.Pow(L.gammaGrad, 2f);
+                    stateSum_B[i] = stateSum_B[i] + Tensor.Pow(L.betaGrad, 2f);
 
-                    L.gamma = L.gamma - gammaBar * (L.gammaGrad / (Tensor.Sqrt(statesum_W[i]) + 1e-10f));
-                    L.beta = L.beta - gammaBar * (L.betaGrad / (Tensor.Sqrt(statesum_B[i]) + 1e-10f));
+                    L.gamma = L.gamma - gammaBar * (L.gammaGrad / (Tensor.Sqrt(stateSum_W[i]) + Utils.EPSILON));
+                    L.beta = L.beta - gammaBar * (L.betaGrad / (Tensor.Sqrt(stateSum_B[i]) + Utils.EPSILON));
                 }
                 if (parameters[i] is RNNCell R)
                 {

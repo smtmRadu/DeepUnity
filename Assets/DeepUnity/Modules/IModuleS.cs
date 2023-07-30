@@ -1,12 +1,15 @@
 namespace DeepUnity
 {
-    public interface IModuleRNN
+    /// <summary>
+    /// This modules are receiving sequencial input.
+    /// </summary>
+    public interface IModuleS
     {
         public Tensor Backward(Tensor loss);
     }
 
     [System.Serializable]
-    public class IModuleRNNWrapper
+    public class IModuleSWrapper
     {
         public string name;
 
@@ -14,7 +17,7 @@ namespace DeepUnity
         public Dropout dropout;
         public LayerNorm layernorm;
 
-        private IModuleRNNWrapper(IModuleRNN module)
+        private IModuleSWrapper(IModuleS module)
         {
             name = module.GetType().Name;
 
@@ -34,13 +37,13 @@ namespace DeepUnity
                 throw new System.Exception("Unhandled rnn module type while wrapping.");
         }
 
-        public static IModuleRNNWrapper Wrap(IModuleRNN module)
+        public static IModuleSWrapper Wrap(IModuleS module)
         {
-            return new IModuleRNNWrapper(module);
+            return new IModuleSWrapper(module);
         }
-        public static IModuleRNN Unwrap(IModuleRNNWrapper moduleWrapper)
+        public static IModuleS Unwrap(IModuleSWrapper moduleWrapper)
         {
-            IModuleRNN module = null;
+            IModuleS module = null;
 
             if (typeof(RNNCell).Name.Equals(moduleWrapper.name))
             {

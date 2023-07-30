@@ -6,7 +6,7 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class RNNCell : Learnable, IModuleRNN
+    public class RNNCell : Learnable, IModuleS
     {
         [SerializeField] private NonLinearity nonlinearity;
 
@@ -63,10 +63,10 @@ namespace DeepUnity
         public Tensor Forward(Tensor input, Tensor hidden)
         {
             if(input.Size(-1) != gamma.Size(-1))
-                throw new Exception($"Input last dimension ({input.Size(-1)}) must be equal to input_size ({gamma.Size(-1)})");
+                throw new ShapeException($"Input last dimension ({input.Size(-1)}) must be equal to input_size ({gamma.Size(-1)})");
 
             if(hidden.Size(-1) != gamma.Size(-2))
-                throw new Exception($"Hidden last dimension ({hidden.Size(-2)}) must be equal to hidden_size ({gamma.Size(-2)})");
+                throw new ShapeException($"Hidden last dimension ({hidden.Size(-2)}) must be equal to hidden_size ({gamma.Size(-2)})");
 
             InputCache.Push(Tensor.Identity(input));
             HiddenCache.Push(Tensor.Identity(hidden));

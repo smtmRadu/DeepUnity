@@ -48,10 +48,6 @@ namespace DeepUnity
                     gamma = Tensor.RandomRange((-1, 1), out_features, in_features);
                     beta = Tensor.Zeros(out_features);
                     break;
-                case InitType.Debug:
-                    gamma = Tensor.Fill(1.5f, out_features, in_features);
-                    beta = Tensor.Fill(-2f, out_features);
-                    break;
                 default:
                     throw new NotImplementedException("Unhandled initialization type!");
             }
@@ -64,9 +60,6 @@ namespace DeepUnity
             if (input.Size(-1) != gamma.Size(-1))
                 throw new ShapeException($"Input ({input.Size(-1)}) shape in Dense layer must be ({gamma.Size(-1)}).");
 
-            if (input.Rank == 2) // squeeze the batch dim if is 1
-                input = input.Squeeze(-2);
-
             // input = (B, IN)
             // gamma = (OUT, IN)
 
@@ -78,14 +71,10 @@ namespace DeepUnity
 
             if (device == Device.CPU)
             {
-                if (batch_size == 1)
-                {
+                if (input.Rank == 1)
                     return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + beta;
-                }
                 else
-                {
-                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
-                }
+                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);   
             }
             else
             {
@@ -126,7 +115,7 @@ namespace DeepUnity
                 betaBuffer.Release();
                 outputBuffer.Release();
 
-                return result.Reshape(batch_size, beta.Size(-1)).Squeeze(-2);
+                return result.Reshape(input.Shape);
             }
         }
         public Tensor Forward(Tensor input)
@@ -142,22 +131,22 @@ namespace DeepUnity
             // tloss = (OUT, B)
 
             //gradGamma(OUT, IN)
-            int batch_size = loss.Rank == 2 ? loss.Size(-2) : 1;
-            if(batch_size == 1)
+            bool isBatched = loss.Rank == 2;
+            int batch_size = isBatched ? loss.Size(-2) : 1;
+
+            if (!isBatched)
             {
                 loss = loss.Unsqueeze(0);
                 InputCache = InputCache.Unsqueeze(0);
             }
-            Tensor transposedLoss = Tensor.Transpose(loss, 0, 1);
 
-            if(device == Device.CPU)
+            Tensor transposedLoss = Tensor.Transpose(loss, 0, 1);
+            if (device == Device.CPU)
             {
                 // compute the gradients
                 gammaGrad += Tensor.MatMul(transposedLoss, InputCache) / batch_size;
-                betaGrad += Tensor.Mean(transposedLoss, axis: 1); // Tensor.MatMul(transposedLoss, Tensor.Ones(batch_size)) / batch_size;
+                betaGrad += Tensor.Mean(transposedLoss, axis: 1);
 
-                // Backpropagate the loss (batch_size, in)
-                return Tensor.MatMul(loss, gamma).Squeeze(-2);
             }
             else
             {
@@ -198,10 +187,15 @@ namespace DeepUnity
                 gammaGradBuffer.Release();
                 betaGradBuffer.Release();
 
-                // Backpropagate the loss (batch_size, in)
-                return Tensor.MatMulGPU(loss, gamma).Squeeze(-2);
+                
             }
-           
+
+            // Backpropagate the loss (batch_size, in)
+            if (isBatched)
+                return Tensor.MatMulGPU(loss, gamma);
+            else
+                return Tensor.MatMulGPU(loss, gamma).Squeeze(0);
+
         }
     }
 

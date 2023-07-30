@@ -60,8 +60,8 @@ namespace DeepUnity
                     vBeta[i] = vBeta[i] * rho + Tensor.Pow(P.betaGrad, 2f) * (1f - rho);
 
                     // In Adadelta, i use v for square avg and u for accumulate variables
-                    var dxGamma = Tensor.Sqrt(uGamma[i] + 1e-6f) / Tensor.Sqrt(vGamma[i] + 1e-6f) * P.gammaGrad;
-                    var dxBeta = Tensor.Sqrt(uBeta[i] + 1e-6f) / Tensor.Sqrt(vBeta[i] + 1e-6f) * P.betaGrad;
+                    var dxGamma = Tensor.Sqrt(uGamma[i] + Utils.EPSILON) / Tensor.Sqrt(vGamma[i] + Utils.EPSILON) * P.gammaGrad;
+                    var dxBeta = Tensor.Sqrt(uBeta[i] + Utils.EPSILON) / Tensor.Sqrt(vBeta[i] + Utils.EPSILON) * P.betaGrad;
 
                     uGamma[i] = uGamma[i] * rho + Tensor.Pow(dxGamma, 2f) * (1f - rho);
                     uBeta[i] = uBeta[i] * rho + Tensor.Pow(dxBeta, 2f) * (1f - rho);

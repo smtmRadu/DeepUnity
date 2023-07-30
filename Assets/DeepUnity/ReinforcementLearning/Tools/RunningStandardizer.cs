@@ -1,5 +1,4 @@
 using System;
-using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity
@@ -22,8 +21,8 @@ namespace DeepUnity
 
         public Tensor Standardise(Tensor tuple, bool update = true)
         {
-            if (tuple.Rank != 1)
-                throw new Exception($"Allowed inputs for standardization are Tensor({mean.Shape.ToCommaSeparatedString()})");
+            if (tuple.Rank > 1)
+                throw new Exception($"Batched tuple is not allowed!");
 
             if (update)
                 Update(tuple);

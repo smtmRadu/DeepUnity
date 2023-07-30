@@ -11,9 +11,9 @@ namespace DeepUnity
     [Serializable]
     public class PerformanceGraph
     {
-        [SerializeField] AnimationCurve graph;
-        [SerializeField, Tooltip("The total number of appends.")] int steps;
-        [SerializeField, Tooltip("The last value appended.")] float current;
+        [ReadOnly, SerializeField] AnimationCurve graph;
+        [ReadOnly, SerializeField, Tooltip("The total number of appends.")] int steps;
+        [ReadOnly, SerializeField, Tooltip("The last value appended.")] float current;
 
 
         LinkedList<float> nodes;
@@ -63,7 +63,7 @@ namespace DeepUnity
             float time_index = 1f;
             foreach (var node in nodes)
             {
-                graph.AddKey(time_index / nodes.Count, node);
+                graph.AddKey(time_index / nodes.Count * 100f, node);
                 time_index += 1f;
             }
         }

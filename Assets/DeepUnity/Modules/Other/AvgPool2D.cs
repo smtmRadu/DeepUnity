@@ -7,6 +7,13 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// Input: <b>(B, C, H_in, W_in)</b> or <b>(C, H_in, W_in)</b> <br></br>
+    /// Output: <b>(B, C, H_out, W_out)</b> or <b>(C, H_out, W_out)</b> <br></br>
+    /// where <br></br>
+    /// H_out = Floor((H_in + 2 * padding - kernel_size - 1) / kernel_size + 1)<br />
+    /// W_out = Floor((W_in + 2 * padding - kernel_size - 1) / kernel_size + 1)<br />
+    /// </summary>
     [Serializable]
     public class AvgPool2D : IModule
     {
@@ -58,36 +65,35 @@ namespace DeepUnity
             if(batch_size == 1)
             {
                 LinkedList<float> values_pool = new LinkedList<float>();
-                for (int b = 0; b < batch_size; b++)
+
+                // Foreach channel
+                for (int c = 0; c < channel_size; c++)
                 {
-                    // Foreach channel
-                    for (int c = 0; c < channel_size; c++)
+                    // foreach pool result
+                    for (int j = 0; j < H_out; j++)
                     {
-                        // foreach pool result
-                        for (int j = 0; j < H_out; j++)
+                        for (int i = 0; i < W_out; i++)
                         {
-                            for (int i = 0; i < W_out; i++)
+                            // foreach pool element in the pool
+                            for (int kj = 0; kj < kernel_size; kj++)
                             {
-                                // foreach pool element in the pool
-                                for (int kj = 0; kj < kernel_size; kj++)
+                                for (int ki = 0; ki < kernel_size; ki++)
                                 {
-                                    for (int ki = 0; ki < kernel_size; ki++)
+                                    try
                                     {
-                                        try
-                                        {
-                                            values_pool.AddLast(input[b, c, j * kernel_size + kj, i * kernel_size + ki]);
-                                        }
-                                        catch { }
-
+                                        values_pool.AddLast(input[0, c, j * kernel_size + kj, i * kernel_size + ki]);
                                     }
-                                }
+                                    catch { }
 
-                                pooled_input[b, c, j, i] = values_pool.Average();
-                                values_pool.Clear();
+                                }
                             }
+
+                            pooled_input[0, c, j, i] = values_pool.Average();
+                            values_pool.Clear();
                         }
                     }
                 }
+                
             }
             else
             {
@@ -127,9 +133,6 @@ namespace DeepUnity
 
                     
             }
-
-            if (input.Rank == 3)
-                pooled_input.Squeeze(0); // remove the Batch dimension
 
             return pooled_input;
         }

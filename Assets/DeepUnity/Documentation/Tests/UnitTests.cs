@@ -10,6 +10,7 @@ namespace kbRadu
         public Device TestDevice;
         public Vector2Int MatShape = new Vector2Int(64, 64);
         public int batchSize = 32;
+        public float lr = 0.001f;
         public int Runs = 100;
         public RNN rnn_network;
         public Sequential dnn_network;
@@ -17,9 +18,10 @@ namespace kbRadu
         public PerformanceGraph graph;
         private void Start()
         {
+            Conv2DLearnTest();
             // Conv2DBenchmark();
             // Conv2DTest();
-            Conv2DLearnTest();
+            // Conv2DLearnTest();
             // CorrelationTest();
 
             // DenseTest();
@@ -31,6 +33,39 @@ namespace kbRadu
             // MNISTForwardBenchmark();
             // MaxPoolBenchmark();        
             //TestMaxPool();
+        }
+
+        void RunAllModules()
+        {
+            var net = new Sequential(
+                new Conv2D((1, 28, 28), 5, 3, TestDevice),
+                new MaxPool2D(2),
+                new Conv2D((5, 13, 13), 1, 3, TestDevice),
+                new Flatten(),
+                new ReLU(),
+                new BatchNorm(121),
+                new Dense(121, 100),
+                new LayerNorm(100),
+                new Sigmoid(),
+                new Dropout(),
+                new Dense(100, 10),
+                new Softmax()
+                );
+
+            var x = Tensor.Random01(2, 1, 28, 28);
+            print(x);
+            print(net.Forward(x));
+            net.Backward(net.Forward(x));
+
+            x = Tensor.Random01(32, 1, 28, 28);
+            print(x);
+            print(net.Forward(x));
+            net.Backward(net.Forward(x));
+
+            x = Tensor.Random01(1, 28, 28);
+            print(x);
+            print(net.Forward(x));
+            net.Backward(net.Forward(x));
         }
 
         void MNISTForwardBenchmark()
@@ -127,7 +162,7 @@ namespace kbRadu
             conv2d = new Conv2D((1, 28, 28), 5, 3, device: TestDevice);
             input = Tensor.RandomNormal(batchSize, 1, 28, 28);
             target = Tensor.RandomNormal(batchSize, 5, 26, 26);
-            optim = new Adam(new Learnable[] { conv2d }, lr: 0.0001f);
+            optim = new Adamax(new Learnable[] { conv2d }, lr: lr);
             graph = new PerformanceGraph();
             // TimerX.Start();
             // for (int i = 0; i < Runs; i++)
@@ -151,7 +186,7 @@ namespace kbRadu
             conv2d.Backward(lossderiv);
             optim.Step();
             float losss = loss.Flatten(0, 3).Mean(0)[0];
-
+            
             print($"Epoch {Time.frameCount} | Loss: " + losss);
             graph.Append(losss);
             
@@ -210,7 +245,7 @@ namespace kbRadu
             Tensor input = Tensor.Fill(2, 32, 64);
 
             print("64x64 CPU");
-            Dense dense = new Dense(64, 64, init: InitType.Debug, device: Device.CPU);
+            Dense dense = new Dense(64, 64, device: Device.CPU);
             var outp = dense.Forward(input);
             print(outp);
             var loss = dense.Backward(outp);
@@ -220,7 +255,7 @@ namespace kbRadu
             print("BetaGrad: " + dense.betaGrad);
 
             print("64x64 GPU");
-            dense = new Dense(64, 64, init: InitType.Debug, device: Device.GPU);
+            dense.device = Device.GPU;
             outp = dense.Forward(input);
             print("output" + outp);
             loss = dense.Backward(outp);
@@ -229,7 +264,7 @@ namespace kbRadu
             print("BetaGrad: " + dense.betaGrad);
 
             print("64x1 CPU");
-            dense = new Dense(64, 1, init: InitType.Debug, device: Device.CPU);
+            dense = new Dense(64, 1, device: Device.CPU);
             outp = dense.Forward(input);
             print("output" + outp);
             loss = dense.Backward(outp);
@@ -238,7 +273,7 @@ namespace kbRadu
             print("BetaGrad: " + dense.betaGrad);
 
             print("64x1 GPU");
-            dense = new Dense(64, 1, init: InitType.Debug, device: Device.GPU);
+            dense.device = Device.GPU;
             outp = dense.Forward(input);
             print("output" + outp);
             loss = dense.Backward(outp);
@@ -252,7 +287,7 @@ namespace kbRadu
 
             input = Tensor.Fill(2, batchSize, 1);
             print("1x64 CPU");
-            dense = new Dense(1, 64, init: InitType.Debug, device: Device.CPU);
+            dense = new Dense(1, 64, device: Device.CPU);
             outp = dense.Forward(input);
             print("output" + outp);
             loss = dense.Backward(outp);
@@ -261,7 +296,7 @@ namespace kbRadu
             print("BetaGrad: " + dense.betaGrad);
 
             print("1x64 GPU");
-            dense = new Dense(1, 64, init: InitType.Debug, device: Device.GPU);
+            dense.device = Device.GPU;
             outp = dense.Forward(input);
             print("output" + outp);
             loss = dense.Backward(outp);
@@ -273,7 +308,7 @@ namespace kbRadu
 
             input = Tensor.Fill(2, 64);
             print("64x64 CPU");
-            dense = new Dense(64, 64, init: InitType.Debug, device: Device.CPU);
+            dense = new Dense(64, 64, device: Device.CPU);
             outp = dense.Forward(input);
             print("output" + outp);
             loss = dense.Backward(outp);
@@ -282,7 +317,7 @@ namespace kbRadu
             print("BetaGrad: " + dense.betaGrad);
 
             print("64x64 GPU");
-            dense = new Dense(64, 64, init: InitType.Debug, device: Device.GPU);
+            dense.device = Device.GPU;
             outp = dense.Forward(input);
             print("output" + outp);
             loss = dense.Backward(outp);
@@ -294,7 +329,7 @@ namespace kbRadu
 
 
             print("64x1 CPU");
-            dense = new Dense(64, 1, init: InitType.Debug, device: Device.CPU);
+            dense = new Dense(64, 1, device: Device.CPU);
             outp = dense.Forward(input);
             print("output" + outp);
             loss = dense.Backward(outp);
@@ -303,7 +338,7 @@ namespace kbRadu
             print("BetaGrad: " + dense.betaGrad);
 
             print("64x1 GPU");
-            dense = new Dense(64, 1, init: InitType.Debug, device: Device.GPU);
+            dense.device = Device.GPU;
             outp = dense.Forward(input);
             print("output" + outp);
             loss = dense.Backward(outp);
@@ -314,7 +349,7 @@ namespace kbRadu
 
             input = Tensor.Fill(2, 1);
             print("1x64 CPU");
-            dense = new Dense(1, 64, init: InitType.Debug, device: Device.CPU);
+            dense = new Dense(1, 64, device: Device.CPU);
             outp = dense.Forward(input);
             print("output" + outp);
             loss = dense.Backward(outp);
@@ -323,7 +358,7 @@ namespace kbRadu
             print("BetaGrad: " + dense.betaGrad);
 
             print("1x64 GPU");
-            dense = new Dense(1, 64, init: InitType.Debug, device: Device.CPU);
+            dense.device = Device.GPU;
             outp = dense.Forward(input);
             print("output" + outp);
             loss = dense.Backward(outp);
@@ -336,7 +371,7 @@ namespace kbRadu
             Tensor input = Tensor.Fill(2, batchSize, MatShape.x);
 
 
-            Dense dense = new Dense(MatShape.x, MatShape.y, init: InitType.Debug, device: TestDevice);
+            Dense dense = new Dense(MatShape.x, MatShape.y, device: TestDevice);
             TimerX.Start();
             for (int i = 0; i < Runs; i++)
             {

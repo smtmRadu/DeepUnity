@@ -13,7 +13,17 @@ namespace DeepUnity
 {
     // https://www.youtube.com/watch?v=Lakz2MoHy6o
 
-
+    /// <summary>
+    /// Input: (<b>B</b>, <b>C_in</b>, <b>H_in</b>, <b>W_in</b>) or (<b>C_in</b>, <b>H_in</b>, <b>W_in</b>) for unbatched input.<br/>
+    /// Output: <b>(B, C_out, H_out, W_out)</b> or <b>(C_out, H_out, W_out)</b> for unbatched input.<br></br>
+    /// <br></br>
+    /// where <br></br>
+    /// B = batch_size <br></br>
+    /// C_in = in_channels <br></br> 
+    /// C_out = out_channels, <br></br>
+    /// H_out = H_in - kernel_size + 1 <br></br> 
+    /// W_out = W_in - kernel_size + 1
+    /// </summary>
     [Serializable]
     public class Conv2D : Learnable, IModule 
     {
@@ -86,8 +96,8 @@ namespace DeepUnity
         /// B = batch_size <br></br>
         /// C_in = in_channels <br></br> 
         /// C_out = out_channels, <br></br>
-        /// H_out = H_in - kernel_shape.Item2 + 1 <br></br> 
-        /// W_out = W_in - kernel_shape.Item1 + 1
+        /// H_out = H_in - kernel_shape.Item1 + 1 <br></br> 
+        /// W_out = W_in - kernel_shape.Item2 + 1
         /// </summary>
         /// <param name="input_shape">(C_in, H, W)</param>
         public Conv2D((int, int, int) input_shape, int out_channels, (int, int) kernel_shape, Device device = Device.CPU) : base(device)
@@ -136,14 +146,12 @@ namespace DeepUnity
 
             if(device == Device.CPU)
             {
-                if(batch_size == 1)
+                if(input.Rank == 3)
                 {
-                    return Correlate2DValid_input_kernels(input, gamma).Squeeze(-4) + beta;
+                    return Correlate2DValid_input_kernels(input, gamma).Squeeze(-4) + beta; // if input (C, H, W), we keep the shape
                 }
                 else
-                {
                     return Correlate2DValid_input_kernels(input, gamma) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
-                }
             }
             else
             {
@@ -187,14 +195,17 @@ namespace DeepUnity
                     (H_out + 16 - 1) / 16,
                     (C_out + 4 - 1) / 4);
 
-                Tensor result = Tensor.Constant(outputBuffer).Reshape(batch_size, outChannels, H_out, W_out).Squeeze(-4);
+                Tensor result = Tensor.Constant(outputBuffer).Reshape(batch_size, outChannels, H_out, W_out);
 
                 inputBuffer.Release();
                 gammaBuffer.Release();
                 betaBuffer.Release();
                 outputBuffer.Release();
 
-                return result;
+                if(input.Rank == 3)
+                    return result.Squeeze(-4);
+                else
+                    return result;
             }
         }
 
@@ -218,7 +229,7 @@ namespace DeepUnity
             {
                 gammaGrad += Correlate2DValid_input_loss(InputCache, loss) / batch_size;
                 betaGrad += isBatched ? Tensor.Mean(loss, -4) : loss;
-                return Convolve2DFull_loss_gamma(loss, gamma).Squeeze(-4);
+                return Convolve2DFull_loss_gamma(loss, gamma);
             }
             else 
             {
@@ -287,7 +298,7 @@ namespace DeepUnity
                     (H_in + 16 - 1) / 16,
                     (batch_size + 4 - 1) / 4);
 
-                Tensor inputGrad = Tensor.Constant(inputGradBuffer).Reshape(batch_size, C_in, H_in, W_in).Squeeze(-4);
+                Tensor inputGrad = Tensor.Constant(inputGradBuffer).Reshape(batch_size, C_in, H_in, W_in);
 
                 lossBuffer.Release();
                 gammaBuffer.Release();

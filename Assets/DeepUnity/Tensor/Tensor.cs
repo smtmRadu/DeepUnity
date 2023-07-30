@@ -1300,7 +1300,9 @@ namespace DeepUnity
         /// Example: <br></br>
         /// Cat(axis: 0,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (8,3) <br></br>
         /// Cat(axis: 1,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (2,12) <br></br>
+        /// Car(axis: 1,    tensors: {(2,3)} => output (2,3) <br></br>
         /// Cat(axis: null, tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (4,2,3) <br></br>
+        /// Cat(axis: null, tensors: {(2,3)} => output (1,2,3) <br></br>
         /// </summary>
         public static Tensor Cat(int? axis, params Tensor[] tensors)
         {
@@ -1309,7 +1311,12 @@ namespace DeepUnity
 
 
             if (tensors.Length == 1)
-                return Identity(tensors[0]);
+            {
+                if (axis == null)
+                    return tensors[0].Unsqueeze(0);
+                else
+                    return Identity(tensors[0]);
+            }
 
             for (int i = 1; i < tensors.Length; i++)
             {
@@ -2550,14 +2557,14 @@ namespace DeepUnity
             if(rank == 0)
             {
                 if (axis != 0 && axis != -1)
-                    throw new ArgumentOutOfRangeException($"Invalid axis value ({axis}) for a tensor with rank ({tensor.Rank})");
+                    throw new ArgumentException($"Invalid axis value ({axis}) for a tensor with rank ({tensor.Rank})");
 
                 axis = 0;
             }
             else
             {
                 if (axis >= rank)
-                    throw new ArgumentOutOfRangeException($"Invalid axis value ({axis}) for a tensor with rank ({tensor.Rank})");
+                    throw new ArgumentException($"Invalid axis value ({axis}) for a tensor with rank ({tensor.Rank})");
 
                 if (axis < 0)
                    axis = rank + axis;

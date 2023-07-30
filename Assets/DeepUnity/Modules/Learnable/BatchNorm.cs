@@ -1,4 +1,5 @@
 using System;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity
@@ -11,8 +12,8 @@ namespace DeepUnity
         private Tensor xCentered { get; set; }
         private Tensor std { get; set; }
         private Tensor xHat { get; set; }
-       
 
+        [SerializeField] private int num_features;
         [SerializeField] private float momentum;
 
         // Learnable parameters
@@ -31,6 +32,7 @@ namespace DeepUnity
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
         public BatchNorm(int num_features, float momentum = 0.9f) : base(Device.CPU)
         {
+            this.num_features = num_features;
             this.momentum = momentum;
 
             gamma = Tensor.Ones(num_features);
@@ -45,10 +47,10 @@ namespace DeepUnity
 
         public Tensor Predict(Tensor input)
         {
-            bool isBatched = input.Rank == 2;
+            if (input.Size(-1) != num_features)
+                throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) last dimension is not equal to num_features ({num_features})");
 
-            if (input.Rank == 2) // squeeze the batch dim if is 1
-                input = input.Squeeze(-2);
+            bool isBatched = input.Rank == 2;
 
             if (isBatched)
             {
@@ -74,8 +76,14 @@ namespace DeepUnity
         }
         public Tensor Forward(Tensor input)
         {
-            if (input.Rank != 2 || input.Size(-2) < 2)
-                throw new ArgumentException("Models having BatchNorm layers must be trained using batched input (batch, features), where batch is > 1.");
+            if (input.Size(-1) != num_features)
+                throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) last dimension is not equal to num_features ({num_features})");
+
+
+            bool isBatched = input.Rank == 2;
+
+            if (!isBatched)
+                input = input.Unsqueeze(0);
 
             int batch_size = input.Size(0);
 
@@ -103,11 +111,19 @@ namespace DeepUnity
             runningMean = runningMean * momentum + mu_B * (1f - momentum);
             runningVar = runningVar * momentum + var_B * (1f - momentum);
 
-            return yB;
+            if(isBatched)
+                return yB;
+            else
+                return yB.Squeeze(0);   
 
         }
         public Tensor Backward(Tensor dLdY)
         {
+            bool isBatched = dLdY.Rank == 2;
+
+            if (!isBatched)
+                dLdY = dLdY.Unsqueeze(0);
+
             int m = dLdY.Size(0);
 
             // paper algorithm https://arxiv.org/pdf/1502.03167.pdf
@@ -137,7 +153,10 @@ namespace DeepUnity
             gammaGrad += dLdGamma;
             betaGrad += dLdBeta;
 
-            return dLdX;
+            if (isBatched)
+                return dLdX;
+            else
+                return dLdX.Squeeze(0);
         }
 
 

@@ -37,7 +37,7 @@ namespace DeepUnity
         public static readonly float default_gamma_StepLR = 0.99f;
         public static readonly (float, float) sigma_clip = (0.001f, 5f);
 
-        public Model(int stateSize, int continuousActions, int[] discreteBranches, HyperParameters hp, string name)
+        public Model(int stateSize, int continuousActions, int[] discreteBranches, string name)
         {
             this.behaviourName = name;
             this.observationSize = stateSize;
@@ -46,39 +46,40 @@ namespace DeepUnity
             stateStandardizer = new RunningStandardizer(stateSize);
             rewardStadardizer = new RunningStandardizer(1);
 
+            int hiddenUnits = 64;
 
             critic = new Sequential(
-                new Dense(stateSize, hp.hiddenUnits),
+                new Dense(stateSize, hiddenUnits),
                 new ReLU(),
-                new Dense(hp.hiddenUnits, hp.hiddenUnits, device: hp.device),
+                new Dense(hiddenUnits, hiddenUnits, device: Device.GPU),
                 new ReLU(),
-                new Dense(hp.hiddenUnits, 1));
+                new Dense(hiddenUnits, 1));
 
             muHead = new Sequential(
-                new Dense(stateSize, hp.hiddenUnits),
+                new Dense(stateSize, hiddenUnits),
                 new ReLU(),
-                new Dense(hp.hiddenUnits, hp.hiddenUnits, device: hp.device),
+                new Dense(hiddenUnits, hiddenUnits, device: Device.GPU),
                 new ReLU(),
-                new Dense(hp.hiddenUnits, continuousActions),
+                new Dense(hiddenUnits, continuousActions),
                 new Tanh());
 
             sigmaHead = new Sequential(
-                new Dense(stateSize, hp.hiddenUnits),
+                new Dense(stateSize, hiddenUnits),
                 new ReLU(),
-                new Dense(hp.hiddenUnits, hp.hiddenUnits, device: hp.device),
+                new Dense(hiddenUnits, hiddenUnits, device: Device.GPU),
                 new ReLU(),
-                new Dense(hp.hiddenUnits, continuousActions),
+                new Dense(hiddenUnits, continuousActions),
                 new Softplus());
 
             discreteHeads = new Sequential[discreteBranches.Length];
             for (int i = 0; i < discreteHeads.Length; i++)
             {
                 discreteHeads[i] = new Sequential(
-                    new Dense(stateSize, hp.hiddenUnits),
+                    new Dense(stateSize, hiddenUnits),
                     new ReLU(),
-                    new Dense(hp.hiddenUnits, hp.hiddenUnits),
+                    new Dense(hiddenUnits, hiddenUnits, device: Device.GPU),
                     new ReLU(),
-                    new Dense(hp.hiddenUnits, discreteBranches[i]),
+                    new Dense(hiddenUnits, discreteBranches[i]),
                     new Softmax());
             }
         }

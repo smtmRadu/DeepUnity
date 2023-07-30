@@ -84,9 +84,8 @@ namespace DeepUnity
         HE,
         Xavier,
         Normal,
+        [Tooltip("Uniform distribution in range (-1, 1).")]
         Uniform,
-        [Tooltip("[DO NOT USE] A hardcoded value set for the parameters. Used on development.")]
-        Debug,
     }
     public enum Device
     {
@@ -134,6 +133,13 @@ namespace DeepUnity
         LoadAll,
         LoadTrainOnly,
         LoadTestOnly
+    }
+
+    public enum DecisionRequestType
+    {
+        EachFrame,
+        OnPeriodInterval,
+        Manual
     }
 }
 

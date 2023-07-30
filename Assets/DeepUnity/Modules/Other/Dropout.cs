@@ -3,14 +3,27 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// <b>Placed after the non-linear activation function.</b> <br></br>
+    /// Input: (B, *) or (*) for unbatched input. <br></br>
+    /// Output: (B, *) or (*) for unbatched input. <br></br>
+    /// where <br></br>
+    /// B = batch_size <br></br>
+    /// * = input_shape
+    /// </summary>
     [Serializable]
-    public class Dropout : IModule, IModuleRNN
+    public class Dropout : IModule, IModuleS
     {
         [SerializeField] private float dropout;
         public Tensor InputCache { get; set; }
 
         /// <summary>
-        /// <b>Placed after the non-linear activation function.</b>
+        /// <b>Placed after the non-linear activation function.</b> <br></br>
+        /// Input: (B, *) or (*) for unbatched input. <br></br>
+        /// Output: (B, *) or (*) for unbatched input. <br></br>
+        /// where <br></br>
+        /// B = batch_size <br></br>
+        /// * = input_shape
         /// </summary>
         /// <param name="dropout"> Low value: weak dropout | High value: strong dropout</param>
         public Dropout(float dropout = 0.5f)

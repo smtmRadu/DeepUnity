@@ -242,7 +242,9 @@ GameObject:
   - component: {fileID: 80255267}
   - component: {fileID: 80255266}
   - component: {fileID: 80255271}
+  - component: {fileID: 80255272}
   - component: {fileID: 80255270}
+  - component: {fileID: 80255273}
   m_Layer: 0
   m_Name: Agent
   m_TagString: Agent
@@ -258,7 +260,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 80255264}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -2.57, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -376,11 +378,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   model: {fileID: 11400000, guid: 4e4b77b2a52204f43b1cf02489b4eacd, type: 2}
-  spaceSize: 2
+  behaviourType: 2
+  spaceSize: 4
   continuousActions: 2
   discreteBranches: 
-  behaviourType: 2
   onEpisodeEnd: 1
+  useSensors: 1
+  PerformanceTracker: {fileID: 0}
   speed: 10
   target: {fileID: 1444833901}
 --- !u!114 &80255271
@@ -395,19 +399,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5970f7530cba1f0499a4a3dbe7d27f96, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  device: 1
-  hiddenUnits: 64
-  numLayers: 2
   targetFPS: 50
+  maxSteps: 1000
   timeHorizon: 64
-  maxSteps: 500000
-  maxEpisodeSteps: 3000
-  learningRate: 0.0003
+  learningRate: 0.001
   batchSize: 256
   bufferSize: 2048
   learningRateSchedule: 0
   normalize: 0
-  verbose: 1
   debug: 0
   beta: 0.005
   epsilon: 0.2
@@ -416,6 +415,63 @@ MonoBehaviour:
   numEpoch: 8
   betaScheduler: 0
   epsilonScheduler: 0
+--- !u!114 &80255272
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 80255264}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d26371695edfbcd4580ca6f6048d885d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  actionRequest: 1
+  periodBetweenDecisions: 1
+  randomAction: 0
+  timeSinceLastAction: 0
+  performActionForced: 0
+--- !u!114 &80255273
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 80255264}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  episodesCompleted: 0
+  rewards:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+  steps:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+  criticLoss:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
 --- !u!1 &104508117
 GameObject:
   m_ObjectHideFlags: 0
@@ -944,7 +1000,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1444833900}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -3.51, y: 0, z: 0.11}
+  m_LocalPosition: {x: 2.86, y: 0, z: -0.03}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

@@ -565,7 +565,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9cc8f121f935e7043b509c3f9dd3ec8b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  network: {fileID: 11400000, guid: e69edae3d7b76d04d8296452c0b7dca1, type: 2}
+  network: {fileID: 11400000, guid: be9a4430ad1ec59419b625b9414b3256, type: 2}
   completed: 
   accuracy: 
 --- !u!4 &1539047896
@@ -970,7 +970,7 @@ MonoBehaviour:
   image: {fileID: 998186862}
   digitPredictionText: {fileID: 2101666736}
   softmaxOutputText: {fileID: 1459484845}
-  network: {fileID: 11400000, guid: e69edae3d7b76d04d8296452c0b7dca1, type: 2}
+  network: {fileID: 11400000, guid: be9a4430ad1ec59419b625b9414b3256, type: 2}
   brushRadius: 2
   brushStrength: 0.05
 --- !u!1 &1820971845
@@ -991,7 +991,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1820971846
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -13,9 +13,9 @@ namespace DeepUnity
     [SerializeField]
     public class RNN : ScriptableObject, IModel
     {
-        [NonSerialized] private IModuleRNN[] modules;
+        [NonSerialized] private IModuleS[] modules;
         [SerializeField] private bool batchFirst;
-        [SerializeField] private IModuleRNNWrapper[] serializedModules;
+        [SerializeField] private IModuleSWrapper[] serializedModules;
         
 
         /// <summary>
@@ -33,7 +33,7 @@ namespace DeepUnity
         /// where B = batch_size, L = sequence_length, H_in = input_size, H_out = hidden_size.
         /// </summary>
         /// <param name="modules">RNNCell, Dropout or LayerNorm.</param>
-        public RNN(bool batch_first = false, params IModuleRNN[] modules)
+        public RNN(bool batch_first = false, params IModuleS[] modules)
         {
             this.modules = modules;
         }
@@ -59,7 +59,7 @@ namespace DeepUnity
                 throw new ArgumentException($"An RNN must have at least one layer, not {num_layers}.");
             }
 
-            List<IModuleRNN> moduleList = new() { new RNNCell(input_size, hidden_size, nonlinearity) };
+            List<IModuleS> moduleList = new() { new RNNCell(input_size, hidden_size, nonlinearity) };
 
             for (int i = 1; i < num_layers; i++)
             {
@@ -300,11 +300,11 @@ namespace DeepUnity
         }
         public void OnBeforeSerialize()
         {
-            serializedModules = modules.Select(x => IModuleRNNWrapper.Wrap(x)).ToArray();
+            serializedModules = modules.Select(x => IModuleSWrapper.Wrap(x)).ToArray();
         }
         public void OnAfterDeserialize()
         {
-            modules = serializedModules.Select(x => IModuleRNNWrapper.Unwrap(x)).ToArray();
+            modules = serializedModules.Select(x => IModuleSWrapper.Unwrap(x)).ToArray();
         }
     }
 }
