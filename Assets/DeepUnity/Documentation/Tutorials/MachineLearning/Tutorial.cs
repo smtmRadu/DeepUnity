@@ -65,7 +65,7 @@ public class Tutorial : MonoBehaviour
             optim.ClipGradNorm(0.5f);
             optim.Step();
 
-            lossGraph.Append(loss.Item.Mean(0).Sum(0)[0]);
+            lossGraph.Append(loss.Value);
             trainAccuracyGraph.Append(Metrics.Accuracy(prediction, target_batches[i]) * 100f);
         }
         validationAccuracyGraph.Append(Metrics.Accuracy(network.Predict(valid_inputs), valid_targets) * 100f);

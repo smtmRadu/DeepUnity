@@ -4,11 +4,11 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class HardTanh : ActivationBase
+    public class HardTanh : Activation
     {
         [SerializeField] private float min_value = -1f;
         [SerializeField] private float max_value =  1f;
-        protected override Tensor Activation(Tensor x) => x.Select(k =>
+        protected override Tensor Activate(Tensor x) => x.Select(k =>
         {
             if (k > max_value)
                 return max_value;

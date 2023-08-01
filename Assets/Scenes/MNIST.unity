@@ -274,7 +274,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &944636988
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -287,10 +287,30 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: df1c42f166d333945804f9bd172f12a9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  network: {fileID: 11400000, guid: be9a4430ad1ec59419b625b9414b3256, type: 2}
-  name: MNIST_V1
-  start_lr: 0.0005
-  batch_size: 64
+  network: {fileID: 0}
+  name: MNIST_SIMPLE
+  lr: 0.01
+  schedulerStepSize: 10
+  schedulerDecay: 1
+  batch_size: 100
+  accuracyGraph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+  lossGraph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
 --- !u!4 &944636989
 Transform:
   m_ObjectHideFlags: 0
@@ -991,7 +1011,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1820971846
 MonoBehaviour:
   m_ObjectHideFlags: 0

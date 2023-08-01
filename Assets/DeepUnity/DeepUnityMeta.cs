@@ -80,12 +80,18 @@ namespace DeepUnity
     }
     public enum InitType
     {
+        /// <summary>
+        /// Values initialized from <b>U(-sqrt(k), sqrt(k))</b> where <b>k = 1 / in_features.</b>
+        /// </summary>
         Default,
-        HE,
-        Xavier,
-        Normal,
-        [Tooltip("Uniform distribution in range (-1, 1).")]
-        Uniform,
+        [Tooltip("Works well with ReLU activation function.")]
+        HE_Normal,
+        [Tooltip("Works well with ReLU activation function.")]
+        HE_Uniform,       
+        [Tooltip("Works well with Sigmoid/Tanh activation function.")]
+        Glorot_Normal,
+        [Tooltip("Works well with Sigmoid/Tanh activation function.")]
+        Glorot_Uniform,
     }
     public enum Device
     {

@@ -47,7 +47,7 @@ public class PlayMNIST : MonoBehaviour
         var prediction = network.Predict(input);
 
         // Display prediction
-        int digit = prediction.ArgMax()[0];
+        float digit = prediction.ArgMax(-1)[0];
         digitPredictionText.text = digit.ToString() + ".";
 
         // display the confidence

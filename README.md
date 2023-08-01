@@ -64,17 +64,17 @@ public class Tutorial : MonoBehaviour
         for (int i = 0; i < input_batches.Length; i++)
         {
             Tensor prediction = network.Forward(input_batches[i]);
-            Loss loss = DeepUnity.Loss.MSE(prediction, target_batches[i]);
+            Loss loss = Loss.MSE(prediction, target_batches[i]);
 
             optim.ZeroGrad();
             network.Backward(loss);
             optim.ClipGradNorm(0.5f);
             optim.Step();
 
-            lossGraph.Append(loss.Item.Mean(0).Sum(0)[0]);
-            trainAccuracyGraph.Append(Metrics.Accuracy(prediction, target_batches[i]) * 100f);
+            lossGraph.Append(loss.Value);
+            trainAccuracyGraph.Append(Metrics.Accuracy(prediction, target_batches[i]));
         }
-        validationAccuracyGraph.Append(Metrics.Accuracy(network.Predict(valid_inputs), valid_targets) * 100f);
+        validationAccuracyGraph.Append(Metrics.Accuracy(network.Predict(valid_inputs), valid_targets));
 
         scheduler.Step();
         network.Save("Tutorial");       
@@ -82,16 +82,16 @@ public class Tutorial : MonoBehaviour
 }
 ```
 ### Reinforcement Learning [In Development]
-In order to work with Reinforcement Learning tools, you must create a 2D or 3D agent using Unity provided GameObjects and Coomponents. The setup flow works similary to ML Agents (but with some restrictions described in the diagram below), so you must create a new behaviour script (e.g. _MoveToGoal_) that must inherit the **Agent** class. Attach the new behaviour script to the agent (automatically is attached a **HyperParameters** script). Choose the space size and number of actions, then override the following methods in the behavior script:
+In order to work with Reinforcement Learning tools, you must create a 2D or 3D agent using Unity provided GameObjects and Coomponents. The setup flow works similary to ML Agents (but with some restrictions described in the diagram below), so you must create a new behaviour script (e.g. _MoveToGoal_) that must inherit the **Agent** class. Attach the new behaviour script to the agent GameObject (automatically are attached 2 more scripts, **HyperParameters** and **DecisionRequester**) [Optionally, a **PerformanceTrack** script can be attached]. Choose the space size and number of actions, then override the following methods in the behavior script:
 - _CollectObservations()_
 - _OnActionReceived()_
 - _Heuristic()_ [Optional]
 - _OnEpisodeBegin()_ [Optional]
 
-Also in order to decide the reward function and episode terminal state, use the following calls:
+Also in order to decide the reward function and episode terminal state, use the following calls inside FixedUpdate(), OnTriggerXXX() or OnCollisionXXX():
 -  _AddReward(*reward*)_
 -  _EndEpsiode()_ 
--  _RequestAction()_ [Optional]
+-  _RequestAction()_ [Optional, if decision is requested manually]
 #### Behaviour script overriding example
 ```csharp
 using UnityEngine;
@@ -162,9 +162,9 @@ public class MoveToGoal : Agent
     }
 }
 ```
-_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (each frame), and must reach a randomly positioned target. The agent is rewarded by 1 point if it touches the target, or penalized by 1 point if it touches a wall. The agent is penalized constantly by 0.001 points at each time step, to encourage the agent reaching the target as fast as possible._
+_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (decision is requested each frame), and must reach a randomly positioned target. The agent is rewarded by 1 point if it touches the target, or penalized by 1 point if it touches a wall. The agent is penalized constantly by 0.001 points at each time step, to encourage the agent reaching the target as fast as possible._
 
-![rl](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_schema.jpg?raw=true)
+![rl](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_Schema.jpg?raw=true)
 
 #### Notes
 - The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. In order to override them, call the their **base** *[first]* each time.

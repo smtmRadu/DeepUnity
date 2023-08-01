@@ -78,9 +78,8 @@ namespace DeepUnity
                 {
                     Tensor image = Tensor.Constant(LoadTexture(tp), true);
 
-                    float[] number = new float[10];
-                    number[i] = 1;
-                    Tensor label = Tensor.Constant(number);
+                    Tensor label = Tensor.Zeros(10);
+                    label[i] = 1;
 
                     train_image.Add(image);
                     train_label.Add(label);
@@ -90,10 +89,8 @@ namespace DeepUnity
                 {
                     Tensor image = Tensor.Constant(LoadTexture(vp), true);
 
-
-                    float[] number = new float[10];
-                    number[i] = 1;
-                    Tensor label = Tensor.Constant(number);
+                    Tensor label = Tensor.Zeros(10);
+                    label[i] = 1;
 
                     test_image.Add(image);
                     test_label.Add(label);

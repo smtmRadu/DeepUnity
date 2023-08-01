@@ -4,7 +4,7 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class Threshold : ActivationBase
+    public class Threshold : Activation
     {
         [SerializeField] private float threshold;
         [SerializeField] private float value;
@@ -18,7 +18,7 @@ namespace DeepUnity
             this.threshold = threshold;
             this.value = value;
         }
-        protected override Tensor Activation(Tensor x) => x.Select(k => k > threshold ? threshold : value);
+        protected override Tensor Activate(Tensor x) => x.Select(k => k > threshold ? threshold : value);
         protected override Tensor Derivative(Tensor x) => x.Select(k => k > threshold ? 1f : 0f);
     }
 }

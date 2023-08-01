@@ -1,3 +1,4 @@
+using JetBrains.Annotations;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.Eventing.Reader;
@@ -8,12 +9,14 @@ using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Windows;
+using static UnityEditor.LightingExplorerTableColumn;
 
 namespace DeepUnity
 {
     [Serializable]
     public class Tensor : IEquatable<Tensor>, IEquatable<TensorGPU>
     {
+        public static string ToStringFormat { get; set; } = "0.00000";
         [SerializeField] private float[] data;
         [SerializeField] private int[] shape;
 
@@ -70,6 +73,7 @@ namespace DeepUnity
                     return shape[shape.Length - 4];
             }
         }
+        
         public float this[int w]
         {
             get => data[w];
@@ -241,6 +245,7 @@ namespace DeepUnity
         /// C_gray = 1 if <paramref name="transparency"/> = false or 2 if <paramref name="transparency"/> = true. <br></br>
         /// H = texture.height <br></br>
         /// W = texture.width <br></br>
+        /// <em>Note: Tensors are displayed as the texture mirrored on horizontal axis when visualized as strings.</em>
         /// </summary>
         /// <param name="texture"></param>
         /// <param name="grayscale"></param>
@@ -249,35 +254,52 @@ namespace DeepUnity
         {
             int width = texture.width;
             int height = texture.height;
-            int channels = grayscale ? 1 : 4;
+            int channels = grayscale ? 1 : 3;
+            if (transparency)
+                channels++;
+
             Color[] colors = texture.GetPixels();
             Tensor result = Tensor.Zeros(channels, height, width);
-
-            if (grayscale)
+           
+            for (int j = 0; j < height; j++)
             {
-                for (int j = 0; j < height; j++)
+                for (int i = 0; i < width; i++)
                 {
-                    for (int i = 0; i < width; i++)
+                    if(transparency)
                     {
-                        int invertedJ = height - 1 - j; // Calculate the inverted row index
-                        result[0, invertedJ, i] = colors[j * width + i].grayscale;
+                        if(grayscale)
+                        {
+                            Color col = colors[j * width + i];
+                            result[0, j, i] = (col.r + col.g + col.b) / 3f;
+                            result[1, j, i] = col.a;
+                        }
+                        else
+                        {
+                            result[0, j, i] = colors[j * width + i].r;
+                            result[1, j, i] = colors[j * width + i].g;
+                            result[2, j, i] = colors[j * width + i].b;
+                            result[3, j, i] = colors[j * width + i].a;
+                        }
                     }
+                    else
+                    {
+                        if (grayscale)
+                        {
+                            Color col = colors[j * width + i];
+                            result[0, j, i] = (col.r + col.g + col.b) / 3f;
+                        }
+                        else
+                        {
+                            result[0, j, i] = colors[j * width + i].r;
+                            result[1, j, i] = colors[j * width + i].g;
+                            result[2, j, i] = colors[j * width + i].b;
+                        }
+                    }
+                    
+                   
                 }
             }
-            else
-            {
-                for (int j = 0; j < height; j++)
-                {
-                    for (int i = 0; i < width; i++)
-                    {
-                        int invertedJ = height - 1 - j; // Calculate the inverted row index
-                        result[0, invertedJ, i] = colors[j * width + i].r;
-                        result[1, invertedJ, i] = colors[j * width + i].g;
-                        result[2, invertedJ, i] = colors[j * width + i].b;
-                        result[3, invertedJ, i] = colors[j * width + i].a;
-                    }
-                }
-            }
+           
             return result;
         }
         /// <summary>
@@ -369,7 +391,7 @@ namespace DeepUnity
             Tensor result = new(tensor.shape);
             for (int i = 0; i < tensor.data.Length; i++)
             {
-                result.data[i] = tensor.data[i];
+                result.data[i] = +tensor.data[i];
             }
 
             return result;
@@ -1134,52 +1156,7 @@ namespace DeepUnity
         /// </summary>
         /// <param name="tensor"></param>
         /// <returns>int[] containing the position indexes.</returns>
-        public static int[] ArgMax(Tensor tensor)
-        {
-            int bIndex = -1;
-            int cIndex = -1;
-            int hIndex = -1;
-            int wIndex = -1;
-
-            int b = tensor.Batch;
-            int c = tensor.Channels;
-            int h = tensor.Height;
-            int w = tensor.Width;
-
-            float maxValue = float.MinValue;
-            for (int l = 0; l < b; l++)
-            {
-                for (int k = 0; k < c; k++)
-                {
-                    for (int j = 0; j < h; j++)
-                    {
-                        for (int i = 0; i < w; i++)
-                        {
-                            float currentValue = tensor[l, k, j, i];
-                            if (currentValue > maxValue)
-                            {
-                                maxValue = currentValue;
-                                bIndex = l;
-                                cIndex = k;
-                                hIndex = j;
-                                wIndex = i;
-                            }
-                        }
-                    }
-                }
-            }
-            List<int> indexes = new() { wIndex };
-            if (tensor.Rank > 1)
-                indexes.Insert(0, hIndex);
-
-            if (tensor.Rank > 2)
-                indexes.Insert(0, cIndex);
-
-            if (tensor.Rank > 3)
-                indexes.Insert(0, bIndex);
-
-            return indexes.ToArray();
-        }
+      
         /// <summary>
         /// Changes the shape of the tensor. Pi(shape) must be equal to Pi(<paramref name="newShape"/>)
         /// </summary>
@@ -1195,7 +1172,7 @@ namespace DeepUnity
                 count *= item;
             }
             if (count != tensor.Count())
-                throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
+                throw new ArgumentException($"The shape ({tensor.shape.ToCommaSeparatedString()}) cannot be reshaped to ({newShape.ToCommaSeparatedString()}).");
 
             // if new shape is broader than the original shape
             Tensor result = new Tensor(newShape);
@@ -1701,7 +1678,7 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
-        /// /// Computes the mean along the speficied axis.
+        /// Computes the mean along the speficied axis.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>
@@ -2103,7 +2080,7 @@ namespace DeepUnity
 
             int[] newShape = tensor.shape.ToArray();
             newShape[axis] = 1;
-            Tensor result = new(newShape);
+            Tensor result = Zeros(newShape);
 
             if (dim == Dim.width)
             {
@@ -2119,10 +2096,6 @@ namespace DeepUnity
                                 m = MathF.Max(m, tensor[l, k, j, i]);
                             }
                             result[l, k, j, 0] = m;
-                            // for (int i = 0; i < newShape[axis]; i++)
-                            // {
-                            //     result[l, k, j, i] = m;
-                            // }
                         }
                     }
                 }
@@ -2141,10 +2114,6 @@ namespace DeepUnity
                                 m = MathF.Max(m, tensor[l, k, j, i]);
                             }
                             result[l, k, 0, i] = m;
-                            // for (int j = 0; j < newShape[axis]; j++)
-                            // {
-                            //     result[l, k, j, i] = m;
-                            // }
                         }
                     }
                 }
@@ -2164,10 +2133,6 @@ namespace DeepUnity
                                 m = MathF.Max(m, tensor[l, k, j, i]);
                             }
                             result[l, 0, j, i] = m;
-                            // for (int k = 0; k < newShape[axis]; k++)
-                            // {
-                            //     result[l, k, j, i] = m;
-                            // }
                         }
                     }
                 }
@@ -2186,10 +2151,6 @@ namespace DeepUnity
                                 m = MathF.Max(m, tensor[l, k, j, i]);
                             }
                             result[0, k, j, i] = m;
-                            // for (int l = 0; l < newShape[axis]; l++)
-                            // {
-                            //     result[l, k, j, i] = m;
-                            // }
                         }
                     }
                 }
@@ -2200,6 +2161,126 @@ namespace DeepUnity
             return result;
 
         }
+        /// <summary>
+        /// Returns the indices of the maximul value of all elements in the input tensor along the specified axis.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <param name="keepDim"></param>
+        /// <returns></returns>
+        public static Tensor ArgMax(Tensor tensor, int axis, bool keepDim = false)
+        {
+            HandleAxis(tensor, ref axis);
+
+            int batch = tensor.Batch;
+            int channels = tensor.Channels;
+            int height = tensor.Height;
+            int width = tensor.Width;
+
+            Dim dim = AxisToDim(tensor, axis);
+
+            int[] newShape = tensor.shape.ToArray();
+            newShape[axis] = 1;
+            Tensor result = Zeros(newShape); // Result tensor will store the indices as integers
+
+            if (dim == Dim.width)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int k = 0; k < channels; k++)
+                    {
+                        for (int j = 0; j < height; j++)
+                        {
+                            int maxIndex = 0;
+                            float maxValue = float.MinValue;
+                            for (int i = 0; i < width; i++)
+                            {
+                                if (tensor[l, k, j, i] > maxValue)
+                                {
+                                    maxValue = tensor[l, k, j, i];
+                                    maxIndex = i;
+                                }
+                            }
+                            result[l, k, j, 0] = maxIndex;
+                        }
+                    }
+                }
+            }
+            else if (dim == Dim.height)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int k = 0; k < channels; k++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            int maxIndex = 0;
+                            float maxValue = float.MinValue;
+                            for (int j = 0; j < height; j++)
+                            {
+                                if (tensor[l, k, j, i] > maxValue)
+                                {
+                                    maxValue = tensor[l, k, j, i];
+                                    maxIndex = j;
+                                }
+                            }
+                            result[l, k, 0, i] = maxIndex;
+                        }
+                    }
+                }
+            }
+            else if (dim == Dim.channel)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            int maxIndex = 0;
+                            float maxValue = float.MinValue;
+                            for (int k = 0; k < channels; k++)
+                            {
+                                if (tensor[l, k, j, i] > maxValue)
+                                {
+                                    maxValue = tensor[l, k, j, i];
+                                    maxIndex = k;
+                                }
+                            }
+                            result[l, 0, j, i] = maxIndex;
+                        }
+                    }
+                }
+            }
+            else if (dim == Dim.batch)
+            {
+                for (int k = 0; k < channels; k++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            int maxIndex = 0;
+                            float maxValue = float.MinValue;
+                            for (int l = 0; l < batch; l++)
+                            {
+                                if (tensor[l, k, j, i] > maxValue)
+                                {
+                                    maxValue = tensor[l, k, j, i];
+                                    maxIndex = l;
+                                }
+                            }
+                            result[0, k, j, i] = maxIndex;
+                        }
+                    }
+                }
+            }
+
+            if (!keepDim)
+                FastSqueeze(result, axis);
+            return result;
+        }
+
         public static Tensor Pow(Tensor tensor, float power)
         {
             Tensor result = new(tensor.shape);
@@ -2297,10 +2378,6 @@ namespace DeepUnity
             HandleAxis(this, ref axis);
             return shape[axis];
         }
-        public int[] ArgMax()
-        {
-            return Tensor.ArgMax(this);
-        }
         public Tensor Reshape(params int[] newShape)
         {
             return Tensor.Reshape(this, newShape);
@@ -2356,6 +2433,10 @@ namespace DeepUnity
         public Tensor Max(int axis, bool keepDim = false)
         {
             return Max(this, axis, keepDim);
+        }
+        public Tensor ArgMax(int axis, bool keepDim = false)
+        {
+            return Tensor.ArgMax(this, axis, keepDim);
         }
         public Tensor Pow(float power)
         {
@@ -2514,7 +2595,7 @@ namespace DeepUnity
                             if (i > 0)
                                 sb.Append(", ");
 
-                            sb.Append(this[l, k, j, i].ToString("0.00000"));
+                            sb.Append(this[l, k, j, i].ToString(ToStringFormat));
                         }
 
                         if (rank > 1)

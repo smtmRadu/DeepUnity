@@ -90,7 +90,7 @@ public class Tutorial3 : MonoBehaviour
         Tensor target = Tensor.Cat(null, train_batch.Select(x => x.Item2).ToArray());
 
         Tensor prediction = network.Forward(input);
-        Loss loss = Loss.CrossEntropy(prediction, target);
+        Loss loss = Loss.CategoricalCrossEntropy(prediction, target);
 
         optim.ZeroGrad();
         network.Backward(loss);

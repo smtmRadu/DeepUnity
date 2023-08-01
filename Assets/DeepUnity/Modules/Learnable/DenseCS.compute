@@ -1,11 +1,15 @@
 // This script is used to resolve all Dense calculations but on GPU
-RWStructuredBuffer<float> transposed_gamma; //tranposed
+
 RWStructuredBuffer<float> gamma;
+RWStructuredBuffer<float> transposed_gamma; //tranposed
 RWStructuredBuffer<float> gamma_grad;
+
 RWStructuredBuffer<float> beta;
 RWStructuredBuffer<float> beta_grad;
+
 RWStructuredBuffer<float> input;
 RWStructuredBuffer<float> output;
+
 RWStructuredBuffer<float> loss;
 RWStructuredBuffer<float> transposed_loss;
 
@@ -31,7 +35,7 @@ float beta_get(int w)
 {
     return beta[w];
 }
-void beta_grad_add(int w, int val)
+void beta_grad_add(int w, float val)
 {
     beta_grad[w] += val;
 }
@@ -115,29 +119,22 @@ void ComputeGradients(int3 id : SV_DispatchThreadID)
     
     if(id.x < in_features && id.y < out_features)
     {
-         float sum = 0.f;
+         float sum = 0.0f;
          for (int m = 0; m < batch_size; m++)
          {
              sum += transposed_loss_get(id.y, m) * input_get(m, id.x);
          }
         
-         gamma_grad_add(id.y, id.x, sum / batch_size);
+        gamma_grad_add(id.y, id.x, sum / batch_size);
     }
-    
-    
-    // MatMul(transposedLoss, Tensor.Ones(batch_size));
-    // id.x = 1, id.y = out_features   
-    // transposed_loss [out_features, batch_size] * ones[batch_size]
-    // beta_grad [out_features]
-    
-    if(id.x < 1 && id.y < out_features)
+
+    // Mean along the batch
+    if(id.x == 0 && id.y < out_features)
     {
-        float sum = 0.f;
+        float sum = 0.0f;
         for (int m = 0; m < batch_size; m++)
         {
-            float l = transposed_loss_get(id.y, m);
-            float r = 1;
-            sum += l * r;
+            sum += transposed_loss_get(id.y, m);
         }      
         beta_grad_add(id.y, sum / batch_size);
     }

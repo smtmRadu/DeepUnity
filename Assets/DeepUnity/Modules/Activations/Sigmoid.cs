@@ -3,9 +3,9 @@ using System;
 namespace DeepUnity
 {
     [Serializable]
-    public class Sigmoid : ActivationBase
+    public class Sigmoid : Activation
     {
-        protected override Tensor Activation(Tensor x)
+        protected override Tensor Activate(Tensor x)
         {
             return x.Select(x => 
             {

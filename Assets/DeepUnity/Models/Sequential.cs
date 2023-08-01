@@ -35,15 +35,19 @@ namespace DeepUnity
             }
             return output;
         }     
+        /// <summary>
+        /// Backpropagates the <paramref name="loss"/>.Derivative and computes the gradients.
+        /// </summary>
+        /// <param name="loss"></param>
         public void Backward(Loss loss) => Backward(loss.Derivative);
         /// <summary>
-        /// Backpropagates the loss derivative w.r.t outputs and computes the gradients.
+        /// Backpropagates the <paramref name="lossDerivative_wrt_Outputs"/> and computes the gradients. This variant considers the loss derivative was computed separatelly.
         /// </summary>
-        /// <param name="lossDerivative">Derivative of the loss function w.r.t output (dLdY).</param>
+        /// <param name="lossDerivative_wrt_Outputs">Derivative of the loss function w.r.t output (dLdY).</param>
         /// <returns></returns>
-        public void Backward(Tensor lossDerivative)
+        public void Backward(Tensor lossDerivative_wrt_Outputs)
         {
-            Tensor loss = modules[modules.Length - 1].Backward(lossDerivative);
+            Tensor loss = modules[modules.Length - 1].Backward(lossDerivative_wrt_Outputs);
             for (int i = modules.Length - 2; i >= 0; i--)
             {
                 loss = modules[i].Backward(loss);

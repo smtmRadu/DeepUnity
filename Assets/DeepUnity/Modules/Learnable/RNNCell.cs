@@ -13,7 +13,7 @@ namespace DeepUnity
         // These ones are lists for each timestep in the sequence
         [NonSerialized] private Stack<Tensor> InputCache;
         [NonSerialized] private Stack<Tensor> HiddenCache;
-        [NonSerialized] private Stack<ActivationBase> Activations;
+        [NonSerialized] private Stack<Activation> Activations;
        
 
         
@@ -36,7 +36,7 @@ namespace DeepUnity
             this.nonlinearity = nonlinearity;
             InputCache = new Stack<Tensor>();
             HiddenCache = new Stack<Tensor>();
-            Activations = new Stack<ActivationBase>();
+            Activations = new Stack<Activation>();
 
 
             float sqrtK = MathF.Sqrt(1f / hidden_size);
@@ -154,7 +154,7 @@ namespace DeepUnity
 
             InputCache = new Stack<Tensor>();
             HiddenCache = new Stack<Tensor>();
-            Activations = new Stack<ActivationBase>();
+            Activations = new Stack<Activation>();
 
             if (recurrentGamma.Shape == null)
                 return;

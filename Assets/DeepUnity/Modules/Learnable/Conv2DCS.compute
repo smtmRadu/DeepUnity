@@ -1,5 +1,3 @@
-
-
 RWStructuredBuffer<float> input; // (in_channels, in_height, in_width)
 RWStructuredBuffer<float> gamma; // (out_channels, in_channels, kernelSize, kernelSize)
 RWStructuredBuffer<float> beta; // (out_channels, out_height, out_width);
@@ -30,6 +28,10 @@ void gamma_grad_add(int b, int c, int h, int w, float value)
 float beta_get(int c, int h, int w)
 {
     return beta[c * out_height * out_width + h * out_width + w];
+}
+void beta_grad_add(int c, int h, int w, float value)
+{
+    beta[c * out_height * out_width + h * out_width + w] += value;
 }
 float input_get(int b, int c, int h, int w)
 {
@@ -107,6 +109,8 @@ void ComputeKernelsGradients(int3 id : SV_DispatchThreadID)
             gamma_grad_add(id.z, ic, id.y, id.x, sum / batch_size);
         }
     }
+    
+    // Beta grad computing on GPU was deprecated due the fact is faster on CPU
 }
 
 #pragma kernel ComputeInputGradients

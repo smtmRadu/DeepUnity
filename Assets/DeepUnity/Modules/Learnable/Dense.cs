@@ -2,20 +2,24 @@ using System;
 using UnityEngine;
 namespace DeepUnity
 {
+    // https://www.youtube.com/watch?v=tMjdQLylyGI&t=602s
+    // https://proceedings.mlr.press/v9/glorot10a/glorot10a.pdf (251 - 253)
     [Serializable]
     public class Dense : Learnable, IModule
     {
         private Tensor InputCache { get; set; }
 
         /// <summary>
-        /// Input: (B, H_in) or (H_in) for unbatched input.<br></br>
-        /// Output: (B, H_out) or (H_out) for unbatched input.<br></br>
+        /// Input: <b>(B, H_in)</b> or <b>(H_in)</b> for unbatched input.<br></br>
+        /// Output: <b>(B, H_out)</b> or <b>(H_out)</b> for unbatched input.<br></br>
         /// where B = batch_size, H_in = in_features and H_out = out_features.
         /// </summary>
         /// <param name="in_features"></param>
         /// <param name="out_features"></param>
-        /// <param name="init"></param>
-        /// <param name="device">If Dense module is a middle layer, larger than (64, 64), it is recommended to run it on GPU. </param>
+        /// <param name="init">Weights initialization mode.</param>
+        /// <param name="device">Computation device used. Recommended <see cref="Device.GPU"/> for Dense modules with <b>in_features</b> and <b>out_features > 64</b>.</param>
+        /// <exception cref="ArgumentException"></exception>
+        /// <exception cref="NotImplementedException"></exception>
         public Dense(int in_features, int out_features, InitType init = InitType.Default, Device device = Device.CPU) : base(device)
         {
             if (in_features < 1)
@@ -23,58 +27,55 @@ namespace DeepUnity
             if (out_features < 1)
                 throw new ArgumentException("Out_features cannot be less than 1.");
 
+            gammaGrad = Tensor.Zeros(out_features, in_features);
+            betaGrad = Tensor.Zeros(out_features);
+
             switch (init)
             {
-                case InitType.Default:
+                case InitType.Default: // pytorch default initialization
                     float sqrtK = MathF.Sqrt(1f / in_features);
-                    gamma = Tensor.RandomRange((-sqrtK, sqrtK), out_features, in_features);
-                    beta = Tensor.RandomRange((-sqrtK, sqrtK), out_features);
-                    break;
-                case InitType.HE:
-                    float sigmaHE = MathF.Sqrt(2f / in_features); //fanIn
+                    var u = (-sqrtK, sqrtK);
+                    gamma = Tensor.RandomRange(u, out_features, in_features);
+                    beta = Tensor.RandomRange(u, out_features);
+                    break;           
+                case InitType.HE_Normal:
+                    float sigmaHE = MathF.Sqrt(2f / in_features);
                     gamma = Tensor.RandomNormal((0, sigmaHE), out_features, in_features);
                     beta = Tensor.Zeros(out_features);
                     break;
-                case InitType.Xavier:
-                    float sigmaXA = MathF.Sqrt(2f / (in_features + out_features)); // fanIn + fanOut
+                case InitType.HE_Uniform:
+                    float bound = MathF.Sqrt(6f / in_features);
+                    gamma = Tensor.RandomRange((-bound, bound), out_features);
+                    beta = Tensor.Zeros(out_features);
+                    break;
+                case InitType.Glorot_Normal: 
+                    float sigmaXA = MathF.Sqrt(2f / (in_features + out_features));
                     gamma = Tensor.RandomNormal((0, sigmaXA), out_features, in_features);
                     beta = Tensor.Zeros(out_features);
                     break;
-                case InitType.Normal:
-                    gamma = Tensor.RandomNormal((0f, 1f), out_features, in_features);
-                    beta = Tensor.Zeros(out_features);
-                    break;
-                case InitType.Uniform:
-                    gamma = Tensor.RandomRange((-1, 1), out_features, in_features);
+                case InitType.Glorot_Uniform: // normalized initialization check 253 bottom in xavier glorot 5/8
+                    float limit = MathF.Sqrt(6f / (in_features + out_features));
+                    gamma = Tensor.RandomRange((-limit, limit), out_features, in_features);
                     beta = Tensor.Zeros(out_features);
                     break;
                 default:
                     throw new NotImplementedException("Unhandled initialization type!");
-            }
-
-            gammaGrad = Tensor.Zeros(out_features, in_features);
-            betaGrad = Tensor.Zeros(out_features);
+            }        
         }
         public Tensor Predict(Tensor input)
         {
             if (input.Size(-1) != gamma.Size(-1))
-                throw new ShapeException($"Input ({input.Size(-1)}) shape in Dense layer must be ({gamma.Size(-1)}).");
+                throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the Dense Layer features_num ({gamma.Size(-1)}).");
 
-            // input = (B, IN)
-            // gamma = (OUT, IN)
-
-            // out = (B, OUT)
-            // input = (batch_size, in_features)
-            // gamma = (out_features, in_features)
-            // out = (out_features, batch_size)
-            int batch_size = input.Rank == 2 ? input.Size(-2) : 1;
+            bool isBatched = input.Rank == 2;
+            int batch_size = isBatched? input.Size(-2) : 1;
 
             if (device == Device.CPU)
             {
-                if (input.Rank == 1)
-                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + beta;
+                if (isBatched)
+                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
                 else
-                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);   
+                    return Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + beta;
             }
             else
             {
@@ -104,8 +105,8 @@ namespace DeepUnity
                 cs.SetInt("input_rank", input.Rank);
 
                 cs.Dispatch(0,
-                    (beta.Size(-1) + 32 - 1) / 32,
-                    (batch_size + 32 - 1) / 32,
+                    (beta.Size(-1) + 31) / 32,
+                    (batch_size + 31) / 32,
                     1);
 
                 Tensor result = Tensor.Constant(outputBuffer);
@@ -115,7 +116,10 @@ namespace DeepUnity
                 betaBuffer.Release();
                 outputBuffer.Release();
 
-                return result.Reshape(input.Shape);
+                if (isBatched)
+                    return result.Reshape(batch_size, beta.Size(-1));
+                else
+                    return result.Reshape(beta.Size(-1));
             }
         }
         public Tensor Forward(Tensor input)
@@ -185,10 +189,9 @@ namespace DeepUnity
                 transposedLossBuffer.Release();
                 inputCacheBuffer.Release();
                 gammaGradBuffer.Release();
-                betaGradBuffer.Release();
-
-                
+                betaGradBuffer.Release();                
             }
+
 
             // Backpropagate the loss (batch_size, in)
             if (isBatched)

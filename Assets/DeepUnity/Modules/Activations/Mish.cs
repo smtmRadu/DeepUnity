@@ -3,9 +3,9 @@ using System;
 namespace DeepUnity
 {
     [Serializable]
-    public class Mish : ActivationBase
+    public class Mish : Activation
     {
-        protected override Tensor Activation(Tensor x)
+        protected override Tensor Activate(Tensor x)
         {
             return x.Select(x => 
             {

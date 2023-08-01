@@ -1,20 +1,19 @@
-
 namespace DeepUnity
 {
-    public abstract class ActivationBase : IModule
+    public abstract class Activation : IModule
     {
-        private Tensor InputCache { get;set; }
-        protected abstract Tensor Activation(Tensor x);
+        protected Tensor InputCache { get;set; }
+        protected abstract Tensor Activate(Tensor x);
         protected abstract Tensor Derivative(Tensor y);
 
         public Tensor Predict(Tensor input)
         {
-            return Activation(input);
+            return Activate(input);
         }
         public Tensor Forward(Tensor input)
         {
             InputCache = Tensor.Identity(input);
-            return Activation(input);
+            return Activate(input);
 
         }
         public Tensor Backward(Tensor loss)
