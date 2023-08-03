@@ -8,8 +8,8 @@ namespace DeepUnity
     public class AgentPerformanceTracker : MonoBehaviour
     {
         [ReadOnly] public int episodesCompleted = 0;
-        [Tooltip("Cumulated rewards in each episode.")]public PerformanceGraph rewards = new PerformanceGraph(100);
-        [Tooltip("Steps required in each episode.")]public PerformanceGraph steps = new PerformanceGraph(100);
+        [Tooltip("Cumulated rewards in each episode.")]public PerformanceGraph cumulativeRewards = new PerformanceGraph(100);
+        [Tooltip("Steps required in each episode.")]public PerformanceGraph episodeLength = new PerformanceGraph(100);
         public PerformanceGraph criticLoss = new PerformanceGraph(1000);
     }
 
@@ -18,7 +18,6 @@ namespace DeepUnity
     {
         public override void OnInspectorGUI()
         {
-            // EditorGUILayout.HelpBox("Training information for each episode.", MessageType.None);
             List<string> dontDrawMe = new List<string>() { "m_Script" };
 
 

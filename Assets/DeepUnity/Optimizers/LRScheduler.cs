@@ -1,6 +1,6 @@
 namespace DeepUnity
 {
-    public class StepLR
+    public class LRScheduler
     {
         private readonly Optimizer optimizer;
         private readonly float initialLR;
@@ -18,7 +18,7 @@ namespace DeepUnity
         /// <param name="step_size">Period of learning rate decay.</param>
         /// <param name="gamma">Multiplicative factor of learning rate decay.</param>
         /// <param name="last_epoch">The index of last epoch. </param>
- 	    public StepLR(Optimizer optimizer, int step_size, float gamma = 0.1f, int last_epoch = -1)
+ 	    public LRScheduler(Optimizer optimizer, int step_size, float gamma = 0.1f, int last_epoch = -1)
         {
             this.optimizer = optimizer;
             initialLR = optimizer.learningRate;

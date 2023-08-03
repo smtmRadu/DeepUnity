@@ -5,6 +5,11 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// Input: <b>(B, *)</b> or <b>(*)</b> for unbatched input. <br></br>
+    /// Output: <b>(B, *')</b> or <b>(*')</b> for unbatched input. <br></br>
+    /// where * = input_shape and *' = output_shape.
+    /// </summary>
     [Serializable]
     public class Reshape : IModule
     {
@@ -16,8 +21,8 @@ namespace DeepUnity
         /// Output: <b>(B, *')</b> or <b>(*')</b> for unbatched input. <br></br>
         /// where * = input_shape and *' = output_shape.
         /// </summary>
-        /// <param name="input_shape"></param>
-        /// <param name="output_shape"></param>
+        /// <param name="input_shape">Value of <b>*</b>, where B dimension is not included.</param>
+        /// <param name="output_shape">Value of <b>*'</b>, where B dimension is not included.</param>
         public Reshape(int[] input_shape, int[] output_shape)
         {
             if (input_shape == null || input_shape.Length == 0)

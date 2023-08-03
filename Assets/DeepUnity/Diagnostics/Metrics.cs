@@ -12,7 +12,7 @@ namespace DeepUnity
         /// <br></br>
         /// Predictions: <b>(B, H)</b> or <b>(H)</b> for unbatched input. <br></br>
         /// Targets: <b>(B, H)</b> or <b>(H)</b> for unbatched input. <br></br>
-        /// where B = batch_size and H = output_size
+        /// where B = batch_size and H = output_size (H > 2)
         /// </summary>
         /// <returns>Returns a float value in range [0, 1].</returns>
         public static float Accuracy(Tensor predictions, Tensor targets)
@@ -73,7 +73,7 @@ namespace DeepUnity
 
             float precision = truePositives / (truePositives + falsePositives);
             float recall = truePositives / (truePositives + falseNegatives);
-            return 2 * (precision * recall) / (precision + recall);
+            return 2f * (precision * recall) / (precision + recall);
         }
 
         public static float MeanAbsoluteError(Tensor predictions, Tensor targets)

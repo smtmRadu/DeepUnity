@@ -2,6 +2,9 @@ using UnityEngine;
 using System;
 namespace DeepUnity
 {
+    /// <summary>
+    /// Base class for all <see cref="IModule"/> that have learnable parameters.
+    /// </summary>
     public abstract class Learnable : ISerializationCallbackReceiver
     {
         [SerializeField] public Device device;
@@ -11,7 +14,7 @@ namespace DeepUnity
         [NonSerialized] public Tensor gammaGrad;
         [NonSerialized] public Tensor betaGrad;
 
-        public Learnable(Device device) => this.device = device;
+        protected Learnable(Device device) => this.device = device;
 
         public void ZeroGrad()
         {
@@ -73,10 +76,7 @@ namespace DeepUnity
                 }
             }
         }
-        public virtual int ParametersCount()
-        {
-            return gamma.Count() + beta.Count();
-        }
+        public virtual int LearnableParametersCount => gamma.Count() + beta.Count();
         public virtual void OnBeforeSerialize()
         {
 

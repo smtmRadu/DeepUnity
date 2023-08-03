@@ -1,13 +1,12 @@
 using System;
 using System.IO;
-using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 
 namespace DeepUnity
 {
     [Serializable]
-    public class Model : ScriptableObject
+    public class AgentBehaviour : ScriptableObject
     {
         [SerializeField] public string behaviourName;
         [SerializeField] public int observationSize;
@@ -27,17 +26,17 @@ namespace DeepUnity
         public Optimizer sigmaHeadOptimizer { get; private set; }
         public Optimizer[] discreteHeadsOptimizers { get; private set; }
 
-        public StepLR criticScheduler { get; private set; }
-        public StepLR muHeadScheduler { get; private set; }
-        public StepLR sigmaHeadScheduler { get; private set; }
-        public StepLR[] discreteHeadsSchedulers { get; private set; }
+        public LRScheduler criticScheduler { get; private set; }
+        public LRScheduler muHeadScheduler { get; private set; }
+        public LRScheduler sigmaHeadScheduler { get; private set; }
+        public LRScheduler[] discreteHeadsSchedulers { get; private set; }
 
 
         public static readonly int default_step_size_StepLR = 10;
         public static readonly float default_gamma_StepLR = 0.99f;
         public static readonly (float, float) sigma_clip = (0.001f, 5f);
 
-        public Model(int stateSize, int continuousActions, int[] discreteBranches, string name)
+        public AgentBehaviour(int stateSize, int continuousActions, int[] discreteBranches)
         {
             this.behaviourName = name;
             this.observationSize = stateSize;
@@ -88,14 +87,14 @@ namespace DeepUnity
             if (criticOptimizer != null)
                 return;
 
-            criticOptimizer = new Adam(critic.Parameters, hp.learningRate);          
-            muHeadOptimizer = new Adam(muHead.Parameters, hp.learningRate);            
-            sigmaHeadOptimizer = new Adam(sigmaHead.Parameters, hp.learningRate);
+            criticOptimizer = new Adam(critic.Parameters(), hp.learningRate);          
+            muHeadOptimizer = new Adam(muHead.Parameters(), hp.learningRate);            
+            sigmaHeadOptimizer = new Adam(sigmaHead.Parameters(), hp.learningRate);
 
             discreteHeadsOptimizers = new Optimizer[discreteBranches == null? 0 : discreteBranches.Length];
             for (int i = 0; i < discreteHeads.Length; i++)
             {
-                discreteHeadsOptimizers[i] = new Adam(discreteHeads[i].Parameters, hp.learningRate);
+                discreteHeadsOptimizers[i] = new Adam(discreteHeads[i].Parameters(), hp.learningRate);
             }
 
         }
@@ -114,14 +113,14 @@ namespace DeepUnity
             int step_size = hp.learningRateSchedule ? default_step_size_StepLR : 1000;
             float gamma = hp.learningRateSchedule ? default_gamma_StepLR : 1f;
 
-            criticScheduler = new StepLR(criticOptimizer, step_size, gamma);
-            muHeadScheduler = new StepLR(muHeadOptimizer, step_size, gamma);
-            sigmaHeadScheduler = new StepLR(sigmaHeadOptimizer, step_size, gamma);
+            criticScheduler = new LRScheduler(criticOptimizer, step_size, gamma);
+            muHeadScheduler = new LRScheduler(muHeadOptimizer, step_size, gamma);
+            sigmaHeadScheduler = new LRScheduler(sigmaHeadOptimizer, step_size, gamma);
 
-            discreteHeadsSchedulers = new StepLR[discreteBranches == null ? 0 : discreteBranches.Length];
+            discreteHeadsSchedulers = new LRScheduler[discreteBranches == null ? 0 : discreteBranches.Length];
             for (int i = 0; i < discreteHeads.Length; i++)
             {
-                discreteHeadsSchedulers[i] = new StepLR(discreteHeadsOptimizers[i], step_size, gamma);
+                discreteHeadsSchedulers[i] = new LRScheduler(discreteHeadsOptimizers[i], step_size, gamma);
             }
 
         }
@@ -166,37 +165,53 @@ namespace DeepUnity
             return null;
         }
 
-        /// <summary>
-        /// Saves the behaviour in the Assets folder, along with the respective neural networks.
-        /// </summary>
-        public void Save()
+
+        public AgentBehaviour Compile(string name)
         {
+            this.behaviourName = name;
+            var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{behaviourName}/{behaviourName}.asset");
+
+            if (instance != null)
+                throw new InvalidOperationException($"A Behaviour with the same name '{name}' already exists!");
+
+            // Create the asset
             if (!Directory.Exists($"Assets/{behaviourName}"))
                 Directory.CreateDirectory($"Assets/{behaviourName}");
+            AssetDatabase.CreateAsset(this, $"Assets/{behaviourName}/{behaviourName}.asset");
+            AssetDatabase.SaveAssets();
 
-            // Save aux networks
-            critic.Save($"{behaviourName}/critic");
-            muHead.Save($"{behaviourName}/mu");
-            sigmaHead.Save($"{behaviourName}/sigma");
+            // Create aux assets
+            critic.Compile($"{behaviourName}/critic");
+            muHead.Compile($"{behaviourName}/mu");
+            sigmaHead.Compile($"{behaviourName}/sigma");
 
             for (int i = 0; i < discreteHeads.Length; i++)
             {
-                discreteHeads[i].Save($"{behaviourName}/discrete{i}");
+                discreteHeads[i].Compile($"{behaviourName}/discrete{i}");
             }
 
+            return this;
+        }
 
-            // Save this wrapper
-            var instance = AssetDatabase.LoadAssetAtPath<Model>($"Assets/{behaviourName}/{behaviourName}.asset");
+        /// <summary>
+        /// Updates the state of the Behaviour parameters.
+        /// </summary>
+        public void Save()
+        {
+            var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{behaviourName}/{behaviourName}.asset");
+
             if (instance == null)
-            {
-                //create instance
-                AssetDatabase.CreateAsset(this, $"Assets/{behaviourName}/{behaviourName}.asset");
-                AssetDatabase.SaveAssets();
-            }
+                throw new InvalidOperationException("Cannot save the Behaviour because it requires compilation first.");
 
-            EditorUtility.SetDirty(this);
-            AssetDatabase.SaveAssetIfDirty(this);
-            AssetDatabase.Refresh();
+
+            critic.Save();
+            muHead.Save();
+            sigmaHead.Save();
+
+            for (int i = 0; i < discreteHeads.Length; i++)
+            {
+                discreteHeads[i].Save();
+            }
 
         }
     }

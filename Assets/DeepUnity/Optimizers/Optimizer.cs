@@ -5,9 +5,6 @@ using UnityEngine;
 
 namespace DeepUnity
 {
-    /// <summary>
-    /// Optimizer serialization is off.
-    /// </summary>
     public abstract class Optimizer
     {
         protected Learnable[] parameters;
@@ -26,7 +23,7 @@ namespace DeepUnity
         public abstract void Step();
 
         /// <summary>
-        /// Resets all gradients to 0.
+        /// Resets all gradients of a <see cref="Learnable"/> layer to 0.
         /// </summary>
         public void ZeroGrad()
         {
@@ -36,7 +33,7 @@ namespace DeepUnity
             }
         }
         /// <summary>
-        /// The gradients are clipped in the range [-clip_value, clip_value]
+        /// Clips the gradients of a <see cref="Learnable"/> layer in the range [-clip_value, clip_value]
         /// </summary>
         public void ClipGradValue(float clip_value)
         {
@@ -46,7 +43,7 @@ namespace DeepUnity
             }
         }
         /// <summary>
-        /// The norm is computed globaly.
+        /// Computes the clip grad norm globally over all <see cref="Learnable"/> layers.
         /// </summary>
         public void ClipGradNorm(float max_norm)
         {

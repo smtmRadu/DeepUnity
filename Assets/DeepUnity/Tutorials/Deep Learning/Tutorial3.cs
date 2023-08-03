@@ -54,7 +54,7 @@ public class Tutorial3 : MonoBehaviour
                 new ReLU(),
                 new Dense(64, 10),
                 new Softmax()
-                );
+                ).Compile("MNIST_MODEL");
 
             // network = new Sequential(
             //     new Flatten(),
@@ -64,7 +64,7 @@ public class Tutorial3 : MonoBehaviour
             //     new Softmax());
         }
 
-        optim = new Adam(network.Parameters);
+        optim = new Adam(network.Parameters());
 
         Utils.Shuffle(train);
         train_batches = Utils.Split(train, batch_size);
@@ -79,7 +79,7 @@ public class Tutorial3 : MonoBehaviour
         {
             batch_index = 0;
             print($"Epoch {epochIndex++}");
-            network.Save("MNIST_Model");
+            network.Save();
             Utils.Shuffle(train);
         }
 
@@ -90,10 +90,10 @@ public class Tutorial3 : MonoBehaviour
         Tensor target = Tensor.Cat(null, train_batch.Select(x => x.Item2).ToArray());
 
         Tensor prediction = network.Forward(input);
-        Loss loss = Loss.CategoricalCrossEntropy(prediction, target);
+        Loss loss = Loss.CrossEntropy(prediction, target);
 
         optim.ZeroGrad();
-        network.Backward(loss);
+        network.Backward(loss.Derivative);
         optim.Step();
 
 

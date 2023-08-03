@@ -11,12 +11,11 @@ public class Tutorial : MonoBehaviour
 {
     [Header("Learning z = x^2 + y^2.")]
     [SerializeField] private Sequential network;
-    [SerializeField] private PerformanceGraph lossGraph = new PerformanceGraph();
-    [SerializeField] private PerformanceGraph trainAccuracyGraph = new PerformanceGraph();
-    [SerializeField] private PerformanceGraph validationAccuracyGraph = new PerformanceGraph();
+    [SerializeField] private PerformanceGraph trainLossGraph = new PerformanceGraph();
+    [SerializeField] private PerformanceGraph validLossGraph = new PerformanceGraph();
    
     private Optimizer optim;
-    private StepLR scheduler;
+    private LRScheduler scheduler;
 
     private Tensor train_inputs;
     private Tensor train_targets;
@@ -30,54 +29,58 @@ public class Tutorial : MonoBehaviour
             network = new Sequential(
                 new Dense(2, 64),
                 new Tanh(),
-                new Dense(64, 64),
+                new Dense(64, 64, device: Device.GPU),
                 new ReLU(),
-                new Dense(64, 1));
+                new Dense(64, 1)).Compile("TutorialModel");
         }
-        optim = new Adam(network.Parameters);
-        scheduler = new StepLR(optim, 100);
+        optim = new Adam(network.Parameters(), 0.001f);
+        scheduler = new LRScheduler(optim, 30, 0.1f);
 
         // Generate training dataset
         int data_size = 1024;
         Tensor x = Tensor.RandomNormal(data_size, 1);
         Tensor y = Tensor.RandomNormal(data_size, 1);
         train_inputs = Tensor.Cat(1, x, y);
-        train_targets = x.Zip(y, (a, b) => a * a + b * b);
+        train_targets = x * x + y * y;
 
         // Generate validation set
         int valid_size = 64;
         x = Tensor.RandomNormal(valid_size, 1);
         y = Tensor.RandomNormal(valid_size, 1);
         valid_inputs = Tensor.Cat(1, x, y);
-        valid_targets = x.Zip(y, (a, b) => a * a + b * b);
-
+        valid_targets = x * x + y * y;
     }
 
     public void Update()
     {
-        // Split dataset into batches
-        int batch_size = 32;
-        Tensor[] input_batches = train_inputs.Split(0, batch_size);
-        Tensor[] target_batches = train_targets.Split(0, batch_size);
-
-        // Update the network for each batch
+        // Training. Split the dataset into batches of 32.
+        float train_loss = 0f;
+        Tensor[] input_batches = train_inputs.Split(0, 32);
+        Tensor[] target_batches = train_targets.Split(0, 32);
         for (int i = 0; i < input_batches.Length; i++)
         {
             Tensor prediction = network.Forward(input_batches[i]);
             Loss loss = Loss.MSE(prediction, target_batches[i]);
 
             optim.ZeroGrad();
-            network.Backward(loss);
+            network.Backward(loss.Derivative);
             optim.ClipGradNorm(0.5f);
             optim.Step();
 
-            lossGraph.Append(loss.Value);
-            trainAccuracyGraph.Append(Metrics.Accuracy(prediction, target_batches[i]));
+            train_loss += loss.Item;
         }
-        validationAccuracyGraph.Append(Metrics.Accuracy(network.Predict(valid_inputs), valid_targets));
+        train_loss /= input_batches.Length;
+        trainLossGraph.Append(train_loss);
+
+        // Validation
+        Tensor valid_prediction = network.Predict(valid_inputs);
+        float valid_loss = Metrics.MeanSquaredError(valid_prediction, valid_targets);
+        validLossGraph.Append(valid_loss);
+
+        print($"Epoch: {Time.frameCount} - Train Loss: {train_loss} - Valid Loss: {valid_loss}");
 
         scheduler.Step();
-        network.Save("Tutorial");       
+        network.Save();       
     }
 }
 ```
@@ -164,7 +167,7 @@ public class MoveToGoal : Agent
 ```
 _This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (decision is requested each frame), and must reach a randomly positioned target. The agent is rewarded by 1 point if it touches the target, or penalized by 1 point if it touches a wall. The agent is penalized constantly by 0.001 points at each time step, to encourage the agent reaching the target as fast as possible._
 
-![rl](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_Schema.jpg?raw=true)
+![rl](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_schema.jpg?raw=true)
 
 #### Notes
 - The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. In order to override them, call the their **base** *[first]* each time.

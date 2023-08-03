@@ -377,7 +377,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 981c49901ebb06c41b8c590a7b979867, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  model: {fileID: 11400000, guid: 4e4b77b2a52204f43b1cf02489b4eacd, type: 2}
+  model: {fileID: 11400000, guid: da3915bdea0dda24689578c4c6cf6c9b, type: 2}
   behaviourType: 2
   spaceSize: 4
   continuousActions: 2
@@ -401,18 +401,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   targetFPS: 50
   maxSteps: 1000
-  timeHorizon: 64
   learningRate: 0.001
-  batchSize: 256
-  bufferSize: 2048
+  numEpoch: 8
+  batchSize: 64
   learningRateSchedule: 0
   normalize: 0
   debug: 0
+  timeHorizon: 64
   beta: 0.005
   epsilon: 0.2
   gamma: 0.99
   lambda: 0.95
-  numEpoch: 8
   betaScheduler: 0
   epsilonScheduler: 0
 --- !u!114 &80255272
@@ -427,9 +426,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d26371695edfbcd4580ca6f6048d885d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  actionRequest: 1
+  actionRequest: 0
   periodBetweenDecisions: 1
-  randomAction: 0
   timeSinceLastAction: 0
   performActionForced: 0
 --- !u!114 &80255273
@@ -445,7 +443,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   episodesCompleted: 0
-  rewards:
+  cumulativeRewards:
     graph:
       serializedVersion: 2
       m_Curve: []
@@ -454,7 +452,7 @@ MonoBehaviour:
       m_RotationOrder: 4
     steps: 0
     current: 0
-  steps:
+  episodeLength:
     graph:
       serializedVersion: 2
       m_Curve: []

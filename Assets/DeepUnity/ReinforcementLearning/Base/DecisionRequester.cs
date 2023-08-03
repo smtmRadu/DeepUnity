@@ -9,7 +9,7 @@ namespace DeepUnity
     {
         [SerializeField] public DecisionRequestType actionRequest = DecisionRequestType.EachFrame;
         [Range(0.01f, 20f), Tooltip("The agent performs a value every X seconds.")] public float periodBetweenDecisions = 1f;
-        [Tooltip("Use random actions to help the agent explore the environment.")] public bool randomAction = false;
+        // [Tooltip("Use random actions to help the agent explore the environment.")] public bool randomAction = false;
 
         [HideInInspector] public float timeSinceLastAction = 0f;
         [HideInInspector] public bool performActionForced = false;

@@ -26,12 +26,7 @@ namespace kbRadu
         List<(Tensor, Tensor)> train;
         private void Start()
         {
-            Tensor x = Tensor.Random01(5, 5);
-            print(x
-            + "\n" + x.ArgMax(0)
-            + "\n" + x.ArgMax(0, true)
-            + "\n" + x.ArgMax(1)
-            + "\n" + x.ArgMax(1, true));
+            Conv2DLearnTest();
         }
 
 
@@ -42,7 +37,7 @@ namespace kbRadu
                 new Tanh(),
                 new Dense(100, 5),
                 new Softmax());
-            var optim = new Adam(net.Parameters);
+            var optim = new Adam(net.Parameters());
 
             Tensor input = Tensor.Random01(2048, 10);
             Tensor targets = Tensor.Zeros(2048, 5);
@@ -68,9 +63,9 @@ namespace kbRadu
             for (int i = 0; i < inputBatched.Length; i++)
             {
                 var preds = net.Forward(inputBatched[i]);
-                var loss = Loss.CategoricalCrossEntropy(preds, targetBatches[i]);
+                var loss = Loss.CrossEntropy(preds, targetBatches[i]);
 
-                net.Backward(loss);
+                net.Backward(loss.Derivative);
                 optim.Step();
                 float acc = Metrics.Accuracy(preds, targetBatches[i]);
                 graph.Append(acc);
@@ -183,38 +178,36 @@ namespace kbRadu
         }
         void TestRNN()
         {
-            rnn_network = new RNN(10, 20, 2);
+            rnn_network = new RNN(10, 20, 2).Compile("rnn");
             var input = Tensor.RandomNormal(6, 3, 10); // (L, B, H_in) 
             var h0 = Tensor.RandomNormal(2, 3, 20);  // (num_layers, B, H_out)
             var output = rnn_network.Forward(input, h0);
             rnn_network.Backward(output.Item1);
 
-            rnn_network.Save("Some rnn");
+            rnn_network.Save();
             // print("output" + output.Item1);
             // print("h_n" + output.Item2);
         }
 
-
-        Conv2D conv2d;
-        Tensor input;
-        Tensor target;
-        Optimizer optim;
         void Conv2DLearnTest() 
         {
-            conv2d = new Conv2D((1, 28, 28), 5, 3, device: TestDevice);
-            input = Tensor.RandomNormal(batchSize, 1, 28, 28);
-            target = Tensor.RandomNormal(batchSize, 5, 26, 26);
-            optim = new Adamax(new Learnable[] { conv2d }, lr: lr);
-            graph = new PerformanceGraph();
+            var net = new Sequential(
+                new Conv2D((1, 5, 5), out_channels: 3, kernel_size: 2, device: TestDevice),
+                new Flatten());
+
+            var input = Tensor.RandomNormal(batchSize, 1, 5, 5);
+            var target = Tensor.RandomNormal(batchSize, 3 * 4 * 4);
+            var optim = new Adam(net.Parameters(), lr: lr);
             TimerX.Start();
             for (int i = 0; i < Runs; i++)
             {
-                var pred = conv2d.Forward(input);
-                var loss = (pred - target) * (pred - target);
-                var lossderiv = (pred - target) * 2;
-                conv2d.Backward(lossderiv);
+                var pred = net.Forward(input);
+                var loss = Loss.MSE(pred, target);
+                net.Backward(loss.Derivative);
+                optim.ClipGradNorm(0.5f);
                 optim.Step();
-                print("Loss: " + loss.Flatten(0, 3).Mean(0)[0]);
+                print($"Epoch {i} | Loss: {loss.Item}");
+                graph.Append(loss.Item);
             }
             TimerX.Stop();
         }

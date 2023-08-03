@@ -15,7 +15,7 @@ namespace DeepUnity
         private Dictionary<Agent, bool> agents;
         private HyperParameters hp;
         private AgentPerformanceTracker performanceTracker;
-        private Model ac;
+        private AgentBehaviour ac;
         [SerializeField] private int StepCount;
 
         private void Awake()
@@ -36,10 +36,18 @@ namespace DeepUnity
                 Train();
 
         }
+
+        // Methods use to interact with agents
+        public static void Ready(Agent agent)
+        {
+            Instance.agents[agent] = true;
+        }
         public static void Subscribe(Agent agent)
         {
             if(Instance == null)
             {
+                EditorApplication.playModeStateChanged += SaveAC;
+                EditorApplication.pauseStateChanged += SaveAC2;
                 GameObject go = new GameObject("Trainer");
                 go.AddComponent<Trainer>();
                 Instance.agents = new();
@@ -54,11 +62,17 @@ namespace DeepUnity
             }
 
             Instance.agents.Add(agent, false);
-        }
-        public static void Ready(Agent agent)
-        {
-            Instance.agents[agent] = true;
-        }
+        }      
+
+
+
+        // Methods used to save the Actor Critic network when editor state changes.
+        private static void SaveAC(PlayModeStateChange state) => Instance.ac.Save();
+        private static void SaveAC2(PauseState state) => Instance.ac.Save();
+
+
+
+        // PPO algorithm here
         private void Train()
         {
 
@@ -80,7 +94,7 @@ namespace DeepUnity
                 if(hp.debug)
                     agent.Trajectory.DebugInFile();
 
-                performanceTracker.rewards.Append(agent.Trajectory.rewards.Sum(x => x[0]));
+                performanceTracker.cumulativeRewards.Append(agent.Trajectory.rewards.Sum(x => x[0]));
 
 
                 // Unzip the trajectory
@@ -103,8 +117,6 @@ namespace DeepUnity
                 float std = MathF.Sqrt(var);
                 advantages = advantages.Select(x => (x[0] - mean) / (std + Utils.EPSILON)).Select(x => Tensor.Constant(x)).ToList();
                 
-
-                int noBatches = (int)(hp.bufferSize / (float)hp.batchSize);
                 for (int e = 0; e < hp.numEpoch; e++)
                 {
                     // shuffle the trajectory lists together
@@ -155,28 +167,22 @@ namespace DeepUnity
             {
                 agents[key] = false;
             }
-
-            
-            ac.Save();
         }
-
         private void UpdateCritic(Tensor states_batch, Tensor returns_batch)
         {
             Tensor values = ac.critic.Forward(states_batch);
             Loss dLdV = Loss.MSE(values, returns_batch);
 
             ac.criticOptimizer.ZeroGrad();
-            ac.critic.Backward(dLdV);
-            //ac.criticOptimizer.ClipGradNorm(0.5f);
+            ac.critic.Backward(dLdV.Derivative);
             ac.criticOptimizer.Step();
 
             if(performanceTracker != null)
             {
-                float criticLoss = dLdV.Item.Mean(0)[0];
-                performanceTracker.criticLoss.Append(criticLoss);
+                float criticLoss = dLdV.Value.Mean(0)[0];
+                performanceTracker?.criticLoss.Append(criticLoss);
             }
         }
-
         private void UpdateContinuousNetwork(Tensor states, Tensor advantages, Tensor oldActions, Tensor oldLogProbs)
         {
             int batch = states.Rank == 2 ? states.Size(-2) : 1;
@@ -194,7 +200,7 @@ namespace DeepUnity
 
             // Computing d Loss
             Tensor ratio = Tensor.Exp(newLogProbs - oldLogProbs);
-            Tensor clipped_ratio = Tensor.Clip(ratio, 1 - hp.epsilon, 1 + hp.epsilon);
+            Tensor clipped_ratio = Tensor.Clip(ratio, 1f - hp.epsilon, 1f + hp.epsilon);
             Tensor PIold = Tensor.Exp(oldLogProbs);
 
             float[,] dmindx = new float[batch, actions_num];
@@ -212,13 +218,13 @@ namespace DeepUnity
                     float At = advantages[b, a];
 
                     // dMin(x,y)/dx
-                    dmindx[b,a] = (pt * At <= clip_p * At) ? 1 : 0;
+                    dmindx[b,a] = (pt * At <= clip_p * At) ? 1f : 0f;
 
                     // dMin(x,y)/dy
-                    dmindy[b,a] = (clip_p * At < pt * At) ? 1 : 0;
+                    dmindy[b,a] = (clip_p * At < pt * At) ? 1f : 0f;
 
                     // dClip(x,a,b)/dx
-                    dclipdx[b,a] = (1.0 - eps <= pt && pt <= 1.0 + eps) ? 1 : 0;
+                    dclipdx[b,a] = (1.0f - eps <= pt && pt <= 1.0f + eps) ? 1f : 0f;
                 }
             }
 
@@ -241,7 +247,6 @@ namespace DeepUnity
 
             ac.muHeadOptimizer.ZeroGrad();
             ac.muHead.Backward(dLdMu);
-            // ac.muHeadOptimizer.ClipGradNorm(0.5f);
             ac.muHeadOptimizer.Step();
 
 
@@ -251,7 +256,6 @@ namespace DeepUnity
             // 
             // ac.sigmaHeadOptimizer.ZeroGrad();
             // ac.sigmaHead.Backward(dLdSigma);
-            // // ac.sigmaHeadOptimizer.ClipGradNorm(0.5f);
             // ac.sigmaHeadOptimizer.Step();
 
             // Test KL
@@ -260,7 +264,6 @@ namespace DeepUnity
         {
 
         }
-
         public void ComputeAdvantageEstimatesAndQValues(TrajectoryBuffer trajectory)
         {
             int T = trajectory.Count;

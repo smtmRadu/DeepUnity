@@ -12,6 +12,7 @@ public class TestMNIST : MonoBehaviour
 
     public string completed = "0/0";
     public string accuracy = "0%";
+    public PerformanceGraph graph = new PerformanceGraph ();
     int sample_index = 0;
     public void Start()
     {
@@ -39,6 +40,7 @@ public class TestMNIST : MonoBehaviour
 
         var output = network.Predict(input);
         float acc = Metrics.Accuracy(output, label);
+        graph.Append(acc);
         accs.Add(acc);
 
         completed = $"{sample_index}/{test.Count}";

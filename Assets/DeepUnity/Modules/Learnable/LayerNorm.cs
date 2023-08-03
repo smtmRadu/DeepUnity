@@ -5,6 +5,13 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// <b>Placed before the non-linear activation function. </b>    <br />
+    /// Input: (B, *) or (*) for unbatched input.<br />
+    /// Output: (B, *) or (*) for unbatched input.<br />
+    /// where  B = batch_size and * = input_shape.<br />
+    /// <b>Applies normalization over all dimensions (*) of the input.</b> 
+    /// </summary>
     [Serializable]
     public class LayerNorm: Learnable, IModule, IModuleS
     {
@@ -29,13 +36,10 @@ namespace DeepUnity
         /// <b>Placed before the non-linear activation function. </b>    <br />
         /// Input: (B, *) or (*) for unbatched input.<br />
         /// Output: (B, *) or (*) for unbatched input.<br />
-        /// <br></br>
-        /// where <br></br>
-        /// B = batch_size, <br></br> 
-        /// * = input_shape.<br />
+        /// where  B = batch_size and * = input_shape.<br />
         /// <b>Applies normalization over all dimensions (*) of the input.</b> 
         /// </summary>
-        /// <param name="input_shape">Shape of the input, excepting the batch.</param>
+        /// <param name="input_shape">Shape of the input (*), excepting the batch (B) dimension.</param>
         public LayerNorm(params int[] input_shape) : base(Device.CPU)
         {
             if (input_shape == null || input_shape.Length == 0)

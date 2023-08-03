@@ -9,10 +9,11 @@ public class Tutorial2 : MonoBehaviour
     public Device device;
     public Sequential net;
     public PerformanceGraph LossGraph = new PerformanceGraph();
+    public PerformanceGraph ValidLossGraph = new PerformanceGraph();
     public int Optimizer = 0; // 0 = adam, 1 = sgd
     public bool save;
     public Optimizer optimizer;
-    public StepLR scheduler;
+    public LRScheduler scheduler;
     public int hiddenSize = 64;
     public int trainingSamples = 1024;
     public int batch_size = 32;
@@ -49,16 +50,17 @@ public class Tutorial2 : MonoBehaviour
              // new LayerNorm(hiddenSize),                
              new ReLU(),
              // new BatchNorm(hiddenSize),
-             new Dense(hiddenSize, hiddenSize, device: device),          
+             new Dense(hiddenSize, hiddenSize, device: device),
              new ReLU(),
+             new Dropout(),
              new Dense(hiddenSize, hiddenSize, device: device),
              new ReLU(),
              new Dense(hiddenSize, 1)
-             );; 
+             );
         }
 
-        optimizer = Optimizer == 0? new Adam(net.Parameters) : new SGD(net.Parameters,0.1f);
-        scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
+        optimizer = Optimizer == 0? new Adam(net.Parameters()) : new SGD(net.Parameters(),0.1f);
+        scheduler = new LRScheduler(optimizer, scheduler_step_size, scheduler_gamma);
 
 
         trainPoints = new Vector3[trainingSamples];
@@ -83,21 +85,13 @@ public class Tutorial2 : MonoBehaviour
         TimerX.Start();
     }
 
-
-    List<float> trainAcc = new List<float>();
-    List<float> validationAcc = new List<float>();
-
     public void Update()
     {
         if (i == trainingSamples / batch_size)
         {
 
-            Debug.Log($"Epoch {++epoch} | Train Accuracy {trainAcc.Average() * 100f}% | Validation Accuracy {validationAcc.Average() * 100f}% | LR {scheduler.CurrentLR}");
-            trainAcc.Clear();
-            validationAcc.Clear();
+            Debug.Log($"Epoch {++epoch} | LR {scheduler.CurrentLR}");
             scheduler.Step();
-            if (save && epoch % 10 == 0)
-                 net.Save("test");
             i = 0;
 
             if (epoch == timerStopEpoch)
@@ -107,28 +101,20 @@ public class Tutorial2 : MonoBehaviour
         }
         var trainPrediction = net.Forward(trainXbatches[i]);
         Loss loss = Loss.MSE(trainPrediction, trainYbatches[i]);
-        LossGraph.Append(loss.Item.Mean(0)[0]);
+        LossGraph.Append(loss.Item);
         optimizer.ZeroGrad();
         net.Backward(loss.Derivative);
         optimizer.Step();
         
 
-        // Compute train accuracy
-        float trainacc = Metrics.Accuracy(trainPrediction, trainYbatches[i]);
-        
-        trainAcc.Add(trainacc);
-
         // Compute test accuracy
         var testPrediction = net.Predict(validationInputs);
-        float testacc = Metrics.Accuracy(testPrediction, validationTargets);
+        Loss testLoss = Loss.MSE(testPrediction, validationTargets);
+        ValidLossGraph.Append(testLoss.Item);
         for (int j = 0; j < validationInputs.Size(-2); j++)
         {
             validationPoints[j] = new Vector3(validationInputs[j, 0], testPrediction[j, 0], validationInputs[j, 1]);
         }
-
-        validationAcc.Add(testacc);
-
-
 
         for (int j = 0; j < batch_size; j++)
         {

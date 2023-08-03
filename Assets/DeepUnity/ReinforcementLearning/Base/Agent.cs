@@ -21,7 +21,7 @@ namespace DeepUnity
     [AddComponentMenu("DeepUnity/Agent"), DisallowMultipleComponent, RequireComponent(typeof(HyperParameters)), RequireComponent(typeof(DecisionRequester))]
     public class Agent : MonoBehaviour
     {
-        public Model model;
+        public AgentBehaviour model;
         [SerializeField] private BehaviourType behaviourType = BehaviourType.Inference;
 
         [Space]
@@ -30,8 +30,10 @@ namespace DeepUnity
         [SerializeField] private int[] discreteBranches = new int[0];
 
         [Space]         
-        [SerializeField] private OnEpisodeEndType onEpisodeEnd = OnEpisodeEndType.ResetEnvironment;
-        [SerializeField, Tooltip("Auto use the sensors information attached to this agent.")] private bool useSensors = true;
+        [SerializeField] 
+        private OnEpisodeEndType onEpisodeEnd = OnEpisodeEndType.ResetEnvironment;
+        [SerializeField, Tooltip("Collect sensors' observations attached to this agent automatically. ")] 
+        private bool useSensors = true;
 
 
         [HideInInspector] public AgentPerformanceTracker PerformanceTracker;
@@ -63,8 +65,6 @@ namespace DeepUnity
             PositionReseter = onEpisodeEnd == OnEpisodeEndType.ResetAgent ?
                 new StateResetter(transform) :
                 new StateResetter(transform.parent);
-
-            model.Save();
         }
         public virtual void Start()
         {
@@ -144,7 +144,7 @@ namespace DeepUnity
                 IsEpisodeEnd = false;
                 PositionReseter?.Reset();
                 PerformanceTracker.episodesCompleted++;
-                PerformanceTracker.steps.Append(StepCount);
+                PerformanceTracker.episodeLength.Append(StepCount);
                 StepCount = 0;
                 
 
@@ -168,19 +168,19 @@ namespace DeepUnity
 
                 if(modelFoundGUID.Length == 0)
                 {
-                    model = new Model(spaceSize, continuousActions, discreteBranches, GetType().Name);
+                    model = new AgentBehaviour(spaceSize, continuousActions, discreteBranches).Compile(GetType().Name);
                     return;
                 }
                 string modelFoundPath = AssetDatabase.GUIDToAssetPath(modelFoundGUID[0]);
 
                 if (modelFoundPath.EndsWith(".cs"))
                 {
-                    model = new Model(spaceSize, continuousActions, discreteBranches, GetType().Name);
+                    model = new AgentBehaviour(spaceSize, continuousActions, discreteBranches).Compile(GetType().Name);
                     return;
                 }
                 
 
-                model = AssetDatabase.LoadAssetAtPath<Model>(modelFoundPath);
+                model = AssetDatabase.LoadAssetAtPath<AgentBehaviour>(modelFoundPath);
                 Debug.Log($"<b>{GetType().Name}<b/> model auto-loaded from project Assets.");
 
             }
@@ -231,15 +231,16 @@ namespace DeepUnity
             Actions.ContinuousActions = Timestep.continuous_action?.ToArray();
             Actions.DiscreteActions = null; // need to convert afterwards from tensor of logits [branch, logits] to argmax int[]
 
-            if(DecisionRequester.randomAction)
-            {
-                if(Actions.ContinuousActions != null)
-                    Actions.ContinuousActions =  Actions.ContinuousActions.Select(x => Utils.Random.Range(-1f, 1f)).ToArray();
+            // if(DecisionRequester.randomAction)
+            // {
+            //     if(Actions.ContinuousActions != null)
+            //         Actions.ContinuousActions =  Actions.ContinuousActions.Select(x => Utils.Random.Range(-1f, 1f)).ToArray();
+            // 
+            //     if (Actions.DiscreteActions != null)
+            //         throw new NotImplementedException();
+            // 
+            // }
 
-                if (Actions.DiscreteActions != null)
-                    throw new NotImplementedException();
-
-            }
             OnActionReceived(Actions);
         }
         private void ActiveBehavior()

@@ -14,12 +14,11 @@ public class TrainMNIST : MonoBehaviour
     [SerializeField] private PerformanceGraph accuracyGraph;
     [SerializeField] private PerformanceGraph lossGraph;
     Optimizer optim;
-    StepLR scheduler;
+    LRScheduler scheduler;
     List<(Tensor, Tensor)> train = new();
     List<(Tensor, Tensor)[]> train_batches;
     int epochIndex = 1;
     int batch_index = 0;
-    int correctGuesses = 0;
 
     public void Start()
     {
@@ -42,11 +41,11 @@ public class TrainMNIST : MonoBehaviour
             //      new Softmax()
             //      );
 
-            network = new Sequential(
-                new Flatten(),
-                new Dense(784, 10, init: InitType.Glorot_Uniform, device: Device.GPU),
-                new Softmax()
-                );
+            // network = new Sequential(
+            //     new Flatten(),
+            //     new Dense(784, 10, init: InitType.Glorot_Uniform, device: Device.GPU),
+            //     new Softmax()
+            //     ).Compile(name);
 
             // network = new Sequential(
             //     new Conv2D((1, 28, 28), 5, 3, Device.GPU),
@@ -58,18 +57,18 @@ public class TrainMNIST : MonoBehaviour
             //     new Softmax()
             //     );
 
-            // network = new Sequential(
-            //     new Flatten(),
-            //     new Dense(784, 64, device: Device.GPU),
-            //     new ReLU(),
-            //     new Dense(64, 10),
-            //     new Softmax());
+            network = new Sequential(
+                new Flatten(),
+                new Dense(784, 100, init: InitType.HE_Normal, device: Device.GPU),
+                new ReLU(),
+                new Dense(100, 10, InitType.HE_Normal, device: Device.GPU),
+                new Softmax()).Compile(name);
 
             Debug.Log("Network created.");
         }
 
-        optim = new SGD(network.Parameters, lr: lr);
-        scheduler = new StepLR(optim, schedulerStepSize, schedulerDecay);
+        optim = new Adam(network.Parameters(), lr: lr);
+        scheduler = new LRScheduler(optim, schedulerStepSize, schedulerDecay);
         accuracyGraph = new PerformanceGraph();
         lossGraph = new PerformanceGraph();
         Utils.Shuffle(train);
@@ -84,7 +83,7 @@ public class TrainMNIST : MonoBehaviour
         // Save the network each 100 batches
         if(batch_index % 100 == 0)
         {
-            network.Save(name);
+            network.Save();
         }
 
         // Case when epoch finished
@@ -92,7 +91,7 @@ public class TrainMNIST : MonoBehaviour
         {
             batch_index = 0;
             
-            network.Save(name);
+            network.Save();
             Utils.Shuffle(train);
             scheduler.Step();
 
@@ -106,17 +105,18 @@ public class TrainMNIST : MonoBehaviour
         Tensor target = Tensor.Cat(null, train_batch.Select(x => x.Item2).ToArray());
 
         Tensor prediction = network.Forward(input);
-        Loss loss = Loss.CategoricalCrossEntropy(prediction, target);
+        Loss loss = Loss.CrossEntropy(prediction, target);
 
         optim.ZeroGrad();
-        network.Backward(loss);
+        network.Backward(loss.Derivative);
+        optim.ClipGradNorm(0.5f);
         optim.Step();
 
         float acc = Metrics.Accuracy(prediction, target);
         accuracyGraph.Append(acc);
-        lossGraph.Append(loss.Value);
+        lossGraph.Append(loss.Item);
 
-        Debug.Log($"Epoch: {epochIndex} | Batch: {batch_index++}/{train_batches.Count} | Acc: {acc * 100f}% | Loss: {loss.Value}");
+        Debug.Log($"Epoch: {epochIndex} | Batch: {batch_index++}/{train_batches.Count} | Acc: {acc * 100f}% | Loss: {loss.Item}");
     }
 }
 

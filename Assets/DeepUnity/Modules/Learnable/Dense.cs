@@ -4,6 +4,11 @@ namespace DeepUnity
 {
     // https://www.youtube.com/watch?v=tMjdQLylyGI&t=602s
     // https://proceedings.mlr.press/v9/glorot10a/glorot10a.pdf (251 - 253)
+    /// <summary>
+    /// Input: <b>(B, H_in)</b> or <b>(H_in)</b> for unbatched input.<br></br>
+    /// Output: <b>(B, H_out)</b> or <b>(H_out)</b> for unbatched input.<br></br>
+    /// where B = batch_size, H_in = in_features and H_out = out_features.
+    /// </summary>
     [Serializable]
     public class Dense : Learnable, IModule
     {
@@ -14,12 +19,10 @@ namespace DeepUnity
         /// Output: <b>(B, H_out)</b> or <b>(H_out)</b> for unbatched input.<br></br>
         /// where B = batch_size, H_in = in_features and H_out = out_features.
         /// </summary>
-        /// <param name="in_features"></param>
-        /// <param name="out_features"></param>
+        /// <param name="in_features">Input's last dimension value (H_in).</param>
+        /// <param name="out_features">Output's last dimension value (H_out).</param>
         /// <param name="init">Weights initialization mode.</param>
-        /// <param name="device">Computation device used. Recommended <see cref="Device.GPU"/> for Dense modules with <b>in_features</b> and <b>out_features > 64</b>.</param>
-        /// <exception cref="ArgumentException"></exception>
-        /// <exception cref="NotImplementedException"></exception>
+        /// <param name="device">Computation device used. Recommended <see cref="Device.GPU"/> for large <see cref="Dense"/> layers with <b>in_features</b> &amp; <b>out_features > 64</b>.</param>
         public Dense(int in_features, int out_features, InitType init = InitType.Default, Device device = Device.CPU) : base(device)
         {
             if (in_features < 1)

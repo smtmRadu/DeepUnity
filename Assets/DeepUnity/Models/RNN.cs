@@ -11,10 +11,10 @@ using System.Text;
 namespace DeepUnity
 {
     [SerializeField]
-    public class RNN : ScriptableObject, IModel
+    public class RNN : Model<RNN>, ISerializationCallbackReceiver
     {
-        [NonSerialized] private IModuleS[] modules;
         [SerializeField] private bool batchFirst;
+        [NonSerialized] private IModuleS[] modules;
         [SerializeField] private IModuleSWrapper[] serializedModules;
         
 
@@ -35,6 +35,7 @@ namespace DeepUnity
         /// <param name="modules">RNNCell, Dropout or LayerNorm.</param>
         public RNN(bool batch_first = false, params IModuleS[] modules)
         {
+            this.batchFirst = batch_first;
             this.modules = modules;
         }
         /// <summary>
@@ -71,9 +72,6 @@ namespace DeepUnity
 
             modules = moduleList.ToArray();         
         }
-
-
-
 
 
 
@@ -211,7 +209,7 @@ namespace DeepUnity
         /// loss w.r.t outputs: <b>(L, H_out)</b> for unbatched input, or <b>(L, B, H_out)</b> when batch_first = false or <b>(B, L, H_out)</b> when batch_first = true. <br></br>
         /// </summary>
         /// <param name="lossDerivative"></param>
-        public void Backward(Tensor lossDerivative)
+        public override void Backward(Tensor lossDerivative)
         {
             Tensor loss_clone = Tensor.Identity(lossDerivative);
             // loss (L, B, H_out)/(B, L, H_Out) or (L, H_out)
@@ -260,44 +258,52 @@ namespace DeepUnity
             }
         }
 
-        public void Backward(Loss loss) => Backward(loss.Derivative);
-
-
-
-
-
-        /// <summary>
-        /// Gets all <typeparamref name="Learnable"/> modules.
-        /// </summary>
-        /// <returns></returns>
-        public Learnable[] Parameters { get => modules.Where(x => x is Learnable P).Select(x => (Learnable)x).ToArray(); }
-
-        /// <summary>
-        /// Save path: "Assets/". Creates/Overwrites model on the same path.
-        /// For specific existing folder saving, <b><paramref name="name"/> = "folder_name/model_name"</b>
-        /// </summary>
-        public void Save(string name)
-        {
-            var instance = AssetDatabase.LoadAssetAtPath<RNN>("Assets/" + name + ".asset");
-            if (instance == null)
-                AssetDatabase.CreateAsset(this, "Assets/" + name + ".asset");
-
-            EditorUtility.SetDirty(this);
-            AssetDatabase.SaveAssetIfDirty(this);
-        }
-        public string Summary()
+        public override string Summary()
         {
             StringBuilder stringBuilder = new StringBuilder();
 
-            stringBuilder.AppendLine("Model: Sequencial");
+            stringBuilder.AppendLine($"Name: {name} ({version})");
+            stringBuilder.AppendLine("Type: Sequencial");
             stringBuilder.AppendLine($"Layers : {modules.Length}");
             foreach (var module in modules)
             {
                 stringBuilder.AppendLine($"         {module.GetType().Name}");
             }
-            stringBuilder.AppendLine($"Parameters: {modules.Where(x => x is Learnable).Select(x => (Learnable)x).Sum(x => x.ParametersCount())}");
+            stringBuilder.AppendLine($"Parameters: {modules.Where(x => x is Learnable).Select(x => (Learnable)x).Sum(x => x.LearnableParametersCount)}");
             return stringBuilder.ToString();
         }
+        public override Learnable[] Parameters()
+        {
+            return modules.OfType<Learnable>().ToArray();
+        }
+        public override RNN Compile(string name)
+        {
+            var instance = AssetDatabase.LoadAssetAtPath<RNN>("Assets/" + name + ".asset");
+            if (instance != null)
+            {
+                throw new System.InvalidOperationException($"A RNN asset called '{name}' already exists!.");
+            }
+
+            this.name = name;
+            AssetDatabase.CreateAsset(this, $"Assets/{name}.asset");
+            EditorUtility.SetDirty(this);
+            AssetDatabase.SaveAssetIfDirty(this);
+            return this;
+
+        }
+        public override void Save(string version = "1.0")
+        {
+            this.version += "v" + version;
+            // Check if asset exists:
+            var instance = AssetDatabase.LoadAssetAtPath<RNN>("Assets/" + name + ".asset");
+            if (instance == null)
+                throw new System.InvalidOperationException("Cannot save the network because it requires compilation first.");
+
+            EditorUtility.SetDirty(this);
+            AssetDatabase.SaveAssetIfDirty(this);
+        }
+
+
         public void OnBeforeSerialize()
         {
             serializedModules = modules.Select(x => IModuleSWrapper.Wrap(x)).ToArray();

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using UnityEditor;
 using UnityEngine;
 
@@ -63,7 +64,7 @@ namespace DeepUnity
             float time_index = 1f;
             foreach (var node in nodes)
             {
-                graph.AddKey(time_index / nodes.Count * 100f, node);
+                graph.AddKey(time_index / nodes.Count, node);
                 time_index += 1f;
             }
         }
@@ -73,6 +74,7 @@ namespace DeepUnity
             steps = 0;
             nodes.Clear();        
         }
+        public Keyframe[] Keys { get => graph.keys; }
     }
 
 

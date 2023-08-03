@@ -4,6 +4,12 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// <b>Placed before or after the non-linear activation function.</b>    <br />
+    /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br></br>
+    /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br></br>
+    /// where B = batch_size and H = num_features.
+    /// </summary>
     [Serializable]
     public class BatchNorm : Learnable, IModule
     {
@@ -25,10 +31,9 @@ namespace DeepUnity
         /// <b>Placed before or after the non-linear activation function.</b>    <br />
         /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br></br>
         /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br></br>
-        /// where <br></br>
-        /// B = batch_size, <br></br> 
-        /// H = num_features.
+        /// where B = batch_size and H = num_features.
         /// </summary>
+        /// <param name="num_features">Input's last axis dimension (H).</param>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
         public BatchNorm(int num_features, float momentum = 0.9f) : base(Device.CPU)
         {

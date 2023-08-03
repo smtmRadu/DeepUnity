@@ -13,7 +13,7 @@ namespace DeepUnity
         private Tensor InputCache { get; set; }
 
         /// <summary>
-        /// <b>Applies the Softmax function over the last dimension of the input.</b> <br></br>
+        /// <b>Applies the Softmax function over the last input's dimension.</b> <br></br>
         /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input <br></br>
         /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input <br></br>
         /// </summary>

@@ -2,6 +2,13 @@ using System;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// A tool for computing a loss function for predictions and targets. There are 3 properties: <br></br>
+    /// <b>Item</b>: Returns the mean of all loss values in the tensor. <br></br>
+    /// <b>Value</b>: Returns the loss <see cref="Tensor"/> applied element-wisely over predictions and targets.<br></br>
+    /// <b>Derivative</b>: Returns the derivative of the loss function <see cref="Tensor"/> applied element-wisely over predictions and targets. 
+    /// <b>Used for backpropagation.</b>
+    /// </summary>
     public class Loss
     {
         private LossType lossType;
@@ -16,25 +23,28 @@ namespace DeepUnity
         }
         public static Loss MSE(Tensor predicts, Tensor targets) => new Loss(LossType.MSE, predicts, targets);
         public static Loss MAE(Tensor predicts, Tensor targets) => new Loss(LossType.MAE, predicts, targets);
-        public static Loss CategoricalCrossEntropy(Tensor predicts, Tensor targets) => new Loss(LossType.CategoricalCrossEntropy, predicts, targets);   
+        public static Loss CrossEntropy(Tensor predicts, Tensor targets) => new Loss(LossType.CrossEntropy, predicts, targets);   
         public static Loss HingeEmbedded(Tensor predicts, Tensor targets) => new Loss(LossType.HingeEmbedded, predicts, targets);
-        public static Loss BinaryCrossEntropy(Tensor predicts, Tensor targets) => new Loss(LossType.BinaryCrossEntropy, predicts, targets);
+        public static Loss BinaryCrossEntropy(Tensor predicts, Tensor targets) => new Loss(LossType.BCE, predicts, targets);
         public static Loss KLDivergence(Tensor predicts, Tensor targets) => new Loss(LossType.KLDivergence, predicts, targets);
 
         /// <summary>
-        /// Returns the loss summed along the last axis. The value is meaned along the batch axis.
+        /// Returns the mean loss.
         /// </summary>
-        public float Value { get
+        public float Item { get
             {
-                Tensor lossItem = Item;
+                Tensor lossItem = Value;
                 if (lossItem.Rank == 2)// case is batched
-                    return lossItem.Mean(-2).Sum(-1)[0];
+                    return lossItem.Mean(0).Mean(0)[0];
                 else
-                    return lossItem.Sum(-1)[0];
+                    return lossItem.Mean(0)[0];
 
             }
         }
-        public Tensor Item { get
+        /// <summary>
+        /// Returns the computed loss function.
+        /// </summary>
+        public Tensor Value { get
             {
                 switch (lossType)
                 {
@@ -43,9 +53,9 @@ namespace DeepUnity
                     case LossType.MAE:
                         return Tensor.Abs(predicts - targets);
 
-                    case LossType.CategoricalCrossEntropy:
+                    case LossType.CrossEntropy:
                         return -targets * Tensor.Log(predicts);
-                    case LossType.BinaryCrossEntropy:
+                    case LossType.BCE:
                         return targets * Tensor.Log(predicts + Utils.EPSILON) - (-targets + 1f) * Tensor.Log(-predicts + 1f + Utils.EPSILON);
 
                     case LossType.HingeEmbedded:
@@ -57,6 +67,9 @@ namespace DeepUnity
                 }
             }
         }
+        /// <summary>
+        /// Returns the computed loss function derivative [Used for backpropagation]
+        /// </summary>
         public Tensor Derivative { get
             {
                 switch (lossType)
@@ -66,9 +79,9 @@ namespace DeepUnity
                     case LossType.MAE:
                         return predicts.Zip(targets, (p, t) => p - t > 0 ? 1f : -1f);
 
-                    case LossType.CategoricalCrossEntropy:
+                    case LossType.CrossEntropy:
                         return -targets / predicts;
-                    case LossType.BinaryCrossEntropy:
+                    case LossType.BCE:
                         return (targets - predicts) / (predicts * (predicts - 1f) + Utils.EPSILON);
 
                     case LossType.HingeEmbedded:
@@ -84,8 +97,8 @@ namespace DeepUnity
         {
             MSE,
             MAE,
-            CategoricalCrossEntropy,
-            BinaryCrossEntropy,
+            CrossEntropy,
+            BCE,
             HingeEmbedded,            
             KLDivergence
         }

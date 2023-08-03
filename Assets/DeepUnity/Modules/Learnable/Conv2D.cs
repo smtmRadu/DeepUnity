@@ -14,6 +14,7 @@ namespace DeepUnity
     // https://www.youtube.com/watch?v=Lakz2MoHy6o
 
     /// <summary>
+    /// <b>For non bouncing loss it requires GradClipNorm().</b> <br></br>
     /// Input: (<b>B</b>, <b>C_in</b>, <b>H_in</b>, <b>W_in</b>) or (<b>C_in</b>, <b>H_in</b>, <b>W_in</b>) for unbatched input.<br/>
     /// Output: <b>(B, C_out, H_out, W_out)</b> or <b>(C_out, H_out, W_out)</b> for unbatched input.<br></br>
     /// <br></br>
@@ -218,7 +219,7 @@ namespace DeepUnity
             return Predict(input);
         }
 
-        /// <param name="loss">(B, C_out, H - K + 1, W - K + 1)</param>
+        /// <param name="loss">(B, C_out, H - K_h + 1, W - K_w + 1)</param>
         /// <returns></returns>
         public Tensor Backward(Tensor loss)
         {
@@ -456,8 +457,6 @@ namespace DeepUnity
         /// <returns>input_gradient(B, iC, H, W)</returns>
         private Tensor Convolve2DFull_loss_gamma(Tensor loss, Tensor kernels)
         {
-            
-
             int batchSize = loss.Rank == 4 ? loss.Size(-4) : 1;
 
             int inChannels = inputShape[0];
