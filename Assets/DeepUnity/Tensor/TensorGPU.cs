@@ -13,7 +13,7 @@ namespace DeepUnity
     /// [Deprecated] A tensor used for custom objectives, that lives in VRAM and runs much faster high computational operations like MatMul.
     /// </summary>
     [Serializable]
-    public class TensorGPU : IDisposable, ISerializationCallbackReceiver, IEquatable<Tensor>, IEquatable<TensorGPU>
+    public sealed class TensorGPU : IDisposable, ISerializationCallbackReceiver, IEquatable<Tensor>, IEquatable<TensorGPU>
     { 
         private ComputeBuffer data;
         [SerializeField] private float[] serialized_data;
@@ -239,6 +239,9 @@ namespace DeepUnity
         // Create
         private TensorGPU(params int[] shape)
         {
+            Debug.LogError("TensorGPU class is deprecated.");
+            EditorApplication.isPlaying = false;
+
             if (shape == null)
                 throw new ShapeException("Tensor cannot be instantiated with null shape");
             if (shape.Length == 0)
@@ -255,7 +258,7 @@ namespace DeepUnity
             }
 
             if (size > 4_194_304) // hardcoded like this because 4096x4096 max allowed matrix, on 8192 it crashes
-                throw new NotSupportedException("Tensor dimensions is too large on initialization (cannot surpass 16,777,216 units).");
+                throw new NotSupportedException("Tensor dimensions is too large on initialization (cannot surpass 4,194,304 units).");
 
 
             this.shape = shape.ToArray();
@@ -1275,7 +1278,6 @@ namespace DeepUnity
 
             return t;
         }
-       
 
         #endregion Static operations
 
@@ -1283,89 +1285,21 @@ namespace DeepUnity
         #region Instance operations
         public TensorGPU Reshape(params int[] newShape)
         {
-            int count = 1;
-            foreach (var item in newShape)
-            {
-                count *= item;
-            }
-
-            if (count != Count())
-                throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
-
-            TensorGPU result = new TensorGPU(newShape);
-            float[] tensor_data = new float[Count()];
-            data.GetData(tensor_data);
-            result.data.SetData(tensor_data);
-            return result;
+            return Reshape(this, newShape);
         }
         public TensorGPU Squeeze(int? axis = null)
         {
-            if (axis == null)
-            {
-                // Removes all axis with value 1
-                LinkedList<int> squeezedShape = new LinkedList<int>();
-
-                if (Width > 1)
-                    squeezedShape.AddFirst(Width);
-
-                if (Height > 1)
-                    squeezedShape.AddFirst(Height);
-
-                if (Channels > 1)
-                    squeezedShape.AddFirst(Channels);
-
-                if (Batch > 1)
-                    squeezedShape.AddFirst(Batch);
-
-                if (squeezedShape.Count == 0)
-                    squeezedShape.AddFirst(Width);
-
-                shape = squeezedShape.ToArray();
-                return this;
-            }
-            else
-            {
-                int ax = axis.Value;
-                HandleAxis(this, ref ax);
-
-
-                // if axis is not 1, tensor remains unchanged
-                if (this.shape[ax] != 1)
-                    return Identity(this);
-
-                // Esle remove that axis
-                List<int> squeezedShape = this.shape.ToList();
-                if(squeezedShape.Count > 1)
-                    squeezedShape.RemoveAt(ax);
-
-                this.shape = squeezedShape.ToArray();
-                return this;
-            }
-
+            return Squeeze(this, axis);
         }
         public TensorGPU Unsqueeze(int axis)
         {
-            HandleAxis(this, ref axis);
-
-            List<int> unsqueezedShape = this.shape.ToList();
-            unsqueezedShape.Insert(axis, 1);
-            this.shape = unsqueezedShape.ToArray(); 
-            return this;
+            return Unsqueeze(this, axis);
         }
 
         #endregion Instance operations
 
 
         // other
-        public void ForEach(Action<float> action)
-        {
-            float[] dataarr = new float[data.count];
-            data.GetData(dataarr);
-            for (int i = 0; i < dataarr.Length; i++)
-            {
-                action(dataarr[i]);
-            }
-        }
         public int Count(Func<float, bool> predicate = null)
         {         
             if (predicate == null)
@@ -1374,7 +1308,6 @@ namespace DeepUnity
             }
             else
             {
-                int count = 0;
                 float[] data_cpu = new float[data.count];
                 data.GetData(data_cpu);
 
@@ -1514,12 +1447,11 @@ namespace DeepUnity
         }
         public void Dispose()
         {
-            if (!disposed)
-            {
-                data.Release();
-                disposed = true;
-            }
+            if (disposed)
+                return;
 
+            data.Release();
+            disposed = true;
             GC.SuppressFinalize(this);
         }
         public void OnBeforeSerialize()

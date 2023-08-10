@@ -12,9 +12,9 @@ using UnityEngine.Windows;
 namespace DeepUnity
 {
     // https://www.youtube.com/watch?v=Lakz2MoHy6o
-
+    // https://github.com/TheIndependentCode/Neural-Network/blob/master/convolutional.py
     /// <summary>
-    /// <b>For non bouncing loss it requires GradClipNorm().</b> <br></br>
+    /// <b>This modules tends to diverge on high learning rate. A recommended approach is either using Adam optimizer on lr = 0.0002, or using GradClipNorm().</b> <br></br>
     /// Input: (<b>B</b>, <b>C_in</b>, <b>H_in</b>, <b>W_in</b>) or (<b>C_in</b>, <b>H_in</b>, <b>W_in</b>) for unbatched input.<br/>
     /// Output: <b>(B, C_out, H_out, W_out)</b> or <b>(C_out, H_out, W_out)</b> for unbatched input.<br></br>
     /// <br></br>
@@ -22,8 +22,8 @@ namespace DeepUnity
     /// B = batch_size <br></br>
     /// C_in = in_channels <br></br> 
     /// C_out = out_channels, <br></br>
-    /// H_out = H_in - kernel_size + 1 <br></br> 
-    /// W_out = W_in - kernel_size + 1
+    /// H_out = H_in - kernel.height + 1 <br></br> 
+    /// W_out = W_in - kernel.width + 1
     /// </summary>
     [Serializable]
     public class Conv2D : Learnable, IModule 
@@ -56,7 +56,16 @@ namespace DeepUnity
         /// <param name="input_shape">(C_in, H, W)</param>
         /// <param name="out_channels">C_out</param>
         /// <param name="kernel_size"></param>
-        public Conv2D((int, int, int) input_shape, int out_channels, int kernel_size, Device device = Device.CPU) : base(device)
+        /// <param name="gamma_init">Initializer used for weights.</param>
+        /// <param name="beta_init">Initializer used for biases.</param>
+        public Conv2D((int, int, int) input_shape, int out_channels, int kernel_size, InitType gamma_init = InitType.LeCun_Uniform, InitType beta_init = InitType.LeCun_Uniform, Device device = Device.CPU) : 
+            base(device, 
+                gamma_init,
+                beta_init, 
+                new int[] { out_channels, input_shape.Item1, kernel_size, kernel_size },
+                new int[] { out_channels, input_shape.Item2 - kernel_size + 1, input_shape.Item3 - kernel_size + 1},
+                input_shape.Item1 * kernel_size * kernel_size,
+                out_channels)
         {
             if (input_shape.Item1 < 1)
                 throw new ArgumentException("Cannot have less than 1 input channels.");
@@ -70,24 +79,7 @@ namespace DeepUnity
             this.inputShape = new int[] { input_shape.Item1, input_shape.Item2, input_shape.Item3 };
             this.outChannels = out_channels;
             this.kernelWidth = kernel_size;
-            this.kernelHeight = kernel_size;
-
-            
-            int in_width = input_shape.Item3;
-            int in_height = input_shape.Item2;
-            int in_channels = input_shape.Item1;
-
-            int out_width = in_width - kernelWidth + 1;
-            int out_height = in_height - kernelWidth + 1;
-
-
-            float k = 1f / (in_channels * kernelHeight * kernelWidth);
-            (float, float) range = (-MathF.Sqrt(k), MathF.Sqrt(k));
-
-            gamma = Tensor.RandomRange(range, out_channels, in_channels, kernelHeight, kernelWidth);
-            beta = Tensor.RandomRange(range, outChannels, out_height, out_width);
-            gammaGrad = Tensor.Zeros(out_channels, in_channels, kernelHeight, kernelWidth);
-            betaGrad = Tensor.Zeros(outChannels, out_height, out_width);
+            this.kernelHeight = kernel_size;                    
         }
         /// <summary>
         /// Input: (<b>B</b>, <b>C_in</b>, <b>H_in</b>, <b>W_in</b>) or (<b>C_in</b>, <b>H_in</b>, <b>W_in</b>) for unbatched input.<br/>
@@ -101,7 +93,16 @@ namespace DeepUnity
         /// W_out = W_in - kernel_shape.Item2 + 1
         /// </summary>
         /// <param name="input_shape">(C_in, H, W)</param>
-        public Conv2D((int, int, int) input_shape, int out_channels, (int, int) kernel_shape, Device device = Device.CPU) : base(device)
+        /// <param name="gamma_init">Initializer used for weights.</param>
+        /// <param name="beta_init">Initializer used for biases.</param>
+        public Conv2D((int, int, int) input_shape, int out_channels, (int, int) kernel_shape, InitType gamma_init = InitType.Glorot_Uniform, InitType beta_init = InitType.Zeros, Device device = Device.CPU) :
+             base(device,
+                gamma_init,
+                beta_init,
+                new int[] { out_channels, input_shape.Item1, kernel_shape.Item1, kernel_shape.Item2 },
+                new int[] { out_channels, input_shape.Item2 - kernel_shape.Item1 + 1, input_shape.Item3 - kernel_shape.Item2 + 1 },
+                input_shape.Item1 * kernel_shape.Item1 * kernel_shape.Item2,
+                out_channels)
         {
             if (input_shape.Item1 < 1)
                 throw new ArgumentException("Cannot have less than 1 input channels.");
@@ -116,29 +117,17 @@ namespace DeepUnity
             this.outChannels = out_channels;
             this.kernelWidth = kernel_shape.Item2;
             this.kernelHeight = kernel_shape.Item1;
-
-
-            int in_width = input_shape.Item3;
-            int in_height = input_shape.Item2;
-            int in_channels = input_shape.Item1;
-
-            int out_width = in_width - kernelWidth + 1;
-            int out_height = in_height - kernelWidth + 1;
-
-            float k = 1f / (in_channels * kernelHeight * kernelWidth);
-            (float, float) range = (-MathF.Sqrt(k), MathF.Sqrt(k));
-            gamma = Tensor.RandomRange(range, out_channels, in_channels, kernelHeight, kernelWidth);
-            beta = Tensor.RandomRange(range, outChannels, out_height, out_width);
-            gammaGrad = Tensor.Zeros(out_channels, in_channels, kernelHeight, kernelWidth);
-            betaGrad = Tensor.Zeros(outChannels, out_height, out_width);
         }
+
+
+
 
         /// <param name="input">(B, C_in, H, W)</param>
         /// <returns></returns>
         public Tensor Predict(Tensor input)
         {
             if (input.Rank < 3)
-                throw new ShapeException("The input in Conv2D module must be (B, C, H, W) or (C, H, W) for unbatched input.");
+                throw new ShapeException($"The input ({input.Shape.ToCommaSeparatedString()}) in Conv2D module must be (B, C, H, W) or (C, H, W) for unbatched input.");
 
             if(input.Size(-3) != inputShape[0] || input.Size(-2) != inputShape[1] || input.Size(-1) != inputShape[2])
                 throw new ShapeException($"Input shape ({input.Size(-3)}{input.Size(-2)}{input.Size(-1)}) received in Conv2D module must be ({inputShape.ToCommaSeparatedString()})");
@@ -192,9 +181,9 @@ namespace DeepUnity
                 cs.SetInt("kernel_width", kernelWidth);
 
                 cs.Dispatch(0,
-                    (W_out + 16 - 1) / 16,
-                    (H_out + 16 - 1) / 16,
-                    (C_out + 4 - 1) / 4);
+                    (W_out + 15) / 16,
+                    (H_out + 15) / 16,
+                    (C_out + 3) / 4);
 
                 Tensor result = Tensor.Constant(outputBuffer).Reshape(batch_size, outChannels, H_out, W_out);
 
@@ -254,23 +243,31 @@ namespace DeepUnity
                 cs.SetInt("kernel_width", kernelWidth);
 
 
-                // Compute the gradients of the loss wrt. parameters ------------------------------------------------------------OK SO COMPUTE SHADER WORKS BUT IT S AN OUTER PROBLEM
+                // Compute the gradients of the loss wrt. parameters ------------------------------------------------------------
+                int KINDEX = kernelHeight <= 3 ? 1 : 2;
+
                 ComputeBuffer lossBuffer = new ComputeBuffer(loss.Count(), 4);
                 lossBuffer.SetData(loss.ToArray());
-                cs.SetBuffer(1, "loss", lossBuffer);
+                cs.SetBuffer(KINDEX, "loss", lossBuffer);
                 
                 ComputeBuffer inputBuffer = new ComputeBuffer(InputCache.Count(), 4);
                 inputBuffer.SetData(InputCache.ToArray());
-                cs.SetBuffer(1, "input", inputBuffer);
+                cs.SetBuffer(KINDEX, "input", inputBuffer);
                 
                 ComputeBuffer gammaGradBuffer = new ComputeBuffer(gammaGrad.Count(), 4);
                 gammaGradBuffer.SetData(gammaGrad.ToArray());
-                cs.SetBuffer(1, "gamma_grad", gammaGradBuffer);
+                cs.SetBuffer(KINDEX, "gamma_grad", gammaGradBuffer);
                 
-                cs.Dispatch(1,
-                    (gamma.Size(-1) + 5 - 1) / 5,
-                    (gamma.Size(-2) + 5 - 1) / 5,
-                    (C_out + 32 - 1) / 32);
+                if(KINDEX == 1)
+                    cs.Dispatch(1,
+                        (gamma.Size(-1) + 2) / 3,
+                        (gamma.Size(-2) + 2) / 3,
+                        (C_out + 63) / 64);
+                else
+                    cs.Dispatch(2,
+                        (gamma.Size(-1) + 4) / 5,
+                        (gamma.Size(-2) + 4) / 5,
+                        (C_out + 31) / 32);
 
                 gammaGrad = Tensor.Constant(gammaGradBuffer).Reshape(gammaGrad.Shape);
                 betaGrad += isBatched ? Tensor.Mean(loss, -4) : loss;  // faster on CPU
@@ -284,20 +281,20 @@ namespace DeepUnity
 
 
                 // Computes the gradient of the loss wrt input. -------------------------------------------------------------------------
-                cs.SetBuffer(2, "loss", lossBuffer);
+                cs.SetBuffer(3, "loss", lossBuffer);
 
                 ComputeBuffer gammaBuffer = new ComputeBuffer(gamma.Count(), 4);
                 gammaBuffer.SetData(gamma.ToArray());
-                cs.SetBuffer(2, "gamma", gammaBuffer);
+                cs.SetBuffer(3, "gamma", gammaBuffer);
 
                 ComputeBuffer inputGradBuffer = new ComputeBuffer(InputCache.Count(), 4);
                 inputGradBuffer.SetData(new float[InputCache.Count()]);
-                cs.SetBuffer(2, "input_grad", inputGradBuffer);
+                cs.SetBuffer(3, "input_grad", inputGradBuffer);
 
-                cs.Dispatch(2,
-                    (W_in + 16 - 1) / 16,
-                    (H_in + 16 - 1) / 16,
-                    (batch_size + 4 - 1) / 4);
+                cs.Dispatch(3,
+                    (W_in + 15) / 16,
+                    (H_in + 15) / 16,
+                    (batch_size + 3) / 4);
 
                 Tensor inputGrad = Tensor.Constant(inputGradBuffer).Reshape(batch_size, C_in, H_in, W_in);
 
@@ -379,17 +376,17 @@ namespace DeepUnity
                          {
                              for (int w = 0; w < outputWidth; w++)
                              {
-                                 float sum = 0f;
+                                 float poolSum = 0f;
 
                                  for (int j = 0; j < kernelHeight; j++)
                                  {
                                      for (int i = 0; i < kernelWidth; i++)
                                      {
-                                         sum += input[0, ic, h + j, w + i] * kernels[oc, ic, j, i];
+                                         poolSum += input[0, ic, h + j, w + i] * kernels[oc, ic, j, i];
                                      }
                                  }
 
-                                 output[0, oc, h, w] += sum;
+                                 output[0, oc, h, w] += poolSum;
                              }
                          }
                      }
@@ -479,7 +476,7 @@ namespace DeepUnity
                             {
                                 for (int w = 0; w < inputGradWidth; w++)
                                 {
-                                    float sum = 0f;
+                                    float poolSum = 0f;
                 
                                     for (int j = 0; j < kernelHeight; j++)
                                     {
@@ -493,11 +490,11 @@ namespace DeepUnity
                                                 // the kernels are rotated by 180 degrees, so we get the inversed index of the kernel.
                                                 int jIndexOfRotatedKernel = kernelHeight - j - 1;
                                                 int iIndexOfRotatedKernel = kernelWidth - i - 1;
-                                                sum += loss[b, oc, inputRow, inputCol] * kernels[oc, ic, jIndexOfRotatedKernel, iIndexOfRotatedKernel];
+                                                poolSum += loss[b, oc, inputRow, inputCol] * kernels[oc, ic, jIndexOfRotatedKernel, iIndexOfRotatedKernel];
                                             }
                                         }
                                     }
-                                    inputGrad[b, ic, h, w] += sum;
+                                    inputGrad[b, ic, h, w] += poolSum;
                                 }
                             }
                         }

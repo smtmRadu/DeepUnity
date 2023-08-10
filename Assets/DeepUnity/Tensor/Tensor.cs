@@ -1,20 +1,15 @@
-using JetBrains.Annotations;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Eventing.Reader;
 using System.Linq;
-using System.Runtime.Remoting.Channels;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
-using UnityEngine.Windows;
-using static UnityEditor.LightingExplorerTableColumn;
 
 namespace DeepUnity
 {
     [Serializable]
-    public class Tensor : IEquatable<Tensor>, IEquatable<TensorGPU>
+    public sealed class Tensor : IEquatable<Tensor>, IEquatable<TensorGPU>
     {
         public static string ToStringFormat { get; set; } = "0.00000";
         [SerializeField] private float[] data;
@@ -73,7 +68,6 @@ namespace DeepUnity
                     return shape[shape.Length - 4];
             }
         }
-        
         public float this[int w]
         {
             get => data[w];
@@ -239,64 +233,53 @@ namespace DeepUnity
             return t;
         }
         /// <summary>
-        /// Output: (C_color, H, W) or (C_gray, H, W) when <paramref name="grayscale"/> = true <br></br>
+        /// Output: (C, H, W) <br></br>
         /// where <br></br>
-        /// C_color = 3 if <paramref name="transparency"/> = false or 4 if <paramref name="transparency"/> = true.<br></br>
-        /// C_gray = 1 if <paramref name="transparency"/> = false or 2 if <paramref name="transparency"/> = true. <br></br>
+        /// C = <paramref name="channels"/> (1 = Grayscale, 2 = Grayscale + Alpha, 3 = RGB, 4 = RGBA)<br></br>
         /// H = texture.height <br></br>
         /// W = texture.width <br></br>
         /// <em>Note: Tensors are displayed as the texture mirrored on horizontal axis when visualized as strings.</em>
         /// </summary>
-        /// <param name="texture"></param>
-        /// <param name="grayscale"></param>
+        /// <param name="channels">A value between 1 and 4</param>
         /// <returns></returns>
-        public static Tensor Constant(Texture2D texture, bool grayscale = false, bool transparency = false)
+        public static Tensor Constant(Texture2D texture, int channels)
         {
             int width = texture.width;
             int height = texture.height;
-            int channels = grayscale ? 1 : 3;
-            if (transparency)
-                channels++;
 
             Color[] colors = texture.GetPixels();
-            Tensor result = Tensor.Zeros(channels, height, width);
+            Tensor result = Zeros(channels, height, width);
            
             for (int j = 0; j < height; j++)
             {
                 for (int i = 0; i < width; i++)
                 {
-                    if(transparency)
+                    if(channels == 1)
                     {
-                        if(grayscale)
-                        {
-                            Color col = colors[j * width + i];
-                            result[0, j, i] = (col.r + col.g + col.b) / 3f;
-                            result[1, j, i] = col.a;
-                        }
-                        else
-                        {
-                            result[0, j, i] = colors[j * width + i].r;
-                            result[1, j, i] = colors[j * width + i].g;
-                            result[2, j, i] = colors[j * width + i].b;
-                            result[3, j, i] = colors[j * width + i].a;
-                        }
+                        Color col = colors[j * width + i];
+                        result[0, j, i] = (col.r + col.g + col.b) / 3f;
                     }
-                    else
+                    else if(channels == 2)
                     {
-                        if (grayscale)
-                        {
-                            Color col = colors[j * width + i];
-                            result[0, j, i] = (col.r + col.g + col.b) / 3f;
-                        }
-                        else
-                        {
-                            result[0, j, i] = colors[j * width + i].r;
-                            result[1, j, i] = colors[j * width + i].g;
-                            result[2, j, i] = colors[j * width + i].b;
-                        }
+                        Color col = colors[j * width + i];
+                        result[0, j, i] = (col.r + col.g + col.b) / 3f;
+                        result[1, j, i] = col.a;
                     }
-                    
-                   
+                    else if(channels == 3)
+                    {
+                        result[0, j, i] = colors[j * width + i].r;
+                        result[1, j, i] = colors[j * width + i].g;
+                        result[2, j, i] = colors[j * width + i].b;
+
+                    }
+                    else if(channels == 4)
+                    {
+
+                        result[0, j, i] = colors[j * width + i].r;
+                        result[1, j, i] = colors[j * width + i].g;
+                        result[2, j, i] = colors[j * width + i].b;
+                        result[3, j, i] = colors[j * width + i].a;
+                    }                   
                 }
             }
            
@@ -1152,12 +1135,6 @@ namespace DeepUnity
             return tensor.shape[axis];
         }
         /// <summary>
-        /// Finds the indexes of the largest element in the tensor.
-        /// </summary>
-        /// <param name="tensor"></param>
-        /// <returns>int[] containing the position indexes.</returns>
-      
-        /// <summary>
         /// Changes the shape of the tensor. Pi(shape) must be equal to Pi(<paramref name="newShape"/>)
         /// </summary>
         /// <param name="tensor"></param>
@@ -1231,6 +1208,14 @@ namespace DeepUnity
             }
 
         }
+        /// <summary>
+        /// Creates a new dimension, higher than the provided axis. <br></br>
+        /// Example: <br></br>
+        /// Unsqueeze(tensor: (8,16), axis: 0) => output tensor: (1, 8, 16)
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <returns></returns>
         public static Tensor Unsqueeze(Tensor tensor, int axis)
         {
             HandleAxis(tensor, ref axis);
@@ -1242,6 +1227,16 @@ namespace DeepUnity
             Array.Copy(tensor.data, result.data, tensor.data.Length);
             return result;
         }     
+        /// <summary>
+        /// Combines multiple dimensions into a single dimension. <br></br>
+        /// Example: <br></br>
+        /// Flatten(tensor: (10,4,3), startAxis: 1, endAxis: -1) => output tensor: (10,12)
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="startAxis"></param>
+        /// <param name="endAxis"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
         public static Tensor Flatten(Tensor tensor, int startAxis, int endAxis)
         {
             if (startAxis > endAxis)
@@ -1378,6 +1373,16 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Expands the tensor along the specified axis. <br></br>
+        /// Example: <br></br>
+        /// Expand(tensor: (10, <b>4</b>, 12), axis: 1, times: 4) => output tensor: (10, <b>20</b>, 12)
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <param name="times"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
         public static Tensor Expand(Tensor tensor, int axis, int times)
         {
             if (times < 1)
@@ -1444,6 +1449,13 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Transposes the tensor along the two specified axis.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis0"></param>
+        /// <param name="axis1"></param>
+        /// <returns></returns>
         public static Tensor Transpose(Tensor tensor, int axis0, int axis1)
         {
             HandleAxis(tensor, ref axis0);

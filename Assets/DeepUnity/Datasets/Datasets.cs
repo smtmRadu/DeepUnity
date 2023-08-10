@@ -58,7 +58,7 @@ namespace DeepUnity
         }
         public static void SerializeMNIST()
         {
-            TimerX.Start();
+            ClockTimer.Start();
             string trainPath = "C:\\Users\\radup\\OneDrive\\Desktop\\TRAIN\\";
             string testPath = "C:\\Users\\radup\\OneDrive\\Desktop\\TEST\\";
 
@@ -76,7 +76,7 @@ namespace DeepUnity
 
                 foreach (var tp in trainPaths)
                 {
-                    Tensor image = Tensor.Constant(LoadTexture(tp), true);
+                    Tensor image = Tensor.Constant(LoadTexture(tp), 1);
 
                     Tensor label = Tensor.Zeros(10);
                     label[i] = 1;
@@ -87,7 +87,7 @@ namespace DeepUnity
                 }
                 foreach (var vp in testPaths)
                 {
-                    Tensor image = Tensor.Constant(LoadTexture(vp), true);
+                    Tensor image = Tensor.Constant(LoadTexture(vp), 1);
 
                     Tensor label = Tensor.Zeros(10);
                     label[i] = 1;
@@ -133,7 +133,7 @@ namespace DeepUnity
             test_l.Close();
 
             Debug.Log("MNIST Serialized.");
-            TimerX.Stop();
+            ClockTimer.Stop();
         }
         private static Texture2D LoadTexture(string filePath)
         {

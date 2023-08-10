@@ -4,17 +4,15 @@ using System.Linq;
 using UnityEngine;
 
 
-
+// https://machinelearningmastery.com/how-to-develop-a-convolutional-neural-network-from-scratch-for-mnist-handwritten-digit-classification/
 public class Tutorial3 : MonoBehaviour
 {
     [Header("Learning MNIST digit recognition.")]
     [SerializeField] Sequential network; 
     [SerializeField] private int batch_size = 64;
-    [SerializeField] private bool showTrainAccuracy = true;
+    [SerializeField] private PerformanceGraph accuracyGraph = new PerformanceGraph();
+    [SerializeField] private PerformanceGraph lossGraph = new PerformanceGraph();
 
-
-    [Header("Test")]
-    [SerializeField] RenderTexture renderTexture;
     Optimizer optim;
     
     List<(Tensor, Tensor)> train = new();
@@ -47,14 +45,17 @@ public class Tutorial3 : MonoBehaviour
             //      );
 
             network = new Sequential(
-                new Conv2D((1, 28, 28), 1, 3, Device.GPU),
+                new Conv2D((1, 28, 28), 32, (3, 3), gamma_init: InitType.HE_Uniform, device: Device.GPU),
                 new ReLU(),
+                new MaxPool2D(2),
                 new Flatten(),
-                new Dense(1 * 26 * 26, 64, device: Device.GPU),
+                new BatchNorm(5408),
+                new Dense(5408, 100, gamma_init: InitType.HE_Uniform, device: Device.GPU),
                 new ReLU(),
-                new Dense(64, 10),
+                new BatchNorm(100),
+                new Dense(100, 10),
                 new Softmax()
-                ).Compile("MNIST_MODEL");
+                ).CreateAsset("Tutorial3");
 
             // network = new Sequential(
             //     new Flatten(),
@@ -64,7 +65,7 @@ public class Tutorial3 : MonoBehaviour
             //     new Softmax());
         }
 
-        optim = new Adam(network.Parameters());
+        optim = new SGD(network.Parameters(), lr: 0.1f, momentum: 0.9f);
 
         Utils.Shuffle(train);
         train_batches = Utils.Split(train, batch_size);
@@ -79,11 +80,9 @@ public class Tutorial3 : MonoBehaviour
         {
             batch_index = 0;
             print($"Epoch {epochIndex++}");
-            network.Save();
             Utils.Shuffle(train);
         }
-
-       
+      
         (Tensor, Tensor)[] train_batch = train_batches[batch_index];
 
         Tensor input = Tensor.Cat(null, train_batch.Select(x => x.Item1).ToArray());
@@ -95,16 +94,11 @@ public class Tutorial3 : MonoBehaviour
         optim.ZeroGrad();
         network.Backward(loss.Derivative);
         optim.Step();
-
-
-        float train_acc = showTrainAccuracy ? Metrics.Accuracy(prediction, target) : 0f;
+      
+        float train_acc = Metrics.Accuracy(prediction, target);
+        lossGraph.Append(loss.Item);
+        accuracyGraph.Append(train_acc);
         Debug.Log($"Epoch {epochIndex} | Batch {batch_index++}/{train_batches.Count} | Accuracy {train_acc * 100}%");
-
-
-        // Tensor valid_input = Tensor.Concat(null, test.Select(x => x.Item1).ToArray());
-        // Tensor valid_target = Tensor.Concat(null, test.Select(x => x.Item2).ToArray());
-        // float  valid_acc = Metrics.Accuracy(network.Predict(valid_input), valid_target);
-
     }
 }
 

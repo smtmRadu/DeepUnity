@@ -54,48 +54,19 @@ namespace DeepUnity
         }
 
 
-        public override Learnable[] Parameters()
-        {
-            return modules.OfType<Learnable>().ToArray();
-        }       
-        public override Sequential Compile(string name)
-        {
-            var instance = AssetDatabase.LoadAssetAtPath<Sequential>("Assets/" + name + ".asset");
-            if(instance != null)
-            {
-                throw new InvalidOperationException($"A Sequencial asset called '{name}' already exists!.");
-            }
-           
-            this.name = name;
-            AssetDatabase.CreateAsset(this, $"Assets/{name}.asset");
-            EditorUtility.SetDirty(this);
-            AssetDatabase.SaveAssetIfDirty(this);
-            return this;
-
-        }
-        public override void Save(string version = "1.0")
-        {
-            this.version += "v" + version;
-            // Check if asset exists:
-            var instance = AssetDatabase.LoadAssetAtPath<Sequential>("Assets/" + name + ".asset");
-            if (instance == null)
-                throw new InvalidOperationException($"Cannot save Sequencial because it was not compiled.");
-            
-            EditorUtility.SetDirty(this);
-            AssetDatabase.SaveAssetIfDirty(this);
-        }
+        public override Learnable[] Parameters() => modules.OfType<Learnable>().ToArray();     
         public override string Summary()
         {
             StringBuilder stringBuilder = new StringBuilder();
 
-            stringBuilder.AppendLine($"Name: {name} ({version})");
+            stringBuilder.AppendLine($"Name: {name}");
             stringBuilder.AppendLine("Type: Sequencial");
             stringBuilder.AppendLine($"Layers : {modules.Length}");
             foreach (var module in modules)
             {
                 stringBuilder.AppendLine($"         {module.GetType().Name}");
             }
-            stringBuilder.AppendLine($"Parameters: {modules.Where(x => x is Learnable).Select(x => (Learnable)x).Sum(x => x.LearnableParametersCount)}");
+            stringBuilder.AppendLine($"Parameters: {modules.Where(x => x is Learnable).Select(x => (Learnable)x).Sum(x => x.ParametersCount())}");
             return stringBuilder.ToString();
         }
 

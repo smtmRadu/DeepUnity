@@ -1,7 +1,6 @@
 # DeepUnity
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU support] and deep neural networks, along with reinforcement learning tools.
-
 #### Run your first DeepUnity script
 ```csharp
 using UnityEngine;
@@ -31,7 +30,7 @@ public class Tutorial : MonoBehaviour
                 new Tanh(),
                 new Dense(64, 64, device: Device.GPU),
                 new ReLU(),
-                new Dense(64, 1)).Compile("TutorialModel");
+                new Dense(64, 1)).CreateAsset("TutorialModel");
         }
         optim = new Adam(network.Parameters(), 0.001f);
         scheduler = new LRScheduler(optim, 30, 0.1f);
@@ -80,10 +79,12 @@ public class Tutorial : MonoBehaviour
         print($"Epoch: {Time.frameCount} - Train Loss: {train_loss} - Valid Loss: {valid_loss}");
 
         scheduler.Step();
-        network.Save();       
+        network.Save();
     }
 }
 ```
+![rl](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/tensors.png?raw=true)
+
 ### Reinforcement Learning [In Development]
 In order to work with Reinforcement Learning tools, you must create a 2D or 3D agent using Unity provided GameObjects and Coomponents. The setup flow works similary to ML Agents (but with some restrictions described in the diagram below), so you must create a new behaviour script (e.g. _MoveToGoal_) that must inherit the **Agent** class. Attach the new behaviour script to the agent GameObject (automatically are attached 2 more scripts, **HyperParameters** and **DecisionRequester**) [Optionally, a **PerformanceTrack** script can be attached]. Choose the space size and number of actions, then override the following methods in the behavior script:
 - _CollectObservations()_
@@ -165,7 +166,7 @@ public class MoveToGoal : Agent
     }
 }
 ```
-_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (decision is requested each frame), and must reach a randomly positioned target. The agent is rewarded by 1 point if it touches the target, or penalized by 1 point if it touches a wall. The agent is penalized constantly by 0.001 points at each time step, to encourage the agent reaching the target as fast as possible._
+_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (decision is requested each frame), and must reach a randomly positioned target. The agent is rewarded by 1 point if he touches the target, or penalized by 1 point if he hits a wall. The agent is penalized constantly by 0.001 points at each time step, to encourage the agent reaching the target as fast as possible._
 
 ![rl](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_schema.jpg?raw=true)
 

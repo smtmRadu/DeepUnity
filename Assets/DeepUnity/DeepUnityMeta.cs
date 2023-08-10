@@ -1,5 +1,5 @@
 using System;
-using System.Threading.Tasks;
+using System.Diagnostics;
 using UnityEditor;
 using UnityEngine;
 
@@ -40,19 +40,18 @@ namespace DeepUnity
         }
  	   
     }
-    public static class TimerX
+    public static class ClockTimer
     {
-        static DateTime start;
-        static TimeSpan time;
+        static Stopwatch clock;
         public static void Start()
         {
-            start = DateTime.Now;
+            clock = Stopwatch.StartNew();
         }
         public static TimeSpan Stop()
         {
-            time = DateTime.Now - start;
-            Debug.Log("[Timer] : " +  time);
-            return time;
+            clock.Stop();
+            UnityEngine.Debug.Log("[Timer] : " +  clock.Elapsed);
+            return clock.Elapsed;
         }
     }
     public class ReadOnlyAttribute : PropertyAttribute
@@ -80,18 +79,32 @@ namespace DeepUnity
     }
     public enum InitType
     {
-        /// <summary>
-        /// Values initialized from <b>U(-sqrt(k), sqrt(k))</b> where <b>k = 1 / in_features.</b>
-        /// </summary>
-        Default,
-        [Tooltip("Works well with ReLU activation function.")]
+        [Tooltip("N(0, s) where s = sqrt(2 / fan_in). Works well with ReLU activation function.")]
         HE_Normal,
-        [Tooltip("Works well with ReLU activation function.")]
-        HE_Uniform,       
-        [Tooltip("Works well with Sigmoid/Tanh activation function.")]
+        [Tooltip("U(-k, k) where k = sqrt(6 / fan_in). Works well with ReLU activation function.")]
+        HE_Uniform, 
+        
+        [Tooltip("N(0, s) where s = sqrt(2 / (fan_in + fan_out)). Works well with Sigmoid activation function.")]
         Glorot_Normal,
-        [Tooltip("Works well with Sigmoid/Tanh activation function.")]
+        [Tooltip("U(-k, k) where k = sqrt(6 / (fan_in + fan_out)). Works well with Sigmoid activation function.")]
         Glorot_Uniform,
+
+        [Tooltip("N(0, s) where s = sqrt(1 / (fan_in + fan_out)). Works well with Tanh/LReLU activation function.")]
+        LeCun_Normal,
+        [Tooltip("U(-k, k) where k = sqrt(3 / (fan_in + fan_out)). Works well with Tanh/LReLU activation function.")]
+        LeCun_Uniform,
+
+        [Tooltip("N(0, 1).")]
+        Random_Normal,
+        [Tooltip("U(-1, 1).")]
+        Random_Uniform,
+
+        [Tooltip("0")]
+        Zeros,
+        [Tooltip("1")]
+        Ones
+
+
     }
     public enum Device
     {
@@ -143,9 +156,45 @@ namespace DeepUnity
 
     public enum DecisionRequestType
     {
-        EachFrame,
+        [Tooltip("The agent performs an action on each FixedUpdate() call.")]
+        OnceEachFrame,
+        [Tooltip("The agent performs an action once every X seconds denoted by the field below.")]
         OnPeriodInterval,
-        Manual
+        [Tooltip("The agent performs an action whenever RequestAction() method is called.")]
+        WhenRequested
     }
+    public enum BehaviourType
+    {
+        [Tooltip("Latent behaviour. Learning: NO. Scene resets: NO.")]
+        Inactive,
+        [Tooltip("Active behaviour. Learning: NO. Scene resets: YES.")]
+        Active,
+        [Tooltip("Exploring behaviour. Learning: YES. Scene resets: YES.")]
+        Learn,
+        [Tooltip("Manual control. Learning: NO. Scene resets: YES.")]
+        Manual,
+    }
+
+    public enum OnEpisodeEndType
+    {
+        [Tooltip("When the episode ends, only the agent is repositioned to the initial state.")]
+        ResetAgent,
+        [Tooltip("When the episode ends, the agent and it's parent environment are repositioned to the initial state.")]
+        ResetEnvironment
+    }
+    public enum ActionType
+    {
+        Continuous,
+        Discrete
+    }
+
+    public enum NormalizationType
+    {
+        None,
+        Scale,
+        ZScore,
+        LogScale
+    }
+
 }
 

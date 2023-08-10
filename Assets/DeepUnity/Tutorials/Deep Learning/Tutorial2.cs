@@ -1,3 +1,4 @@
+
 using DeepUnity;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,8 +11,6 @@ public class Tutorial2 : MonoBehaviour
     public Sequential net;
     public PerformanceGraph LossGraph = new PerformanceGraph();
     public PerformanceGraph ValidLossGraph = new PerformanceGraph();
-    public int Optimizer = 0; // 0 = adam, 1 = sgd
-    public bool save;
     public Optimizer optimizer;
     public LRScheduler scheduler;
     public int hiddenSize = 64;
@@ -49,17 +48,17 @@ public class Tutorial2 : MonoBehaviour
              new Dense(2, hiddenSize),
              // new LayerNorm(hiddenSize),                
              new ReLU(),
-             // new BatchNorm(hiddenSize),
              new Dense(hiddenSize, hiddenSize, device: device),
+             new BatchNorm(hiddenSize),
              new ReLU(),
-             new Dropout(),
+             //new Dropout(),
              new Dense(hiddenSize, hiddenSize, device: device),
              new ReLU(),
              new Dense(hiddenSize, 1)
-             );
+             );//.CreateAsset("Tutorial2");
         }
 
-        optimizer = Optimizer == 0? new Adam(net.Parameters()) : new SGD(net.Parameters(),0.1f);
+        optimizer = new Adam(net.Parameters());
         scheduler = new LRScheduler(optimizer, scheduler_step_size, scheduler_gamma);
 
 
@@ -82,7 +81,7 @@ public class Tutorial2 : MonoBehaviour
         validationInputs = Tensor.Cat(1, x1, x2);
         validationTargets = y;
 
-        TimerX.Start();
+        ClockTimer.Start();
     }
 
     public void Update()
@@ -93,9 +92,9 @@ public class Tutorial2 : MonoBehaviour
             Debug.Log($"Epoch {++epoch} | LR {scheduler.CurrentLR}");
             scheduler.Step();
             i = 0;
-
+            // net.Save();
             if (epoch == timerStopEpoch)
-                TimerX.Stop();
+                ClockTimer.Stop();
 
             return;
         }

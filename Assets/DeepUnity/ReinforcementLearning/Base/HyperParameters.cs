@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace DeepUnity
 {
-    [DisallowMultipleComponent, AddComponentMenu("DeepUnity/HyperParameters")]
+    [DisallowMultipleComponent, AddComponentMenu("DeepUnity/Hyperparameters")]
     public class HyperParameters : MonoBehaviour
     { 
         [Header("Training Configurations")]
@@ -15,6 +15,10 @@ namespace DeepUnity
         [Tooltip("Tthe maximum length of an agent's episodes/trajectories. Set to a positive integer to limit the episode length to that many steps. Set to 0 for unlimited episode length.")]
         [Min(0)] public int maxSteps = 1000;
 
+        [Tooltip("Debug all timesteps in an output file.")]
+        public bool debug = false;
+
+
         [Space]
         [Tooltip("Initial learning rate for Adam optimizer.")]
         [Min(0)] public float learningRate = 3e-4f;
@@ -22,22 +26,19 @@ namespace DeepUnity
         [Tooltip("Number of epochs per episode trajectory.")]
         [Min(3)] public int numEpoch = 10;
 
-        //[Tooltip("This should always be multiple times smaller than bufferSize. Typical range: (Continuous 512 - 5120) (Discrete 32 - 512)")]
-        [Tooltip("Typical range (MaxSteps/16, MaxSteps/4), considering the batch will be most of the time less than the trajectory length.")]
+        [Tooltip("Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer_size")]
         [Min(32)] public int batchSize = 256;
 
-        // [ReadOnly, Tooltip("Typical range 2048 - 409600")]
-        // [Min(1024)] public int bufferSize = 10240;
+        [ReadOnly, Tooltip("Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch_size. Typically a larger buffer_size corresponds to more stable training updates.")]
+        [Min(1024)] public int bufferSize = 2048;
 
         [Tooltip("Applies linear decay on learning rate (default step_size: 10, default decay: 0.99f).")]
         public bool learningRateSchedule = false;
 
         [Tooltip("Apply normalization to observation inputs and rewards.")]
-        public bool normalize = false;
+        public NormalizationType normalization = NormalizationType.ZScore;
 
-        [Tooltip("Debug all timesteps in an output file.")]
-        public bool debug = false;
-
+      
         [Header("PPO-specific Configurations")]
         [ReadOnly, Tooltip("How many steps of experience to collect per-agent before adding it to the experience buffer.")]
         [Min(1)] public int timeHorizon = 64;

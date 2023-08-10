@@ -21,49 +21,22 @@ namespace DeepUnity
         /// </summary>
         /// <param name="in_features">Input's last dimension value (H_in).</param>
         /// <param name="out_features">Output's last dimension value (H_out).</param>
-        /// <param name="init">Weights initialization mode.</param>
+        /// <param name="gamma_init">Initializer used for weights.</param>
+        /// <param name="beta_init">Initializer used for biases.</param>
         /// <param name="device">Computation device used. Recommended <see cref="Device.GPU"/> for large <see cref="Dense"/> layers with <b>in_features</b> &amp; <b>out_features > 64</b>.</param>
-        public Dense(int in_features, int out_features, InitType init = InitType.Default, Device device = Device.CPU) : base(device)
+        public Dense(int in_features, int out_features, InitType gamma_init = InitType.Glorot_Uniform, InitType beta_init = InitType.Zeros, Device device = Device.CPU) 
+            : base(device, 
+                  gamma_init, 
+                  beta_init,
+                  new int[] { out_features, in_features }, 
+                  new int[] { out_features }, 
+                  in_features, 
+                  out_features)
         {
             if (in_features < 1)
                 throw new ArgumentException("In_features cannot be less than 1.");
             if (out_features < 1)
                 throw new ArgumentException("Out_features cannot be less than 1.");
-
-            gammaGrad = Tensor.Zeros(out_features, in_features);
-            betaGrad = Tensor.Zeros(out_features);
-
-            switch (init)
-            {
-                case InitType.Default: // pytorch default initialization
-                    float sqrtK = MathF.Sqrt(1f / in_features);
-                    var u = (-sqrtK, sqrtK);
-                    gamma = Tensor.RandomRange(u, out_features, in_features);
-                    beta = Tensor.RandomRange(u, out_features);
-                    break;           
-                case InitType.HE_Normal:
-                    float sigmaHE = MathF.Sqrt(2f / in_features);
-                    gamma = Tensor.RandomNormal((0, sigmaHE), out_features, in_features);
-                    beta = Tensor.Zeros(out_features);
-                    break;
-                case InitType.HE_Uniform:
-                    float bound = MathF.Sqrt(6f / in_features);
-                    gamma = Tensor.RandomRange((-bound, bound), out_features);
-                    beta = Tensor.Zeros(out_features);
-                    break;
-                case InitType.Glorot_Normal: 
-                    float sigmaXA = MathF.Sqrt(2f / (in_features + out_features));
-                    gamma = Tensor.RandomNormal((0, sigmaXA), out_features, in_features);
-                    beta = Tensor.Zeros(out_features);
-                    break;
-                case InitType.Glorot_Uniform: // normalized initialization check 253 bottom in xavier glorot 5/8
-                    float limit = MathF.Sqrt(6f / (in_features + out_features));
-                    gamma = Tensor.RandomRange((-limit, limit), out_features, in_features);
-                    beta = Tensor.Zeros(out_features);
-                    break;
-                default:
-                    throw new NotImplementedException("Unhandled initialization type!");
-            }        
         }
         public Tensor Predict(Tensor input)
         {

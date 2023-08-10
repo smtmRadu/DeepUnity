@@ -166,7 +166,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 3
+  m_RootOrder: 4
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &403049174
 GameObject:
@@ -234,7 +234,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 5
+  m_RootOrder: 6
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &621327369
 GameObject:
@@ -267,7 +267,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   device: 1
-  net: {fileID: 11400000, guid: 066e2cc5fed0eeb4e9bb4bd3004ef905, type: 2}
+  net: {fileID: 11400000, guid: 3da8ebca872670143b902318986d3a80, type: 2}
   LossGraph:
     graph:
       serializedVersion: 2
@@ -286,8 +286,6 @@ MonoBehaviour:
       m_RotationOrder: 4
     steps: 0
     current: 0
-  Optimizer: 0
-  save: 1
   hiddenSize: 32
   trainingSamples: 256
   batch_size: 64
@@ -296,7 +294,7 @@ MonoBehaviour:
   scheduler_gamma: 1
   rotationSpeed: 0.35
   dataScale: 0.15
-  timerStopEpoch: 25
+  timerStopEpoch: 100
   drawScale: 200
 --- !u!4 &621327371
 Transform:
@@ -380,7 +378,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &752495706
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -397,9 +395,9 @@ MonoBehaviour:
   MatShape: {x: 640, y: 480}
   batchSize: 64
   lr: 0.001
-  Runs: 1000
+  Runs: 100
   rnn_network: {fileID: 11400000, guid: 7fb1cc86ea6c8bd44980b4c2cc2966ca, type: 2}
-  dnn_network: {fileID: 11400000, guid: 2e5f4d2620bc7014bbe094c1a93166f3, type: 2}
+  net: {fileID: 0}
   image: {fileID: 1095767905}
   image2: {fileID: 1484253706}
   graph:
@@ -427,6 +425,70 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &964543450
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 964543452}
+  - component: {fileID: 964543451}
+  m_Layer: 0
+  m_Name: Tutorial3
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!114 &964543451
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 964543450}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 45ec7b8831bf73c4bbed236ccf4948d6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  network: {fileID: 0}
+  batch_size: 64
+  accuracyGraph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+  lossGraph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+--- !u!4 &964543452
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 964543450}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -1.0931627, y: 1.8492832, z: 27.913939}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 3
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1012927895
 GameObject:
@@ -525,7 +587,7 @@ RectTransform:
   - {fileID: 1095767904}
   - {fileID: 1484253705}
   m_Father: {fileID: 0}
-  m_RootOrder: 4
+  m_RootOrder: 5
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
@@ -700,7 +762,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1973326619
 Transform:
   m_ObjectHideFlags: 0

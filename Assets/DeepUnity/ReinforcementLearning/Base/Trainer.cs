@@ -16,7 +16,6 @@ namespace DeepUnity
         private HyperParameters hp;
         private AgentPerformanceTracker performanceTracker;
         private AgentBehaviour ac;
-        [SerializeField] private int StepCount;
 
         private void Awake()
         {
@@ -46,36 +45,27 @@ namespace DeepUnity
         {
             if(Instance == null)
             {
-                EditorApplication.playModeStateChanged += SaveAC;
-                EditorApplication.pauseStateChanged += SaveAC2;
+                EditorApplication.playModeStateChanged += Autosave1;
+                EditorApplication.pauseStateChanged += Autosave2;
                 GameObject go = new GameObject("Trainer");
                 go.AddComponent<Trainer>();
                 Instance.agents = new();
                 Instance.ac = agent.model;
                 Instance.hp = agent.Hp;
                 Instance.performanceTracker = agent.PerformanceTracker;
-
                 Instance.ac.InitOptimisers(Instance.hp);
                 Instance.ac.InitSchedulers(Instance.hp);
-
-                Instance.StepCount = 0;
             }
 
             Instance.agents.Add(agent, false);
-        }      
-
-
-
+        }
         // Methods used to save the Actor Critic network when editor state changes.
-        private static void SaveAC(PlayModeStateChange state) => Instance.ac.Save();
-        private static void SaveAC2(PauseState state) => Instance.ac.Save();
-
-
+        private static void Autosave1(PlayModeStateChange state) => Instance.ac.Save();
+        private static void Autosave2(PauseState state) => Instance.ac.Save();
 
         // PPO algorithm here
         private void Train()
         {
-
             foreach (var kv in agents)
             {
                 if (kv.Value == false)
@@ -167,6 +157,9 @@ namespace DeepUnity
             {
                 agents[key] = false;
             }
+
+            performanceTracker.learningRate.Append(ac.criticScheduler.CurrentLR);
+            hp.learningRate = ac.criticScheduler.CurrentLR;
         }
         private void UpdateCritic(Tensor states_batch, Tensor returns_batch)
         {
@@ -303,8 +296,6 @@ namespace DeepUnity
 
             }
         }
-        
-
     }
 }
 

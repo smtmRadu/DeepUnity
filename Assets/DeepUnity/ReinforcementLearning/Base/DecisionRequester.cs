@@ -7,33 +7,34 @@ namespace DeepUnity
     [DisallowMultipleComponent, AddComponentMenu("DeepUnity/Decision Requester")]
     public class DecisionRequester : MonoBehaviour
     {
-        [SerializeField] public DecisionRequestType actionRequest = DecisionRequestType.EachFrame;
+        [Tooltip("When does the agent performs an action?")]
+        [SerializeField] public DecisionRequestType actionRequest = DecisionRequestType.OnceEachFrame;
         [Range(0.01f, 20f), Tooltip("The agent performs a value every X seconds.")] public float periodBetweenDecisions = 1f;
-        // [Tooltip("Use random actions to help the agent explore the environment.")] public bool randomAction = false;
+        [Tooltip("Use random actions instead of predictions.")] public bool randomAction = false;
 
         [HideInInspector] public float timeSinceLastAction = 0f;
-        [HideInInspector] public bool performActionForced = false;
+        [HideInInspector] public bool TakeActionThisFrame = true;
 
-        public bool GetPermission()
+        /// <summary>
+        /// Called in FixedUpdate() * X times (but runs logic only once), Update() and LateUpdate().
+        /// </summary>
+        /// <returns></returns>
+        /// <exception cref="KeyNotFoundException"></exception>
+        public bool DoITakeActionThisFrame()
         {
-            switch(actionRequest)
+            if (!TakeActionThisFrame)
+                return false;
+
+            TakeActionThisFrame = false;
+
+            switch (actionRequest)
             {
-                case DecisionRequestType.EachFrame:
+                case DecisionRequestType.OnceEachFrame:
                     return true;
                 case DecisionRequestType.OnPeriodInterval:
-                    if(timeSinceLastAction >= periodBetweenDecisions || performActionForced)
-                    {
-                        timeSinceLastAction = 0f;
-                        return true;
-                    }
-                    return false;
-                case DecisionRequestType.Manual:
-                    if(performActionForced)
-                    {
-                        performActionForced = false;
-                        return true;
-                    }    
-                    return false;
+                    return timeSinceLastAction >= periodBetweenDecisions;
+                case DecisionRequestType.WhenRequested:
+                    return true;
                 default:
                     throw new KeyNotFoundException("Unhandled action request type!");
             }
@@ -41,8 +42,36 @@ namespace DeepUnity
 
         private void FixedUpdate()
         {
-            if (actionRequest == DecisionRequestType.OnPeriodInterval)
-                timeSinceLastAction += Time.fixedDeltaTime;
+            switch (actionRequest)
+            {
+                case DecisionRequestType.OnceEachFrame:
+                    break;
+                case DecisionRequestType.OnPeriodInterval:
+                    timeSinceLastAction += Time.fixedDeltaTime;
+                    break;
+                case DecisionRequestType.WhenRequested:
+                    break;
+            }
+        }
+
+        private void LateUpdate()
+        {
+            switch(actionRequest)
+            {
+                case DecisionRequestType.OnceEachFrame:
+                    TakeActionThisFrame = true;
+                    break;
+
+                case DecisionRequestType.OnPeriodInterval:
+                    if (timeSinceLastAction >= periodBetweenDecisions)
+                    {
+                        timeSinceLastAction = 0f;
+                        TakeActionThisFrame = true;
+                    }
+                    break;
+                case DecisionRequestType.WhenRequested: // TakeActionThisFrame is modified by RequestAction() method
+                    break;
+            }
         }
 
     }
@@ -69,7 +98,7 @@ namespace DeepUnity
             {
                 dontDrawMe.Add("periodBetweenDecisions");
             }
-            if(actionRequestProperty.enumValueIndex == (int)DecisionRequestType.Manual)
+            if(actionRequestProperty.enumValueIndex == (int)DecisionRequestType.WhenRequested)
             {
                 dontDrawMe.Add("actionNoise");
             }
@@ -84,7 +113,7 @@ namespace DeepUnity
             serializedObject.ApplyModifiedProperties();
 
             // Check if "actionRequest" is of a specific type, and if so, display a HelpBox
-            if (actionRequestProperty.enumValueIndex == (int)DecisionRequestType.Manual)
+            if (actionRequestProperty.enumValueIndex == (int)DecisionRequestType.WhenRequested)
             {
                 EditorGUILayout.HelpBox("Actions are performed whenever RequestAction() method is called.", MessageType.None);
             }

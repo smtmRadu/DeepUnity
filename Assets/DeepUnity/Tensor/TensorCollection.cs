@@ -11,7 +11,7 @@ namespace DeepUnity
     /// A simple way to serialize a bunch of tensors.
     /// </summary>
     [Serializable]
-    public class TensorCollection : Collection<Tensor>
+    public class TensorCollection
     {
         [SerializeField] private List<Tensor> tensors = new List<Tensor>();
 

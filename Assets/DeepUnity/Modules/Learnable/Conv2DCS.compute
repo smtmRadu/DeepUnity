@@ -82,9 +82,40 @@ void Forward(int3 id : SV_DispatchThreadID)
     }
 }
 
-#pragma kernel ComputeKernelsGradients
+#pragma kernel ComputeKernelsGradients3
+[numthreads(3, 3, 64)]
+void ComputeKernelsGradients3(int3 id : SV_DispatchThreadID)
+{
+    // id.x = kernel_width, id.y = kernel_height, id.z = out_channels
+     // Performs 2d correlation between the input and loss to compute the gradients for kernels;
+    
+    if (id.x >= kernel_width || id.y >= kernel_height || id.z >= out_channels)
+        return;
+    
+    for (int b = 0; b < batch_size; b++)
+    {
+        for (int ic = 0; ic < in_channels; ic++)
+        {
+            float sum = 0.0f;
+            
+            for (int j = 0; j < out_height; j++)
+            {
+                for (int i = 0; i < out_width; i++)
+                {
+                    sum += input_get(b, ic, id.y + j, id.x + i) * loss_get(b, id.z, j, i);
+                }
+            }
+           
+            gamma_grad_add(id.z, ic, id.y, id.x, sum / batch_size);
+        }
+    }
+    
+    // Beta grad computing on GPU was deprecated due the fact is faster on CPU
+}
+
+#pragma kernel ComputeKernelsGradients5
 [numthreads(5, 5, 32)]
-void ComputeKernelsGradients(int3 id : SV_DispatchThreadID)
+void ComputeKernelsGradients5(int3 id : SV_DispatchThreadID)
 {
     // id.x = kernel_width, id.y = kernel_height, id.z = out_channels
      // Performs 2d correlation between the input and loss to compute the gradients for kernels;

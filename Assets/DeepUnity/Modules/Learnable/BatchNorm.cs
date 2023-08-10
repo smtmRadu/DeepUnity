@@ -35,16 +35,20 @@ namespace DeepUnity
         /// </summary>
         /// <param name="num_features">Input's last axis dimension (H).</param>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
-        public BatchNorm(int num_features, float momentum = 0.9f) : base(Device.CPU)
+        public BatchNorm(int num_features, float momentum = 0.9f) : 
+            base(Device.CPU,
+                InitType.Ones,
+                InitType.Zeros,
+                new int[] {num_features},
+                new int[] {num_features},
+                num_features,
+                num_features)
         {
+            if (num_features < 1)
+                throw new ArgumentException($"BatchNorm layer cannot have num_layers < 1. (Received arg: {num_features})");
+
             this.num_features = num_features;
             this.momentum = momentum;
-
-            gamma = Tensor.Ones(num_features);
-            beta = Tensor.Zeros(num_features);
-
-            gammaGrad = Tensor.Zeros(num_features);
-            betaGrad = Tensor.Zeros(num_features);
 
             runningVar = Tensor.Ones(num_features);
             runningMean = Tensor.Zeros(num_features);          

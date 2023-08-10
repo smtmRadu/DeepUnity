@@ -1,9 +1,7 @@
 using UnityEngine;
 using DeepUnity;
-using Unity.VisualScripting;
 using System.Collections.Generic;
 using UnityEngine.UI;
-using System.Linq;
 
 namespace kbRadu
 {
@@ -14,8 +12,9 @@ namespace kbRadu
         public int batchSize = 32;
         public float lr = 0.001f;
         public int Runs = 100;
+        public Optimizer optim;
         public RNN rnn_network;
-        public Sequential dnn_network;
+        public Sequential net;
         public Image image;
         public Image image2;
 
@@ -27,6 +26,28 @@ namespace kbRadu
         private void Start()
         {
             Conv2DLearnTest();
+        }
+
+        Tensor input = Tensor.RandomNormal(64, 1, 28, 28);
+        Tensor target = Tensor.RandomNormal(64, 5 * 26 * 26);
+        void Conv2DLearnTest()
+        {
+            net = new Sequential(
+               new Conv2D((1, 28, 28), out_channels: 5, kernel_size: 3, gamma_init: InitType.Random_Normal, beta_init: InitType.Random_Normal, device: TestDevice),
+               new Flatten());
+
+            optim = new Adam(net.Parameters(), lr: lr);
+        }
+
+        private void Update()
+        {
+            var pred = net.Forward(input);
+            var loss = Loss.MSE(pred, target);
+            net.Backward(loss.Derivative);
+            // optim.ClipGradNorm(1f);
+            optim.Step();
+            print($"Epoch {Time.frameCount} | Loss: {loss.Item}");
+            graph.Append(loss.Item);
         }
 
 
@@ -75,9 +96,9 @@ namespace kbRadu
         void RunAllModules()
         {
             var net = new Sequential(
-                new Conv2D((1, 28, 28), 5, 3, TestDevice),
+                new Conv2D((1, 28, 28), 5, 3, device: TestDevice),
                 new MaxPool2D(2),
-                new Conv2D((5, 13, 13), 1, 3, TestDevice),
+                new Conv2D((5, 13, 13), 1, 3, device: TestDevice),
                 new Flatten(),
                 new ReLU(),
                 new BatchNorm(121),
@@ -123,14 +144,14 @@ namespace kbRadu
                 new Softmax()
                 );
 
-            TimerX.Start();
+            ClockTimer.Start();
             for (int i = 0; i < Runs; i++)
             {
                 var output = network.Forward(Tensor.Random01(32, 1, 28, 28));
                 network.Backward(output);
             }
             
-            TimerX.Stop();
+            ClockTimer.Stop();
         }
         void MaxPoolBenchmark()
         {
@@ -138,12 +159,12 @@ namespace kbRadu
 
             MaxPool2D mp = new MaxPool2D(5);
 
-            TimerX.Start();
+            ClockTimer.Start();
             for (int i = 0; i < Runs; i++)
             {
                 mp.Predict(input);
             }
-            TimerX.Stop();
+            ClockTimer.Stop();
         }
         void TestMaxPool()
         {
@@ -178,39 +199,15 @@ namespace kbRadu
         }
         void TestRNN()
         {
-            rnn_network = new RNN(10, 20, 2).Compile("rnn");
+            rnn_network = new RNN(10, 20, 2).CreateAsset("rnn");
             var input = Tensor.RandomNormal(6, 3, 10); // (L, B, H_in) 
             var h0 = Tensor.RandomNormal(2, 3, 20);  // (num_layers, B, H_out)
             var output = rnn_network.Forward(input, h0);
             rnn_network.Backward(output.Item1);
-
-            rnn_network.Save();
             // print("output" + output.Item1);
             // print("h_n" + output.Item2);
         }
 
-        void Conv2DLearnTest() 
-        {
-            var net = new Sequential(
-                new Conv2D((1, 5, 5), out_channels: 3, kernel_size: 2, device: TestDevice),
-                new Flatten());
-
-            var input = Tensor.RandomNormal(batchSize, 1, 5, 5);
-            var target = Tensor.RandomNormal(batchSize, 3 * 4 * 4);
-            var optim = new Adam(net.Parameters(), lr: lr);
-            TimerX.Start();
-            for (int i = 0; i < Runs; i++)
-            {
-                var pred = net.Forward(input);
-                var loss = Loss.MSE(pred, target);
-                net.Backward(loss.Derivative);
-                optim.ClipGradNorm(0.5f);
-                optim.Step();
-                print($"Epoch {i} | Loss: {loss.Item}");
-                graph.Append(loss.Item);
-            }
-            TimerX.Stop();
-        }
 
 
         void CorrelationTest()
@@ -457,13 +454,13 @@ namespace kbRadu
 
 
             Dense dense = new Dense(MatShape.x, MatShape.y, device: TestDevice);
-            TimerX.Start();
+            ClockTimer.Start();
             for (int i = 0; i < Runs; i++)
             {
                 var outp = dense.Forward(input);
                 dense.Backward(outp);
             }
-            TimerX.Stop();
+            ClockTimer.Stop();
         }
 
 
@@ -525,13 +522,13 @@ namespace kbRadu
             Conv2D c = new Conv2D((1, 28, 28), 64, 3, device: TestDevice);
 
             Tensor input = Tensor.Random01(batchSize, 1, 28, 28);
-            TimerX.Start();
+            ClockTimer.Start();
             for (int i = 0; i < Runs; i++)
             {
                 var outp = c.Forward(input);
                 c.Backward(outp);
             }
-            TimerX.Stop();
+            ClockTimer.Stop();
         }
 
         void Test_MatMulUnbalanced()
@@ -567,24 +564,24 @@ namespace kbRadu
                 var t1 = Tensor.Random01(MatShape.x, MatShape.y);
                 var t2 = Tensor.Random01(MatShape.x, MatShape.y);
 
-                TimerX.Start();
+                ClockTimer.Start();
                 for (int i = 0; i < Runs; i++)
                 {
                     Tensor.MatMul(t1, t2);
                 }
-                TimerX.Stop();
+                ClockTimer.Stop();
             }
             else
             {
                 var t1 = TensorGPU.Random01(MatShape.x, MatShape.y);
                 var t2 = TensorGPU.Random01(MatShape.x, MatShape.y);
 
-                TimerX.Start();
+                ClockTimer.Start();
                 for (int i = 0; i < Runs; i++)
                 {
                     TensorGPU.MatMul(t1, t2);
                 }
-                TimerX.Stop();
+                ClockTimer.Stop();
             }
 
         }
@@ -594,17 +591,17 @@ namespace kbRadu
             var t2 = TensorGPU.Random01(MatShape.x, MatShape.y);
            
             
-            TimerX.Start();
+            ClockTimer.Start();
             for (int i = 0; i < Runs; i++)
             {
                 TensorGPU.MatMul(t1, t2);
             }
-            TimerX.Stop();
+            ClockTimer.Stop();
 
         }
         void StdTest()
         {
-            RunningStandardizer rn = new RunningStandardizer(10);
+            ZScoreNormalizer rn = new ZScoreNormalizer(10, false);
 
             Tensor data = Tensor.RandomRange((0, 360), 1024, 10);
 
@@ -612,10 +609,10 @@ namespace kbRadu
 
             foreach (var batch in batches)
             {
-                rn.Standardise(batch);
+                rn.Normalize(batch);
             }
 
-            print(rn.Standardise(Tensor.Random01(10)));
+            print(rn.Normalize(Tensor.Random01(10)));
         }
         void Test_TensorOperaitons()
         {

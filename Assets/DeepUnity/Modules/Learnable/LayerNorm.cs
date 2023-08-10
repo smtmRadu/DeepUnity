@@ -40,16 +40,17 @@ namespace DeepUnity
         /// <b>Applies normalization over all dimensions (*) of the input.</b> 
         /// </summary>
         /// <param name="input_shape">Shape of the input (*), excepting the batch (B) dimension.</param>
-        public LayerNorm(params int[] input_shape) : base(Device.CPU)
+        public LayerNorm(params int[] input_shape) :
+            base(Device.CPU,
+                InitType.Ones,
+                InitType.Zeros,
+                new int[] { 1 },
+                new int[] { 1 },
+                input_shape.Aggregate(1, (current, next) => current * next),
+                input_shape.Aggregate(1, (current, next) => current * next))
         {
             if (input_shape == null || input_shape.Length == 0)
-                throw new ShapeException("Please specify the input_shape when creating a LayerNorm module.");
-
-            gamma = Tensor.Ones(1);
-            beta = Tensor.Zeros(1);
-
-            gammaGrad = Tensor.Zeros(1);
-            betaGrad = Tensor.Zeros(1);
+                throw new ShapeException("Specify the input_shape when creating a LayerNorm module.");
 
             runningMean = Tensor.Zeros(1);
             runningVar = Tensor.Ones(1);

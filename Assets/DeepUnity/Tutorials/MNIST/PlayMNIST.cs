@@ -43,7 +43,7 @@ public class PlayMNIST : MonoBehaviour
 
 
         Texture2D texture = image.sprite.texture;
-        Tensor input = Tensor.Constant(texture, true);
+        Tensor input = Tensor.Constant(texture, 1);
         var prediction = network.Predict(input);
 
         // Display prediction
@@ -117,7 +117,7 @@ public class PlayMNIST : MonoBehaviour
                 if (distanceFromCenter < brushRadius * brushRadius)
                 {
                     Color alreadyColor = image.sprite.texture.GetPixel(xb, yb);
-                    image.sprite.texture.SetPixel(xb, yb, Color.black);
+                    image.sprite.texture.SetPixel(xb, yb, Color.black); // can use already color if you want a smooth removal
                 }
             }
         }

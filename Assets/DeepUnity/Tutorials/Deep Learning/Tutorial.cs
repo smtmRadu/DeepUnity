@@ -25,7 +25,7 @@ public class Tutorial : MonoBehaviour
                 new Tanh(),
                 new Dense(64, 64, device: Device.GPU),
                 new ReLU(),
-                new Dense(64, 1)).Compile("TutorialModel");
+                new Dense(64, 1)).CreateAsset("TutorialModel");
         }
         optim = new Adam(network.Parameters(), 0.001f);
         scheduler = new LRScheduler(optim, 30, 0.1f);
@@ -74,6 +74,6 @@ public class Tutorial : MonoBehaviour
         print($"Epoch: {Time.frameCount} - Train Loss: {train_loss} - Valid Loss: {valid_loss}");
 
         scheduler.Step();
-        network.Save();       
+        network.Save();
     }
 }

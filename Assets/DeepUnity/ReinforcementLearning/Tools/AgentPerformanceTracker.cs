@@ -8,9 +8,10 @@ namespace DeepUnity
     public class AgentPerformanceTracker : MonoBehaviour
     {
         [ReadOnly] public int episodesCompleted = 0;
-        [Tooltip("Cumulated rewards in each episode.")]public PerformanceGraph cumulativeRewards = new PerformanceGraph(100);
-        [Tooltip("Steps required in each episode.")]public PerformanceGraph episodeLength = new PerformanceGraph(100);
+        [Tooltip("Cumulated rewards in each episode.")] public PerformanceGraph cumulativeRewards = new PerformanceGraph(100);
+        [Tooltip("Steps required in each episode.")] public PerformanceGraph episodeLength = new PerformanceGraph(100);
         public PerformanceGraph criticLoss = new PerformanceGraph(1000);
+        public PerformanceGraph learningRate = new PerformanceGraph(100);
     }
 
     [CustomEditor(typeof(AgentPerformanceTracker)), CanEditMultipleObjects]

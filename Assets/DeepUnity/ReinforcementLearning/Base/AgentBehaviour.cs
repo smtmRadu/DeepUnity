@@ -13,8 +13,8 @@ namespace DeepUnity
         [SerializeField] public int continuousDim;
         [SerializeField] public int[] discreteBranches;
 
-        [SerializeField] public RunningStandardizer stateStandardizer;
-        [SerializeField] public RunningStandardizer rewardStadardizer;  
+        [SerializeField] public ZScoreNormalizer stateStandardizer;
+        [SerializeField] public ZScoreNormalizer rewardNormalizer;  
  
         [SerializeField] public Sequential critic;
         [SerializeField] public Sequential muHead;
@@ -42,8 +42,8 @@ namespace DeepUnity
             this.observationSize = stateSize;
             this.continuousDim = continuousActions;
 
-            stateStandardizer = new RunningStandardizer(stateSize);
-            rewardStadardizer = new RunningStandardizer(1);
+            stateStandardizer = new ZScoreNormalizer(stateSize, true);// Normalizer.Create(stateSize, normalization);
+            rewardNormalizer = null; // new ZScoreNormalizer(1, true);// Normalizer.Create(1, normalization);
 
             int hiddenUnits = 64;
 
@@ -87,6 +87,9 @@ namespace DeepUnity
             if (criticOptimizer != null)
                 return;
 
+            if (critic == null)
+                throw new Exception($"Networks were not assigned to the {behaviourName} behaviour asset.");
+
             criticOptimizer = new Adam(critic.Parameters(), hp.learningRate);          
             muHeadOptimizer = new Adam(muHead.Parameters(), hp.learningRate);            
             sigmaHeadOptimizer = new Adam(sigmaHead.Parameters(), hp.learningRate);
@@ -103,14 +106,11 @@ namespace DeepUnity
             if (criticScheduler != null)
                 return;
 
-            /*
-             int max_step = 500_000;
-             int step_size = 10;
-             int no_epochs = 8;
-             
-             */
 
-            int step_size = hp.learningRateSchedule ? default_step_size_StepLR : 1000;
+            if (critic == null)
+                throw new Exception($"Networks were not assigned to the {behaviourName} behaviour asset.");
+
+            int step_size = hp.learningRateSchedule ? default_step_size_StepLR : 1000000;
             float gamma = hp.learningRateSchedule ? default_gamma_StepLR : 1f;
 
             criticScheduler = new LRScheduler(criticOptimizer, step_size, gamma);
@@ -125,15 +125,12 @@ namespace DeepUnity
 
         }
 
-        public Tensor Value(Tensor state)
-        {
-            return critic.Predict(state);
-        }
+        public Tensor Value(Tensor state) => critic.Predict(state);
         public Tensor ContinuousPredict(Tensor state, out Tensor logProbs)
         {
             // Sample mu and sigma
             Tensor mu = muHead.Predict(state);
-            //Tensor sigma = sigmaHead.Predict(state).Clip(sigma_clip.Item1, sigma_clip.Item2);
+            // Tensor sigma = sigmaHead.Predict(state).Clip(sigma_clip.Item1, sigma_clip.Item2);
             Tensor sigma = Tensor.Fill(0.1f, mu.Shape); // (static sigma 0.1)
 
             // Sample actions
@@ -147,7 +144,7 @@ namespace DeepUnity
         public Tensor ContinuousForward(Tensor stateBatch, out Tensor mu, out Tensor sigma)
         {
             mu = muHead.Forward(stateBatch);
-            //sigma = sigmaHead.Forward(stateBatch).Clip(sigma_clip.Item1, sigma_clip.Item2);
+            // sigma = sigmaHead.Forward(stateBatch).Clip(sigma_clip.Item1, sigma_clip.Item2);
             sigma = Tensor.Fill(0.1f, mu.Shape); // (static sigma 0.1)
 
             return mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
@@ -166,7 +163,7 @@ namespace DeepUnity
         }
 
 
-        public AgentBehaviour Compile(string name)
+        public AgentBehaviour CreateAsset(string name)
         {
             this.behaviourName = name;
             var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{behaviourName}/{behaviourName}.asset");
@@ -181,18 +178,17 @@ namespace DeepUnity
             AssetDatabase.SaveAssets();
 
             // Create aux assets
-            critic.Compile($"{behaviourName}/critic");
-            muHead.Compile($"{behaviourName}/mu");
-            sigmaHead.Compile($"{behaviourName}/sigma");
+            critic.CreateAsset($"{behaviourName}/critic");
+            muHead.CreateAsset($"{behaviourName}/mu");
+            sigmaHead.CreateAsset($"{behaviourName}/sigma");
 
             for (int i = 0; i < discreteHeads.Length; i++)
             {
-                discreteHeads[i].Compile($"{behaviourName}/discrete{i}");
+                discreteHeads[i].CreateAsset($"{behaviourName}/discrete{i}");
             }
 
             return this;
         }
-
         /// <summary>
         /// Updates the state of the Behaviour parameters.
         /// </summary>
@@ -203,6 +199,7 @@ namespace DeepUnity
             if (instance == null)
                 throw new InvalidOperationException("Cannot save the Behaviour because it requires compilation first.");
 
+            // Debug.Log($"<color=#03a9fc>Agent behaviour <b>{behaviourName}<b/> saved.</color>");
 
             critic.Save();
             muHead.Save();
@@ -214,11 +211,6 @@ namespace DeepUnity
             }
 
         }
-    }
-    public enum ActionType
-    {
-        Continuous,
-        Discrete
     }
 }
 

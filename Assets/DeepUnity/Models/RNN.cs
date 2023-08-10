@@ -10,7 +10,7 @@ using System.Text;
 
 namespace DeepUnity
 {
-    [SerializeField]
+    [Serializable]
     public class RNN : Model<RNN>, ISerializationCallbackReceiver
     {
         [SerializeField] private bool batchFirst;
@@ -262,45 +262,19 @@ namespace DeepUnity
         {
             StringBuilder stringBuilder = new StringBuilder();
 
-            stringBuilder.AppendLine($"Name: {name} ({version})");
+            stringBuilder.AppendLine($"Name: {name}");
             stringBuilder.AppendLine("Type: Sequencial");
             stringBuilder.AppendLine($"Layers : {modules.Length}");
             foreach (var module in modules)
             {
                 stringBuilder.AppendLine($"         {module.GetType().Name}");
             }
-            stringBuilder.AppendLine($"Parameters: {modules.Where(x => x is Learnable).Select(x => (Learnable)x).Sum(x => x.LearnableParametersCount)}");
+            stringBuilder.AppendLine($"Parameters: {modules.Where(x => x is Learnable).Select(x => (Learnable)x).Sum(x => x.ParametersCount())}");
             return stringBuilder.ToString();
         }
         public override Learnable[] Parameters()
         {
             return modules.OfType<Learnable>().ToArray();
-        }
-        public override RNN Compile(string name)
-        {
-            var instance = AssetDatabase.LoadAssetAtPath<RNN>("Assets/" + name + ".asset");
-            if (instance != null)
-            {
-                throw new System.InvalidOperationException($"A RNN asset called '{name}' already exists!.");
-            }
-
-            this.name = name;
-            AssetDatabase.CreateAsset(this, $"Assets/{name}.asset");
-            EditorUtility.SetDirty(this);
-            AssetDatabase.SaveAssetIfDirty(this);
-            return this;
-
-        }
-        public override void Save(string version = "1.0")
-        {
-            this.version += "v" + version;
-            // Check if asset exists:
-            var instance = AssetDatabase.LoadAssetAtPath<RNN>("Assets/" + name + ".asset");
-            if (instance == null)
-                throw new System.InvalidOperationException("Cannot save the network because it requires compilation first.");
-
-            EditorUtility.SetDirty(this);
-            AssetDatabase.SaveAssetIfDirty(this);
         }
 
 

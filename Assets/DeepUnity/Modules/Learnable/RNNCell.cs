@@ -17,10 +17,10 @@ namespace DeepUnity
        
 
         
-        [SerializeField, Tooltip("weight_hh")]          public Tensor recurrentGamma;
-        [SerializeField, Tooltip("bias_hh")]            public Tensor recurrentBeta;
-        [NonSerialized, Tooltip("weight_hh_gradient")]  public Tensor recurrentGammaGrad;
-        [NonSerialized, Tooltip("bias_hh_gradient")]    public Tensor recurrentBetaGrad;
+        [SerializeField, Tooltip("weight hidden->hidden")]          public Tensor recurrentGamma;
+        [SerializeField, Tooltip("bias hidden->hidden")]            public Tensor recurrentBeta;
+        [NonSerialized, Tooltip("weight hidden->hidden gradient")]  public Tensor recurrentGammaGrad;
+        [NonSerialized, Tooltip("bias hidden->hidden gradient")]    public Tensor recurrentBetaGrad;
 
 
         /// <summary>
@@ -31,7 +31,14 @@ namespace DeepUnity
         /// <param name="input_size"></param>
         /// <param name="hidden_size"></param>
         /// <param name="nonlinearity"></param>
-        public RNNCell(int input_size, int hidden_size, NonLinearity nonlinearity = NonLinearity.Tanh) : base(Device.CPU) 
+        public RNNCell(int input_size, int hidden_size, NonLinearity nonlinearity = NonLinearity.Tanh) : 
+            base(Device.CPU,
+                InitType.Glorot_Uniform,
+                InitType.Zeros,
+                new int[] {hidden_size, input_size},
+                new int[] {hidden_size},
+                input_size,
+                hidden_size) 
         {
             this.nonlinearity = nonlinearity;
             InputCache = new Stack<Tensor>();
@@ -42,13 +49,8 @@ namespace DeepUnity
             float sqrtK = MathF.Sqrt(1f / hidden_size);
             var range = (-sqrtK, sqrtK);
 
-            gamma = Tensor.RandomRange(range, hidden_size, input_size);            // weight_ih
-            beta = Tensor.RandomRange(range, hidden_size);                         // bias_ih
             recurrentGamma = Tensor.RandomRange(range, hidden_size, hidden_size);  // weight_hh
             recurrentBeta = Tensor.RandomRange(range, hidden_size);                // bias_hh
-
-            gammaGrad = Tensor.Zeros(hidden_size, input_size);            // weight_ih_g
-            betaGrad = Tensor.Zeros(hidden_size);                         // bias_ih_g
             recurrentGammaGrad = Tensor.Zeros(hidden_size, hidden_size);  // weight_hh_g
             recurrentBetaGrad = Tensor.Zeros(hidden_size);                // bias_hh_g
         }
@@ -147,6 +149,59 @@ namespace DeepUnity
             return inputGrad.Squeeze(-2);
         }
 
+        public override void ZeroGrad()
+        {
+            base.ZeroGrad();
+            recurrentGammaGrad = Tensor.Zeros(recurrentGammaGrad.Shape);
+            recurrentBetaGrad = Tensor.Zeros(recurrentBetaGrad.Shape);
+        }
+        public override void ClipGradValue(float clip_value)
+        {
+            base.ClipGradValue(clip_value);
+            recurrentGammaGrad = Tensor.Clip(recurrentGammaGrad, -clip_value, clip_value);
+            recurrentBetaGrad = Tensor.Clip(recurrentBetaGrad, -clip_value, clip_value);
+        }
+        public override void ClipGradNorm(float max_norm)
+        {
+            // Maybe it can be modified in the future ...
+
+            Tensor normG = Tensor.Norm(gammaGrad, NormType.ManhattanL1);
+
+            if (normG[0] > max_norm)
+            {
+                float scale = max_norm / normG[0];
+                gammaGrad *= scale;
+            }
+
+            Tensor normB = Tensor.Norm(betaGrad, NormType.ManhattanL1);
+
+            if (normB[0] > max_norm)
+            {
+                float scale = max_norm / normB[0];
+                betaGrad *= scale;
+            }
+
+            Tensor rnormG = Tensor.Norm(recurrentGammaGrad, NormType.ManhattanL1);
+
+            if (rnormG[0] > max_norm)
+            {
+                float scale = max_norm / rnormG[0];
+                recurrentGammaGrad *= scale;
+            }
+
+            Tensor rnormB = Tensor.Norm(recurrentBetaGrad, NormType.ManhattanL1);
+
+            if (rnormB[0] > max_norm)
+            {
+                float scale = max_norm / rnormB[0];
+                recurrentBetaGrad *= scale;
+            }
+            
+        }
+        public override int ParametersCount()
+        {
+            return base.ParametersCount() + recurrentGamma.Count() + recurrentBeta.Count();
+        }
         public override void OnBeforeSerialize() { }
         public override void OnAfterDeserialize()
         {
