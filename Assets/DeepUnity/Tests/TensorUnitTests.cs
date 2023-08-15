@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using DeepUnity;
+using System.Collections.Generic;
 
 namespace kbRadu
 {
@@ -131,8 +132,8 @@ namespace kbRadu
 
                 Tensor.Clip(t1, -1, 0.5f);
                 Tensor.Norm(t1, NormType.EuclideanL2);
-                Tensor.LogDensity(t1, t1, t1);
-                Tensor.Density(t1, t1, t1);
+                Tensor.LogPDF(t1, t1, t1);
+                Tensor.PDF(t1, t1, t1);
             }
             catch
             {

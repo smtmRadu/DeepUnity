@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEditor;
@@ -81,4 +82,18 @@ namespace DeepUnity
             modules = serializedModules.Select(x => IModuleWrapper.Unwrap(x)).ToArray();
         }
     }
+
+    // If you turn this ON you will not see the param updates in the inspector
+    // [CustomEditor(typeof(Model<Sequential>), true)]
+    // [CanEditMultipleObjects]
+    // class ScriptlessSequential : Editor
+    // {
+    //     public override void OnInspectorGUI()
+    //     {
+    //         List<string> dontDrawMe = new List<string>() { "m_Script" };
+    // 
+    //         DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
+    //         serializedObject.ApplyModifiedProperties();
+    //     }
+    // }
 }

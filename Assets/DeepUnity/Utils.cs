@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace DeepUnity
@@ -11,6 +12,8 @@ namespace DeepUnity
     public static class Utils
     {
         public const float EPSILON = 1e-8f;
+        public const float PI = 3.14159265358979323846f;
+        public const float E = 2.7182818284590452354f;
         private static System.Random RNG = new System.Random(DateTime.Now.Millisecond);
 
         public static void Shuffle<T>(T[] arrayToShuffle)
@@ -201,7 +204,10 @@ namespace DeepUnity
 
             return tex;
         }
-
+        public static float Clip(float value, float min, float max) 
+        {
+            return Math.Clamp(value, min, max);
+        }
         public static class ImageProcessing
         {
             /// <summary>
@@ -444,6 +450,9 @@ namespace DeepUnity
                 return part1 * MathF.Exp(part2);
             }
         }
+        /// <summary>
+        /// A thread-safe way to extract random numbers;
+        /// </summary>
         public static class Random
         {        
             /// <summary>

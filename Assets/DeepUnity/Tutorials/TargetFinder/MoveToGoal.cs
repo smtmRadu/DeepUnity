@@ -50,12 +50,11 @@ public class MoveToGoal : Agent
     
     public override void OnEpisodeBegin()
     {
-        return;
         // Randomly position the target on each episode begin
-        float xrand = Random.Range(-5, 5);
-        float zrand = Random.Range(-5, 5);
-
-        target.position = new Vector3(xrand, 0, zrand);
+        // float xrand = Random.Range(-5f, 5f);
+        // float zrand = Random.Range(-5f, 5f);
+        // 
+        // target.localPosition = new Vector3(xrand, 0, zrand);
     }
     private void OnCollisionEnter(Collision collision)
     {

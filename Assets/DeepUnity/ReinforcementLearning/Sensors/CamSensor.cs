@@ -78,26 +78,34 @@ namespace DeepUnity
 
             string[] guids = AssetDatabase.FindAssets("t:Texture", new string[] { "Assets/CamShots" });
 
-            string lastPath = AssetDatabase.GUIDToAssetPath(guids.Last());
-
-            Debug.Log(guids.ToLineSeparatedString());
-            // Extract the number from the last path using a regular expression
-            Match match = Regex.Match(lastPath, @".*Frame(\d+)");
-            if (match.Success)
-            {
-                string numberString = match.Groups[1].Value;
-                int newNumber = int.Parse(numberString) + 1;
-                string newPath = lastPath.ToString().Replace(numberString, newNumber.ToString());
-
-                Debug.Log(newNumber);
-                Debug.Log(newPath);
-                File.WriteAllBytes(newPath, Capture().EncodeToPNG());
-                
-            }
-            else
+            if(guids.Length == 0)
             {
                 File.WriteAllBytes("Assets/CamShots/Frame1.png", Capture().EncodeToPNG());
             }
+            else
+            {
+                string lastPath = AssetDatabase.GUIDToAssetPath(guids.Last());
+
+                Debug.Log(guids.ToLineSeparatedString());
+                // Extract the number from the last path using a regular expression
+                Match match = Regex.Match(lastPath, @".*Frame(\d+)");
+                if (match.Success)
+                {
+                    string numberString = match.Groups[1].Value;
+                    int newNumber = int.Parse(numberString) + 1;
+                    string newPath = lastPath.ToString().Replace(numberString, newNumber.ToString());
+
+                    Debug.Log(newNumber);
+                    Debug.Log(newPath);
+                    File.WriteAllBytes(newPath, Capture().EncodeToPNG());
+
+                }
+                else
+                {
+                    File.WriteAllBytes("Assets/CamShots/Frame1.png", Capture().EncodeToPNG());
+                }
+            }
+            
 
             AssetDatabase.Refresh();
         }  

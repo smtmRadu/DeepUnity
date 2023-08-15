@@ -45,16 +45,16 @@ public class Tutorial2 : MonoBehaviour
         if (net == null)
         {
             net = new Sequential(
-             new Dense(2, hiddenSize),
+             new Dense(2, hiddenSize, InitType.HE_Normal, InitType.HE_Normal),
              // new LayerNorm(hiddenSize),                
              new ReLU(),
-             new Dense(hiddenSize, hiddenSize, device: device),
-             new BatchNorm(hiddenSize),
+             new Dense(hiddenSize, hiddenSize, InitType.HE_Normal, InitType.HE_Normal, device: device),
+             // new BatchNorm(hiddenSize),
              new ReLU(),
              //new Dropout(),
-             new Dense(hiddenSize, hiddenSize, device: device),
+             new Dense(hiddenSize, hiddenSize, InitType.HE_Normal, InitType.HE_Normal, device: device),
              new ReLU(),
-             new Dense(hiddenSize, 1)
+             new Dense(hiddenSize, 1, InitType.HE_Normal, InitType.HE_Normal)
              );//.CreateAsset("Tutorial2");
         }
 
@@ -103,6 +103,7 @@ public class Tutorial2 : MonoBehaviour
         LossGraph.Append(loss.Item);
         optimizer.ZeroGrad();
         net.Backward(loss.Derivative);
+        optimizer.ClipGradNorm(1f);
         optimizer.Step();
         
 

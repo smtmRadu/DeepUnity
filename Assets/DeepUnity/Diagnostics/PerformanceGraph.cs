@@ -15,6 +15,7 @@ namespace DeepUnity
         [ReadOnly, SerializeField] AnimationCurve graph;
         [ReadOnly, SerializeField, Tooltip("The total number of appends.")] int steps;
         [ReadOnly, SerializeField, Tooltip("The last value appended.")] float current;
+        [ReadOnly, SerializeField, Tooltip("The mean of all values.")] float mean;
 
 
         LinkedList<float> nodes;
@@ -38,6 +39,7 @@ namespace DeepUnity
             current = value;
             nodes.AddLast(value);
 
+            // cut half of them if is full
             if (nodes.Count == resolution)
             {
                 LinkedList<float> newList = new LinkedList<float>();
@@ -58,21 +60,24 @@ namespace DeepUnity
                 nodes = newList;
             }
 
+            // squeeze the nodes in range [0,1]
             graph.ClearKeys();
-
-
             float time_index = 1f;
             foreach (var node in nodes)
             {
                 graph.AddKey(time_index / nodes.Count, node);
                 time_index += 1f;
             }
+
+            // set mean value
+            mean = mean * (steps - 1f) / steps + value / steps; 
         }
         public void Clear()
         {
             current = 0f;
             steps = 0;
-            nodes.Clear();        
+            nodes.Clear();
+            mean = 0f;
         }
         public Keyframe[] Keys { get => graph.keys; }
     }
@@ -85,7 +90,7 @@ namespace DeepUnity
     {
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
-            int numFields = 3; // Change this to the number of fields to display (curve, count, current)
+            int numFields = 4; // Change this to the number of fields to display (curve, count, current, mean)
             float lineHeight = EditorGUIUtility.singleLineHeight;
             float spacing = EditorGUIUtility.standardVerticalSpacing;
             return EditorGUIUtility.singleLineHeight + (numFields * lineHeight) + ((numFields - 1) * spacing);
@@ -103,10 +108,12 @@ namespace DeepUnity
             Rect curveRect = new Rect(position.x + EditorGUIUtility.labelWidth, position.y + EditorGUIUtility.singleLineHeight, position.width - EditorGUIUtility.labelWidth, EditorGUIUtility.singleLineHeight);
             Rect currentRect = new Rect(position.x + EditorGUIUtility.labelWidth, position.y + 2 * EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing, position.width - EditorGUIUtility.labelWidth, EditorGUIUtility.singleLineHeight);
             Rect countRect = new Rect(position.x + EditorGUIUtility.labelWidth, position.y + 3 * EditorGUIUtility.singleLineHeight + 2 * EditorGUIUtility.standardVerticalSpacing, position.width - EditorGUIUtility.labelWidth, EditorGUIUtility.singleLineHeight);
-
+            Rect meanRect = new Rect(position.x + EditorGUIUtility.labelWidth, position.y + 4 * EditorGUIUtility.singleLineHeight + 3 * EditorGUIUtility.standardVerticalSpacing, position.width - EditorGUIUtility.labelWidth, EditorGUIUtility.singleLineHeight);
+            
             SerializedProperty curveProperty = property.FindPropertyRelative("graph");
             SerializedProperty currentProperty = property.FindPropertyRelative("current");
             SerializedProperty countProperty = property.FindPropertyRelative("steps");
+            SerializedProperty meanProperty = property.FindPropertyRelative("mean");
 
             if (curveProperty.animationCurveValue == null)
             {
@@ -119,7 +126,7 @@ namespace DeepUnity
 
             EditorGUI.PropertyField(currentRect, currentProperty);
             EditorGUI.PropertyField(countRect, countProperty);
-
+            EditorGUI.PropertyField(meanRect, meanProperty);
             EditorGUI.EndProperty();
         }
     }

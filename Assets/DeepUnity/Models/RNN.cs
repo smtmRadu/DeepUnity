@@ -287,5 +287,18 @@ namespace DeepUnity
             modules = serializedModules.Select(x => IModuleSWrapper.Unwrap(x)).ToArray();
         }
     }
+
+    // [CustomEditor(typeof(Model<RNN>), true)]
+    // [CanEditMultipleObjects]
+    // class ScriptlessRNN : Editor
+    // {
+    //     public override void OnInspectorGUI()
+    //     {
+    //         List<string> dontDrawMe = new List<string>() { "m_Script" };
+    // 
+    //         DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
+    //         serializedObject.ApplyModifiedProperties();
+    //     }
+    // }
 }
 

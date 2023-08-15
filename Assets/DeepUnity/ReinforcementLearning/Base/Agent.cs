@@ -5,20 +5,15 @@ using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 
-/*
- * Logic
- * 
- * OnTrigger()/OnCollision() => AddReward? / EndEpisode?
- * Update() => Action / Store 
- * LateUpdate() => ResetEpisode?
- */
 namespace DeepUnity
 {
-    [AddComponentMenu("DeepUnity/Agent"), DisallowMultipleComponent, RequireComponent(typeof(HyperParameters)), RequireComponent(typeof(DecisionRequester))]
+    [AddComponentMenu("DeepUnity/Agent"), DisallowMultipleComponent, RequireComponent(typeof(DecisionRequester))]
     public class Agent : MonoBehaviour
     {
         [SerializeField] public AgentBehaviour model;
+        [SerializeField] public Hyperparameters hp;
         [SerializeField] private BehaviourType behaviourType = BehaviourType.Learn;
+        
 
         [Space]
         [SerializeField] private int spaceSize = 2;
@@ -32,40 +27,41 @@ namespace DeepUnity
         private bool useSensors = true;
 
 
-        [HideInInspector] public AgentPerformanceTracker PerformanceTracker;
-        public HyperParameters Hp { get; private set; }
-        public DecisionRequester DecisionRequester { get; private set; }
+        public TrainingStatistics PerformanceTrack { get; private set; }
+        public Trajectory Trajectory { get; set; }
+        private TimeStep Timestep { get; set; }
+        private DecisionRequester DecisionRequester { get; set; }
         private List<ISensor> Sensors { get; set; }
         private StateResetter PositionReseter { get; set; }
-        public TrajectoryBuffer Trajectory { get; private set; }
-        public TimeStep Timestep { get; private set; }    
-        public SensorBuffer Observations { get; private set; }
-        public ActionBuffer Actions { get; private set; }
-        public int StepCount { get; private set; } = 1;
-        public float TimestepReward { get; private set; } = 0f;    
+        private SensorBuffer Observations { get; set; }
+        private ActionBuffer Actions { get; set; }
+        private int StepCount { get; set; } = 1;
         private bool IsEpisodeEnd { get; set; } = false;
         private bool ActionOccured { get; set; } = false;
 
+
         public virtual void Awake()
         {
-            Hp = GetComponent<HyperParameters>();
             DecisionRequester = GetComponent<DecisionRequester>();
-            TryGetComponent(out PerformanceTracker);
-            Time.fixedDeltaTime = 1f / Hp.targetFPS;
             Sensors = new List<ISensor>();
-
-            InitNetwork();
-            InitBuffers();
             InitSensors(transform);
-
-            PositionReseter = onEpisodeEnd == OnEpisodeEndType.ResetAgent ?
-                new StateResetter(transform) :
-                new StateResetter(transform.parent);
+            InitBuffers();                    
         }
         public virtual void Start()
         {
-            if (behaviourType == BehaviourType.Learn)
-                Trainer.Subscribe(this);
+            if (behaviourType != BehaviourType.Learn)
+                return;
+
+            Time.fixedDeltaTime = 1f / hp.targetFPS;
+            TrainingStatistics pf;
+            TryGetComponent(out pf);
+            PerformanceTrack = pf;
+            PositionReseter = onEpisodeEnd == OnEpisodeEndType.ResetAgent ?
+                new StateResetter(transform) :
+                new StateResetter(transform.parent);
+
+
+            Trainer.Subscribe(this);
         }
         public virtual void FixedUpdate()
         {
@@ -74,60 +70,84 @@ namespace DeepUnity
 
             ActionOccured = true;
 
-            switch (behaviourType)
+            if (behaviourType == BehaviourType.Inactive)
             {
-                case BehaviourType.Inactive:
-                    break;
+                return;
 
-                case BehaviourType.Learn:
-                    LearnBehaviour();
-                    break;
+            }
 
-                case BehaviourType.Active:
-                    ActiveBehavior();
-                    break;
+            if (behaviourType == BehaviourType.Manual)
+            {
+                Actions.Clear();
+                Heuristic(Actions);
+                OnActionReceived(Actions);
+            }
 
-                case BehaviourType.Manual:
-                    ManualBehaviour();
-                    break;
+            if (behaviourType == BehaviourType.Learn)
+            {
+                // Collect new observations
+                Observations.Clear();
+                Actions.Clear();
+                CollectObservations(Observations);
+                if (useSensors) Sensors.ForEach(x => Observations.AddObservation(x.GetObservations()));
 
-                default: throw new NotImplementedException("Unhandled behaviour type!");
+                // Normalize the observations if requested
+                if (hp.normalize)
+                {
+                    model.stateNormalizer.Update(Observations.Observations);
+                    Observations.Observations = model.stateNormalizer.Normalize(Observations.Observations);
+                }
+
+                // Set state[t], action[t] & pi[t]
+                Timestep.state = Tensor.Identity(Observations.Observations);
+                model.ContinuousPredict(Timestep.state, out Timestep.action_continuous, out Timestep.piold_continuous);
+                model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.piold_discrete);
+
+                // Run agent's actions and clip them
+                Actions.ContinuousActions = DecisionRequester.randomAction ? Tensor.RandomRange((-1f, 1f), continuousActions).ToArray() : Timestep.action_continuous.Clip(-1f, 1f).ToArray();
+                Actions.DiscreteActions = null; // need to convert afterwards from tensor of logits [branch, logits] to argmax int[]
+
+                OnActionReceived(Actions);
             }
         }
         public virtual void Update()
         {
+            if (behaviourType != BehaviourType.Learn)
+                return;
+
             if (!ActionOccured)
                 return;
 
-            // If the agent reached max steps without reaching the terminal state
-            if (StepCount == Hp.maxSteps && !IsEpisodeEnd) 
+            // reward[t] already set
+            Trajectory.Add(Timestep);
+
+            // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state
+            if (StepCount <= hp.maxSteps && !IsEpisodeEnd) 
             {
                 EndEpisode();
                 Trajectory.reachedTerminalState = false;                  
             }
 
-            if(IsEpisodeEnd && behaviourType == BehaviourType.Learn)
+            if (IsEpisodeEnd)
             {
+                // Set advantage[t] & v_target
+                Trajectory.ComputeAdvantagesAndVTargets(hp.gamma, hp.lambda, model.critic);
+                // trajectory.NormAdvantages();
                 Trainer.Ready(this);
             }
 
-
-            // Norm the reward
-            Timestep.reward = Tensor.Constant(TimestepReward);
-            if (model.rewardNormalizer != null)
-                Timestep.reward = model.rewardNormalizer.Normalize(Timestep.reward);
-
-            // Remember the timestep
-            Trajectory.Remember(Timestep);
+            
         }
         public virtual void LateUpdate()
         {
+            if (behaviourType != BehaviourType.Learn)
+                return;
+
             if (!ActionOccured)
                 return;
 
             ActionOccured = false;
-
-            TimestepReward = 0; // reward[t+1] = 0 -> reset
+            StepCount++;
             Timestep = new TimeStep();
             
 
@@ -135,51 +155,34 @@ namespace DeepUnity
             {
                 IsEpisodeEnd = false;             
                 PositionReseter?.Reset();
-                PerformanceTracker.episodesCompleted++;
-                PerformanceTracker.episodeLength.Append(StepCount);
+                if(PerformanceTrack != null)
+                {
+                    PerformanceTrack.episodesCompleted++;
+                    PerformanceTrack.episodeLength.Append(StepCount - 1);
+                }             
                 StepCount = 0;
-                
-
                 OnEpisodeBegin();          
-            }
-
-            StepCount++;
+            }           
         }
 
         // Setup
-        private void InitNetwork()
+        public void BakeModel()
         {
-            if (model != null)
-            {
-                continuousActions = model.continuousDim;
-                discreteBranches = model.discreteBranches;
-            }
-            else
-            {
-                string[] modelFoundGUID = AssetDatabase.FindAssets(GetType().Name);
+            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, continuousActions, discreteBranches);
 
-                if(modelFoundGUID.Length == 0)
-                {
-                    model = new AgentBehaviour(spaceSize, continuousActions, discreteBranches).CreateAsset(GetType().Name);
-                    return;
-                }
-                string modelFoundPath = AssetDatabase.GUIDToAssetPath(modelFoundGUID[0]);
+            continuousActions = model.continuousDim;
+            discreteBranches = model.discreteBranches;
+        }
+        public void BakeHyperParamters()
+        {
+            if (hp != null)
+                return;
+            hp = Hyperparameters.CreateOrLoadAsset(GetType().Name);
 
-                if (modelFoundPath.EndsWith(".cs"))
-                {
-                    model = new AgentBehaviour(spaceSize, continuousActions, discreteBranches).CreateAsset(GetType().Name);
-                    return;
-                }
-                
-
-                model = AssetDatabase.LoadAssetAtPath<AgentBehaviour>(modelFoundPath);
-                Debug.Log($"<b>{GetType().Name}<b/> model auto-loaded from project Assets.");
-
-            }
         }
         private void InitBuffers()
         {
-            Trajectory = new TrajectoryBuffer();
+            Trajectory = new Trajectory();
             Timestep = new TimeStep();
 
             Observations = new SensorBuffer(model.observationSize);
@@ -198,84 +201,17 @@ namespace DeepUnity
             }
         }
 
-        // Loop
-        private void LearnBehaviour()
-        {
-            // Collect new observations
-            Observations.Clear();
-            Actions.Clear();
-            CollectObservations(Observations);
-            if (useSensors) Sensors.ForEach(x => Observations.AddObservation(x.GetObservations()));
-
-            // Set state[t], action[t], reward[t]
-            Timestep.state = Tensor.Identity(Observations.Observations);
-
-            if (model.stateStandardizer != null)
-                Timestep.state = model.stateStandardizer.Normalize(Timestep.state);
-
-
-            Timestep.value = model.Value(Timestep.state);
-
-            Timestep.continuous_action = model.ContinuousPredict(Timestep.state, out Timestep.continuous_log_prob);
-            Timestep.discrete_action = model.DiscretePredict(Timestep.state, out Timestep.discrete_log_prob);
-
-            // Run agent's actions
-            Actions.ContinuousActions = Timestep.continuous_action?.ToArray();
-            Actions.DiscreteActions = null; // need to convert afterwards from tensor of logits [branch, logits] to argmax int[]
-
-            if(DecisionRequester.randomAction)
-            {
-                if(Actions.ContinuousActions != null)
-                    Actions.ContinuousActions =  Actions.ContinuousActions.Select(x => Utils.Random.Range(-1f, 1f)).ToArray();
-            
-                if (Actions.DiscreteActions != null)
-                    throw new NotImplementedException();
-            
-            }
-
-            OnActionReceived(Actions);
-        }
-        private void ActiveBehavior()
-        {
-            throw new NotImplementedException();
-            // Observations.Clear();
-            // Actions.Clear();
-            // 
-            // CollectObservations(Observations);
-            // if(useSensors) Sensors.ForEach(x => Observations.AddObservation(x.GetObservations()));
-            // 
-            // Tensor state = Tensor.Constant(Observations.values);
-            // 
-            // if (Hp.normalize)
-            // {
-            //     state = model.stateStandardizer.Standardise(state);
-            // }
-            // 
-            // Actions.ContinuousActions = model.ContinuousPredict(state, out _)?.ToArray();
-            // Actions.DiscreteActions = null;
-            // 
-            // 
-            // OnActionReceived(Actions);
-        }
-        private void ManualBehaviour()
-        {
-            Actions.Clear();
-            Heuristic(Actions);
-            OnActionReceived(Actions);
-        }
-
 
         // User call
         public virtual void OnEpisodeBegin() { }
         public virtual void CollectObservations(SensorBuffer sensorBuffer) { }
         public virtual void OnActionReceived(ActionBuffer actionBuffer) { } 
         public virtual void Heuristic(ActionBuffer actionBuffer) { }
-
         /// <summary>
         /// Called only on <b>FixedUpdate()</b>, <b>OnTriggerXXX()</b> or <b>OnCollisionXXX()</b>. <br></br>
         /// Ensures the agent will perform an action this frame.
         /// </summary>
-        public void RequestAction() => DecisionRequester.TakeActionThisFrame = true;
+        public void RequestAction() => DecisionRequester.decisionWasRequested = true;
         /// <summary>
         /// Called only on <b>FixedUpdate()</b>, and <b>OnTriggerXXX()</b> or <b>OnCollisionXXX()</b>. <br></br>
         /// Ensures the episode will end this frame. Does not require the agent to take action this frame.
@@ -286,10 +222,14 @@ namespace DeepUnity
         /// Modifies the reward of the current time step. Does not require the agent to take action this frame.
         /// </summary>
         /// <param name="reward">positive or negative</param>
-        public void AddReward(float reward) => TimestepReward += reward;
+        public void AddReward(float reward)
+        {
+            if(Timestep.reward == null)
+                Timestep.reward = Tensor.Constant(reward);    
+            else
+                Timestep.reward += reward;
+        }
     }
-
-   
 
     [CustomEditor(typeof(Agent), true), CanEditMultipleObjects]
     sealed class CustomAgentEditor : Editor
@@ -298,14 +238,31 @@ namespace DeepUnity
         {
             List<string> dontDrawMe = new(){ "m_Script" };
 
-            SerializedProperty mod = serializedObject.FindProperty("model");
+            SerializedProperty modelProperty = serializedObject.FindProperty("model");
+            SerializedProperty hpProperty = serializedObject.FindProperty("hp");
+            var script = (Agent)target;
+            
+            if(modelProperty.objectReferenceValue == null || hpProperty.objectReferenceValue == null)
+                if (GUILayout.Button("Bake/Load model and hyperparameters"))
+                {
+                    script.BakeModel();
+                    script.BakeHyperParamters();
+                }
 
-            if(mod.objectReferenceValue != null)
+            if (modelProperty.objectReferenceValue != null)
             {
                 dontDrawMe.Add("spaceSize");
                 dontDrawMe.Add("continuousActions");
                 dontDrawMe.Add("discreteBranches");
             }
+
+            SerializedProperty beh = serializedObject.FindProperty("behaviourType");
+
+            if(beh.enumValueIndex != (int)BehaviourType.Learn)
+            {
+                dontDrawMe.Add("Hp");
+            }
+
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
             serializedObject.ApplyModifiedProperties();
         }

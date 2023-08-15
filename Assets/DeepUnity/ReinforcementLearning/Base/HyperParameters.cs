@@ -1,11 +1,11 @@
-using System.Collections.Generic;
+using System;
 using UnityEditor;
 using UnityEngine;
-
+using System.Collections.Generic;
 namespace DeepUnity
 {
-    [DisallowMultipleComponent, AddComponentMenu("DeepUnity/Hyperparameters")]
-    public class HyperParameters : MonoBehaviour
+    [Serializable]
+    public class Hyperparameters : ScriptableObject
     { 
         [Header("Training Configurations")]
 
@@ -29,19 +29,20 @@ namespace DeepUnity
         [Tooltip("Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer_size")]
         [Min(32)] public int batchSize = 256;
 
-        [ReadOnly, Tooltip("Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch_size. Typically a larger buffer_size corresponds to more stable training updates.")]
-        [Min(1024)] public int bufferSize = 2048;
+        [Tooltip("Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch_size. Typically a larger buffer_size corresponds to more stable training updates.")]
+        [Min(1024)] public int bufferSize = 4096;
+
+        [Tooltip("Apply normalization to observation inputs.")]
+        public bool normalize = true;
 
         [Tooltip("Applies linear decay on learning rate (default step_size: 10, default decay: 0.99f).")]
         public bool learningRateSchedule = false;
 
-        [Tooltip("Apply normalization to observation inputs and rewards.")]
-        public NormalizationType normalization = NormalizationType.ZScore;
-
+        
       
         [Header("PPO-specific Configurations")]
-        [ReadOnly, Tooltip("How many steps of experience to collect per-agent before adding it to the experience buffer.")]
-        [Min(1)] public int timeHorizon = 64;
+        [Tooltip("How many steps of experience to collect per-agent before adding it to the experience buffer.")]
+        [Min(1)] public int horizon = 64;
 
         [Tooltip("Entropy regularization.")]
         [Min(0f)] public float beta = 5e-3f;
@@ -52,7 +53,7 @@ namespace DeepUnity
         [Tooltip("Discount factor.")]
         [Min(0)] public float gamma = 0.99f;
 
-        [ReadOnly, Tooltip("GAE factor.")]
+        [Tooltip("GAE factor.")]
         [Min(0)] public float lambda = 0.95f;
 
         
@@ -63,15 +64,37 @@ namespace DeepUnity
         [ReadOnly, Tooltip("Applies linear decay on epsilon.")]
         public bool epsilonScheduler = false;
 
+        /// <summary>
+        /// Creates a new Hyperparameters asset in the <em>behaviour</em> folder.
+        /// </summary>
+        /// <param name="behaviourName"></param>
+        /// <returns></returns>
+        public static Hyperparameters CreateOrLoadAsset(string behaviourName)
+        {
+            var instance = AssetDatabase.LoadAssetAtPath<Hyperparameters>($"Assets/{behaviourName}/Hyperparameters.asset");
+            
+            if(instance != null)
+            {
 
+                return instance;
+            }
+
+
+            Hyperparameters hp = new Hyperparameters();
+
+            AssetDatabase.CreateAsset(hp, $"Assets/{behaviourName}/Hyperparameters.asset");
+            AssetDatabase.SaveAssets();
+            Debug.Log($"<color=#0ef0bf>[<b>{behaviourName}</b> <i>Hyperparameters</i> asset created]</color>");
+            return hp;
+        }
     }
-    [CustomEditor(typeof(HyperParameters), true), CanEditMultipleObjects]
+    [CustomEditor(typeof(Hyperparameters), true), CanEditMultipleObjects]
     class ScriptlessHP : Editor
     {
         public override void OnInspectorGUI()
         {
             List<string> dontDrawMe = new List<string>() { "m_Script" };
-
+    
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
             serializedObject.ApplyModifiedProperties();
         }

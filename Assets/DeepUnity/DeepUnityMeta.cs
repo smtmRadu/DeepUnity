@@ -188,13 +188,13 @@ namespace DeepUnity
         Discrete
     }
 
-    public enum NormalizationType
-    {
-        None,
-        Scale,
-        ZScore,
-        LogScale
-    }
+    // public enum NormalizationType
+    // {
+    //     None,
+    //     Scale,
+    //     ZScore,
+    //     LogScale
+    // }
 
 }
 

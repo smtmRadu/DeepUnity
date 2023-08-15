@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.IO;
+using System.Security.AccessControl;
 using UnityEditor;
 using UnityEngine;
 
@@ -13,9 +14,10 @@ namespace DeepUnity
         [SerializeField] public int continuousDim;
         [SerializeField] public int[] discreteBranches;
 
-        [SerializeField] public ZScoreNormalizer stateStandardizer;
-        [SerializeField] public ZScoreNormalizer rewardNormalizer;  
- 
+        [Header("Normalizers")]
+        [SerializeField] public ZScoreNormalizer stateNormalizer;
+
+        [Header("Neural Networks")]
         [SerializeField] public Sequential critic;
         [SerializeField] public Sequential muHead;
         [SerializeField] public Sequential sigmaHead;
@@ -32,57 +34,56 @@ namespace DeepUnity
         public LRScheduler[] discreteHeadsSchedulers { get; private set; }
 
 
-        public static readonly int default_step_size_StepLR = 10;
-        public static readonly float default_gamma_StepLR = 0.99f;
-        public static readonly (float, float) sigma_clip = (0.001f, 5f);
 
-        public AgentBehaviour(int stateSize, int continuousActions, int[] discreteBranches)
+
+        private AgentBehaviour(string behaviourName, int stateSize, int continuousActions, int[] discreteBranches)
         {
-            this.behaviourName = name;
+            this.behaviourName = behaviourName;
             this.observationSize = stateSize;
             this.continuousDim = continuousActions;
+            stateNormalizer = new ZScoreNormalizer(stateSize);
 
-            stateStandardizer = new ZScoreNormalizer(stateSize, true);// Normalizer.Create(stateSize, normalization);
-            rewardNormalizer = null; // new ZScoreNormalizer(1, true);// Normalizer.Create(1, normalization);
 
-            int hiddenUnits = 64;
+            //------------------ NETWORK INITIALIZATION ----------------//
+            int H = 64;
 
             critic = new Sequential(
-                new Dense(stateSize, hiddenUnits),
+                new Dense(stateSize, H, InitType.HE_Normal, InitType.HE_Normal),
                 new ReLU(),
-                new Dense(hiddenUnits, hiddenUnits, device: Device.GPU),
+                new Dense(H, H, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
                 new ReLU(),
-                new Dense(hiddenUnits, 1));
+                new Dense(H, 1, InitType.HE_Normal, InitType.HE_Normal));
 
             muHead = new Sequential(
-                new Dense(stateSize, hiddenUnits),
+                new Dense(stateSize, H, InitType.HE_Normal, InitType.HE_Normal),
                 new ReLU(),
-                new Dense(hiddenUnits, hiddenUnits, device: Device.GPU),
+                new Dense(H, H, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
                 new ReLU(),
-                new Dense(hiddenUnits, continuousActions),
+                new Dense(H, continuousActions, InitType.HE_Normal, InitType.HE_Normal),
                 new Tanh());
 
             sigmaHead = new Sequential(
-                new Dense(stateSize, hiddenUnits),
+                new Dense(stateSize, H, InitType.HE_Normal, InitType.HE_Normal),
                 new ReLU(),
-                new Dense(hiddenUnits, hiddenUnits, device: Device.GPU),
+                new Dense(H, H, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
                 new ReLU(),
-                new Dense(hiddenUnits, continuousActions),
+                new Dense(H, continuousActions, InitType.HE_Normal, InitType.HE_Normal),
                 new Softplus());
 
             discreteHeads = new Sequential[discreteBranches.Length];
             for (int i = 0; i < discreteHeads.Length; i++)
             {
                 discreteHeads[i] = new Sequential(
-                    new Dense(stateSize, hiddenUnits),
+                    new Dense(stateSize, H, InitType.HE_Normal, InitType.HE_Normal),
                     new ReLU(),
-                    new Dense(hiddenUnits, hiddenUnits, device: Device.GPU),
+                    new Dense(H, H, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
                     new ReLU(),
-                    new Dense(hiddenUnits, discreteBranches[i]),
+                    new Dense(H, discreteBranches[i], InitType.HE_Normal, InitType.HE_Normal),
                     new Softmax());
             }
+            //----------------------------------------------------------//
         }
-        public void InitOptimisers(HyperParameters hp)
+        public void InitOptimisers(Hyperparameters hp)
         {
             if (criticOptimizer != null)
                 return;
@@ -101,7 +102,7 @@ namespace DeepUnity
             }
 
         }
-        public void InitSchedulers(HyperParameters hp)
+        public void InitSchedulers(Hyperparameters hp)
         {
             if (criticScheduler != null)
                 return;
@@ -110,8 +111,8 @@ namespace DeepUnity
             if (critic == null)
                 throw new Exception($"Networks were not assigned to the {behaviourName} behaviour asset.");
 
-            int step_size = hp.learningRateSchedule ? default_step_size_StepLR : 1000000;
-            float gamma = hp.learningRateSchedule ? default_gamma_StepLR : 1f;
+            int step_size = hp.learningRateSchedule ? 10 : 1000;
+            float gamma = hp.learningRateSchedule ? 0.99f : 1f;
 
             criticScheduler = new LRScheduler(criticOptimizer, step_size, gamma);
             muHeadScheduler = new LRScheduler(muHeadOptimizer, step_size, gamma);
@@ -125,69 +126,81 @@ namespace DeepUnity
 
         }
 
-        public Tensor Value(Tensor state) => critic.Predict(state);
-        public Tensor ContinuousPredict(Tensor state, out Tensor logProbs)
+
+
+        /// <summary>
+        /// Input: <paramref name="state"/> - <em>sₜ</em> | Tensor (<em>Observations</em>) <br></br>
+        /// Output: <paramref name="value"/> - <em>Vtarget</em> | Tensor (<em>1</em>)
+        /// </summary>
+        public void ValuePredict(Tensor state, out Tensor value) 
         {
-            // Sample mu and sigma
+            value = critic.Predict(state);
+        }
+        /// <summary>
+        /// Input: <paramref name="state"/> - <em>sₜ</em> | Tensor (<em>Observations</em>) <br></br>
+        /// Output: <paramref name="action"/> - <em>aₜ</em> |  Tensor (<em>Continuous Actions</em>) <br></br>
+        /// Extra Output: <paramref name="probabilities"/> - <em>πθ(aₜ|sₜ)</em> | Tensor (<em>Continuous Actions</em>)
+        /// </summary>
+        public void ContinuousPredict(Tensor state, out Tensor action, out Tensor probabilities)
+        {
             Tensor mu = muHead.Predict(state);
-            // Tensor sigma = sigmaHead.Predict(state).Clip(sigma_clip.Item1, sigma_clip.Item2);
-            Tensor sigma = Tensor.Fill(0.1f, mu.Shape); // (static sigma 0.1)
-
-            // Sample actions
-            Tensor actions = mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
-
-            // Get log probs
-            logProbs = Tensor.LogDensity(actions, mu, sigma);
-       
-            return actions;
+            Tensor sigma = Tensor.Fill(0.1f, mu.Shape);
+            action = mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
+            probabilities = Tensor.PDF(action, mu, sigma);
         }
-        public Tensor ContinuousForward(Tensor stateBatch, out Tensor mu, out Tensor sigma)
+        /// <summary>
+        /// Input: <paramref name="statesBatch"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
+        /// Output: <paramref name="mu"/> - <em>μ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
+        /// OutputL <paramref name="sigma"/> - <em>σ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
+        /// </summary>
+        public void ContinuousForward(Tensor statesBatch, out Tensor mu, out Tensor sigma)
         {
-            mu = muHead.Forward(stateBatch);
-            // sigma = sigmaHead.Forward(stateBatch).Clip(sigma_clip.Item1, sigma_clip.Item2);
-            sigma = Tensor.Fill(0.1f, mu.Shape); // (static sigma 0.1)
-
-            return mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
+            mu = muHead.Forward(statesBatch);
+            sigma = Tensor.Fill(0.1f, mu.Shape);
         }
-
-
-        public Tensor DiscretePredict(Tensor state, out Tensor logProbs)
+        public void DiscretePredict(Tensor state, out Tensor action, out Tensor probabilities)
+        {
+            probabilities = null;
+            action = null;
+        }
+        public void DiscreteForward(Tensor statesBatch, out Tensor logProbs)
         {
             logProbs = null;
-            return null;
-        }
-        public Tensor DiscreteForward(Tensor statesBatch, out Tensor logProbs)
-        {
-            logProbs = null;
-            return null;
         }
 
 
-        public AgentBehaviour CreateAsset(string name)
-        {
-            this.behaviourName = name;
-            var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{behaviourName}/{behaviourName}.asset");
+
+
+        /// <summary>
+        /// Creates a new Agent behaviour folder containing all auxiliar neural networks, or loads it if already exists one for this behaviour.
+        /// </summary>
+        /// <returns></returns>
+        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int continuousActions, int[] discreteActions)
+        {          
+            var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
 
             if (instance != null)
-                throw new InvalidOperationException($"A Behaviour with the same name '{name}' already exists!");
+                return instance;
+
+            AgentBehaviour newAgBeh = new AgentBehaviour(name, stateSize, continuousActions, discreteActions);
 
             // Create the asset
-            if (!Directory.Exists($"Assets/{behaviourName}"))
-                Directory.CreateDirectory($"Assets/{behaviourName}");
-            AssetDatabase.CreateAsset(this, $"Assets/{behaviourName}/{behaviourName}.asset");
+            if (!Directory.Exists($"Assets/{name}"))
+                Directory.CreateDirectory($"Assets/{name}");
+            AssetDatabase.CreateAsset(newAgBeh, $"Assets/{name}/{name}.asset");
             AssetDatabase.SaveAssets();
 
             // Create aux assets
-            critic.CreateAsset($"{behaviourName}/critic");
-            muHead.CreateAsset($"{behaviourName}/mu");
-            sigmaHead.CreateAsset($"{behaviourName}/sigma");
+            newAgBeh.critic.CreateAsset($"{name}/critic");
+            newAgBeh.muHead.CreateAsset($"{name}/mu");
+            newAgBeh.sigmaHead.CreateAsset($"{name}/sigma");
 
-            for (int i = 0; i < discreteHeads.Length; i++)
+            for (int i = 0; i < newAgBeh.discreteHeads.Length; i++)
             {
-                discreteHeads[i].CreateAsset($"{behaviourName}/discrete{i}");
+                newAgBeh.discreteHeads[i].CreateAsset($"{name}/discrete{i}");
             }
 
-            return this;
+            return newAgBeh;
         }
         /// <summary>
         /// Updates the state of the Behaviour parameters.
@@ -199,7 +212,7 @@ namespace DeepUnity
             if (instance == null)
                 throw new InvalidOperationException("Cannot save the Behaviour because it requires compilation first.");
 
-            // Debug.Log($"<color=#03a9fc>Agent behaviour <b>{behaviourName}<b/> saved.</color>");
+            Debug.Log($"<color=#03a9fc>Agent behaviour <b><i>{behaviourName}</i></b> autosaved.</color>");
 
             critic.Save();
             muHead.Save();

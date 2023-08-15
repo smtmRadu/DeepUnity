@@ -69,14 +69,14 @@ namespace DeepUnity
                 var e_gamma = Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size);
                 var e_beta = Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
 
-                var input_centered = (input - e_mean) / Tensor.Sqrt(e_var + Utils.EPSILON);
+                var input_centered = (input - e_mean) / (e_var.Sqrt() + Utils.EPSILON);
                 var output = e_gamma * input_centered + e_beta;
 
                 return output;
             }
             else
             {
-                var input_centered = (input - runningMean) / Tensor.Sqrt(runningVar + Utils.EPSILON);
+                var input_centered = (input - runningMean) / (runningVar.Sqrt() + Utils.EPSILON);
                 var output = gamma * input_centered + beta;
 
                 return output;
@@ -87,7 +87,6 @@ namespace DeepUnity
         {
             if (input.Size(-1) != num_features)
                 throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) last dimension is not equal to num_features ({num_features})");
-
 
             bool isBatched = input.Rank == 2;
 

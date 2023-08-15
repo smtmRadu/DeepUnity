@@ -9,9 +9,8 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public sealed class Tensor : IEquatable<Tensor>, IEquatable<TensorGPU>
+    public sealed class Tensor : IEquatable<Tensor>, IEquatable<TensorGPU>, ICloneable
     {
-        public static string ToStringFormat { get; set; } = "0.00000";
         [SerializeField] private float[] data;
         [SerializeField] private int[] shape;
 
@@ -1074,33 +1073,34 @@ namespace DeepUnity
             }
         }
         /// <summary>
-        /// Computes the element-wise log density,
+        /// Computes the element-wise log probability density function (Log(PDF(x))).  <br></br>
+        /// https://stats.stackexchange.com/questions/404191/what-is-the-log-of-the-pdf-for-a-normal-distribution
         /// </summary>
         /// <param name="x"></param>
         /// <param name="mu"></param>
         /// <param name="sigma"></param>
         /// <returns></returns>
-        public static Tensor LogDensity(Tensor x, Tensor mu, Tensor sigma)
+        public static Tensor LogPDF(Tensor x, Tensor mu, Tensor sigma)
         {
             var frac = (x - mu) / sigma;
             var elem1 = Log(sigma);
-            var elem2 = 0.5f * MathF.Log(2.0f * MathF.PI);
+            var elem2 = 0.5f * MathF.Log(2f * MathF.PI);
             var elem3 = 0.5f * frac * frac;
-            return -elem1 - elem2 - elem3;
+            return - elem1 - elem2 - elem3;
         }
         /// <summary>
-        /// Computes the element-wise density,
+        /// Computes the element-wise probability density function of <paramref name="x"/> (PDF(x)).
         /// </summary>
         /// <param name="x"></param>
         /// <param name="mu"></param>
         /// <param name="sigma"></param>
         /// <returns></returns>
-        public static Tensor Density(Tensor x, Tensor mu, Tensor sigma)
+        public static Tensor PDF(Tensor x, Tensor mu, Tensor sigma)
         {
-            Tensor p1 = (sigma * MathF.Sqrt(2f * MathF.PI)) * 0.5f;
+            Tensor p1 = sigma * MathF.Sqrt(2f * MathF.PI);
             Tensor std = (x - mu) / sigma;
             Tensor p2 = -0.5f * std * std;
-            return p1 * Tensor.Exp(p2);
+            return Exp(p2) / p1;
         }
         /// <summary>
         /// Computes the element-wise Kullback-Leibler divergence. Measures the distance between two data distributions showing how different the two distributions are from each other.
@@ -2509,6 +2509,10 @@ namespace DeepUnity
 
             return result;
         }
+        public bool Contains(float item)
+        {
+            return data.Contains(item);
+        }
         public int Count(Func<float, bool> predicate = null)
         {
             if (predicate == null)
@@ -2553,6 +2557,10 @@ namespace DeepUnity
                 return false;
 
             return true;
+        }
+        public object Clone()
+        {
+            return Identity(this);
         }
         public override string ToString()
         {
@@ -2607,7 +2615,7 @@ namespace DeepUnity
                             if (i > 0)
                                 sb.Append(", ");
 
-                            sb.Append(this[l, k, j, i].ToString(ToStringFormat));
+                            sb.Append(this[l, k, j, i].ToString(StringFormat));
                         }
 
                         if (rank > 1)
@@ -2630,6 +2638,10 @@ namespace DeepUnity
         {
             return base.GetHashCode();
         }
+        /// <summary>
+        /// The format in which the tensor elements are displayed. <em>Default: "0.00000".</em>
+        /// </summary>
+        public static string StringFormat { get; set; } = "0.00000";
 
         #endregion LINQ
 

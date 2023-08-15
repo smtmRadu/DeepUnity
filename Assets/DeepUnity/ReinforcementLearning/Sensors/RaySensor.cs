@@ -49,11 +49,17 @@ namespace DeepUnity
         {
             float oneAngle = rays == 1 ? 0 : -fieldOfView / (rays - 1f);
 
-            float begin = (float)-oneAngle * (rays - 1f) / 2f + rotationOffset;
+            float begin = -oneAngle * (rays - 1f) / 2f + rotationOffset;
             Vector3 startAngle;
 
             if (world == World.World3d)
-                startAngle = Quaternion.AngleAxis(tilt, transform.right) * Quaternion.AngleAxis(tilt, transform.forward) * Quaternion.AngleAxis(begin, transform.up) * transform.forward;
+            {
+                Quaternion rotationToTheLeft = Quaternion.AngleAxis(begin, transform.up);
+                Vector3 rotatedForward = rotationToTheLeft * transform.forward;
+                Vector3 rotationAxis = Vector3.Cross(rotatedForward, transform.up).normalized;
+                Quaternion secondaryRotation = Quaternion.AngleAxis(tilt, rotationAxis);
+                startAngle = secondaryRotation * rotatedForward;
+            }
             else //world2d
                 startAngle = Quaternion.AngleAxis(begin, transform.forward) * transform.up;
 
@@ -126,10 +132,17 @@ namespace DeepUnity
             Observations.Clear();
             float oneAngle = rays == 1 ? 0 : -fieldOfView / (rays - 1f);
 
-            float begin = (float)-oneAngle * (rays - 1f) / 2f + rotationOffset;
+            float begin = -oneAngle * (rays - 1f) / 2f + rotationOffset;
             Vector3 startAngle;
+
             if (world == World.World3d)
-                startAngle = Quaternion.AngleAxis(tilt, transform.right) * Quaternion.AngleAxis(tilt, transform.forward) * Quaternion.AngleAxis(begin, transform.up) * transform.forward;
+            {
+                Quaternion rotationToTheLeft = Quaternion.AngleAxis(begin, transform.up);
+                Vector3 rotatedForward = rotationToTheLeft * transform.forward;
+                Vector3 rotationAxis = Vector3.Cross(rotatedForward, transform.up).normalized;
+                Quaternion secondaryRotation = Quaternion.AngleAxis(tilt, rotationAxis);
+                startAngle = secondaryRotation * rotatedForward;
+            }
             else //world2d
                 startAngle = Quaternion.AngleAxis(begin, transform.forward) * transform.up;
 
@@ -208,7 +221,7 @@ namespace DeepUnity
         private void CastRay2D(Vector3 castOrigin, float sphereCastRadius, Vector3 rayDirection, float distance, LayerMask layerMask)
         {
             RaycastHit2D hit = Physics2D.CircleCast(castOrigin, sphereCastRadius, rayDirection, distance, layerMask);
-            if (hit == true)
+            if (hit)
             {
                 switch (info)
                 {
