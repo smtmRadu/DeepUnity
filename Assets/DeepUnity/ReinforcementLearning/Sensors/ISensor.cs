@@ -14,7 +14,7 @@ namespace DeepUnity
     public enum CaptureType
     {
         RGB,
-        Greyscale,
+        Grayscale,
     }
 }
 

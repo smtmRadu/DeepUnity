@@ -26,33 +26,13 @@ namespace kbRadu
 
         private void Start()
         {
-            Tensor mu = Tensor.RandomNormal(10).Clip(-1f, 1f);
-            Tensor sigma = Tensor.Random01(10);
-            Tensor pi = mu.Zip(sigma, (x,y) => Utils.Random.Gaussian(x,y));
-            Tensor.StringFormat = "0.000000000000";
-
-            print("mu" + mu);
-            print("sigma" + sigma);
-            print("actions" + pi);
-
-
-            print(Tensor.PDF(pi, mu, sigma));
-            print("Density + log" + Tensor.PDF(pi, mu, sigma).Log());
-
-
-            print("logdensity" + Tensor.LogPDF(pi, mu, sigma));
-            print("lgoDensity" + Tensor.PDF(pi.Log(), mu, sigma));
-
-            /**
-             * 
-             * forward(s) -> mu -> N(mu, sigma) -> a
-             * pi (a|s) = g(a)
-             * log pi (a|s) = log g(a)
-             * log pi (a|s) = g(log(a))
-             * 
-             */
+            DeepUnity.ClockTimer.Start();
+            for (int i = 0; i < 10000000; i++)
+            {
+                var x = Utils.Random.Value;
+            }
+            ClockTimer.Stop();
         }
-
         /* private void Start()
          {
              Conv2DLearnTest();

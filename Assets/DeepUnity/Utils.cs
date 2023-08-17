@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -16,6 +17,10 @@ namespace DeepUnity
         public const float E = 2.7182818284590452354f;
         private static System.Random RNG = new System.Random(DateTime.Now.Millisecond);
 
+        public static bool IsMainThread()
+        {
+            return Thread.CurrentThread.ManagedThreadId == 1;
+        }
         public static void Shuffle<T>(T[] arrayToShuffle)
         {
             lock (RNG)
@@ -451,14 +456,15 @@ namespace DeepUnity
             }
         }
         /// <summary>
-        /// A thread-safe way to extract random numbers;
+        /// A thread-safe way to extract random numbers.
         /// </summary>
         public static class Random
         {        
+            // -- On tests, extracting numbers threadsafely is just 2 times less efficient than checking if we are on the main thread --//
             /// <summary>
-            /// Returns a value in range [0, 1)
+            /// Returns a value in range [0, 1) thread-safely.
             /// </summary>
-            public static float Value { get { lock (RNG) return (float) RNG.NextDouble(); } }
+            public static float Value { get { lock (RNG) return (float)RNG.NextDouble(); } }        
             public static float Range(float minInclusive, float maxExclusive) => Value * (maxExclusive - minInclusive) + minInclusive;
             public static int Range(int minInclusive, int maxExclusive) => (int) (Value * (maxExclusive - minInclusive) + minInclusive);
             public static bool Bernoulli(float p = 0.5f) => Value < p;
@@ -477,7 +483,8 @@ namespace DeepUnity
 
                 entropy = MathF.Sqrt(-2.0f * MathF.Log(x1)) * MathF.Cos(2.0f * MathF.PI * x2);
                 return entropy * stddev + mean;
-            }    
+            }
+            
         }
     }
 

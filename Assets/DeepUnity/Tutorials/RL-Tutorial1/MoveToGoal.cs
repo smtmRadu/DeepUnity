@@ -5,24 +5,27 @@ public class MoveToGoal : Agent
 {
     [Header("Properties")]
     public float speed = 10f;
-    public Transform target; // referenced manually
+    public Transform target;
 
-    public override void FixedUpdate()
+    public override void OnEpisodeBegin()
     {
-        base.FixedUpdate();
-        AddReward(-0.001f);
+        float xrand = Random.Range(-5f, 5f);
+        float zrand = Random.Range(-5f, 5f);
+        target.localPosition = new Vector3(xrand, 0, zrand);
+
+        xrand = Random.Range(-5f, 5f);
+        zrand = Random.Range(-5f, 5f);
+        transform.localPosition = new Vector3(xrand, 0, zrand);
     }
     public override void CollectObservations(SensorBuffer sensorBuffer)
     {
-        // Space size 4
-        sensorBuffer.AddObservation(transform.localPosition.x);
-        sensorBuffer.AddObservation(transform.localPosition.z);
-        sensorBuffer.AddObservation(target.transform.localPosition.x);
-        sensorBuffer.AddObservation(target.transform.localPosition.z);
+        sensorBuffer.AddObservation(transform.localPosition.x / 5f);
+        sensorBuffer.AddObservation(transform.localPosition.z / 5f);
+        sensorBuffer.AddObservation(target.transform.localPosition.x / 5f);
+        sensorBuffer.AddObservation(target.transform.localPosition.z / 5f);
     }
     public override void OnActionReceived(ActionBuffer actionBuffer)
     {
-        // Continuous actions 2 | Discrete actions 0
         float xmov = actionBuffer.ContinuousActions[0];
         float zmov = actionBuffer.ContinuousActions[1];
 
@@ -30,7 +33,6 @@ public class MoveToGoal : Agent
     }
     public override void Heuristic(ActionBuffer actionBuffer)
     {
-        // Control the agent manually
         float xmov = 0;
         float zmov = 0;
 
@@ -46,26 +48,17 @@ public class MoveToGoal : Agent
 
         actionBuffer.ContinuousActions[0] = xmov;
         actionBuffer.ContinuousActions[1] = zmov;
-    }
-    
-    public override void OnEpisodeBegin()
-    {
-        // Randomly position the target on each episode begin
-        // float xrand = Random.Range(-5f, 5f);
-        // float zrand = Random.Range(-5f, 5f);
-        // 
-        // target.localPosition = new Vector3(xrand, 0, zrand);
-    }
+    }  
     private void OnCollisionEnter(Collision collision)
     {
-        if(collision.collider.CompareTag("Target"))
+        if(collision.collider.TryGetComponent<Goal>(out _))
         {
-            AddReward(1f);
+            SetReward(1f);
             EndEpisode();
         }    
-        else if(collision.collider.CompareTag("Wall"))
+        if(collision.collider.TryGetComponent<Wall>(out _))
         {
-            AddReward(-1f);
+            SetReward(-1f);
             EndEpisode();
         }
     }

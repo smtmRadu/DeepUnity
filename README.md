@@ -68,8 +68,7 @@ public class Tutorial : MonoBehaviour
 
             train_loss += loss.Item;
         }
-        train_loss /= input_batches.Length;
-        trainLossGraph.Append(train_loss);
+        trainLossGraph.Append(train_loss / input_batches.Length);
 
         // Validation
         Tensor valid_prediction = network.Predict(valid_inputs);
@@ -85,15 +84,16 @@ public class Tutorial : MonoBehaviour
 ```
 ![rl](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/tensors.png?raw=true)
 
-### Reinforcement Learning [In Development]
+### Reinforcement Learning
 In order to work with Reinforcement Learning tools, you must create a 2D or 3D agent using Unity provided GameObjects and Coomponents. The setup flow works similary to ML Agents (but with some restrictions described in the diagram below), so you must create a new behaviour script (e.g. _MoveToGoal_) that must inherit the **Agent** class. Attach the new behaviour script to the agent GameObject (automatically are attached 2 more scripts, **HyperParameters** and **DecisionRequester**) [Optionally, a **PerformanceTrack** script can be attached]. Choose the space size and number of actions, then override the following methods in the behavior script:
 - _CollectObservations()_
 - _OnActionReceived()_
 - _Heuristic()_ [Optional]
 - _OnEpisodeBegin()_ [Optional]
 
-Also in order to decide the reward function and episode terminal state, use the following calls inside FixedUpdate(), OnTriggerXXX() or OnCollisionXXX():
+Also in order to decide the reward function and episode terminal state, or telling the agent to perform actions on specific time frames, use the following calls:
 -  _AddReward(*reward*)_
+-  _SetReward(*reward*)_
 -  _EndEpsiode()_ 
 -  _RequestAction()_ [Optional, if decision is requested manually]
 #### Behaviour script overriding example
@@ -107,23 +107,28 @@ public class MoveToGoal : Agent
     public float speed = 10f;
     public Transform target;
 
-    public override void FixedUpdate()
+    public override void OnEpisodeBegin()
     {
-        base.FixedUpdate();
-        AddReward(-0.001f);
+        float xrand = Random.Range(-5f, 5f);
+        float zrand = Random.Range(-5f, 5f);
+        target.localPosition = new Vector3(xrand, 0, zrand);
+
+        xrand = Random.Range(-5f, 5f);
+        zrand = Random.Range(-5f, 5f);
+        transform.localPosition = new Vector3(xrand, 0, zrand);
     }
     public override void CollectObservations(SensorBuffer sensorBuffer)
     {
-        sensorBuffer.AddObservation(transform.localPosition.x);
-        sensorBuffer.AddObservation(transform.localPosition.z);
-        sensorBuffer.AddObservation(target.transform.localPosition.x);
-        sensorBuffer.AddObservation(target.transform.localPosition.z);
+        sensorBuffer.AddObservation(transform.localPosition.x / 5f);
+        sensorBuffer.AddObservation(transform.localPosition.z / 5f);
+        sensorBuffer.AddObservation(target.transform.localPosition.x / 5f);
+        sensorBuffer.AddObservation(target.transform.localPosition.z / 5f);
     }
     public override void OnActionReceived(ActionBuffer actionBuffer)
     {
         float xmov = actionBuffer.ContinuousActions[0];
         float zmov = actionBuffer.ContinuousActions[1];
-        
+
         transform.position += new Vector3(xmov, 0, zmov) * Time.fixedDeltaTime * speed;
     }
     public override void Heuristic(ActionBuffer actionBuffer)
@@ -143,35 +148,34 @@ public class MoveToGoal : Agent
 
         actionBuffer.ContinuousActions[0] = xmov;
         actionBuffer.ContinuousActions[1] = zmov;
-    }
-    
-    public override void OnEpisodeBegin()
-    {
-        float xrand = Random.Range(-5, 5);
-        float zrand = Random.Range(-5, 5);
-        target.position = new Vector3(xrand, 0, zrand);
-    }
+    }  
     private void OnCollisionEnter(Collision collision)
     {
-        if(collision.collider.CompareTag("Target"))
+        if(collision.collider.TryGetComponent<Goal>(out _))
         {
-            AddReward(1f);
+            SetReward(1f);
             EndEpisode();
         }    
-        else if(collision.collider.CompareTag("Wall"))
+        if(collision.collider.TryGetComponent<Wall>(out _))
         {
-            AddReward(-1f);
+            SetReward(-1f);
             EndEpisode();
         }
     }
 }
-```
-_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (decision is requested each frame), and must reach a randomly positioned target. The agent is rewarded by 1 point if he touches the target, or penalized by 1 point if he hits a wall. The agent is penalized constantly by 0.001 points at each time step, to encourage the agent reaching the target as fast as possible._
 
+
+
+```
+_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (decision is requested Once Each Frame), and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the goal, and penalized by 1 point if he hits a wall, and on every collision the episode ends._
+
+/// place gif here
+
+In order to properly get use of _AddReward()_, _EndEpisode()_ and _RequestDecision()_ consult the diagram below. For manual decision request, keep in mind that you can call the method anywhere, but only before base.FixedUpdate() will allow the action to be performed in the same frame; otherwise the action will appear in the next frame. _AddReward()_ and _EndEpisode()_ methods work well being called inside _OnTriggerXXX()_ or _OnCollisionXXX()_, as well as inside _OnActionReceived()_ rightafter each action was performed.
 ![rl](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_schema.jpg?raw=true)
 
 #### Notes
-- The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. In order to override them, call the their **base** *[first]* each time.
-- Call _AddReward()_, _EndEpisode()_ and _RequestAction()_ only inside **FixedUpdate()**, or any **OnTriggerXXX()**/**OnCollisionXXX()** methods.
+- The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. It is not recommended to use them, but if neccesary, in order to override them, call the their **base** each time, respecting the logic of the diagram above.
+- Call _AddReward()_, _EndEpisode()_ and _RequestAction()_ only inside **OnActionReceived()** or any **OnTriggerXXX**/**OnCollisionXXX** methods.
 
 

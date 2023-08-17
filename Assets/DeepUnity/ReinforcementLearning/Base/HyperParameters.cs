@@ -12,7 +12,7 @@ namespace DeepUnity
         [Tooltip("The framerate at which the simulation is runned (FixedUpdate() calls per second).")]
         [Min(30)] public int targetFPS = 50;
 
-        [Tooltip("Tthe maximum length of an agent's episodes/trajectories. Set to a positive integer to limit the episode length to that many steps. Set to 0 for unlimited episode length.")]
+        [Tooltip("The maximum length of an agent's episode. Set to a positive integer to limit the episode length to that many steps. Set to 0 for unlimited episode length.")]
         [Min(0)] public int maxSteps = 1000;
 
         [Tooltip("Debug all timesteps in an output file.")]
@@ -24,16 +24,20 @@ namespace DeepUnity
         [Min(0)] public float learningRate = 3e-4f;
 
         [Tooltip("Number of epochs per episode trajectory.")]
-        [Min(3)] public int numEpoch = 10;
+        [Min(3)] public int numEpoch = 8;
 
         [Tooltip("Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer_size")]
-        [Min(32)] public int batchSize = 256;
+        [Min(32)] public int batchSize = 128;
 
         [Tooltip("Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch_size. Typically a larger buffer_size corresponds to more stable training updates.")]
-        [Min(1024)] public int bufferSize = 4096;
+        [Min(64)] 
+        public int bufferSize = 2048;
 
-        [Tooltip("Apply normalization to observation inputs.")]
-        public bool normalize = true;
+        [Tooltip("Auto-normalize the observation inputs.")]
+        public bool normalizeObservations = false;
+
+        [Tooltip("Apply normalization to advantages over the memory buffer.")]
+        public bool normalizeAdvantages = false;
 
         [Tooltip("Applies linear decay on learning rate (default step_size: 10, default decay: 0.99f).")]
         public bool learningRateSchedule = false;
@@ -56,8 +60,6 @@ namespace DeepUnity
         [Tooltip("GAE factor.")]
         [Min(0)] public float lambda = 0.95f;
 
-        
-
         [ReadOnly, Tooltip("Applies linear decay on beta.")]
         public bool betaScheduler = false;
 
@@ -71,20 +73,16 @@ namespace DeepUnity
         /// <returns></returns>
         public static Hyperparameters CreateOrLoadAsset(string behaviourName)
         {
-            var instance = AssetDatabase.LoadAssetAtPath<Hyperparameters>($"Assets/{behaviourName}/Hyperparameters.asset");
+            var instance = AssetDatabase.LoadAssetAtPath<Hyperparameters>($"Assets/{behaviourName}/Config.asset");
             
             if(instance != null)
-            {
-
                 return instance;
-            }
-
 
             Hyperparameters hp = new Hyperparameters();
 
-            AssetDatabase.CreateAsset(hp, $"Assets/{behaviourName}/Hyperparameters.asset");
+            AssetDatabase.CreateAsset(hp, $"Assets/{behaviourName}/Config.asset");
             AssetDatabase.SaveAssets();
-            Debug.Log($"<color=#0ef0bf>[<b>{behaviourName}</b> <i>Hyperparameters</i> asset created]</color>");
+            Debug.Log($"<color=#0ef0bf>[<b>{behaviourName}/Config</b> <i>Hyperparameters</i> asset created]</color>");
             return hp;
         }
     }

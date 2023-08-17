@@ -54,7 +54,7 @@ namespace DeepUnity
             {
                 case CaptureType.RGB:
                     break;
-                case CaptureType.Greyscale:
+                case CaptureType.Grayscale:
                     image.SetPixels(image.GetPixels().Select(x => new Color(x.grayscale, x.grayscale, x.grayscale, x.a)).ToArray());
                     break;
             }

@@ -24,7 +24,7 @@ namespace DeepUnity
                 return Tensor.Identity(tuple);
 
             Tensor variance = m2 / (step - 1);
-            Tensor result;
+
             if (tuple.Rank == 1)
                 return (tuple - mean) / (variance.Sqrt() + Utils.EPSILON);
             else if (tuple.Rank == 2)

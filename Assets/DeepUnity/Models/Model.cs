@@ -11,7 +11,7 @@ namespace DeepUnity
     public abstract class Model<T> : ScriptableObject where T : Model<T>
     {
         [SerializeField] private int version = 1;
-        [SerializeField] private bool assetCreated = false;
+        [SerializeField, HideInInspector] private bool assetCreated = false;
 
 
         /// <summary>
@@ -50,7 +50,7 @@ namespace DeepUnity
             AssetDatabase.CreateAsset(this, $"Assets/{name}.asset");
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssetIfDirty(this);
-            Debug.Log($"<color=#03a9fc>[<b>{name}</b> <i>{GetType().Name}</i> model asset created]</color>");
+            Debug.Log($"<color=#03a9fc>[<b>{name}</b> <i>{GetType().Name}</i> asset created]</color>");
             return (T)this;
         }
         /// <summary>

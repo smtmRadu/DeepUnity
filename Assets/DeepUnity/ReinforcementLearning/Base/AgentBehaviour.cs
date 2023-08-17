@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Security.AccessControl;
 using UnityEditor;
@@ -14,28 +15,39 @@ namespace DeepUnity
         [SerializeField] public int continuousDim;
         [SerializeField] public int[] discreteBranches;
 
+        [Header("Standard Deviation for Continuous Actions")]
+        [SerializeField] public StandardDeviationType standardDeviation = StandardDeviationType.Fixed;
+        [SerializeField] public float fixedStandardDeviationValue = 1f;
+
         [Header("Normalizers")]
         [SerializeField] public ZScoreNormalizer stateNormalizer;
 
         [Header("Neural Networks")]
         [SerializeField] public Sequential critic;
-        [SerializeField] public Sequential muHead;
-        [SerializeField] public Sequential sigmaHead;
-        [SerializeField] public Sequential[] discreteHeads;
+        [SerializeField] public Sequential actorMu;
+        [SerializeField] public Sequential actorSigma;
+        [SerializeField] public Sequential[] actorDiscretes;
 
         public Optimizer criticOptimizer { get; private set; }
-        public Optimizer muHeadOptimizer { get; private set; }
-        public Optimizer sigmaHeadOptimizer { get; private set; }
-        public Optimizer[] discreteHeadsOptimizers { get; private set; }
+        public Optimizer actorMuOptimizer { get; private set; }
+        public Optimizer actorSigmaOptimizer { get; private set; }
+        public Optimizer[] actorDiscretesOptimizers { get; private set; }
 
         public LRScheduler criticScheduler { get; private set; }
-        public LRScheduler muHeadScheduler { get; private set; }
-        public LRScheduler sigmaHeadScheduler { get; private set; }
-        public LRScheduler[] discreteHeadsSchedulers { get; private set; }
+        public LRScheduler actorMuScheduler { get; private set; }
+        public LRScheduler actorSigmaScheduler { get; private set; }
+        public LRScheduler[] actorDiscretesScheduler { get; private set; }
 
+        private void Awake()
+        {
+            if (critic == null)
+            {
+                Debug.Log($"<color=#fcba03>Warning! Some network assets are not attached to {behaviourName} behaviour asset! </color>");
+                EditorApplication.isPlaying = false;
+                return;
+            }
 
-
-
+        }
         private AgentBehaviour(string behaviourName, int stateSize, int continuousActions, int[] discreteBranches)
         {
             this.behaviourName = behaviourName;
@@ -45,40 +57,42 @@ namespace DeepUnity
 
 
             //------------------ NETWORK INITIALIZATION ----------------//
-            int H = 64;
+            const int H = 64;
+            const InitType INIT_W = InitType.LeCun_Uniform;
+            const InitType INIT_B = InitType.LeCun_Uniform;
 
             critic = new Sequential(
-                new Dense(stateSize, H, InitType.HE_Normal, InitType.HE_Normal),
+                new Dense(stateSize, H, INIT_W, INIT_B),
                 new ReLU(),
-                new Dense(H, H, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
+                new Dense(H, H, INIT_W, INIT_B, device: Device.GPU),
                 new ReLU(),
-                new Dense(H, 1, InitType.HE_Normal, InitType.HE_Normal));
+                new Dense(H, 1, INIT_W, INIT_B));
 
-            muHead = new Sequential(
-                new Dense(stateSize, H, InitType.HE_Normal, InitType.HE_Normal),
+            actorMu = new Sequential(
+                new Dense(stateSize, H, INIT_W, INIT_B),
                 new ReLU(),
-                new Dense(H, H, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
+                new Dense(H, H, INIT_W, INIT_B, device: Device.GPU),
                 new ReLU(),
-                new Dense(H, continuousActions, InitType.HE_Normal, InitType.HE_Normal),
+                new Dense(H, continuousActions, INIT_W, INIT_B),
                 new Tanh());
 
-            sigmaHead = new Sequential(
-                new Dense(stateSize, H, InitType.HE_Normal, InitType.HE_Normal),
+            actorSigma = new Sequential(
+                new Dense(stateSize, H, INIT_W, INIT_B),
                 new ReLU(),
-                new Dense(H, H, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
+                new Dense(H, H, INIT_W, INIT_B, device: Device.GPU),
                 new ReLU(),
-                new Dense(H, continuousActions, InitType.HE_Normal, InitType.HE_Normal),
+                new Dense(H, continuousActions, INIT_W, INIT_B),
                 new Softplus());
 
-            discreteHeads = new Sequential[discreteBranches.Length];
-            for (int i = 0; i < discreteHeads.Length; i++)
+            actorDiscretes = new Sequential[discreteBranches.Length];
+            for (int i = 0; i < actorDiscretes.Length; i++)
             {
-                discreteHeads[i] = new Sequential(
-                    new Dense(stateSize, H, InitType.HE_Normal, InitType.HE_Normal),
+                actorDiscretes[i] = new Sequential(
+                    new Dense(stateSize, H, INIT_W, INIT_B),
                     new ReLU(),
-                    new Dense(H, H, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
+                    new Dense(H, H, INIT_W, INIT_B, device: Device.GPU),
                     new ReLU(),
-                    new Dense(H, discreteBranches[i], InitType.HE_Normal, InitType.HE_Normal),
+                    new Dense(H, discreteBranches[i], INIT_W, INIT_B),
                     new Softmax());
             }
             //----------------------------------------------------------//
@@ -89,16 +103,20 @@ namespace DeepUnity
                 return;
 
             if (critic == null)
-                throw new Exception($"Networks were not assigned to the {behaviourName} behaviour asset.");
+            {
+                Debug.Log($"<color=#fcba03>Warning! Some network assets are not attached to {behaviourName} behaviour asset! </color>");
+                EditorApplication.isPlaying = false;
+                return;
+            }
 
             criticOptimizer = new Adam(critic.Parameters(), hp.learningRate);          
-            muHeadOptimizer = new Adam(muHead.Parameters(), hp.learningRate);            
-            sigmaHeadOptimizer = new Adam(sigmaHead.Parameters(), hp.learningRate);
+            actorMuOptimizer = new Adam(actorMu.Parameters(), hp.learningRate);            
+            actorSigmaOptimizer = new Adam(actorSigma.Parameters(), hp.learningRate);
 
-            discreteHeadsOptimizers = new Optimizer[discreteBranches == null? 0 : discreteBranches.Length];
-            for (int i = 0; i < discreteHeads.Length; i++)
+            actorDiscretesOptimizers = new Optimizer[discreteBranches == null? 0 : discreteBranches.Length];
+            for (int i = 0; i < actorDiscretes.Length; i++)
             {
-                discreteHeadsOptimizers[i] = new Adam(discreteHeads[i].Parameters(), hp.learningRate);
+                actorDiscretesOptimizers[i] = new Adam(actorDiscretes[i].Parameters(), hp.learningRate);
             }
 
         }
@@ -107,21 +125,24 @@ namespace DeepUnity
             if (criticScheduler != null)
                 return;
 
-
             if (critic == null)
-                throw new Exception($"Networks were not assigned to the {behaviourName} behaviour asset.");
+            {
+                Debug.Log($"<color=#fcba03>Warning! Some network assets are not attached to {behaviourName} behaviour asset! </color>");
+                EditorApplication.isPlaying = false;
+                return;
+            }
 
             int step_size = hp.learningRateSchedule ? 10 : 1000;
             float gamma = hp.learningRateSchedule ? 0.99f : 1f;
 
             criticScheduler = new LRScheduler(criticOptimizer, step_size, gamma);
-            muHeadScheduler = new LRScheduler(muHeadOptimizer, step_size, gamma);
-            sigmaHeadScheduler = new LRScheduler(sigmaHeadOptimizer, step_size, gamma);
+            actorMuScheduler = new LRScheduler(actorMuOptimizer, step_size, gamma);
+            actorSigmaScheduler = new LRScheduler(actorSigmaOptimizer, step_size, gamma);
 
-            discreteHeadsSchedulers = new LRScheduler[discreteBranches == null ? 0 : discreteBranches.Length];
-            for (int i = 0; i < discreteHeads.Length; i++)
+            actorDiscretesScheduler = new LRScheduler[discreteBranches == null ? 0 : discreteBranches.Length];
+            for (int i = 0; i < actorDiscretes.Length; i++)
             {
-                discreteHeadsSchedulers[i] = new LRScheduler(discreteHeadsOptimizers[i], step_size, gamma);
+                actorDiscretesScheduler[i] = new LRScheduler(actorDiscretesOptimizers[i], step_size, gamma);
             }
 
         }
@@ -139,24 +160,28 @@ namespace DeepUnity
         /// <summary>
         /// Input: <paramref name="state"/> - <em>sₜ</em> | Tensor (<em>Observations</em>) <br></br>
         /// Output: <paramref name="action"/> - <em>aₜ</em> |  Tensor (<em>Continuous Actions</em>) <br></br>
-        /// Extra Output: <paramref name="probabilities"/> - <em>πθ(aₜ|sₜ)</em> | Tensor (<em>Continuous Actions</em>)
+        /// Extra Output: <paramref name="log_probs"/> - <em>log πθ(aₜ|sₜ)</em> | Tensor (<em>Continuous Actions</em>)
         /// </summary>
-        public void ContinuousPredict(Tensor state, out Tensor action, out Tensor probabilities)
+        public void ContinuousPredict(Tensor state, out Tensor action, out Tensor log_probs)
         {
-            Tensor mu = muHead.Predict(state);
-            Tensor sigma = Tensor.Fill(0.1f, mu.Shape);
+            Tensor mu = actorMu.Predict(state);
+            Tensor sigma = standardDeviation == StandardDeviationType.Trainable ?
+                            actorSigma.Predict(state) :
+                            Tensor.Fill(fixedStandardDeviationValue, mu.Shape);
             action = mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
-            probabilities = Tensor.PDF(action, mu, sigma);
+            log_probs = Tensor.LogProbability(action, mu, sigma);
         }
         /// <summary>
-        /// Input: <paramref name="statesBatch"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
+        /// Input: <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
         /// Output: <paramref name="mu"/> - <em>μ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
         /// OutputL <paramref name="sigma"/> - <em>σ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
         /// </summary>
-        public void ContinuousForward(Tensor statesBatch, out Tensor mu, out Tensor sigma)
+        public void ContinuousForward(Tensor states, out Tensor mu, out Tensor sigma)
         {
-            mu = muHead.Forward(statesBatch);
-            sigma = Tensor.Fill(0.1f, mu.Shape);
+            mu = actorMu.Forward(states);
+            sigma = standardDeviation == StandardDeviationType.Trainable ?
+                           actorSigma.Predict(states) :
+                           Tensor.Fill(fixedStandardDeviationValue, mu.Shape);
         }
         public void DiscretePredict(Tensor state, out Tensor action, out Tensor probabilities)
         {
@@ -192,12 +217,12 @@ namespace DeepUnity
 
             // Create aux assets
             newAgBeh.critic.CreateAsset($"{name}/critic");
-            newAgBeh.muHead.CreateAsset($"{name}/mu");
-            newAgBeh.sigmaHead.CreateAsset($"{name}/sigma");
+            newAgBeh.actorMu.CreateAsset($"{name}/actorMu");
+            newAgBeh.actorSigma.CreateAsset($"{name}/actorSigma");
 
-            for (int i = 0; i < newAgBeh.discreteHeads.Length; i++)
+            for (int i = 0; i < newAgBeh.actorDiscretes.Length; i++)
             {
-                newAgBeh.discreteHeads[i].CreateAsset($"{name}/discrete{i}");
+                newAgBeh.actorDiscretes[i].CreateAsset($"{name}/actorDiscrete{i}");
             }
 
             return newAgBeh;
@@ -215,14 +240,34 @@ namespace DeepUnity
             Debug.Log($"<color=#03a9fc>Agent behaviour <b><i>{behaviourName}</i></b> autosaved.</color>");
 
             critic.Save();
-            muHead.Save();
-            sigmaHead.Save();
+            actorMu.Save();
+            actorSigma.Save();
 
-            for (int i = 0; i < discreteHeads.Length; i++)
+            for (int i = 0; i < actorDiscretes.Length; i++)
             {
-                discreteHeads[i].Save();
+                actorDiscretes[i].Save();
             }
 
+        }
+    }
+
+
+    [CustomEditor(typeof(AgentBehaviour), true), CanEditMultipleObjects]
+    sealed class CustomAgentBehaviourEditor : Editor
+    {
+        public override void OnInspectorGUI()
+        {
+            List<string> dontDrawMe = new() { "m_Script" };
+
+            SerializedProperty sd = serializedObject.FindProperty("standardDeviation");
+
+            if(sd.enumValueIndex == (int)StandardDeviationType.Trainable)
+            {
+                dontDrawMe.Add("fixedStandardDeviationValue");
+            }
+
+            DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
+            serializedObject.ApplyModifiedProperties();
         }
     }
 }

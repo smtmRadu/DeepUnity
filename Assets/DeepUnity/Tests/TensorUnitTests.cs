@@ -132,8 +132,6 @@ namespace kbRadu
 
                 Tensor.Clip(t1, -1, 0.5f);
                 Tensor.Norm(t1, NormType.EuclideanL2);
-                Tensor.LogPDF(t1, t1, t1);
-                Tensor.PDF(t1, t1, t1);
             }
             catch
             {

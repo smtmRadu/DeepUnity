@@ -16,6 +16,8 @@ MonoBehaviour:
   observationSize: 4
   continuousDim: 2
   discreteBranches: 
+  standardDeviation: 0
+  fixedStandardDeviationValue: 1
   stateNormalizer:
     step: 0
     mean:
@@ -32,7 +34,7 @@ MonoBehaviour:
       - 0
       - 0
       shape: 04000000
-  critic: {fileID: 0}
-  muHead: {fileID: 0}
-  sigmaHead: {fileID: 0}
-  discreteHeads: []
+  critic: {fileID: 11400000, guid: 486e6487271f4e54db805c9a3706aafb, type: 2}
+  actorMu: {fileID: 11400000, guid: ae95b80837913f74781b6f254c742a3e, type: 2}
+  actorSigma: {fileID: 11400000, guid: 4f6901a9c9019cf4f95f7c1354295781, type: 2}
+  actorDiscretes: []

@@ -20,10 +20,10 @@ namespace DeepUnity
         [SerializeField, Tooltip("@scene type")] World world = World.World3d;
         [SerializeField, Tooltip("@LayerMask used when casting the rays")] LayerMask layerMask = ~0;
         [SerializeField, Range(0.01f, 100f)] float scale = 1f;
-        [SerializeField, Range(0.01f, 0.99f), Tooltip("@cast overlap raio")] float castScale = 0.95f;
-        [SerializeField, Range(1, 10f)] int width = 8;
-        [SerializeField, Range(1, 10f)] int height = 8;
-        [SerializeField, Range(1, 10f)] int deep = 8;
+        [SerializeField, Range(0.01f, 1f), Tooltip("@cast overlap raio")] float castScale = 0.95f;
+        [SerializeField, Range(1, 20f)] int width = 8;
+        [SerializeField, Range(1, 20f)] int height = 8;
+        [SerializeField, Range(1, 20f)] int depth = 8;
 
         [Space(10)]
         [SerializeField, Range(-4.5f, 4.5f), Tooltip("@grid X axis offset")] float xOffset = 0;
@@ -31,9 +31,8 @@ namespace DeepUnity
         [SerializeField, Range(-4.5f, 4.5f), Tooltip("@grid Z axis offset\n@not used in 2D world")] float zOffset = 0;
 
         [Space(10)]
-        [SerializeField] Color missColor = new Color(Color.red.r, Color.red.g, Color.red.b, 0.5f);
-        [SerializeField, Tooltip("Color drawn for hit objects with the specific tag.")] Color[] hitColor = 
-            new Color[] { Color.green, Color.blue, Color.magenta, Color.yellow, Color.cyan};
+        [SerializeField] Color missColor = Color.gray;
+        private Color defaultHitColor = Color.green;
 
 
         private void Start()
@@ -46,41 +45,36 @@ namespace DeepUnity
         }
         private void OnDrawGizmos()
         {
-            Vector3 origin000 = transform.position + (Vector3.one - new Vector3(width, height, deep)) * scale / 2f + new Vector3(xOffset, yOffset, zOffset) * scale;
+            Vector3 origin000 = transform.position + (Vector3.one - new Vector3(width, height, depth)) * scale / 2f + new Vector3(xOffset, yOffset, zOffset) * scale;
 
             // Compute positions
-            for (int d = 0; d < deep; d++)
+            for (int d = 0; d < depth; d++)
             {
                 for (int h = 0; h < height; h++)
                 {
                     for (int w = 0; w < width; w++)
                     {
                         Vector3 position = origin000 + new Vector3(w, h, d) * scale;
-                        string[] tags = UnityEditorInternal.InternalEditorUtility.tags;
 
                         if (world == World.World3d)
                         {
                             Collider[] hits = Physics.OverlapBox(position, Vector3.one * scale * castScale / 2f, new Quaternion(0, 0, 0, 1), layerMask);
-
+ 
                             if (hits.Length > 0)
                             {
-                                
-                                int index = tags.ToList().IndexOf(hits[0].tag);
-                                try
-                                {
-                                    Gizmos.color = hitColor[index];
-                                }
-                                catch
-                                {
-                                    Gizmos.color = Color.green;
-                                }
+                                Renderer rend;
+                                hits[0].gameObject.TryGetComponent(out rend);
+                                Gizmos.color = rend != null ? rend.sharedMaterial.color : defaultHitColor;
                             }
                             else
-                            {
-
                                 Gizmos.color = missColor;
-                            }
+
+                            Gizmos.color = new Color(Gizmos.color.r, Gizmos.color.g, Gizmos.color.b, 0.6f);
                             Gizmos.DrawWireCube(position, Vector3.one * scale * castScale);
+                            Gizmos.color = new Color(Gizmos.color.r, Gizmos.color.g, Gizmos.color.b, 0.2f);
+                            Gizmos.DrawCube(position, Vector3.one * scale * castScale);
+                            
+                           
                         }
                         else if(world == World.World2d)
                         {
@@ -88,26 +82,20 @@ namespace DeepUnity
                                 return;
 
                             Collider2D hit = Physics2D.OverlapBox(position, Vector2.one * scale * castScale, 0);
+                            bool gotHit = hit != null;
 
-                            if(hit != null)
+                            if (gotHit)
                             {
-                                int index = tags.ToList().IndexOf(hit.tag);
-                                try
-                                {
-                                    Gizmos.color = hitColor[index];
-                                }
-                                catch
-                                {
-                                    Gizmos.color = Color.green;
-                                }
+                                SpriteRenderer sr;
+                                hit.gameObject.TryGetComponent(out sr);
+                                Gizmos.color = sr != null ? sr.color : defaultHitColor;
                             }
                             else
-                            {
-
                                 Gizmos.color = missColor;
-                            }
-
+                            Gizmos.color = new Color(Gizmos.color.r, Gizmos.color.g, Gizmos.color.b, 0.6f);
                             Gizmos.DrawWireCube(new Vector3(position.x, position.y, transform.position.z), Vector3.one * scale * castScale);
+                            Gizmos.color = new Color(Gizmos.color.r, Gizmos.color.g, Gizmos.color.b, 0.4f);
+                            Gizmos.DrawCube(new Vector3(position.x, position.y, transform.position.z), Vector3.one * scale * castScale);
                         }
                        
                     }
@@ -129,10 +117,10 @@ namespace DeepUnity
         private void CastGrid()
         {
             Observations.Clear();
-            Vector3 origin000 = transform.position + (Vector3.one - new Vector3(width, height, deep)) * scale / 2f + new Vector3(xOffset, yOffset, zOffset) * scale;
+            Vector3 origin000 = transform.position + (Vector3.one - new Vector3(width, height, depth)) * scale / 2f + new Vector3(xOffset, yOffset, zOffset) * scale;
 
             // Compute positions
-            for (int d = 0; d < deep; d++)
+            for (int d = 0; d < depth; d++)
             {
                 for (int h = 0; h < height; h++)
                 {

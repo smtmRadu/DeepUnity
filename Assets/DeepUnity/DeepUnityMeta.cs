@@ -188,6 +188,13 @@ namespace DeepUnity
         Discrete
     }
 
+    public enum StandardDeviationType
+    {
+        Fixed,
+        Trainable
+    }
+
+
     // public enum NormalizationType
     // {
     //     None,

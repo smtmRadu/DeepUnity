@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using Unity.VisualScripting;
 using UnityEditor;
@@ -13,10 +12,11 @@ namespace DeepUnity
     {
         private static Trainer Instance { get; set; }
 
-        private Dictionary<Agent, bool> agents;
+        private List<Agent> agents;
         private Hyperparameters hp;
-        private TrainingStatistics performanceTracker;
+        private TrainingStatistics trainingStatisticsTrack;
         private AgentBehaviour ac;
+        private bool train = false;
 
         private void Awake()
         {
@@ -31,17 +31,12 @@ namespace DeepUnity
         }
         private void LateUpdate()
         {
-            // check if there are any ready agents
-            if (Instance.agents.Values.Contains(true))
+            if (Instance.train)
                 Train();
-
         }
 
-        // Methods use to interact with agents
-        public static void Ready(Agent agent)
-        {
-            Instance.agents[agent] = true;
-        }
+        // Methods use to interact with the agents
+        public static void ReadyToTrain() => Instance.train = true;
         public static void Subscribe(Agent agent)
         {
             if(Instance == null)
@@ -53,152 +48,137 @@ namespace DeepUnity
                 Instance.agents = new();
                 Instance.ac = agent.model;
                 Instance.hp = agent.hp;
-                Instance.performanceTracker = agent.PerformanceTrack;
+                Instance.trainingStatisticsTrack = agent.PerformanceTrack;
                 Instance.ac.InitOptimisers(Instance.hp);
                 Instance.ac.InitSchedulers(Instance.hp);
             }
-
-            Instance.agents.Add(agent, false);
+            agent.PerformanceTrack = Instance.trainingStatisticsTrack;
+            Instance.agents.Add(agent);
         }
+
         // Methods used to save the Actor Critic network when editor state changes.
         private static void Autosave1(PlayModeStateChange state) => Instance.ac.Save();
         private static void Autosave2(PauseState state) => Instance.ac.Save();
 
 
 
-        // PPO algorithm here
+        // PPO algorithm
         private void Train()
         {
-            foreach (var kv in agents)
+            if(Instance.trainingStatisticsTrack != null)
+                Instance.trainingStatisticsTrack.iterations++;
+
+            foreach (var train_data in Instance.agents.Select(x => x.Memory))
             {
-                if (!kv.Value)
-                    continue;
+                train_data.GAE(hp.gamma, hp.lambda, hp.horizon, ac.critic);
 
-                Agent agent = kv.Key;
-                Trajectory trajectory = agent.Trajectory;
+                if(hp.normalizeAdvantages)
+                    train_data.NormAdvantages();
 
-                if (hp.debug) Utils.DebugInFile(trajectory.ToString());
-
-                performanceTracker?.cumulativeReward.Append(trajectory.CumulativeReward);
+                if (hp.debug) 
+                    Utils.DebugInFile(train_data.ToString());
 
                 for (int epoch = 0; epoch < hp.numEpoch; epoch++)
                 {
                     // randomizeOrder(train_data)
-                    trajectory.Shuffle();
+                    train_data.Shuffle();
 
-                    // unpack
-                    Tensor[] states = trajectory.States;
-                    Tensor[] actions_continuous = trajectory.ActionsContinuous;
-                    Tensor[] actions_discrete = trajectory.ActionsDiscrete;
-                    Tensor[] probs_continous = trajectory.PIoldContinuous;
-                    Tensor[] probs_discrete = trajectory.PIoldDiscrete;
-                    Tensor[] value_targets = trajectory.ValueTargets;
-                    Tensor[] advantages = trajectory.Advantages;
+                    // unpack & split traindata into minibatches
+                    List<Tensor[]> states_batches = Utils.Split(train_data.States, hp.batchSize);
+                    List<Tensor[]> cont_act_batches = Utils.Split(train_data.ContinuousActions, hp.batchSize);
+                    List<Tensor[]> cont_log_probs_batches = Utils.Split(train_data.ContinuousLogProbs, hp.batchSize);
+                    List<Tensor[]> advantages_batches = Utils.Split(train_data.Advantages, hp.batchSize);
+                    List<Tensor[]> value_targets_batches = Utils.Split(train_data.ValueTargets, hp.batchSize);
 
-                    // split traindata into minibatches
-                    List<Tensor[]> states_batches = Utils.Split(states, hp.batchSize);
-                    List<Tensor[]> cont_act_batches = Utils.Split(actions_continuous, hp.batchSize);
-                    List<Tensor[]> cont_probs_batches = Utils.Split(probs_continous, hp.batchSize);
-                    List<Tensor[]> advantages_batches = Utils.Split(advantages, hp.batchSize);
-                    List<Tensor[]> value_targets_batches = Utils.Split(value_targets, hp.batchSize);
-
-                    int M = states_batches.Count;
-
-                    for (int b = 0; b < M; b++)
+                    for (int b = 0; b < states_batches.Count; b++)
                     { 
                         Tensor states_batch = Tensor.Cat(null, states_batches[b]);
                         Tensor advantages_batch = Tensor.Cat(null, advantages_batches[b]);
                         Tensor value_targets_batch = Tensor.Cat(null, value_targets_batches[b]);
                         Tensor cont_act_batch = Tensor.Cat(null, cont_act_batches[b]);
-                        Tensor cont_probs_batch = Tensor.Cat(null, cont_probs_batches[b]);
+                        Tensor cont_log_probs_batch = Tensor.Cat(null, cont_log_probs_batches[b]);
 
                         UpdateCritic(states_batch, value_targets_batch);
                         UpdateContinuousNetwork(
                                 states_batch,
                                 advantages_batch,
                                 cont_act_batch,
-                                cont_probs_batch);
+                                cont_log_probs_batch);
                         // UpdateDiscreteNetworks(
                         //     states_batch,
                         //     advantages_batch,
                         //     discreteActions,
-                        //     discreteLogProbs);
+                        //     discreteProbs);
                     }
                    
                     // Step schedulers after each epoch
                     ac.criticScheduler.Step();
-                    ac.muHeadScheduler.Step();
-                    ac.sigmaHeadScheduler.Step();
-                    for (int i = 0; i < ac.discreteHeadsSchedulers.Length; i++)
+                    ac.actorMuScheduler.Step();
+                    ac.actorSigmaScheduler.Step();
+                    for (int i = 0; i < ac.actorDiscretesScheduler.Length; i++)
                     {
-                        ac.discreteHeadsSchedulers[i].Step();
+                        ac.actorDiscretesScheduler[i].Step();
                     }
                 }
 
-                agent.Trajectory.Reset();
+                train_data.Reset();
             }
 
-
-            // Set agents states to unready (this remains like this due to foreach problems when modifing the dict)
-            var keys = agents.Keys.ToList();
-            foreach (var key in keys)
-            {
-                agents[key] = false;
-            }
-
-            performanceTracker?.learningRate.Append(ac.criticScheduler.CurrentLR);
+            Instance.train = false;
+            trainingStatisticsTrack?.learningRate.Append(ac.criticScheduler.CurrentLR);
+            trainingStatisticsTrack?.epsilon.Append(hp.epsilon);
         }
         /// <summary>
-        /// <paramref name="targets_batch"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
-        /// <paramref name="targets_batch"/> - <em>V target</em> | Tensor(<em>Batch Size, 1</em>)
+        /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>) where * = <em>Observations Shape</em><br></br>
+        /// <paramref name="targets"/> - <em>Vtarget</em> | Tensor(<em>Batch Size, 1</em>)
         /// </summary>
-        private void UpdateCritic(Tensor states_batch, Tensor targets_batch)
+        private void UpdateCritic(Tensor states, Tensor targets)
         {
-            Tensor values_batch = ac.critic.Forward(states_batch);
-            Loss criticLoss = Loss.MSE(values_batch, targets_batch);
+            Tensor values = ac.critic.Forward(states);
+            Loss criticLoss = Loss.MSE(values, targets);
 
             ac.criticOptimizer.ZeroGrad();
             ac.critic.Backward(criticLoss.Derivative);
             ac.criticOptimizer.ClipGradNorm(0.5f);
             ac.criticOptimizer.Step();
 
-            performanceTracker?.valueLoss.Append(criticLoss.Item);
+            trainingStatisticsTrack?.valueLoss.Append(criticLoss.Item);
         }
         /// <summary>
-        /// <paramref name="states_batch"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
-        /// <paramref name="advantages_batch"/> - <em>A</em> | Tensor(<em>Batch Size, 1</em>) <br></br>
-        /// <paramref name="actions_batch"/> - <em>a</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
-        /// <paramref name="PIold_batch"/> - <em>log πθₒₗ(a|s) </em>| Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
+        /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>)  where * = <em>Observations Shape</em><br></br>
+        /// <paramref name="advantages"/> - <em>A</em> | Tensor(<em>Batch Size, 1</em>) <br></br>
+        /// <paramref name="actions"/> - <em>a</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
+        /// <paramref name="logPiOld"/> - <em>log πθold(a|s) </em>| Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
         /// </summary>
-        private void UpdateContinuousNetwork(Tensor states_batch, Tensor advantages_batch, Tensor actions_batch, Tensor PIold_batch)
+        private void UpdateContinuousNetwork(Tensor states, Tensor advantages, Tensor actions, Tensor logPiOld)
         {
-            int batch_size = states_batch.Rank == 2 ? states_batch.Size(0) : 1;
-            int continuous_actions_num = actions_batch.Size(-1);
+            int batch_size = states.Rank == 2 ? states.Size(0) : 1;
+            int continuous_actions_num = actions.Size(-1);
 
             // Forwards pass
-            Tensor mu_batch;
-            Tensor sigma_batch;
-            Instance.ac.ContinuousForward(states_batch, out mu_batch, out sigma_batch);
-            Tensor PI_batch = Tensor.PDF(actions_batch, mu_batch, sigma_batch);
+            Tensor mu;
+            Tensor sigma;
+            Instance.ac.ContinuousForward(states, out mu, out sigma);
+            Tensor logPi = Tensor.LogProbability(actions, mu, sigma);
 
-            Tensor ratio = PI_batch / PIold_batch; // a.k.a pₜ(θ)
+            Tensor ratio = (logPi - logPiOld).Exp(); // a.k.a pₜ(θ) = πθ(a|s) / πθold(a|s)
 
-            // Compute Lᶜˡⁱᵖ
-            Tensor A = advantages_batch.Expand(1, continuous_actions_num);
+            // Compute L_CLIP
+            advantages = advantages.Expand(1, continuous_actions_num);
             Tensor LClip = Tensor.Minimum(
-                                ratio * A, 
-                                Tensor.Clip(ratio, 1 - hp.epsilon, 1 + hp.epsilon) * A);
-            performanceTracker?.objectiveFunction.Append(LClip.Mean(0).Mean(0)[0]);
+                                ratio * advantages, 
+                                Tensor.Clip(ratio, 1 - hp.epsilon, 1 + hp.epsilon) * advantages);
 
             if(LClip.Contains(float.NaN))
             {
-                Debug.Log($"------NaN LCLIP removed [{LClip.ToArray().ToCommaSeparatedString()}]-------\n");
+                Debug.Log($"<color=#fcba03>Warning! L_CLIP containing NaN values removed [{LClip.ToArray().ToCommaSeparatedString()}]! </color>");
                 return;   
             }
+            trainingStatisticsTrack?.policyLoss.Append(-LClip.Mean(0).Mean(0)[0]);
 
             // Computing δLClip
-            Tensor dmindx_At = Tensor.Zeros(batch_size, continuous_actions_num);
-            Tensor dmindy_At = Tensor.Zeros(batch_size, continuous_actions_num);
+            Tensor dmindx = Tensor.Zeros(batch_size, continuous_actions_num);
+            Tensor dmindy = Tensor.Zeros(batch_size, continuous_actions_num);
             Tensor dclipdx = Tensor.Zeros(batch_size, continuous_actions_num);
 
             for (int b = 0; b < batch_size; b++)
@@ -207,58 +187,62 @@ namespace DeepUnity
                 {
                     float pt = ratio[b, a];
                     float e = hp.epsilon;
-                    float At = advantages_batch[b, 0];
+                    float At = advantages[b, a];
+                    float clip_pt = Math.Clamp(pt, 1f - e, 1f + e);
 
                     // δMin(x,y)/δx
-                    dmindx_At[b,a] = (pt * At <= Utils.Clip(pt, 1f - e, 1f + e) * At) ? 1f : 0f * At;
+                    dmindx[b, a] = (pt * At <= clip_pt * At) ? 1f : 0f;
 
                     // δMin(x,y)/δy
-                    dmindy_At[b,a] = (Utils.Clip(pt, 1f - e, 1f + e) * At < pt * At) ? 1f : 0f * At;
+                    dmindy[b, a] = (clip_pt * At < pt * At) ? 1f : 0f;
 
                     // δClip(x,a,b)/δx
-                    dclipdx[b,a] = (1f - e <= pt && pt <= 1f + e) ? 1f : 0f;
+                    dclipdx[b, a] = (1f - e <= pt && pt <= 1f + e) ? 1f : 0f;
                 }
             }
 
-            // δ-LClip / δpi(a|s)  (20) --------------------------------------------------------------------
-            Tensor dmLClip_dPi = -1f * (dmindx_At + dmindy_At * dclipdx) / PIold_batch;
-            // -----------------------------------------------------------------------------------------------
+            // δ-LClip / δpi(a|s)  (20)
+            Tensor dmLClip_dPi = -1f * (dmindx * advantages + dmindy * advantages * dclipdx) / logPiOld.Exp();
+           
+            if(ac.standardDeviation == StandardDeviationType.Trainable)
+            {
+                // Entropy
+                Tensor entropy = Tensor.Log(MathF.Sqrt(2f * MathF.PI * MathF.E) * sigma);
+                dmLClip_dPi -= entropy * hp.beta;
+            }
+
+            // δpi(a|s) / δmu  (26) 
+            Tensor dPi_dMu = logPi.Exp() * (actions - mu) / sigma.Pow(2);
 
 
-
-            // Entropy --------------------------------------------------------------------------------------- 
-            // Tensor entropy = Tensor.Log(MathF.Sqrt(2f * MathF.PI * MathF.E) * sigma);
-            // dmLdPi -= entropy * hp.beta;
-            // -----------------------------------------------------------------------------------------------
-
-
-
-            // δpi(a|s) / δmu  (26) ------------------------------------------------------------------------
-            Tensor dPi_dMu = PI_batch * (actions_batch - mu_batch) / (sigma_batch.Pow(2));
-            // -----------------------------------------------------------------------------------------------
-
-            // δ-LClip / δmu = (δ-LClip / δpi(a|t)) * (δpi(a|s) / δmu);
+            // δ-LClip / δmu = (δ-LClip / δpi(a|t)) * (δpi(a|s) / δmu)
             Tensor dmLClip_dMu = dmLClip_dPi * dPi_dMu;
-            ac.muHeadOptimizer.ZeroGrad();
-            ac.muHead.Backward(dmLClip_dMu);
-            ac.muHeadOptimizer.ClipGradNorm(0.5f);
-            ac.muHeadOptimizer.Step();
+            ac.actorMuOptimizer.ZeroGrad();
+            ac.actorMu.Backward(dmLClip_dMu);
+            ac.actorMuOptimizer.ClipGradNorm(0.5f);
+            ac.actorMuOptimizer.Step();
 
+            if(ac.standardDeviation == StandardDeviationType.Trainable)
+            {
+                // δpi(a|s) / δsigma
+                Tensor dPi_dSigma = ((actions - mu).Pow(2) - sigma.Pow(2)) / sigma.Pow(3);
 
-            // // δpi(a|s) / δsigma (XX) -----------------------------------------------------------------------
-            // Tensor dPi_dSigma = ((actions_batch - mu_batch).Pow(2) - sigma_batch.Pow(2)) / sigma_batch.Pow(3);
-            // // ------------------------------------------------------------------------------------------------
-            // 
-            // // δ-LClip / δmu = (δ-LClip / δpi(a|t)) * (δpi(a|s) / δsigma)
-            // Tensor dmLClip_dSigma = dmLClip_dPi * dPi_dSigma;
-            // ac.sigmaHeadOptimizer.ZeroGrad();
-            // ac.sigmaHead.Backward(dmLClip_dSigma);
-            // ac.sigmaHeadOptimizer.ClipGradNorm(0.5f);
-            // ac.sigmaHeadOptimizer.Step();
-
-            // Test KL
+                // δ-LClip / δmu = (δ-LClip / δpi(a|t)) * (δpi(a|s) / δsigma)
+                Tensor dmLClip_dSigma = dmLClip_dPi * dPi_dSigma;
+                ac.actorSigmaOptimizer.ZeroGrad();
+                ac.actorSigma.Backward(dmLClip_dSigma);
+                ac.actorSigmaOptimizer.ClipGradNorm(0.5f);
+                ac.actorSigmaOptimizer.Step();
+            }
+           
         }
-        private void UpdateDiscreteNetworks(Tensor states, Tensor advantages, Tensor oldActions, Tensor oldLogProbs)
+        /// <summary>
+        /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>)  where * = <em>Observations Shape</em><br></br>
+        /// <paramref name="advantages"/> - <em>A</em> | Tensor(<em>Batch Size, 1</em>) <br></br>
+        /// <paramref name="actions"/> - <em>a</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
+        /// <paramref name="logPiOld"/> - <em>log πθold(a|s) </em>| Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
+        /// </summary>
+        private void UpdateDiscreteNetworks(Tensor states, Tensor advantages, Tensor actions, Tensor logPiOld)
         {
 
         }

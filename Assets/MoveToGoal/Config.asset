@@ -10,16 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5970f7530cba1f0499a4a3dbe7d27f96, type: 3}
-  m_Name: Hyperparameters
+  m_Name: Config
   m_EditorClassIdentifier: 
   targetFPS: 50
-  maxSteps: 1000
+  maxSteps: 250
   debug: 0
   learningRate: 0.0003
-  numEpoch: 10
-  batchSize: 256
-  bufferSize: 4096
-  normalize: 1
+  numEpoch: 6
+  batchSize: 64
+  bufferSize: 512
+  normalizeObservations: 0
+  normalizeAdvantages: 0
   learningRateSchedule: 0
   horizon: 64
   beta: 0.005

@@ -388,6 +388,9 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Elements addition by <paramref name="right"/> value.
+        /// </summary>
         public static Tensor operator +(Tensor left, float right)
         {
             Tensor result = Identity(left);
@@ -399,6 +402,9 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Elements subtraction by <paramref name="right"/> value.
+        /// </summary>
         public static Tensor operator -(Tensor left, float right)
         {
             Tensor result = Identity(left);
@@ -410,6 +416,9 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Elements multiplication by <paramref name="right"/> value.
+        /// </summary>
         public static Tensor operator *(Tensor left, float right)
         {
             Tensor result = Identity(left);
@@ -421,6 +430,9 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Elements division by <paramref name="right"/> value.
+        /// </summary>
         public static Tensor operator /(Tensor left, float right)
         {
             Tensor result = Identity(left);
@@ -432,8 +444,17 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Elements addition by <paramref name="left"/> value.
+        /// </summary>
         public static Tensor operator +(float left, Tensor right) => right + left;
+        /// <summary>
+        /// Elements multiplication by <paramref name="left"/> value.
+        /// </summary>
         public static Tensor operator *(float left, Tensor right) => right * left;
+        /// <summary>
+        /// Element-wise addition.
+        /// </summary>
         public static Tensor operator +(Tensor left, Tensor right)
         {
             if (!left.shape.SequenceEqual(right.shape))
@@ -449,6 +470,9 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Element-wise subtraction.
+        /// </summary>
         public static Tensor operator -(Tensor left, Tensor right)
         {
             if (!left.shape.SequenceEqual(right.shape))
@@ -462,6 +486,9 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Element-wise multiplication.
+        /// </summary>
         public static Tensor operator *(Tensor left, Tensor right)
         {
            if (!left.shape.SequenceEqual(right.shape))
@@ -477,6 +504,9 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Element-wise division.
+        /// </summary>
         public static Tensor operator /(Tensor left, Tensor right)
         {
             if (!left.shape.SequenceEqual(right.shape))
@@ -1012,7 +1042,6 @@ namespace DeepUnity
             if (!left.shape.SequenceEqual(right.shape))
                 throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and right({right.shape.ToCommaSeparatedString()}) tensors must have different shape for Min operation.");
 
-
             Tensor result = new(left.shape);
 
             for (int i = 0; i < result.data.Length; i++)
@@ -1073,34 +1102,21 @@ namespace DeepUnity
             }
         }
         /// <summary>
-        /// Computes the element-wise log probability density function (Log(PDF(x))).  <br></br>
+        /// Computes the element-wise log probability density/mass function w.r.t the received distribution 
+        /// N(<paramref name="mu"/>, <paramref name="sigma"/>) at <paramref name="value"/>.  <br></br>
         /// https://stats.stackexchange.com/questions/404191/what-is-the-log-of-the-pdf-for-a-normal-distribution
         /// </summary>
-        /// <param name="x"></param>
+        /// <param name="value"></param>
         /// <param name="mu"></param>
         /// <param name="sigma"></param>
         /// <returns></returns>
-        public static Tensor LogPDF(Tensor x, Tensor mu, Tensor sigma)
+        public static Tensor LogProbability(Tensor value, Tensor mu, Tensor sigma)
         {
-            var frac = (x - mu) / sigma;
             var elem1 = Log(sigma);
             var elem2 = 0.5f * MathF.Log(2f * MathF.PI);
-            var elem3 = 0.5f * frac * frac;
-            return - elem1 - elem2 - elem3;
-        }
-        /// <summary>
-        /// Computes the element-wise probability density function of <paramref name="x"/> (PDF(x)).
-        /// </summary>
-        /// <param name="x"></param>
-        /// <param name="mu"></param>
-        /// <param name="sigma"></param>
-        /// <returns></returns>
-        public static Tensor PDF(Tensor x, Tensor mu, Tensor sigma)
-        {
-            Tensor p1 = sigma * MathF.Sqrt(2f * MathF.PI);
-            Tensor std = (x - mu) / sigma;
-            Tensor p2 = -0.5f * std * std;
-            return Exp(p2) / p1;
+            var std = (value - mu) / sigma;
+            var elem3 = 0.5f * std.Pow(2f);
+            return -elem1 - elem2 - elem3;
         }
         /// <summary>
         /// Computes the element-wise Kullback-Leibler divergence. Measures the distance between two data distributions showing how different the two distributions are from each other.
@@ -1115,7 +1131,7 @@ namespace DeepUnity
             var var1 = sig1 * sig1;
             var var2 = sig2 * sig2;
 
-            return Tensor.Log((sig2 / (sig1 + Utils.EPSILON)) + Utils.EPSILON) +
+            return Log((sig2 / (sig1 + Utils.EPSILON)) + Utils.EPSILON) +
                 (var1 + (mu1 - mu2) * (mu1 - mu2)) / (2f * var2) - 0.5f;
         }
 

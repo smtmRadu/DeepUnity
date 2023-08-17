@@ -4,9 +4,6 @@
 TagManager:
   serializedVersion: 2
   tags:
-  - Wall
-  - Target
-  - Agent
   - Coin
   - Empty
   layers:
