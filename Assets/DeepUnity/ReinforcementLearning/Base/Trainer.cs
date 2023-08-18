@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.VisualScripting;
@@ -8,15 +9,25 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// There is a loss of time when Train is performed, and FixedUpdate() gets called multiple times afterwards.
+    /// It may affect the strong transition between the states, but it depends only on how much it takes.
+    /// </summary>
     public class Trainer : MonoBehaviour
     {
         private static Trainer Instance { get; set; }
 
-        private List<Agent> agents;
-        private Hyperparameters hp;
-        private TrainingStatistics trainingStatisticsTrack;
-        private AgentBehaviour ac;
-        private bool train = false;
+        [ReadOnly, SerializeField, Tooltip("Time passed since the training process started.")] private float trainingTime = 0f;
+        [ReadOnly, SerializeField, Tooltip("Steps performed since the training process started")] private int steps = 0;
+
+        [Space]
+        [ReadOnly, SerializeField] private List<Agent> parallelAgents;
+        [ReadOnly, SerializeField] private Hyperparameters hp;
+        [ReadOnly, SerializeField] private TrainingStatistics trainingStatisticsTrack;
+        [ReadOnly, SerializeField] private AgentBehaviour ac;
+
+        private bool trainFlag = false;
+        private float autosaveSecondsElapsed = 0f;
 
         private void Awake()
         {
@@ -31,12 +42,26 @@ namespace DeepUnity
         }
         private void LateUpdate()
         {
-            if (Instance.train)
+            if (Instance.trainFlag)
+            {
                 Train();
+                Instance.steps += Instance.hp.bufferSize;
+            }
+
+            Instance.trainingTime += Time.deltaTime;
+
+            // Autosave process 
+            Instance.autosaveSecondsElapsed += Time.deltaTime;
+
+            if (Instance.autosaveSecondsElapsed >= Instance.hp.autosave * 60f)
+            {
+                Instance.autosaveSecondsElapsed = 0f;
+                Instance.ac.Save();
+            }
         }
 
         // Methods use to interact with the agents
-        public static void ReadyToTrain() => Instance.train = true;
+        public static void ReadyToTrain() => Instance.trainFlag = true;
         public static void Subscribe(Agent agent)
         {
             if(Instance == null)
@@ -45,15 +70,18 @@ namespace DeepUnity
                 EditorApplication.pauseStateChanged += Autosave2;
                 GameObject go = new GameObject("Trainer");
                 go.AddComponent<Trainer>();
-                Instance.agents = new();
+                Instance.parallelAgents = new();
                 Instance.ac = agent.model;
                 Instance.hp = agent.hp;
-                Instance.trainingStatisticsTrack = agent.PerformanceTrack;
                 Instance.ac.InitOptimisers(Instance.hp);
                 Instance.ac.InitSchedulers(Instance.hp);
             }
-            agent.PerformanceTrack = Instance.trainingStatisticsTrack;
-            Instance.agents.Add(agent);
+
+            // Assign a common TrainingStatistics for all agents (and also the trainer)
+            Instance.trainingStatisticsTrack = agent.PerformanceTrack;
+            Instance.parallelAgents.ForEach(x => x.PerformanceTrack = agent.PerformanceTrack);
+
+            Instance.parallelAgents.Add(agent);
         }
 
         // Methods used to save the Actor Critic network when editor state changes.
@@ -68,12 +96,12 @@ namespace DeepUnity
             if(Instance.trainingStatisticsTrack != null)
                 Instance.trainingStatisticsTrack.iterations++;
 
-            foreach (var train_data in Instance.agents.Select(x => x.Memory))
+            foreach (var train_data in Instance.parallelAgents.Select(x => x.Memory))
             {
                 train_data.GAE(hp.gamma, hp.lambda, hp.horizon, ac.critic);
 
                 if(hp.normalizeAdvantages)
-                    train_data.NormAdvantages();
+                    train_data.NormalizeAdvantages();
 
                 if (hp.debug) 
                     Utils.DebugInFile(train_data.ToString());
@@ -124,9 +152,9 @@ namespace DeepUnity
                 train_data.Reset();
             }
 
-            Instance.train = false;
+            Instance.trainFlag = false;
             trainingStatisticsTrack?.learningRate.Append(ac.criticScheduler.CurrentLR);
-            trainingStatisticsTrack?.epsilon.Append(hp.epsilon);
+            trainingStatisticsTrack?.epsilon.Append(hp.epsilon);         
         }
         /// <summary>
         /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>) where * = <em>Observations Shape</em><br></br>
@@ -247,6 +275,18 @@ namespace DeepUnity
 
         }
 
+    }
+
+    [CustomEditor(typeof(Trainer), true), CanEditMultipleObjects]
+    sealed class CustomTrainerEditor : Editor
+    {
+        public override void OnInspectorGUI()
+        {
+            List<string> dontDrawMe = new() { "m_Script" };
+
+            DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
+            serializedObject.ApplyModifiedProperties();
+        }
     }
 }
 

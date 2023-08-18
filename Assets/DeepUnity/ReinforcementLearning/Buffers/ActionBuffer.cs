@@ -6,7 +6,13 @@ namespace DeepUnity
 {
     public class ActionBuffer
     {
+        /// <summary>
+        /// A vector of length <em>Discrete Branches</em> containing values in range [0, <em>branch value - 1]</em>
+        /// </summary>
         public int[] DiscreteActions { get; set; }
+        /// <summary>
+        /// A vector of Length <em>Continuous Actions</em> containing values in range [-1, 1]
+        /// </summary>
         public float[] ContinuousActions { get; set; }
 
         public ActionBuffer(int continuousDim, int[] discreteBranches)

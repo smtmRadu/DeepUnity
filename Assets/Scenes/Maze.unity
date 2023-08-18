@@ -310,8 +310,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1705870258}
-  - component: {fileID: 1705870257}
-  - component: {fileID: 1705870256}
   m_Layer: 0
   m_Name: Agent
   m_TagString: Untagged
@@ -319,59 +317,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 0
---- !u!114 &1705870256
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1705870255}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 77aaf4e69ab673d4d9b1336ed5da495f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  model: {fileID: 0}
-  behaviourType: 0
-  spaceSize: 2
-  continuousActions: 2
-  discreteBranches: 
-  onEpisodeEnd: 1
-  autoRequestAction: 1
-  useSensors: 1
---- !u!114 &1705870257
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1705870255}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5970f7530cba1f0499a4a3dbe7d27f96, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  device: 0
-  hiddenUnits: 64
-  numLayers: 2
-  targetFPS: 50
-  timeHorizon: 64
-  maxSteps: 500000
-  maxEpisodeSteps: 3000
-  learningRate: 0.0003
-  batchSize: 256
-  bufferSize: 10240
-  learningRateSchedule: 0
-  normalize: 0
-  verbose: 1
-  debug: 0
-  beta: 0.005
-  epsilon: 0.2
-  gamma: 0.99
-  lambda: 0.95
-  numEpoch: 10
-  betaScheduler: 0
-  epsilonScheduler: 0
 --- !u!4 &1705870258
 Transform:
   m_ObjectHideFlags: 0

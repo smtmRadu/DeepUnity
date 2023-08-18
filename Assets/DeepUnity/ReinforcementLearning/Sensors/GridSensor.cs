@@ -8,9 +8,10 @@ using UnityEngine;
 namespace DeepUnity
 {
     /// <summary>
-    /// No hit value: 0       <br />
-    /// Tag 0 hit value: 1    <br />
-    /// Tag 1 hit value: 2    <br />
+    /// GridSensor returns the observations of all objects reached by their tags. <br></br>
+    /// No hit -> value 0    <br />
+    /// Tag 1 hit -> value 1 <br />
+    /// Tag 2 hit -> value 2 <br />
     /// ...
     /// </summary>
     [AddComponentMenu("DeepUnity/Grid Sensor")]

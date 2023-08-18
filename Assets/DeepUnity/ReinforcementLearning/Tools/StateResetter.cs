@@ -86,21 +86,25 @@ namespace DeepUnity
 
         }
         private void ResetAllRigidBodies()
+        {
+            foreach (var rb in rigidBodies)
             {
-                foreach (var rb in rigidBodies)
-                {
-                    rb.velocity = Vector3.zero;
-                    rb.angularVelocity = Vector3.zero;                    
-                }
+                if (rb.isKinematic)
+                    continue;
+                rb.velocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;                    
             }
+        }
         private void ResetAllRigidBodies2D()
+        {
+            foreach (var rb2d in rigidBodies2D)
             {
-                foreach (var rb2d in rigidBodies2D)
-                {
-                    rb2d.velocity = Vector2.zero;
-                    rb2d.angularVelocity = 0f;
-                }
+                if (rb2d.isKinematic)
+                    continue;
+                rb2d.velocity = Vector2.zero;
+                rb2d.angularVelocity = 0f;
             }
+        }
 
     }
 }

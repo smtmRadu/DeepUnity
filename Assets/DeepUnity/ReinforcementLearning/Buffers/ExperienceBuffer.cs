@@ -135,7 +135,7 @@ namespace DeepUnity
             //     for (int t = timestep; t < T - 1; t++)
             //     {
             //         float mask = 1f - frames[t].done[0];
-            //         Tensor d_t = frames[t].reward + gamma * V_s[t + 1] * mask - V_s[t];
+            //         Tensor d_t = frames[t].reward + gamma * Vw_s[t + 1] * mask - Vw_s[t];
             //         a_t += discount * d_t;
             //         discount *= gamma * lambda;
             //
@@ -150,7 +150,7 @@ namespace DeepUnity
             // }     
 
         }
-        public void NormAdvantages()
+        public void NormalizeAdvantages()
         {
             float mean = frames.Average(x => x.advantage[0]);
             float var = frames.Sum(x => (x.advantage[0] - mean) * (x.advantage[0] - mean)) / (Count - 1);

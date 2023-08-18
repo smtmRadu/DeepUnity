@@ -6,11 +6,9 @@ using UnityEngine;
 namespace DeepUnity
 {
     /// <summary>
-    /// Notes and bugs:
-    /// 1. Do not rename any Sequencial or RNN asset (even repair doesn t work for now).
-    /// 2. Do not use TensorGPU (it was experimental).
-    /// 3. Do not use RL because is in development.
-    /// 4. CamSensor requires a different architecture containing Conv2D modules in order for max efficiency.
+    /// Notes:
+    /// 1. Do not use TensorGPU (it was experimental).
+    /// 2. CamSensor requires a different architecture containing Conv2D modules in order for max efficiency.
     /// 
     /// </summary>
     public static class DeepUnityMeta
@@ -36,7 +34,10 @@ namespace DeepUnity
                 cspath = AssetDatabase.GUIDToAssetPath(csguid);
                 Conv2DCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
             }
-            catch { }
+            catch 
+            {
+                ConsoleMessage.Warning("Compute Shader files where not found! Make sure DeepUnity framework files were not modified or deleted");          
+            }
         }
  	   
     }
@@ -103,8 +104,6 @@ namespace DeepUnity
         Zeros,
         [Tooltip("1")]
         Ones
-
-
     }
     public enum Device
     {
@@ -177,9 +176,11 @@ namespace DeepUnity
 
     public enum OnEpisodeEndType
     {
-        [Tooltip("When the episode ends, only the agent is repositioned to the initial state.")]
+        [Tooltip("When the episode ends, on OnEpsiodeBegin() method is called.")]
+        Nothing,
+        [Tooltip("When the episode ends, agent's transforms and rigidbodies are reinitialized. OnEpisodeBegin() is called afterwards.")]
         ResetAgent,
-        [Tooltip("When the episode ends, the agent and it's parent environment are repositioned to the initial state.")]
+        [Tooltip("When the episode ends, environment's transforms and rigidbodies (including the agent) are reinitialized. OnEpisodeBegin() is called afterwards.")]
         ResetEnvironment
     }
     public enum ActionType
@@ -193,15 +194,5 @@ namespace DeepUnity
         Fixed,
         Trainable
     }
-
-
-    // public enum NormalizationType
-    // {
-    //     None,
-    //     Scale,
-    //     ZScore,
-    //     LogScale
-    // }
-
 }
 

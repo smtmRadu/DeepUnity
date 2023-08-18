@@ -85,7 +85,7 @@ public class Tutorial : MonoBehaviour
 ![rl](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/tensors.png?raw=true)
 
 ### Reinforcement Learning
-In order to work with Reinforcement Learning tools, you must create a 2D or 3D agent using Unity provided GameObjects and Coomponents. The setup flow works similary to ML Agents (but with some restrictions described in the diagram below), so you must create a new behaviour script (e.g. _MoveToGoal_) that must inherit the **Agent** class. Attach the new behaviour script to the agent GameObject (automatically are attached 2 more scripts, **HyperParameters** and **DecisionRequester**) [Optionally, a **PerformanceTrack** script can be attached]. Choose the space size and number of actions, then override the following methods in the behavior script:
+In order to work with Reinforcement Learning tools, you must create a 2D or 3D agent using Unity provided GameObjects and Components. The setup flow works similary to ML Agents, so you must create a new behaviour script (e.g. _MoveToGoal_) that must inherit the **Agent** class. Attach the new behaviour script to the agent GameObject (automatically **DecisionRequester** script is attached too) [Optionally, a **TrainingStatistics** script can be attached]. Choose the space size and number of continuous/discrete actions, then override the following methods in the behavior script:
 - _CollectObservations()_
 - _OnActionReceived()_
 - _Heuristic()_ [Optional]
@@ -106,23 +106,23 @@ public class MoveToGoal : Agent
     [Header("Properties")]
     public float speed = 10f;
     public Transform target;
-
+    public float norm_scale = 8f;
     public override void OnEpisodeBegin()
     {
-        float xrand = Random.Range(-5f, 5f);
-        float zrand = Random.Range(-5f, 5f);
-        target.localPosition = new Vector3(xrand, 0, zrand);
+        float xrand = Random.Range(-norm_scale, norm_scale);
+        float zrand = Random.Range(-norm_scale, norm_scale);
+        target.localPosition = new Vector3(xrand, 2.25f, zrand);
 
-        xrand = Random.Range(-5f, 5f);
-        zrand = Random.Range(-5f, 5f);
-        transform.localPosition = new Vector3(xrand, 0, zrand);
+        xrand = Random.Range(-norm_scale, norm_scale);
+        zrand = Random.Range(-norm_scale, norm_scale);
+        transform.localPosition = new Vector3(xrand, 2.25f, zrand);
     }
     public override void CollectObservations(SensorBuffer sensorBuffer)
     {
-        sensorBuffer.AddObservation(transform.localPosition.x / 5f);
-        sensorBuffer.AddObservation(transform.localPosition.z / 5f);
-        sensorBuffer.AddObservation(target.transform.localPosition.x / 5f);
-        sensorBuffer.AddObservation(target.transform.localPosition.z / 5f);
+        sensorBuffer.AddObservation(transform.localPosition.x / norm_scale);
+        sensorBuffer.AddObservation(transform.localPosition.z / norm_scale);
+        sensorBuffer.AddObservation(target.transform.localPosition.x / norm_scale);
+        sensorBuffer.AddObservation(target.transform.localPosition.z / norm_scale);
     }
     public override void OnActionReceived(ActionBuffer actionBuffer)
     {
@@ -163,15 +163,12 @@ public class MoveToGoal : Agent
         }
     }
 }
-
-
-
 ```
-_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (decision is requested Once Each Frame), and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the goal, and penalized by 1 point if he hits a wall, and on every collision the episode ends._
+_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (decision is requested Once Each Frame), and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the goal, and penalized by 1 point if is hitting a wall, and on every collision the episode ends._
 
-/// place gif here
+![agent](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/agent.gif?raw=true)
 
-In order to properly get use of _AddReward()_, _EndEpisode()_ and _RequestDecision()_ consult the diagram below. For manual decision request, keep in mind that you can call the method anywhere, but only before base.FixedUpdate() will allow the action to be performed in the same frame; otherwise the action will appear in the next frame. _AddReward()_ and _EndEpisode()_ methods work well being called inside _OnTriggerXXX()_ or _OnCollisionXXX()_, as well as inside _OnActionReceived()_ rightafter each action was performed.
+In order to properly get use of _AddReward()_, _EndEpisode()_ and _RequestDecision()_ consult the diagram below. For custom decision request, keep in mind that you can call _RequestDecision()_ method everywhere, but only before base.FixedUpdate() will allow the action to be performed in the same frame; otherwise the action will occur in the next frame. _AddReward()_ and _EndEpisode()_ methods work well being called inside _OnTriggerXXX()_ or _OnCollisionXXX()_, as well as inside _OnActionReceived()_ rightafter actions are performed.
 ![rl](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_schema.jpg?raw=true)
 
 #### Notes

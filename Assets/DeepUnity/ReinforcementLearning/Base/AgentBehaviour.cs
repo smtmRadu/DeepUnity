@@ -17,10 +17,11 @@ namespace DeepUnity
 
         [Header("Standard Deviation for Continuous Actions")]
         [SerializeField] public StandardDeviationType standardDeviation = StandardDeviationType.Fixed;
-        [SerializeField] public float fixedStandardDeviationValue = 1f;
+        [SerializeField, Min(0.001f)] public float fixedStandardDeviationValue = 1f;
 
-        [Header("Normalizers")]
-        [SerializeField] public ZScoreNormalizer stateNormalizer;
+        [Header("Normalization")]
+        [SerializeField] public bool normalizeObservations = false;
+        [ReadOnly, SerializeField] public ZScoreNormalizer normalizer;
 
         [Header("Neural Networks")]
         [SerializeField] public Sequential critic;
@@ -53,7 +54,7 @@ namespace DeepUnity
             this.behaviourName = behaviourName;
             this.observationSize = stateSize;
             this.continuousDim = continuousActions;
-            stateNormalizer = new ZScoreNormalizer(stateSize);
+            normalizer = new ZScoreNormalizer(stateSize);
 
 
             //------------------ NETWORK INITIALIZATION ----------------//
@@ -132,8 +133,8 @@ namespace DeepUnity
                 return;
             }
 
-            int step_size = hp.learningRateSchedule ? 10 : 1000;
-            float gamma = hp.learningRateSchedule ? 0.99f : 1f;
+            int step_size = hp.learningRateSchedule ? hp.schedulerStepSize : 1_000_000;
+            float gamma = hp.learningRateSchedule ? hp.schedulerDecay : 1f;
 
             criticScheduler = new LRScheduler(criticOptimizer, step_size, gamma);
             actorMuScheduler = new LRScheduler(actorMuOptimizer, step_size, gamma);
@@ -264,6 +265,12 @@ namespace DeepUnity
             if(sd.enumValueIndex == (int)StandardDeviationType.Trainable)
             {
                 dontDrawMe.Add("fixedStandardDeviationValue");
+            }
+
+            SerializedProperty norm = serializedObject.FindProperty("normalizeObservations");
+            if(!norm.boolValue)
+            {
+                dontDrawMe.Add("normalizer");
             }
 
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());

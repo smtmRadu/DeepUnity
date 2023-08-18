@@ -6,44 +6,41 @@ namespace DeepUnity
 {
     [Serializable]
     public class Hyperparameters : ScriptableObject
-    { 
+    {
         [Header("Training Configurations")]
 
-        [Tooltip("The framerate at which the simulation is runned (FixedUpdate() calls per second).")]
-        [Min(30)] public int targetFPS = 50;
-
-        [Tooltip("The maximum length of an agent's episode. Set to a positive integer to limit the episode length to that many steps. Set to 0 for unlimited episode length.")]
-        [Min(0)] public int maxSteps = 1000;
+        [Tooltip("Autosaves the model every X minutes")]
+        [Min(1)] public int autosave = 5;
 
         [Tooltip("Debug all timesteps in an output file.")]
         public bool debug = false;
 
-
         [Space]
+
+        [Tooltip("The maximum length of an agent's episode. Set to a positive integer to limit the episode length to that many steps. Set to 0 for unlimited episode length.")]
+        [Min(1)] public int maxSteps = 1000;
+
         [Tooltip("Initial learning rate for Adam optimizer.")]
-        [Min(0)] public float learningRate = 3e-4f;
+        [Min(1e-8f)] public float learningRate = 3e-4f;
 
         [Tooltip("Number of epochs per episode trajectory.")]
-        [Min(3)] public int numEpoch = 8;
+        [Min(3)] public int numEpoch = 3;
 
         [Tooltip("Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer_size")]
-        [Min(32)] public int batchSize = 128;
+        [Min(32)] public int batchSize = 64;
 
         [Tooltip("Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch_size. Typically a larger buffer_size corresponds to more stable training updates.")]
         [Min(64)] 
-        public int bufferSize = 2048;
-
-        [Tooltip("Auto-normalize the observation inputs.")]
-        public bool normalizeObservations = false;
+        public int bufferSize = 1024;
 
         [Tooltip("Apply normalization to advantages over the memory buffer.")]
-        public bool normalizeAdvantages = false;
+        public bool normalizeAdvantages = true;
 
-        [Tooltip("Applies linear decay on learning rate (default step_size: 10, default decay: 0.99f).")]
-        public bool learningRateSchedule = false;
+        [Tooltip("Applies linear decay on learning rate. Step occurs on each [Num Epoch * Parallel Agents] times per policy iteration.")]
+        [SerializeField] public bool learningRateSchedule = false;
+        [SerializeField] public int schedulerStepSize = 8;
+        [SerializeField] public float schedulerDecay = 0.99f;
 
-        
-      
         [Header("PPO-specific Configurations")]
         [Tooltip("How many steps of experience to collect per-agent before adding it to the experience buffer.")]
         [Min(1)] public int horizon = 64;
@@ -92,7 +89,14 @@ namespace DeepUnity
         public override void OnInspectorGUI()
         {
             List<string> dontDrawMe = new List<string>() { "m_Script" };
-    
+
+            SerializedProperty lrs = serializedObject.FindProperty("learningRateSchedule");
+            if(!lrs.boolValue)
+            {
+                dontDrawMe.Add("schedulerStepSize");
+                dontDrawMe.Add("schedulerDecay");
+            }
+
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
             serializedObject.ApplyModifiedProperties();
         }
