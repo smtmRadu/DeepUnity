@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -56,7 +57,7 @@ namespace DeepUnity
                 }
             }            
         }
-        public static void SerializeMNIST()
+        private static void SerializeMNIST()
         {
             ClockTimer.Start();
             string trainPath = "C:\\Users\\radup\\OneDrive\\Desktop\\TRAIN\\";
@@ -76,7 +77,7 @@ namespace DeepUnity
 
                 foreach (var tp in trainPaths)
                 {
-                    Tensor image = Tensor.Constant(LoadTexture(tp), 1);
+                    Tensor image = Tensor.Constant(LoadTexturePixels(tp), (1,28,28));
 
                     Tensor label = Tensor.Zeros(10);
                     label[i] = 1;
@@ -87,7 +88,7 @@ namespace DeepUnity
                 }
                 foreach (var vp in testPaths)
                 {
-                    Tensor image = Tensor.Constant(LoadTexture(vp), 1);
+                    Tensor image = Tensor.Constant(LoadTexturePixels(vp), (1, 28, 28));
 
                     Tensor label = Tensor.Zeros(10);
                     label[i] = 1;
@@ -135,18 +136,23 @@ namespace DeepUnity
             Debug.Log("MNIST Serialized.");
             ClockTimer.Stop();
         }
-        private static Texture2D LoadTexture(string filePath)
+        private static Color[] LoadTexturePixels(string filePath)
         {
-            Texture2D tex = null;
+            throw new NotImplementedException("This method suffer from memory leaks, because the texture must be destroyed!");
             byte[] fileData;
 
             if (File.Exists(filePath))
             {
                 fileData = File.ReadAllBytes(filePath);
-                tex = new Texture2D(28, 28);
+                Texture2D tex = new Texture2D(28, 28);
                 tex.LoadImage(fileData);
+                Color[] pixels = tex.GetPixels();
+                return pixels;
             }
-            return tex;
+            else
+            {
+                throw new FileNotFoundException($"File at path {filePath} not found!");
+            }
         }
 
         

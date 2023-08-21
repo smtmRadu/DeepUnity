@@ -234,19 +234,19 @@ namespace DeepUnity
         /// <summary>
         /// Output: (C, H, W) <br></br>
         /// where <br></br>
-        /// C = <paramref name="channels"/> (1 = Grayscale, 2 = Grayscale + Alpha, 3 = RGB, 4 = RGBA)<br></br>
-        /// H = texture.height <br></br>
-        /// W = texture.width <br></br>
-        /// <em>Note: Tensors are displayed as the texture mirrored on horizontal axis when visualized as strings.</em>
+        /// C = <paramref name="shape"/>.Item1 (1 = Grayscale, 2 = Grayscale with Alpha, 3 = RGB, 4 = RGBA)<br></br>
+        /// H = <paramref name="shape"/>.Item2  <br></br>
+        /// W = <paramref name="shape"/>.Item3  <br></br>
+        /// <em>Note: Tensors are displayed as the image mirrored on horizontal axis when visualized as strings.</em>
         /// </summary>
-        /// <param name="channels">A value between 1 and 4</param>
+        /// <param name="shape">the shape of the resulting tensor</param>
         /// <returns></returns>
-        public static Tensor Constant(Texture2D texture, int channels)
+        public static Tensor Constant(Color[] pixels, (int,int,int) shape)
         {
-            int width = texture.width;
-            int height = texture.height;
+            int width = shape.Item3;
+            int height = shape.Item2;
+            int channels = shape.Item1;
 
-            Color[] colors = texture.GetPixels();
             Tensor result = Zeros(channels, height, width);
            
             for (int j = 0; j < height; j++)
@@ -255,29 +255,29 @@ namespace DeepUnity
                 {
                     if(channels == 1)
                     {
-                        Color col = colors[j * width + i];
+                        Color col = pixels[j * width + i];
                         result[0, j, i] = (col.r + col.g + col.b) / 3f;
                     }
                     else if(channels == 2)
                     {
-                        Color col = colors[j * width + i];
+                        Color col = pixels[j * width + i];
                         result[0, j, i] = (col.r + col.g + col.b) / 3f;
                         result[1, j, i] = col.a;
                     }
                     else if(channels == 3)
                     {
-                        result[0, j, i] = colors[j * width + i].r;
-                        result[1, j, i] = colors[j * width + i].g;
-                        result[2, j, i] = colors[j * width + i].b;
+                        result[0, j, i] = pixels[j * width + i].r;
+                        result[1, j, i] = pixels[j * width + i].g;
+                        result[2, j, i] = pixels[j * width + i].b;
 
                     }
                     else if(channels == 4)
                     {
 
-                        result[0, j, i] = colors[j * width + i].r;
-                        result[1, j, i] = colors[j * width + i].g;
-                        result[2, j, i] = colors[j * width + i].b;
-                        result[3, j, i] = colors[j * width + i].a;
+                        result[0, j, i] = pixels[j * width + i].r;
+                        result[1, j, i] = pixels[j * width + i].g;
+                        result[2, j, i] = pixels[j * width + i].b;
+                        result[3, j, i] = pixels[j * width + i].a;
                     }                   
                 }
             }
@@ -1114,9 +1114,22 @@ namespace DeepUnity
         {
             var elem1 = Log(sigma);
             var elem2 = 0.5f * MathF.Log(2f * MathF.PI);
-            var std = (value - mu) / sigma;
-            var elem3 = 0.5f * std.Pow(2f);
+            var elem3 = 0.5f * ((value - mu) / sigma).Pow(2f);
             return -elem1 - elem2 - elem3;
+        }
+        /// <summary>
+        /// Computes the element-wise probability density/mass function w.r.t the received distribution
+        /// N(<paramref name="mu"/>, <paramref name="sigma"/>) at <paramref name="value"/>.  <br></br>
+        /// </summary>
+        /// <param name="value"></param>
+        /// <param name="mu"></param>
+        /// <param name="sigma"></param>
+        /// <returns></returns>
+        public static Tensor Probability(Tensor value, Tensor mu, Tensor sigma)
+        {
+            Tensor elem1 = sigma * MathF.Sqrt(2f * MathF.PI);
+            Tensor elem2 = -0.5f * ((value - mu) / sigma).Pow(2f);
+            return elem2.Exp() / elem1;
         }
         /// <summary>
         /// Computes the element-wise Kullback-Leibler divergence. Measures the distance between two data distributions showing how different the two distributions are from each other.

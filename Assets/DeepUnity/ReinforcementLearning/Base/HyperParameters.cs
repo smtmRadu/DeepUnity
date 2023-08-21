@@ -7,19 +7,7 @@ namespace DeepUnity
     [Serializable]
     public class Hyperparameters : ScriptableObject
     {
-        [Header("Training Configurations")]
-
-        [Tooltip("Autosaves the model every X minutes")]
-        [Min(1)] public int autosave = 5;
-
-        [Tooltip("Debug all timesteps in an output file.")]
-        public bool debug = false;
-
-        [Space]
-
-        [Tooltip("The maximum length of an agent's episode. Set to a positive integer to limit the episode length to that many steps. Set to 0 for unlimited episode length.")]
-        [Min(1)] public int maxSteps = 1000;
-
+        [Header("Training Configuration")]
         [Tooltip("Initial learning rate for Adam optimizer.")]
         [Min(1e-8f)] public float learningRate = 3e-4f;
 
@@ -30,8 +18,7 @@ namespace DeepUnity
         [Min(32)] public int batchSize = 64;
 
         [Tooltip("Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch_size. Typically a larger buffer_size corresponds to more stable training updates.")]
-        [Min(64)] 
-        public int bufferSize = 1024;
+        [Min(64)] public int bufferSize = 1024;
 
         [Tooltip("Apply normalization to advantages over the memory buffer.")]
         public bool normalizeAdvantages = true;
@@ -41,7 +28,9 @@ namespace DeepUnity
         [SerializeField] public int schedulerStepSize = 8;
         [SerializeField] public float schedulerDecay = 0.99f;
 
-        [Header("PPO-specific Configurations")]
+
+
+        [Header("PPO-specific Configuration")]
         [Tooltip("How many steps of experience to collect per-agent before adding it to the experience buffer.")]
         [Min(1)] public int horizon = 64;
 
@@ -62,6 +51,11 @@ namespace DeepUnity
 
         [ReadOnly, Tooltip("Applies linear decay on epsilon.")]
         public bool epsilonScheduler = false;
+
+        [Space]
+        [Tooltip("Debug all timesteps in an output file.")]
+        public bool debug = false;
+
 
         /// <summary>
         /// Creates a new Hyperparameters asset in the <em>behaviour</em> folder.

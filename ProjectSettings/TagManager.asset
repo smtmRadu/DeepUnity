@@ -6,6 +6,9 @@ TagManager:
   tags:
   - Coin
   - Empty
+  - Box
+  - Wall
+  - Goal
   layers:
   - Default
   - TransparentFX

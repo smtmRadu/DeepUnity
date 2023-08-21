@@ -14,11 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   autosave: 1
   debug: 0
-  maxSteps: 2000
+  maxSteps: 5000
   learningRate: 0.0003
   numEpoch: 3
-  batchSize: 64
-  bufferSize: 1024
+  batchSize: 128
+  bufferSize: 2048
   normalizeAdvantages: 1
   learningRateSchedule: 0
   schedulerStepSize: 8

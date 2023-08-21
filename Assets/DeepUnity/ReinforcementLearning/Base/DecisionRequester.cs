@@ -7,6 +7,10 @@ namespace DeepUnity
     [DisallowMultipleComponent, AddComponentMenu("DeepUnity/Decision Requester")]
     public class DecisionRequester : MonoBehaviour
     {
+        
+        [Tooltip("The maximum length of an agent's episode. Set to a positive integer to limit the episode length to that many steps. Set to 0 for unlimited episode length.")]
+        [Min(1)] public int maxStep = 1000;
+
         [Tooltip("When does the agent performs an action?")]
         [SerializeField] public DecisionRequestType performAction = DecisionRequestType.OnceEachFrame;
         [Range(0.01f, 20f), Tooltip("The agent performs a value every X seconds.")] public float periodBetweenDecisions = 1f;
@@ -111,7 +115,10 @@ namespace DeepUnity
             SerializedObject serializedObject = new SerializedObject(targetScript);
             SerializedProperty performActProperty = serializedObject.FindProperty("performAction");
 
+            targetScript.maxStep = EditorGUILayout.IntField("Max Step", targetScript.maxStep);
+            EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
 
+            dontDrawMe.Add("maxStep");
             if (performActProperty.enumValueIndex != (int)DecisionRequestType.OnPeriodInterval)
             {
                 dontDrawMe.Add("periodBetweenDecisions");

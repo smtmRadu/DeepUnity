@@ -12,7 +12,7 @@ using UnityEngine;
 /// 
 namespace DeepUnity
 {
-    [AddComponentMenu("DeepUnity/Agent"), DisallowMultipleComponent, RequireComponent(typeof(DecisionRequester))]
+    [DisallowMultipleComponent, RequireComponent(typeof(DecisionRequester))]
     public abstract class Agent : MonoBehaviour
     {
         [SerializeField] public AgentBehaviour model;
@@ -27,8 +27,8 @@ namespace DeepUnity
         [Space]
         [SerializeField]
         private OnEpisodeEndType onEpisodeEnd = OnEpisodeEndType.ResetEnvironment;
-        [SerializeField, Tooltip("Collect sensors' observations attached to this agent automatically. ")]
-        private bool useSensors = true;
+        [SerializeField, Tooltip("Collect automatically the [Compressed] Observation Vector of attached sensors to this GameObject, or any child GameObject of any degree of it. Consider the number of Observation Vector's float values when defining the Space Size.")]
+        private UseSensorsType useSensors = UseSensorsType.ObservationsVector;
 
         public TrainingStatistics PerformanceTrack { get; set; }
         public ExperienceBuffer Memory { get; set; }
@@ -100,7 +100,11 @@ namespace DeepUnity
                 Observations.Clear();
                 Actions.Clear();
                 CollectObservations(Observations);
-                if (useSensors) Sensors.ForEach(x => Observations.AddObservation(x.GetObservations()));
+                if (useSensors == UseSensorsType.ObservationsVector) 
+                    Sensors.ForEach(x => Observations.AddObservation(x.GetObservationsVector()));
+                else
+                    Sensors.ForEach(x => Observations.AddObservation(x.GetCompressedObservationsVector()));
+
 
                 // Normalize the observations if neccesary
                 if (model.normalizeObservations)
@@ -111,11 +115,11 @@ namespace DeepUnity
 
                 // Set state[t], action[t] & pi[t]
                 Timestep.state = Tensor.Identity(Observations.Observations);
-                model.ContinuousPredict(Timestep.state, out Timestep.action_continuous, out Timestep.log_probs_continuous);
-                model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.log_probs_discrete);
+                model.ContinuousPredict(Timestep.state, out Timestep.action_continuous, out Timestep.prob_continuous);
+                model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.prob_discrete);
 
                 // Run agent's actions and clip them
-                Actions.ContinuousActions = Timestep.action_continuous.Clip(-1f, 1f).ToArray();
+                Actions.ContinuousActions = model.IsUsingContinuousActions ? Timestep.action_continuous.Clip(-1f, 1f).ToArray() : null;
                 Actions.DiscreteActions = null; // need to convert afterwards from tensor of logits [branch, logits] to argmax int[]
 
                 OnActionReceived(Actions);
@@ -126,7 +130,11 @@ namespace DeepUnity
                 Observations.Clear();
                 Actions.Clear();
                 CollectObservations(Observations);
-                if (useSensors) Sensors.ForEach(x => Observations.AddObservation(x.GetObservations()));
+                if (useSensors == UseSensorsType.ObservationsVector)
+                    Sensors.ForEach(x => Observations.AddObservation(x.GetObservationsVector()));
+                else
+                    Sensors.ForEach(x => Observations.AddObservation(x.GetCompressedObservationsVector()));
+
 
                 // Normalize the observations if neccesary
                 if (model.normalizeObservations)
@@ -134,11 +142,11 @@ namespace DeepUnity
 
                 // Set state[t], action[t] & pi[t]
                 Timestep.state = Tensor.Identity(Observations.Observations);
-                model.ContinuousPredict(Timestep.state, out Timestep.action_continuous, out Timestep.log_probs_continuous);
-                model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.log_probs_discrete);
+                model.ContinuousPredict(Timestep.state, out Timestep.action_continuous, out Timestep.prob_continuous);
+                model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.prob_discrete);
 
                 // Run agent's actions and clip them
-                Actions.ContinuousActions = Timestep.action_continuous.Clip(-1f, 1f).ToArray();
+                Actions.ContinuousActions = model.IsUsingContinuousActions ? Timestep.action_continuous.Clip(-1f, 1f).ToArray() : null;
                 Actions.DiscreteActions = null; // need to convert afterwards from tensor of logits [branch, logits] to argmax int[]
 
                 OnActionReceived(Actions);
@@ -167,11 +175,11 @@ namespace DeepUnity
             {
                 Timestep.index = EpisodeStepCount;
 
-                // reward[t] already set
+                // reward[t] object already set to 0 in FixedUpdate()
                 Memory.Add(Timestep);
 
                 // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state
-                if (EpisodeStepCount == hp.maxSteps)
+                if (EpisodeStepCount == DecisionRequester.maxStep)
                     EndEpisode();
 
                 if (Memory.IsFull())
@@ -191,6 +199,8 @@ namespace DeepUnity
             ActionOccured = false;
 
             // ----------------------------------------------------------------------------------
+            if (behaviourType == BehaviourType.Inactive)
+                return;
 
             if (behaviourType == BehaviourType.Learn)
             {
@@ -206,8 +216,6 @@ namespace DeepUnity
                     PositionReseter?.Reset();
                     OnEpisodeBegin();
                 }
-
-                Timestep = new TimestepBuffer();
             }
             else if(behaviourType == BehaviourType.Active)
             {
@@ -227,7 +235,8 @@ namespace DeepUnity
                 }
                     
             }
-            // Timestep is not reset in Active and Manual behaviours, so it cannot be saved.   
+
+            Timestep = new TimestepBuffer(); 
         }
   
         public void BakeModel()
@@ -237,12 +246,9 @@ namespace DeepUnity
             continuousActions = model.continuousDim;
             discreteBranches = model.discreteBranches;
         }
-        public void BakeHyperParamters()
+        public void BakeHyperparamters()
         {
-            if (hp != null)
-                return;
             hp = Hyperparameters.CreateOrLoadAsset(GetType().Name);
-
         }
         private void InitBuffers()
         {
@@ -341,7 +347,7 @@ namespace DeepUnity
                 if (GUILayout.Button("Bake/Load model and hyperparameters"))
                 {
                     script.BakeModel();
-                    script.BakeHyperParamters();
+                    script.BakeHyperparamters();
                 }
 
             if (modelProperty.objectReferenceValue != null)
@@ -358,6 +364,7 @@ namespace DeepUnity
                 dontDrawMe.Add("Hp");
             }
 
+           
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
             serializedObject.ApplyModifiedProperties();
         }

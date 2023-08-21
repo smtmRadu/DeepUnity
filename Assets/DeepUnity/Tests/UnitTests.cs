@@ -2,6 +2,7 @@ using UnityEngine;
 using DeepUnity;
 using System.Collections.Generic;
 using UnityEngine.UI;
+using System;
 
 namespace kbRadu
 {
@@ -24,15 +25,6 @@ namespace kbRadu
         public int whatIsIt = 0;
         List<(Tensor, Tensor)> train;
 
-        private void Start()
-        {
-            DeepUnity.ClockTimer.Start();
-            for (int i = 0; i < 10000000; i++)
-            {
-                var x = Utils.Random.Value;
-            }
-            ClockTimer.Stop();
-        }
         /* private void Start()
          {
              Conv2DLearnTest();

@@ -239,7 +239,7 @@ namespace DeepUnity
         // Create
         private TensorGPU(params int[] shape)
         {
-            Debug.LogError("TensorGPU class is deprecated.");
+            Debug.LogError("TensorGPU class is deprecated. Please use Tensor class instead!");
             EditorApplication.isPlaying = false;
 
             if (shape == null)

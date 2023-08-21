@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: MoveToGoal
   m_EditorClassIdentifier: 
   behaviourName: MoveToGoal
+  assetCreated: 1
   observationSize: 4
   continuousDim: 2
   discreteBranches: 

@@ -13,12 +13,13 @@ MonoBehaviour:
   m_Name: HoldBall
   m_EditorClassIdentifier: 
   behaviourName: HoldBall
+  assetCreated: 1
   observationSize: 10
   continuousDim: 2
   discreteBranches: 
   standardDeviation: 0
   fixedStandardDeviationValue: 1
-  normalizeObservations: 0
+  normalizeObservations: 1
   normalizer:
     step: 0
     mean:

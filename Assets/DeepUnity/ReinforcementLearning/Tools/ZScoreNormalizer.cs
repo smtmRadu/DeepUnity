@@ -4,6 +4,9 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// Online standardizer. Works well even if input data contains extremly large values.
+    /// </summary>
     [Serializable]
     public class ZScoreNormalizer : INormalizer
     {

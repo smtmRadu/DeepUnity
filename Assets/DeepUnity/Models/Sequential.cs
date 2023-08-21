@@ -11,7 +11,7 @@ namespace DeepUnity
     public class Sequential : Model<Sequential>, ISerializationCallbackReceiver
     {
         [NonSerialized] private IModule[] modules;
-        [SerializeField] private IModuleWrapper[] serializedModules;
+        [ReadOnly, SerializeField] private IModuleWrapper[] serializedModules;
 
         public Sequential(params IModule[] modules) => this.modules = modules;
 

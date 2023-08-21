@@ -4,6 +4,9 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// MinMax online normalizer. Works well if the input data does not have extreme large values along.
+    /// </summary>
     [Serializable]
     public class MinMaxNormalizer : INormalizer
     {

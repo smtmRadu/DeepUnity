@@ -15,7 +15,7 @@ namespace DeepUnity
     {
         [SerializeField] private bool batchFirst;
         [NonSerialized] private IModuleS[] modules;
-        [SerializeField] private IModuleSWrapper[] serializedModules;
+        [ReadOnly, SerializeField] private IModuleSWrapper[] serializedModules;
         
 
         /// <summary>

@@ -1,6 +1,7 @@
 # DeepUnity
 
-DeepUnity is an add-on framework that provides tensor computation [with GPU support] and deep neural networks, along with reinforcement learning tools.
+DeepUnity is an add-on framework that provides tensor computation [with GPU support] and deep neural networks, resembling a compound syntax between PyTorch and TensorFlow, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO).
+
 #### Run your first DeepUnity script
 ```csharp
 using UnityEngine;
@@ -8,7 +9,7 @@ using DeepUnity;
 
 public class Tutorial : MonoBehaviour
 {
-    [Header("Learning z = x^2 + y^2.")]
+    [Header("Learning z = x^2 + y^2 function")]
     [SerializeField] private Sequential network;
     [SerializeField] private PerformanceGraph trainLossGraph = new PerformanceGraph();
     [SerializeField] private PerformanceGraph validLossGraph = new PerformanceGraph();
@@ -82,9 +83,9 @@ public class Tutorial : MonoBehaviour
     }
 }
 ```
-![rl](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/tensors.png?raw=true)
+![rl](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/tensors.png?raw=true)
 
-### Reinforcement Learning
+### Reinforcement Learning using PPO
 In order to work with Reinforcement Learning tools, you must create a 2D or 3D agent using Unity provided GameObjects and Components. The setup flow works similary to ML Agents, so you must create a new behaviour script (e.g. _MoveToGoal_) that must inherit the **Agent** class. Attach the new behaviour script to the agent GameObject (automatically **DecisionRequester** script is attached too) [Optionally, a **TrainingStatistics** script can be attached]. Choose the space size and number of continuous/discrete actions, then override the following methods in the behavior script:
 - _CollectObservations()_
 - _OnActionReceived()_
@@ -166,13 +167,15 @@ public class MoveToGoal : Agent
 ```
 _This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (decision is requested Once Each Frame), and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the goal, and penalized by 1 point if is hitting a wall, and on every collision the episode ends._
 
-![agent](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/agent.gif?raw=true)
+![agent](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/agent.gif?raw=true)
 
-In order to properly get use of _AddReward()_, _EndEpisode()_ and _RequestDecision()_ consult the diagram below. For custom decision request, keep in mind that you can call _RequestDecision()_ method everywhere, but only before base.FixedUpdate() will allow the action to be performed in the same frame; otherwise the action will occur in the next frame. _AddReward()_ and _EndEpisode()_ methods work well being called inside _OnTriggerXXX()_ or _OnCollisionXXX()_, as well as inside _OnActionReceived()_ rightafter actions are performed.
-![rl](https://github.com/RaduTM-spec/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_schema.jpg?raw=true)
-
-#### Notes
+TIPS: 
+- In order to properly get use of _AddReward()_, _EndEpisode()_ and _RequestDecision()_ consult the diagram below. For custom decision request, keep in mind that you can call _RequestDecision()_ method everywhere, but only before base.FixedUpdate() will allow the action to be performed in the same frame; otherwise the action will occur in the next frame. _AddReward()_ and _EndEpisode()_ methods work well being called inside _OnTriggerXXX()_ or _OnCollisionXXX()_, as well as inside _OnActionReceived()_ rightafter actions are performed.
+- **Input Normalization** plays a huge role in policy convergence. To outcome this problem, observations can be auto-normalized by checking the corresponding box inside behaviour asset, or manually normalize all values before adding them to the _SensorBuffer_, either by calling **_.normalized_** for **Vector3**'s and **Quaternions**, or squashing other values like angles or positions within [0, 1] or [-1, 1] ranges. 
 - The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. It is not recommended to use them, but if neccesary, in order to override them, call the their **base** each time, respecting the logic of the diagram above.
-- Call _AddReward()_, _EndEpisode()_ and _RequestAction()_ only inside **OnActionReceived()** or any **OnTriggerXXX**/**OnCollisionXXX** methods.
+
+![rl](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_schema.jpg?raw=true)
+
+_A paper describing how to implement Proximal Policy Optimization (including neural networks) from scratch will be released soon..._
 
 

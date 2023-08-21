@@ -7,6 +7,8 @@ namespace DeepUnity
     [DisallowMultipleComponent, AddComponentMenu("DeepUnity/Training Statistics")]
     public class TrainingStatistics : MonoBehaviour
     {
+        [ReadOnly, Tooltip("Total seconds runned by the agent multipled by the number of parallel agents.")] public float trainingTime = 0f;
+        [ReadOnly, Tooltip("Total numbers of steps runned by the agent multiplied by the number of parallel agents.")] public int trainingSteps = 0;
         [ReadOnly, Tooltip("How many policy updates were made.")] public int iterations = 0;
         [Header("Environment")]
         [Tooltip("Cumulated rewards in each episode.")] public PerformanceGraph cumulativeReward = new PerformanceGraph(100);

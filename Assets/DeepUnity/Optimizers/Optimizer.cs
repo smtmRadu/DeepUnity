@@ -45,7 +45,7 @@ namespace DeepUnity
         /// <summary>
         /// Computes the clip grad norm globally over all <see cref="Learnable"/> layers.
         /// </summary>
-        public void ClipGradNorm(float max_norm)
+        public void ClipGradNorm(float max_norm, NormType normType = NormType.EuclideanL2)
         {
             int totalCount = 0;
             foreach (var param in parameters)
@@ -94,7 +94,7 @@ namespace DeepUnity
             }
 
             // Compute norm
-            Tensor norm = Tensor.Norm(Tensor.Constant(vector), NormType.ManhattanL1);
+            Tensor norm = Tensor.Norm(Tensor.Constant(vector), normType);
 
             if (norm[0] <= max_norm)
                 return;
@@ -111,10 +111,7 @@ namespace DeepUnity
                     r.recurrentGammaGrad *= scale;
                     r.recurrentBetaGrad *= scale;
                 }
-            }
-
-            
-            
+            }     
         }
 
 

@@ -2,22 +2,21 @@ using System;
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
-using System.Collections;
+using System.Linq;
 
 namespace DeepUnity
 {
     /// <summary>
-    /// No hit value: 0 [info != all] or 0,0,0 [info == all]      <br />
-    /// Hit value: x [info != all] or x,y,z [info == all]         <br />
+    /// ObservationVector.Length = <see cref="rays"/> * (2 +  <see cref="detectableTags"/>.Length)
     /// </summary>
-    [AddComponentMenu("DeepUnity/Ray Sensor")]
+    [AddComponentMenu("DeepUnity/RaySensor")]
     public class RaySensor : MonoBehaviour, ISensor
     {
-        private List<float> Observations = new List<float>();
+        private readonly LinkedList<RayInfo> Observations = new LinkedList<RayInfo>();
 
         [SerializeField, Tooltip("@scene type")] World world = World.World3d;
         [SerializeField, Tooltip("@LayerMask used when casting the rays")] LayerMask layerMask = ~0;
-        [SerializeField, Tooltip("@observations values returned by rays")] RayInfo info = RayInfo.Distance;
+        [SerializeField, Tooltip("@tags that can provide information")] string[] detectableTags;
         [SerializeField, Range(1, 50), Tooltip("@size of the buffer equals the number of rays")] int rays = 5;
         [SerializeField, Range(1, 360)] int fieldOfView = 45;
         [SerializeField, Range(0, 359)] int rotationOffset = 0;
@@ -33,8 +32,6 @@ namespace DeepUnity
         [Space(10)]
         [SerializeField] Color rayColor = Color.green;
         [SerializeField] Color missRayColor = Color.red;
-
-
 
 
         private void Start()
@@ -77,7 +74,7 @@ namespace DeepUnity
                     RaycastHit hit;
                     bool isHit = Physics.SphereCast(castOrigin, sphereCastRadius, rayDirection, out hit, distance, layerMask);
                     
-                    if (isHit == true)
+                    if (isHit)
                     {
                         Gizmos.color = rayColor;
                         Gizmos.DrawRay(castOrigin, rayDirection * hit.distance);
@@ -94,7 +91,7 @@ namespace DeepUnity
                     rayDirection = Quaternion.AngleAxis(currentAngle, transform.forward) * startAngle;
                     
                     RaycastHit2D hit2D = Physics2D.CircleCast(castOrigin, sphereCastRadius, rayDirection, distance, layerMask);
-                    if (hit2D == true)
+                    if (hit2D)
                     {
                         Gizmos.color = rayColor;
                         Gizmos.DrawRay(castOrigin, rayDirection * hit2D.distance);
@@ -109,19 +106,67 @@ namespace DeepUnity
 
                 currentAngle += oneAngle;
             }
-
-
         }
-    
+
         /// <summary>
-        /// <b>Length</b> = <b>Rays</b> * (if Info != All <b>1</b> else <b>3</b>)
+        /// Embedds the observations into a float[]. HitTagIndex is One Hot Encoded, where the first spot represents a non-detectable tag. <br></br>
+        /// Example: <b>[<em>NormalizedDistance, NonDetectableTag</em>, DetectableTag[0], DetectableTag[1], ... DetectableTag[n-1]]</b>
         /// </summary>
-        /// <returns>IEnumerable of float values</returns>
-        public IEnumerable GetObservations()
+        /// <returns>Returns a float[] of length = num_rays * (2 + num_detectable_tags).</returns>
+        public float[] GetObservationsVector()
         {
-            return Observations;
-        }
+            int rayInfoDim = 2 + detectableTags.Length;
+            float[] vector = new float[rays * rayInfoDim];
+            int index = 0;
+            foreach (var rayInfo in Observations)
+            {
+                vector[index++] = rayInfo.NormalizedDistance;
 
+                // OneHotEncode
+                if (rayInfo.HitTagIndex == -1)
+                    vector[index++] = 1f;
+                else
+                    vector[index++] = 0f;
+
+
+                for (int i = 0; i < detectableTags.Length; i++)
+                    if (rayInfo.HitTagIndex == i)
+                        vector[index++] = 1f;
+                    else
+                        vector[index++] = 0f;
+            }
+            return vector;
+        }
+        /// <summary>
+        /// Scales down in range [0, 1] the HitTagIndex. If the HitTagIndex is -1, it remains -1. <br></br>
+        /// Example: <b>[NormalizedDistance, HitTagIndex]</b>
+        /// </summary>
+        /// <returns>Returns a float[] of length = 2 * num_rays.</returns>
+        public float[] GetCompressedObservationsVector()
+        {
+            float[] vector = new float[rays * 2];
+            int index = 0;
+            foreach (var rayInfo in Observations)
+            {
+                vector[index++] = rayInfo.NormalizedDistance;
+
+                // OneHotEncode
+                if (rayInfo.HitTagIndex == -1)
+                    vector[index++] = -1f;
+                else
+                    vector[index++] = rayInfo.HitTagIndex / (float) detectableTags.Length;
+            }
+            return vector;
+        }
+        /// <summary>
+        /// Returns information of all rays.
+        /// </summary>
+        /// <returns></returns>
+        public RayInfo[] GetObservationRays()
+        {
+            return Observations.ToArray();
+        }
+        
        
 
         /// <summary>
@@ -174,46 +219,12 @@ namespace DeepUnity
         private void CastRay3D(Vector3 castOrigin, float sphereCastRadius, Vector3 rayDirection, float distance, LayerMask layerMask)
         {
             RaycastHit hit;
-            if (Physics.SphereCast(castOrigin, sphereCastRadius, rayDirection, out hit, distance, layerMask))
-            {
-                switch(info)
-                {
-                    case RayInfo.Distance:
-                        Observations.Add(hit.distance);
-                        break;
-                    case RayInfo.Layer:
-                        Observations.Add(hit.collider.gameObject.layer);
-                        break;
-                    case RayInfo.Angle:
-                        Observations.Add(Vector3.Angle(hit.normal, rayDirection));
-                        break;
-                    case RayInfo.All:
-                        Observations.Add(hit.distance);
-                        Observations.Add(hit.collider.gameObject.layer);
-                        Observations.Add(Vector3.Angle(hit.normal, rayDirection));
-                        break;
-                }
-            }
-            else
-            {
-                switch (info)
-                {
-                    case RayInfo.Distance:
-                        Observations.Add(0);
-                        break;
-                    case RayInfo.Layer:
-                        Observations.Add(0);
-                        break;
-                    case RayInfo.Angle:
-                        Observations.Add(0);
-                        break;
-                    case RayInfo.All:
-                        Observations.Add(0);
-                        Observations.Add(0);
-                        Observations.Add(0);
-                        break;
-                }
-            }
+            bool success = Physics.SphereCast(castOrigin, sphereCastRadius, rayDirection, out hit, distance, layerMask);
+            
+            RayInfo rayInfo = new RayInfo();
+            rayInfo.NormalizedDistance = success ? hit.distance / distance : -1f;
+            rayInfo.HitTagIndex = success && detectableTags != null ? Array.IndexOf(detectableTags, hit.collider.tag) : -1;
+            Observations.AddLast(rayInfo);
         }
         /// <summary>
         /// This method casts only rays for 2D worlds. It is called from CastRays().
@@ -221,60 +232,17 @@ namespace DeepUnity
         private void CastRay2D(Vector3 castOrigin, float sphereCastRadius, Vector3 rayDirection, float distance, LayerMask layerMask)
         {
             RaycastHit2D hit = Physics2D.CircleCast(castOrigin, sphereCastRadius, rayDirection, distance, layerMask);
-            if (hit)
-            {
-                switch (info)
-                {
-                    case RayInfo.Distance:
-                        Observations.Add(hit.distance);
-                        break;
-                    case RayInfo.Layer:
-                        Observations.Add(hit.collider.gameObject.layer);
-                        break;
-                    case RayInfo.Angle:
-                        Observations.Add(Vector3.Angle(hit.normal, rayDirection));
-                        break;
-                    case RayInfo.All:
-                        Observations.Add(hit.distance);
-                        Observations.Add(hit.collider.gameObject.layer);
-                        Observations.Add(Vector3.Angle(hit.normal, rayDirection));
-                        break;
-                }
-            }
-            else
-            {
-                switch (info)
-                {
-                    case RayInfo.Distance:
-                        Observations.Add(0);
-                        break;
-                    case RayInfo.Layer:
-                        Observations.Add(0);
-                        break;
-                    case RayInfo.Angle:
-                        Observations.Add(0);
-                        break;
-                    case RayInfo.All:
-                        Observations.Add(0);
-                        Observations.Add(0);
-                        Observations.Add(0);
-                        break;
-                }
-            }
-        }        
+
+            RayInfo rayInfo = new RayInfo();
+            rayInfo.NormalizedDistance = hit ? hit.distance / distance : -1f;
+            rayInfo.HitTagIndex = hit && detectableTags != null ? Array.IndexOf(detectableTags, hit.collider.tag) : -1;
+            Observations.AddLast(rayInfo);
+        }   
     }
+
+    
   
-    public enum RayInfo
-    {
-        [Tooltip("1 float value per ray")]
-        Distance,
-        [Tooltip("1 float value per ray")]
-        Layer,
-        [Tooltip("1 float value per ray")]
-        Angle,
-        [Tooltip("3 float values per ray")]
-        All,
-    }
+   
 
     [CustomEditor(typeof(RaySensor)), CanEditMultipleObjects]
     class ScriptlessRaySensor : Editor
@@ -282,23 +250,69 @@ namespace DeepUnity
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-
-            var script = target as RaySensor;
-
             List<string> _dontDrawMe = new List<string>() { "m_Script" };
 
 
             SerializedProperty sr = serializedObject.FindProperty("world");
-
             if (sr.enumValueIndex == (int)World.World2d)
             {
                 _dontDrawMe.Add("tilt");
                 _dontDrawMe.Add("zOffset");
 
             }
+
+
+            SerializedProperty detectableTags = serializedObject.FindProperty("detectableTags");
+            CheckTags(detectableTags);
+
             DrawPropertiesExcluding(serializedObject, _dontDrawMe.ToArray());
 
+            SerializedProperty rays_num = serializedObject.FindProperty("rays");
+            int vecSize = (2 + detectableTags.arraySize) * rays_num.intValue;
+            int compVecSize = 2 * rays_num.intValue;
+            EditorGUILayout.HelpBox($"Observations Vector contains {vecSize} float values. Compressed Observations Vector contains {compVecSize} float values.", MessageType.Info);
+
+
             serializedObject.ApplyModifiedProperties();
+        }
+        private void CheckTags(SerializedProperty detectableTags)
+        {
+            List<string> tagsToList = new List<string>();
+            for (int i = 0; i < detectableTags.arraySize; i++)
+                tagsToList.Add(detectableTags.GetArrayElementAtIndex(i).stringValue);
+
+            List<(int, string)> tags_that_are_not_existing = new List<(int, string)>();
+            for (int i = 0; i < tagsToList.Count; i++)
+            {
+                if (!UnityEditorInternal.InternalEditorUtility.tags.Contains(tagsToList[i]))
+                {
+                    tags_that_are_not_existing.Add((i, tagsToList[i]));
+                }
+            }
+
+            if (tags_that_are_not_existing.Count == 1)
+                EditorGUILayout.HelpBox(
+                    $"Detectable tag '{tags_that_are_not_existing[0].Item2}' at index {tags_that_are_not_existing[0].Item1} is not defined!", MessageType.Warning);
+
+            else if (tags_that_are_not_existing.Count > 1)
+            {
+                string wrongTagsList = "";
+                foreach (var item in tags_that_are_not_existing)
+                {
+                    wrongTagsList += $"'{item.Item2}' ({item.Item1}), ";
+                }
+                wrongTagsList = wrongTagsList.Substring(0, wrongTagsList.Length - 2);
+                EditorGUILayout.HelpBox(
+                    $"Detectable tags {wrongTagsList} are not defined!", MessageType.Warning);
+
+            }
+                
+
+            // Check for doubles
+            var set = tagsToList.ToHashSet();
+            if(tagsToList.Count != set.Count)
+                EditorGUILayout.HelpBox(
+                   $"Detectable tags contains doubles!", MessageType.Warning);
         }
     }
    

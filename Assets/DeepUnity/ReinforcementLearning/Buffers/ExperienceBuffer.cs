@@ -15,9 +15,9 @@ namespace DeepUnity
         public float CumulativeReward { get => frames.Sum(x => x.reward[0]); }
         public Tensor[] States { get => frames.Select(x => x.state).ToArray(); }
         public Tensor[] ContinuousActions { get => frames.Select(x => x.action_continuous).ToArray(); }
-        public Tensor[] ContinuousLogProbs { get => frames.Select(x => x.log_probs_continuous).ToArray(); }
-        public Tensor[] ActionsDiscrete { get => frames.Select(x => x.action_discrete).ToArray(); }
-        public Tensor[] DiscreteLogProbs { get => frames.Select(x => x.log_probs_discrete).ToArray(); }
+        public Tensor[] ContinuousProbabilities { get => frames.Select(x => x.prob_continuous).ToArray(); }
+        public Tensor[] DiscreteActions { get => frames.Select(x => x.action_discrete).ToArray(); }
+        public Tensor[] DiscreteProbabilities { get => frames.Select(x => x.prob_discrete).ToArray(); }
         public Tensor[] ValueTargets { get => frames.Select(x => x.value_target).ToArray(); }
         public Tensor[] Advantages { get => frames.Select(x => x.advantage).ToArray(); }
 
@@ -60,9 +60,9 @@ namespace DeepUnity
                     frames[i].action_continuous = frames[r].action_continuous;
                     frames[r].action_continuous = temp;
 
-                    temp = frames[i].log_probs_continuous;
-                    frames[i].log_probs_continuous = frames[r].log_probs_continuous;
-                    frames[r].log_probs_continuous = temp;
+                    temp = frames[i].prob_continuous;
+                    frames[i].prob_continuous = frames[r].prob_continuous;
+                    frames[r].prob_continuous = temp;
                 }
                                   
                 if (frames[i].action_discrete != null)
@@ -71,9 +71,9 @@ namespace DeepUnity
                     frames[i].action_discrete = frames[r].action_discrete;
                     frames[r].action_discrete = temp;
 
-                    temp = frames[i].log_probs_discrete;
-                    frames[i].log_probs_discrete = frames[r].log_probs_discrete;
-                    frames[r].log_probs_discrete = temp;
+                    temp = frames[i].prob_discrete;
+                    frames[i].prob_discrete = frames[r].prob_discrete;
+                    frames[r].prob_discrete = temp;
                 }
 
                 temp = frames[i].reward;
@@ -88,9 +88,10 @@ namespace DeepUnity
                 frames[i].value_target = frames[r].value_target;
                 frames[r].value_target = temp;
 
-                // temp = frames[i].done;
-                // frames[i].done = frames[r].done;
-                // frames[r].done = temp;
+                // There are not really neccesarry to be shuffled
+                temp = frames[i].done;
+                frames[i].done = frames[r].done;
+                frames[r].done = temp;
             }
         }
         public bool IsFull() => Count == capacity;
@@ -154,11 +155,10 @@ namespace DeepUnity
         {
             float mean = frames.Average(x => x.advantage[0]);
             float var = frames.Sum(x => (x.advantage[0] - mean) * (x.advantage[0] - mean)) / (Count - 1);
-            float std = MathF.Sqrt(var);
+            float std = MathF.Sqrt(var) + Utils.EPSILON;
 
-            if(std != 0)
-                for (int i = 0; i < Count; i++)
-                    frames[i].advantage = (frames[i].advantage - mean) / std;
+            for (int i = 0; i < Count; i++)
+                frames[i].advantage = (frames[i].advantage - mean) / std;
         }
         public override string ToString()
         {
