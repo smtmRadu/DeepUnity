@@ -13,7 +13,7 @@ namespace DeepUnity
 
         [Tooltip("When does the agent performs an action?")]
         [SerializeField] public DecisionRequestType performAction = DecisionRequestType.OnceEachFrame;
-        [Range(0.01f, 20f), Tooltip("The agent performs a value every X seconds.")] public float periodBetweenDecisions = 1f;
+        [Range(0.01f, 20f), Tooltip("The agent performs an action every X seconds.")] public float periodBetweenDecisions = 0.5f;
 
         /// <summary>
         /// Handles to take action only once in FixedUpdate().

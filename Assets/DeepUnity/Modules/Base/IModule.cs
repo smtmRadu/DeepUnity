@@ -16,7 +16,7 @@ namespace DeepUnity
     {
         public string name;
 
-        [Header("These modules have save-able fields.")]
+        [Header("These modules have save-able properties.")]
 
         // Learnable modules
         public Dense dense;                  

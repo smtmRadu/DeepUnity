@@ -11,8 +11,8 @@ namespace DeepUnity
     [Serializable]
     public sealed class Tensor : IEquatable<Tensor>, IEquatable<TensorGPU>, ICloneable
     {
-        [SerializeField] private float[] data;
-        [SerializeField] private int[] shape;
+        [ReadOnly, SerializeField] private float[] data;
+        [ReadOnly, SerializeField] private int[] shape;
 
         public int Rank
         {
@@ -114,6 +114,11 @@ namespace DeepUnity
             this.shape = shape.ToArray();
             data = new float[size];
         }
+        /// <summary>
+        /// Clones a tensor input.
+        /// </summary>
+        /// <param name="other"></param>
+        /// <returns></returns>
         public static Tensor Identity(Tensor other)
         {
             Tensor clone = new(other.shape);              

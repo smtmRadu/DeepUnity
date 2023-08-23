@@ -12,7 +12,7 @@ namespace DeepUnity
     {
         [SerializeField] private int version = 1;
         [SerializeField, HideInInspector] private bool assetCreated = false;
-
+        private bool canBackPropagate = false; // a flag that cares if a forward pass had happen before doing backpropagation.
 
         /// <summary>
         /// Backpropagates the <paramref name="lossDerivative"/> and computes the gradients.
@@ -76,6 +76,19 @@ namespace DeepUnity
         /// </summary>
         /// <returns></returns>
         public abstract string Summary();
+
+
+        protected void BaseForward()
+        {
+            canBackPropagate = true;
+        }
+        protected void BaseBackward()
+        {
+            if(!canBackPropagate)
+                throw new ArgumentException("Cannot backpropagate if no forward had happen before!");
+
+            canBackPropagate = false;
+        }
     }
 
 }

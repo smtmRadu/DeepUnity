@@ -148,8 +148,8 @@ namespace DeepUnity
         Active,
         [Tooltip("Exploring behaviour. Learning: YES. Scene resets: YES.")]
         Learn,
-        [Tooltip("Manual control. Learning: NO. Scene resets: YES.")]
-        Manual,
+        [Tooltip("Imitation learning. Learning: YES. Scene resets: YES.")]
+        Heuristic,
     }
 
     public enum OnEpisodeEndType

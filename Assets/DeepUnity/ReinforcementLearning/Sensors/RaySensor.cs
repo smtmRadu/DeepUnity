@@ -41,6 +41,12 @@ namespace DeepUnity
         private void Update()
         {
             CastRays();
+            // string str  = "";
+            // foreach (var item in GetCompressedObservationsVector())
+            // {
+            //     str += item + " ";
+            // }
+            // print(str);
         }
         private void OnDrawGizmos()
         {
@@ -110,7 +116,7 @@ namespace DeepUnity
 
         /// <summary>
         /// Embedds the observations into a float[]. HitTagIndex is One Hot Encoded, where the first spot represents a non-detectable tag. <br></br>
-        /// Example: <b>[<em>NormalizedDistance, NonDetectableTag</em>, DetectableTag[0], DetectableTag[1], ... DetectableTag[n-1]]</b>
+        /// Example: <b>[ray 1: <em>NormalizedDistance, NonDetectableTag</em>, DetectableTag[0], DetectableTag[1], ... DetectableTag[n-1], ray 2: NormalizedDistance, ....]</b>
         /// </summary>
         /// <returns>Returns a float[] of length = num_rays * (2 + num_detectable_tags).</returns>
         public float[] GetObservationsVector()
@@ -141,7 +147,7 @@ namespace DeepUnity
         /// Scales down in range [0, 1] the HitTagIndex. If the HitTagIndex is -1, it remains -1. <br></br>
         /// Example: <b>[NormalizedDistance, HitTagIndex]</b>
         /// </summary>
-        /// <returns>Returns a float[] of length = 2 * num_rays.</returns>
+        /// <returns>Returns a float[] of length = num_rays * 2.</returns>
         public float[] GetCompressedObservationsVector()
         {
             float[] vector = new float[rays * 2];

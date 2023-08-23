@@ -80,6 +80,7 @@ namespace DeepUnity
             mean = 0f;
         }
         public Keyframe[] Keys { get => graph.keys; }
+        public AnimationCurve Curve { get => graph; }
     }
 
 

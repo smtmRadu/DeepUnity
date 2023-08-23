@@ -7,20 +7,15 @@ public class MoveToGoal : Agent
     public float speed = 10f;
     public Transform target;
     public float norm_scale = 8f;
-    public override void FixedUpdate()
-    {
-        base.FixedUpdate();
-        AddReward(-0.001f);
-    }
     public override void OnEpisodeBegin()
     {
         float xrand = Random.Range(-norm_scale, norm_scale);
         float zrand = Random.Range(-norm_scale, norm_scale);
         target.localPosition = new Vector3(xrand, 2.25f, zrand);
-
-        // xrand = Random.Range(-norm_scale, norm_scale);
-        // zrand = Random.Range(-norm_scale, norm_scale);
-        // transform.localPosition = new Vector3(xrand, 2.25f, zrand);
+        
+        xrand = Random.Range(-norm_scale, norm_scale);
+        zrand = Random.Range(-norm_scale, norm_scale);
+        transform.localPosition = new Vector3(xrand, 2.25f, zrand);
     }
     public override void CollectObservations(SensorBuffer sensorBuffer)
     {
@@ -35,6 +30,8 @@ public class MoveToGoal : Agent
         float zmov = actionBuffer.ContinuousActions[1];
 
         transform.position += new Vector3(xmov, 0, zmov) * Time.fixedDeltaTime * speed;
+
+        AddReward(-0.0025f);
     }
     public override void Heuristic(ActionBuffer actionBuffer)
     {

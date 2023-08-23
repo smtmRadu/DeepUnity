@@ -10,17 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
-  m_Name: HoldBall
+  m_Name: MoveToGoal
   m_EditorClassIdentifier: 
-  behaviourName: HoldBall
+  behaviourName: MoveToGoal
   assetCreated: 1
-  observationSize: 10
+  observationSize: 4
   continuousDim: 2
   discreteBranches: 
   standardDeviation: 0
   standardDeviationValue: 1.5
-  standardDeviationScale: 0
-  normalizeObservations: 1
+  standardDeviationScale: 2
+  normalizeObservations: 0
   normalizer:
     step: 0
     mean:
@@ -29,27 +29,15 @@ MonoBehaviour:
       - 0
       - 0
       - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      shape: 0a000000
+      shape: 04000000
     m2:
       data:
       - 0
       - 0
       - 0
       - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      shape: 0a000000
-  critic: {fileID: 11400000, guid: 640689d590e2efc42ba2beb2408035b4, type: 2}
-  actorMu: {fileID: 11400000, guid: 61b3467c821323a4898516ac223d38cc, type: 2}
-  actorSigma: {fileID: 11400000, guid: eea87843cec3939498b2d1c747c060c5, type: 2}
+      shape: 04000000
+  critic: {fileID: 0}
+  actorMu: {fileID: 0}
+  actorSigma: {fileID: 0}
   actorDiscretes: []

@@ -53,7 +53,7 @@ public class Tutorial2 : MonoBehaviour
              new ReLU(),
              //new Dropout(),
              new Dense(hiddenSize, hiddenSize, InitType.HE_Normal, InitType.HE_Normal, device: device),
-             new ReLU(),
+             new Softplus(),
              new Dense(hiddenSize, 1, InitType.HE_Normal, InitType.HE_Normal)
              );//.CreateAsset("Tutorial2");
         }

@@ -1,7 +1,5 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 
@@ -66,15 +64,19 @@ namespace DeepUnity
         }
         public virtual void Start()
         {
-            if (behaviourType != BehaviourType.Learn)
-                return;
+                
 
-            TrainingStatistics pf;
-            TryGetComponent(out pf);
-            PerformanceTrack = pf;
+            if (behaviourType == BehaviourType.Learn)
+            {
+                TrainingStatistics pf;
+                TryGetComponent(out pf);
+                PerformanceTrack = pf;
 
-            Trainer.Subscribe(this);
-            OnEpisodeBegin();
+                Trainer.Subscribe(this);
+            }
+            if(behaviourType == BehaviourType.Learn || behaviourType == BehaviourType.Heuristic)
+                OnEpisodeBegin();
+
         }
         public virtual void FixedUpdate()
         {
@@ -147,11 +149,11 @@ namespace DeepUnity
 
                 // Run agent's actions and clip them
                 Actions.ContinuousActions = model.IsUsingContinuousActions ? Timestep.action_continuous.Clip(-1f, 1f).ToArray() : null;
-                Actions.DiscreteActions = null; // need to convert afterwards from tensor of logits [branch, logits] to argmax int[]
+                Actions.DiscreteActions = model.IsUsingDiscreteActions ? Timestep.action_continuous.ToArray().Select(x => (int)x).ToArray() : null; // need to convert afterwards from tensor of logits [branch, logits] to argmax int[]
 
                 OnActionReceived(Actions);
             }
-            else if(behaviourType == BehaviourType.Manual)
+            else if(behaviourType == BehaviourType.Heuristic)
             {
                 Actions.Clear();
                 Heuristic(Actions);
@@ -209,7 +211,7 @@ namespace DeepUnity
                 if (Timestep.done[0] == 1)
                 {                  
                     PerformanceTrack?.episodeLength.Append(EpisodeStepCount);
-                    PerformanceTrack?.cumulativeReward.Append(EpsiodeCumulativeReward);
+                    PerformanceTrack?.episodeReward.Append(EpsiodeCumulativeReward);
                     EpisodeStepCount = 1;
                     EpsiodeCumulativeReward = 0f;
 
@@ -226,7 +228,7 @@ namespace DeepUnity
                 }
                    
             }
-            else if (behaviourType == BehaviourType.Manual)
+            else if (behaviourType == BehaviourType.Heuristic)
             {
                 if (Timestep.done[0] == 1)
                 {
@@ -337,6 +339,7 @@ namespace DeepUnity
     {
         public override void OnInspectorGUI()
         {
+            serializedObject.Update();
             List<string> dontDrawMe = new(){ "m_Script" };
 
             SerializedProperty modelProperty = serializedObject.FindProperty("model");
@@ -366,6 +369,10 @@ namespace DeepUnity
 
            
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
+
+            // Need to draw everything and then draw the line.. i will let this for the future
+            // EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+
             serializedObject.ApplyModifiedProperties();
         }
     }

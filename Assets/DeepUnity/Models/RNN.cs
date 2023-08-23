@@ -15,7 +15,7 @@ namespace DeepUnity
     {
         [SerializeField] private bool batchFirst;
         [NonSerialized] private IModuleS[] modules;
-        [ReadOnly, SerializeField] private IModuleSWrapper[] serializedModules;
+        [SerializeField] private IModuleSWrapper[] serializedModules;
         
 
         /// <summary>
@@ -87,6 +87,7 @@ namespace DeepUnity
         /// </returns>
         public (Tensor, Tensor) Forward(Tensor input, Tensor h_0)
         {
+            BaseForward();
             Tensor input_clone = Tensor.Identity(input);
             Tensor h_0_clone = Tensor.Identity(h_0);
 
@@ -211,6 +212,7 @@ namespace DeepUnity
         /// <param name="lossDerivative"></param>
         public override void Backward(Tensor lossDerivative)
         {
+            BaseBackward();
             Tensor loss_clone = Tensor.Identity(lossDerivative);
             // loss (L, B, H_out)/(B, L, H_Out) or (L, H_out)
             bool isBatched = lossDerivative.Rank == 3;

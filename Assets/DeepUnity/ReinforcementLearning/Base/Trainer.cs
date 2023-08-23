@@ -10,8 +10,8 @@ using UnityEngine;
 namespace DeepUnity
 {
     /// <summary>
-    /// There is a loss of time when Train is performed, and FixedUpdate() gets called multiple times afterwards.
-    /// It may affect the strong transition between the states, but it depends only on how much it takes.
+    /// https://fse.studenttheses.ub.rug.nl/25709/1/mAI_2021_BickD.pdf
+    /// https://link.springer.com/article/10.1007/BF00992696
     /// </summary>
     public class Trainer : MonoBehaviour
     {
@@ -25,6 +25,10 @@ namespace DeepUnity
 
         private bool trainFlag = false;
         private float autosaveSecondsElapsed = 0f;
+        private float meanPolicyLoss = 0f;
+        private float meanValueLoss = 0f;
+        private DateTime timeWhenTheTrainingStarted = DateTime.Now;
+
 
         private void Awake()
         {
@@ -37,25 +41,40 @@ namespace DeepUnity
                 Instance = this;
             }
         }
+        private void Update()
+        {
+            if (Instance.trainingStatisticsTrack != null)
+            {
+                Instance.trainingStatisticsTrack.trainingTime += Time.deltaTime;
+                Instance.trainingStatisticsTrack.realTrainingTime =
+                    $"{(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalHours.ToString("0")} hrs : " +
+                    $"{(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalMinutes.ToString("0")} min : " +
+                    $"{(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalSeconds.ToString("0")} sec";
+            }
+
+            // Autosave process 
+            Instance.autosaveSecondsElapsed += Time.deltaTime;
+        }
         private void LateUpdate()
         {
             if (Instance.trainFlag)
             {
                 Train();
-                if(Instance.trainingStatisticsTrack != null)
-                    Instance.trainingStatisticsTrack.trainingSteps += Instance.hp.bufferSize * parallelAgents.Count;            
+                if (Instance.trainingStatisticsTrack != null)
+                {
+                    Instance.trainingStatisticsTrack.parallelAgents = Instance.parallelAgents.Count;
+                    Instance.trainingStatisticsTrack.totalSteps += Instance.hp.bufferSize * parallelAgents.Count;
+                    Instance.trainingStatisticsTrack.iterations++;
+                }
             }
-            if (Instance.trainingStatisticsTrack != null)
-                Instance.trainingStatisticsTrack.trainingTime += Time.deltaTime;
 
-            // Autosave process 
-            Instance.autosaveSecondsElapsed += Time.deltaTime;
-
+            // Autosaves the ac
             if (Instance.autosaveSecondsElapsed >= Instance.autosave * 60f)
             {
                 Instance.autosaveSecondsElapsed = 0f;
                 Instance.ac.Save();
             }
+
         }
 
         // Methods use to interact with the agents
@@ -83,16 +102,25 @@ namespace DeepUnity
         }
 
         // Methods used to save the Actor Critic network when editor state changes.
-        private static void Autosave1(PlayModeStateChange state) => Instance.ac.Save();
+        private static void Autosave1(PlayModeStateChange state)
+        {
+            Instance.ac.Save();
+            if (state == PlayModeStateChange.ExitingPlayMode)
+            {
+                Instance.trainingStatisticsTrack.start = Instance.timeWhenTheTrainingStarted.ToLongTimeString() + ", " + Instance.timeWhenTheTrainingStarted.ToLongDateString();
+                Instance.trainingStatisticsTrack.end = DateTime.Now.ToLongTimeString() + ", " + DateTime.Now.ToLongDateString();
+                string pth = Instance.trainingStatisticsTrack.ExportAsSVG(Instance.ac.behaviourName);
+                Debug.Log($"<color=#57f542>Training Session statistics log saved at <b><i>{pth}</i></b>.</color>");
+                AssetDatabase.Refresh();
+            }
+                
+        }
         private static void Autosave2(PauseState state) => Instance.ac.Save();
       
 
         // PPO algorithm
         private void Train()
         {
-            if(Instance.trainingStatisticsTrack != null)
-                Instance.trainingStatisticsTrack.iterations++;
-
             foreach (var train_data in Instance.parallelAgents.Select(x => x.Memory))
             {
                 train_data.GAE(hp.gamma, hp.lambda, hp.horizon, ac.critic);
@@ -105,6 +133,10 @@ namespace DeepUnity
 
                 for (int epoch = 0; epoch < hp.numEpoch; epoch++)
                 {
+                    meanPolicyLoss = 0f;
+                    meanValueLoss = 0f;
+
+
                     // randomizeOrder(train_data)
                     train_data.Shuffle();
 
@@ -114,7 +146,7 @@ namespace DeepUnity
                     List<Tensor[]> value_targets_batches = Utils.Split(train_data.ValueTargets, hp.batchSize);
                     List<Tensor[]> cont_act_batches = Utils.Split(train_data.ContinuousActions, hp.batchSize);
                     List<Tensor[]> cont_probs_batches = Utils.Split(train_data.ContinuousProbabilities, hp.batchSize);
-                    List<Tensor[]> disc_act_batches = Utils.Split(train_data.DiscreteActions, hp.batchSize);
+                    List<Tensor[]> disc_act_batches = Utils.Split(train_data.DiscreteActions, hp.batchSize); // the list contains the batches, the first [] represents the batch, the second[] represents the branch
                     List<Tensor[]> disc_probs_batches = Utils.Split(train_data.DiscreteProbabilities, hp.batchSize);
 
                     for (int b = 0; b < states_batches.Count; b++)
@@ -123,7 +155,6 @@ namespace DeepUnity
                         Tensor advantages_batch = Tensor.Cat(null, advantages_batches[b]);
                         Tensor value_targets_batch = Tensor.Cat(null, value_targets_batches[b]);
                         
-
                         UpdateCritic(states_batch, value_targets_batch);
 
                         if(Instance.ac.IsUsingContinuousActions)
@@ -138,13 +169,20 @@ namespace DeepUnity
                         }
                         if(Instance.ac.IsUsingDiscreteActions)
                         {
-                            Tensor disc_act_batch = Tensor.Cat(null, disc_act_batches[b]);
-                            Tensor disc_probs_batch = Tensor.Cat(null, disc_probs_batches[b]);
-                            UpdateDiscreteNetworks(
-                                states_batch,
-                                advantages_batch,
-                                disc_act_batch,
-                                disc_probs_batch);
+                            int num_branches = Instance.ac.discreteBranches.Length;
+                            for (int branch_id = 0; branch_id < num_branches; branch_id++)
+                            {
+                                Tensor disc_act_batch_branch_i = Tensor.Cat(null, cont_act_batches[b][branch_id]);
+                                Tensor disc_prob_batch_branch_i = Tensor.Cat(null, cont_probs_batches[b][branch_id]);
+                                UpdateDiscreteBranchNetwork(
+                                    states_batch,
+                                    advantages_batch,
+                                    disc_act_batch_branch_i,
+                                    disc_prob_batch_branch_i,
+                                    branch_id);
+
+                            }
+                          
                         }
 
 
@@ -152,26 +190,31 @@ namespace DeepUnity
                    
                     // Step schedulers after each epoch
                     ac.criticScheduler.Step();
-
                     if(ac.IsUsingContinuousActions)
                     {
                         ac.actorMuScheduler.Step();
                         ac.actorSigmaScheduler.Step();
-                    }
-                    
+                    }                   
                     if(ac.IsUsingDiscreteActions)                  
                         for (int i = 0; i < ac.actorDiscretesSchedulers.Length; i++)
                         {
                             ac.actorDiscretesSchedulers[i].Step();
-                        }                  
+                        }
+
+                    // Save statistics info
+                    trainingStatisticsTrack?.learningRate.Append(ac.criticScheduler.CurrentLR);
+                    trainingStatisticsTrack?.epsilon.Append(hp.epsilon);
+                    trainingStatisticsTrack?.policyLoss.Append(meanPolicyLoss / hp.batchSize);
+                    trainingStatisticsTrack?.valueLoss.Append(meanValueLoss / hp.batchSize);
+
                 }
+
+                
 
                 train_data.Reset();
             }
 
             Instance.trainFlag = false;
-            trainingStatisticsTrack?.learningRate.Append(ac.criticScheduler.CurrentLR);
-            trainingStatisticsTrack?.epsilon.Append(hp.epsilon);         
         }
         /// <summary>
         /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>) where * = <em>Observations Shape</em><br></br>
@@ -187,7 +230,7 @@ namespace DeepUnity
             ac.criticOptimizer.ClipGradNorm(0.5f);
             ac.criticOptimizer.Step();
 
-            trainingStatisticsTrack?.valueLoss.Append(criticLoss.Item);
+            meanValueLoss += criticLoss.Item;
         }
         /// <summary>
         /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>)  where * = <em>Observations Shape</em><br></br>
@@ -208,7 +251,7 @@ namespace DeepUnity
 
             Tensor ratio = pi / piOld; // a.k.a pₜ(θ) = πθ(a|s) / πθold(a|s)
 
-            // Compute L_CLIP
+            // Compute L CLIP
             advantages = advantages.Expand(1, continuous_actions_num);
             Tensor LClip = Tensor.Minimum(
                                 ratio * advantages, 
@@ -216,12 +259,12 @@ namespace DeepUnity
 
             if(LClip.Contains(float.NaN))
             {
-                Debug.Log($"<color=#fcba03>Warning! L_CLIP containing NaN values removed [{LClip.ToArray().ToCommaSeparatedString()}]! </color>");
+                ConsoleMessage.Warning($"L_CLIP containing NaN values removed [{ LClip.ToArray().ToCommaSeparatedString()}]");
                 return;   
             }
-            trainingStatisticsTrack?.policyLoss.Append(-LClip.Mean(0).Mean(0)[0]);
+            meanPolicyLoss += Mathf.Abs(LClip.Mean(0).Mean(0)[0]);
 
-            // Computing δLClip
+            // Computing δ-LClip / δπθ(a|s)
             Tensor dmindx = Tensor.Zeros(batch_size, continuous_actions_num);
             Tensor dmindy = Tensor.Zeros(batch_size, continuous_actions_num);
             Tensor dclipdx = Tensor.Zeros(batch_size, continuous_actions_num);
@@ -246,21 +289,22 @@ namespace DeepUnity
                 }
             }
 
-            // δ-LClip / δpi(a|s)  (20)
+            // δ-LClip / δπθ(a|s)  (20) Bick.D
             Tensor dmLClip_dPi = -1f * (dmindx * advantages + dmindy * advantages * dclipdx) / piOld;
-           
-            if(ac.standardDeviation == StandardDeviationType.Trainable)
+
+
+            // Entropy bonus added if σ is trainable
+            if (ac.standardDeviation == StandardDeviationType.Trainable)
             {
-                // Entropy
                 Tensor entropy = Tensor.Log(MathF.Sqrt(2f * MathF.PI * MathF.E) * sigma);
                 dmLClip_dPi -= entropy * hp.beta;
             }
 
-            // δpi(a|s) / δmu  (26) 
+            // δπθ(a|s) / δμ = πθ(a|s) * (x - μ) / σ^2 /  (26) Bick.D
             Tensor dPi_dMu = pi * (actions - mu) / sigma.Pow(2);
 
 
-            // δ-LClip / δmu = (δ-LClip / δpi(a|t)) * (δpi(a|s) / δmu)
+            // δ-LClip / δμ = (δ-LClip / δπθ(a|s)) * (δπθ(a|s) / δμ)
             Tensor dmLClip_dMu = dmLClip_dPi * dPi_dMu;
             ac.actorMuOptimizer.ZeroGrad();
             ac.actorMu.Backward(dmLClip_dMu);
@@ -269,11 +313,12 @@ namespace DeepUnity
 
             if(ac.standardDeviation == StandardDeviationType.Trainable)
             {
-                // δpi(a|s) / δsigma
-                Tensor dPi_dSigma = ((actions - mu).Pow(2) - sigma.Pow(2)) / sigma.Pow(3);
+                // δπθ(a|s) / δσ = πθ(a|s) * (x - μ)^2 / σ^3    (Simple statistical gradient-following for connectionst Reinforcement Learning (pag 14)
+                Tensor dPi_dSigma = pi * ((actions - mu).Pow(2) - sigma.Pow(2)) / sigma.Pow(3);
 
-                // δ-LClip / δmu = (δ-LClip / δpi(a|t)) * (δpi(a|s) / δsigma)
+                // δ-LClip / δμ = (δ-LClip / δπθ(a|s)) * (δπθ(a|s) / δσ)
                 Tensor dmLClip_dSigma = dmLClip_dPi * dPi_dSigma;
+
                 ac.actorSigmaOptimizer.ZeroGrad();
                 ac.actorSigma.Backward(dmLClip_dSigma);
                 ac.actorSigmaOptimizer.ClipGradNorm(0.5f);
@@ -284,12 +329,17 @@ namespace DeepUnity
         /// <summary>
         /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>)  where * = <em>Observations Shape</em><br></br>
         /// <paramref name="advantages"/> - <em>A</em> | Tensor(<em>Batch Size, 1</em>) <br></br>
-        /// <paramref name="actions"/> - <em>a</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
-        /// <paramref name="logPiOld"/> - <em>log πθold(a|s) </em>| Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
+        /// <paramref name="actions"/> - <em>a</em> | Tensor (<em>Batch Size, Discrete Branchᵢ</em>) <br></br>
+        /// <paramref name="piOld"/> - <em>πθold(a|s) </em>| Tensor (<em>Batch Size, Discrete Branchᵢ</em>) <br></br>
         /// </summary>
-        private void UpdateDiscreteNetworks(Tensor states, Tensor advantages, Tensor actions, Tensor logPiOld)
+        private void UpdateDiscreteBranchNetwork(Tensor states, Tensor advantages, Tensor actions, Tensor piOld, int discreteBranchId)
         {
-            Debug.Log("DiscreteActions are not implemented for now");
+            throw new NotImplementedException();
+
+            int batch_size = states.Rank == 2 ? states.Size(0) : 1;
+            int discrete_actions_num = actions.Size(-1); // on this branch
+
+
         }
 
     }

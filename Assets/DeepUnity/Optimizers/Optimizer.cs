@@ -43,10 +43,13 @@ namespace DeepUnity
             }
         }
         /// <summary>
-        /// Computes the clip grad norm globally over all <see cref="Learnable"/> layers.
+        /// Computes the clip grad norm globally over all <see cref="Learnable"/> layers. If <paramref name="max_norm"/> = 0, no changes are made.
         /// </summary>
         public void ClipGradNorm(float max_norm, NormType normType = NormType.EuclideanL2)
         {
+            if (max_norm == 0)
+                return;
+
             int totalCount = 0;
             foreach (var param in parameters)
             {

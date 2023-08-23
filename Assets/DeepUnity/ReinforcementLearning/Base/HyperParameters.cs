@@ -8,11 +8,15 @@ namespace DeepUnity
     public class Hyperparameters : ScriptableObject
     {
         [Header("Training Configuration")]
+
         [Tooltip("Initial learning rate for Adam optimizer.")]
         [Min(1e-8f)] public float learningRate = 3e-4f;
 
+        [Tooltip("Global Gradient Clipping max norm value. Set to 0 to turn off.")]
+        [Min(0)] public float gradClipNorm = 0.5f;
+
         [Tooltip("Number of epochs per episode trajectory.")]
-        [Min(3)] public int numEpoch = 3;
+        [Min(3)] public int numEpoch = 8;
 
         [Tooltip("Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer_size")]
         [Min(32)] public int batchSize = 64;
@@ -23,10 +27,12 @@ namespace DeepUnity
         [Tooltip("Apply normalization to advantages over the memory buffer.")]
         public bool normalizeAdvantages = true;
 
+
         [Tooltip("Applies linear decay on learning rate. Step occurs on each [Num Epoch * Parallel Agents] times per policy iteration.")]
         [SerializeField] public bool learningRateSchedule = false;
         [SerializeField] public int schedulerStepSize = 8;
         [SerializeField] public float schedulerDecay = 0.99f;
+
 
 
 
@@ -44,7 +50,13 @@ namespace DeepUnity
         [Min(0)] public float gamma = 0.99f;
 
         [Tooltip("GAE factor.")]
-        [Min(0)] public float lambda = 0.95f;
+        [ReadOnly, Min(0)] public float lambda = 0.95f;
+
+        [ReadOnly, Tooltip("Use early stopping")]
+        public bool earlyStopping = false;
+
+        [Tooltip("Kullback-Leibler divergence target value")]
+        [Min(0)] public float targetKL = 0.015f;
 
         [ReadOnly, Tooltip("Applies linear decay on beta.")]
         public bool betaScheduler = false;
@@ -82,6 +94,7 @@ namespace DeepUnity
     {
         public override void OnInspectorGUI()
         {
+            serializedObject.Update();
             List<string> dontDrawMe = new List<string>() { "m_Script" };
 
             SerializedProperty lrs = serializedObject.FindProperty("learningRateSchedule");
@@ -90,6 +103,10 @@ namespace DeepUnity
                 dontDrawMe.Add("schedulerStepSize");
                 dontDrawMe.Add("schedulerDecay");
             }
+
+            SerializedProperty es = serializedObject.FindProperty("earlyStopping");
+            if (!es.boolValue)
+                dontDrawMe.Add("targetKL");
 
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
             serializedObject.ApplyModifiedProperties();

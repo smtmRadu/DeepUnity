@@ -18,7 +18,8 @@ MonoBehaviour:
   continuousDim: 2
   discreteBranches: 
   standardDeviation: 0
-  fixedStandardDeviationValue: 1
+  standardDeviationValue: 1
+  standardDeviationScale: 0
   normalizeObservations: 0
   normalizer:
     step: 0

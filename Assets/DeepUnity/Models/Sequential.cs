@@ -11,7 +11,7 @@ namespace DeepUnity
     public class Sequential : Model<Sequential>, ISerializationCallbackReceiver
     {
         [NonSerialized] private IModule[] modules;
-        [ReadOnly, SerializeField] private IModuleWrapper[] serializedModules;
+        [SerializeField] private IModuleWrapper[] serializedModules;
 
         public Sequential(params IModule[] modules) => this.modules = modules;
 
@@ -38,6 +38,7 @@ namespace DeepUnity
         /// <returns></returns>
         public Tensor Forward(Tensor input)
         {
+            BaseForward();
             Tensor output = modules[0].Forward(input);
             for (int i = 1; i < modules.Length; i++)
             {
@@ -47,6 +48,7 @@ namespace DeepUnity
         }     
         public override void Backward(Tensor lossDerivative)
         {
+            BaseBackward();
             Tensor loss = modules[modules.Length - 1].Backward(lossDerivative);
             for (int i = modules.Length - 2; i >= 0; i--)
             {

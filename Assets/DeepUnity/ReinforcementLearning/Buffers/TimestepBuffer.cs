@@ -6,11 +6,11 @@ namespace DeepUnity
     {
         public int index;
         public Tensor state;
-        public Tensor action_continuous;      
-        public Tensor action_discrete;    
-        public Tensor reward;
-        public Tensor prob_continuous;
+        public Tensor action_continuous;
+        public Tensor prob_continuous;      
+        public Tensor action_discrete;
         public Tensor prob_discrete;
+        public Tensor reward;
         public Tensor advantage;
         public Tensor value_target;
         public Tensor done;
