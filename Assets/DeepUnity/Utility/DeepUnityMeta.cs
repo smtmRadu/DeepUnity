@@ -118,11 +118,12 @@ namespace DeepUnity
     /// <summary>
     /// Nonlinearity used for RNNCells.
     /// </summary>
-    public enum NonLinearity
+    public enum RNNNonLinearity
     {
         Tanh,
         ReLU
     }
+
 
     public enum DatasetSettings
     {
@@ -143,9 +144,9 @@ namespace DeepUnity
     public enum BehaviourType
     {
         [Tooltip("Latent behaviour. Learning: NO. Scene resets: NO.")]
-        Inactive,
+        Off,
         [Tooltip("Active behaviour. Learning: NO. Scene resets: YES.")]
-        Active,
+        Inference,
         [Tooltip("Exploring behaviour. Learning: YES. Scene resets: YES.")]
         Learn,
         [Tooltip("Imitation learning. Learning: YES. Scene resets: YES.")]
@@ -154,7 +155,7 @@ namespace DeepUnity
 
     public enum OnEpisodeEndType
     {
-        [Tooltip("When the episode ends, on OnEpsiodeBegin() method is called.")]
+        [Tooltip("When the episode ends, OnEpisodeBegin() method is called.")]
         Nothing,
         [Tooltip("When the episode ends, agent's transforms and rigidbodies are reinitialized. OnEpisodeBegin() is called afterwards.")]
         ResetAgent,
@@ -175,7 +176,7 @@ namespace DeepUnity
 
     public enum UseSensorsType
     {
-        [Tooltip("Does not collect automatically the observation values from attached sensors.")]
+        [Tooltip("Does not collect automatically the observation values from attached sensors. All attached sensors observation vectors can be added manually inside CollectObservations() method.")]
         Off,
         [Tooltip("Automatically collects ObservationsVector from attached sensors.")]
         ObservationsVector,

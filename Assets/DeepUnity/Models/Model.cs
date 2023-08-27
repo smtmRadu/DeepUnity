@@ -15,6 +15,19 @@ namespace DeepUnity
         private bool canBackPropagate = false; // a flag that cares if a forward pass had happen before doing backpropagation.
 
         /// <summary>
+        /// Forwards the input without caching it on the layers.
+        /// </summary>
+        /// <param name="input"></param>
+        /// <returns></returns>
+        /// <exception cref="NotSupportedException"></exception>
+        public virtual Tensor Predict(Tensor input) { throw new NotSupportedException($"Tensor Predict(Tensor input) method is not available for {GetType().Name} models."); }
+        /// <summary>
+        /// Forwards the input and caches it on all layers.
+        /// </summary>
+        /// <param name="input"></param>
+        /// <returns></returns>
+        public virtual Tensor Forward(Tensor input) { throw new NotSupportedException($"Tensor Forward(Tensor input) method is not available for {GetType().Name} models."); }
+        /// <summary>
         /// Backpropagates the <paramref name="lossDerivative"/> and computes the gradients.
         /// </summary>
         /// <param name="lossDerivative">Derivative of the loss function w.r.t output (dLdY).</param>

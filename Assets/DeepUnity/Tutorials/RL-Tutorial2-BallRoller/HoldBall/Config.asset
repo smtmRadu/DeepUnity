@@ -12,13 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5970f7530cba1f0499a4a3dbe7d27f96, type: 3}
   m_Name: Config
   m_EditorClassIdentifier: 
-  autosave: 1
-  debug: 0
-  maxSteps: 5000
   learningRate: 0.0003
+  gradClipNorm: 0.5
   numEpoch: 3
-  batchSize: 128
-  bufferSize: 2048
+  batchSize: 512
+  bufferSize: 8192
   normalizeAdvantages: 1
   learningRateSchedule: 0
   schedulerStepSize: 8
@@ -28,5 +26,8 @@ MonoBehaviour:
   epsilon: 0.2
   gamma: 0.99
   lambda: 0.95
+  earlyStopping: 0
+  targetKL: 0.015
   betaScheduler: 0
   epsilonScheduler: 0
+  debug: 0

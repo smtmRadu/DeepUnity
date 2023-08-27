@@ -35,14 +35,9 @@ namespace DeepUnity
         [SerializeField] Color missColor = Color.gray;
         Color defaultHitColor = Color.black;
 
-        private void Start()
+        private void Awake()
         {
             Observations = new GridCellInfo[depth, height, width];
-            CastGrid();
-        }
-        private void Update()
-        {
-            CastGrid();
         }
         private void OnDrawGizmos()
         {
@@ -113,6 +108,7 @@ namespace DeepUnity
         /// <returns>Returns a float[] of length = width * height * depth * (2 + num_detectable_tags)</returns>
         public float[] GetObservationsVector()
         {
+            CastGrid();
             int cellDataSize = 2 + detectableTags.Length;
             float[] vector = new float[cellDataSize * Observations.GetLength(0) * Observations.GetLength(1) * Observations.GetLength(2)];
             int index = 0; 
@@ -150,26 +146,48 @@ namespace DeepUnity
         /// <returns>Returns a float[] of length = width * height * depth * 2.</returns>
         public float[] GetCompressedObservationsVector()
         {
-            float[] vector = new float[2 * Observations.GetLength(0) * Observations.GetLength(1) * Observations.GetLength(2)];
-            int index = 0;
-            for (int k = 0; k < depth; k++)
-            {
-                for (int h = 0; h < height; h++)
-                {
-                    for (int w = 0; w < width; w++)
-                    {
-                        GridCellInfo cell = Observations[k, h, w];
-                        vector[index++] = cell.HasOverlappedObject ? 1f : 0f;
+            CastGrid();
 
-                        // OneHotEncode
-                        if (cell.OverlappedObjectTagIndex == -1)
-                            vector[index++] = -1f;
-                        else
-                            vector[index++] = cell.OverlappedObjectTagIndex / (float) cell.OverlappedObjectTagIndex;
+            if(detectableTags.Length > 0)
+            {
+                float[] vector = new float[2 * Observations.GetLength(0) * Observations.GetLength(1) * Observations.GetLength(2)];
+                int index = 0;
+                for (int k = 0; k < depth; k++)
+                {
+                    for (int h = 0; h < height; h++)
+                    {
+                        for (int w = 0; w < width; w++)
+                        {
+                            GridCellInfo cell = Observations[k, h, w];
+                            vector[index++] = cell.HasOverlappedObject ? 1f : 0f;
+
+                            // OneHotEncode
+                            if (cell.OverlappedObjectTagIndex == -1)
+                                vector[index++] = -1f;
+                            else
+                                vector[index++] = cell.OverlappedObjectTagIndex / (float)cell.OverlappedObjectTagIndex;
+                        }
                     }
                 }
+                return vector;
             }
-            return vector;
+            else
+            {
+                float[] vector = new float[Observations.GetLength(0) * Observations.GetLength(1) * Observations.GetLength(2)];
+                int index = 0;
+                for (int k = 0; k < depth; k++)
+                {
+                    for (int h = 0; h < height; h++)
+                    {
+                        for (int w = 0; w < width; w++)
+                        {
+                            GridCellInfo cell = Observations[k, h, w];
+                            vector[index++] = cell.HasOverlappedObject ? 1f : 0f;
+                        }
+                    }
+                }
+                return vector;
+            }
         }
         /// <summary>
         /// Returns information of all grid cells in (depth, height, width) dimensions. In 2D, first dimension (depth) is 1.
@@ -177,6 +195,7 @@ namespace DeepUnity
         /// <returns></returns>
         public GridCellInfo[,,] GetObservationsGridCells()
         {
+            CastGrid();
             return Observations.Clone() as GridCellInfo[,,];
         }
 
@@ -257,8 +276,11 @@ namespace DeepUnity
               (2 + detTags.arraySize) * width.intValue * height.intValue * depth.intValue;
 
             int compVecDim = sr.enumValueIndex == (int)World.World2d ?
-                2 * width.intValue * height.intValue :
-                2 * width.intValue * height.intValue * depth.intValue;
+                width.intValue * height.intValue :
+                width.intValue * height.intValue * depth.intValue;
+            if (detTags.arraySize > 0)
+                compVecDim *= 2;
+            
             EditorGUILayout.HelpBox($"Observations Vector contains {vecDim} float values. Compressed Observations Vector contains {compVecDim} float values.", MessageType.Info);
 
 

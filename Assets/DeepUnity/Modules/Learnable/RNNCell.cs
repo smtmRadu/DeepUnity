@@ -6,9 +6,9 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class RNNCell : Learnable, IModuleS
+    public class RNNCell : Learnable, IModuleS, ISelfOptimizable
     {
-        [SerializeField] private NonLinearity nonlinearity;
+        [SerializeField] private RNNNonLinearity nonlinearity;
 
         // These ones are lists for each timestep in the sequence
         [NonSerialized] private Stack<Tensor> InputCache;
@@ -31,7 +31,7 @@ namespace DeepUnity
         /// <param name="input_size"></param>
         /// <param name="hidden_size"></param>
         /// <param name="nonlinearity"></param>
-        public RNNCell(int input_size, int hidden_size, NonLinearity nonlinearity = NonLinearity.Tanh) : 
+        public RNNCell(int input_size, int hidden_size, RNNNonLinearity nonlinearity = RNNNonLinearity.Tanh) : 
             base(Device.CPU,
                 InitType.Glorot_Uniform,
                 InitType.Zeros,
@@ -74,10 +74,10 @@ namespace DeepUnity
             HiddenCache.Push(Tensor.Identity(hidden));
             switch (nonlinearity)
             {
-                case NonLinearity.Tanh:
+                case RNNNonLinearity.Tanh:
                     Activations.Push(new Tanh());
                     break;
-                case NonLinearity.ReLU:
+                case RNNNonLinearity.ReLU:
                     Activations.Push(new ReLU());
                     break;
                 default:
@@ -149,6 +149,11 @@ namespace DeepUnity
             return inputGrad.Squeeze(-2);
         }
 
+        public void SelfOptimise(float lr)
+        {
+            recurrentGamma = -lr * recurrentGammaGrad;
+            recurrentBeta = -lr * recurrentBetaGrad;
+        }
         public override void ZeroGrad()
         {
             base.ZeroGrad();
@@ -197,7 +202,7 @@ namespace DeepUnity
                 recurrentBetaGrad *= scale;
             }
             
-        }
+        }       
         public override int ParametersCount()
         {
             return base.ParametersCount() + recurrentGamma.Count() + recurrentBeta.Count();

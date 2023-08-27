@@ -7,7 +7,11 @@ public class BoxScript : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        partnerAgent.AddReward(1f);
+        if(other.CompareTag("Goal"))
+            partnerAgent.AddReward(1f);
+        else if(other.CompareTag("Wall"))
+            partnerAgent.AddReward(-1f);
+
         partnerAgent.EndEpisode();
     }
 }

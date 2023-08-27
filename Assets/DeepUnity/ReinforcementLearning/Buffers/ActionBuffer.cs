@@ -28,8 +28,8 @@ namespace DeepUnity
         }
         public void Clear()
         {
-            DiscreteActions = DiscreteActions?.Select(x => -1).ToArray();
-            ContinuousActions = ContinuousActions?.Select(x => float.NaN).ToArray();
+            DiscreteActions = DiscreteActions?.Select(x => 0).ToArray();
+            ContinuousActions = ContinuousActions?.Select(x => 0f).ToArray();
         }
         public override string ToString()
         {

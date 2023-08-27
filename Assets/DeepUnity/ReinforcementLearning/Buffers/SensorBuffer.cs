@@ -1,4 +1,5 @@
 
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,9 +11,8 @@ namespace DeepUnity
     public class SensorBuffer
     {
         public int Capacity => Observations.Count();
-
-        public Tensor Observations;
-        private int position_index;
+        public Tensor Observations { get; set; }
+        private int position_index { get; set; }
        
  	    public SensorBuffer(int capacity)
         {
@@ -21,7 +21,10 @@ namespace DeepUnity
         }
         public void Clear()
         {
-            Observations = Observations.Select(x => float.NaN);
+            for (int i = 0; i < Capacity; i++)
+            {
+                Observations[i] = float.NaN;
+            }
             position_index = 0;
         }
         public override string ToString()
@@ -41,6 +44,10 @@ namespace DeepUnity
         {
             if (Capacity - position_index < 1)
                 throw new System.InsufficientMemoryException($"SensorBuffer overflow. Please add observations considering a capacity of {Capacity}.");
+
+            if (float.IsNaN(observation))
+                throw new ArgumentException("float.NaN value observation added to the SensorBuffer.");
+
 
             Observations[position_index++] = observation;
         }
@@ -95,7 +102,7 @@ namespace DeepUnity
         /// </summary>
         /// <param name="observationsN"></param>
         /// <exception cref="System.InsufficientMemoryException"></exception>
-        public void AddObservation(IEnumerable observationsN)
+        public void AddObservationRange(IEnumerable observationsN)
         {
             IEnumerable<float> castedObservationCollection = observationsN.Cast<float>();
 
@@ -127,8 +134,7 @@ namespace DeepUnity
                 else
                     AddObservation(0);
             }
-        }
-       
+        }    
     }
 }
 

@@ -14,14 +14,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   learningRate: 0.0003
   gradClipNorm: 0.5
-  numEpoch: 3
-  batchSize: 512
+  numEpoch: 8
+  batchSize: 256
   bufferSize: 4096
   normalizeAdvantages: 1
   learningRateSchedule: 0
   schedulerStepSize: 8
   schedulerDecay: 0.99
-  horizon: 128
+  horizon: 512
   beta: 0.005
   epsilon: 0.2
   gamma: 0.99

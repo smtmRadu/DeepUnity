@@ -17,37 +17,39 @@ MonoBehaviour:
   observationSize: 10
   continuousDim: 2
   discreteBranches: 
+  inferenceDevice: 0
+  trainingDevice: 1
   standardDeviation: 0
-  standardDeviationValue: 1.5
+  standardDeviationValue: 1.25
   standardDeviationScale: 0
   normalizeObservations: 1
   normalizer:
-    step: 0
+    step: 184500
     mean:
       data:
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
+      - 0.00046274762
+      - 0.7175052
+      - -0.00087474624
+      - -0.6578047
+      - 0.04935963
+      - -0.37572548
+      - 0.078733906
+      - 0.092509985
+      - 1.2517419
+      - 0.21410687
       shape: 0a000000
     m2:
       data:
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
+      - 158.59982
+      - 4878.074
+      - 138.99446
+      - 4492.3115
+      - 60000.426
+      - 34355.47
+      - 62410.344
+      - 6770.271
+      - 441.30875
+      - 2309.3752
       shape: 0a000000
   critic: {fileID: 11400000, guid: 640689d590e2efc42ba2beb2408035b4, type: 2}
   actorMu: {fileID: 11400000, guid: 61b3467c821323a4898516ac223d38cc, type: 2}

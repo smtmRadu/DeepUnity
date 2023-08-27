@@ -33,14 +33,14 @@ namespace DeepUnity
 
             for (int i = 0; i < parameters.Length; i++)
             {
-                if (parameters[i] is Learnable P)
-                {
-                    vGamma[i] = Tensor.Zeros(P.gamma.Shape);
-                    vBeta[i] = Tensor.Zeros(P.beta.Shape);
+                Learnable P = parameters[i];
 
-                    uGamma[i] = Tensor.Zeros(P.gamma.Shape);
-                    uBeta[i] = Tensor.Zeros(P.beta.Shape);
-                }
+                vGamma[i] = Tensor.Zeros(P.gamma.Shape);
+                vBeta[i] = Tensor.Zeros(P.beta.Shape);
+
+                uGamma[i] = Tensor.Zeros(P.gamma.Shape);
+                uBeta[i] = Tensor.Zeros(P.beta.Shape);
+                
             }
         }
 
@@ -51,7 +51,7 @@ namespace DeepUnity
 
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
-                 if (parameters[i] is Learnable P)
+                if (parameters[i] is Learnable P)
                 {
                     if (weightDecay != 0f)
                         P.gammaGrad = P.gammaGrad + weightDecay * P.gamma;
@@ -68,12 +68,9 @@ namespace DeepUnity
 
                     P.gamma = P.gamma - learningRate * dxGamma;
                     P.beta = P.beta - learningRate * dxBeta;
-                 }
-                if (parameters[i] is RNNCell R)
-                {
-                    R.recurrentGamma = -learningRate / 10f * R.recurrentGammaGrad;
-                    R.recurrentBeta = -learningRate / 10f * R.recurrentBetaGrad;
                 }
+                if (parameters[i] is ISelfOptimizable S)
+                    S.SelfOptimise(learningRate / 100f);
             });
         }
     }

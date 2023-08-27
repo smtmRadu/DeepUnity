@@ -19,10 +19,10 @@ namespace DeepUnity
         [Min(3)] public int numEpoch = 8;
 
         [Tooltip("Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer_size")]
-        [Min(32)] public int batchSize = 64;
+        [Min(32)] public int batchSize = 256;
 
         [Tooltip("Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch_size. Typically a larger buffer_size corresponds to more stable training updates.")]
-        [Min(64)] public int bufferSize = 1024;
+        [Min(64)] public int bufferSize = 4096;
 
         [Tooltip("Apply normalization to advantages over the memory buffer.")]
         public bool normalizeAdvantages = true;

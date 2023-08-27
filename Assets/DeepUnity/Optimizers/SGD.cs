@@ -93,12 +93,8 @@ namespace DeepUnity
                         P.beta = P.beta - learningRate * P.betaGrad;
                     }
                 }
-
-                if (parameters[i] is RNNCell R)
-                {
-                    R.recurrentGamma = -learningRate * R.recurrentGammaGrad;
-                    R.recurrentBeta = -learningRate * R.recurrentBetaGrad;
-                }
+                if (parameters[i] is ISelfOptimizable S)
+                    S.SelfOptimise(learningRate);
             });
         }
     }

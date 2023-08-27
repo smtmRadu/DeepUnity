@@ -21,12 +21,10 @@ namespace DeepUnity
 
             for (int i = 0; i < parameters.Length; i++)
             {
-                if (parameters[i] is Learnable P)
-                {
-                    stateSum_W[i] = Tensor.Zeros(P.gamma.Shape);
-                    stateSum_B[i] = Tensor.Zeros(P.beta.Shape);
+                Learnable P = parameters[i];
 
-                }
+                stateSum_W[i] = Tensor.Zeros(P.gamma.Shape);
+                stateSum_B[i] = Tensor.Zeros(P.beta.Shape);         
             }
         }
 
@@ -51,11 +49,9 @@ namespace DeepUnity
                     L.gamma = L.gamma - gammaBar * (L.gammaGrad / (Tensor.Sqrt(stateSum_W[i]) + Utils.EPSILON));
                     L.beta = L.beta - gammaBar * (L.betaGrad / (Tensor.Sqrt(stateSum_B[i]) + Utils.EPSILON));
                 }
-                if (parameters[i] is RNNCell R)
-                {
-                    R.recurrentGamma = -learningRate * R.recurrentGammaGrad;
-                    R.recurrentBeta = -learningRate * R.recurrentBetaGrad;
-                }
+
+                if (parameters[i] is ISelfOptimizable S)
+                    S.SelfOptimise(learningRate);
             });
 
         }

@@ -9,6 +9,7 @@ TagManager:
   - Box
   - Wall
   - Goal
+  - Spider
   layers:
   - Default
   - TransparentFX

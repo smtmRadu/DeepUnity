@@ -30,7 +30,7 @@ namespace DeepUnity
 
 
         /// <summary>
-        /// Returns the image pixels converted into float numbers.
+        /// Returns the RGB image pixels converted into float numbers.
         /// </summary>
         /// <returns>Returns a float[] with length = <b>3 * width * height</b>, or <b>1 * width * height</b> for Grayscale capture.</returns>
         public float[] GetObservationsVector()
@@ -72,7 +72,7 @@ namespace DeepUnity
             if (cam == null)
             {
                 Debug.LogError("<color=red>CamSensor Cam not set to an instance of an object.</color>");
-                return null;
+                return new Color[0];
             }
             if (renderTexture == null)
                 renderTexture = new RenderTexture(width, height, 0);

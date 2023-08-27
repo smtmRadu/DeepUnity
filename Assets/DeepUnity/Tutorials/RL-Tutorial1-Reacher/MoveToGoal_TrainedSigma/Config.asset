@@ -15,8 +15,8 @@ MonoBehaviour:
   learningRate: 0.0003
   gradClipNorm: 0.5
   numEpoch: 8
-  batchSize: 64
-  bufferSize: 1024
+  batchSize: 256
+  bufferSize: 2048
   normalizeAdvantages: 1
   learningRateSchedule: 0
   schedulerStepSize: 8

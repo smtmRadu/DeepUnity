@@ -20,34 +20,19 @@ namespace DeepUnity
         [SerializeField, Range(1, 50), Tooltip("@size of the buffer equals the number of rays")] int rays = 5;
         [SerializeField, Range(1, 360)] int fieldOfView = 45;
         [SerializeField, Range(0, 359)] int rotationOffset = 0;
-        [SerializeField, Range(1, 1000), Tooltip("@maximum length of the rays")] int distance = 100;
+        [SerializeField, Range(1f, 1000f), Tooltip("@maximum length of the rays")] float distance = 100;
         [SerializeField, Range(0.01f, 10)] float sphereCastRadius = 0.5f;
 
         [Space(10)]
         [SerializeField, Range(-5, 5), Tooltip("@ray X axis offset")] float xOffset = 0;
         [SerializeField, Range(-5, 5), Tooltip("@ray Y axis offset")] float yOffset = 0;
         [SerializeField, Range(-5, 5), Tooltip("@ray Z axis offset\n@not used in 2D world")] float zOffset = 0;
-        [SerializeField, Range(-45, 45), Tooltip("@ray vertical tilt\n@not used in 2D world")] float tilt = 0;
+        [SerializeField, Range(-90, 90), Tooltip("@ray vertical tilt\n@not used in 2D world")] float tilt = 0;
 
         [Space(10)]
         [SerializeField] Color rayColor = Color.green;
         [SerializeField] Color missRayColor = Color.red;
 
-
-        private void Start()
-        {
-            CastRays();
-        }
-        private void Update()
-        {
-            CastRays();
-            // string str  = "";
-            // foreach (var item in GetCompressedObservationsVector())
-            // {
-            //     str += item + " ";
-            // }
-            // print(str);
-        }
         private void OnDrawGizmos()
         {
             float oneAngle = rays == 1 ? 0 : -fieldOfView / (rays - 1f);
@@ -121,6 +106,7 @@ namespace DeepUnity
         /// <returns>Returns a float[] of length = num_rays * (2 + num_detectable_tags).</returns>
         public float[] GetObservationsVector()
         {
+            CastRays();
             int rayInfoDim = 2 + detectableTags.Length;
             float[] vector = new float[rays * rayInfoDim];
             int index = 0;
@@ -150,19 +136,35 @@ namespace DeepUnity
         /// <returns>Returns a float[] of length = num_rays * 2.</returns>
         public float[] GetCompressedObservationsVector()
         {
-            float[] vector = new float[rays * 2];
-            int index = 0;
-            foreach (var rayInfo in Observations)
-            {
-                vector[index++] = rayInfo.NormalizedDistance;
+            CastRays();
 
-                // OneHotEncode
-                if (rayInfo.HitTagIndex == -1)
-                    vector[index++] = -1f;
-                else
-                    vector[index++] = rayInfo.HitTagIndex / (float) detectableTags.Length;
+            if(detectableTags!=null && detectableTags.Length > 0)
+            {
+                float[] vector = new float[rays * 2];
+                int index = 0;
+                foreach (var rayInfo in Observations)
+                {
+                    vector[index++] = rayInfo.NormalizedDistance;
+
+                    // OneHotEncode
+                    if (rayInfo.HitTagIndex == -1)
+                        vector[index++] = -1f;
+                    else
+                        vector[index++] = rayInfo.HitTagIndex / (float)detectableTags.Length;
+                }
+                return vector;
             }
-            return vector;
+            else
+            {
+                float[] vector = new float[rays];
+                int index = 0;
+                foreach (var rayInfo in Observations)
+                {
+                    vector[index++] = rayInfo.NormalizedDistance;
+                }
+                return vector;
+            }
+            
         }
         /// <summary>
         /// Returns information of all rays.
@@ -170,6 +172,7 @@ namespace DeepUnity
         /// <returns></returns>
         public RayInfo[] GetObservationRays()
         {
+            CastRays();
             return Observations.ToArray();
         }
         
@@ -218,6 +221,13 @@ namespace DeepUnity
               
                 currentAngle += oneAngle;
             }
+
+            // var str = "";
+            // foreach (var item in Observations)
+            // {
+            //     str += item.ToString() + " ";
+            // }
+            // print(str);
         }
         /// <summary>
         /// This method casts only rays for 3D worlds. It is called from CastRays().
@@ -275,7 +285,7 @@ namespace DeepUnity
 
             SerializedProperty rays_num = serializedObject.FindProperty("rays");
             int vecSize = (2 + detectableTags.arraySize) * rays_num.intValue;
-            int compVecSize = 2 * rays_num.intValue;
+            int compVecSize = detectableTags.arraySize == 0 ? rays_num.intValue : 2 * rays_num.intValue;
             EditorGUILayout.HelpBox($"Observations Vector contains {vecSize} float values. Compressed Observations Vector contains {compVecSize} float values.", MessageType.Info);
 
 

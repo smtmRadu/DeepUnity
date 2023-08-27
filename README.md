@@ -2,6 +2,7 @@
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU support] and deep neural networks, resembling a compound syntax between PyTorch and TensorFlow, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO).
 
+
 #### Run your first DeepUnity script
 ```csharp
 using UnityEngine;
@@ -97,6 +98,13 @@ Also in order to decide the reward function and episode terminal state, or telli
 -  _SetReward(*reward*)_
 -  _EndEpsiode()_ 
 -  _RequestAction()_ [Optional, if decision is requested manually]
+
+When the setup is ready, press the _Bake_ button, this way a behaviour along with all neural networks and hyperparameters assets are created inside a folder with the _behaviour's name_, located in _Assets/_ folder. From this point everything is ready to go. 
+
+To get into advanced training, check out the following assets created:
+- **Behaviour** can be set whether to use a fixed or trainable standard deviation for continuous actions, along with the associated exploration strength value. Inference devices are also available to be set, but is recommended to be kept on default.
+- **Config** provides all hyperparameters necesarry for a custom training session.
+
 #### Behaviour script overriding example
 ```csharp
 using UnityEngine;
@@ -165,14 +173,14 @@ public class MoveToGoal : Agent
     }
 }
 ```
-_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (decision is requested Once Each Frame), and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the goal, and penalized by 1 point if is hitting a wall, and on every collision the episode ends._
+_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (decision is requested Once Each Frame), and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the goal, and penalized by 1 point if he is hitting a wall (or falls of the floor), and on every collision the episode ends._
 
 ![agent](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/agent.gif?raw=true)
 
 TIPS: 
 - In order to properly get use of _AddReward()_, _EndEpisode()_ and _RequestDecision()_ consult the diagram below. For custom decision request, keep in mind that you can call _RequestDecision()_ method everywhere, but only before base.FixedUpdate() will allow the action to be performed in the same frame; otherwise the action will occur in the next frame. _AddReward()_ and _EndEpisode()_ methods work well being called inside _OnTriggerXXX()_ or _OnCollisionXXX()_, as well as inside _OnActionReceived()_ rightafter actions are performed.
-- **Input Normalization** plays a huge role in policy convergence. To outcome this problem, observations can be auto-normalized by checking the corresponding box inside behaviour asset, or manually normalize all values before adding them to the _SensorBuffer_, either by calling **_.normalized_** for **Vector3**'s and **Quaternions**, or squashing other values like angles or positions within [0, 1] or [-1, 1] ranges. 
-- The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. It is not recommended to use them, but if neccesary, in order to override them, call the their **base** each time, respecting the logic of the diagram above.
+- **Input Normalization** plays a huge role in policy convergence. To outcome this problem, observations can be auto-normalized by checking the corresponding box inside behaviour asset, but instead, is highly recommended to manually normalize all input values before adding them to the __SensorBuffer__. **Vector2**, **Vector3** and **Quaternion** variables can be normalized by calling **_.normalized_**. Single values can be normalized within [0, 1] or [-1, 1] ranges by using the formula **normalized_value = (value - min) / (max - min)**.
+- The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. It is not recommended to use them, but if neccesary, in order to override them, call the their **base** each time, respecting the logic of the diagram below.
 
 ![rl](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_schema.jpg?raw=true)
 

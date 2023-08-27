@@ -5,10 +5,6 @@ using UnityEngine;
 using System;
 using System.IO;
 using System.Linq;
-using Unity.VisualScripting;
-using static UnityEngine.UI.Image;
-using System.Security.Cryptography;
-using UnityEngine.UIElements;
 
 namespace DeepUnity
 {
@@ -44,46 +40,6 @@ namespace DeepUnity
         public PerformanceGraph learningRate = new PerformanceGraph(1000);
         public PerformanceGraph epsilon = new PerformanceGraph(1000);
 
-
-        private string ToTXT()
-        {
-            StringBuilder sb = new StringBuilder();
-            sb.AppendLine($" ==========================================================================");
-            sb.AppendLine($" Start: {start}");
-            sb.AppendLine($" End: {end}");
-            sb.AppendLine($" Real training time: {realTrainingTime}");
-            sb.AppendLine($" Training time: {trainingTime}");
-            sb.AppendLine($" Training steps: {trainingTime}");   
-            sb.AppendLine($" Iterations: {iterations}");
-            sb.AppendLine($" Parallel agents: {parallelAgents}");
-            sb.AppendLine($"===========================================================================");
-
-            return sb.ToString();
-        }
-        private void SaveAsTXT(string behaviourName)
-        {
-            string name = "Training";// $"TrainingSession_{start} - {end}";
-            string path = $"Assets/{behaviourName}/Logs/{name}.txt";
-
-            if(!Directory.Exists($"Assets/{behaviourName}"))
-            {
-                ConsoleMessage.Warning($"{behaviourName} behaviour folder must have been inside Assets folder, with the name unchanged! The training session statistics were saved in Assets/Logs folder instead.");
-                
-                if(!Directory.Exists($"Assets/Logs"))
-                    Directory.CreateDirectory($"Assets/Logs");
-
-                path = $"Assets/Logs/{name}.txt";
-            }
-            else if(!Directory.Exists($"Assets/{behaviourName}/Logs"))
-            {
-                Directory.CreateDirectory($"Assets/{behaviourName}/Logs");
-            }
-
-            File.Create(path).Dispose();
-            File.WriteAllText(path, ToTXT());
-        }
-
-
         /// <summary>
         /// Returns the path of the file.
         /// </summary>
@@ -109,7 +65,7 @@ namespace DeepUnity
 
             if (!Directory.Exists($"Assets/{behaviourName}"))
             {
-                ConsoleMessage.Warning($"{behaviourName} behaviour folder must have been inside Assets folder, with the name unchanged! The training session statistics were saved in Assets/Logs folder instead.");
+                ConsoleMessage.Warning($"{behaviourName} behaviour folder has been moved from Assets folder, or it's name was changed! The training session log was saved in Assets/Logs in consequence.");
 
                 if (!Directory.Exists($"Assets/Logs"))
                     Directory.CreateDirectory($"Assets/Logs");
@@ -148,20 +104,11 @@ namespace DeepUnity
             DrawGraph(svgBuilder, learningRate.Curve.keys, ref graphYPosition, 200, 200, "Learning Rate");
             DrawGraph(svgBuilder, epsilon.Curve.keys, ref graphYPosition, 200, 200, "Epsilon");
 
-
-            //graphYPosition = GenerateGraphSVG(svgBuilder, episodeReward.Curve, graphYPosition, "Episode Reward");
-            //graphYPosition = GenerateGraphSVG(svgBuilder, episodeLength.Curve, graphYPosition, "Episode Length");
-            //graphYPosition = GenerateGraphSVG(svgBuilder, policyLoss.Curve, graphYPosition, "Policy Loss");
-            //graphYPosition = GenerateGraphSVG(svgBuilder, valueLoss.Curve, graphYPosition, "Value Loss");
-            //graphYPosition = GenerateGraphSVG(svgBuilder, learningRate.Curve, graphYPosition, "Learning Rate");
-            //graphYPosition = GenerateGraphSVG(svgBuilder, epsilon.Curve, graphYPosition, "Epsilon");
-
             svgBuilder.AppendLine(@"</svg>");
 
             return svgBuilder.ToString();
         }
-
-        public static void DrawGraph(StringBuilder svgBuilder, Keyframe[] keyFrames, ref float yOffset, int height, int width, string title)
+        private static void DrawGraph(StringBuilder svgBuilder, Keyframe[] keyFrames, ref float yOffset, int height, int width, string title)
         {
 
             if (keyFrames == null || keyFrames.Length == 0 || yOffset < 0 || height <= 0 || width <= 0)
@@ -172,9 +119,6 @@ namespace DeepUnity
                    
             svgBuilder.AppendLine($@"<text x=""10"" y=""{yOffset}"" font-family=""Arial"" font-size=""12"" fill=""black"">" + title + @"</text>");
             yOffset += 20;
-
-
-
 
             float maxY = keyFrames.Max(x => x.value);
             float minY = keyFrames.Min(x => x.value);

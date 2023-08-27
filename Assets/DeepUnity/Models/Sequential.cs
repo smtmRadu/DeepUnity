@@ -36,7 +36,7 @@ namespace DeepUnity
         /// </summary>
         /// <param name="input"></param>
         /// <returns></returns>
-        public Tensor Forward(Tensor input)
+        public override Tensor Forward(Tensor input)
         {
             BaseForward();
             Tensor output = modules[0].Forward(input);

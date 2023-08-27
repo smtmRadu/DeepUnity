@@ -19,23 +19,21 @@ public class PushBlock : Agent
 
     public override void OnEpisodeBegin()
     {
-        // // Replace box;
-        // float randx = Utils.Random.Range(7f, 30f);
-        // float randz = Utils.Random.Range(12f, 20f);
-        // box.localPosition = new Vector3(randx, box.localPosition.y, randz);
-        // 
-        // // Reposition agent
-        // randx = Utils.Random.Range(5, 32f);
-        // randz = Utils.Random.Range(20f, 31f);
-        // transform.localPosition = new Vector3(randx, transform.localPosition.y, randz);
+        // Replace box;
+        float randx = Utils.Random.Range(6f, 52f);
+        float randz = Utils.Random.Range(15f, 48f);
+        box.localPosition = new Vector3(randx, box.localPosition.y, randz);
+
+        // Reposition agent
+        randx = Utils.Random.Range(6f, 52f);
+        randz = Utils.Random.Range(15f, 48f);
+        transform.localPosition = new Vector3(randx, transform.localPosition.y, randz);
 
     }
     public override void CollectObservations(SensorBuffer sensorBuffer)
     {
         // + 60
-        sensorBuffer.AddObservation(rb.velocity); // + 3
-        
-        // They are already received from the RaySensor
+        sensorBuffer.AddObservation(rb.velocity.normalized); // + 3
     }
     public override void OnActionReceived(ActionBuffer actionBuffer)
     {

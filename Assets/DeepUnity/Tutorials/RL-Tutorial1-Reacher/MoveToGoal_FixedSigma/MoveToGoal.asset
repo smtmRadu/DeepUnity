@@ -17,6 +17,8 @@ MonoBehaviour:
   observationSize: 4
   continuousDim: 2
   discreteBranches: 
+  inferenceDevice: 0
+  trainingDevice: 1
   standardDeviation: 0
   standardDeviationValue: 1
   standardDeviationScale: 0

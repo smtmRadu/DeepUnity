@@ -11,6 +11,10 @@ namespace DeepUnity
         public static void Error(string message)
         {
             Debug.Log($"<color=red>Error! {message}.</color>");
+        }     
+        public static void Info(string message)
+        {
+            Debug.Log($"<color=#03a9fc> {message}.</color>");
         }
     }
 

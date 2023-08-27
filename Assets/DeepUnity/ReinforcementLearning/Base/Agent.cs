@@ -25,7 +25,7 @@ namespace DeepUnity
         [Space]
         [SerializeField]
         private OnEpisodeEndType onEpisodeEnd = OnEpisodeEndType.ResetEnvironment;
-        [SerializeField, Tooltip("Collect automatically the [Compressed] Observation Vector of attached sensors to this GameObject, or any child GameObject of any degree of it. Consider the number of Observation Vector's float values when defining the Space Size.")]
+        [SerializeField, Tooltip("Collect automatically the [Compressed] Observation Vector of attached sensors to this GameObject, and any child GameObject of any degree. Consider the number of Observation Vector's float values when defining the Space Size.")]
         private UseSensorsType useSensors = UseSensorsType.ObservationsVector;
 
         public TrainingStatistics PerformanceTrack { get; set; }
@@ -45,6 +45,9 @@ namespace DeepUnity
 
         public virtual void Awake()
         {
+            if (!this.enabled)
+                return;
+
             DecisionRequester = GetComponent<DecisionRequester>();
             Sensors = new List<ISensor>();
             InitSensors(transform);
@@ -64,7 +67,8 @@ namespace DeepUnity
         }
         public virtual void Start()
         {
-                
+            if (!this.enabled)
+                return;
 
             if (behaviourType == BehaviourType.Learn)
             {
@@ -89,7 +93,7 @@ namespace DeepUnity
             // ----------------------------------------------------------------------------------
 
 
-            if (behaviourType == BehaviourType.Inactive)
+            if (behaviourType == BehaviourType.Off)
                 return;
 
             ActionOccured = true;
@@ -101,12 +105,13 @@ namespace DeepUnity
                 // Collect new observations
                 Observations.Clear();
                 Actions.Clear();
-                CollectObservations(Observations);
-                if (useSensors == UseSensorsType.ObservationsVector) 
-                    Sensors.ForEach(x => Observations.AddObservation(x.GetObservationsVector()));
+                if (useSensors == UseSensorsType.ObservationsVector)
+                    Sensors.ForEach(x => Observations.AddObservationRange(x.GetObservationsVector()));
                 else
-                    Sensors.ForEach(x => Observations.AddObservation(x.GetCompressedObservationsVector()));
+                    Sensors.ForEach(x => Observations.AddObservationRange(x.GetCompressedObservationsVector()));
 
+                CollectObservations(Observations);
+                
 
                 // Normalize the observations if neccesary
                 if (model.normalizeObservations)
@@ -126,18 +131,17 @@ namespace DeepUnity
 
                 OnActionReceived(Actions);
             }
-            else if (behaviourType == BehaviourType.Active && DecisionRequester.DoITakeActionThisFrame())
+            else if (behaviourType == BehaviourType.Inference && DecisionRequester.DoITakeActionThisFrame())
             {
                 // Collect new observations
                 Observations.Clear();
                 Actions.Clear();
-                CollectObservations(Observations);
                 if (useSensors == UseSensorsType.ObservationsVector)
-                    Sensors.ForEach(x => Observations.AddObservation(x.GetObservationsVector()));
+                    Sensors.ForEach(x => Observations.AddObservationRange(x.GetObservationsVector()));
                 else
-                    Sensors.ForEach(x => Observations.AddObservation(x.GetCompressedObservationsVector()));
-
-
+                    Sensors.ForEach(x => Observations.AddObservationRange(x.GetCompressedObservationsVector()));
+                CollectObservations(Observations);
+                
                 // Normalize the observations if neccesary
                 if (model.normalizeObservations)
                     Observations.Observations = model.normalizer.Normalize(Observations.Observations);
@@ -201,7 +205,7 @@ namespace DeepUnity
             ActionOccured = false;
 
             // ----------------------------------------------------------------------------------
-            if (behaviourType == BehaviourType.Inactive)
+            if (behaviourType == BehaviourType.Off)
                 return;
 
             if (behaviourType == BehaviourType.Learn)
@@ -219,7 +223,7 @@ namespace DeepUnity
                     OnEpisodeBegin();
                 }
             }
-            else if(behaviourType == BehaviourType.Active)
+            else if(behaviourType == BehaviourType.Inference)
             {
                 if (Timestep.done[0] == 1)
                 {

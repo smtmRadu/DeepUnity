@@ -47,9 +47,9 @@ namespace DeepUnity
             {
                 Instance.trainingStatisticsTrack.trainingTime += Time.deltaTime;
                 Instance.trainingStatisticsTrack.realTrainingTime =
-                    $"{(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalHours.ToString("0")} hrs : " +
-                    $"{(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalMinutes.ToString("0")} min : " +
-                    $"{(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalSeconds.ToString("0")} sec";
+                    $"{(int)(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalHours} hrs : " +
+                    $"{(int)(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalMinutes % 60} min : " +
+                    $"{(int)(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalSeconds % 60} sec";
             }
 
             // Autosave process 
@@ -60,6 +60,8 @@ namespace DeepUnity
             if (Instance.trainFlag)
             {
                 Train();
+                Instance.trainFlag = false;
+
                 if (Instance.trainingStatisticsTrack != null)
                 {
                     Instance.trainingStatisticsTrack.parallelAgents = Instance.parallelAgents.Count;
@@ -85,7 +87,7 @@ namespace DeepUnity
             {
                 EditorApplication.playModeStateChanged += Autosave1;
                 EditorApplication.pauseStateChanged += Autosave2;
-                GameObject go = new GameObject("Trainer");
+                GameObject go = new GameObject("[Deep Unity] Trainer");
                 go.AddComponent<Trainer>();
                 Instance.parallelAgents = new();
                 Instance.ac = agent.model;
@@ -95,8 +97,11 @@ namespace DeepUnity
             }
 
             // Assign a common TrainingStatistics for all agents (and also the trainer)
-            Instance.trainingStatisticsTrack = agent.PerformanceTrack;
-            Instance.parallelAgents.ForEach(x => x.PerformanceTrack = agent.PerformanceTrack);
+            if(agent.PerformanceTrack != null)
+            {
+                Instance.trainingStatisticsTrack = agent.PerformanceTrack;
+                Instance.parallelAgents.ForEach(x => x.PerformanceTrack = agent.PerformanceTrack);
+            }
 
             Instance.parallelAgents.Add(agent);
         }
@@ -105,7 +110,7 @@ namespace DeepUnity
         private static void Autosave1(PlayModeStateChange state)
         {
             Instance.ac.Save();
-            if (state == PlayModeStateChange.ExitingPlayMode)
+            if (state == PlayModeStateChange.ExitingPlayMode && Instance.trainingStatisticsTrack != null)
             {
                 Instance.trainingStatisticsTrack.start = Instance.timeWhenTheTrainingStarted.ToLongTimeString() + ", " + Instance.timeWhenTheTrainingStarted.ToLongDateString();
                 Instance.trainingStatisticsTrack.end = DateTime.Now.ToLongTimeString() + ", " + DateTime.Now.ToLongDateString();
@@ -121,9 +126,12 @@ namespace DeepUnity
         // PPO algorithm
         private void Train()
         {
+            ac.SetActorDevice(ac.trainingDevice);
             foreach (var train_data in Instance.parallelAgents.Select(x => x.Memory))
             {
+                ac.SetCriticDevice(ac.inferenceDevice); // critic is used now to compute the values, so for time efficiency, inference device is used now
                 train_data.GAE(hp.gamma, hp.lambda, hp.horizon, ac.critic);
+                ac.SetCriticDevice(ac.trainingDevice); // and then on training, training device is used.
 
                 if(hp.normalizeAdvantages)
                     train_data.NormalizeAdvantages();
@@ -208,13 +216,9 @@ namespace DeepUnity
                     trainingStatisticsTrack?.valueLoss.Append(meanValueLoss / hp.batchSize);
 
                 }
-
-                
-
                 train_data.Reset();
             }
-
-            Instance.trainFlag = false;
+            ac.SetActorDevice(ac.inferenceDevice);
         }
         /// <summary>
         /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>) where * = <em>Observations Shape</em><br></br>

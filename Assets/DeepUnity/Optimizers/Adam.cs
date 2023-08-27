@@ -3,12 +3,15 @@ using UnityEngine;
 
 namespace DeepUnity
 {
-    // This one is took right from the paper
-
+    // Took right from the paper
+    // https://arxiv.org/pdf/1412.6980.pdf
     public sealed class Adam : Optimizer
     {
         [SerializeField] private readonly float beta1;
         [SerializeField] private readonly float beta2;
+
+        [SerializeField] private float beta1_t = 1f; // beta1^t caching
+        [SerializeField] private float beta2_t = 1f;
 
         // 1st momentum buffer
         private readonly Tensor[] mGamma;
@@ -48,15 +51,15 @@ namespace DeepUnity
         {
             t++;
 
+            beta1_t *= beta1;
+            beta2_t *= beta2;
+
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
                 if (parameters[i] is Learnable P)
                 {
                     Tensor mHat;
                     Tensor vHat;
-
-                    float beta1RaisedAtT = MathF.Pow(beta1, t);
-                    float beta2RaisedAtT = MathF.Pow(beta2, t);
 
                     // Update biased first momentum estimate
                     mGamma[i] = beta1 * mGamma[i] + (1f - beta1) * P.gammaGrad;
@@ -65,10 +68,10 @@ namespace DeepUnity
                     vGamma[i] = beta2 * vGamma[i] + (1f - beta2) * Tensor.Pow(P.gammaGrad, 2f);
 
                     // Compute bias-corrected first momentum estimate
-                    mHat = mGamma[i] / (1f - beta1RaisedAtT);
+                    mHat = mGamma[i] / (1f - beta1_t);
 
                     // Compute bias-corrected second raw momentum estimate
-                    vHat = vGamma[i] / (1f - beta2RaisedAtT);
+                    vHat = vGamma[i] / (1f - beta2_t);
 
                     // Update parameters
                     P.gamma = P.gamma * (1f - weightDecay) - learningRate * mHat / (Tensor.Sqrt(vHat) + Utils.EPSILON);
@@ -81,20 +84,17 @@ namespace DeepUnity
                     vBeta[i] = beta2 * vBeta[i] + (1f - beta2) * Tensor.Pow(P.betaGrad, 2f);
 
                     // Compute bias-corrected first momentum estimate
-                    mHat = mBeta[i] / (1f - beta1RaisedAtT);
+                    mHat = mBeta[i] / (1f - beta1_t);
 
                     // Compute bias-corrected second raw momentum estimate
-                    vHat = vBeta[i] / (1f - beta2RaisedAtT);
+                    vHat = vBeta[i] / (1f - beta2_t);
 
                     // Update parameters 
                     P.beta = P.beta - learningRate * mHat / (Tensor.Sqrt(vHat) + Utils.EPSILON);
                 }
 
-                if (parameters[i] is RNNCell R)
-                {
-                    R.recurrentGamma = -learningRate * 10f * R.recurrentGammaGrad;
-                    R.recurrentBeta = -learningRate * 10f * R.recurrentBetaGrad;
-                }
+                if (parameters[i] is ISelfOptimizable S)
+                    S.SelfOptimise(learningRate * 10f);
             });
 
         }

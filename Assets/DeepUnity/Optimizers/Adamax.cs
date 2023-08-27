@@ -9,6 +9,8 @@ namespace DeepUnity
         [SerializeField] private float beta1;
         [SerializeField] private float beta2;
 
+        [SerializeField] private float beta1_t = 1f; // beta1^t caching
+
         // 1st momentum buffer
         [NonSerialized] public Tensor[] mGamma;
         [NonSerialized] public Tensor[] mBeta;
@@ -31,15 +33,13 @@ namespace DeepUnity
 
             for (int i = 0; i < parameters.Length; i++)
             {
-                if (parameters[i] is Learnable P)
-                {
-                    mGamma[i] = Tensor.Zeros(P.gamma.Shape);
-                    mBeta[i] = Tensor.Zeros(P.beta.Shape);
+                Learnable P = parameters[i];
 
-                    uGamma[i] = Tensor.Zeros(P.gamma.Shape);
-                    uBeta[i] = Tensor.Zeros(P.beta.Shape);
+                mGamma[i] = Tensor.Zeros(P.gamma.Shape);
+                mBeta[i] = Tensor.Zeros(P.beta.Shape);
 
-                }
+                uGamma[i] = Tensor.Zeros(P.gamma.Shape);
+                uBeta[i] = Tensor.Zeros(P.beta.Shape);              
             }
         }
 
@@ -48,9 +48,11 @@ namespace DeepUnity
         {
             t++;
 
+            beta1_t *= beta1;
+
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
-                // Paper implementation
+                // Paper implementation (lacks epsilon)
                 // if (parameters[i] is Learnable P)
                 // {
                 //     // Update biased first momentum estimate
@@ -78,14 +80,12 @@ namespace DeepUnity
                     uGamma[i] = Tensor.Maximum(beta2 * uGamma[i], Tensor.Abs(L.gammaGrad) + Utils.EPSILON);
                     uBeta[i] = Tensor.Maximum(beta2 * uBeta[i], Tensor.Abs(L.betaGrad) + Utils.EPSILON);
 
-                    L.gamma = L.gamma - learningRate * mGamma[i] / ((1f - MathF.Pow(beta1, t)) * uGamma[i]);
-                    L.beta = L.beta - learningRate * mBeta[i] / ((1f - MathF.Pow(beta1, t)) * uBeta[i]);
+                    L.gamma = L.gamma - learningRate * mGamma[i] / ((1f - beta1_t) * uGamma[i]);
+                    L.beta = L.beta - learningRate * mBeta[i] / ((1f - beta1_t) * uBeta[i]);
                 }
-                if (parameters[i] is RNNCell R)
-                {
-                    R.recurrentGamma = -learningRate * 5f * R.recurrentGammaGrad;
-                    R.recurrentBeta = -learningRate * 5f * R.recurrentBetaGrad;
-                }
+
+                if (parameters[i] is ISelfOptimizable S)
+                    S.SelfOptimise(learningRate * 5f);
             });
 
 

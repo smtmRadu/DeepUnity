@@ -20,10 +20,17 @@ namespace DeepUnity
         [SerializeField] public int continuousDim;
         [SerializeField] public int[] discreteBranches;
 
+        [Header("Devices")]
+        [SerializeField, Tooltip("Network forward progapation is runned on this device when the agents interfere with the environment. It is recommended to be kept on CPU." +
+            " Best way to find the device is to check the number of fps when multiple environments are running.")] 
+        public Device inferenceDevice = Device.CPU;
+        [SerializeField, Tooltip("Network computation is runned on this device when training. It is highly recommended to be set on GPU if it is available.")] 
+        public Device trainingDevice = Device.GPU;
+
         [Header("Standard Deviation for Continuous Actions")]
         [SerializeField] public StandardDeviationType standardDeviation = StandardDeviationType.Fixed;
         [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
-        [SerializeField, Range(0.001f, 3f)] public float standardDeviationValue = 1.5f;
+        [SerializeField, Range(0.001f, 3f)] public float standardDeviationValue = 1f;
         [Tooltip("Sigma network's output is multiplied by this number. Modify this value to change the exploration/exploitation ratio.")]
         [SerializeField, Range(0.1f, 3f)] public float standardDeviationScale = 2f;
 
@@ -50,17 +57,6 @@ namespace DeepUnity
         public bool IsUsingContinuousActions { get => continuousDim > 0; }
         public bool IsUsingDiscreteActions { get => discreteBranches != null && discreteBranches.Length > 0; }
 
-
-        private void Awake()
-        {
-            // if (critic == null)
-            // {
-            //     Debug.Log($"<color=#fcba03>Warning! Some network assets are not attached to {behaviourName} behaviour asset! </color>");
-            //     EditorApplication.isPlaying = false;
-            //     return;
-            // }
-
-        }
         private AgentBehaviour(string behaviourName, int stateSize, int continuousActions, int[] discreteBranches)
         {
             this.behaviourName = behaviourName;
@@ -76,30 +72,31 @@ namespace DeepUnity
             const int H_32 = 32;
             const InitType INIT_W = InitType.LeCun_Uniform;
             const InitType INIT_B = InitType.LeCun_Uniform;
+            const Device dev = Device.CPU;
 
             critic = new Sequential(
-                new Dense(stateSize, H_64, INIT_W, INIT_B),
+                new Dense(stateSize, H_64, INIT_W, INIT_B, device: dev),
                 new ReLU(),
-                new Dense(H_64, H_64, INIT_W, INIT_B, device: Device.GPU),
+                new Dense(H_64, H_64, INIT_W, INIT_B, device: dev),
                 new ReLU(),
-                new Dense(H_64, 1, INIT_W, INIT_B));
+                new Dense(H_64, 1, INIT_W, INIT_B, device: dev));
 
             if(IsUsingContinuousActions)
             {
                 actorMu = new Sequential(
-                new Dense(stateSize, H_64, INIT_W, INIT_B),
+                new Dense(stateSize, H_64, INIT_W, INIT_B, device: dev),
                 new ReLU(),
-                new Dense(H_64, H_64, INIT_W, INIT_B, device: Device.GPU),
+                new Dense(H_64, H_64, INIT_W, INIT_B, device: dev),
                 new ReLU(),
-                new Dense(H_64, continuousActions, INIT_W, INIT_B),
+                new Dense(H_64, continuousActions, INIT_W, INIT_B, device: dev),
                 new Tanh());
 
                 actorSigma = new Sequential(
-                    new Dense(stateSize, H_32, INIT_W, INIT_B),
+                    new Dense(stateSize, H_32, INIT_W, INIT_B, device: dev),
                     new ReLU(),
-                    new Dense(H_32, H_32, INIT_W, INIT_B, device: Device.CPU),
+                    new Dense(H_32, H_32, INIT_W, INIT_B, device: dev),
                     new ReLU(),
-                    new Dense(H_32, continuousActions, INIT_W, INIT_B),
+                    new Dense(H_32, continuousActions, INIT_W, INIT_B, device: dev),
                     new Softplus());
             }
             if(IsUsingDiscreteActions)
@@ -114,17 +111,59 @@ namespace DeepUnity
                     }
 
                     actorDiscretes[i] = new Sequential(
-                        new Dense(stateSize, H_64, INIT_W, INIT_B),
+                        new Dense(stateSize, H_64, INIT_W, INIT_B, device: dev),
                         new ReLU(),
-                        new Dense(H_64, H_64, INIT_W, INIT_B, device: Device.GPU),
+                        new Dense(H_64, H_64, INIT_W, INIT_B, device: dev),
                         new ReLU(),
-                        new Dense(H_64, discreteBranches[i], INIT_W, INIT_B),
+                        new Dense(H_64, discreteBranches[i], INIT_W, INIT_B, device: dev),
                         new Softmax());
                 }
             }
 
             
             //----------------------------------------------------------//
+        }
+
+        public void SetActorDevice(Device device)
+        {
+            if (IsUsingContinuousActions)
+            { 
+                var learnables = actorMu.Parameters();
+                foreach (var item in learnables)
+                {
+                    item.device = device;
+                }
+
+                learnables = actorSigma.Parameters();
+                foreach (var item in learnables)
+                {
+                    item.device = device;
+                }
+                
+            }
+
+            if (IsUsingDiscreteActions)
+            {
+                for (int i = 0; i < actorDiscretes.Length; i++)
+                {
+                    var learnables = actorDiscretes[i].Parameters();
+                    foreach (var item in learnables)
+                    {
+                        item.device = device;
+                    }
+                }
+            }
+        }
+        public void SetCriticDevice(Device device)
+        {
+            var learnables = critic.Parameters();
+            for (int i = 0; i < learnables.Length - 1; i++)
+            {
+                learnables[i].device = device;
+            }
+            learnables[learnables.Length - 1].device = Device.CPU;
+
+            // Due to benchmark performances, critic last dense (which has the output features = 1), is working faster on CPU.
         }
         public void InitOptimisers(Hyperparameters hp)
         {
@@ -133,7 +172,7 @@ namespace DeepUnity
 
             if (critic == null)
             {
-                Debug.Log($"<color=#fcba03>Warning! Some network assets are not attached to {behaviourName} behaviour asset! </color>");
+                ConsoleMessage.Warning($"Some network assets are not attached to {behaviourName} behaviour asset!");
                 EditorApplication.isPlaying = false;
                 return;
             }
@@ -162,7 +201,7 @@ namespace DeepUnity
 
             if (critic == null)
             {
-                Debug.Log($"<color=#fcba03>Warning! Some network assets are not attached to {behaviourName} behaviour asset! </color>");
+                ConsoleMessage.Warning($"Some network assets are not attached to {behaviourName} behaviour asset!");
                 EditorApplication.isPlaying = false;
                 return;
             }
@@ -191,15 +230,6 @@ namespace DeepUnity
         }
 
 
-
-        /// <summary>
-        /// Input: <paramref name="state"/> - <em>sₜ</em> | Tensor (<em>Observations</em>) <br></br>
-        /// Output: <paramref name="value"/> - <em>Vtarget</em> | Tensor (<em>1</em>)
-        /// </summary>
-        public void ValuePredict(Tensor state, out Tensor value) 
-        {
-            value = critic.Predict(state);
-        }
         /// <summary>
         /// Input: <paramref name="state"/> - <em>sₜ</em> | Tensor (<em>Observations</em>) <br></br>
         /// Output: <paramref name="action"/> - <em>aₜ</em> |  Tensor (<em>Continuous Actions</em>) <br></br>
@@ -314,7 +344,7 @@ namespace DeepUnity
                 ConsoleMessage.Warning("Cannot save the Behaviour because it requires compilation first.");
             }
 
-            Debug.Log($"<color=#03a9fc>Agent behaviour <b><i>{behaviourName}</i></b> autosaved.</color>");
+            ConsoleMessage.Info($"Agent behaviour <b><i>{behaviourName}</i></b> autosaved.");
 
             critic.Save();
 
