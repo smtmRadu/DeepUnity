@@ -45,11 +45,11 @@ namespace DeepUnity
         {
             if (Instance.trainingStatisticsTrack != null)
             {
-                Instance.trainingStatisticsTrack.trainingTime += Time.deltaTime;
+                Instance.trainingStatisticsTrack.trainingSecondsElapsed += Time.deltaTime;
+                Instance.trainingStatisticsTrack.trainingTime =
+                    $"{Math.Ceiling(Instance.trainingStatisticsTrack.trainingSecondsElapsed) / 3600} hrs : {Math.Ceiling(Instance.trainingStatisticsTrack.trainingSecondsElapsed) % 3600 / 60} min : {Math.Ceiling(Instance.trainingStatisticsTrack.trainingSecondsElapsed) % 60} sec";
                 Instance.trainingStatisticsTrack.realTrainingTime =
-                    $"{(int)(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalHours} hrs : " +
-                    $"{(int)(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalMinutes % 60} min : " +
-                    $"{(int)(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalSeconds % 60} sec";
+                    $"{(int)(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalHours} hrs : {(int)(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalMinutes % 60} min : {(int)(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalSeconds % 60} sec";
             }
 
             // Autosave process 
@@ -112,8 +112,8 @@ namespace DeepUnity
             Instance.ac.Save();
             if (state == PlayModeStateChange.ExitingPlayMode && Instance.trainingStatisticsTrack != null)
             {
-                Instance.trainingStatisticsTrack.start = Instance.timeWhenTheTrainingStarted.ToLongTimeString() + ", " + Instance.timeWhenTheTrainingStarted.ToLongDateString();
-                Instance.trainingStatisticsTrack.end = DateTime.Now.ToLongTimeString() + ", " + DateTime.Now.ToLongDateString();
+                Instance.trainingStatisticsTrack.startedAt = Instance.timeWhenTheTrainingStarted.ToLongTimeString() + ", " + Instance.timeWhenTheTrainingStarted.ToLongDateString();
+                Instance.trainingStatisticsTrack.finishedAt = DateTime.Now.ToLongTimeString() + ", " + DateTime.Now.ToLongDateString();
                 string pth = Instance.trainingStatisticsTrack.ExportAsSVG(Instance.ac.behaviourName);
                 Debug.Log($"<color=#57f542>Training Session statistics log saved at <b><i>{pth}</i></b>.</color>");
                 AssetDatabase.Refresh();

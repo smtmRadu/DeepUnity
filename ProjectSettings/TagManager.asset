@@ -10,11 +10,13 @@ TagManager:
   - Wall
   - Goal
   - Spider
+  - Floor
+  - Agent
   layers:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - 
+  - Agent
   - Water
   - UI
   - 

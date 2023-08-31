@@ -14,16 +14,17 @@ namespace DeepUnity
     {
         [Header("Real Time Statistics")]
         [ReadOnly, Tooltip("When the simulation started.")]
-        public string start = " - ";
+        public string startedAt = " - ";
         [ReadOnly, Tooltip("When the simulation ended.")]
-        public string end = " - ";
+        public string finishedAt = " - ";
         [ReadOnly, Tooltip("How much time passed in real time since the start of the training simulation.")] 
         public string realTrainingTime = " - ";
 
         [Space]
         [Header("Simulation Statistics")]
-        [ReadOnly, Tooltip("Total seconds runned by all parallel agents.")] 
-        public float trainingTime = 0f;
+        [ReadOnly, Tooltip("Total seconds runned by all parallel agents.")]
+        public string trainingTime = " - ";
+        [HideInInspector] public float trainingSecondsElapsed = 0f;
         [ReadOnly, Tooltip("Total numbers of steps runned by all parallel agents.")] 
         public int totalSteps = 0;
         [ReadOnly, Tooltip("How many policy updates were made.")] 
@@ -31,14 +32,14 @@ namespace DeepUnity
         [ReadOnly, Tooltip("Parallel agents learning. If this is not equal to your environments, some of them are not having the behaviour to learn.")] 
         public int parallelAgents = 0;
         
-        [Tooltip("Cumulated reward on each episode.")] public PerformanceGraph episodeReward = new PerformanceGraph(1000);
-        [Tooltip("Steps required in each episode.")] public PerformanceGraph episodeLength = new PerformanceGraph(1000);
+        [Tooltip("Cumulated reward on each episode.")] public PerformanceGraph episodeReward = new PerformanceGraph();
+        [Tooltip("Steps required in each episode.")] public PerformanceGraph episodeLength = new PerformanceGraph();
         [Header("Losses")]
-        [Tooltip("Mean loss of policy function on each epoch")] public PerformanceGraph policyLoss = new PerformanceGraph(1000);
-        [Tooltip("Mean MSE of value function on each epoch")]public PerformanceGraph valueLoss = new PerformanceGraph(1000);
+        [Tooltip("Mean loss of policy function on each epoch")] public PerformanceGraph policyLoss = new PerformanceGraph();
+        [Tooltip("Mean MSE of value function on each epoch")]public PerformanceGraph valueLoss = new PerformanceGraph();
         [Header("Policy")]
-        public PerformanceGraph learningRate = new PerformanceGraph(1000);
-        public PerformanceGraph epsilon = new PerformanceGraph(1000);
+        public PerformanceGraph learningRate = new PerformanceGraph();
+        public PerformanceGraph epsilon = new PerformanceGraph();
 
         /// <summary>
         /// Returns the path of the file.
@@ -47,7 +48,7 @@ namespace DeepUnity
         /// <returns></returns>
         public string ExportAsSVG(string behaviourName)
         {
-            string extra = new string(start.Select(x =>
+            string extra = new string(startedAt.Select(x =>
             {
                 if (char.IsLetterOrDigit(x))
                     return x;
@@ -88,8 +89,8 @@ namespace DeepUnity
             svgBuilder.AppendLine(@"<svg width=""800"" height=""600"" xmlns=""http://www.w3.org/2000/svg"">");
             svgBuilder.AppendLine(@"<text x=""10"" y=""20"" font-family=""Arial"" font-size=""16"" fill=""black""> [DeepUnity] Training Session</text>");
 
-            svgBuilder.AppendLine(@"<text x=""10"" y=""40"" font-family=""Arial"" font-size=""12"" fill=""black"">Start: " + start + @"</text>");
-            svgBuilder.AppendLine(@"<text x=""10"" y=""60"" font-family=""Arial"" font-size=""12"" fill=""black"">End: " + end + @"</text>");
+            svgBuilder.AppendLine(@"<text x=""10"" y=""40"" font-family=""Arial"" font-size=""12"" fill=""black"">Started at: " + startedAt + @"</text>");
+            svgBuilder.AppendLine(@"<text x=""10"" y=""60"" font-family=""Arial"" font-size=""12"" fill=""black"">Finished at: " + finishedAt + @"</text>");
             svgBuilder.AppendLine(@"<text x=""10"" y=""80"" font-family=""Arial"" font-size=""12"" fill=""black"">Real Training Time: " + realTrainingTime + @"</text>");
             svgBuilder.AppendLine(@"<text x=""10"" y=""100"" font-family=""Arial"" font-size=""12"" fill=""black"">Training Time: " + trainingTime + @"</text>");
             svgBuilder.AppendLine(@"<text x=""10"" y=""120"" font-family=""Arial"" font-size=""12"" fill=""black"">Iterations: " + iterations + @"</text>");
@@ -97,12 +98,12 @@ namespace DeepUnity
 
             float graphYPosition = 160;
 
-            DrawGraph(svgBuilder, episodeReward.Curve.keys, ref graphYPosition, 200, 200, "Episode Reward");
-            DrawGraph(svgBuilder, episodeLength.Curve.keys, ref graphYPosition, 200, 200, "Episode Length");
-            DrawGraph(svgBuilder, policyLoss.Curve.keys, ref graphYPosition, 200, 200, "Policy Loss");
-            DrawGraph(svgBuilder, valueLoss.Curve.keys, ref graphYPosition, 200, 200, "Value Loss");
-            DrawGraph(svgBuilder, learningRate.Curve.keys, ref graphYPosition, 200, 200, "Learning Rate");
-            DrawGraph(svgBuilder, epsilon.Curve.keys, ref graphYPosition, 200, 200, "Epsilon");
+            DrawGraph(svgBuilder, episodeReward.Keys, ref graphYPosition, 200, 200, "Episode Reward");
+            DrawGraph(svgBuilder, episodeLength.Keys, ref graphYPosition, 200, 200, "Episode Length");
+            DrawGraph(svgBuilder, policyLoss.Keys, ref graphYPosition, 200, 200, "Policy Loss");
+            DrawGraph(svgBuilder, valueLoss.Keys, ref graphYPosition, 200, 200, "Value Loss");
+            DrawGraph(svgBuilder, learningRate.Keys, ref graphYPosition, 200, 200, "Learning Rate");
+            DrawGraph(svgBuilder, epsilon.Keys, ref graphYPosition, 200, 200, "Epsilon");
 
             svgBuilder.AppendLine(@"</svg>");
 

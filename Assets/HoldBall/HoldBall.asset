@@ -1,0 +1,57 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
+  m_Name: HoldBall
+  m_EditorClassIdentifier: 
+  behaviourName: HoldBall
+  assetCreated: 1
+  observationSize: 10
+  continuousDim: 2
+  discreteBranches: 
+  normalizeObservations: 0
+  normalizer:
+    step: 0
+    mean:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 0a000000
+    m2:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 0a000000
+  standardDeviation: 1
+  standardDeviationValue: 1.5
+  standardDeviationScale: 1
+  inferenceDevice: 0
+  trainingDevice: 1
+  critic: {fileID: 11400000, guid: 3b2008e1b09bbcd44b9f817d2976fc97, type: 2}
+  actorMu: {fileID: 11400000, guid: c24fb5e91db682b47b8f6e0e032c046e, type: 2}
+  actorSigma: {fileID: 11400000, guid: 160b9aae0d36fc24d862cdacea863863, type: 2}
+  actorDiscretes: []

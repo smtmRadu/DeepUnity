@@ -181,7 +181,7 @@ ConfigurableJoint:
     spring: 0
     damper: 0
   m_AngularYLimit:
-    limit: 20.15
+    limit: 15
     bounciness: 0
     contactDistance: 0
   m_AngularZLimit:
@@ -2094,7 +2094,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7193562966586733323}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.07, y: 2.7301, z: -0}
+  m_LocalPosition: {x: 0.07, y: 1.72, z: -0}
   m_LocalScale: {x: 0.15, y: 0.15, z: 0.15}
   m_ConstrainProportionsScale: 1
   m_Children: []
@@ -2417,9 +2417,9 @@ GameObject:
   - component: {fileID: 267959078858125474}
   - component: {fileID: 1640279596211062971}
   - component: {fileID: 3277267077938968892}
-  - component: {fileID: 4970778611919697317}
   - component: {fileID: 2273284490549027019}
   - component: {fileID: 5806263877956343436}
+  - component: {fileID: 5934619029939632008}
   m_Layer: 0
   m_Name: Spider
   m_TagString: Spider
@@ -2577,27 +2577,6 @@ MonoBehaviour:
   tilt: -90
   rayColor: {r: 0, g: 1, b: 0, a: 1}
   missRayColor: {r: 0.9427508, g: 1, b: 0, a: 1}
---- !u!114 &4970778611919697317
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7596263110853264572}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a5b5145f60efeb04ea3456286b52bbc0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  shin1: {fileID: 44656975482521900}
-  shin2: {fileID: 6617320069841073545}
-  shin3: {fileID: 6566306834347007173}
-  shin4: {fileID: 8664795200974402046}
-  thigh1: {fileID: 8034606074600303299}
-  thigh2: {fileID: 3269872256846437689}
-  thigh3: {fileID: 2617768508306203519}
-  thigh4: {fileID: 4300124400385522714}
-  speed: 5
 --- !u!114 &2273284490549027019
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2627,13 +2606,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   model: {fileID: 11400000, guid: b52f624152f2bfc48b75b140795381b8, type: 2}
   hp: {fileID: 11400000, guid: 11ce996bd68b2b14c85aea0ba6657630, type: 2}
-  behaviourType: 3
-  spaceSize: 40
+  behaviourType: 2
+  spaceSize: 94
   continuousActions: 12
   discreteBranches: 
   onEpisodeEnd: 2
   useSensors: 2
   target: {fileID: 0}
+  directionArrow: {fileID: 6950084108313781418}
   shin1: {fileID: 44656975482521900}
   shin2: {fileID: 6617320069841073545}
   shin3: {fileID: 6566306834347007173}
@@ -2643,7 +2623,85 @@ MonoBehaviour:
   thigh3: {fileID: 2617768508306203519}
   thigh4: {fileID: 4300124400385522714}
   speed: 10
-  directionArrow: {fileID: 6950084108313781418}
+--- !u!114 &5934619029939632008
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7596263110853264572}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  start: ' - '
+  end: ' - '
+  realTrainingTime: ' - '
+  trainingTime: 0
+  totalSteps: 0
+  iterations: 0
+  parallelAgents: 0
+  episodeReward:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  episodeLength:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  policyLoss:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  valueLoss:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  learningRate:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  epsilon:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
 --- !u!1 &7852556128638947000
 GameObject:
   m_ObjectHideFlags: 0

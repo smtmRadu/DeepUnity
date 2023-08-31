@@ -10,22 +10,28 @@ namespace DeepUnity
 {
     public class SensorBuffer
     {
-        public int Capacity => Observations.Count();
+        public readonly int Capacity;
         public Tensor Observations { get; set; }
         private int position_index { get; set; }
        
  	    public SensorBuffer(int capacity)
         {
-            Observations = Tensor.Zeros(capacity).Select(x => float.NaN);
+            Observations = Tensor.Zeros(capacity).Select(x => 0f);
+            this.Capacity = capacity;
             position_index = 0;
         }
         public void Clear()
         {
             for (int i = 0; i < Capacity; i++)
             {
-                Observations[i] = float.NaN;
+                Observations[i] = 9999;
             }
             position_index = 0;
+        }
+        public bool IsFulfilled(out int missingObs)
+        {
+            missingObs = Capacity - position_index;
+            return position_index == Capacity;
         }
         public override string ToString()
         {

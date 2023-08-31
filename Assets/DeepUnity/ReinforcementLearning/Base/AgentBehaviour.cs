@@ -14,29 +14,30 @@ namespace DeepUnity
     [Serializable]
     public class AgentBehaviour : ScriptableObject
     {
-        [SerializeField] public string behaviourName;
+        [Header("General Properties")]
+        [SerializeField, ReadOnly] public string behaviourName;
         [SerializeField, HideInInspector] private bool assetCreated = false;
-        [SerializeField] public int observationSize;
-        [SerializeField] public int continuousDim;
-        [SerializeField] public int[] discreteBranches;
-
-        [Header("Devices")]
-        [SerializeField, Tooltip("Network forward progapation is runned on this device when the agents interfere with the environment. It is recommended to be kept on CPU." +
-            " Best way to find the device is to check the number of fps when multiple environments are running.")] 
-        public Device inferenceDevice = Device.CPU;
-        [SerializeField, Tooltip("Network computation is runned on this device when training. It is highly recommended to be set on GPU if it is available.")] 
-        public Device trainingDevice = Device.GPU;
-
-        [Header("Standard Deviation for Continuous Actions")]
-        [SerializeField] public StandardDeviationType standardDeviation = StandardDeviationType.Fixed;
-        [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
-        [SerializeField, Range(0.001f, 3f)] public float standardDeviationValue = 1f;
-        [Tooltip("Sigma network's output is multiplied by this number. Modify this value to change the exploration/exploitation ratio.")]
-        [SerializeField, Range(0.1f, 3f)] public float standardDeviationScale = 2f;
+        [SerializeField, ReadOnly] public int observationSize;
+        [SerializeField, ReadOnly] public int continuousDim;
+        [SerializeField, ReadOnly] public int[] discreteBranches;
 
         [Header("Normalization")]
         [ReadOnly, SerializeField, Tooltip("Auto-normalize input observations.")] public bool normalizeObservations = false;
         [ReadOnly, SerializeField] public ZScoreNormalizer normalizer;
+
+        [Header("Standard Deviation for Continuous Actions")]
+        [SerializeField] public StandardDeviationType standardDeviation = StandardDeviationType.Fixed;
+        [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
+        [SerializeField, Range(0.001f, 3f)] public float standardDeviationValue = 1.5f;
+        [Tooltip("Sigma network's output is multiplied by this number. Modify this value to change the exploration/exploitation ratio.")]
+        [SerializeField, Range(0.1f, 3f)] public float standardDeviationScale = 1f;
+
+        [Header("Devices")]
+        [SerializeField, Tooltip("Network forward progapation is runned on this device when the agents interfere with the environment. It is recommended to be kept on CPU." +
+           " The best way to find the optimal device is to check the number of fps when running out multiple environments.")]
+        public Device inferenceDevice = Device.CPU;
+        [SerializeField, Tooltip("Network computation is runned on this device when training on batches. It is highly recommended to be set on GPU if it is available.")]
+        public Device trainingDevice = Device.GPU;
 
         [Header("Neural Networks")]
         [SerializeField] public Sequential critic;
@@ -92,12 +93,10 @@ namespace DeepUnity
                 new Tanh());
 
                 actorSigma = new Sequential(
-                    new Dense(stateSize, H_32, INIT_W, INIT_B, device: dev),
+                    new Dense(stateSize, H_64, INIT_W, INIT_B, device: dev),
                     new ReLU(),
-                    new Dense(H_32, H_32, INIT_W, INIT_B, device: dev),
-                    new ReLU(),
-                    new Dense(H_32, continuousActions, INIT_W, INIT_B, device: dev),
-                    new Softplus());
+                    new Dense(H_64, continuousActions, INIT_W, INIT_B, device: dev),
+                    new Exp());
             }
             if(IsUsingDiscreteActions)
             {
@@ -243,7 +242,15 @@ namespace DeepUnity
                 probs = null;
                 return;
             }
-                
+            if (actorMu == null)
+            {
+                ConsoleMessage.Warning($"Some network assets are not attached to {behaviourName} behaviour asset!");
+                EditorApplication.isPlaying = false;
+                action = null;
+                probs = null;
+                return;
+            }
+
             Tensor mu = actorMu.Predict(state);
             Tensor sigma = standardDeviation == StandardDeviationType.Trainable ?
                             actorSigma.Predict(state) * standardDeviationScale :
@@ -274,6 +281,15 @@ namespace DeepUnity
         {
             if (!IsUsingDiscreteActions)
             {
+                action = null;
+                probs = null;
+                return;
+            }
+
+            if (actorDiscretes[0] == null)
+            {
+                ConsoleMessage.Warning($"Some network assets are not attached to {behaviourName} behaviour asset!");
+                EditorApplication.isPlaying = false;
                 action = null;
                 probs = null;
                 return;

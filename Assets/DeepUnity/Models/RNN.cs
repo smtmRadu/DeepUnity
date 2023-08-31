@@ -52,7 +52,7 @@ namespace DeepUnity
         /// <br></br>
         /// where B = batch_size, L = sequence_length, H_in = input_size, H_out = hidden_size.
         /// </summary>
-        public RNN(int input_size, int hidden_size, int num_layers = 2, RNNNonLinearity nonlinearity = RNNNonLinearity.Tanh, bool batch_first = false, float dropout = 0f)
+        public RNN(int input_size, int hidden_size, int num_layers = 2, NonLinearity nonlinearity = NonLinearity.Tanh, bool batch_first = false, float dropout = 0f)
         {
             this.batchFirst = batch_first;
             if (num_layers < 1)

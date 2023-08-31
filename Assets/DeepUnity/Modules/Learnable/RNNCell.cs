@@ -8,7 +8,7 @@ namespace DeepUnity
     [Serializable]
     public class RNNCell : Learnable, IModuleS, ISelfOptimizable
     {
-        [SerializeField] private RNNNonLinearity nonlinearity;
+        [SerializeField] private NonLinearity nonlinearity;
 
         // These ones are lists for each timestep in the sequence
         [NonSerialized] private Stack<Tensor> InputCache;
@@ -31,7 +31,7 @@ namespace DeepUnity
         /// <param name="input_size"></param>
         /// <param name="hidden_size"></param>
         /// <param name="nonlinearity"></param>
-        public RNNCell(int input_size, int hidden_size, RNNNonLinearity nonlinearity = RNNNonLinearity.Tanh) : 
+        public RNNCell(int input_size, int hidden_size, NonLinearity nonlinearity = NonLinearity.Tanh) : 
             base(Device.CPU,
                 InitType.Glorot_Uniform,
                 InitType.Zeros,
@@ -74,10 +74,10 @@ namespace DeepUnity
             HiddenCache.Push(Tensor.Identity(hidden));
             switch (nonlinearity)
             {
-                case RNNNonLinearity.Tanh:
+                case NonLinearity.Tanh:
                     Activations.Push(new Tanh());
                     break;
-                case RNNNonLinearity.ReLU:
+                case NonLinearity.ReLU:
                     Activations.Push(new ReLU());
                     break;
                 default:

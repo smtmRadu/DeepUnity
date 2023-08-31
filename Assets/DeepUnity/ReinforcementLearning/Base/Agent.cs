@@ -100,23 +100,31 @@ namespace DeepUnity
             Timestep.done = Tensor.Constant(0);
             Timestep.reward = Tensor.Constant(0);
 
-            if (behaviourType == BehaviourType.Learn && DecisionRequester.DoITakeActionThisFrame())
+            if ((behaviourType == BehaviourType.Learn || behaviourType == BehaviourType.Inference) 
+                && DecisionRequester.DoITakeActionThisFrame())
             {
-                // Collect new observations
                 Observations.Clear();
                 Actions.Clear();
-                if (useSensors == UseSensorsType.ObservationsVector)
-                    Sensors.ForEach(x => Observations.AddObservationRange(x.GetObservationsVector()));
-                else
-                    Sensors.ForEach(x => Observations.AddObservationRange(x.GetCompressedObservationsVector()));
 
+                // Collect new observations
+                if (useSensors == UseSensorsType.ObservationsVector) Sensors.ForEach(x => Observations.AddObservationRange(x.GetObservationsVector()));
+                else if(useSensors == UseSensorsType.CompressedObservationsVector) Sensors.ForEach(x => Observations.AddObservationRange(x.GetCompressedObservationsVector()));
                 CollectObservations(Observations);
-                
+
+                // Check SensorBuffer is full
+                int missing = 0;
+                if (!Observations.IsFulfilled(out missing))
+                {
+                    ConsoleMessage.Warning($"SensorBuffer is missing {missing} observations. Please add {missing} more observations values or reduce the space size.");
+                    EditorApplication.isPlaying = false;
+                }
 
                 // Normalize the observations if neccesary
                 if (model.normalizeObservations)
                 {
-                    model.normalizer.Update(Observations.Observations);
+                    if(behaviourType == BehaviourType.Learn)
+                        model.normalizer.Update(Observations.Observations);
+
                     Observations.Observations = model.normalizer.Normalize(Observations.Observations);
                 }
 
@@ -128,37 +136,11 @@ namespace DeepUnity
                 // Run agent's actions and clip them
                 Actions.ContinuousActions = model.IsUsingContinuousActions ? Timestep.action_continuous.Clip(-1f, 1f).ToArray() : null;
                 Actions.DiscreteActions = null; // need to convert afterwards from tensor of logits [branch, logits] to argmax int[]
-
-                OnActionReceived(Actions);
-            }
-            else if (behaviourType == BehaviourType.Inference && DecisionRequester.DoITakeActionThisFrame())
-            {
-                // Collect new observations
-                Observations.Clear();
-                Actions.Clear();
-                if (useSensors == UseSensorsType.ObservationsVector)
-                    Sensors.ForEach(x => Observations.AddObservationRange(x.GetObservationsVector()));
-                else
-                    Sensors.ForEach(x => Observations.AddObservationRange(x.GetCompressedObservationsVector()));
-                CollectObservations(Observations);
-                
-                // Normalize the observations if neccesary
-                if (model.normalizeObservations)
-                    Observations.Observations = model.normalizer.Normalize(Observations.Observations);
-
-                // Set state[t], action[t] & pi[t]
-                Timestep.state = Tensor.Identity(Observations.Observations);
-                model.ContinuousPredict(Timestep.state, out Timestep.action_continuous, out Timestep.prob_continuous);
-                model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.prob_discrete);
-
-                // Run agent's actions and clip them
-                Actions.ContinuousActions = model.IsUsingContinuousActions ? Timestep.action_continuous.Clip(-1f, 1f).ToArray() : null;
-                Actions.DiscreteActions = model.IsUsingDiscreteActions ? Timestep.action_continuous.ToArray().Select(x => (int)x).ToArray() : null; // need to convert afterwards from tensor of logits [branch, logits] to argmax int[]
-
                 OnActionReceived(Actions);
             }
             else if(behaviourType == BehaviourType.Heuristic)
             {
+                // For now, in heuristic mode, only manual control is available
                 Actions.Clear();
                 Heuristic(Actions);
                 OnActionReceived(Actions);

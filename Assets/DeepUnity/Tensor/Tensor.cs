@@ -534,7 +534,7 @@ namespace DeepUnity
 
         /// <summary>
         /// Left: <b>(J, 1, N, M)</b> <br></br>
-        /// Right: <b>(K, N, M)</b> <br></br>
+        /// Right: <b>(K, M, P)</b> <br></br>
         /// </summary>
         /// <returns>Output: <b>(J, K, N, P)</b></returns>
         public static Tensor MatMul(Tensor left, Tensor right)
@@ -572,11 +572,11 @@ namespace DeepUnity
  
             if(right_rank == 1)
             {
-                for (int j = 0; j < J; j++)
+                Parallel.For(0, N, n =>
                 {
-                    for (int k = 0; k < K; k++)
+                    for (int j = 0; j < J; j++)
                     {
-                        for (int n = 0; n < N; n++)
+                        for (int k = 0; k < K; k++)
                         {
                             float sum = 0f;
                             for (int m = 0; m < M; m++)
@@ -588,15 +588,16 @@ namespace DeepUnity
                             result[j, k, 0, n] = sum;
                         }
                     }
-                }
+                });
+                    
             }
             else if(left_rank == 1)
             {
-                for (int j = 0; j < J; j++)
+                Parallel.For(0, P, p =>
                 {
-                    for (int k = 0; k < K; k++)
+                    for (int j = 0; j < J; j++)
                     {
-                        for (int p = 0; p < P; p++)
+                        for (int k = 0; k < K; k++)
                         {
                             float sum = 0f;
                             for (int m = 0; m < M; m++)
@@ -608,13 +609,14 @@ namespace DeepUnity
                             result[j, k, 0, p] = sum;
                         }
                     }
-                }
+                });
             }
             else
             {
-                // starting with 64x64 matmul, GPU based multiplication becomes better
+                // note: starting with 64x64 matmul, GPU based multiplication becomes better
                 // case non-batched and non-channeled matmul
                 if (J == 1 && K == 1)
+                {
                     Parallel.For(0, N, n =>
                     {
                         for (int p = 0; p < P; p++)
@@ -626,7 +628,8 @@ namespace DeepUnity
                             }
                             result[n, p] = sum;
                         }
-                    });
+                    });                  
+                }                
                 else if (J > 1)
                     Parallel.For(0, J, j =>
                     {
@@ -663,25 +666,6 @@ namespace DeepUnity
                         }
 
                     });
-                    // // base matmul operation
-                    // Parallel.For(0, N, n =>
-                    // {
-                    //     for (int j = 0; j < J; j++)
-                    //     {
-                    //         for (int k = 0; k < K; k++)
-                    //         {
-                    //             for (int p = 0; p < P; p++)
-                    //             {
-                    //                 float sum = 0f;
-                    //                 for (int m = 0; m < M; m++)
-                    //                 {
-                    //                     sum += left[j, 0, n, m] * right[k, m, p];
-                    //                 }
-                    //                 result[j, k, n, p] = sum;
-                    //             }
-                    //         }
-                    //     }
-                    // });
             }
 
 
@@ -710,9 +694,17 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
-        /// Matrix multiplication but operations are computed on GPU. Efficient for matrices large matrices (larger than 64x64). <br></br>
+        /// Matrix multiplication where matrices are loaded on GPU where operations are done. Efficient for matrices large matrices, where output's dimensions <b>N * M * P > 100,000</b>. <br></br>
         /// Left: <b>(J, 1, N, M)</b> <br></br>
         /// Right: <b>(K, N, M)</b> <br></br>
+        /// 
+        /// <br></br>
+        /// <em>
+        /// A benchmark matmul was made on the following matrices (24, 64) * (64, 64) for 100 runs. <br></br>
+        /// (i5 9300h) CPU time: 0.26s. <br></br>
+        /// (GTX 1650) GPU time: 0.24s. <br></br>
+        /// Where output n * m * p = 24 * 64 * 64 = 98,304. <br></br>
+        /// </em>
         /// </summary>
         /// <returns>Output: <b>(J, K, N, P)</b></returns>
         public static Tensor MatMulGPU(Tensor left, Tensor right)

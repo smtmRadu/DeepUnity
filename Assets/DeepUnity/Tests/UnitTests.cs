@@ -105,7 +105,7 @@ namespace kbRadu
                 new ReLU(),
                 new BatchNorm(121),
                 new Dense(121, 100),
-                new LayerNorm(100),
+                new LayerNorm(),
                 new Sigmoid(),
                 new Dropout(),
                 new Dense(100, 10),

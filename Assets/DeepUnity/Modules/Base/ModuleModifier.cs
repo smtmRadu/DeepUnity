@@ -1,7 +1,7 @@
 namespace DeepUnity
 {
     /// <summary>
-    /// A static class for modification of <see cref="IModule"/> layers.
+    /// A class for modification of <see cref="IModule"/> layers.
     /// </summary>
     public static class ModuleModifier
     {

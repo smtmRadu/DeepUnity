@@ -16,6 +16,7 @@ namespace DeepUnity
         internal readonly static ComputeShader TensorCS;
         internal readonly static ComputeShader DenseCS;
         internal readonly static ComputeShader Conv2DCS;
+        internal readonly static ComputeShader MLPCS;
         internal readonly static int THREADS_NUM = 256;
 
         static DeepUnityMeta()
@@ -33,6 +34,11 @@ namespace DeepUnity
                 csguid = AssetDatabase.FindAssets("Conv2DCS")[0];
                 cspath = AssetDatabase.GUIDToAssetPath(csguid);
                 Conv2DCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+
+                csguid = AssetDatabase.FindAssets("MLPCS")[0];
+                cspath = AssetDatabase.GUIDToAssetPath(csguid);
+                MLPCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+
             }
             catch 
             {
@@ -118,12 +124,11 @@ namespace DeepUnity
     /// <summary>
     /// Nonlinearity used for RNNCells.
     /// </summary>
-    public enum RNNNonLinearity
+    public enum NonLinearity
     {
         Tanh,
         ReLU
     }
-
 
     public enum DatasetSettings
     {

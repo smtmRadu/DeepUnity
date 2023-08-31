@@ -15,6 +15,17 @@ namespace DeepUnity
         [NonSerialized] public Tensor gammaGrad;
         [NonSerialized] public Tensor betaGrad;
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="device"></param>
+        /// <param name="gamma_initializer"></param>
+        /// <param name="beta_initializer"></param>
+        /// <param name="gammaShape">>Used to init gamma and bgammaGrad. Use 1 for default.</param>
+        /// <param name="betaShape">Used to init beta and betaGrad. Use 1 for default.</param>
+        /// <param name="fan_in">Used only for init.</param>
+        /// <param name="fan_out">Used only for init</param>
+        /// <exception cref="NotImplementedException"></exception>
         protected Learnable(Device device, InitType gamma_initializer, InitType beta_initializer, int[] gammaShape, int[] betaShape, int fan_in, int fan_out)
         {
             // Here will be no checkings the parameters are ok, only in each class constructors respectively.

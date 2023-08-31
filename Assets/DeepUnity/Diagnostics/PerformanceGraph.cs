@@ -14,60 +14,46 @@ namespace DeepUnity
     {
         [ReadOnly, SerializeField] AnimationCurve graph;
         [ReadOnly, SerializeField, Tooltip("The total number of appends.")] int steps;
-        [ReadOnly, SerializeField, Tooltip("The last value appended.")] float current;
+        [ReadOnly, SerializeField, Tooltip("The value of the last item appended.")] float current;
         [ReadOnly, SerializeField, Tooltip("The mean of all values.")] float mean;
 
-
-        LinkedList<float> nodes;
-        int resolution;
+        float time_step_size = 0.1f;
+        int next_squash = 10;
 
         /// <summary>
         /// A board to keep track of the evolution of loss or accuracy.
         /// </summary>
         /// <param name="animationCurve"></param>
         /// <param name="resolution">The number of dots displayed in the animation curve.</param>
-        public PerformanceGraph(int resolution = 1000)
+        public PerformanceGraph()
         {
             steps = 0;
             graph = new AnimationCurve();
-            this.resolution = resolution;
-            nodes = new LinkedList<float>();
         }
         public void Append(float value)
         {
-            steps++;
+           
             current = value;
-            nodes.AddLast(value);
+            graph.AddKey(time_step_size * steps, value);
 
-            // cut half of them if is full
-            if (nodes.Count == resolution)
+            // when reaches 1, squash them to half.
+            if (steps % next_squash == 0)
             {
-                LinkedList<float> newList = new LinkedList<float>();
+                next_squash *= 2;
+                time_step_size = 1f / next_squash;
 
-                int index = 0;
-                float lastNode = -1f;
-                foreach (var node in nodes)
+
+                Keyframe[] keys = graph.keys;
+                for (int i = 0; i < keys.Length; i++)
                 {
-                    if (index % 2 == 0)
-                        lastNode = node;
-                    else
-                        newList.AddLast((lastNode + node) / 2f);
-
-
-                    index++;
+                    keys[i].time = time_step_size * i;
                 }
-
-                nodes = newList;
+                graph.keys = keys;
+                
             }
 
-            // squeeze the nodes in range [0,1]
-            graph.ClearKeys();
-            float time_index = 1f;
-            foreach (var node in nodes)
-            {
-                graph.AddKey(time_index / nodes.Count, node);
-                time_index += 1f;
-            }
+            
+            steps++;
 
             // set mean value
             mean = mean * (steps - 1f) / steps + value / steps; 
@@ -76,11 +62,9 @@ namespace DeepUnity
         {
             current = 0f;
             steps = 0;
-            nodes.Clear();
             mean = 0f;
         }
         public Keyframe[] Keys { get => graph.keys; }
-        public AnimationCurve Curve { get => graph; }
     }
 
 

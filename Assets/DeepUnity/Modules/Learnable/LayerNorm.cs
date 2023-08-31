@@ -1,5 +1,5 @@
 using System;
-using System.Linq;
+using Unity.VisualScripting;
 using UnityEngine;
 
 
@@ -7,10 +7,10 @@ namespace DeepUnity
 {
     /// <summary>
     /// <b>Placed before the non-linear activation function. </b>    <br />
-    /// Input: (B, *) or (*) for unbatched input.<br />
-    /// Output: (B, *) or (*) for unbatched input.<br />
-    /// where  B = batch_size and * = input_shape.<br />
-    /// <b>Applies normalization over all dimensions (*) of the input.</b> 
+    /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br />
+    /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br />
+    /// where  B = batch_size and H = in_features.<br />
+    /// <b>Applies normalization over the last dimension (H) of the input.</b> 
     /// </summary>
     [Serializable]
     public class LayerNorm: Learnable, IModule, IModuleS
@@ -19,12 +19,10 @@ namespace DeepUnity
         // Just a good reference paper to learn from, i made this just by adapting batchnorm layer.
         /// https://proceedings.neurips.cc/paper_files/paper/2019/file/2f4fe03d77724a7217006e5d16728874-Paper.pdf
         
-        // These caches a flattened shape of the input value
         private Tensor xCentered { get; set; }
         private Tensor xHat { get; set; }
         private Tensor std { get; set; }
 
-        [SerializeField] private int[] inputShape;
         [SerializeField] private int step;
 
         // Learnable parameters
@@ -34,89 +32,80 @@ namespace DeepUnity
 
         /// <summary>
         /// <b>Placed before the non-linear activation function. </b>    <br />
-        /// Input: (B, *) or (*) for unbatched input.<br />
-        /// Output: (B, *) or (*) for unbatched input.<br />
-        /// where  B = batch_size and * = input_shape.<br />
-        /// <b>Applies normalization over all dimensions (*) of the input.</b> 
+        /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br />
+        /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br />
+        /// where  B = batch_size and H = in_features.<br />
+        /// <b>Applies normalization over the last dimension (H) of the input.</b> 
         /// </summary>
-        /// <param name="input_shape">Shape of the input (*), excepting the batch (B) dimension.</param>
-        public LayerNorm(params int[] input_shape) :
+        public LayerNorm() :
             base(Device.CPU,
                 InitType.Ones,
                 InitType.Zeros,
                 new int[] { 1 },
                 new int[] { 1 },
-                input_shape.Aggregate(1, (current, next) => current * next),
-                input_shape.Aggregate(1, (current, next) => current * next))
+                1,
+                1)
         {
-            if (input_shape == null || input_shape.Length == 0)
-                throw new ShapeException("Specify the input_shape when creating a LayerNorm module.");
-
             runningMean = Tensor.Zeros(1);
             runningVar = Tensor.Ones(1);
-
             step = 0;
-            this.inputShape = input_shape.ToArray();
         }
         public Tensor Predict(Tensor input)
         {
-            var input_centered = (input - runningMean[0]) / MathF.Sqrt(runningVar[0] + Utils.EPSILON);
-            var output = gamma[0] * input_centered + beta[0];
-
+            Tensor input_centered = (input - runningMean[0]) / MathF.Sqrt(runningVar[0] + Utils.EPSILON);
+            Tensor output = gamma[0] * input_centered + beta[0];
             return output;    
         }
 
         public Tensor Forward(Tensor input)
         {
-            bool isBatched = input.Rank > inputShape.Rank;
+            if (input.Rank > 2)
+                throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) received is invalid for LayerNorm. Make sure is of shape (B, H) or (H).");
+
+            bool isBatched = input.Rank == 2;
             int batch_size = isBatched? input.Size(0) : 1;
+            int feature_size = input.Size(-1);
 
-            // This applyes a mean over everything, even the batch.. which is actually ok. I had to 
-            // do layernorm over each batch element separately but it works ok like this i think.
+            Tensor mu = input.Mean(-1, keepDim: true).Expand(-1, feature_size);
+            Tensor var = input.Var(-1, keepDim: true).Expand(-1, feature_size);
 
-            Tensor input_flat = Tensor.Reshape(input, input.Count());
-
-            Tensor mu_flat = Tensor.Mean(input_flat, 0);
-            Tensor var_flat = Tensor.Var(input_flat, 0);
-            mu_flat = Tensor.Expand(mu_flat, 0, input.Count());
-            var_flat = Tensor.Expand(var_flat, 0, input.Count());
-
-            xCentered = input_flat - mu_flat;
-            std = Tensor.Sqrt(var_flat + Utils.EPSILON);
+            xCentered = input - mu;
+            std = Tensor.Sqrt(var + Utils.EPSILON);
             xHat = xCentered / std;
 
             Tensor y = gamma[0] * xHat + beta[0];
-            
+
+            float mu_over_batch = isBatched ? mu.Mean(-2)[0] : mu[0];
+            float var_over_batch = isBatched ? var.Mean(-2)[0] : var[0];
 
             // Update running mean and running var
             int total_samples = batch_size + step;
             float weight_old = step / (float)total_samples;
             float weight_new = batch_size / (float)total_samples;
-            runningMean = runningMean * weight_old + Tensor.Mean(mu_flat, 0) * weight_new;
-            runningVar = runningVar * weight_old + Tensor.Mean(var_flat, 0) * weight_new;
+            runningMean = runningMean * weight_old + mu_over_batch * weight_new;
+            runningVar = runningVar * weight_old + var_over_batch * weight_new;
             step = total_samples;
 
-
-            return y.Reshape(input.Shape);
+            return y;
         }
         public Tensor Backward(Tensor dLdY)
         {
-            bool isBatched = dLdY.Rank > inputShape.Rank;
+            // check page 4 https://arxiv.org/pdf/1502.03167.pdf for differentiation
+
+            bool isBatched = dLdY.Rank == 2;
             int m = isBatched ? dLdY.Size(0) : 1;
 
-            Tensor flattened_dLdY = Tensor.Reshape(dLdY, dLdY.Count());
+            Tensor dLdxHat = dLdY * gamma[0];
+            Tensor dLdVar = dLdxHat * xCentered * (-1f / 2f) * Tensor.Pow(std.Pow(2f) + Utils.EPSILON, -3f / 2f);
+            Tensor dLdMu = dLdxHat * -1f / std + dLdVar * -2f * xCentered / m;
+            Tensor dLdX = dLdxHat * 1f / std + dLdVar * 2f * xCentered / m + dLdMu * (1f / m);
+            Tensor dLdGamma = Tensor.Mean(dLdY + xCentered, 0);
+            Tensor dLdBeta = Tensor.Mean(dLdY, 0);
 
-            var dLdxHat = flattened_dLdY * gamma[0];
-            var dLdVar = dLdxHat * xCentered * (-1f / 2f) * Tensor.Pow(std + Utils.EPSILON, -3f / 2f);
-            var dLdMu = dLdxHat * -1f / (std + Utils.EPSILON) + dLdVar * -2f * xCentered / m;
-            var dLdX = dLdxHat * 1f / Tensor.Sqrt(std + Utils.EPSILON) + dLdVar * 2f * xCentered / m + dLdMu * (1f / m);
-            var dLdGamma = Tensor.Mean(flattened_dLdY + xCentered, 0);
-            var dLdBeta = Tensor.Mean(flattened_dLdY, 0);
+            gammaGrad += dLdGamma.Mean(0);
+            betaGrad += dLdBeta.Mean(0);
 
-            gammaGrad += dLdGamma;
-            betaGrad += dLdBeta;
-
-             return dLdX.Reshape(dLdY.Shape);
+            return dLdX;
         }
     }
 }

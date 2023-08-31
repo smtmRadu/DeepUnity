@@ -331,7 +331,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   device: 1
   net: {fileID: 11400000, guid: 3da8ebca872670143b902318986d3a80, type: 2}
-  LossGraph:
+  TrainLossGraph:
     graph:
       serializedVersion: 2
       m_Curve: []
@@ -973,10 +973,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  start: ' - '
-  end: ' - '
+  startedAt: ' - '
+  finishedAt: ' - '
   realTrainingTime: ' - '
   trainingTime: 0
+  trainingSecondsElapsed: 0
   totalSteps: 0
   iterations: 0
   parallelAgents: 0
@@ -1120,10 +1121,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   runs: 100
-  batch_size: 512
-  dense_in_features: 128
-  dense_out_features: 1
-  device: 1
+  batch_size: 24
+  dense_in_features: 64
+  dense_out_features: 64
+  device: 0
 --- !u!4 &1816221529
 Transform:
   m_ObjectHideFlags: 0
@@ -1155,7 +1156,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1973326619
 Transform:
   m_ObjectHideFlags: 0

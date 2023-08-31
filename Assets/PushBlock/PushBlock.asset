@@ -17,9 +17,6 @@ MonoBehaviour:
   observationSize: 63
   continuousDim: 3
   discreteBranches: 
-  standardDeviation: 0
-  standardDeviationValue: 1.5
-  standardDeviationScale: 0
   normalizeObservations: 0
   normalizer:
     step: 0
@@ -155,6 +152,11 @@ MonoBehaviour:
       - 0
       - 0
       shape: 3f000000
+  standardDeviation: 0
+  standardDeviationValue: 1.5
+  standardDeviationScale: 1.25
+  inferenceDevice: 0
+  trainingDevice: 1
   critic: {fileID: 11400000, guid: da93820f3300a5241be466f94bcaea94, type: 2}
   actorMu: {fileID: 11400000, guid: e8ad54604dfb45040bcd40133a1eee71, type: 2}
   actorSigma: {fileID: 11400000, guid: ce4c4c2f312f6394f836265bcab23015, type: 2}

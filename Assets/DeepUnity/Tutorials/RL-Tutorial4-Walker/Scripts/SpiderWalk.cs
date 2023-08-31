@@ -56,6 +56,7 @@ public class SpiderWalk : Agent
         sensorBuffer.AddObservation(thigh4.rb.angularVelocity.normalized);
 
         // + 40
+        sensorBuffer.AddObservation(shin1.transform.rotation.normalized);
         sensorBuffer.AddObservation(shin1.rb.velocity.normalized);
         sensorBuffer.AddObservation(shin1.rb.angularVelocity.normalized);
         sensorBuffer.AddObservation(shin2.transform.rotation.normalized);

@@ -9,7 +9,7 @@ public class Tutorial2 : MonoBehaviour
     [Header("Learning z = x^2 + y^2. Visible on Gizmos.")]
     public Device device;
     public Sequential net;
-    public PerformanceGraph LossGraph = new PerformanceGraph();
+    public PerformanceGraph TrainLossGraph = new PerformanceGraph();
     public PerformanceGraph ValidLossGraph = new PerformanceGraph();
     public Optimizer optimizer;
     public LRScheduler scheduler;
@@ -46,7 +46,7 @@ public class Tutorial2 : MonoBehaviour
         {
             net = new Sequential(
              new Dense(2, hiddenSize, InitType.HE_Normal, InitType.HE_Normal),
-             // new LayerNorm(hiddenSize),                
+             //new LayerNorm(),                
              new ReLU(),
              new Dense(hiddenSize, hiddenSize, InitType.HE_Normal, InitType.HE_Normal, device: device),
              // new BatchNorm(hiddenSize),
@@ -100,7 +100,7 @@ public class Tutorial2 : MonoBehaviour
         }
         var trainPrediction = net.Forward(trainXbatches[i]);
         Loss loss = Loss.MSE(trainPrediction, trainYbatches[i]);
-        LossGraph.Append(loss.Item);
+        TrainLossGraph.Append(loss.Item);
         optimizer.ZeroGrad();
         net.Backward(loss.Derivative);
         optimizer.ClipGradNorm(1f);
