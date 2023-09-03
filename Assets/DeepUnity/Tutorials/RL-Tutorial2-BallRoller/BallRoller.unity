@@ -403,12 +403,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0e96453288f5d394d914142745001df7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  model: {fileID: 11400000, guid: 7d5fd7b3c2e23c84dae1ba793d49d5d8, type: 2}
-  hp: {fileID: 11400000, guid: c631fbd8d18eb5c45a4fe6f325591d33, type: 2}
-  behaviourType: 1
   spaceSize: 10
   continuousActions: 2
   discreteBranches: 
+  model: {fileID: 11400000, guid: 781b914cb5949ca47a2ed5b953dd3542, type: 2}
+  hp: {fileID: 11400000, guid: 1a89c20f61ced5149955cbc9f749b369, type: 2}
+  behaviourType: 1
   onEpisodeEnd: 2
   useSensors: 0
   ball: {fileID: 1198115738}
@@ -549,12 +549,12 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1198115734}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 54ee1ab4e5f587a4abd7ff2e530f4c87, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  noise: 1
+  noise: 100
 --- !u!135 &1198115737
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -602,7 +602,7 @@ Rigidbody:
   m_IsKinematic: 0
   m_Interpolate: 0
   m_Constraints: 0
-  m_CollisionDetection: 0
+  m_CollisionDetection: 1
 --- !u!1 &1238026459
 GameObject:
   m_ObjectHideFlags: 0

@@ -23,10 +23,10 @@ namespace DeepUnity
         }
         public static Loss MSE(Tensor predicts, Tensor targets) => new Loss(LossType.MSE, predicts, targets);
         public static Loss MAE(Tensor predicts, Tensor targets) => new Loss(LossType.MAE, predicts, targets);
-        public static Loss CrossEntropy(Tensor predicts, Tensor targets) => new Loss(LossType.CrossEntropy, predicts, targets);   
-        public static Loss HingeEmbedded(Tensor predicts, Tensor targets) => new Loss(LossType.HingeEmbedded, predicts, targets);
+        public static Loss CrossEntropy(Tensor predicts, Tensor targets) => new Loss(LossType.CE, predicts, targets);   
+        public static Loss HingeEmbedded(Tensor predicts, Tensor targets) => new Loss(LossType.HE, predicts, targets);
         public static Loss BinaryCrossEntropy(Tensor predicts, Tensor targets) => new Loss(LossType.BCE, predicts, targets);
-        public static Loss KLDivergence(Tensor predicts, Tensor targets) => new Loss(LossType.KLDivergence, predicts, targets);
+        public static Loss KLDivergence(Tensor predicts, Tensor targets) => new Loss(LossType.KL, predicts, targets);
 
         /// <summary>
         /// Returns the mean loss.
@@ -53,14 +53,14 @@ namespace DeepUnity
                     case LossType.MAE:
                         return Tensor.Abs(predicts - targets);
 
-                    case LossType.CrossEntropy:
+                    case LossType.CE:
                         return -targets * Tensor.Log(predicts);
                     case LossType.BCE:
                         return targets * Tensor.Log(predicts + Utils.EPSILON) - (-targets + 1f) * Tensor.Log(-predicts + 1f + Utils.EPSILON);
 
-                    case LossType.HingeEmbedded:
+                    case LossType.HE:
                         return predicts.Zip(targets, (p, t) => MathF.Max(0f, 1f - p * t));
-                    case LossType.KLDivergence:
+                    case LossType.KL:
                         return targets * Tensor.Log(targets / (predicts + Utils.EPSILON));
                     default:
                         throw new NotImplementedException("Unhandled loss type.");
@@ -79,14 +79,14 @@ namespace DeepUnity
                     case LossType.MAE:
                         return predicts.Zip(targets, (p, t) => p - t > 0 ? 1f : -1f);
 
-                    case LossType.CrossEntropy:
+                    case LossType.CE:
                         return -targets / predicts;
                     case LossType.BCE:
                         return (targets - predicts) / (predicts * (predicts - 1f) + Utils.EPSILON);
 
-                    case LossType.HingeEmbedded:
+                    case LossType.HE:
                         return predicts.Zip(targets, (p, t) => 1f - p * t > 0f ? -t : 0f);
-                    case LossType.KLDivergence:
+                    case LossType.KL:
                         return -targets / (predicts + Utils.EPSILON);
                     default:
                         throw new NotImplementedException("Unhandled loss type.");
@@ -97,10 +97,10 @@ namespace DeepUnity
         {
             MSE,
             MAE,
-            CrossEntropy,
+            CE,
             BCE,
-            HingeEmbedded,            
-            KLDivergence
+            HE,            
+            KL
         }
     }
 }

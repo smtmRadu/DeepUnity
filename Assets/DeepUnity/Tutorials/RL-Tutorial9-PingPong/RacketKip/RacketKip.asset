@@ -1,0 +1,76 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
+  m_Name: RacketKip
+  m_EditorClassIdentifier: 
+  behaviourName: RacketKip
+  assetCreated: 1
+  observationSize: 19
+  continuousDim: 6
+  discreteBranches: 
+  critic: {fileID: 11400000, guid: 48f964a1ffcd95949825db976fe6f030, type: 2}
+  actorMu: {fileID: 11400000, guid: 3fb8299201b19ee41b3570f405c0a894, type: 2}
+  actorSigma: {fileID: 11400000, guid: 6c12db4a48110884287719963ff11210, type: 2}
+  actorDiscretes: []
+  targetFPS: 50
+  normalizeObservations: 0
+  normalizer:
+    step: 0
+    mean:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 13000000
+    m2:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 13000000
+  standardDeviation: 0
+  standardDeviationValue: 1.5
+  standardDeviationScale: 1
+  inferenceDevice: 0
+  trainingDevice: 1

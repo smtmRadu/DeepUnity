@@ -82,8 +82,8 @@ namespace kbRadu
                 }
             }
             // this part may be unsafe.
-            return;
-            bool placedOne = true;
+            //return;
+            /*bool placedOne = true;
             while(placedOne)
             {
                 placedOne = false;
@@ -132,7 +132,7 @@ namespace kbRadu
 
                     }
                 }
-            }
+            }*/
             
         }
         private void AddCoins()

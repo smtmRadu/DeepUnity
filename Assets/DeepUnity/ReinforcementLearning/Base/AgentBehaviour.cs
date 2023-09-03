@@ -14,36 +14,47 @@ namespace DeepUnity
     [Serializable]
     public class AgentBehaviour : ScriptableObject
     {
-        [Header("General Properties")]
+
+        [Header("Behaviour Properties")]
         [SerializeField, ReadOnly] public string behaviourName;
         [SerializeField, HideInInspector] private bool assetCreated = false;
         [SerializeField, ReadOnly] public int observationSize;
         [SerializeField, ReadOnly] public int continuousDim;
         [SerializeField, ReadOnly] public int[] discreteBranches;
+        [SerializeField] public Sequential critic;
+        [SerializeField] public Sequential actorMu;
+        [SerializeField] public Sequential actorSigma;
+        [SerializeField] public Sequential[] actorDiscretes;
 
-        [Header("Normalization")]
-        [ReadOnly, SerializeField, Tooltip("Auto-normalize input observations.")] public bool normalizeObservations = false;
-        [ReadOnly, SerializeField] public ZScoreNormalizer normalizer;
 
-        [Header("Standard Deviation for Continuous Actions")]
-        [SerializeField] public StandardDeviationType standardDeviation = StandardDeviationType.Fixed;
+
+
+        [Space(25), Header("Behaviour Configurations")]
+        [SerializeField, Tooltip("The frames per second runned by the physics engine. Time.fixedDeltaTime = 1 / targetFPS")]
+        [Range(30, 100)]
+        public int targetFPS = 50;
+
+        [SerializeField, Tooltip("Auto-normalize input observations.")]
+        public bool normalizeObservations = false;
+        [ReadOnly, SerializeField, Tooltip("Observations normalizer data.")] 
+        public ZScoreNormalizer normalizer;
+
+        [SerializeField, Tooltip("The standard deviation for Continuous Actions")] 
+        public StandardDeviationType standardDeviation = StandardDeviationType.Fixed;
         [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
-        [SerializeField, Range(0.001f, 3f)] public float standardDeviationValue = 1.5f;
+        [SerializeField, Range(0.001f, 3f)] 
+        public float standardDeviationValue = 1.5f;
         [Tooltip("Sigma network's output is multiplied by this number. Modify this value to change the exploration/exploitation ratio.")]
-        [SerializeField, Range(0.1f, 3f)] public float standardDeviationScale = 1f;
+        [SerializeField, Range(0.1f, 3f)]
+        public float standardDeviationScale = 1f;
 
-        [Header("Devices")]
         [SerializeField, Tooltip("Network forward progapation is runned on this device when the agents interfere with the environment. It is recommended to be kept on CPU." +
            " The best way to find the optimal device is to check the number of fps when running out multiple environments.")]
         public Device inferenceDevice = Device.CPU;
         [SerializeField, Tooltip("Network computation is runned on this device when training on batches. It is highly recommended to be set on GPU if it is available.")]
         public Device trainingDevice = Device.GPU;
 
-        [Header("Neural Networks")]
-        [SerializeField] public Sequential critic;
-        [SerializeField] public Sequential actorMu;
-        [SerializeField] public Sequential actorSigma;
-        [SerializeField] public Sequential[] actorDiscretes;
+        
 
         public Optimizer criticOptimizer { get; private set; }
         public Optimizer actorMuOptimizer { get; private set; }
@@ -58,6 +69,7 @@ namespace DeepUnity
         public bool IsUsingContinuousActions { get => continuousDim > 0; }
         public bool IsUsingDiscreteActions { get => discreteBranches != null && discreteBranches.Length > 0; }
 
+
         private AgentBehaviour(string behaviourName, int stateSize, int continuousActions, int[] discreteBranches)
         {
             this.behaviourName = behaviourName;
@@ -68,9 +80,9 @@ namespace DeepUnity
             assetCreated = true;
 
             //------------------ NETWORK INITIALIZATION ----------------//
-            const int H_128 = 128;
+            // const int H_128 = 128;
             const int H_64 = 64;
-            const int H_32 = 32;
+            // const int H_32 = 32;
             const InitType INIT_W = InitType.LeCun_Uniform;
             const InitType INIT_B = InitType.LeCun_Uniform;
             const Device dev = Device.CPU;
@@ -138,7 +150,6 @@ namespace DeepUnity
                 {
                     item.device = device;
                 }
-                
             }
 
             if (IsUsingDiscreteActions)
@@ -321,7 +332,11 @@ namespace DeepUnity
             var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
 
             if (instance != null)
+            {
+                ConsoleMessage.Info($"Behaviour {name} asset loaded.");
                 return instance;
+            }
+                
 
             AgentBehaviour newAgBeh = new AgentBehaviour(name, stateSize, continuousActions, discreteActions);
 
@@ -378,7 +393,6 @@ namespace DeepUnity
 
         }
     }
-
 
     [CustomEditor(typeof(AgentBehaviour), true), CanEditMultipleObjects]
     sealed class CustomAgentBehaviourEditor : Editor

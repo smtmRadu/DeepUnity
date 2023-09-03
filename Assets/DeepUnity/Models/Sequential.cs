@@ -22,7 +22,7 @@ namespace DeepUnity
         /// </summary>
         /// <param name="input"></param>
         /// <returns></returns>
-        public Tensor Predict(Tensor input)
+        public override Tensor Predict(Tensor input)
         {
             Tensor output = modules[0].Predict(input);
             for (int i = 1; i < modules.Length; i++)

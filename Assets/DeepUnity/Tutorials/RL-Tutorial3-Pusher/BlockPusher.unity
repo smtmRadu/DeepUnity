@@ -1536,12 +1536,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b6495fa690344148979172a891a9dfe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  model: {fileID: 11400000, guid: c7ce009f37c2d8a438887c4a0e7fd39f, type: 2}
-  hp: {fileID: 11400000, guid: d61aca2854b3e4947a7b2fc29d7935e4, type: 2}
-  behaviourType: 2
   spaceSize: 63
   continuousActions: 3
   discreteBranches: 
+  model: {fileID: 11400000, guid: c7ce009f37c2d8a438887c4a0e7fd39f, type: 2}
+  hp: {fileID: 11400000, guid: d61aca2854b3e4947a7b2fc29d7935e4, type: 2}
+  behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 1
   box: {fileID: 1571993204}
@@ -1560,10 +1560,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  start: ' - '
-  end: ' - '
+  startedAt: ' - '
+  finishedAt: ' - '
   realTrainingTime: ' - '
   trainingTime: 0
+  trainingSecondsElapsed: 0
   totalSteps: 0
   iterations: 0
   parallelAgents: 0
@@ -2307,12 +2308,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b6495fa690344148979172a891a9dfe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  model: {fileID: 11400000, guid: c7ce009f37c2d8a438887c4a0e7fd39f, type: 2}
-  hp: {fileID: 11400000, guid: d61aca2854b3e4947a7b2fc29d7935e4, type: 2}
-  behaviourType: 2
   spaceSize: 63
   continuousActions: 3
   discreteBranches: 
+  model: {fileID: 11400000, guid: c7ce009f37c2d8a438887c4a0e7fd39f, type: 2}
+  hp: {fileID: 11400000, guid: d61aca2854b3e4947a7b2fc29d7935e4, type: 2}
+  behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 1
   box: {fileID: 2028952446}
@@ -2331,10 +2332,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  start: ' - '
-  end: ' - '
+  startedAt: ' - '
+  finishedAt: ' - '
   realTrainingTime: ' - '
   trainingTime: 0
+  trainingSecondsElapsed: 0
   totalSteps: 0
   iterations: 0
   parallelAgents: 0
@@ -3134,12 +3136,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b6495fa690344148979172a891a9dfe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  model: {fileID: 11400000, guid: c7ce009f37c2d8a438887c4a0e7fd39f, type: 2}
-  hp: {fileID: 11400000, guid: d61aca2854b3e4947a7b2fc29d7935e4, type: 2}
-  behaviourType: 2
   spaceSize: 63
   continuousActions: 3
   discreteBranches: 
+  model: {fileID: 11400000, guid: c7ce009f37c2d8a438887c4a0e7fd39f, type: 2}
+  hp: {fileID: 11400000, guid: d61aca2854b3e4947a7b2fc29d7935e4, type: 2}
+  behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 1
   box: {fileID: 636232770}
@@ -3158,10 +3160,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  start: ' - '
-  end: ' - '
+  startedAt: ' - '
+  finishedAt: ' - '
   realTrainingTime: ' - '
   trainingTime: 0
+  trainingSecondsElapsed: 0
   totalSteps: 0
   iterations: 0
   parallelAgents: 0
@@ -4137,12 +4140,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b6495fa690344148979172a891a9dfe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  model: {fileID: 11400000, guid: c7ce009f37c2d8a438887c4a0e7fd39f, type: 2}
-  hp: {fileID: 11400000, guid: d61aca2854b3e4947a7b2fc29d7935e4, type: 2}
-  behaviourType: 2
   spaceSize: 63
   continuousActions: 3
   discreteBranches: 
+  model: {fileID: 11400000, guid: c7ce009f37c2d8a438887c4a0e7fd39f, type: 2}
+  hp: {fileID: 11400000, guid: d61aca2854b3e4947a7b2fc29d7935e4, type: 2}
+  behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 1
   box: {fileID: 1084060870}
@@ -4161,10 +4164,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  start: ' - '
-  end: ' - '
+  startedAt: ' - '
+  finishedAt: ' - '
   realTrainingTime: ' - '
   trainingTime: 0
+  trainingSecondsElapsed: 0
   totalSteps: 0
   iterations: 0
   parallelAgents: 0
@@ -5456,12 +5460,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b6495fa690344148979172a891a9dfe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  model: {fileID: 11400000, guid: c7ce009f37c2d8a438887c4a0e7fd39f, type: 2}
-  hp: {fileID: 11400000, guid: d61aca2854b3e4947a7b2fc29d7935e4, type: 2}
-  behaviourType: 2
   spaceSize: 63
   continuousActions: 3
   discreteBranches: 
+  model: {fileID: 11400000, guid: c7ce009f37c2d8a438887c4a0e7fd39f, type: 2}
+  hp: {fileID: 11400000, guid: d61aca2854b3e4947a7b2fc29d7935e4, type: 2}
+  behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 1
   box: {fileID: 30804915}
@@ -5495,10 +5499,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  start: ' - '
-  end: ' - '
+  startedAt: ' - '
+  finishedAt: ' - '
   realTrainingTime: ' - '
   trainingTime: 0
+  trainingSecondsElapsed: 0
   totalSteps: 0
   iterations: 0
   parallelAgents: 0

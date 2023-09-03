@@ -54,12 +54,12 @@ public class MoveToGoal : Agent
 
     private void OnTriggerEnter(Collider other)
     {
-        if (other.TryGetComponent<Goal>(out _))
+        if (other.CompareTag("Goal"))
         {
             SetReward(1f);
             EndEpisode();
         }
-        if (other.TryGetComponent<Wall>(out _))
+        if (other.CompareTag("Wall"))
         {
             SetReward(-1f);
             EndEpisode();
@@ -67,12 +67,12 @@ public class MoveToGoal : Agent
     }
     private void OnTriggerStay(Collider other)
     {
-        if (other.TryGetComponent<Goal>(out _))
+        if (other.CompareTag("Goal"))
         {
             SetReward(1f);
             EndEpisode();
         }
-        if (other.TryGetComponent<Wall>(out _))
+        if (other.CompareTag("Wall"))
         {
             SetReward(-1f);
             EndEpisode();

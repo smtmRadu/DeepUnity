@@ -132,7 +132,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 9444466}
-  - component: {fileID: 9444465}
   - component: {fileID: 9444464}
   m_Layer: 0
   m_Name: GameObject
@@ -159,18 +158,6 @@ MonoBehaviour:
   type: 0
   compression: 0
   renderTexture: {fileID: 1499895331}
---- !u!114 &9444465
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9444463}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e2eacdeb550b2fd4b891d25e38dabf50, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!4 &9444466
 Transform:
   m_ObjectHideFlags: 0
@@ -1068,12 +1055,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 833cf6f791d186e4497d4e80c2edc30c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  model: {fileID: 11400000, guid: c474dac60d47cfb4786ca57d924d4a5e, type: 2}
-  hp: {fileID: 11400000, guid: 354e08b2cbfb08d468ef7db3c38430fc, type: 2}
-  behaviourType: 2
   spaceSize: 3
   continuousActions: 1
   discreteBranches: 
+  model: {fileID: 11400000, guid: c474dac60d47cfb4786ca57d924d4a5e, type: 2}
+  hp: {fileID: 11400000, guid: 354e08b2cbfb08d468ef7db3c38430fc, type: 2}
+  behaviourType: 2
   onEpisodeEnd: 0
   useSensors: 0
 --- !u!4 &1636929567
@@ -1121,10 +1108,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   runs: 100
-  batch_size: 24
-  dense_in_features: 64
-  dense_out_features: 64
-  device: 0
+  batch_size: 1024
+  dense_in_features: 128
+  dense_out_features: 128
+  device: 1
 --- !u!4 &1816221529
 Transform:
   m_ObjectHideFlags: 0
@@ -1156,7 +1143,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1973326619
 Transform:
   m_ObjectHideFlags: 0

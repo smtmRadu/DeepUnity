@@ -1,11 +1,10 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
-
+using System.Diagnostics;
 
 namespace DeepUnity
 {
@@ -45,12 +44,17 @@ namespace DeepUnity
         {
             if (Instance.trainingStatisticsTrack != null)
             {
-                Instance.trainingStatisticsTrack.trainingSecondsElapsed += Time.deltaTime;
-                Instance.trainingStatisticsTrack.trainingTime =
-                    $"{Math.Ceiling(Instance.trainingStatisticsTrack.trainingSecondsElapsed) / 3600} hrs : {Math.Ceiling(Instance.trainingStatisticsTrack.trainingSecondsElapsed) % 3600 / 60} min : {Math.Ceiling(Instance.trainingStatisticsTrack.trainingSecondsElapsed) % 60} sec";
+                TimeSpan timeElapsed = DateTime.Now - Instance.timeWhenTheTrainingStarted;
                 Instance.trainingStatisticsTrack.realTrainingTime =
-                    $"{(int)(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalHours} hrs : {(int)(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalMinutes % 60} min : {(int)(DateTime.Now - Instance.timeWhenTheTrainingStarted).TotalSeconds % 60} sec";
-            }
+                    $"{(int)timeElapsed.TotalHours} hrs : {(int)timeElapsed.TotalMinutes % 60} min : {(int)timeElapsed.TotalSeconds % 60} sec";
+
+
+                Instance.trainingStatisticsTrack.inferenceSecondsElapsed += Time.deltaTime;
+                Instance.trainingStatisticsTrack.inferenceTime = 
+                    $"{(int)(Math.Ceiling(Instance.trainingStatisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) / 3600)} hrs : {(int)(Math.Ceiling(Instance.trainingStatisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.trainingStatisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) % 60)} sec";
+                Instance.trainingStatisticsTrack.inferenceTimePerAgent =
+                    $"{(int)(Math.Ceiling(Instance.trainingStatisticsTrack.inferenceSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(Instance.trainingStatisticsTrack.inferenceSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.trainingStatisticsTrack.inferenceSecondsElapsed) % 60)} sec";
+             }
 
             // Autosave process 
             Instance.autosaveSecondsElapsed += Time.deltaTime;
@@ -59,7 +63,12 @@ namespace DeepUnity
         {
             if (Instance.trainFlag)
             {
+                Stopwatch clock = Stopwatch.StartNew();
                 Train();
+                clock.Stop();
+
+
+
                 Instance.trainFlag = false;
 
                 if (Instance.trainingStatisticsTrack != null)
@@ -67,6 +76,13 @@ namespace DeepUnity
                     Instance.trainingStatisticsTrack.parallelAgents = Instance.parallelAgents.Count;
                     Instance.trainingStatisticsTrack.totalSteps += Instance.hp.bufferSize * parallelAgents.Count;
                     Instance.trainingStatisticsTrack.iterations++;
+                    Instance.trainingStatisticsTrack.policyUpdateSecondsElapsed += (float)clock.Elapsed.TotalSeconds;
+                    Instance.trainingStatisticsTrack.policyUpdateTime = $"{(int)(Math.Ceiling(Instance.trainingStatisticsTrack.policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(Instance.trainingStatisticsTrack.policyUpdateSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.trainingStatisticsTrack.policyUpdateSecondsElapsed) % 60)} sec";
+                    Instance.trainingStatisticsTrack.policyUpdateTimePerIteration = $"{(int)clock.Elapsed.TotalHours} hrs : {(int)(clock.Elapsed.TotalMinutes) % 60} min : {(int)(clock.Elapsed.TotalSeconds) % 60} sec";
+
+                    float totalTimeElapsed = (float)(DateTime.Now - timeWhenTheTrainingStarted).TotalSeconds;
+                    Instance.trainingStatisticsTrack.inferenceTimeRatio = (Instance.trainingStatisticsTrack.inferenceSecondsElapsed  / totalTimeElapsed).ToString("0.000");
+                    Instance.trainingStatisticsTrack.policyUpdateTimeRatio = (Instance.trainingStatisticsTrack.policyUpdateSecondsElapsed / totalTimeElapsed).ToString("0.000");
                 }
             }
 
@@ -87,7 +103,7 @@ namespace DeepUnity
             {
                 EditorApplication.playModeStateChanged += Autosave1;
                 EditorApplication.pauseStateChanged += Autosave2;
-                GameObject go = new GameObject("[Deep Unity] Trainer");
+                GameObject go = new GameObject("[DeepUnity] Trainer");
                 go.AddComponent<Trainer>();
                 Instance.parallelAgents = new();
                 Instance.ac = agent.model;
@@ -114,9 +130,13 @@ namespace DeepUnity
             {
                 Instance.trainingStatisticsTrack.startedAt = Instance.timeWhenTheTrainingStarted.ToLongTimeString() + ", " + Instance.timeWhenTheTrainingStarted.ToLongDateString();
                 Instance.trainingStatisticsTrack.finishedAt = DateTime.Now.ToLongTimeString() + ", " + DateTime.Now.ToLongDateString();
-                string pth = Instance.trainingStatisticsTrack.ExportAsSVG(Instance.ac.behaviourName);
-                Debug.Log($"<color=#57f542>Training Session statistics log saved at <b><i>{pth}</i></b>.</color>");
-                AssetDatabase.Refresh();
+
+                if(Instance.trainingStatisticsTrack.iterations > 0)
+                {
+                    string pth = Instance.trainingStatisticsTrack.ExportAsSVG(Instance.ac.behaviourName);
+                    UnityEngine.Debug.Log($"<color=#57f542>Training Session statistics log saved at <b><i>{pth}</i></b>.</color>");
+                    AssetDatabase.Refresh();
+                }               
             }
                 
         }
@@ -146,15 +166,16 @@ namespace DeepUnity
 
 
                     // randomizeOrder(train_data)
-                    train_data.Shuffle();
+                    if(hp.shuffleTrainingData)
+                        train_data.Shuffle();
 
-                    // unpack & split traindata into minibatches
+                    // unpack & split train_data into minibatches
                     List<Tensor[]> states_batches = Utils.Split(train_data.States, hp.batchSize);                 
                     List<Tensor[]> advantages_batches = Utils.Split(train_data.Advantages, hp.batchSize);
                     List<Tensor[]> value_targets_batches = Utils.Split(train_data.ValueTargets, hp.batchSize);
                     List<Tensor[]> cont_act_batches = Utils.Split(train_data.ContinuousActions, hp.batchSize);
                     List<Tensor[]> cont_probs_batches = Utils.Split(train_data.ContinuousProbabilities, hp.batchSize);
-                    List<Tensor[]> disc_act_batches = Utils.Split(train_data.DiscreteActions, hp.batchSize); // the list contains the batches, the first [] represents the batch, the second[] represents the branch
+                    List<Tensor[]> disc_act_batches = Utils.Split(train_data.DiscreteActions, hp.batchSize);
                     List<Tensor[]> disc_probs_batches = Utils.Split(train_data.DiscreteProbabilities, hp.batchSize);
 
                     for (int b = 0; b < states_batches.Count; b++)
@@ -203,11 +224,14 @@ namespace DeepUnity
                         ac.actorMuScheduler.Step();
                         ac.actorSigmaScheduler.Step();
                     }                   
-                    if(ac.IsUsingDiscreteActions)                  
+                    if(ac.IsUsingDiscreteActions)
+                    {
                         for (int i = 0; i < ac.actorDiscretesSchedulers.Length; i++)
                         {
                             ac.actorDiscretesSchedulers[i].Step();
                         }
+                    }
+                        
 
                     // Save statistics info
                     trainingStatisticsTrack?.learningRate.Append(ac.criticScheduler.CurrentLR);
@@ -340,8 +364,8 @@ namespace DeepUnity
         {
             throw new NotImplementedException();
 
-            int batch_size = states.Rank == 2 ? states.Size(0) : 1;
-            int discrete_actions_num = actions.Size(-1); // on this branch
+            // int batch_size = states.Rank == 2 ? states.Size(0) : 1;
+            // int discrete_actions_num = actions.Size(-1); // on this branch
 
 
         }

@@ -52,7 +52,10 @@ namespace kbRadu
              graph.Append(loss.Item);
          }*/
 
-
+        public void Update()
+        {
+            graph.Append(1f);
+        }
         void TestCrossEntropy()
         {
             var net = new Sequential(

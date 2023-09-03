@@ -17,6 +17,11 @@ MonoBehaviour:
   observationSize: 4
   continuousDim: 2
   discreteBranches: 
+  critic: {fileID: 11400000, guid: 486e6487271f4e54db805c9a3706aafb, type: 2}
+  actorMu: {fileID: 11400000, guid: ae95b80837913f74781b6f254c742a3e, type: 2}
+  actorSigma: {fileID: 11400000, guid: 4f6901a9c9019cf4f95f7c1354295781, type: 2}
+  actorDiscretes: []
+  targetFPS: 50
   normalizeObservations: 0
   normalizer:
     step: 0
@@ -31,7 +36,3 @@ MonoBehaviour:
   standardDeviationScale: 0
   inferenceDevice: 0
   trainingDevice: 1
-  critic: {fileID: 11400000, guid: 486e6487271f4e54db805c9a3706aafb, type: 2}
-  actorMu: {fileID: 11400000, guid: ae95b80837913f74781b6f254c742a3e, type: 2}
-  actorSigma: {fileID: 11400000, guid: 4f6901a9c9019cf4f95f7c1354295781, type: 2}
-  actorDiscretes: []

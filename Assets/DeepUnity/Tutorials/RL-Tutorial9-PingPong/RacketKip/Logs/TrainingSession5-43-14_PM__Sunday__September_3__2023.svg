@@ -1,0 +1,38 @@
+<svg width="1000" height="3000" xmlns="http://www.w3.org/2000/svg">
+<text x="10" y="20" font-family="Arial" font-size="16" fill="black"> [RacketKip] Training Session</text>
+<text x="10" y="40" font-family="Arial" font-size="12" fill="black">Started at: 5:43:14 PM, Sunday, September 3, 2023</text>
+<text x="10" y="60" font-family="Arial" font-size="12" fill="black">Finished at: 5:43:40 PM, Sunday, September 3, 2023</text>
+<text x="10" y="80" font-family="Arial" font-size="12" fill="black">Real Training Time: 0 hrs : 0 min : 26 sec</text>
+<text x="10" y="100" font-family="Arial" font-size="12" fill="black">Inference Time: 0 hrs : 0 min : 23 sec</text>
+<text x="10" y="120" font-family="Arial" font-size="12" fill="black">Inference Time Per Agent: 0 hrs : 0 min : 23 sec</text>
+<text x="10" y="140" font-family="Arial" font-size="12" fill="black">Policy Optimization Time: 0 hrs : 0 min : 4 sec</text>
+<text x="10" y="160" font-family="Arial" font-size="12" fill="black">Policy Optimization Time / Iteration: 0 hrs : 0 min : 3 sec</text>
+<text x="10" y="180" font-family="Arial" font-size="12" fill="black">Inference Time Per Agent / Real Training Time (ratio): 0.832</text>
+<text x="10" y="200" font-family="Arial" font-size="12" fill="black">Policy Update Time / Real Training Time (ratio): 0.135</text>
+<text x="10" y="220" font-family="Arial" font-size="12" fill="black">Iterations: 1</text>
+<text x="10" y="240" font-family="Arial" font-size="12" fill="black">Parallel Agents: 1</text>
+<text x="10" y="280" font-family="Arial" font-size="12" fill="black">Episode Reward</text>
+<text x="5" y="295" font-family="Arial" font-size="10" fill="black">-0.5</text>
+<text x="5" y="510" font-family="Arial" font-size="10" fill="black">-1</text>
+<path d="M10,400 L30,500 L50,300 L70,500 L90,400 L110,500 L130,400 L150,500 L170,400 L190,500 L210,300 L230,500 L250,400 L270,500 L290,400 L310,500 " stroke="blue" fill="none" />
+<text x="10" y="530" font-family="Arial" font-size="12" fill="black">Episode Length</text>
+<text x="5" y="545" font-family="Arial" font-size="10" fill="black">197</text>
+<text x="5" y="760" font-family="Arial" font-size="10" fill="black">2</text>
+<path d="M10,655.6411 L30,750 L50,550 L70,750 L90,628.9744 L110,750 L130,627.9487 L150,750 L170,620.7692 L190,750 L210,590 L230,750 L250,640.2564 L270,750 L290,641.282 L310,750 " stroke="blue" fill="none" />
+<text x="10" y="780" font-family="Arial" font-size="12" fill="black">Policy Loss</text>
+<text x="5" y="795" font-family="Arial" font-size="10" fill="black">0.01291961</text>
+<text x="5" y="1010" font-family="Arial" font-size="10" fill="black">0.004529542</text>
+<path d="M10,949.0735 L30,993.1703 L50,800.0002 L70,971.4898 L90,908.2112 L110,934.108 L130,881.7483 L150,1000 " stroke="blue" fill="none" />
+<text x="10" y="1030" font-family="Arial" font-size="12" fill="black">Value Loss</text>
+<text x="5" y="1045" font-family="Arial" font-size="10" fill="black">0.001719765</text>
+<text x="5" y="1260" font-family="Arial" font-size="10" fill="black">0.0009108526</text>
+<path d="M10,1050.002 L30,1119.915 L50,1156.238 L70,1184.902 L90,1209.952 L110,1227.198 L130,1238.263 L150,1250 " stroke="blue" fill="none" />
+<text x="10" y="1280" font-family="Arial" font-size="12" fill="black">Learning Rate</text>
+<text x="5" y="1295" font-family="Arial" font-size="10" fill="black">0.0003</text>
+<text x="5" y="1510" font-family="Arial" font-size="10" fill="black">0.0003</text>
+<path d="M10,1500 L30,1500 L50,1500 L70,1500 L90,1500 L110,1500 L130,1500 L150,1500 " stroke="blue" fill="none" />
+<text x="10" y="1530" font-family="Arial" font-size="12" fill="black">Epsilon</text>
+<text x="5" y="1545" font-family="Arial" font-size="10" fill="black">0.2</text>
+<text x="5" y="1760" font-family="Arial" font-size="10" fill="black">0.2</text>
+<path d="M10,1750 L30,1750 L50,1750 L70,1750 L90,1750 L110,1750 L130,1750 L150,1750 " stroke="blue" fill="none" />
+</svg>

@@ -1,0 +1,21 @@
+<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+<text x="10" y="20" font-family="Arial" font-size="16" fill="black"> [DeepUnity] Training Session</text>
+<text x="10" y="40" font-family="Arial" font-size="12" fill="black">Started at: 2:01:00 PM, Friday, September 1, 2023</text>
+<text x="10" y="60" font-family="Arial" font-size="12" fill="black">Finished at: 2:01:21 PM, Friday, September 1, 2023</text>
+<text x="10" y="80" font-family="Arial" font-size="12" fill="black">Real Training Time: 0 hrs : 0 min : 20 sec</text>
+<text x="10" y="100" font-family="Arial" font-size="12" fill="black">Training Time: 0.00555555555555556 hrs : 0.333333333333333 min : 20 sec</text>
+<text x="10" y="120" font-family="Arial" font-size="12" fill="black">Iterations: 0</text>
+<text x="10" y="140" font-family="Arial" font-size="12" fill="black">Parallel Agents: 0</text>
+<text x="10" y="160" font-family="Arial" font-size="12" fill="black">Episode Reward</text>
+<path d="M10,382.3122 L210,382.3122" stroke="gray" />
+<text x="5" y="387.3122" font-family="Arial" font-size="10" fill="black">0</text>
+<text x="5" y="180" font-family="Arial" font-size="10" fill="black">14.24264</text>
+<text x="5" y="380" font-family="Arial" font-size="10" fill="black">0.162779</text>
+<path d="M0,380 L10,374.0339 L20,376.8228 L30,361.8947 L40,289.5043 L50,180 L60,297.182 L70,197.2731 L80,238.9936 L90,258.4099 " stroke="blue" fill="none" />
+<text x="10" y="400" font-family="Arial" font-size="12" fill="black">Episode Length</text>
+<path d="M10,633.449 L210,633.449" stroke="gray" />
+<text x="5" y="638.449" font-family="Arial" font-size="10" fill="black">0</text>
+<text x="5" y="420" font-family="Arial" font-size="10" fill="black">492</text>
+<text x="5" y="620" font-family="Arial" font-size="10" fill="black">31</text>
+<path d="M0,620 L10,616.0955 L20,616.0955 L30,602.6464 L40,512.8417 L50,436.9197 L60,556.6594 L70,420 L80,508.0694 L90,526.2906 " stroke="blue" fill="none" />
+</svg>

@@ -9,7 +9,7 @@ namespace DeepUnity
     {
         
         [Tooltip("The maximum length of an agent's episode. Set to a positive integer to limit the episode length to that many steps. Set to 0 for unlimited episode length.")]
-        [Min(1)] public int maxStep = 1000;
+        [Min(0)] public int maxStep = 1000;
 
         [Tooltip("When does the agent performs an action?")]
         [SerializeField] public DecisionRequestType performAction = DecisionRequestType.OnceEachFrame;
@@ -29,8 +29,6 @@ namespace DeepUnity
         /// Handles the WhenRequested case.
         /// </summary>
         public bool decisionWasRequested { get; set; } = false;
-    
-
 
 
         /// <summary>
@@ -56,8 +54,6 @@ namespace DeepUnity
                     throw new KeyNotFoundException("Unhandled action request type!");
             }
         }
-
-
 
         private void FixedUpdate()
         {
@@ -95,8 +91,6 @@ namespace DeepUnity
         }
 
 
-
-
         private enum FrameState
         {
             AllowedToTakeAction,
@@ -114,6 +108,11 @@ namespace DeepUnity
             List<string> dontDrawMe = new List<string> { "m_Script" };
             SerializedObject serializedObject = new SerializedObject(targetScript);
             SerializedProperty performActProperty = serializedObject.FindProperty("performAction");
+            SerializedProperty agentProperty = serializedObject.FindProperty("agent");
+            if (targetScript.maxStep == 0)
+            {
+                EditorGUILayout.HelpBox("Episode's steps are unlimited.", MessageType.None);
+            }
 
             targetScript.maxStep = EditorGUILayout.IntField("Max Step", targetScript.maxStep);
             EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);

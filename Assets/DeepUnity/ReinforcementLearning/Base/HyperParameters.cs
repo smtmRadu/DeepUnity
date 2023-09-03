@@ -27,6 +27,8 @@ namespace DeepUnity
         [Tooltip("Apply normalization to advantages over the memory buffer.")]
         public bool normalizeAdvantages = true;
 
+        [Tooltip("Shuffle the training data each epoch. Increases generalization and convergence and avoid batch effects (in BatchNorm). Decreases policy update time.")]
+        public bool shuffleTrainingData = true;
 
         [Tooltip("Applies linear decay on learning rate. Step occurs on each [Num Epoch * Parallel Agents] times per policy iteration.")]
         [SerializeField] public bool learningRateSchedule = false;

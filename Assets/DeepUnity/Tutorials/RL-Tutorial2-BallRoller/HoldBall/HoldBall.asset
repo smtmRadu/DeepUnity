@@ -17,41 +17,42 @@ MonoBehaviour:
   observationSize: 10
   continuousDim: 2
   discreteBranches: 
-  inferenceDevice: 0
-  trainingDevice: 1
-  standardDeviation: 0
-  standardDeviationValue: 1.25
-  standardDeviationScale: 0
-  normalizeObservations: 1
-  normalizer:
-    step: 184500
-    mean:
-      data:
-      - 0.00046274762
-      - 0.7175052
-      - -0.00087474624
-      - -0.6578047
-      - 0.04935963
-      - -0.37572548
-      - 0.078733906
-      - 0.092509985
-      - 1.2517419
-      - 0.21410687
-      shape: 0a000000
-    m2:
-      data:
-      - 158.59982
-      - 4878.074
-      - 138.99446
-      - 4492.3115
-      - 60000.426
-      - 34355.47
-      - 62410.344
-      - 6770.271
-      - 441.30875
-      - 2309.3752
-      shape: 0a000000
   critic: {fileID: 11400000, guid: 640689d590e2efc42ba2beb2408035b4, type: 2}
   actorMu: {fileID: 11400000, guid: 61b3467c821323a4898516ac223d38cc, type: 2}
   actorSigma: {fileID: 11400000, guid: eea87843cec3939498b2d1c747c060c5, type: 2}
   actorDiscretes: []
+  targetFPS: 50
+  normalizeObservations: 1
+  normalizer:
+    step: 291234
+    mean:
+      data:
+      - 0.0004134959
+      - 0.7166181
+      - -0.0011626398
+      - -0.6623725
+      - 0.055728093
+      - -0.39066696
+      - 0.076938786
+      - 0.10874602
+      - 1.2516295
+      - 0.22251654
+      shape: 0a000000
+    m2:
+      data:
+      - 221.26295
+      - 6993.6
+      - 215.90773
+      - 6504.454
+      - 92383.19
+      - 55855.85
+      - 95764.664
+      - 9966.666
+      - 658.6007
+      - 3476.3713
+      shape: 0a000000
+  standardDeviation: 0
+  standardDeviationValue: 1.5
+  standardDeviationScale: 0
+  inferenceDevice: 0
+  trainingDevice: 1

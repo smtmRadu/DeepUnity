@@ -139,7 +139,7 @@ namespace DeepUnity
         private static Color[] LoadTexturePixels(string filePath)
         {
             throw new NotImplementedException("This method suffer from memory leaks, because the texture must be destroyed!");
-            byte[] fileData;
+            /*byte[] fileData;
 
             if (File.Exists(filePath))
             {
@@ -152,7 +152,7 @@ namespace DeepUnity
             else
             {
                 throw new FileNotFoundException($"File at path {filePath} not found!");
-            }
+            }*/
         }
 
         

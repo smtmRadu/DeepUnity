@@ -1,9 +1,0 @@
-<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
-<text x="10" y="20" font-family="Arial" font-size="16" fill="black"> [DeepUnity] Training Session</text>
-<text x="10" y="40" font-family="Arial" font-size="12" fill="black">Start: 3:29:37 PM, Wednesday, August 30, 2023</text>
-<text x="10" y="60" font-family="Arial" font-size="12" fill="black">End: 3:29:38 PM, Wednesday, August 30, 2023</text>
-<text x="10" y="80" font-family="Arial" font-size="12" fill="black">Real Training Time: 0 hrs : 0 min : 1 sec</text>
-<text x="10" y="100" font-family="Arial" font-size="12" fill="black">Training Time: 0.020.020.08458060.03726190.0270520.02919390.01949220.02332860.01782280.00230990.02234160.02855850.02764580.03367780.019694</text>
-<text x="10" y="120" font-family="Arial" font-size="12" fill="black">Iterations: 0</text>
-<text x="10" y="140" font-family="Arial" font-size="12" fill="black">Parallel Agents: 0</text>
-</svg>

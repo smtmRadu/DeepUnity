@@ -12,6 +12,7 @@ TagManager:
   - Spider
   - Floor
   - Agent
+  - Ball
   layers:
   - Default
   - TransparentFX

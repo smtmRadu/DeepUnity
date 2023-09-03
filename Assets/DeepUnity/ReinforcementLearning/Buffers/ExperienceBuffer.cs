@@ -10,7 +10,7 @@ namespace DeepUnity
 {
     public class ExperienceBuffer
     {
-        private readonly int capacity;
+        public readonly int Capacity;
         public int Count { get; private set; }
         public float CumulativeReward { get => frames.Sum(x => x.reward[0]); }
         public Tensor[] States { get => frames.Select(x => x.state).ToArray(); }
@@ -26,7 +26,7 @@ namespace DeepUnity
 
         public ExperienceBuffer(int capacity)
         {
-            this.capacity = capacity;
+            this.Capacity = capacity;
             frames = new TimestepBuffer[capacity];
             Count = 0;
         }
@@ -94,7 +94,7 @@ namespace DeepUnity
                 frames[r].done = temp;
             }
         }
-        public bool IsFull() => Count == capacity;
+        public bool IsFull() => Count == Capacity;
         public void GAE(in float gamma, in float lambda, in int horizon, Sequential crticNetwork)
         {
             int T = Count;

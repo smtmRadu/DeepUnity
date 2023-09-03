@@ -1,0 +1,21 @@
+<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+<text x="10" y="20" font-family="Arial" font-size="16" fill="black"> [DeepUnity] Training Session</text>
+<text x="10" y="40" font-family="Arial" font-size="12" fill="black">Started at: 9:38:22 PM, Friday, September 1, 2023</text>
+<text x="10" y="60" font-family="Arial" font-size="12" fill="black">Finished at: 9:38:31 PM, Friday, September 1, 2023</text>
+<text x="10" y="80" font-family="Arial" font-size="12" fill="black">Real Training Time: 0 hrs : 0 min : 8 sec</text>
+<text x="10" y="100" font-family="Arial" font-size="12" fill="black">Training Time: 0 hrs : 0 min : 8 sec</text>
+<text x="10" y="120" font-family="Arial" font-size="12" fill="black">Iterations: 0</text>
+<text x="10" y="140" font-family="Arial" font-size="12" fill="black">Parallel Agents: 0</text>
+<text x="10" y="160" font-family="Arial" font-size="12" fill="black">Episode Reward</text>
+<path d="M10,180 L210,180" stroke="gray" />
+<text x="5" y="185" font-family="Arial" font-size="10" fill="black">0</text>
+<text x="5" y="180" font-family="Arial" font-size="10" fill="black">0</text>
+<text x="5" y="380" font-family="Arial" font-size="10" fill="black">0</text>
+<path d="M0,NaN L5,NaN L10,NaN L15,NaN L20,NaN L25,NaN L30,NaN L35,NaN L40,NaN L45,NaN L50,NaN L55,NaN L60,NaN L65,NaN L70,NaN L75,NaN L80,NaN L85,NaN L90,NaN L95,NaN L100,NaN " stroke="blue" fill="none" />
+<text x="10" y="400" font-family="Arial" font-size="12" fill="black">Episode Length</text>
+<path d="M10,703.0189 L210,703.0189" stroke="gray" />
+<text x="5" y="708.0189" font-family="Arial" font-size="10" fill="black">0</text>
+<text x="5" y="420" font-family="Arial" font-size="10" fill="black">150</text>
+<text x="5" y="620" font-family="Arial" font-size="10" fill="black">44</text>
+<path d="M0,589.8113 L5,576.6038 L10,553.9623 L15,506.7924 L20,504.9057 L25,476.6038 L30,567.1698 L35,620 L40,512.4528 L45,587.9245 L50,512.4528 L55,420 L60,484.1509 L65,614.3396 L70,620 L75,586.0377 L80,557.7358 L85,453.9622 L90,527.5472 L95,431.3207 L100,540.7547 " stroke="blue" fill="none" />
+</svg>

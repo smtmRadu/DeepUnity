@@ -747,19 +747,22 @@ MonoBehaviour:
     layernorm:
       device: 0
       gamma:
-        data: []
-        shape: 
+        data:
+        - 1
+        shape: 01000000
       beta:
-        data: []
-        shape: 
-      inputShape: 
+        data:
+        - 0
+        shape: 01000000
       step: 0
       runningMean:
-        data: []
-        shape: 
+        data:
+        - 0
+        shape: 01000000
       runningVar:
-        data: []
-        shape: 
+        data:
+        - 1
+        shape: 01000000
     conv2d:
       device: 0
       gamma:
@@ -828,19 +831,22 @@ MonoBehaviour:
     layernorm:
       device: 0
       gamma:
-        data: []
-        shape: 
+        data:
+        - 1
+        shape: 01000000
       beta:
-        data: []
-        shape: 
-      inputShape: 
+        data:
+        - 0
+        shape: 01000000
       step: 0
       runningMean:
-        data: []
-        shape: 
+        data:
+        - 0
+        shape: 01000000
       runningVar:
-        data: []
-        shape: 
+        data:
+        - 1
+        shape: 01000000
     conv2d:
       device: 0
       gamma:
@@ -883,7 +889,7 @@ MonoBehaviour:
       max_value: 0
   - name: Dense
     dense:
-      device: 1
+      device: 0
       gamma:
         data:
         - -0.08169546
@@ -5069,19 +5075,22 @@ MonoBehaviour:
     layernorm:
       device: 0
       gamma:
-        data: []
-        shape: 
+        data:
+        - 1
+        shape: 01000000
       beta:
-        data: []
-        shape: 
-      inputShape: 
+        data:
+        - 0
+        shape: 01000000
       step: 0
       runningMean:
-        data: []
-        shape: 
+        data:
+        - 0
+        shape: 01000000
       runningVar:
-        data: []
-        shape: 
+        data:
+        - 1
+        shape: 01000000
     conv2d:
       device: 0
       gamma:
@@ -5150,19 +5159,22 @@ MonoBehaviour:
     layernorm:
       device: 0
       gamma:
-        data: []
-        shape: 
+        data:
+        - 1
+        shape: 01000000
       beta:
-        data: []
-        shape: 
-      inputShape: 
+        data:
+        - 0
+        shape: 01000000
       step: 0
       runningMean:
-        data: []
-        shape: 
+        data:
+        - 0
+        shape: 01000000
       runningVar:
-        data: []
-        shape: 
+        data:
+        - 1
+        shape: 01000000
     conv2d:
       device: 0
       gamma:
@@ -5361,19 +5373,22 @@ MonoBehaviour:
     layernorm:
       device: 0
       gamma:
-        data: []
-        shape: 
+        data:
+        - 1
+        shape: 01000000
       beta:
-        data: []
-        shape: 
-      inputShape: 
+        data:
+        - 0
+        shape: 01000000
       step: 0
       runningMean:
-        data: []
-        shape: 
+        data:
+        - 0
+        shape: 01000000
       runningVar:
-        data: []
-        shape: 
+        data:
+        - 1
+        shape: 01000000
     conv2d:
       device: 0
       gamma:
@@ -5442,19 +5457,22 @@ MonoBehaviour:
     layernorm:
       device: 0
       gamma:
-        data: []
-        shape: 
+        data:
+        - 1
+        shape: 01000000
       beta:
-        data: []
-        shape: 
-      inputShape: 
+        data:
+        - 0
+        shape: 01000000
       step: 0
       runningMean:
-        data: []
-        shape: 
+        data:
+        - 0
+        shape: 01000000
       runningVar:
-        data: []
-        shape: 
+        data:
+        - 1
+        shape: 01000000
     conv2d:
       device: 0
       gamma:

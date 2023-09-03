@@ -47,7 +47,7 @@ namespace DeepUnity
         /// </summary>
         public int HitTagIndex { get; set; }
 
-        public string ToString()
+        public override string ToString()
         {
             return $"[HitFraction={NormalizedDistance}, HitTagIndex={HitTagIndex}]";
         }
@@ -67,7 +67,7 @@ namespace DeepUnity
         /// </summary>
         public int OverlappedObjectTagIndex { get; set; }
 
-        public string ToString()
+        public override string ToString()
         {
             return $"[HasOverlappedObject={HasOverlappedObject}, OverlapTagIndex={OverlappedObjectTagIndex}]";
         }
