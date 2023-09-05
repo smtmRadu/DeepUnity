@@ -24,7 +24,7 @@ namespace DeepUnity
         /// <param name="gamma_init">Initializer used for weights.</param>
         /// <param name="beta_init">Initializer used for biases.</param>
         /// <param name="device">Computation device used. Recommended <see cref="Device.GPU"/> for large <see cref="Dense"/> layers with <b>in_features</b> &amp; <b>out_features > 64</b>.</param>
-        public Dense(int in_features, int out_features, InitType gamma_init = InitType.Glorot_Uniform, InitType beta_init = InitType.Zeros, Device device = Device.CPU) 
+        public Dense(int in_features, int out_features, InitType gamma_init = InitType.LeCun_Uniform, InitType beta_init = InitType.LeCun_Uniform, Device device = Device.CPU) 
             : base(device, 
                   gamma_init, 
                   beta_init,

@@ -21,23 +21,59 @@ namespace DeepUnity
             this.predicts = predicts;
             this.targets = targets;
         }
+        /// <summary>
+        /// Mean Square Error loss. <br></br>
+        /// Predicts: (B, *) or (*) for unbatched input <br></br>
+        /// Targets: (B, *) or (*) for unbatched input <br></br>
+        /// where * = input Shape
+        /// </summary>
         public static Loss MSE(Tensor predicts, Tensor targets) => new Loss(LossType.MSE, predicts, targets);
+        /// <summary>
+        /// Mean Absolute Error loss. <br></br>
+        /// Predicts: (B, *) or (*) for unbatched input <br></br>
+        /// Targets: (B, *) or (*) for unbatched input <br></br>
+        /// where * = input Shape
+        /// </summary>
         public static Loss MAE(Tensor predicts, Tensor targets) => new Loss(LossType.MAE, predicts, targets);
-        public static Loss CrossEntropy(Tensor predicts, Tensor targets) => new Loss(LossType.CE, predicts, targets);   
+        /// <summary>
+        /// Cross Entropy loss. <br></br>
+        /// Predicts: (B, *) or (*) for unbatched input <br></br>
+        /// Targets: (B, *) or (*) for unbatched input <br></br>
+        /// where * = input Shape
+        /// </summary>
+        public static Loss CrossEntropy(Tensor predicts, Tensor targets) => new Loss(LossType.CE, predicts, targets);
+        /// <summary>
+        /// Hinge Hmbedded loss. <br></br>
+        /// Predicts: (B, *) or (*) for unbatched input <br></br>
+        /// Targets: (B, *) or (*) for unbatched input <br></br>
+        /// where * = input Shape
+        /// </summary>
         public static Loss HingeEmbedded(Tensor predicts, Tensor targets) => new Loss(LossType.HE, predicts, targets);
+        /// <summary>
+        /// Binary Cross Entropy loss. <br></br>
+        /// Predicts: (B, *) or (*) for unbatched input <br></br>
+        /// Targets: (B, *) or (*) for unbatched input <br></br>
+        /// where * = input Shape
+        /// </summary>
         public static Loss BinaryCrossEntropy(Tensor predicts, Tensor targets) => new Loss(LossType.BCE, predicts, targets);
+        /// <summary>
+        /// Hullback-Liebler Divergence loss. <br></br>
+        /// Predicts: (B, *) or (*) for unbatched input <br></br>
+        /// Targets: (B, *) or (*) for unbatched input <br></br>
+        /// where * = input Shape
+        /// </summary>
         public static Loss KLDivergence(Tensor predicts, Tensor targets) => new Loss(LossType.KL, predicts, targets);
 
         /// <summary>
-        /// Returns the mean loss.
+        /// Returns the mean loss value (positive number).
         /// </summary>
         public float Item { get
             {
                 Tensor lossItem = Value;
                 if (lossItem.Rank == 2)// case is batched
-                    return lossItem.Mean(0).Mean(0)[0];
+                    return lossItem.Mean(0).Mean(0).Abs()[0];
                 else
-                    return lossItem.Mean(0)[0];
+                    return lossItem.Mean(0).Abs()[0];
 
             }
         }

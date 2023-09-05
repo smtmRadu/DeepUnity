@@ -21,10 +21,12 @@ namespace DeepUnity
         [SerializeField, ReadOnly] public int observationSize;
         [SerializeField, ReadOnly] public int continuousDim;
         [SerializeField, ReadOnly] public int[] discreteBranches;
-        [SerializeField] public Sequential critic;
-        [SerializeField] public Sequential actorMu;
-        [SerializeField] public Sequential actorSigma;
-        [SerializeField] public Sequential[] actorDiscretes;
+
+        [Header("Neural Networks")]
+        [SerializeField] public NeuralNetwork critic;
+        [SerializeField] public NeuralNetwork actorMu;
+        [SerializeField] public NeuralNetwork actorSigma;
+        [SerializeField] public NeuralNetwork[] actorDiscretes;
 
 
 
@@ -34,11 +36,13 @@ namespace DeepUnity
         [Range(30, 100)]
         public int targetFPS = 50;
 
+        [Space]
         [SerializeField, Tooltip("Auto-normalize input observations.")]
         public bool normalizeObservations = false;
         [ReadOnly, SerializeField, Tooltip("Observations normalizer data.")] 
         public ZScoreNormalizer normalizer;
 
+        [Space]
         [SerializeField, Tooltip("The standard deviation for Continuous Actions")] 
         public StandardDeviationType standardDeviation = StandardDeviationType.Fixed;
         [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
@@ -48,6 +52,7 @@ namespace DeepUnity
         [SerializeField, Range(0.1f, 3f)]
         public float standardDeviationScale = 1f;
 
+        [Space]
         [SerializeField, Tooltip("Network forward progapation is runned on this device when the agents interfere with the environment. It is recommended to be kept on CPU." +
            " The best way to find the optimal device is to check the number of fps when running out multiple environments.")]
         public Device inferenceDevice = Device.CPU;
@@ -87,7 +92,7 @@ namespace DeepUnity
             const InitType INIT_B = InitType.LeCun_Uniform;
             const Device dev = Device.CPU;
 
-            critic = new Sequential(
+            critic = new NeuralNetwork(
                 new Dense(stateSize, H_64, INIT_W, INIT_B, device: dev),
                 new ReLU(),
                 new Dense(H_64, H_64, INIT_W, INIT_B, device: dev),
@@ -96,7 +101,7 @@ namespace DeepUnity
 
             if(IsUsingContinuousActions)
             {
-                actorMu = new Sequential(
+                actorMu = new NeuralNetwork(
                 new Dense(stateSize, H_64, INIT_W, INIT_B, device: dev),
                 new ReLU(),
                 new Dense(H_64, H_64, INIT_W, INIT_B, device: dev),
@@ -104,15 +109,15 @@ namespace DeepUnity
                 new Dense(H_64, continuousActions, INIT_W, INIT_B, device: dev),
                 new Tanh());
 
-                actorSigma = new Sequential(
+                actorSigma = new NeuralNetwork(
                     new Dense(stateSize, H_64, INIT_W, INIT_B, device: dev),
                     new ReLU(),
                     new Dense(H_64, continuousActions, INIT_W, INIT_B, device: dev),
-                    new Exp());
+                    new Exp()); // Softplus()
             }
             if(IsUsingDiscreteActions)
             {
-                actorDiscretes = new Sequential[discreteBranches.Length];
+                actorDiscretes = new NeuralNetwork[discreteBranches.Length];
                 for (int i = 0; i < actorDiscretes.Length; i++)
                 {
                     if (discreteBranches[i] < 2)
@@ -121,7 +126,7 @@ namespace DeepUnity
                         return;
                     }
 
-                    actorDiscretes[i] = new Sequential(
+                    actorDiscretes[i] = new NeuralNetwork(
                         new Dense(stateSize, H_64, INIT_W, INIT_B, device: dev),
                         new ReLU(),
                         new Dense(H_64, H_64, INIT_W, INIT_B, device: dev),

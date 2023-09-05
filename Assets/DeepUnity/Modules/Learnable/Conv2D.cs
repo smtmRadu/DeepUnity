@@ -130,16 +130,14 @@ namespace DeepUnity
                 throw new ShapeException($"The input ({input.Shape.ToCommaSeparatedString()}) in Conv2D module must be (B, C, H, W) or (C, H, W) for unbatched input.");
 
             if(input.Size(-3) != inputShape[0] || input.Size(-2) != inputShape[1] || input.Size(-1) != inputShape[2])
-                throw new ShapeException($"Input shape ({input.Size(-3)}{input.Size(-2)}{input.Size(-1)}) received in Conv2D module must be ({inputShape.ToCommaSeparatedString()})");
+                throw new ShapeException($"Input shape ({input.Shape.ToCommaSeparatedString()}) received in Conv2D module must be ({inputShape.ToCommaSeparatedString()})");
 
             int batch_size = input.Rank == 4 ? input.Size(-4) : 1;
 
             if(device == Device.CPU)
             {
-                if(input.Rank == 3)
-                {
+                if (input.Rank == 3)
                     return Correlate2DValid_input_kernels(input, gamma).Squeeze(-4) + beta; // if input (C, H, W), we keep the shape
-                }
                 else
                     return Correlate2DValid_input_kernels(input, gamma) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
             }
@@ -161,10 +159,6 @@ namespace DeepUnity
                 ComputeBuffer gammaBuffer = new ComputeBuffer(gamma.Count(), 4);
                 gammaBuffer.SetData(gamma.ToArray());
                 cs.SetBuffer(0, "gamma", gammaBuffer);
-
-                ComputeBuffer betaBuffer = new ComputeBuffer(beta.Count(), 4);  
-                betaBuffer.SetData(beta.ToArray());
-                cs.SetBuffer(0, "beta", betaBuffer);
 
                 ComputeBuffer outputBuffer = new ComputeBuffer(batch_size * C_out * H_out * W_out, 4);
                 outputBuffer.SetData(new float[batch_size * C_out * H_out * W_out]);
@@ -189,13 +183,12 @@ namespace DeepUnity
 
                 inputBuffer.Release();
                 gammaBuffer.Release();
-                betaBuffer.Release();
                 outputBuffer.Release();
 
                 if(input.Rank == 3)
-                    return result.Squeeze(-4);
+                    return result.Squeeze(-4) + beta;
                 else
-                    return result;
+                    return result + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
             }
         }
 
@@ -340,57 +333,57 @@ namespace DeepUnity
 
              output = Tensor.Zeros(batchSize, outputChannels, outputHeight, outputWidth);
 
-             if(batchSize > 1)
-                 Parallel.For(0, batchSize, b =>
-                 {
-                     for (int oc = 0; oc < outputChannels; oc++)
-                     {
-                         for (int ic = 0; ic < inputChannels; ic++)
-                         {
-                             for (int h = 0; h < outputHeight; h++)
-                             {
-                                 for (int w = 0; w < outputWidth; w++)
-                                 {
-                                     float sum = 0f;
+            if (batchSize > 1)
+                Parallel.For(0, batchSize, b =>
+                {
+                    for (int oc = 0; oc < outputChannels; oc++)
+                    {
+                        for (int ic = 0; ic < inputChannels; ic++)
+                        {
+                            for (int h = 0; h < outputHeight; h++)
+                            {
+                                for (int w = 0; w < outputWidth; w++)
+                                {
+                                    float sum = 0f;
 
-                                     for (int j = 0; j < kernelHeight; j++)
-                                     {
-                                         for (int i = 0; i < kernelWidth; i++)
-                                         {
-                                             sum += input[b, ic, h + j, w + i] * kernels[oc, ic, j, i];
-                                         }
-                                     }
+                                    for (int j = 0; j < kernelHeight; j++)
+                                    {
+                                        for (int i = 0; i < kernelWidth; i++)
+                                        {
+                                            sum += input[b, ic, h + j, w + i] * kernels[oc, ic, j, i];
+                                        }
+                                    }
 
-                                     output[b, oc, h, w] += sum;
-                                 }
-                             }
-                         }
-                     }
-                 });
-             else
-                 for (int oc = 0; oc < outputChannels; oc++)
-                 {
-                     for (int ic = 0; ic < inputChannels; ic++)
-                     {
-                         for (int h = 0; h < outputHeight; h++)
-                         {
-                             for (int w = 0; w < outputWidth; w++)
-                             {
-                                 float poolSum = 0f;
+                                    output[b, oc, h, w] += sum;
+                                }
+                            }
+                        }
+                    }
+                });
+            else
+                Parallel.For(0, outputChannels, oc =>
+                {
+                    for (int ic = 0; ic < inputChannels; ic++)
+                    {
+                        for (int h = 0; h < outputHeight; h++)
+                        {
+                            for (int w = 0; w < outputWidth; w++)
+                            {
+                                float poolSum = 0f;
 
-                                 for (int j = 0; j < kernelHeight; j++)
-                                 {
-                                     for (int i = 0; i < kernelWidth; i++)
-                                     {
-                                         poolSum += input[0, ic, h + j, w + i] * kernels[oc, ic, j, i];
-                                     }
-                                 }
+                                for (int j = 0; j < kernelHeight; j++)
+                                {
+                                    for (int i = 0; i < kernelWidth; i++)
+                                    {
+                                        poolSum += input[0, ic, h + j, w + i] * kernels[oc, ic, j, i];
+                                    }
+                                }
 
-                                 output[0, oc, h, w] += poolSum;
-                             }
-                         }
-                     }
-                 }
+                                output[0, oc, h, w] += poolSum;
+                            }
+                        }
+                    }
+                });
             
 
 
@@ -415,9 +408,35 @@ namespace DeepUnity
             int lossWidth = loss.Size(-1);   
 
             // correlation type = valid
-            Parallel.For(0, outChannels, oc =>
-            {
-                for (int b = 0; b < batchSize; b++)
+            if(batchSize > 1)
+                Parallel.For(0, batchSize, b =>
+                {
+                    for (int oc = 0; oc < outChannels; oc++)
+                    {
+                        for (int ic = 0; ic < inChannels; ic++)
+                        {
+                            for (int h = 0; h < kernelHeight; h++)
+                            {
+                                for (int w = 0; w < kernelWidth; w++)
+                                {
+                                    float sum = 0f;
+
+                                    for (int j = 0; j < lossHeight; j++)
+                                    {
+                                        for (int i = 0; i < lossWidth; i++)
+                                        {
+                                            sum += input[b, ic, h + j, w + i] * loss[b, oc, j, i];
+                                        }
+                                    }
+
+                                    kernGrad[oc, ic, h, w] += sum;
+                                }
+                            }
+                        }
+                    }
+                }); 
+            else
+                Parallel.For(0, outChannels, oc =>
                 {
                     for (int ic = 0; ic < inChannels; ic++)
                     {
@@ -431,7 +450,7 @@ namespace DeepUnity
                                 {
                                     for (int i = 0; i < lossWidth; i++)
                                     {
-                                        sum += input[b, ic, h + j, w + i] * loss[b, oc, j, i];
+                                        sum += input[0, ic, h + j, w + i] * loss[0, oc, j, i];
                                     }
                                 }
 
@@ -439,8 +458,7 @@ namespace DeepUnity
                             }
                         }
                     }
-                }
-            }); 
+                });
 
 
             return kernGrad;
@@ -465,7 +483,7 @@ namespace DeepUnity
             /// convolution type == full
             Tensor inputGrad = Tensor.Zeros(batchSize, inChannels, inputGradHeight, inputGradWidth);
 
-            if(batchSize > 1)
+            if (batchSize > 1)
                 Parallel.For(0, batchSize, b =>
                 {
                     for (int ic = 0; ic < inChannels; ic++)
@@ -477,14 +495,14 @@ namespace DeepUnity
                                 for (int w = 0; w < inputGradWidth; w++)
                                 {
                                     float poolSum = 0f;
-                
+
                                     for (int j = 0; j < kernelHeight; j++)
                                     {
                                         for (int i = 0; i < kernelWidth; i++)
                                         {
                                             int inputRow = h - j;
                                             int inputCol = w - i;
-                
+
                                             if (inputRow >= 0 && inputRow < lossHeight && inputCol >= 0 && inputCol < lossWidth)
                                             {
                                                 // the kernels are rotated by 180 degrees, so we get the inversed index of the kernel.
@@ -501,9 +519,9 @@ namespace DeepUnity
                     }
                 });
             else
-                for (int ic = 0; ic < inChannels; ic++)
+                Parallel.For(0, outChannels, oc =>
                 {
-                    for (int oc = 0; oc < outChannels; oc++)
+                    for (int ic = 0; ic < inChannels; ic++)
                     {
                         for (int h = 0; h < inputGradHeight; h++)
                         {
@@ -531,7 +549,7 @@ namespace DeepUnity
                             }
                         }
                     }
-                }
+                });
 
             return inputGrad;
         }

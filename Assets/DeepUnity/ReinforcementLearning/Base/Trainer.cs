@@ -133,7 +133,7 @@ namespace DeepUnity
 
                 if(Instance.trainingStatisticsTrack.iterations > 0)
                 {
-                    string pth = Instance.trainingStatisticsTrack.ExportAsSVG(Instance.ac.behaviourName);
+                    string pth = Instance.trainingStatisticsTrack.ExportAsSVG(Instance.ac.behaviourName, Instance.hp, Instance.ac);
                     UnityEngine.Debug.Log($"<color=#57f542>Training Session statistics log saved at <b><i>{pth}</i></b>.</color>");
                     AssetDatabase.Refresh();
                 }               
@@ -231,6 +231,7 @@ namespace DeepUnity
                             ac.actorDiscretesSchedulers[i].Step();
                         }
                     }
+                    // Also Epsilon step and beta step must be runned here, but maybe in the future.
                         
 
                     // Save statistics info
@@ -255,13 +256,13 @@ namespace DeepUnity
 
             ac.criticOptimizer.ZeroGrad();
             ac.critic.Backward(criticLoss.Derivative);
-            ac.criticOptimizer.ClipGradNorm(0.5f);
+            ac.criticOptimizer.ClipGradNorm(hp.gradClipNorm);
             ac.criticOptimizer.Step();
 
             meanValueLoss += criticLoss.Item;
         }
         /// <summary>
-        /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>)  where * = <em>Observations Shape</em><br></br>
+        /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>)  where * = <em>Observations Shape (default: Space Size)</em><br></br>
         /// <paramref name="advantages"/> - <em>A</em> | Tensor(<em>Batch Size, 1</em>) <br></br>
         /// <paramref name="actions"/> - <em>a</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
         /// <paramref name="piOld"/> - <em>πθold(a|s) </em>| Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
@@ -336,7 +337,7 @@ namespace DeepUnity
             Tensor dmLClip_dMu = dmLClip_dPi * dPi_dMu;
             ac.actorMuOptimizer.ZeroGrad();
             ac.actorMu.Backward(dmLClip_dMu);
-            ac.actorMuOptimizer.ClipGradNorm(0.5f);
+            ac.actorMuOptimizer.ClipGradNorm(hp.gradClipNorm);
             ac.actorMuOptimizer.Step();
 
             if(ac.standardDeviation == StandardDeviationType.Trainable)
@@ -349,7 +350,7 @@ namespace DeepUnity
 
                 ac.actorSigmaOptimizer.ZeroGrad();
                 ac.actorSigma.Backward(dmLClip_dSigma);
-                ac.actorSigmaOptimizer.ClipGradNorm(0.5f);
+                ac.actorSigmaOptimizer.ClipGradNorm(hp.gradClipNorm);
                 ac.actorSigmaOptimizer.Step();
             }
            

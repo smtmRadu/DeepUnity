@@ -1,6 +1,5 @@
 RWStructuredBuffer<float> input; // (in_channels, in_height, in_width)
 RWStructuredBuffer<float> gamma; // (out_channels, in_channels, kernelSize, kernelSize)
-RWStructuredBuffer<float> beta; // (out_channels, out_height, out_width);
 RWStructuredBuffer<float> output;
 RWStructuredBuffer<float> gamma_grad;
 RWStructuredBuffer<float> beta_grad;
@@ -25,14 +24,6 @@ void gamma_grad_add(int b, int c, int h, int w, float value)
 {
     gamma_grad[b * in_channels * kernel_height * kernel_width + c * kernel_height * kernel_width + h * kernel_width + w] += value;
 }
-float beta_get(int c, int h, int w)
-{
-    return beta[c * out_height * out_width + h * out_width + w];
-}
-void beta_grad_add(int c, int h, int w, float value)
-{
-    beta[c * out_height * out_width + h * out_width + w] += value;
-}
 float input_get(int b, int c, int h, int w)
 {
     return input[b * in_channels * in_height * in_width + c * in_height * in_width + h * in_width + w];
@@ -54,7 +45,6 @@ void input_grad_add(int b, int c, int h, int w, float value)
 [numthreads(16, 16, 4)]
 void Forward(int3 id : SV_DispatchThreadID)
 {
-  
    // id.x = out_width, id.y = out_height, id.z = out_channels
    // 1. Apply valid correlation between input and gamma
    // 2. Add beta to the end
@@ -68,7 +58,7 @@ void Forward(int3 id : SV_DispatchThreadID)
     {
         for (int ic = 0; ic < in_channels; ic++)
         {
-            float sum = beta_get(id.z, id.y, id.x);
+            float sum = 0.0f; // beta is added in C# (due to an error - first byte of the float number is incremeneted by one sometime no reason why - beta no longer added here, also efficiency reasons)
             for (int j = 0; j < kernel_height; j++)
             {
                 for (int i = 0; i < kernel_width; i++)
@@ -78,7 +68,6 @@ void Forward(int3 id : SV_DispatchThreadID)
             }
             output_add(b, id.z, id.y, id.x, sum);
         }
-
     }
 }
 
@@ -96,7 +85,7 @@ void ComputeKernelsGradients3(int3 id : SV_DispatchThreadID)
     {
         for (int ic = 0; ic < in_channels; ic++)
         {
-            float sum = 0.0f;
+            float sum = 0.;
             
             for (int j = 0; j < out_height; j++)
             {
@@ -127,7 +116,7 @@ void ComputeKernelsGradients5(int3 id : SV_DispatchThreadID)
     {
         for (int ic = 0; ic < in_channels; ic++)
         {
-            float sum = 0.0f;
+            float sum = 0.;
             
             for (int j = 0; j < out_height; j++)
             {

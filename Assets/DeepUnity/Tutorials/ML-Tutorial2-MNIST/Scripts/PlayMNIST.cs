@@ -10,11 +10,11 @@ namespace DeepUnityTutorials
     {
 
         [SerializeField] public Image image;
-        [SerializeField] public TMPro.TMP_Text digitPredictionText;
-        [SerializeField] public TMPro.TMP_Text softmaxOutputText;
+        [SerializeField] public Text digitPredictionText;
+        [SerializeField] public Text softmaxOutputText;
 
 
-        [SerializeField] public Sequential network;
+        [SerializeField] public NeuralNetwork network;
         [SerializeField] public int brushRadius = 1;
         [SerializeField] public float brushStrength = 0.1f;
 

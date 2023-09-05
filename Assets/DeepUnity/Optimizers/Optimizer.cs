@@ -45,6 +45,7 @@ namespace DeepUnity
         /// <summary>
         /// Computes the clip grad norm globally over all <see cref="Learnable"/> layers. If <paramref name="max_norm"/> = 0, no changes are made.
         /// </summary>
+        /// <param name="max_norm">If is 0, nothing is changed</param>
         public void ClipGradNorm(float max_norm, NormType normType = NormType.EuclideanL2)
         {
             if (max_norm == 0)
@@ -64,7 +65,7 @@ namespace DeepUnity
             }
 
             // Concatenate all gradients in a single tensor vector
-            float[] vector = new float[totalCount];
+            Tensor vector = Tensor.Zeros(totalCount);
             int index = 0;
             foreach (var param in parameters)
             {
@@ -97,7 +98,7 @@ namespace DeepUnity
             }
 
             // Compute norm
-            Tensor norm = Tensor.Norm(Tensor.Constant(vector), normType);
+            Tensor norm = Tensor.Norm(vector, normType);
 
             if (norm[0] <= max_norm)
                 return;

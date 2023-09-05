@@ -2,7 +2,6 @@ using UnityEngine;
 using DeepUnity;
 using System.Collections.Generic;
 using UnityEngine.UI;
-using System;
 
 namespace kbRadu
 {
@@ -15,9 +14,9 @@ namespace kbRadu
         public int Runs = 100;
         public Optimizer optim;
         public RNN rnn_network;
-        public Sequential net;
-        public Image image;
-        public Image image2;
+        public NeuralNetwork net;
+        public RawImage image;
+        public RawImage image2;
 
         public PerformanceGraph graph = new PerformanceGraph();
 
@@ -25,40 +24,10 @@ namespace kbRadu
         public int whatIsIt = 0;
         List<(Tensor, Tensor)> train;
 
-        /* private void Start()
-         {
-             Conv2DLearnTest();
-         }
 
-         Tensor input = Tensor.RandomNormal(64, 1, 28, 28);
-         Tensor target = Tensor.RandomNormal(64, 5 * 26 * 26);
-         void Conv2DLearnTest()
-         {
-             net = new Sequential(
-                new Conv2D((1, 28, 28), out_channels: 5, kernel_size: 3, gamma_init: InitType.Random_Normal, beta_init: InitType.Random_Normal, device: TestDevice),
-                new Flatten());
-
-             optim = new Adam(net.Parameters(), lr: lr);
-         }
-
-         private void Update()
-         {
-             var pred = net.Forward(input);
-             var loss = Loss.MSE(pred, target);
-             net.Backward(loss.Derivative);
-             // optim.ClipGradNorm(1f);
-             optim.Step();
-             print($"Epoch {Time.frameCount} | Loss: {loss.Item}");
-             graph.Append(loss.Item);
-         }*/
-
-        public void Update()
-        {
-            graph.Append(1f);
-        }
         void TestCrossEntropy()
         {
-            var net = new Sequential(
+            var net = new NeuralNetwork(
                 new Dense(10, 100),
                 new Tanh(),
                 new Dense(100, 5),
@@ -100,7 +69,7 @@ namespace kbRadu
         }
         void RunAllModules()
         {
-            var net = new Sequential(
+            var net = new NeuralNetwork(
                 new Conv2D((1, 28, 28), 5, 3, device: TestDevice),
                 new MaxPool2D(2),
                 new Conv2D((5, 13, 13), 1, 3, device: TestDevice),
@@ -133,7 +102,7 @@ namespace kbRadu
 
         void MNISTForwardBenchmark()
         {
-            var network = new Sequential(
+            var network = new NeuralNetwork(
                 new Conv2D((1, 28, 28), 5, 3),                    // outs (5, 26, 26)
                 new ReLU(),
                 new MaxPool2D(2),                               // outs (5, 13, 13)

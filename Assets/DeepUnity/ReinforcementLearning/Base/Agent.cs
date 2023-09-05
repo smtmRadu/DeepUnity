@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
@@ -12,7 +12,7 @@ namespace DeepUnity
     [DisallowMultipleComponent, RequireComponent(typeof(DecisionRequester))]
     public abstract class Agent : MonoBehaviour
     {
-        [SerializeField] private int spaceSize = 2;
+        [SerializeField, Min(1)] private int spaceSize = 2;
         [SerializeField, Min(0)] private int continuousActions = 2;
         [SerializeField] private int[] discreteBranches = new int[0];
 
@@ -208,7 +208,6 @@ namespace DeepUnity
 
                 if (Timestep.done[0] == 1)
                 {
-                    Debug.Log($"here {EpisodeStepCount}");
                     PerformanceTrack?.episodeLength.Append(EpisodeStepCount);
                     PerformanceTrack?.episodeReward.Append(EpsiodeCumulativeReward);
                     EpisodeStepCount = 1;
@@ -388,22 +387,22 @@ namespace DeepUnity
             {
                 float bufferFillPercentage = script.Memory.Count / (float)script.Memory.Capacity * 100;
                 StringBuilder sb = new StringBuilder();
-                sb.Append("Buffer [");         
-                for (int i = 0; i < 100; i+=5)
-                {
-                    if (i == 45)
-                        sb.Append($"{bufferFillPercentage.ToString("0.0")}%");
-                    else if (i == 50)
-                        continue;
-                    else if (i <= bufferFillPercentage)
-                        sb.Append("=");
-                    else
-                        sb.Append("..");
-                }
-                sb.Append("] [");
+                sb.Append("Buffer [");
                 sb.Append(script.Memory.Count);
                 sb.Append(" / ");
                 sb.Append(script.Memory.Capacity);
+                sb.Append("] \n[");
+                for (float i = 1.25f; i <= 100f; i+=1.25f)
+                {
+                    if (i == 47.5f)
+                        sb.Append($"{bufferFillPercentage.ToString("00.0")}%");
+                    else if (i > 47.5f && i <= 53.75f)
+                        continue;
+                    else if (i <= bufferFillPercentage)
+                        sb.Append("▮");
+                    else
+                        sb.Append("▯");
+                }
                 sb.Append("]");
                 EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
                 // EditorGUILayout.HelpBox($"Reward [{script.EpsiodeCumulativeReward}]",

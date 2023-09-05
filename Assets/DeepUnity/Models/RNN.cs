@@ -7,6 +7,7 @@ using UnityEngine.Windows;
 using Unity.VisualScripting;
 using System.Drawing.Printing;
 using System.Text;
+using System.CodeDom;
 
 namespace DeepUnity
 {
@@ -210,7 +211,7 @@ namespace DeepUnity
         /// loss w.r.t outputs: <b>(L, H_out)</b> for unbatched input, or <b>(L, B, H_out)</b> when batch_first = false or <b>(B, L, H_out)</b> when batch_first = true. <br></br>
         /// </summary>
         /// <param name="lossDerivative"></param>
-        public override void Backward(Tensor lossDerivative)
+        public override Tensor Backward(Tensor lossDerivative)
         {
             BaseBackward();
             Tensor loss_clone = Tensor.Identity(lossDerivative);
@@ -258,6 +259,8 @@ namespace DeepUnity
                     loss_sequence[t] = modules[m].Backward(loss_sequence[t]);
                 }
             }
+
+            return Tensor.Cat(null, loss_sequence);
         }
 
         public override string Summary()

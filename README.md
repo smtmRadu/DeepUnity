@@ -1,92 +1,94 @@
 # DeepUnity
 
-DeepUnity is an add-on framework that provides tensor computation [with GPU support] and deep neural networks, resembling a compound syntax between PyTorch and TensorFlow, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO).
-
+DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, resembling a compound syntax between PyTorch and TensorFlow, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO).
 
 #### Run your first DeepUnity script
 ```csharp
 using UnityEngine;
 using DeepUnity;
 
-public class Tutorial : MonoBehaviour
+namespace DeepUnityTutorials
 {
-    [Header("Learning z = x^2 + y^2 function")]
-    [SerializeField] private Sequential network;
-    [SerializeField] private PerformanceGraph trainLossGraph = new PerformanceGraph();
-    [SerializeField] private PerformanceGraph validLossGraph = new PerformanceGraph();
-   
-    private Optimizer optim;
-    private LRScheduler scheduler;
-
-    private Tensor train_inputs;
-    private Tensor train_targets;
-    private Tensor valid_inputs;
-    private Tensor valid_targets;
-
-    public void Start()
+    public class Tutorial : MonoBehaviour
     {
-        if (network == null)
+        [Header("Learning z = x^2 + y^2.")]
+        [SerializeField] private NeuralNetwork network;
+        [SerializeField] private PerformanceGraph trainLossGraph = new PerformanceGraph();
+        [SerializeField] private PerformanceGraph validLossGraph = new PerformanceGraph();
+
+        private Optimizer optim;
+        private LRScheduler scheduler;
+
+        private Tensor train_inputs;
+        private Tensor train_targets;
+        private Tensor valid_inputs;
+        private Tensor valid_targets;
+
+        public void Start()
         {
-            network = new Sequential(
-                new Dense(2, 64),
-                new Tanh(),
-                new Dense(64, 64, device: Device.GPU),
-                new ReLU(),
-                new Dense(64, 1)).CreateAsset("TutorialModel");
+            if (network == null)
+            {
+                network = new NeuralNetwork(
+                    new Dense(2, 64),
+                    new Tanh(),
+                    new Dense(64, 64, device: Device.GPU),
+                    new ReLU(),
+                    new Dense(64, 1)).CreateAsset("TutorialModel");
+            }
+            optim = new Adam(network.Parameters(), 0.001f);
+            scheduler = new LRScheduler(optim, 30, 0.1f);
+
+            // Generate training dataset
+            int data_size = 1024;
+            Tensor x = Tensor.RandomNormal(data_size, 1);
+            Tensor y = Tensor.RandomNormal(data_size, 1);
+            train_inputs = Tensor.Cat(1, x, y);
+            train_targets = x * x + y * y;
+
+            // Generate validation set
+            int valid_size = 64;
+            x = Tensor.RandomNormal(valid_size, 1);
+            y = Tensor.RandomNormal(valid_size, 1);
+            valid_inputs = Tensor.Cat(1, x, y);
+            valid_targets = x * x + y * y;
         }
-        optim = new Adam(network.Parameters(), 0.001f);
-        scheduler = new LRScheduler(optim, 30, 0.1f);
 
-        // Generate training dataset
-        int data_size = 1024;
-        Tensor x = Tensor.RandomNormal(data_size, 1);
-        Tensor y = Tensor.RandomNormal(data_size, 1);
-        train_inputs = Tensor.Cat(1, x, y);
-        train_targets = x * x + y * y;
-
-        // Generate validation set
-        int valid_size = 64;
-        x = Tensor.RandomNormal(valid_size, 1);
-        y = Tensor.RandomNormal(valid_size, 1);
-        valid_inputs = Tensor.Cat(1, x, y);
-        valid_targets = x * x + y * y;
-    }
-
-    public void Update()
-    {
-        // Training. Split the dataset into batches of 32.
-        float train_loss = 0f;
-        Tensor[] input_batches = train_inputs.Split(0, 32);
-        Tensor[] target_batches = train_targets.Split(0, 32);
-        for (int i = 0; i < input_batches.Length; i++)
+        public void Update()
         {
-            Tensor prediction = network.Forward(input_batches[i]);
-            Loss loss = Loss.MSE(prediction, target_batches[i]);
+            // Training. Split the dataset into batches of 32.
+            float train_loss = 0f;
+            Tensor[] input_batches = train_inputs.Split(0, 32);
+            Tensor[] target_batches = train_targets.Split(0, 32);
+            for (int i = 0; i < input_batches.Length; i++)
+            {
+                Tensor prediction = network.Forward(input_batches[i]);
+                Loss loss = Loss.MSE(prediction, target_batches[i]);
 
-            optim.ZeroGrad();
-            network.Backward(loss.Derivative);
-            optim.ClipGradNorm(0.5f);
-            optim.Step();
+                optim.ZeroGrad();
+                network.Backward(loss.Derivative);
+                optim.ClipGradNorm(0.5f);
+                optim.Step();
 
-            train_loss += loss.Item;
+                train_loss += loss.Item;
+            }
+            train_loss /= input_batches.Length;
+            trainLossGraph.Append(train_loss);
+
+            // Validation
+            Tensor valid_prediction = network.Predict(valid_inputs);
+            float valid_loss = Metrics.MeanSquaredError(valid_prediction, valid_targets);
+            validLossGraph.Append(valid_loss);
+
+            print($"Epoch: {Time.frameCount} - Train Loss: {train_loss} - Valid Loss: {valid_loss}");
+
+            scheduler.Step();
+            network.Save();
         }
-        trainLossGraph.Append(train_loss / input_batches.Length);
-
-        // Validation
-        Tensor valid_prediction = network.Predict(valid_inputs);
-        float valid_loss = Metrics.MeanSquaredError(valid_prediction, valid_targets);
-        validLossGraph.Append(valid_loss);
-
-        print($"Epoch: {Time.frameCount} - Train Loss: {train_loss} - Valid Loss: {valid_loss}");
-
-        scheduler.Step();
-        network.Save();
     }
 }
 ```
-![rl](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/tensors.png?raw=true)
 
-### Reinforcement Learning using PPO
+## Reinforcement Learning with PPO
 In order to work with Reinforcement Learning tools, you must create a 2D or 3D agent using Unity provided GameObjects and Components. The setup flow works similary to ML Agents, so you must create a new behaviour script (e.g. _MoveToGoal_) that must inherit the **Agent** class. Attach the new behaviour script to the agent GameObject (automatically **DecisionRequester** script is attached too) [Optionally, a **TrainingStatistics** script can be attached]. Choose the space size and number of continuous/discrete actions, then override the following methods in the behavior script:
 - _CollectObservations()_
 - _OnActionReceived()_
@@ -102,7 +104,7 @@ Also in order to decide the reward function and episode terminal state, or telli
 When the setup is ready, press the _Bake_ button, this way a behaviour along with all neural networks and hyperparameters assets are created inside a folder with the _behaviour's name_, located in _Assets/_ folder. From this point everything is ready to go. 
 
 To get into advanced training, check out the following assets created:
-- **Behaviour** can be set whether to use a fixed or trainable standard deviation for continuous actions, along with the associated exploration strength value. Inference devices are also available to be set, but is recommended to be kept on default.
+- **Behaviour** can be set whether to use a fixed or trainable standard deviation for continuous actions, along with the associated exploration strength value. Inference devices are also available to be set, but is recommended to be kept on default. TargetFPS modifies the rate of physics update, being equal to _1 / time.fixedDeltaTime (default:v50)_.
 - **Config** provides all hyperparameters necesarry for a custom training session.
 
 #### Behaviour script overriding example
@@ -177,13 +179,23 @@ _This example considers an agent (with 4 space size and 2 continuous actions) po
 
 ![agent](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/agent.gif?raw=true)
 
+
+
 TIPS: 
+- Editor FPS must not be lower than **TargetFPS** value (default: 50, the frame rate of physics simulation; to modify, check Behaviour asset), otherwise there will be loss of information and the agent might not perform as expected.
 - In order to properly get use of _AddReward()_, _EndEpisode()_ and _RequestDecision()_ consult the diagram below. For custom decision request, keep in mind that you can call _RequestDecision()_ method everywhere, but only before base.FixedUpdate() will allow the action to be performed in the same frame; otherwise the action will occur in the next frame. _AddReward()_ and _EndEpisode()_ methods work well being called inside _OnTriggerXXX()_ or _OnCollisionXXX()_, as well as inside _OnActionReceived()_ rightafter actions are performed.
 - **Input Normalization** plays a huge role in policy convergence. To outcome this problem, observations can be auto-normalized by checking the corresponding box inside behaviour asset, but instead, is highly recommended to manually normalize all input values before adding them to the __SensorBuffer__. **Vector2**, **Vector3** and **Quaternion** variables can be normalized by calling **_.normalized_**. Single values can be normalized within [0, 1] or [-1, 1] ranges by using the formula **normalized_value = (value - min) / (max - min)**.
 - The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. It is not recommended to use them, but if neccesary, in order to override them, call the their **base** each time, respecting the logic of the diagram below.
 
 ![rl](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_schema.jpg?raw=true)
 
+###### _A pole balancing itself using deep reinforcement learning (13 observations, 1 continuous action)_
+![pole](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/pole.gif?raw=true)
+
+
+
 _A paper describing how to implement Proximal Policy Optimization (including neural networks) from scratch will be released soon..._
+
+![rl](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/tensors.png?raw=true)
 
 

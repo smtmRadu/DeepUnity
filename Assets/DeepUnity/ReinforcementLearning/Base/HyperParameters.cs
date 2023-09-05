@@ -2,6 +2,8 @@ using System;
 using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
+using System.Text;
+
 namespace DeepUnity
 {
     [Serializable]
@@ -15,7 +17,7 @@ namespace DeepUnity
         [Tooltip("Global Gradient Clipping max norm value. Set to 0 to turn off.")]
         [Min(0)] public float gradClipNorm = 0.5f;
 
-        [Tooltip("Number of epochs per episode trajectory.")]
+        [Tooltip("Number of epochs per buffer.")]
         [Min(3)] public int numEpoch = 8;
 
         [Tooltip("Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer_size")]
@@ -66,10 +68,9 @@ namespace DeepUnity
         [ReadOnly, Tooltip("Applies linear decay on epsilon.")]
         public bool epsilonScheduler = false;
 
-        [Space]
-        [Tooltip("Debug all timesteps in an output file.")]
+        [Space(30)]
+        [Tooltip("Debug all timesteps in a .txt file on Desktop.")]
         public bool debug = false;
-
 
         /// <summary>
         /// Creates a new Hyperparameters asset in the <em>behaviour</em> folder.

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using Unity.Mathematics;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity
@@ -131,21 +132,20 @@ namespace DeepUnity
         {
             return string.Format("#{0:X2}{1:X2}{2:X2}", r, g, b);
         }
-        public static Array GetRange(Array arr, int start, int count)
+        public static IEnumerable<T> GetRange<T>(IEnumerable<T> arr, int start, int count)
         {
             if (arr == null)
                 throw new ArgumentNullException(nameof(arr));
 
-            if (start < 0 || start >= arr.Length)
+            if (start < 0 || start >= arr.Count())
                 throw new ArgumentOutOfRangeException(nameof(start));
 
-            if (count < 0 || start + count > arr.Length)
+            if (count < 0 || start + count > arr.Count())
                 throw new ArgumentOutOfRangeException(nameof(count));
 
-            Array result = Array.CreateInstance(arr.GetType().GetElementType(), count);
-            Array.Copy(arr, start, result, 0, count);
-            return result;
+            return arr.Skip(start).Take(count);
         }
+
         public static List<T[]> Split<T>(IEnumerable<T> collection, int split_size)
         {
             List<T[]> slices = new();
@@ -166,10 +166,18 @@ namespace DeepUnity
 
             return slices;
         }
-        public static Color[] TensorToPixels(Tensor tensor)
+
+        /// <summary>
+        /// Input: Tensor <b>(C, H, W)</b> <br></br>
+        /// Output: Color[] pixels used to load on Texture2D's
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        /// <exception cref="ShapeException"></exception>
+        public static Color[] TensorToColorArray(Tensor tensor)
         {
             if (tensor.Shape.Length != 3)
-                throw new ShapeException($"Cannot convert tensor ({tensor.Shape}) to a Texture2D because the shape must be (C, H, W)");
+                throw new ShapeException($"Cannot convert tensor ({tensor.Shape.ToCommaSeparatedString()}) to a Texture2D because the shape must be (C, H, W)");
 
             int width = tensor.Size(2);
             int height = tensor.Size(1);
@@ -206,232 +214,277 @@ namespace DeepUnity
         {
             return Math.Clamp(value, min, max);
         }
+
+
+
+        /// <summary>
+        /// An easy way to augment your training data.
+        /// </summary>
         public static class ImageProcessing
         {
-            /// <summary>
-            /// Scales the texture rezolution.
-            /// </summary>
-            /// <param name="texture"></param>
-            /// <param name="scale"></param>
-            /// <returns></returns>
-            public static Texture2D Resize(Texture2D texture, float scale)
+            public static Tensor Resize(Tensor image, float scale)
             {
-                int width = Mathf.FloorToInt(texture.width * scale);
-                int height = Mathf.FloorToInt(texture.height * scale);
-                Texture2D scaledTexture = new Texture2D(width, height);
+                int width = Mathf.FloorToInt(image.Size(-1) * scale);
+                int height = Mathf.FloorToInt(image.Size(-2) * scale);
+                int channels = image.Rank >= 3 ? image.Size(-3) : 1;
+                int batch_size = image.Rank == 4 ? image.Size(-4) : 1;
+
+                int[] newShape = image.Shape;
+                newShape[newShape.Length - 1] = width;
+                newShape[newShape.Length - 2] = height;
+                Tensor scaled = Tensor.Zeros(newShape);
 
 
-
-
-                for (int x = 0; x < width; x++)
+                for (int b = 0; b < batch_size; b++)
                 {
-                    for (int y = 0; y < height; y++)
+                    for (int c = 0; c < channels; c++)
                     {
-                        float x0 = x / scale;
-                        float y0 = y / scale;
+                        for (int y = 0; y < height; y++)
+                        {
+                            for (int x = 0; x < width; x++)
+                            {
+                                float x0 = x / scale;
+                                float y0 = y / scale;
 
-                        Color pixel = texture.GetPixelBilinear(x0 / texture.width, y0 / texture.height);
-                        scaledTexture.SetPixel(x, y, pixel);
+                                float pix = image[(int)y0 / image.Size(-2), (int)x0 / image.Size(-1)];
+                                scaled[b, c, y, x] = pix;
+                            }
+                        }
                     }
                 }
 
-                scaledTexture.Apply();
-                scaledTexture.filterMode = texture.filterMode;
-                return scaledTexture;
+                return scaled;
             }
-            public static Texture2D Rotate(Texture2D texture, float angle)
+            public static Tensor Rotate(Tensor image, float angle)
             {
-                int width = texture.width;
-                int height = texture.height;
-                Texture2D rotatedTexture = new Texture2D(width, height);
+                int width = image.Size(-1);
+                int height = image.Size(-2);
+                int channels = image.Rank >= 3 ? image.Size(-3) : 1;
+                int batch_size = image.Rank == 4 ? image.Size(-4) : 1;
+
+                Tensor rotated = Tensor.Zeros(image.Shape);
 
                 Vector2 pivot = new Vector2(width * 0.5f, height * 0.5f); // Center pivot point
 
-                for (int x = 0; x < width; x++)
+
+                for (int b = 0; b < batch_size; b++)
                 {
-                    for (int y = 0; y < height; y++)
+                    for (int c = 0; c < channels; c++)
                     {
-                        Color pixel = texture.GetPixel(x, y);
-                        float radianAngle = angle * Mathf.Deg2Rad;
-                        float cos = Mathf.Cos(radianAngle);
-                        float sin = Mathf.Sin(radianAngle);
+                        for (int y = 0; y < height; y++)
+                        {
+                            for (int x = 0; x < width; x++)
+                            {
+                                float value = image[b, c, y, x];
+                                float radianAngle = angle * Mathf.Deg2Rad;
+                                float cos = Mathf.Cos(radianAngle);
+                                float sin = Mathf.Sin(radianAngle);
 
-                        // Calculate coordinates relative to the pivot
-                        float xOffset = x - pivot.x;
-                        float yOffset = y - pivot.y;
+                                // Calculate coordinates relative to the pivot
+                                float xOffset = x - pivot.x;
+                                float yOffset = y - pivot.y;
 
-                        // Apply rotation around the pivot
-                        float x0 = xOffset * cos - yOffset * sin + pivot.x;
-                        float y0 = xOffset * sin + yOffset * cos + pivot.y;
+                                // Apply rotation around the pivot
+                                float x0 = xOffset * cos - yOffset * sin + pivot.x;
+                                float y0 = xOffset * sin + yOffset * cos + pivot.y;
 
-                        x0 = Mathf.Clamp(x0, 0, width - 1);
-                        y0 = Mathf.Clamp(y0, 0, height - 1);
+                                x0 = Mathf.Clamp(x0, 0, width - 1);
+                                y0 = Mathf.Clamp(y0, 0, height - 1);
 
-                        rotatedTexture.SetPixel(x, y, texture.GetPixel(Mathf.FloorToInt(x0), Mathf.FloorToInt(y0)));
+                                rotated[b, c, y, x] = image[Mathf.FloorToInt(y0), Mathf.FloorToInt(x0)];
+                            }
+                        }
                     }
                 }
 
-                rotatedTexture.Apply();
-                rotatedTexture.filterMode = texture.filterMode;
-                return rotatedTexture;
+                return rotated;
             }
-            public static Texture2D Zoom(Texture2D texture, float zoomFactor)
+            public static Tensor Zoom(Tensor image, float zoomFactor)
             {
-                if(zoomFactor <= 0f)
+                if (zoomFactor <= 0f)
                 {
                     throw new ArgumentException($"Zoom Factor (received value: {zoomFactor}) cannot be equal or less than 0");
                 }
-                int width = texture.width;
-                int height = texture.height;
-                Texture2D zoomedTexture = new Texture2D(width, height);
 
-                zoomedTexture.filterMode = texture.filterMode;
+                int width = image.Size(-1);
+                int height = image.Size(-2);
+                int channels = image.Rank >= 3 ? image.Size(-3) : 1;
+                int batch_size = image.Rank == 4 ? image.Size(-4) : 1;
+
+                Tensor zoomed = Tensor.Zeros(image.Shape);
 
                 float centerX = width / 2f;
                 float centerY = height / 2f;
 
-                for (int x = 0; x < width; x++)
+                for (int b = 0; b < batch_size; b++)
                 {
-                    for (int y = 0; y < height; y++)
+                    for (int c = 0; c < channels; c++)
                     {
-                        float offsetX = (x - centerX) / zoomFactor;
-                        float offsetY = (y - centerY) / zoomFactor;
-
-                        int originalX = Mathf.RoundToInt(centerX + offsetX);
-                        int originalY = Mathf.RoundToInt(centerY + offsetY);
-
-                        originalX = Mathf.Clamp(originalX, 0, width - 1);
-                        originalY = Mathf.Clamp(originalY, 0, height - 1);
-
-                        Color pixel = texture.GetPixel(originalX, originalY);
-                        zoomedTexture.SetPixel(x, y, pixel);
-                    }
-                }
-
-                zoomedTexture.Apply();
-                return zoomedTexture;
-            }
-            public static Texture2D Offset(Texture2D texture, float x, float y)
-            {
-                int width = texture.width;
-                int height = texture.height;
-                Texture2D offsetTexture = new Texture2D(width, height);
-
-                for (int destX = 0; destX < width; destX++)
-                {
-                    for (int destY = 0; destY < height; destY++)
-                    {
-                        int srcX = Mathf.Clamp(destX - Mathf.FloorToInt(x), 0, width - 1);
-                        int srcY = Mathf.Clamp(destY - Mathf.FloorToInt(y), 0, height - 1);
-                        offsetTexture.SetPixel(destX, destY, texture.GetPixel(srcX, srcY));
-                    }
-                }
-
-                offsetTexture.Apply();
-                offsetTexture.filterMode = texture.filterMode;
-                return offsetTexture;
-            }
-            public static Texture2D Noise(Texture2D texture, float noise_prob, float noise_size)
-            {
-                int width = texture.width;
-                int height = texture.height;
-                Texture2D noisyTexture = new Texture2D(width, height);
-
-                for (int x = 0; x < width; x++)
-                {
-                    for (int y = 0; y < height; y++)
-                    {
-                        Color pixel = texture.GetPixel(x, y);
-                        if (UnityEngine.Random.value < noise_prob)
+                        for (int x = 0; x < width; x++)
                         {
-                            float intensity = UnityEngine.Random.Range(-noise_size, noise_size);
-                            Color noise = new Color(intensity, intensity, intensity);
-                            pixel += noise;
-                            pixel = Color.Lerp(pixel, Color.black, Mathf.Abs(intensity));
+                            for (int y = 0; y < height; y++)
+                            {
+                                float offsetX = (x - centerX) / zoomFactor;
+                                float offsetY = (y - centerY) / zoomFactor;
+
+                                int originalX = Mathf.RoundToInt(centerX + offsetX);
+                                int originalY = Mathf.RoundToInt(centerY + offsetY);
+
+                                originalX = Mathf.Clamp(originalX, 0, width - 1);
+                                originalY = Mathf.Clamp(originalY, 0, height - 1);
+
+                                zoomed[b, c, y, x] = image[b, c, originalY, originalX];
+                            }
                         }
-                        noisyTexture.SetPixel(x, y, pixel);
                     }
                 }
 
-                noisyTexture.Apply();
-                noisyTexture.filterMode = texture.filterMode;
-                return noisyTexture;
+                return zoomed;
             }
-            public static Texture2D Mask(Texture2D texture, Texture2D mask)
+            public static Tensor Offset(Tensor image, float x, float y)
             {
-                int width = texture.width;
-                int height = texture.height;
-                Texture2D maskedTexture = new Texture2D(width, height);
+                int width = image.Size(-1);
+                int height = image.Size(-2);
+                int channels = image.Rank >= 3 ? image.Size(-3) : 1;
+                int batch_size = image.Rank == 4 ? image.Size(-4) : 1;
 
-                for (int x = 0; x < width; x++)
+                Tensor offsetImage = Tensor.Zeros(image.Shape);
+
+                for (int b = 0; b < batch_size; b++)
                 {
-                    for (int y = 0; y < height; y++)
+                    for (int c = 0; c < channels; c++)
                     {
-                        Color texturePixel = texture.GetPixel(x, y);
-                        Color maskPixel = mask.GetPixel(x % mask.width, y % mask.height);
-                        Color maskedColor = new Color(texturePixel.r * maskPixel.r, texturePixel.g * maskPixel.g, texturePixel.b * maskPixel.b, texturePixel.a * maskPixel.a);
-                        maskedTexture.SetPixel(x, y, maskedColor);
+                        for (int destX = 0; destX < width; destX++)
+                        {
+                            for (int destY = 0; destY < height; destY++)
+                            {
+                                int srcX = Mathf.Clamp(destX - Mathf.FloorToInt(x), 0, width - 1);
+                                int srcY = Mathf.Clamp(destY - Mathf.FloorToInt(y), 0, height - 1);
+                                offsetImage[b, c, destY, destX] = image[b, c, srcY, srcX];
+                            }
+                        }
                     }
                 }
 
-                maskedTexture.Apply();
-                maskedTexture.filterMode = texture.filterMode;
-                return maskedTexture;
+                return offsetImage;
             }
-            public static Texture2D Blur(Texture2D texture, int kernel_size)
+            public static Tensor Noise(Tensor image, float noise_prob, float noise_size)
+            {
+                int width = image.Size(-1);
+                int height = image.Size(-2);
+                int channels = image.Rank >= 3 ? image.Size(-3) : 1;
+                int batch_size = image.Rank == 4 ? image.Size(-4) : 1;
+
+                Tensor noisyImage = Tensor.Zeros(image.Shape);
+
+                for (int b = 0; b < batch_size; b++)
+                {
+                    for (int c = 0; c < channels; c++)
+                    {
+                        for (int x = 0; x < width; x++)
+                        {
+                            for (int y = 0; y < height; y++)
+                            {
+                                float pixel = image[b, c, y, x];
+                                if (UnityEngine.Random.value < noise_prob)
+                                {
+                                    float intensity = UnityEngine.Random.Range(-noise_size, noise_size);
+                                    pixel += intensity;
+                                    pixel = Mathf.Clamp01(pixel); // Ensure the pixel value is in [0, 1] range
+                                }
+                                noisyImage[b, c, y, x] = pixel;
+                            }
+                        }
+                    }
+                }
+
+                return noisyImage;
+            }
+            public static Tensor Mask(Tensor image, Tensor mask)
+            {
+                int width = image.Size(-1);
+                int height = image.Size(-2);
+                int channels = image.Rank >= 3 ? image.Size(-3) : 1;
+                int batch_size = image.Rank == 4 ? image.Size(-4) : 1;
+                int maskWidth = mask.Shape[2];
+                int maskHeight = mask.Shape[1];
+
+                Tensor maskedImage = Tensor.Zeros(image.Shape);
+
+                for (int b = 0; b < batch_size; b++)
+                {
+                    for (int c = 0; c < channels; c++)
+                    {
+                        for (int x = 0; x < width; x++)
+                        {
+                            for (int y = 0; y < height; y++)
+                            {
+                                float texturePixel = image[b, c, y, x];
+                                float maskPixel = mask[b, c, y % maskHeight, x % maskWidth];
+                                maskedImage[b, c, y, x] = texturePixel * maskPixel;
+                            }
+                        }
+                    }
+                }
+
+                return maskedImage;
+            }
+            public static Tensor Blur(Tensor image, int kernel_size)
             {
                 if (kernel_size % 2 == 0 || kernel_size <= 0)
                 {
                     throw new ArgumentException("Kernel size must be an odd positive number.");
                 }
 
-                int width = texture.width;
-                int height = texture.height;
-                Color[] originalPixels = texture.GetPixels();
-                Color[] blurredPixels = new Color[width * height];
+                int width = image.Size(-1);
+                int height = image.Size(-2);
+                int channels = image.Rank >= 3 ? image.Size(-3) : 1;
+                int batch_size = image.Rank == 4 ? image.Size(-4) : 1;
+
+                Tensor blurredImage = Tensor.Zeros(image.Shape);
 
                 int halfKernel = kernel_size / 2;
 
-                for (int y = 0; y < height; y++)
+                for (int ba = 0; ba < batch_size; ba++)
                 {
-                    for (int x = 0; x < width; x++)
+                    for (int c = 0; c < channels; c++)
                     {
-                        float r = 0f, g = 0f, b = 0f, a = 0f;
-
-                        for (int ky = -halfKernel; ky <= halfKernel; ky++)
+                        for (int y = 0; y < height; y++)
                         {
-                            for (int kx = -halfKernel; kx <= halfKernel; kx++)
+                            for (int x = 0; x < width; x++)
                             {
-                                int offsetX = x + kx;
-                                int offsetY = y + ky;
+                                float v = 0f;
 
-                                if (offsetX >= 0 && offsetX < width && offsetY >= 0 && offsetY < height)
+                                for (int ky = -halfKernel; ky <= halfKernel; ky++)
                                 {
-                                    Color pixel = originalPixels[offsetY * width + offsetX];
-                                    r += pixel.r;
-                                    g += pixel.g;
-                                    b += pixel.b;
-                                    a += pixel.a;
+                                    for (int kx = -halfKernel; kx <= halfKernel; kx++)
+                                    {
+                                        int offsetX = x + kx;
+                                        int offsetY = y + ky;
+
+                                        if (offsetX >= 0 && offsetX < width && offsetY >= 0 && offsetY < height)
+                                        {
+                                            float pixel = image[ba, c, offsetY, offsetX];
+                                            v += pixel;
+                                        }
+                                    }
                                 }
+
+                                int numPixelsInKernel = kernel_size * kernel_size;
+                                blurredImage[ba, c, y, x] = v;
                             }
                         }
-
-                        int numPixelsInKernel = kernel_size * kernel_size;
-                        blurredPixels[y * width + x] = new Color(r / numPixelsInKernel, g / numPixelsInKernel, b / numPixelsInKernel, a / numPixelsInKernel);
                     }
                 }
 
-                Texture2D blurredTexture = new Texture2D(width, height);
-                blurredTexture.SetPixels(blurredPixels);
-                blurredTexture.Apply();
-                blurredTexture.filterMode = texture.filterMode;
-
-                return blurredTexture;
+                return blurredImage;
             }
         }
+
+
         /// <summary>
-        /// A thread-safe way to extract random numbers.
-        /// </summary>
+/// A thread-safe way to extract random numbers.
+/// </summary>
         public static class Random
         {        
             // -- On tests, extracting numbers threadsafely is just 2 times less efficient than checking if we are on the main thread --//
@@ -506,5 +559,5 @@ namespace DeepUnity
             }
         }
     }
-
 }
+

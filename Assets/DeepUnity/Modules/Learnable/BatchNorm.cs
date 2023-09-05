@@ -10,6 +10,15 @@ namespace DeepUnity
     /// Output: <b>(B, H)</b> on training and <b>(B, H)</b> or <b>(H)</b> on inference.<br></br>
     /// where B = batch_size and H = num_features. <br></br>
     /// <b>Applies batch normalization over the first dimension (B) of the input.</b> 
+    /// <br></br>
+    /// <br></br>
+    /// <em>TIPS:<br></br>
+    ///     Shuffle training dataset. <br></br>
+    ///     Increase learning rate. <br></br>
+    ///     Remove dropout. <br></br>
+    ///     Reduce L2 penalty. <br></br>
+    ///     Accelerate learning rate decay. <br></br>
+    /// </em>
     /// </summary>
     [Serializable]
     public class BatchNorm : Learnable, IModule
@@ -34,6 +43,16 @@ namespace DeepUnity
         /// Output: <b>(B, H)</b> on training and <b>(B, H)</b> or <b>(H)</b> on inference.<br></br>
         /// where B = batch_size and H = num_features. <br></br>
         /// <b>Applies batch normalization over the first dimension (B) of the input.</b> 
+        /// <br></br>
+        /// <br></br>
+        /// <em>TIPS:<br></br>
+        ///     Shuffle training dataset. <br></br>
+        ///     Increase learning rate. <br></br>
+        ///     Remove dropout. <br></br>
+        ///     Reduce L2 penalty. <br></br>
+        ///     Accelerate learning rate decay. <br></br>
+        /// </em>
+        /// 
         /// </summary>
         /// <param name="num_features">Input's last axis dimension (H).</param>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
@@ -58,9 +77,14 @@ namespace DeepUnity
 
         public Tensor Predict(Tensor input)
         {
+            if (input.Rank > 2)
+                throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) must be (B, H) or (H).");
+
+
             if (input.Size(-1) != num_features)
                 throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) last dimension is not equal to num_features ({num_features})");
 
+            
             bool isBatched = input.Rank == 2;
 
             if (isBatched)
@@ -91,7 +115,7 @@ namespace DeepUnity
                 throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) last dimension is not equal to num_features ({num_features})");
 
             if (input.Rank != 2 || input.Size(-2) < 2)
-                throw new InputException($"On training, input shape must be (B, H) exclusively (received input shape: {input.Shape.ToCommaSeparatedString()}). For inference, use Predict method instead.");
+                throw new InputException($"On training, input shape must be (B, H) exclusively, where B > 1 (received input shape: {input.Shape.ToCommaSeparatedString()}). For inference, use Predict method instead.");
 
             int batch_size = input.Size(0);
 

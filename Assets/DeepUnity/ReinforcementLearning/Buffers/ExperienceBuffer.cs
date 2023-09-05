@@ -95,7 +95,7 @@ namespace DeepUnity
             }
         }
         public bool IsFull() => Count == Capacity;
-        public void GAE(in float gamma, in float lambda, in int horizon, Sequential crticNetwork)
+        public void GAE(in float gamma, in float lambda, in int horizon, NeuralNetwork crticNetwork)
         {
             int T = Count;
             Tensor[] Vw_s = new Tensor[T];

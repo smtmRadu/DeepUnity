@@ -31,7 +31,8 @@ namespace DeepUnity
         /// Backpropagates the <paramref name="lossDerivative"/> and computes the gradients.
         /// </summary>
         /// <param name="lossDerivative">Derivative of the loss function w.r.t output (dLdY).</param>
-        public abstract void Backward(Tensor lossDerivative);  
+        /// <returns>The backpropagated loss derivative. (<em>Not necessary to use in casual situations</em>)</returns>
+        public abstract Tensor Backward(Tensor lossDerivative);  
         /// <summary>
         /// Get all <typeparamref name="Learnable"/> modules.
         /// </summary>

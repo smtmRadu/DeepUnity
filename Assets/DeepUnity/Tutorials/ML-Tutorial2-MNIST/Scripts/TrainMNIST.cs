@@ -7,7 +7,7 @@ namespace DeepUnityTutorials
 {
     public class TrainMNIST : MonoBehaviour
     {
-        [SerializeField] Sequential network;
+        [SerializeField] NeuralNetwork network;
         [SerializeField] new string name = "MNIST_MODEL";
         [SerializeField] private float lr = 0.0002f;
         [SerializeField] private int schedulerStepSize = 1;
@@ -30,7 +30,7 @@ namespace DeepUnityTutorials
 
             if (network == null)
             {
-                network = new Sequential(
+                network = new NeuralNetwork(
                      new Conv2D((1, 28, 28), 5, 3, device: Device.GPU),
                      new ReLU(),
                      new MaxPool2D(2),
@@ -83,7 +83,7 @@ namespace DeepUnityTutorials
 
         public void Update()
         {
-            if (batch_index % 100 == 0)
+            if (batch_index % 50 == 0)
                 network.Save();
 
             // Case when epoch finished
@@ -129,18 +129,11 @@ namespace DeepUnityTutorials
 
         public Tensor AugmentImage(Tensor image)
         {
-            throw new System.NotImplementedException();
-            // Texture2D tex = Utils.TensorToTexture(image);
-            // 
-            // tex = Utils.ImageProcessing.Zoom(tex, Utils.Random.Range(0.7f, 1.4f));
-            // tex = Utils.ImageProcessing.Rotate(tex, Utils.Random.Range(-60f, 60f));
-            // tex = Utils.ImageProcessing.Offset(tex, Utils.Random.Range(-5f, 5f), Utils.Random.Range(-5f, 5f));
-            // tex = Utils.ImageProcessing.Noise(tex, Utils.Random.Range(0.05f, 0.15f), Utils.Random.Range(0.20f, 0.30f));
-            // 
-            // 
-            // 
-            // return Tensor.Constant(tex, 1);
-
+            Tensor tex = Utils.ImageProcessing.Zoom(image, Utils.Random.Range(0.7f, 1.4f));
+            tex = Utils.ImageProcessing.Rotate(tex, Utils.Random.Range(-60f, 60f));
+            tex = Utils.ImageProcessing.Offset(tex, Utils.Random.Range(-5f, 5f), Utils.Random.Range(-5f, 5f));
+            tex = Utils.ImageProcessing.Noise(tex, Utils.Random.Range(0.05f, 0.15f), Utils.Random.Range(0.20f, 0.30f));
+            return tex;
         }
     }
 

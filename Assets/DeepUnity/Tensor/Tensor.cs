@@ -242,7 +242,7 @@ namespace DeepUnity
         /// C = <paramref name="shape"/>.Item1 (1 = Grayscale, 2 = Grayscale with Alpha, 3 = RGB, 4 = RGBA)<br></br>
         /// H = <paramref name="shape"/>.Item2  <br></br>
         /// W = <paramref name="shape"/>.Item3  <br></br>
-        /// <em>Note: Tensors are displayed as the image mirrored on horizontal axis when visualized as strings.</em>
+        /// <em>Note: Tensors are displayed as the image mirrored on vertical axis when visualized as strings.</em>
         /// </summary>
         /// <param name="shape">the shape of the resulting tensor</param>
         /// <returns></returns>
@@ -302,12 +302,9 @@ namespace DeepUnity
             if (computeBuffer.stride != sizeof(float))
                 throw new ArgumentException("ComputeBuffer stride must be equal to sizeof(float).");
 
-            float[] data = new float[computeBuffer.count];
-            computeBuffer.GetData(data);
-            Tensor result = new Tensor(data.Length);
-            result.data = data;
+            Tensor result = Zeros(computeBuffer.count);
+            computeBuffer.GetData(result.data);
             return result;
-
         }
         public static Tensor Zeros(params int[] shape)
         {
@@ -1398,6 +1395,20 @@ namespace DeepUnity
 
 
             return result;
+        }
+        /// <summary>
+        /// All tensors must have the same shape. <br></br>
+        /// If <b>axis == null</b>, all tensors are Unsqueezed(0). <br></br>
+        /// Example: <br></br>
+        /// Cat(axis: 0,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (8,3) <br></br>
+        /// Cat(axis: 1,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (2,12) <br></br>
+        /// Car(axis: 1,    tensors: {(2,3)} => output (2,3) <br></br>
+        /// Cat(axis: null, tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (4,2,3) <br></br>
+        /// Cat(axis: null, tensors: {(2,3)} => output (1,2,3) <br></br>
+        /// </summary>
+        public static Tensor Cat(int? axis, IEnumerable<Tensor> tensors)
+        {
+            return Cat(axis, tensors.ToArray());
         }
         /// <summary>
         /// Expands the tensor along the specified axis. <br></br>
