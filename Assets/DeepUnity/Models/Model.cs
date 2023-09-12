@@ -10,9 +10,9 @@ namespace DeepUnity
     [Serializable]
     public abstract class Model<T> : ScriptableObject where T : Model<T>
     {
-        [SerializeField] private int version = 1;
+        [SerializeField, ReadOnly] private int version = 1;
         [SerializeField, HideInInspector] private bool assetCreated = false;
-        private bool canBackPropagate = false; // a flag that cares if a forward pass had happen before doing backpropagation.
+        private bool canComputeGradients = false; // a flag that cares if a forward pass had happen before doing backpropagation.
 
         /// <summary>
         /// Forwards the input without caching it on the layers.
@@ -40,6 +40,8 @@ namespace DeepUnity
         public abstract Learnable[] Parameters();
         /// <summary>
         /// Creates a Unity asset instance of this network in <em>Assets</em> folder with the specified <paramref name="name"/>. <br></br>
+        /// <br></br>
+        /// <em>If already exists, this method creates a new instance called '[behaviour_name]_v[x]'</em>
         /// </summary>
         /// <param name="name"></param>
         /// <returns>Returns this network model.</returns>        
@@ -72,6 +74,7 @@ namespace DeepUnity
         /// Notes: <br></br>
         /// <![CDATA[-]]> Cannot save a network that was not created as an asset. <br></br>
         /// <![CDATA[-]]> Consider saving is a costly operation in terms of performance, so save the network manually sparsely throughout the training process.<br></br>
+        /// <![CDATA[-]]> Version increments on each save.
         /// </summary>
         public void Save()
         {
@@ -80,7 +83,7 @@ namespace DeepUnity
                 Debug.LogError($"<color=#ff3636>[<b>{name}</b> <i>{GetType().Name}</i> model cannot be saved because the asset was not created]</color>");
                 return;
             }
-
+            version++;
             // Debug.Log($"<color=#03a9fc>[{name} model saved]</color>");
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssetIfDirty(this);
@@ -94,14 +97,14 @@ namespace DeepUnity
 
         protected void BaseForward()
         {
-            canBackPropagate = true;
+            canComputeGradients = true;
         }
         protected void BaseBackward()
         {
-            if(!canBackPropagate)
+            if(!canComputeGradients)
                 throw new ArgumentException("Cannot backpropagate if no forward had happen before!");
 
-            canBackPropagate = false;
+            canComputeGradients = false;
         }
     }
 

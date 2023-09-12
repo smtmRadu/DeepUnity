@@ -14,12 +14,12 @@ public class MatMulBenchmark : MonoBehaviour
 		Dense dense = new Dense(dense_in_features, dense_out_features, device: device);
 		Tensor input = Tensor.RandomNormal(batch_size, dense_in_features);
 
-		ClockTimer.Start();
+		TimeKeeper.Start();
 		for (int i = 0; i < runs; i++)
 		{
 			dense.Forward(input);
 		}
-		ClockTimer.Stop();
+		TimeKeeper.Stop();
     }
 
 }

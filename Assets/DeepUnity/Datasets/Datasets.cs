@@ -9,6 +9,7 @@ namespace DeepUnity
 {
     public static class Datasets
     {
+        
         /// <summary>
         /// Item1 = input: Tensor(1,28,28)<br />
         /// Item2 = target: Tensor(10) -> onehot encoding<br />
@@ -23,9 +24,8 @@ namespace DeepUnity
         /// <param name="test"></param>
         public static void MNIST(string path, out List<(Tensor, Tensor)> train, out List<(Tensor, Tensor)> test, DatasetSettings whatToLoad = DatasetSettings.LoadAll)
         {
-            train = new();
-            test = new();
-
+            train = null;
+            test = null;
             string json_train_image = null;
             string json_train_label = null;
             string json_test_image = null;
@@ -36,6 +36,7 @@ namespace DeepUnity
             List<Tensor> collect_test_label = null;
             if (whatToLoad == DatasetSettings.LoadAll || whatToLoad == DatasetSettings.LoadTrainOnly) 
             {
+                train = new(60000);
                 json_train_image = File.ReadAllText(path + "\\train_input.txt");
                 json_train_label = File.ReadAllText(path + "\\train_target.txt");
                 collect_train_image = JsonUtility.FromJson<TensorCollection>(json_train_image).ToList();
@@ -47,6 +48,7 @@ namespace DeepUnity
             }
             if (whatToLoad == DatasetSettings.LoadAll || whatToLoad == DatasetSettings.LoadTestOnly)
             {
+                test = new(10000);
                 json_test_image = File.ReadAllText(path + "\\test_input.txt");
                 json_test_label = File.ReadAllText(path + "\\test_target.txt");
                 collect_test_image = JsonUtility.FromJson<TensorCollection>(json_test_image).ToList();
@@ -59,7 +61,7 @@ namespace DeepUnity
         }
         private static void SerializeMNIST()
         {
-            ClockTimer.Start();
+            TimeKeeper.Start();
             string trainPath = "C:\\Users\\radup\\OneDrive\\Desktop\\TRAIN\\";
             string testPath = "C:\\Users\\radup\\OneDrive\\Desktop\\TEST\\";
 
@@ -134,7 +136,7 @@ namespace DeepUnity
             test_l.Close();
 
             Debug.Log("MNIST Serialized.");
-            ClockTimer.Stop();
+            TimeKeeper.Stop();
         }
         private static Color[] LoadTexturePixels(string filePath)
         {

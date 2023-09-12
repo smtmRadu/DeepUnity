@@ -92,7 +92,7 @@ namespace DeepUnity
             int batch_size = input.Rank == 2 ? input.Size(-2) : 1;
 
 
-            Tensor H_Prime = null;
+            Tensor H_Prime;
             if(batch_size == 1)
             {
                 H_Prime = Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + beta +

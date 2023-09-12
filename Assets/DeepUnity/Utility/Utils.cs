@@ -145,7 +145,6 @@ namespace DeepUnity
 
             return arr.Skip(start).Take(count);
         }
-
         public static List<T[]> Split<T>(IEnumerable<T> collection, int split_size)
         {
             List<T[]> slices = new();
@@ -169,10 +168,10 @@ namespace DeepUnity
 
         /// <summary>
         /// Input: Tensor <b>(C, H, W)</b> <br></br>
-        /// Output: Color[] pixels used to load on Texture2D's
+        /// Output: <b>Color[]</b> pixels used to load on Texture2D's.
         /// </summary>
         /// <param name="tensor"></param>
-        /// <returns></returns>
+        /// <returns>Pixels array</returns>
         /// <exception cref="ShapeException"></exception>
         public static Color[] TensorToColorArray(Tensor tensor)
         {
@@ -215,7 +214,37 @@ namespace DeepUnity
             return Math.Clamp(value, min, max);
         }
 
+        public static class Hyperbolics
+        {
+            public static float Sinh(float x)
+            {
+                return (MathF.Exp(x) - MathF.Exp(-x)) / 2f;
+            }
+            public static float Cosh(float x)
+            {
+                return (MathF.Exp(x) + MathF.Exp(-x)) / 2f;
+            }
+            
+            public static float Csch(float x)
+            {
+                return 2f / (MathF.Exp(x) - MathF.Exp(-x));
+            }
+            public static float Sech(float x)
+            {
+                return 2f / (MathF.Exp(x) + MathF.Exp(-x));
+            }
 
+            public static float Tanh(float x)
+            {
+                float e2x = MathF.Exp(2f * x);
+                return (e2x - 1f) / (e2x + 1f);
+            }
+            public static float Coth(float x)
+            {
+                float e2x = MathF.Exp(2f * x);
+                return (e2x + 1f) / (e2x - 1f);
+            }
+        }
 
         /// <summary>
         /// An easy way to augment your training data.
@@ -521,7 +550,7 @@ namespace DeepUnity
             /// <returns></returns>
             public static float Range(float minInclusive, float maxInclusive) => Value * (maxInclusive - minInclusive) + minInclusive;
             /// <summary>
-            /// Returns an integer value in range [<paramref name="minInclusive"/>, <paramref name="maxExclusive"/>) (range in exclusive on the right)
+            /// Returns an integer value in range [<paramref name="minInclusive"/>, <paramref name="maxExclusive"/>) (range in exclusive on the right handside)
             /// </summary>
             /// <param name="minInclusive"></param>
             /// <param name="maxExclusive"></param>
@@ -544,8 +573,7 @@ namespace DeepUnity
 
                 var entropy = MathF.Sqrt(-2.0f * MathF.Log(x1)) * MathF.Cos(2.0f * MathF.PI * x2);
                 return entropy * stddev + mean;
-            }
-              
+            }           
             public static float Gaussian(float mean, float stddev, out float entropy)
             {
                 // x1 must be > 0 to avoid log(0)

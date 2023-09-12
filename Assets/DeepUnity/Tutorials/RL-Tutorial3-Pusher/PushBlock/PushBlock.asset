@@ -158,7 +158,7 @@ MonoBehaviour:
       - 0
       shape: 3f000000
   standardDeviation: 0
-  standardDeviationValue: 1.5
+  standardDeviationValue: 1.53
   standardDeviationScale: 1.25
   inferenceDevice: 0
   trainingDevice: 1

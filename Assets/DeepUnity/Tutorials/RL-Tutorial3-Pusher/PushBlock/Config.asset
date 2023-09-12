@@ -16,8 +16,9 @@ MonoBehaviour:
   gradClipNorm: 0.5
   numEpoch: 8
   batchSize: 256
-  bufferSize: 4096
+  bufferSize: 2048
   normalizeAdvantages: 1
+  shuffleTrainingData: 1
   learningRateSchedule: 0
   schedulerStepSize: 8
   schedulerDecay: 0.99

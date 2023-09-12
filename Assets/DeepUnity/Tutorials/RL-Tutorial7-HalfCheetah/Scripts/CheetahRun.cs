@@ -10,6 +10,7 @@ namespace DeepUnityTutorials
         public float jointsSpeed = 2000f;
         [SerializeField] List<HingeJoint2D> joints;
 
+        float lastHeadX = 0f;
 
         public override void CollectObservations(SensorBuffer sensorBuffer)
         {
@@ -31,7 +32,10 @@ namespace DeepUnityTutorials
                 motor.motorSpeed = actionBuffer.ContinuousActions[i] * jointsSpeed;
                 joints[i].motor = motor;
             }
-            AddReward(joints[0].transform.position.x / 100);
+
+            float reward = joints[0].transform.position.x - lastHeadX;
+            AddReward(reward / 100f);
+            lastHeadX = joints[0].transform.position.x;
         }
 
 

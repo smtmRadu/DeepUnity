@@ -14,7 +14,6 @@ namespace DeepUnity
     // https://www.youtube.com/watch?v=Lakz2MoHy6o
     // https://github.com/TheIndependentCode/Neural-Network/blob/master/convolutional.py
     /// <summary>
-    /// <b>This modules tends to diverge on high learning rate. A recommended approach is either using Adam optimizer on lr = 0.0002, or using GradClipNorm().</b> <br></br>
     /// Input: (<b>B</b>, <b>C_in</b>, <b>H_in</b>, <b>W_in</b>) or (<b>C_in</b>, <b>H_in</b>, <b>W_in</b>) for unbatched input.<br/>
     /// Output: <b>(B, C_out, H_out, W_out)</b> or <b>(C_out, H_out, W_out)</b> for unbatched input.<br></br>
     /// <br></br>

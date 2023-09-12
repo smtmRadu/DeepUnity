@@ -83,7 +83,7 @@ namespace DeepUnityTutorials
 
         public void Update()
         {
-            if (batch_index % 50 == 0)
+            if (batch_index % 100 == 0)
                 network.Save();
 
             // Case when epoch finished

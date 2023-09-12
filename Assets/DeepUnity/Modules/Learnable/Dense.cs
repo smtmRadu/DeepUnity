@@ -24,13 +24,13 @@ namespace DeepUnity
         /// <param name="gamma_init">Initializer used for weights.</param>
         /// <param name="beta_init">Initializer used for biases.</param>
         /// <param name="device">Computation device used. Recommended <see cref="Device.GPU"/> for large <see cref="Dense"/> layers with <b>in_features</b> &amp; <b>out_features > 64</b>.</param>
-        public Dense(int in_features, int out_features, InitType gamma_init = InitType.LeCun_Uniform, InitType beta_init = InitType.LeCun_Uniform, Device device = Device.CPU) 
-            : base(device, 
-                  gamma_init, 
+        public Dense(int in_features, int out_features, InitType gamma_init = InitType.LeCun_Uniform, InitType beta_init = InitType.LeCun_Uniform, Device device = Device.CPU)
+            : base(device,
+                  gamma_init,
                   beta_init,
-                  new int[] { out_features, in_features }, 
-                  new int[] { out_features }, 
-                  in_features, 
+                  new int[] { out_features, in_features },
+                  new int[] { out_features },
+                  in_features,
                   out_features)
         {
             if (in_features < 1)
@@ -44,7 +44,7 @@ namespace DeepUnity
                 throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the Dense Layer features_num ({gamma.Size(-1)}).");
 
             bool isBatched = input.Rank == 2;
-            int batch_size = isBatched? input.Size(-2) : 1;
+            int batch_size = isBatched ? input.Size(-2) : 1;
 
             if (device == Device.CPU)
             {
@@ -55,7 +55,7 @@ namespace DeepUnity
             }
             else
             {
-                
+
                 ComputeShader cs = DeepUnityMeta.DenseCS;
 
                 ComputeBuffer inputBuffer = new ComputeBuffer(input.Count(), 4);
@@ -102,7 +102,7 @@ namespace DeepUnity
         {
             InputCache = Tensor.Identity(input);
 
-            return Predict(input);           
+            return Predict(input);
         }
         public Tensor Backward(Tensor loss)
         {
@@ -165,7 +165,7 @@ namespace DeepUnity
                 transposedLossBuffer.Release();
                 inputCacheBuffer.Release();
                 gammaGradBuffer.Release();
-                betaGradBuffer.Release();                
+                betaGradBuffer.Release();
             }
 
 

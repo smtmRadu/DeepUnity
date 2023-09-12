@@ -28,7 +28,7 @@ namespace DeepUnity
         private UseSensorsType useSensors = UseSensorsType.ObservationsVector;
 
         public TrainingStatistics PerformanceTrack { get; set; }
-        public ExperienceBuffer Memory { get; set; }
+        public MemoryBuffer Memory { get; set; }
         private TimestepBuffer Timestep { get; set; }
         private DecisionRequester DecisionRequester { get; set; }
         private List<ISensor> Sensors { get; set; }
@@ -182,8 +182,7 @@ namespace DeepUnity
                 if (EpisodeStepCount == DecisionRequester.maxStep)
                     EndEpisode();
 
-                if (Memory.IsFull())
-                    Trainer.ReadyToTrain();
+                Trainer.SendMemoryStatus(Memory.Count);
             }            
         }
         public virtual void LateUpdate()
@@ -253,7 +252,7 @@ namespace DeepUnity
         }
         private void InitBuffers()
         {
-            Memory = new ExperienceBuffer(hp.bufferSize);
+            Memory = new MemoryBuffer();
             Timestep = new TimestepBuffer();
 
             Observations = new SensorBuffer(model.observationSize);
@@ -385,13 +384,13 @@ namespace DeepUnity
 
             if (EditorApplication.isPlaying && beh.enumValueIndex == (int)BehaviourType.Learn)
             {
-                float bufferFillPercentage = script.Memory.Count / (float)script.Memory.Capacity * 100;
+                float bufferFillPercentage = script.Memory.Count * Trainer.ParallelAgentsCount / ((float)script.hp.bufferSize) * 100f;
                 StringBuilder sb = new StringBuilder();
                 sb.Append("Buffer [");
-                sb.Append(script.Memory.Count);
+                sb.Append(script.Memory.Count * Trainer.ParallelAgentsCount);
                 sb.Append(" / ");
-                sb.Append(script.Memory.Capacity);
-                sb.Append("] \n[");
+                sb.Append(script.hp.bufferSize);
+                sb.Append($"] \n[");
                 for (float i = 1.25f; i <= 100f; i+=1.25f)
                 {
                     if (i == 47.5f)

@@ -71,7 +71,7 @@ namespace DeepUnity
         /// <param name="observation"></param>
         public void AddObservation(int observation)
         {
-            AddObservation(observation);
+            AddObservation((float)observation);
         }
         /// <summary>
         /// Adds an observation vector of length 2.

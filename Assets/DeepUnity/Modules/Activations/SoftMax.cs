@@ -4,9 +4,10 @@ namespace DeepUnity
 {
     // https://www.youtube.com/watch?v=09c7bkxpv9I
     /// <summary>
-    /// <b>Applies the Softmax function over the last dimension of the input.</b> <br></br>
-    /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input <br></br>
-    /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input <br></br>
+    /// <b>Applies the Softmax function over the last input's dimension H (-1).</b> <br></br>
+    /// Input: <b>(*, H)</b> or <b>(H)</b> for unbatched input <br></br>
+    /// Output: <b>(*, H)</b> or <b>(H)</b> for unbatched input <br></br>
+    /// where * = any shape and H = features_num
     /// </summary>
     [Serializable]
     public class Softmax : IModule
@@ -14,9 +15,10 @@ namespace DeepUnity
         private Tensor InputCache { get; set; }
 
         /// <summary>
-        /// <b>Applies the Softmax function over the last input's dimension.</b> <br></br>
-        /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input <br></br>
-        /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input <br></br>
+        /// <b>Applies the Softmax function over the last input's dimension H (-1).</b> <br></br>
+        /// Input: <b>(*, H)</b> or <b>(H)</b> for unbatched input <br></br>
+        /// Output: <b>(*, H)</b> or <b>(H)</b> for unbatched input <br></br>
+        /// where * = any shape and H = features_num
         /// </summary>
         public Softmax() { }
         public Tensor Predict(Tensor input)

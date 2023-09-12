@@ -46,12 +46,12 @@ namespace DeepUnityTutorials
             {
                 net = new NeuralNetwork(
                  new Dense(2, hiddenSize, InitType.HE_Normal, InitType.HE_Normal),
-                 //new LayerNorm(),                
-                 new ReLU(),
+                 // new LayerNorm(),                
+                 new GELU(),
                  new Dense(hiddenSize, hiddenSize, InitType.HE_Normal, InitType.HE_Normal, device: device),
-                 new BatchNorm(hiddenSize),
-                 new ReLU(),
-                 //new Dropout(),
+                 // new BatchNorm(hiddenSize),
+                 new GELU(),
+                 // new Dropout(0.3f),
                  new Dense(hiddenSize, hiddenSize, InitType.HE_Normal, InitType.HE_Normal, device: device),
                  new Softplus(),
                  new Dense(hiddenSize, 1, InitType.HE_Normal, InitType.HE_Normal)
@@ -81,7 +81,7 @@ namespace DeepUnityTutorials
             validationInputs = Tensor.Cat(1, x1, x2);
             validationTargets = y;
 
-            ClockTimer.Start();
+            TimeKeeper.Start();
         }
 
         public void Update()
@@ -94,7 +94,7 @@ namespace DeepUnityTutorials
                 i = 0;
                 // net.Save();
                 if (epoch == timerStopEpoch)
-                    ClockTimer.Stop();
+                    TimeKeeper.Stop();
 
                 return;
             }

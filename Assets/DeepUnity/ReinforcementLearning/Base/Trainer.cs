@@ -15,18 +15,20 @@ namespace DeepUnity
     public class Trainer : MonoBehaviour
     {
         private static Trainer Instance { get; set; }
-
+        public static int ParallelAgentsCount { get { if (Instance == null) return 0; return Instance.parallelAgents.Count; } }
         [ReadOnly, SerializeField] private List<Agent> parallelAgents;
         [ReadOnly, SerializeField] private Hyperparameters hp;
-        [ReadOnly, SerializeField] private TrainingStatistics trainingStatisticsTrack;
+        [ReadOnly, SerializeField] private TrainingStatistics statisticsTrack;
         [ReadOnly, SerializeField] private AgentBehaviour ac;
         [SerializeField] private int autosave = 5;
 
+        private ExperienceBuffer train_data;
         private bool trainFlag = false;
         private float autosaveSecondsElapsed = 0f;
         private float meanPolicyLoss = 0f;
         private float meanValueLoss = 0f;
         private DateTime timeWhenTheTrainingStarted = DateTime.Now;
+       
 
 
         private void Awake()
@@ -42,18 +44,18 @@ namespace DeepUnity
         }
         private void Update()
         {
-            if (Instance.trainingStatisticsTrack != null)
+            if (Instance.statisticsTrack != null)
             {
                 TimeSpan timeElapsed = DateTime.Now - Instance.timeWhenTheTrainingStarted;
-                Instance.trainingStatisticsTrack.realTrainingTime =
+                Instance.statisticsTrack.trainingSessionTime =
                     $"{(int)timeElapsed.TotalHours} hrs : {(int)timeElapsed.TotalMinutes % 60} min : {(int)timeElapsed.TotalSeconds % 60} sec";
 
 
-                Instance.trainingStatisticsTrack.inferenceSecondsElapsed += Time.deltaTime;
-                Instance.trainingStatisticsTrack.inferenceTime = 
-                    $"{(int)(Math.Ceiling(Instance.trainingStatisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) / 3600)} hrs : {(int)(Math.Ceiling(Instance.trainingStatisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.trainingStatisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) % 60)} sec";
-                Instance.trainingStatisticsTrack.inferenceTimePerAgent =
-                    $"{(int)(Math.Ceiling(Instance.trainingStatisticsTrack.inferenceSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(Instance.trainingStatisticsTrack.inferenceSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.trainingStatisticsTrack.inferenceSecondsElapsed) % 60)} sec";
+                Instance.statisticsTrack.inferenceSecondsElapsed += Time.deltaTime;
+                Instance.statisticsTrack.inferenceTime = 
+                    $"{(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) / 3600)} hrs : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) % 60)} sec";
+                Instance.statisticsTrack.inferenceTimePerAgent =
+                    $"{(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed) % 60)} sec";
              }
 
             // Autosave process 
@@ -71,18 +73,18 @@ namespace DeepUnity
 
                 Instance.trainFlag = false;
 
-                if (Instance.trainingStatisticsTrack != null)
+                if (Instance.statisticsTrack != null)
                 {
-                    Instance.trainingStatisticsTrack.parallelAgents = Instance.parallelAgents.Count;
-                    Instance.trainingStatisticsTrack.totalSteps += Instance.hp.bufferSize * parallelAgents.Count;
-                    Instance.trainingStatisticsTrack.iterations++;
-                    Instance.trainingStatisticsTrack.policyUpdateSecondsElapsed += (float)clock.Elapsed.TotalSeconds;
-                    Instance.trainingStatisticsTrack.policyUpdateTime = $"{(int)(Math.Ceiling(Instance.trainingStatisticsTrack.policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(Instance.trainingStatisticsTrack.policyUpdateSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.trainingStatisticsTrack.policyUpdateSecondsElapsed) % 60)} sec";
-                    Instance.trainingStatisticsTrack.policyUpdateTimePerIteration = $"{(int)clock.Elapsed.TotalHours} hrs : {(int)(clock.Elapsed.TotalMinutes) % 60} min : {(int)(clock.Elapsed.TotalSeconds) % 60} sec";
+                    Instance.statisticsTrack.parallelAgents = Instance.parallelAgents.Count;
+                    Instance.statisticsTrack.totalSteps += Instance.hp.bufferSize * parallelAgents.Count;
+                    Instance.statisticsTrack.iterations++;
+                    Instance.statisticsTrack.policyUpdateSecondsElapsed += (float)clock.Elapsed.TotalSeconds;
+                    Instance.statisticsTrack.policyUpdateTime = $"{(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) % 60)} sec";
+                    Instance.statisticsTrack.policyUpdateTimePerIteration = $"{(int)clock.Elapsed.TotalHours} hrs : {(int)(clock.Elapsed.TotalMinutes) % 60} min : {(int)(clock.Elapsed.TotalSeconds) % 60} sec";
 
                     float totalTimeElapsed = (float)(DateTime.Now - timeWhenTheTrainingStarted).TotalSeconds;
-                    Instance.trainingStatisticsTrack.inferenceTimeRatio = (Instance.trainingStatisticsTrack.inferenceSecondsElapsed  / totalTimeElapsed).ToString("0.000");
-                    Instance.trainingStatisticsTrack.policyUpdateTimeRatio = (Instance.trainingStatisticsTrack.policyUpdateSecondsElapsed / totalTimeElapsed).ToString("0.000");
+                    Instance.statisticsTrack.inferenceTimeRatio = (Instance.statisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count / totalTimeElapsed).ToString("0.000");
+                    Instance.statisticsTrack.policyUpdateTimeRatio = (Instance.statisticsTrack.policyUpdateSecondsElapsed / totalTimeElapsed).ToString("0.000");
                 }
             }
 
@@ -96,7 +98,11 @@ namespace DeepUnity
         }
 
         // Methods use to interact with the agents
-        public static void ReadyToTrain() => Instance.trainFlag = true;
+        public static void SendMemoryStatus(in int experiences_collected)
+        {
+            if(experiences_collected * Instance.parallelAgents.Count >= Instance.hp.bufferSize)
+                 Instance.trainFlag = true;
+        }    
         public static void Subscribe(Agent agent)
         {
             if(Instance == null)
@@ -110,12 +116,13 @@ namespace DeepUnity
                 Instance.hp = agent.hp;
                 Instance.ac.InitOptimisers(Instance.hp);
                 Instance.ac.InitSchedulers(Instance.hp);
+                Instance.train_data = new ExperienceBuffer(Instance.hp.bufferSize);
             }
 
             // Assign a common TrainingStatistics for all agents (and also the trainer)
             if(agent.PerformanceTrack != null)
             {
-                Instance.trainingStatisticsTrack = agent.PerformanceTrack;
+                Instance.statisticsTrack = agent.PerformanceTrack;
                 Instance.parallelAgents.ForEach(x => x.PerformanceTrack = agent.PerformanceTrack);
             }
 
@@ -126,14 +133,14 @@ namespace DeepUnity
         private static void Autosave1(PlayModeStateChange state)
         {
             Instance.ac.Save();
-            if (state == PlayModeStateChange.ExitingPlayMode && Instance.trainingStatisticsTrack != null)
+            if (state == PlayModeStateChange.ExitingPlayMode && Instance.statisticsTrack != null)
             {
-                Instance.trainingStatisticsTrack.startedAt = Instance.timeWhenTheTrainingStarted.ToLongTimeString() + ", " + Instance.timeWhenTheTrainingStarted.ToLongDateString();
-                Instance.trainingStatisticsTrack.finishedAt = DateTime.Now.ToLongTimeString() + ", " + DateTime.Now.ToLongDateString();
+                Instance.statisticsTrack.startedAt = Instance.timeWhenTheTrainingStarted.ToLongTimeString() + ", " + Instance.timeWhenTheTrainingStarted.ToLongDateString();
+                Instance.statisticsTrack.finishedAt = DateTime.Now.ToLongTimeString() + ", " + DateTime.Now.ToLongDateString();
 
-                if(Instance.trainingStatisticsTrack.iterations > 0)
+                if(Instance.statisticsTrack.iterations > 0)
                 {
-                    string pth = Instance.trainingStatisticsTrack.ExportAsSVG(Instance.ac.behaviourName, Instance.hp, Instance.ac);
+                    string pth = Instance.statisticsTrack.ExportAsSVG(Instance.ac.behaviourName, Instance.hp, Instance.ac);
                     UnityEngine.Debug.Log($"<color=#57f542>Training Session statistics log saved at <b><i>{pth}</i></b>.</color>");
                     AssetDatabase.Refresh();
                 }               
@@ -146,104 +153,102 @@ namespace DeepUnity
         // PPO algorithm
         private void Train()
         {
-            ac.SetActorDevice(ac.trainingDevice);
-            foreach (var train_data in Instance.parallelAgents.Select(x => x.Memory))
+            // 1. Retrieve all data from the agents
+            foreach (var agent_memory in parallelAgents.Select(x => x.Memory))
             {
-                ac.SetCriticDevice(ac.inferenceDevice); // critic is used now to compute the values, so for time efficiency, inference device is used now
-                train_data.GAE(hp.gamma, hp.lambda, hp.horizon, ac.critic);
-                ac.SetCriticDevice(ac.trainingDevice); // and then on training, training device is used.
+                agent_memory.GAE(hp.gamma, hp.lambda, hp.horizon, ac.critic);
+                train_data.Add(agent_memory);
+                agent_memory.Clear();
+            }
 
-                if(hp.normalizeAdvantages)
-                    train_data.NormalizeAdvantages();
+            // 2. Normalize advantages
+            if (hp.normalizeAdvantages)
+                train_data.NormalizeAdvantages();
 
-                if (hp.debug) 
-                    Utils.DebugInFile(train_data.ToString());
+            // 3. Gradient descent over n epochs
+            ac.SetCriticDevice(ac.trainingDevice);
+            ac.SetActorDevice(ac.trainingDevice);
+            for (int epoch_index = 0; epoch_index < hp.numEpoch; epoch_index++)
+            {
 
-                for (int epoch = 0; epoch < hp.numEpoch; epoch++)
+                // shuffle the dataset
+                if (hp.shuffleTrainingData && epoch_index > 0)
+                    train_data.Shuffle();
+
+                // unpack & split train_data into minibatches
+                List<Tensor[]> states_batches = Utils.Split(train_data.States, hp.batchSize);
+                List<Tensor[]> advantages_batches = Utils.Split(train_data.Advantages, hp.batchSize);
+                List<Tensor[]> value_targets_batches = Utils.Split(train_data.ValueTargets, hp.batchSize);
+                List<Tensor[]> cont_act_batches = Utils.Split(train_data.ContinuousActions, hp.batchSize);
+                List<Tensor[]> cont_probs_batches = Utils.Split(train_data.ContinuousProbabilities, hp.batchSize);
+                List<Tensor[]> disc_act_batches = Utils.Split(train_data.DiscreteActions, hp.batchSize);
+                List<Tensor[]> disc_probs_batches = Utils.Split(train_data.DiscreteProbabilities, hp.batchSize);
+
+                for (int b = 0; b < states_batches.Count; b++)
                 {
-                    meanPolicyLoss = 0f;
-                    meanValueLoss = 0f;
+                    Tensor states_batch = Tensor.Cat(null, states_batches[b]);
+                    Tensor advantages_batch = Tensor.Cat(null, advantages_batches[b]);
+                    Tensor value_targets_batch = Tensor.Cat(null, value_targets_batches[b]);
 
+                    UpdateCritic(states_batch, value_targets_batch);
 
-                    // randomizeOrder(train_data)
-                    if(hp.shuffleTrainingData)
-                        train_data.Shuffle();
-
-                    // unpack & split train_data into minibatches
-                    List<Tensor[]> states_batches = Utils.Split(train_data.States, hp.batchSize);                 
-                    List<Tensor[]> advantages_batches = Utils.Split(train_data.Advantages, hp.batchSize);
-                    List<Tensor[]> value_targets_batches = Utils.Split(train_data.ValueTargets, hp.batchSize);
-                    List<Tensor[]> cont_act_batches = Utils.Split(train_data.ContinuousActions, hp.batchSize);
-                    List<Tensor[]> cont_probs_batches = Utils.Split(train_data.ContinuousProbabilities, hp.batchSize);
-                    List<Tensor[]> disc_act_batches = Utils.Split(train_data.DiscreteActions, hp.batchSize);
-                    List<Tensor[]> disc_probs_batches = Utils.Split(train_data.DiscreteProbabilities, hp.batchSize);
-
-                    for (int b = 0; b < states_batches.Count; b++)
-                    { 
-                        Tensor states_batch = Tensor.Cat(null, states_batches[b]);
-                        Tensor advantages_batch = Tensor.Cat(null, advantages_batches[b]);
-                        Tensor value_targets_batch = Tensor.Cat(null, value_targets_batches[b]);
-                        
-                        UpdateCritic(states_batch, value_targets_batch);
-
-                        if(Instance.ac.IsUsingContinuousActions)
+                    if (Instance.ac.IsUsingContinuousActions)
+                    {
+                        Tensor cont_act_batch = Tensor.Cat(null, cont_act_batches[b]);
+                        Tensor cont_probs_batch = Tensor.Cat(null, cont_probs_batches[b]);
+                        UpdateContinuousNetwork(
+                            states_batch,
+                            advantages_batch,
+                            cont_act_batch,
+                            cont_probs_batch);
+                    }
+                    if (Instance.ac.IsUsingDiscreteActions)
+                    {
+                        int num_branches = Instance.ac.discreteBranches.Length;
+                        for (int branch_id = 0; branch_id < num_branches; branch_id++)
                         {
-                            Tensor cont_act_batch = Tensor.Cat(null, cont_act_batches[b]);
-                            Tensor cont_probs_batch = Tensor.Cat(null, cont_probs_batches[b]);
-                            UpdateContinuousNetwork(
+                            Tensor disc_act_batch_branch_i = Tensor.Cat(null, cont_act_batches[b][branch_id]);
+                            Tensor disc_prob_batch_branch_i = Tensor.Cat(null, cont_probs_batches[b][branch_id]);
+                            UpdateDiscreteBranchNetwork(
                                 states_batch,
                                 advantages_batch,
-                                cont_act_batch,
-                                cont_probs_batch);
-                        }
-                        if(Instance.ac.IsUsingDiscreteActions)
-                        {
-                            int num_branches = Instance.ac.discreteBranches.Length;
-                            for (int branch_id = 0; branch_id < num_branches; branch_id++)
-                            {
-                                Tensor disc_act_batch_branch_i = Tensor.Cat(null, cont_act_batches[b][branch_id]);
-                                Tensor disc_prob_batch_branch_i = Tensor.Cat(null, cont_probs_batches[b][branch_id]);
-                                UpdateDiscreteBranchNetwork(
-                                    states_batch,
-                                    advantages_batch,
-                                    disc_act_batch_branch_i,
-                                    disc_prob_batch_branch_i,
-                                    branch_id);
+                                disc_act_batch_branch_i,
+                                disc_prob_batch_branch_i,
+                                branch_id);
 
-                            }
-                          
-                        }
-
-
-                    }
-                   
-                    // Step schedulers after each epoch
-                    ac.criticScheduler.Step();
-                    if(ac.IsUsingContinuousActions)
-                    {
-                        ac.actorMuScheduler.Step();
-                        ac.actorSigmaScheduler.Step();
-                    }                   
-                    if(ac.IsUsingDiscreteActions)
-                    {
-                        for (int i = 0; i < ac.actorDiscretesSchedulers.Length; i++)
-                        {
-                            ac.actorDiscretesSchedulers[i].Step();
                         }
                     }
-                    // Also Epsilon step and beta step must be runned here, but maybe in the future.
-                        
-
-                    // Save statistics info
-                    trainingStatisticsTrack?.learningRate.Append(ac.criticScheduler.CurrentLR);
-                    trainingStatisticsTrack?.epsilon.Append(hp.epsilon);
-                    trainingStatisticsTrack?.policyLoss.Append(meanPolicyLoss / hp.batchSize);
-                    trainingStatisticsTrack?.valueLoss.Append(meanValueLoss / hp.batchSize);
-
                 }
-                train_data.Reset();
+
+                // Step schedulers after each epoch
+                ac.criticScheduler.Step();
+                if (ac.IsUsingContinuousActions)
+                {
+                    ac.actorMuScheduler.Step();
+                    ac.actorSigmaScheduler.Step();
+                }
+                if (ac.IsUsingDiscreteActions)
+                {
+                    for (int i = 0; i < ac.actorDiscretesSchedulers.Length; i++)
+                    {
+                        ac.actorDiscretesSchedulers[i].Step();
+                    }
+                }
+
+
+                // Save statistics info
+                statisticsTrack?.learningRate.Append(ac.criticScheduler.CurrentLR);
+                statisticsTrack?.epsilon.Append(hp.epsilon);
+                statisticsTrack?.policyLoss.Append(meanPolicyLoss / hp.batchSize);
+                statisticsTrack?.valueLoss.Append(meanValueLoss / hp.batchSize);
+                meanPolicyLoss = 0f;
+                meanValueLoss = 0f;
+
             }
+            ac.SetCriticDevice(ac.inferenceDevice);
             ac.SetActorDevice(ac.inferenceDevice);
+
+            train_data.Clear();
         }
         /// <summary>
         /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>) where * = <em>Observations Shape</em><br></br>

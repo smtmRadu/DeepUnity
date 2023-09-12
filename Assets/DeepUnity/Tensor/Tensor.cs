@@ -115,7 +115,7 @@ namespace DeepUnity
             data = new float[size];
         }
         /// <summary>
-        /// Clones a tensor input.
+        /// Return a Tensor with the same shape and contents as <paramref name="other"/>.
         /// </summary>
         /// <param name="other"></param>
         /// <returns></returns>
@@ -614,18 +614,33 @@ namespace DeepUnity
                 // case non-batched and non-channeled matmul
                 if (J == 1 && K == 1)
                 {
-                    Parallel.For(0, N, n =>
-                    {
-                        for (int p = 0; p < P; p++)
+                    if(N > P)
+                        Parallel.For(0, N, n =>
                         {
-                            float sum = 0f;
-                            for (int m = 0; m < M; m++)
+                            for (int p = 0; p < P; p++)
                             {
-                                sum += left[n, m] * right[m, p];
+                                float sum = 0f;
+                                for (int m = 0; m < M; m++)
+                                {
+                                    sum += left[n, m] * right[m, p];
+                                }
+                                result[n, p] = sum;
                             }
-                            result[n, p] = sum;
-                        }
-                    });                  
+                        });    
+                    else
+                        Parallel.For(0, P, p =>
+                        {
+                            for (int n = 0; n < N; n++)
+                            {
+                                float sum = 0f;
+                                for (int m = 0; m < M; m++)
+                                {
+                                    sum += left[n, m] * right[m, p];
+                                }
+                                result[n, p] = sum;
+                            }
+                        });
+
                 }                
                 else if (J > 1)
                     Parallel.For(0, J, j =>
@@ -700,7 +715,7 @@ namespace DeepUnity
         /// A benchmark matmul was made on the following matrices (24, 64) * (64, 64) for 100 runs. <br></br>
         /// (i5 9300h) CPU time: 0.26s. <br></br>
         /// (GTX 1650) GPU time: 0.24s. <br></br>
-        /// Where output n * m * p = 24 * 64 * 64 = 98,304. <br></br>
+        /// Where output N * M * P = 24 * 64 * 64 = 98,304. <br></br>
         /// </em>
         /// </summary>
         /// <returns>Output: <b>(J, K, N, P)</b></returns>

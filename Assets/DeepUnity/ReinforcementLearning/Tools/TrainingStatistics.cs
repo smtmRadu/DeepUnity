@@ -4,7 +4,6 @@ using UnityEditor;
 using UnityEngine;
 using System.IO;
 using System.Linq;
-using Unity.VisualScripting;
 
 namespace DeepUnity
 {
@@ -16,7 +15,7 @@ namespace DeepUnity
         [ReadOnly, Tooltip("When the simulation ended.")]
         public string finishedAt = " - ";
         [ReadOnly, Tooltip("How much time passed in real time since the start of the training simulation.")] 
-        public string realTrainingTime = " - ";
+        public string trainingSessionTime = " - ";
 
         [HideInInspector] public float policyUpdateSecondsElapsed = 0f;
         [HideInInspector] public float inferenceSecondsElapsed = 0f; // Updated via deltaTime
@@ -34,9 +33,9 @@ namespace DeepUnity
         
 
         [Space(20)] 
-        [ReadOnly, Tooltip("inference time per agent / (inference time per agent + policy update time)")]
+        [ReadOnly, Tooltip("inference time / training session time")]
         public string inferenceTimeRatio = "- / -";
-        [ReadOnly, Tooltip("policy update time / (inference time per agent + policy update time)")]
+        [ReadOnly, Tooltip("policy update time / training session time")]
         public string policyUpdateTimeRatio = "- / -";
 
         [Space(20)]
@@ -116,15 +115,15 @@ namespace DeepUnity
             y += 20;                          
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Finished at: " + finishedAt + @"</text>");
             y += 20;                          
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Real Training Time: " + realTrainingTime + @"</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Training Session Time: " + trainingSessionTime + @"</text>");
             y += 20;                          
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Time: {inferenceTime}    [Per agent: {inferenceTimePerAgent}]    [Device: {ab.inferenceDevice}]</text>");       
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Time: {inferenceTime}       [Per agent: {inferenceTimePerAgent}]        [Device: {ab.inferenceDevice}]</text>");       
             y += 20;                                   
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Policy Optimization Time: {policyUpdateTime}    [Per iteration: {policyUpdateTimePerIteration}]    [Device: {ab.trainingDevice}]</text>");   
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Policy Update Time: {policyUpdateTime}        [Per iteration: {policyUpdateTimePerIteration}]        [Device: {ab.trainingDevice}]</text>");   
             y += 20;                                  
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Time Per Agent / Real Training Time [ratio]: " + inferenceTimeRatio + @"</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Time / Training Session Time: " + inferenceTimeRatio + @"</text>");
             y += 20;                                 
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Policy Update Time / Real Training Time [ratio]: " + policyUpdateTimeRatio + @"</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Policy Update Time / Training Session Time: " + policyUpdateTimeRatio + @"</text>");
             y += 20;                          
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Steps: {totalSteps}    [Per agent: {totalSteps / parallelAgents}]</text>");
             y += 20;                                
@@ -135,19 +134,20 @@ namespace DeepUnity
             y += 50;
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Hyperparameters]</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Buffer Size: {hp.bufferSize}    [Batch Size: {hp.batchSize}]    [No. Batches: {hp.bufferSize/hp.batchSize}]</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Buffer Size: {hp.bufferSize}        [Batch Size: {hp.batchSize}       (x{hp.bufferSize / hp.batchSize})]</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Num Epoch: {hp.numEpoch}</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Time Horizon: {hp.horizon}</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Gradient Clipiing Normalization: {hp.gradClipNorm}</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Gradient Cliping Normalization: {hp.gradClipNorm}</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Advantages Normalization: {hp.normalizeAdvantages}</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Training Data shuffle: {hp.shuffleTrainingData}</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Learning Rate Schedule: {hp.learningRateSchedule}    [Step Size: {hp.schedulerStepSize}]    [Decay: {hp.schedulerDecay}]</text>");
+            string step_lr_details = !hp.learningRateSchedule? "" : $"[Step Size: {hp.schedulerStepSize}]    [Decay: {hp.schedulerDecay}]";
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Learning Rate Schedule: {hp.learningRateSchedule}    {step_lr_details}</text>");
 
             y += 50;
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Behaviour]</text>");
@@ -162,16 +162,22 @@ namespace DeepUnity
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Observations Normalization: {ab.normalizeObservations}</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Standard Deviation: {ab.standardDeviation}    [(Fixed) Standard Deviation Value: {ab.standardDeviationValue}]    [(Trainable) Standard Deviation Scale: {ab.standardDeviationScale}]</text>");
+            string std_value = ab.standardDeviation == StandardDeviationType.Fixed ? $"Value: {ab.standardDeviationValue}" : $"Scale: {ab.standardDeviationScale}";
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Standard Deviation: {ab.standardDeviation}    [{std_value}]</text>");
 
             y += 50;
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Graphs]</text>");
             y += 20;
             DrawGraph(svgBuilder, episodeReward.Keys, ref y, 50, 200, 500, "Episode Reward");
+            y += 20;
             DrawGraph(svgBuilder, episodeLength.Keys, ref y, 50, 200, 500, "Episode Length");
+            y += 20;
             DrawGraph(svgBuilder, policyLoss.Keys, ref y, 50, 200, 500, "Policy Loss");
+            y += 20;
             DrawGraph(svgBuilder, valueLoss.Keys, ref y, 50, 200, 500, "Value Loss");
+            y += 20;
             DrawGraph(svgBuilder, learningRate.Keys, ref y, 50, 200, 500, "Learning Rate");
+            y += 20;
             DrawGraph(svgBuilder, epsilon.Keys, ref y, 50, 200, 500, "Epsilon");
 
             svgBuilder.AppendLine(@"</svg>");

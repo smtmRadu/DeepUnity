@@ -24,7 +24,6 @@ namespace kbRadu
         public int whatIsIt = 0;
         List<(Tensor, Tensor)> train;
 
-
         void TestCrossEntropy()
         {
             var net = new NeuralNetwork(
@@ -118,14 +117,14 @@ namespace kbRadu
                 new Softmax()
                 );
 
-            ClockTimer.Start();
+            TimeKeeper.Start();
             for (int i = 0; i < Runs; i++)
             {
                 var output = network.Forward(Tensor.Random01(32, 1, 28, 28));
                 network.Backward(output);
             }
             
-            ClockTimer.Stop();
+            TimeKeeper.Stop();
         }
         void MaxPoolBenchmark()
         {
@@ -133,12 +132,12 @@ namespace kbRadu
 
             MaxPool2D mp = new MaxPool2D(5);
 
-            ClockTimer.Start();
+            TimeKeeper.Start();
             for (int i = 0; i < Runs; i++)
             {
                 mp.Predict(input);
             }
-            ClockTimer.Stop();
+            TimeKeeper.Stop();
         }
         void TestMaxPool()
         {
@@ -428,13 +427,13 @@ namespace kbRadu
 
 
             Dense dense = new Dense(MatShape.x, MatShape.y, device: TestDevice);
-            ClockTimer.Start();
+            TimeKeeper.Start();
             for (int i = 0; i < Runs; i++)
             {
                 var outp = dense.Forward(input);
                 dense.Backward(outp);
             }
-            ClockTimer.Stop();
+            TimeKeeper.Stop();
         }
 
 
@@ -496,13 +495,13 @@ namespace kbRadu
             Conv2D c = new Conv2D((1, 28, 28), 64, 3, device: TestDevice);
 
             Tensor input = Tensor.Random01(batchSize, 1, 28, 28);
-            ClockTimer.Start();
+            TimeKeeper.Start();
             for (int i = 0; i < Runs; i++)
             {
                 var outp = c.Forward(input);
                 c.Backward(outp);
             }
-            ClockTimer.Stop();
+            TimeKeeper.Stop();
         }
 
         void Test_MatMulUnbalanced()
@@ -538,24 +537,24 @@ namespace kbRadu
                 var t1 = Tensor.Random01(MatShape.x, MatShape.y);
                 var t2 = Tensor.Random01(MatShape.x, MatShape.y);
 
-                ClockTimer.Start();
+                TimeKeeper.Start();
                 for (int i = 0; i < Runs; i++)
                 {
                     Tensor.MatMul(t1, t2);
                 }
-                ClockTimer.Stop();
+                TimeKeeper.Stop();
             }
             else
             {
                 var t1 = TensorGPU.Random01(MatShape.x, MatShape.y);
                 var t2 = TensorGPU.Random01(MatShape.x, MatShape.y);
 
-                ClockTimer.Start();
+                TimeKeeper.Start();
                 for (int i = 0; i < Runs; i++)
                 {
                     TensorGPU.MatMul(t1, t2);
                 }
-                ClockTimer.Stop();
+                TimeKeeper.Stop();
             }
 
         }
@@ -565,12 +564,12 @@ namespace kbRadu
             var t2 = TensorGPU.Random01(MatShape.x, MatShape.y);
            
             
-            ClockTimer.Start();
+            TimeKeeper.Start();
             for (int i = 0; i < Runs; i++)
             {
                 TensorGPU.MatMul(t1, t2);
             }
-            ClockTimer.Stop();
+            TimeKeeper.Stop();
 
         }
         void Test_TensorOperaitons()

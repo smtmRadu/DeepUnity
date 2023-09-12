@@ -31,6 +31,10 @@ namespace DeepUnity
             // Here will be no checkings the parameters are ok, only in each class constructors respectively.
             this.device = device;
 
+            if(gammaShape == null || betaShape == null || fan_in < 1 || fan_out < 1)
+                throw new Exception("Developer error. GammaShape, BetaShape, fan_in and fan_out do not have default values correctly. Please set them to 1.");
+            
+
             // Setting the grads to 0
             gammaGrad = Tensor.Zeros(gammaShape);
             betaGrad = Tensor.Zeros(betaShape);

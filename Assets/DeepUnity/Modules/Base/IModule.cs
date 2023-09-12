@@ -43,6 +43,7 @@ namespace DeepUnity
         public Threshold threshold;
         public HardTanh hardtanh;
         public Exp exp;
+        public GELU gelu;
         
         
         
@@ -130,6 +131,10 @@ namespace DeepUnity
             else if (module is Exp expModule)
             {
                 exp = expModule;
+            }
+            else if (module is GELU geluModule)
+            {
+                gelu = geluModule;
             }
             else
                 throw new Exception("Unhandled module type while wrapping.");
@@ -222,6 +227,10 @@ namespace DeepUnity
             else if (typeof(Exp).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.exp;
+            }
+            else if (typeof(GELU).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.gelu;
             }
             else
                 throw new Exception("Unhandled module type while unwrapping.");
