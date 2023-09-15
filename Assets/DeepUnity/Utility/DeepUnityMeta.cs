@@ -131,16 +131,6 @@ namespace DeepUnity
         LoadTrainOnly,
         LoadTestOnly
     }
-
-    public enum DecisionRequestType
-    {
-        [Tooltip("The agent performs an action on each FixedUpdate() call.")]
-        OnceEachFrame,
-        [Tooltip("The agent performs an action once every X seconds denoted by the field below.")]
-        OnPeriodInterval,
-        [Tooltip("The agent performs an action whenever RequestAction() method is called.")]
-        WhenRequested
-    }
     public enum BehaviourType
     {
         [Tooltip("Latent behaviour. Learning: NO. Scene resets: NO.")]

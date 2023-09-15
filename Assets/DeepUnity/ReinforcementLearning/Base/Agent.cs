@@ -29,18 +29,18 @@ namespace DeepUnity
 
         public TrainingStatistics PerformanceTrack { get; set; }
         public MemoryBuffer Memory { get; set; }
-        private TimestepBuffer Timestep { get; set; }
-        private DecisionRequester DecisionRequester { get; set; }
+        public DecisionRequester DecisionRequester { get; private set; }
+        private TimestepBuffer Timestep { get; set; }    
         private List<ISensor> Sensors { get; set; }
         private StateResetter PositionReseter { get; set; }
         private SensorBuffer Observations { get; set; }
         private ActionBuffer Actions { get; set; }
-        public bool ActionOccured { get; private set; } = false;
         public int EpisodeStepCount { get; private set; } = 1;
-        public float EpsiodeCumulativeReward { get; set; } = 0f;      
+        public float EpsiodeCumulativeReward { get; private set; } = 0f;
         private bool FixedUpdateOccured { get; set; } = false;
         private bool UpdateOccured { get; set; } = false;
         private bool LateUpdateOccured { get; set; } = false;
+        private int FixedFramesCount { get; set; } = 0;
 
 
         public virtual void Awake()
@@ -57,7 +57,7 @@ namespace DeepUnity
             if(model.targetFPS < 30 || model.targetFPS > 100)
             {
                 model.targetFPS = 50;
-                ConsoleMessage.Warning("Behaviour's targetFPS is not in range 30 - 100. It was set on 50 by default.");
+                ConsoleMessage.Warning("Behaviour's targetFPS not in range 30 - 100. It was automatically set on 50 by default.");
             }
 
             Time.fixedDeltaTime = 1f / model.targetFPS;
@@ -96,6 +96,7 @@ namespace DeepUnity
                 OnEpisodeBegin();
 
         }
+
         public virtual void FixedUpdate()
         {
             if (FixedUpdateOccured)
@@ -103,17 +104,19 @@ namespace DeepUnity
 
             FixedUpdateOccured = true;
             UpdateOccured = false;
-
+            FixedFramesCount++;
+            
             // ----------------------------------------------------------------------------------
             if (behaviourType == BehaviourType.Off)
                 return;
 
-            ActionOccured = true;
+            if (!DecisionRequester.TryRequestDecision(FixedFramesCount))
+                return;
+
             Timestep.done = Tensor.Constant(0);
             Timestep.reward = Tensor.Constant(0);
 
-            if ((behaviourType == BehaviourType.Learn || behaviourType == BehaviourType.Inference) 
-                && DecisionRequester.DoITakeActionThisFrame())
+            if (behaviourType == BehaviourType.Learn || behaviourType == BehaviourType.Inference)
             {
                 Observations.Clear();
                 Actions.Clear();
@@ -163,11 +166,11 @@ namespace DeepUnity
             if (UpdateOccured)
                 return;
 
-            if (!ActionOccured)
-                return;
-
             UpdateOccured = true;
             LateUpdateOccured = false;
+
+            if (!DecisionRequester.IsLastFrameBeforeNextAction(FixedFramesCount) || Timestep.done == null)
+                return;
 
             // ----------------------------------------------------------------------------------
 
@@ -190,12 +193,11 @@ namespace DeepUnity
             if (LateUpdateOccured)
                 return;
 
-            if (!ActionOccured)
-                return;
-
             LateUpdateOccured = true;
             FixedUpdateOccured = false;
-            ActionOccured = false;
+
+            if (!DecisionRequester.IsLastFrameBeforeNextAction(FixedFramesCount) || Timestep.done == null)
+                return;
 
             // ----------------------------------------------------------------------------------
             if (behaviourType == BehaviourType.Off)
@@ -317,17 +319,6 @@ namespace DeepUnity
         /// <param name="actionOut"></param>
         public virtual void Heuristic(ActionBuffer actionOut) { }
         /// <summary>
-        /// Called from <b>anywhere</b>. <br></br>
-        /// Ensures the agent will perform an action in the next frame*.
-        /// <br></br>
-        /// <br></br>
-        /// <em>*If the action requires to happen in the same frame, RequestDecision() needs to be called before base.<b>FixedUpdate()</b></em>
-        /// </summary>
-        public void RequestDecision()
-        {
-            DecisionRequester.decisionWasRequested = true;
-        }
-        /// <summary>
         /// Called only inside <b>OnActionReceived()</b>, and <b>OnTriggerXXX()</b> or <b>OnCollisionXXX()</b>. <br></br>
         /// Ensures the episode will end this frame for the current agent.
         /// </summary>
@@ -342,12 +333,6 @@ namespace DeepUnity
         /// <param name="reward">positive or negative</param>
         public void AddReward(float reward)
         {
-            if(Timestep.reward == null)
-            {
-                ConsoleMessage.Warning($"Cannot add reward {reward} before taking an action");
-                return;
-            }
-
             Timestep.reward += reward;
             EpsiodeCumulativeReward += reward;
         }
@@ -358,12 +343,6 @@ namespace DeepUnity
         /// <param name="reward">positive or negative</param>
         public void SetReward(float reward)
         {
-            if (Timestep.reward == null)
-            {
-                ConsoleMessage.Warning($"Cannot set reward {reward} before taking an action");
-                return;
-            }
-
             Timestep.reward[0] = reward;
             EpsiodeCumulativeReward += reward;
         }
@@ -382,8 +361,19 @@ namespace DeepUnity
             SerializedProperty beh = serializedObject.FindProperty("behaviourType");
             var script = (Agent)target;
 
-            if (EditorApplication.isPlaying && beh.enumValueIndex == (int)BehaviourType.Learn)
+            if (EditorApplication.isPlaying && beh.enumValueIndex == (int)BehaviourType.Learn && script.enabled)
             {
+                // Draw Step
+                int currentStep = script.EpisodeStepCount;
+                int maxStep = script.DecisionRequester.maxStep;
+                string stepcount = $"Step [{currentStep} / {maxStep}]";
+                EditorGUILayout.HelpBox(stepcount, MessageType.None);
+
+                // Draw Reward
+                string cumReward = $"Reward [{script.EpsiodeCumulativeReward}]";
+                EditorGUILayout.HelpBox(cumReward, MessageType.None);
+
+                // Draw buffer 
                 float bufferFillPercentage = script.Memory.Count * Trainer.ParallelAgentsCount / ((float)script.hp.bufferSize) * 100f;
                 StringBuilder sb = new StringBuilder();
                 sb.Append("Buffer [");
@@ -404,6 +394,8 @@ namespace DeepUnity
                 }
                 sb.Append("]");
                 EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
+
+                
                 // EditorGUILayout.HelpBox($"Reward [{script.EpsiodeCumulativeReward}]",
                 //                         MessageType.None);
             }

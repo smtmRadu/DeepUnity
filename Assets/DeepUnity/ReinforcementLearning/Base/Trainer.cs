@@ -119,12 +119,18 @@ namespace DeepUnity
                 Instance.train_data = new ExperienceBuffer(Instance.hp.bufferSize);
             }
 
-            // Assign a common TrainingStatistics for all agents (and also the trainer)
-            if(agent.PerformanceTrack != null)
+            // Assign common attributes to all agents
+            if (agent.PerformanceTrack != null)
             {
                 Instance.statisticsTrack = agent.PerformanceTrack;
-                Instance.parallelAgents.ForEach(x => x.PerformanceTrack = agent.PerformanceTrack);
             }
+
+            Instance.parallelAgents.ForEach(x =>
+            {
+                x.PerformanceTrack = agent.PerformanceTrack;
+                x.DecisionRequester.decisionPeriod = agent.DecisionRequester.decisionPeriod;
+                x.DecisionRequester.maxStep = agent.DecisionRequester.maxStep;
+            });
 
             Instance.parallelAgents.Add(agent);
         }
@@ -140,7 +146,7 @@ namespace DeepUnity
 
                 if(Instance.statisticsTrack.iterations > 0)
                 {
-                    string pth = Instance.statisticsTrack.ExportAsSVG(Instance.ac.behaviourName, Instance.hp, Instance.ac);
+                    string pth = Instance.statisticsTrack.ExportAsSVG(Instance.ac.behaviourName, Instance.hp, Instance.ac, Instance.parallelAgents[0].DecisionRequester);
                     UnityEngine.Debug.Log($"<color=#57f542>Training Session statistics log saved at <b><i>{pth}</i></b>.</color>");
                     AssetDatabase.Refresh();
                 }               
@@ -156,9 +162,11 @@ namespace DeepUnity
             // 1. Retrieve all data from the agents
             foreach (var agent_memory in parallelAgents.Select(x => x.Memory))
             {
-                agent_memory.GAE(hp.gamma, hp.lambda, hp.horizon, ac.critic);
+                agent_memory.ComputeAdvantagesAndReturns(hp.gamma, hp.lambda, hp.horizon, ac.critic);
                 train_data.Add(agent_memory);
+                if (hp.debug) Utils.DebugInFile(agent_memory.ToString());
                 agent_memory.Clear();
+
             }
 
             // 2. Normalize advantages

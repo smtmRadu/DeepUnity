@@ -13,6 +13,7 @@ TagManager:
   - Floor
   - Agent
   - Ball
+  - Car
   layers:
   - Default
   - TransparentFX
@@ -20,8 +21,8 @@ TagManager:
   - Agent
   - Water
   - UI
-  - 
-  - 
+  - Zone
+  - Transparent
   - 
   - 
   - 

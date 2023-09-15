@@ -2,6 +2,7 @@ using System;
 using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
+using DeepUnityTutorials;
 
 namespace DeepUnity
 {
@@ -23,7 +24,7 @@ namespace DeepUnity
         [Min(32)] public int batchSize = 512;
 
         [Tooltip("[Typical range: 2048 - 409600] Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch size. Typically a larger buffer size corresponds to more stable training updates.")]
-        [Min(64)] public int bufferSize = 10240;
+        [Min(512)] public int bufferSize = 10240;
 
         [Tooltip("Apply normalization to advantages over the memory buffer.")]
         public bool normalizeAdvantages = true;
@@ -66,6 +67,10 @@ namespace DeepUnity
         // 
         // [ReadOnly, Tooltip("Applies linear decay on epsilon.")]
         // public bool epsilonScheduler = false;
+
+        [Space(50)]
+        [Tooltip("Debug the train_data into a file.")]
+        public bool debug = false;
 
 
         private void Awake()

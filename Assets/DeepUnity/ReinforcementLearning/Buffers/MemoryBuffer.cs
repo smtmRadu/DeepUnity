@@ -27,7 +27,8 @@ namespace DeepUnity
         {
             frames.Clear();
         }
-        public void GAE(in float gamma, in float lambda, in int horizon, NeuralNetwork crticNetwork)
+
+        public void ComputeAdvantagesAndReturns(in float gamma, in float lambda, in int horizon, NeuralNetwork crticNetwork)
         {
             int T = Count;
             Tensor[] Vw_s = new Tensor[T];

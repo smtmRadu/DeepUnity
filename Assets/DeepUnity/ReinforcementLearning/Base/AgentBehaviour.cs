@@ -260,7 +260,7 @@ namespace DeepUnity
             }
             if (actorMu == null)
             {
-                ConsoleMessage.Warning($"Some network assets are not attached to {behaviourName} behaviour asset!");
+                ConsoleMessage.Warning($"<i>NeuralNetwork</i> assets are not attached to <b>{behaviourName}</b> behaviour asset!");
                 EditorApplication.isPlaying = false;
                 action = null;
                 probs = null;

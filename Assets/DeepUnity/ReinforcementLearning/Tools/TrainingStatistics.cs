@@ -64,7 +64,7 @@ namespace DeepUnity
         /// </summary>
         /// <param name="behaviourName"></param>
         /// <returns></returns>
-        public string ExportAsSVG(string behaviourName, Hyperparameters hp, AgentBehaviour behaviour)
+        public string ExportAsSVG(string behaviourName, Hyperparameters hp, AgentBehaviour behaviour, DecisionRequester decisionRequester)
         {
             string extra = new string(startedAt.Select(x =>
             {
@@ -97,10 +97,10 @@ namespace DeepUnity
             }
 
             File.Create(path).Dispose();
-            File.WriteAllText(path, GenerateSVG(behaviourName, hp, behaviour));
+            File.WriteAllText(path, GenerateSVG(behaviourName, hp, behaviour, decisionRequester));
             return path;
         }
-        private string GenerateSVG(string behaviourName, Hyperparameters hp, AgentBehaviour ab)
+        private string GenerateSVG(string behaviourName, Hyperparameters hp, AgentBehaviour ab, DecisionRequester dr)
         {
             StringBuilder svgBuilder = new StringBuilder();
 
@@ -144,7 +144,7 @@ namespace DeepUnity
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Advantages Normalization: {hp.normalizeAdvantages}</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Training Data shuffle: {hp.shuffleTrainingData}</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Training Data Shuffle: {hp.shuffleTrainingData}</text>");
             y += 20;
             string step_lr_details = !hp.learningRateSchedule? "" : $"[Step Size: {hp.schedulerStepSize}]    [Decay: {hp.schedulerDecay}]";
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Learning Rate Schedule: {hp.learningRateSchedule}    {step_lr_details}</text>");
@@ -164,6 +164,14 @@ namespace DeepUnity
             y += 20;
             string std_value = ab.standardDeviation == StandardDeviationType.Fixed ? $"Value: {ab.standardDeviationValue}" : $"Scale: {ab.standardDeviationScale}";
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Standard Deviation: {ab.standardDeviation}    [{std_value}]</text>");
+
+            y += 50;
+            svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Decision Requester]</text>");
+            y += 20;
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Max Step: {dr.maxStep}</text>");
+            y += 20;
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Decision Period: {dr.decisionPeriod}</text>");
+
 
             y += 50;
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Graphs]</text>");

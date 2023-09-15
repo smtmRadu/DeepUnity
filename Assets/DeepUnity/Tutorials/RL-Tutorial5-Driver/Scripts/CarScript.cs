@@ -19,7 +19,6 @@ namespace DeepUnityTutorials
 
         public Transform centerOfMass;
         private Rigidbody rb;
-        private AudioSource audioSource;
         public CameraSensor camSensor;
         public Text speedLabel;
         public RawImage cameraView;
@@ -36,7 +35,8 @@ namespace DeepUnityTutorials
         }
         private void FixedUpdate()
         {
-            speedLabel.text = $"Speed: {(rb.velocity.magnitude * 4f).ToString("0.0")}km/h";
+            if(speedLabel)
+                speedLabel.text = $"Speed: {(rb.velocity.magnitude * 4f).ToString("0.0")}km/h";
         }
         private void Update()
         {
