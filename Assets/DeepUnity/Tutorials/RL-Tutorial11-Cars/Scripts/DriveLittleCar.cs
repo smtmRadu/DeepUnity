@@ -68,6 +68,7 @@ namespace DeepUnityTutorials
             CorrelateColliderAndTransform(rb_collider, rb_transform, true);
             CorrelateColliderAndTransform(rf_collider, rf_transform, true);
 
+
             AddReward(-0.0025f);
         }
         public override void Heuristic(ActionBuffer actionOut)

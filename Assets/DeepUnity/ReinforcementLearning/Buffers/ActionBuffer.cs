@@ -33,7 +33,7 @@ namespace DeepUnity
         }
         public override string ToString()
         {
-            return $"[ContinuousActions [{ContinuousActions?.ToCommaSeparatedString()}] | DiscreteActions [{DiscreteActions?.ToCommaSeparatedString()}]]";
+            return $"[Continuous Actions [{ContinuousActions?.ToCommaSeparatedString()}] | Discrete Actions [{DiscreteActions?.ToCommaSeparatedString()}]]";
         }
     }
 }

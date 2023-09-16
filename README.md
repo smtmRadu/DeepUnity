@@ -1,5 +1,6 @@
 # DeepUnity
-![version](https://img.shields.io/badge/version-v0.9.3.6-blue)
+![version](https://img.shields.io/badge/version-v0.9.3.7-blue)
+
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO).
 
 #### Run your first DeepUnity script
@@ -175,7 +176,7 @@ public class MoveToGoal : Agent
     }
 }
 ```
-_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (decision is every frame), and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the goal, and penalized by 1 point if he is hitting a wall (or falls of the floor), and on every collision the episode ends._
+_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (Decision Period is 1), and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the goal, and penalized by 1 point if he is hitting a wall (or falls of the floor), and on every collision the episode ends._
 
 ![agent](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/agent.gif?raw=true)
 

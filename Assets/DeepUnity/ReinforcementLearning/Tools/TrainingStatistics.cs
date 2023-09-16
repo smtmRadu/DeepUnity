@@ -170,8 +170,8 @@ namespace DeepUnity
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Max Step: {dr.maxStep}</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Decision Period: {dr.decisionPeriod}</text>");
-
+            string decPer = dr.decisionPeriod == 1 ? "1" : $"{dr.decisionPeriod}      [Actions Between Decisions: {dr.takeActionsBetweenDecisions}]";
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Decision Period: {decPer}</text>");
 
             y += 50;
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Graphs]</text>");

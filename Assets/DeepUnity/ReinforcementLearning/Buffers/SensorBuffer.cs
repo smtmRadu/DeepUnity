@@ -11,12 +11,12 @@ namespace DeepUnity
     public class SensorBuffer
     {
         public readonly int Capacity;
-        public Tensor Observations { get; set; }
+        public Tensor ObservationTensor { get; set; }
         private int position_index { get; set; }
        
  	    public SensorBuffer(int capacity)
         {
-            Observations = Tensor.Zeros(capacity).Select(x => 0f);
+            ObservationTensor = Tensor.Zeros(capacity).Select(x => 0f);
             this.Capacity = capacity;
             position_index = 0;
         }
@@ -24,7 +24,7 @@ namespace DeepUnity
         {
             for (int i = 0; i < Capacity; i++)
             {
-                Observations[i] = 9999;
+                ObservationTensor[i] = 9999;
             }
             position_index = 0;
         }
@@ -35,7 +35,7 @@ namespace DeepUnity
         }
         public override string ToString()
         {
-            return $"[Observations [{Observations.ToArray().ToCommaSeparatedString()}]]";
+            return $"[Observations [{ObservationTensor.ToArray().ToCommaSeparatedString()}]]";
 
         }
 
@@ -55,7 +55,7 @@ namespace DeepUnity
                 throw new ArgumentException("float.NaN value observation added to the SensorBuffer.");
 
 
-            Observations[position_index++] = observation;
+            ObservationTensor[position_index++] = observation;
         }
         /// <summary>
         /// Adds a one dimensional observation. The bool value is converted to float, 0 for false and 1 for true respectively.

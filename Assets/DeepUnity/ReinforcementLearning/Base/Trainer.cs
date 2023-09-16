@@ -119,17 +119,19 @@ namespace DeepUnity
                 Instance.train_data = new ExperienceBuffer(Instance.hp.bufferSize);
             }
 
-            // Assign common attributes to all agents
+            
             if (agent.PerformanceTrack != null)
             {
                 Instance.statisticsTrack = agent.PerformanceTrack;
             }
 
+            // Assign common attributes to all agents (based on the last agent that subscribes - this one is actually the first in the Hierarchy)
             Instance.parallelAgents.ForEach(x =>
             {
                 x.PerformanceTrack = agent.PerformanceTrack;
                 x.DecisionRequester.decisionPeriod = agent.DecisionRequester.decisionPeriod;
                 x.DecisionRequester.maxStep = agent.DecisionRequester.maxStep;
+                x.DecisionRequester.takeActionsBetweenDecisions = agent.DecisionRequester.takeActionsBetweenDecisions;
             });
 
             Instance.parallelAgents.Add(agent);
