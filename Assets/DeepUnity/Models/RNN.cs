@@ -12,7 +12,7 @@ using System.CodeDom;
 namespace DeepUnity
 {
     [Serializable]
-    public class RNN : Model<RNN>, ISerializationCallbackReceiver
+    public class RNN : Model<RNN, (Tensor, Tensor)>, ISerializationCallbackReceiver
     {
         [SerializeField] private bool batchFirst;
         [NonSerialized] private IModuleS[] modules;
@@ -75,24 +75,15 @@ namespace DeepUnity
         }
 
 
-
-        /// <summary>
-        /// input:  <b>(L, H_in)</b> for unbatched input, <b>(L, B, H_in)</b> when batch_first = false or <b>(B, L, H_in)</b> when batch_first = true. <br></br>
-        /// h_0:    <b>(num_layers, H_out)</b> for unbatched input, or <b>(num_layers, B, H_out)</b>. <br></br>
-        /// </summary>
-        /// <param name="input"></param>
-        /// <param name="h_0"></param>
-        /// <returns>
-        /// output: <b>(L, H_out)</b> for unbatched input, or <b>(L, B, H_out)</b> when batch_first = false or <b>(B, L, H_out)</b> when batch_first = true. <br></br>
-        /// h_n: <b>(num_layers, H_out)</b> for unbatched input or <b>(num_layers, B, H_out)</b>. <br></br>
-        /// </returns>
-        public (Tensor, Tensor) Forward(Tensor input, Tensor h_0)
+        public override (Tensor, Tensor) Predict((Tensor, Tensor) input_h0)
         {
-            BaseForward();
+            Tensor input = input_h0.Item1;
+            Tensor h_0 = input_h0.Item2;
+
             Tensor input_clone = Tensor.Identity(input);
             Tensor h_0_clone = Tensor.Identity(h_0);
 
-            if(input_clone.Rank != h_0_clone.Rank)
+            if (input_clone.Rank != h_0_clone.Rank)
                 throw new Exception($"Input ({input_clone.Shape.ToCommaSeparatedString()}) or H_0({h_0_clone.Shape.ToCommaSeparatedString()}) must have the same rank.");
 
             if (h_0_clone.Size(0) != modules.Count(x => x is RNNCell))
@@ -158,10 +149,10 @@ namespace DeepUnity
                     {
                         h_0_per_layers[rnncell_index] = r.Forward(input_sequence[t], h_0_per_layers[rnncell_index]);
                         input_sequence[t] = Tensor.Identity(h_0_per_layers[rnncell_index]);
-                        
+
                     }
                     rnncell_index++;
-                }                  
+                }
                 else if (module is Dropout d)
                 {
                     for (int t = 0; t < input_sequence.Length; t++)
@@ -177,12 +168,12 @@ namespace DeepUnity
                     }
                 }
 
-                   
+
                 // they are expelled ok
                 // Debug.Log(h_0_per_layers[rnncell_index - 1]);
 
             }
-           
+
 
 
 
@@ -190,30 +181,45 @@ namespace DeepUnity
             // Join into output and h_n ----------------done
             Tensor h_n = Tensor.Cat(null, h_0_per_layers);
             Tensor output = null;
-            if(batchFirst)
+            if (batchFirst)
             {
                 for (int i = 0; i < input_sequence.Length; i++)
                 {
                     input_sequence[i] = input_sequence[i].Unsqueeze(1);
                 }
                 output = Tensor.Cat(1, input_sequence);
-                
+
             }
             else
             {
                 output = Tensor.Cat(null, input_sequence);
             }
-            
+
             return (output, h_n);
+        }
+        /// <summary>
+        /// input:  <b>(L, H_in)</b> for unbatched input, <b>(L, B, H_in)</b> when batch_first = false or <b>(B, L, H_in)</b> when batch_first = true. <br></br>
+        /// h_0:    <b>(num_layers, H_out)</b> for unbatched input, or <b>(num_layers, B, H_out)</b>. <br></br>
+        /// </summary>
+        /// <param name="input"></param>
+        /// <param name="h_0"></param>
+        /// <returns>
+        /// output: <b>(L, H_out)</b> for unbatched input, or <b>(L, B, H_out)</b> when batch_first = false or <b>(B, L, H_out)</b> when batch_first = true. <br></br>
+        /// h_n: <b>(num_layers, H_out)</b> for unbatched input or <b>(num_layers, B, H_out)</b>. <br></br>
+        /// </returns>
+        public override (Tensor, Tensor) Forward((Tensor, Tensor) input_h0)
+        {
+            return Predict(input_h0);
         }
 
         /// <summary>
         /// loss w.r.t outputs: <b>(L, H_out)</b> for unbatched input, or <b>(L, B, H_out)</b> when batch_first = false or <b>(B, L, H_out)</b> when batch_first = true. <br></br>
         /// </summary>
         /// <param name="lossDerivative"></param>
-        public override Tensor Backward(Tensor lossDerivative)
+        public override (Tensor, Tensor) Backward((Tensor, Tensor) lossDerivative_none)
         {
-            BaseBackward();
+            Tensor lossDerivative = lossDerivative_none.Item1;
+
             Tensor loss_clone = Tensor.Identity(lossDerivative);
             // loss (L, B, H_out)/(B, L, H_Out) or (L, H_out)
             bool isBatched = lossDerivative.Rank == 3;
@@ -260,7 +266,7 @@ namespace DeepUnity
                 }
             }
 
-            return Tensor.Cat(null, loss_sequence);
+            return (Tensor.Cat(null, loss_sequence), null);
         }
 
         public override string Summary()

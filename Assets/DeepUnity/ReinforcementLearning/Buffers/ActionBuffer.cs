@@ -7,33 +7,33 @@ namespace DeepUnity
     public class ActionBuffer
     {
         /// <summary>
-        /// A vector of length <em>Discrete Branches</em> containing values in range [0, <em>branch value - 1]</em>
+        /// The index of the discrete action of value in range [0, <em>Discrete Actions - 1]</em>. If no Discrete Actions are used, this will be equal to -1.
         /// </summary>
-        public int[] DiscreteActions { get; set; }
+        public int DiscreteAction { get; set; }
         /// <summary>
-        /// A vector of Length <em>Continuous Actions</em> containing values in range [-1, 1]
+        /// A vector of Length <em>Continuous Actions</em> containing values in range [-1, 1]. If no Continuous Actions are used, this array is null.
         /// </summary>
         public float[] ContinuousActions { get; set; }
 
-        public ActionBuffer(int continuousDim, int[] discreteBranches)
+        public ActionBuffer(int continuousDim, int discreteDim)
         {
             if (continuousDim < 0)
                 throw new ArgumentException("Cannot have a negative number of continuous actions");
 
-            if (discreteBranches != null && discreteBranches.Any(x => x < 2))
-                throw new ArgumentException("Cannot have a discrete branch that have less than 2 different actions.");
+            if (discreteDim < 0)
+                throw new ArgumentException("Cannot have a negative number of discrete actions");
 
             ContinuousActions = new float[continuousDim];
-            DiscreteActions = discreteBranches == null? new int[0] : new int[discreteBranches.Length];           
+            DiscreteAction = -1;          
         }
         public void Clear()
         {
-            DiscreteActions = DiscreteActions?.Select(x => 0).ToArray();
+            DiscreteAction = -1;
             ContinuousActions = ContinuousActions?.Select(x => 0f).ToArray();
         }
         public override string ToString()
         {
-            return $"[Continuous Actions [{ContinuousActions?.ToCommaSeparatedString()}] | Discrete Actions [{DiscreteActions?.ToCommaSeparatedString()}]]";
+            return $"[Continuous Actions [{ContinuousActions?.ToCommaSeparatedString()}] | Discrete Action [{DiscreteAction}]]";
         }
     }
 }

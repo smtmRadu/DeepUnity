@@ -39,8 +39,10 @@ namespace DeepUnity
         public string policyUpdateTimeRatio = "- / -";
 
         [Space(20)]
+        [ReadOnly, Tooltip("Total number of episodes runned by all parallel agents.")]
+        public int episodeCount = 0;
         [ReadOnly, Tooltip("Total numbers of steps runned by all parallel agents.")] 
-        public int totalSteps = 0;
+        public int stepCount = 0;
         [ReadOnly, Tooltip("How many policy updates were made.")] 
         public int iterations = 0;
         [ReadOnly, Tooltip("Parallel agents learning. If this is not equal to your environments, some of them are not having the behaviour to learn.")] 
@@ -50,6 +52,7 @@ namespace DeepUnity
 
 
         [Space(20)]
+        [Header("Environment")]
         [Tooltip("Cumulated reward on each episode.")] public PerformanceGraph episodeReward = new PerformanceGraph();
         [Tooltip("Steps required in each episode.")] public PerformanceGraph episodeLength = new PerformanceGraph();
         [Header("Losses")]
@@ -124,13 +127,17 @@ namespace DeepUnity
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Time / Training Session Time: " + inferenceTimeRatio + @"</text>");
             y += 20;                                 
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Policy Update Time / Training Session Time: " + policyUpdateTimeRatio + @"</text>");
-            y += 20;                          
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Steps: {totalSteps}    [Per agent: {totalSteps / parallelAgents}]</text>");
+            y += 20;
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Episode Count: {episodeCount}</text>");
+            y += 20;
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Steps: {stepCount}    [Per agent: {stepCount / parallelAgents}]     [Per Episode (mean): {stepCount / episodeCount}]</text>");
             y += 20;                                
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Iterations: " + iterations + @"</text>");
             y += 20;                                  
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Parallel Agents: " + parallelAgents + @"</text>");
-            
+            y += 20;
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Timescale: " + Time.timeScale + @"</text>");
+
             y += 50;
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Hyperparameters]</text>");
             y += 20;
@@ -154,9 +161,9 @@ namespace DeepUnity
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Space Size: {ab.observationSize}</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Continuous Dim: {ab.continuousDim}</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Continuous Actions: {ab.continuousDim}</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Discrete Branches: {ab.discreteBranches.Length}</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Discrete Actions: {ab.discreteDim}</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">TargetFPS: {ab.targetFPS} (physics update rate)</text>");
             y += 20;

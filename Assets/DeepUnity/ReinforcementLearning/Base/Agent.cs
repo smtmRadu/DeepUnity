@@ -12,9 +12,9 @@ namespace DeepUnity
     [DisallowMultipleComponent, RequireComponent(typeof(DecisionRequester))]
     public abstract class Agent : MonoBehaviour
     {
-        [SerializeField, Min(1)] private int spaceSize = 2;
-        [SerializeField, Min(0)] private int continuousActions = 2;
-        [SerializeField] private int[] discreteBranches = new int[0];
+        [SerializeField, Min(1)] private int spaceSize = 1;
+        [SerializeField, Min(0)] private int continuousActions = 0;
+        [SerializeField, Min(0)] private int discreteActions = 0;
 
         [Space(5)]
         [SerializeField] public AgentBehaviour model;
@@ -37,11 +37,7 @@ namespace DeepUnity
         private ActionBuffer Actions { get; set; }
         public int EpisodeStepCount { get; private set; } = 0;
         public float EpsiodeCumulativeReward { get; private set; } = 0f;
-        private bool FixedUpdateOccured { get; set; } = false;
-        private bool UpdateOccured { get; set; } = false;
-        private bool LateUpdateOccured { get; set; } = false;
         private int FixedFramesCount { get; set; } = -1;
-
 
         public virtual void Awake()
         {
@@ -57,7 +53,7 @@ namespace DeepUnity
             if(model.targetFPS < 30 || model.targetFPS > 100)
             {
                 model.targetFPS = 50;
-                ConsoleMessage.Warning("Behaviour's targetFPS not in range 30 - 100. It was automatically set on 50 by default.");
+                ConsoleMessage.Warning("Behaviour's targetFPS not in range 30 - 100. It was automatically set on 50 by default");
             }
 
             Time.fixedDeltaTime = 1f / model.targetFPS;
@@ -74,7 +70,15 @@ namespace DeepUnity
                     PositionReseter = new StateResetter(transform);
                     break;
                 case OnEpisodeEndType.ResetEnvironment:
-                    PositionReseter = new StateResetter(transform.parent);
+                    try
+                    {
+                        PositionReseter = new StateResetter(transform.parent);
+                    }
+                    catch
+                    {
+                        ConsoleMessage.Error("Cannot <b>Reset Environment</b> on episode reset because the agent was not introduced inside an Environment");
+                        EditorApplication.isPlaying = false;
+                    }
                     break;
             }
         }
@@ -96,26 +100,81 @@ namespace DeepUnity
                 OnEpisodeBegin();
 
         }
-
-        /// <summary>
-        /// FixedUpdate() manages:
-        /// - CollectObservations()
-        /// - Heuristic()
-        /// - OnActionReceived()
-        /// </summary>
         public virtual void FixedUpdate()
         {
-            // -------------------------------------------------------------------------------- one call mechanism
-            if (FixedUpdateOccured)
+            FixedFramesCount++;
+
+            PostTimestep();
+
+            switch(DecisionRequester.RequestEvent(FixedFramesCount))
+            {
+                case DecisionRequester.AgentEvent.None:
+                    break;
+                case DecisionRequester.AgentEvent.Action:
+                    PerformAction();
+                    break;
+                case DecisionRequester.AgentEvent.DecisionAndAction:
+                    PerformDecision();
+                    PerformAction();
+                    break;
+            }
+
+            
+
+
+            
+        }
+  
+        private void PostTimestep()
+        {
+            if (behaviourType == BehaviourType.Off)
                 return;
 
-            FixedUpdateOccured = true;
-            UpdateOccured = false;
-            FixedFramesCount++;
-            
-            // ----------------------------------------------------------------------------------
+            if (FixedFramesCount <= 0)
+                return;
+
+            if (!DecisionRequester.IsFrameBeforeDecisionFrame(FixedFramesCount))
+                return;
+
+            if(behaviourType == BehaviourType.Learn)
+            {
+                Memory.Add(Timestep);
+
+                // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state
+                if (EpisodeStepCount == DecisionRequester.maxStep)
+                    EndEpisode();
+
+                Trainer.SendMemory(Memory);
+
+                if (Timestep?.done[0] == 1)
+                {
+
+                    if (PerformanceTrack)
+                    {
+                        PerformanceTrack.episodeCount++;
+                        PerformanceTrack.episodeLength.Append(EpisodeStepCount);
+                        PerformanceTrack.episodeReward.Append(EpsiodeCumulativeReward);
+                    }
+
+                    EpisodeStepCount = 0;
+                    EpsiodeCumulativeReward = 0f;
 
 
+                    PositionReseter?.Reset();
+                    OnEpisodeBegin();
+                }
+            }
+            else if(Timestep?.done[0] == 1)
+            {
+                PositionReseter?.Reset();
+                OnEpisodeBegin();
+            }
+
+            // Reset timestep
+            Timestep = new TimestepBuffer(++EpisodeStepCount);
+        }
+        private void PerformAction()
+        {
             if (behaviourType == BehaviourType.Off)
                 return;
 
@@ -125,33 +184,22 @@ namespace DeepUnity
                 Actions.Clear();
                 Heuristic(Actions);
                 OnActionReceived(Actions);
-                return;
             }
-
-            // Inference and Learn
-
-            if (!DecisionRequester.TryRequestDecision(FixedFramesCount))
+            else
             {
-                if(DecisionRequester.takeActionsBetweenDecisions)
-                    OnActionReceived(Actions);
-
-                return;
+                OnActionReceived(Actions);
             }
 
-
-            // -------------------------------Perform Decision----------------------------------
-
-            EpisodeStepCount++;
-            Timestep.done = Tensor.Constant(0);
-            Timestep.reward = Tensor.Constant(0);
-
-
+           
+        }
+        private void PerformDecision()
+        {
             Observations.Clear();
             Actions.Clear();
 
             // Collect new observations
             if (useSensors == UseSensorsType.ObservationsVector) Sensors.ForEach(x => Observations.AddObservationRange(x.GetObservationsVector()));
-            else if(useSensors == UseSensorsType.CompressedObservationsVector) Sensors.ForEach(x => Observations.AddObservationRange(x.GetCompressedObservationsVector()));
+            else if (useSensors == UseSensorsType.CompressedObservationsVector) Sensors.ForEach(x => Observations.AddObservationRange(x.GetCompressedObservationsVector()));
             CollectObservations(Observations);
 
             // Check SensorBuffer is fullfilled
@@ -165,7 +213,7 @@ namespace DeepUnity
             // Normalize the observations if neccesary
             if (model.normalizeObservations)
             {
-                if(behaviourType == BehaviourType.Learn)
+                if (behaviourType == BehaviourType.Learn)
                     model.normalizer.Update(Observations.ObservationTensor);
 
                 Observations.ObservationTensor = model.normalizer.Normalize(Observations.ObservationTensor);
@@ -178,89 +226,15 @@ namespace DeepUnity
 
             // Run agent's actions and clip them
             Actions.ContinuousActions = model.IsUsingContinuousActions ? Timestep.action_continuous.Clip(-1f, 1f).ToArray() : null;
-            Actions.DiscreteActions = null; // need to convert afterwards from tensor of logits [branch, logits] to argmax int[]
-            OnActionReceived(Actions);
-            
+            Actions.DiscreteAction = model.IsUsingDiscreteActions ? (int)Timestep.action_discrete[0] : -1;
         }
-        public virtual void Update()
-        {
-            // -------------------------------------------------------------------------------- one call mechanism
-            if (UpdateOccured)
-                return;
-
-            UpdateOccured = true;
-            LateUpdateOccured = false;
-            // --------------------------------------------------------------------------------
-            if (!DecisionRequester.IsFrameBeforeDecisionFrame(FixedFramesCount) || Timestep.done == null)
-                return;
-
-            // ----------------------------------------------------------------------------------
-
-            if (behaviourType != BehaviourType.Learn)
-                return;
-
-           
-            Timestep.index = EpisodeStepCount;
-
-            Memory.Add(Timestep);
-
-            // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state
-            if (EpisodeStepCount == DecisionRequester.maxStep)
-                EndEpisode();
-
-            Trainer.SendMemoryStatus(Memory.Count);
-                      
-        }
-        public virtual void LateUpdate()
-        {
-            // -------------------------------------------------------------------------------- one call mechanism
-            if (LateUpdateOccured)
-                return;
-
-            LateUpdateOccured = true;
-            FixedUpdateOccured = false;
-            // -------------------------------------------------------------------------------- 
-
-            if (!DecisionRequester.IsFrameBeforeDecisionFrame(FixedFramesCount) || Timestep.done == null)
-                return;
-
-            // ----------------------------------------------------------------------------------
-           
-            if (behaviourType == BehaviourType.Off)
-                return;
-            else if (behaviourType == BehaviourType.Learn)
-            {
-                if (Timestep.done[0] == 1)
-                {
-                    PerformanceTrack?.episodeLength.Append(EpisodeStepCount);
-                    PerformanceTrack?.episodeReward.Append(EpsiodeCumulativeReward);
-                    EpisodeStepCount = 0; ;
-                    EpsiodeCumulativeReward = 0f;
-
-                    PositionReseter?.Reset();
-                    OnEpisodeBegin();
-                }
-            }
-            else if(behaviourType == BehaviourType.Inference || behaviourType == BehaviourType.Heuristic)
-            {
-                if (Timestep.done[0] == 1)
-                {
-                    PositionReseter?.Reset();
-                    OnEpisodeBegin();
-                }
-                   
-            }
-
-            Timestep = new TimestepBuffer(); 
-        }
-  
         // Init
         public void BakeModel()
         {
-            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, continuousActions, discreteBranches);
+            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, continuousActions, discreteActions);
 
             continuousActions = model.continuousDim;
-            discreteBranches = model.discreteBranches;
+            discreteActions = model.discreteDim;
         }
         public void BakeHyperparamters()
         {
@@ -269,10 +243,10 @@ namespace DeepUnity
         private void InitBuffers()
         {
             Memory = new MemoryBuffer();
-            Timestep = new TimestepBuffer();
+            Timestep = new TimestepBuffer(EpisodeStepCount);
 
             Observations = new SensorBuffer(model.observationSize);
-            Actions = new ActionBuffer(model.continuousDim, model.discreteBranches);
+            Actions = new ActionBuffer(model.continuousDim, model.discreteDim);
         }
         private void InitSensors(Transform parent)
         {
@@ -307,7 +281,7 @@ namespace DeepUnity
         /// 
         /// </summary>
         /// <param name="sensorBuffer"></param>
-        public abstract void CollectObservations(SensorBuffer sensorBuffer);
+        public virtual void CollectObservations(SensorBuffer sensorBuffer) { }
         /// <summary>
         /// Assign an action for each <em>Continuous</em> or <em>Discrete</em> value inside <b>ActionBuffer</b>'s arrays.
         /// <br></br>
@@ -319,7 +293,7 @@ namespace DeepUnity
         /// </em>
         /// </summary>
         /// <param name="actionBuffer"></param>
-        public abstract void OnActionReceived(ActionBuffer actionBuffer);
+        public virtual void OnActionReceived(ActionBuffer actionBuffer) { }
         /// <summary>
         /// Manually introduce actions controlled using user inputs inside <b>ActionBuffer</b>'s <em>Continuous</em> or <em>Discrete</em> arrays.
         /// <br></br>
@@ -429,7 +403,7 @@ namespace DeepUnity
                 drawNow.Add("layers");
                 drawNow.Add("spaceSize");
                 drawNow.Add("continuousActions");
-                drawNow.Add("discreteBranches");
+                drawNow.Add("discreteActions");
             }
 
 

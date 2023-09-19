@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace DeepUnity
 {
@@ -8,7 +9,7 @@ namespace DeepUnity
     /// </summary>
     public class ExperienceBuffer
     {
-        public int Count { get; private set; }
+        public int Count { get => frames.Count; }
         public Tensor[] States { get => frames.Select(x => x.state).ToArray(); }
         public Tensor[] ContinuousActions { get => frames.Select(x => x.action_continuous).ToArray(); }
         public Tensor[] ContinuousProbabilities { get => frames.Select(x => x.prob_continuous).ToArray(); }
@@ -17,15 +18,11 @@ namespace DeepUnity
         public Tensor[] ValueTargets { get => frames.Select(x => x.value_target).ToArray(); }
         public Tensor[] Advantages { get => frames.Select(x => x.advantage).ToArray(); }
 
-
-        public readonly int Capacity;
-        public TimestepBuffer[] frames;
+        public List<TimestepBuffer> frames;
 
         public ExperienceBuffer(int capacity)
         {
-            this.Capacity = capacity;
-            Count = 0;
-            frames = new TimestepBuffer[capacity];
+            frames = new List<TimestepBuffer>(capacity);
         }
 
         public void Shuffle()
@@ -79,15 +76,18 @@ namespace DeepUnity
                 frames[r].done = temp;
             }
         }
-
-        public void Add(MemoryBuffer agentMemory)
+        public bool IsFull(int buffer_size)
+        {
+            return Count == buffer_size;
+        }
+        public void Add(MemoryBuffer agentMemory, int buffer_size)
         {
             foreach (var frm in agentMemory.frames)
             {
-                if (Count == Capacity)
+                if (Count == buffer_size)
                     return;
 
-                frames[Count++] = frm.Clone() as TimestepBuffer;
+                frames.Add(frm.Clone() as TimestepBuffer);
             }
         }
         public void NormalizeAdvantages()
@@ -102,9 +102,7 @@ namespace DeepUnity
 
         public void Clear()
         {
-            for (int i = 0; i < frames.Length; i++)
-                frames[i] = null;
-            Count = 0;
+            frames.Clear();
         }
     }
 

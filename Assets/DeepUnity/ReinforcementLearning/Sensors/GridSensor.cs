@@ -102,10 +102,13 @@ namespace DeepUnity
         }
 
         /// <summary>
-        /// Embedds the observations into a float[]. OverlappedObjectTagindex is One Hot Encoded, where the first spot represents a non-detectable tag. <br></br>
-        /// Example: <b>[<em>HasOverlappedObject, NonDetectableTag</em>, DetectableTag[0], DetectableTag[1], ... DetectableTag[n-1]]</b>
+        /// - HasOverlappedObject is 1 if true, otherwise 0.<br></br>
+        /// - OverlappedObjectTagIndex is One Hot Encoded,  where the first spot represents a non-detectable tag. <br></br>
+        /// Example: <br></br> 
+        /// <b>[cell 1: <em>HasOverlappedObject</em>, NonDetectableTag, DetectableTag[0], DetectableTag[1], ... DetectableTag[n-1], <br></br>
+        /// cell 2: <em>HasOverlappedObject</em>, NonDetectableTag, DetectableTag[0], DetectableTag[1], ... DetectableTag[n-1], ..... ]</b>
         /// </summary>
-        /// <returns>Returns a float[] of length = width * height * depth * (2 + num_detectable_tags)</returns>
+        /// <returns>Returns a float[] of <b>length = width * height * depth * (2 + num_detectable_tags)</b></returns>
         public float[] GetObservationsVector()
         {
             CastGrid();
@@ -140,10 +143,14 @@ namespace DeepUnity
         }
 
         /// <summary>
-        /// Scales down in range [0, 1] the OverlappedObjectTagIndex. If the OverlappedObjectTagIndex is -1, it the remains -1. <br></br>
-        /// Example: <b>[HasOverlappedObject, OverlappedObjectTagIndex]</b>
+        ///  - HasOverlappedObject is 1 if true, otherwise 0.<br></br>
+        ///  - If DetectableTags.Length > 0, OverlappedObejctTagIndex is normalized in range [0, 1]. If the OverlappedObjectTag is not contained into DetectableTags, the value is -1. <br></br>
+        /// Example: <br></br>
+        /// if DetectableTags.Length > 0: <b>[cell 1: HasOverlappedObject, NormalizedOverlappedObjectTagIndex, cell 2: HasOverlappedObject, NormalizedOverlappedObjectTagIndex, .....]</b> <br></br>
+        /// else: <b>[cell 1: HasOverlappedObject, cell 2: HasOverlappedObject, .....]</b>
+        /// 
         /// </summary>
-        /// <returns>Returns a float[] of length = width * height * depth * 2.</returns>
+        /// <returns>Returns a float[] of <b>length = width * height * depth * 2</b> if DetectableTags.Length > 0 else <b>width * height * depth</b>.</returns>
         public float[] GetCompressedObservationsVector()
         {
             CastGrid();

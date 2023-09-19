@@ -32,7 +32,7 @@ namespace DeepUnity
         /// <summary>
         /// Returns the RGB image pixels converted into float numbers.
         /// </summary>
-        /// <returns>Returns a float[] with length = <b>3 * width * height</b>, or <b>1 * width * height</b> for Grayscale capture.</returns>
+        /// <returns>Returns a float[] with length = <b>3 * width * height</b> if capture is RGB else  <b>1 * width * height</b>.</returns>
         public float[] GetObservationsVector()
         {
             Color[] pixels = GetObservationPixels();

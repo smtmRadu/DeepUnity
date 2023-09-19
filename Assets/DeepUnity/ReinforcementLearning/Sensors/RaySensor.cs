@@ -100,10 +100,13 @@ namespace DeepUnity
         }
 
         /// <summary>
-        /// Embedds the observations into a float[]. HitTagIndex is One Hot Encoded, where the first spot represents a non-detectable tag. <br></br>
-        /// Example: <b>[ray 1: <em>NormalizedDistance, NonDetectableTag</em>, DetectableTag[0], DetectableTag[1], ... DetectableTag[n-1], ray 2: NormalizedDistance, ....]</b>
+        /// - The Distance is normalized in range [0, 1] (hit_distance / ray_max_distance).  If no hit happend, the value is -1. <br></br>
+        /// - HitTagIndex is One Hot Encoded, where the first spot represents a non-detectable tag. <br></br>
+        /// Example: <br></br>
+        /// <b>[ray 1: <em>NormalizedDistance</em>, NonDetectableTag, DetectableTag[0], DetectableTag[1], ... DetectableTag[n-1], <br></br>
+        ///  ray 2: <em>NormalizedDistance</em>, NonDetectableTag, DetectableTag[0], DetectableTag[1], ... DetectableTag[n-1], .....]</b>
         /// </summary>
-        /// <returns>Returns a float[] of length = num_rays * (2 + num_detectable_tags).</returns>
+        /// <returns>Returns a float[] of <b>length = num_rays * (2 + num_detectable_tags)</b>.</returns>
         public float[] GetObservationsVector()
         {
             CastRays();
@@ -130,15 +133,18 @@ namespace DeepUnity
             return vector;
         }
         /// <summary>
-        /// Scales down in range [0, 1] the HitTagIndex. If the HitTagIndex is -1, it remains -1. <br></br>
-        /// Example: <b>[NormalizedDistance, HitTagIndex]</b>
+        /// - The Distance is normalized in range [0, 1] (hit_distance / ray_max_distance).  If no hit happend, the value is -1. <br></br>
+        /// - If DetectableTags.Length > 0, HitTagIndex is normalized in range [0, 1]. If no detectable tag hit, the value is -1. <br></br>
+        /// Example: <br></br>
+        /// if DetectableTags.Length > 0: <b>[ray 1: NormalizedDistance, NormalizedHitTagIndex, ray 2: NormalizedDistance, NormalizedHitTagIndex, ..... ]</b> <br></br>
+        /// else: <b>[ray 1: NormalizedDistance, ray 2: NormalizedDistance, ..... ]</b>
         /// </summary>
-        /// <returns>Returns a float[] of length = num_rays * 2.</returns>
+        /// <returns>Returns a float[] of <b>length = num_rays * 2</b> if DetectableTags.Length > 0 else <b>num_rays</b></returns>
         public float[] GetCompressedObservationsVector()
         {
             CastRays();
 
-            if(detectableTags!=null && detectableTags.Length > 0)
+            if(detectableTags != null && detectableTags.Length > 0)
             {
                 float[] vector = new float[rays * 2];
                 int index = 0;

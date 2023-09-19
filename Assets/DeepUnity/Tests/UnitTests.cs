@@ -175,8 +175,8 @@ namespace kbRadu
             rnn_network = new RNN(10, 20, 2).CreateAsset("rnn");
             var input = Tensor.RandomNormal(6, 3, 10); // (L, B, H_in) 
             var h0 = Tensor.RandomNormal(2, 3, 20);  // (num_layers, B, H_out)
-            var output = rnn_network.Forward(input, h0);
-            rnn_network.Backward(output.Item1);
+            var output = rnn_network.Forward((input, h0));
+            rnn_network.Backward(output);
             // print("output" + output.Item1);
             // print("h_n" + output.Item2);
         }

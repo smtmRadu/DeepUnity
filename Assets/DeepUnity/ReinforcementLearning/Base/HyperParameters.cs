@@ -11,7 +11,7 @@ namespace DeepUnity
     {
         [Header("Training Configuration")]
 
-        [Tooltip("[Typical range: 1e-5 - 1e-3] Initial learning rate for Adam optimizer.")]
+        [Tooltip("[Typical range: 1e-5 - 1e-3] Initial learning rate for Adam optimizer (both for Policy and Value networks).")]
         [Min(1e-8f)] public float learningRate = 3e-4f;
 
         [Tooltip("[Typical range: 0 - 1] Global Gradient Clipping max norm value. Set to 0 to turn off.")]
@@ -69,8 +69,10 @@ namespace DeepUnity
         // public bool epsilonScheduler = false;
 
         [Space(50)]
+        [Tooltip("Timescale of the training session.")]
+        [Min(1f)] public float timescale = 1f;
         [Tooltip("Debug the train_data into a file.")]
-        public bool debug = false;
+        [HideInInspector] public bool debug = false;
 
 
         private void Awake()
@@ -116,6 +118,9 @@ namespace DeepUnity
             SerializedProperty es = serializedObject.FindProperty("earlyStopping");
             if (!es.boolValue)
                 dontDrawMe.Add("targetKL");
+
+            if (EditorApplication.isPlaying)
+                EditorGUILayout.HelpBox("All hyperparameters values can be modified at runtime. Hyperparameters (this Config file) have no effect but when the agent is learning.", MessageType.Info);
 
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
             serializedObject.ApplyModifiedProperties();

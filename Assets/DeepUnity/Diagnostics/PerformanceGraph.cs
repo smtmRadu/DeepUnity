@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
+using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 
@@ -17,8 +18,8 @@ namespace DeepUnity
         [ReadOnly, SerializeField, Tooltip("The value of the last item appended.")] float current;
         [ReadOnly, SerializeField, Tooltip("The mean of all values.")] float mean;
 
-        float time_step_size = 0.1f;
-        int next_squash = 10;
+        private float time_step_size = 0.1f;
+        private int next_squash = 10;
 
         /// <summary>
         /// A board to keep track of the evolution of loss or accuracy.
@@ -30,6 +31,22 @@ namespace DeepUnity
             steps = 0;
             graph = new AnimationCurve();
         }
+
+        /// <summary>
+        /// Appends a value to the graph.
+        /// </summary>
+        /// <param name="graph"></param>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public static PerformanceGraph operator+(PerformanceGraph graph, float value)
+        {
+            graph.Append(value);
+            return graph;
+        }
+        /// <summary>
+        /// Appends a value to the graph.
+        /// </summary>
+        /// <param name="value"></param>
         public void Append(float value)
         {
            

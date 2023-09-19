@@ -35,7 +35,6 @@ namespace DeepUnityTutorials
             rb = GetComponent<Rigidbody>();
             rb.centerOfMass = center_of_mass.transform.localPosition;
         }
-
         public override void OnEpisodeBegin()
         {
             foreach (var item in checkPoints)

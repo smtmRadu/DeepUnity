@@ -15,6 +15,13 @@ namespace DeepUnity
         public Tensor value_target;
         public Tensor done;
       
+        public TimestepBuffer(int index)
+        {
+            this.index = index;
+            done = Tensor.Zeros(1);
+            reward = Tensor.Zeros(1);
+        }
+        private TimestepBuffer() { }
         public object Clone()
         {
             TimestepBuffer clone = new TimestepBuffer();

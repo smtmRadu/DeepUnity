@@ -1,5 +1,5 @@
 # DeepUnity
-![version](https://img.shields.io/badge/version-v0.9.3.7-blue)
+![version](https://img.shields.io/badge/version-v0.9.4-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO).
 
@@ -105,7 +105,7 @@ Also in order to decide the reward function and episode terminal state, or telli
 When the setup is ready, press the _Bake_ button, this way a behaviour along with all neural networks and hyperparameters assets are created inside a folder with the _behaviour's name_, located in _Assets/_ folder. From this point everything is ready to go. 
 
 To get into advanced training, check out the following assets created:
-- **Behaviour** can be set whether to use a fixed or trainable standard deviation for continuous actions, along with the associated exploration strength value. Inference devices are also available to be set, but is recommended to be kept on default. TargetFPS modifies the rate of physics update, being equal to _1 / time.fixedDeltaTime (default: 50)_.
+- **Behaviour** can be set whether to use a fixed or trainable standard deviation for continuous actions, along with the associated exploration strength value. Inference devices are also available to be set, but is recommended to be kept on default. TargetFPS modifies the rate of physics update, being equal to _1 / Time.fixedDeltaTime (default: 50)_.
 - **Config** provides all hyperparameters necesarry for a custom training session.
 
 #### Behaviour script overriding example
@@ -183,6 +183,7 @@ _This example considers an agent (with 4 space size and 2 continuous actions) po
 
 
 TIPS: 
+- **Parallel training** is one option to use your device at maximum efficiency. After inserting your agent inside an Environment GameObject, you can duplicate that environment several times along the scene before starting the training session. Another solution is to increase the timescale of the simulation. Both ways can be used concurrently.
 - Editor FPS must not be lower than **TargetFPS** value (default: 50, the frame rate of physics simulation; to modify, check Behaviour asset), otherwise there will be loss of information and the agent might not perform as expected.
 - In order to properly get use of _AddReward()_ and _EndEpisode()_ consult the diagram below. These methos work well being called inside _OnTriggerXXX()_ or _OnCollisionXXX()_, as well as inside _OnActionReceived()_ rightafter actions are performed.
 - **Decision Period** high values increases overall performance of the training session, but lacks when it comes to agent inference accuracy. Typically, use a higher value for broader parallel environments, then decrease this value to 1 to fine-tune the agent.

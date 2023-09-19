@@ -7,6 +7,13 @@ namespace DeepUnityTutorials
     {
         [SerializeField] Rigidbody ball;
         [SerializeField] float rotationSpeed = 1f;
+        public float timescale = 1f;
+
+        public override void Awake()
+        {
+            base.Awake();
+            Time.timeScale = timescale;
+        }
         public override void CollectObservations(SensorBuffer sensorBuffer)
         {
             // 10 observations

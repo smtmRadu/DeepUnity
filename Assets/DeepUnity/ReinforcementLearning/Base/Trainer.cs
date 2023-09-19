@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
@@ -23,7 +22,6 @@ namespace DeepUnity
         [SerializeField] private int autosave = 5;
 
         private ExperienceBuffer train_data;
-        private bool trainFlag = false;
         private float autosaveSecondsElapsed = 0f;
         private float meanPolicyLoss = 0f;
         private float meanValueLoss = 0f;
@@ -42,41 +40,19 @@ namespace DeepUnity
                 Instance = this;
             }
         }
-        private void Update()
+
+        private void FixedUpdate()
         {
-            if (Instance.statisticsTrack != null)
-            {
-                TimeSpan timeElapsed = DateTime.Now - Instance.timeWhenTheTrainingStarted;
-                Instance.statisticsTrack.trainingSessionTime =
-                    $"{(int)timeElapsed.TotalHours} hrs : {(int)timeElapsed.TotalMinutes % 60} min : {(int)timeElapsed.TotalSeconds % 60} sec";
-
-
-                Instance.statisticsTrack.inferenceSecondsElapsed += Time.deltaTime;
-                Instance.statisticsTrack.inferenceTime = 
-                    $"{(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) / 3600)} hrs : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) % 60)} sec";
-                Instance.statisticsTrack.inferenceTimePerAgent =
-                    $"{(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed) % 60)} sec";
-             }
-
-            // Autosave process 
-            Instance.autosaveSecondsElapsed += Time.deltaTime;
-        }
-        private void LateUpdate()
-        {
-            if (Instance.trainFlag)
+            if (Instance.train_data.IsFull(Instance.hp.bufferSize))
             {
                 Stopwatch clock = Stopwatch.StartNew();
                 Train();
                 clock.Stop();
 
-
-
-                Instance.trainFlag = false;
-
                 if (Instance.statisticsTrack != null)
                 {
                     Instance.statisticsTrack.parallelAgents = Instance.parallelAgents.Count;
-                    Instance.statisticsTrack.totalSteps += Instance.hp.bufferSize * parallelAgents.Count;
+                    Instance.statisticsTrack.stepCount += Instance.hp.bufferSize * parallelAgents.Count;
                     Instance.statisticsTrack.iterations++;
                     Instance.statisticsTrack.policyUpdateSecondsElapsed += (float)clock.Elapsed.TotalSeconds;
                     Instance.statisticsTrack.policyUpdateTime = $"{(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) % 60)} sec";
@@ -95,13 +71,40 @@ namespace DeepUnity
                 Instance.ac.Save();
             }
 
+            Time.timeScale = Instance.hp.timescale;
+        }
+        private void Update()
+        {
+            // Only Updating the training statistics here...
+            if (Instance.statisticsTrack != null)
+            {
+                TimeSpan timeElapsed = DateTime.Now - Instance.timeWhenTheTrainingStarted;
+                Instance.statisticsTrack.trainingSessionTime =
+                    $"{(int)timeElapsed.TotalHours} hrs : {(int)timeElapsed.TotalMinutes % 60} min : {(int)timeElapsed.TotalSeconds % 60} sec";
+
+
+                Instance.statisticsTrack.inferenceSecondsElapsed += Time.deltaTime;
+                Instance.statisticsTrack.inferenceTime = 
+                    $"{(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) / 3600)} hrs : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) % 60)} sec";
+                Instance.statisticsTrack.inferenceTimePerAgent =
+                    $"{(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed) % 60)} sec";
+             }
+
+            // Autosave process 
+            Instance.autosaveSecondsElapsed += Time.deltaTime;
         }
 
+
         // Methods use to interact with the agents
-        public static void SendMemoryStatus(in int experiences_collected)
+        public static void SendMemory(in MemoryBuffer agent_memory)
         {
-            if(experiences_collected * Instance.parallelAgents.Count >= Instance.hp.bufferSize)
-                 Instance.trainFlag = true;
+            if (agent_memory.Count * Instance.parallelAgents.Count >= Instance.hp.bufferSize)
+            {
+                agent_memory.ComputeAdvantagesAndReturns(Instance.hp.gamma, Instance.hp.lambda, Instance.hp.horizon, Instance.ac.critic);
+                Instance.train_data.Add(agent_memory, Instance.hp.bufferSize);
+                if (Instance.hp.debug) Utils.DebugInFile(agent_memory.ToString());
+                agent_memory.Clear();
+            }
         }    
         public static void Subscribe(Agent agent)
         {
@@ -161,16 +164,6 @@ namespace DeepUnity
         // PPO algorithm
         private void Train()
         {
-            // 1. Retrieve all data from the agents
-            foreach (var agent_memory in parallelAgents.Select(x => x.Memory))
-            {
-                agent_memory.ComputeAdvantagesAndReturns(hp.gamma, hp.lambda, hp.horizon, ac.critic);
-                train_data.Add(agent_memory);
-                if (hp.debug) Utils.DebugInFile(agent_memory.ToString());
-                agent_memory.Clear();
-
-            }
-
             // 2. Normalize advantages
             if (hp.normalizeAdvantages)
                 train_data.NormalizeAdvantages();
@@ -214,36 +207,23 @@ namespace DeepUnity
                     }
                     if (Instance.ac.IsUsingDiscreteActions)
                     {
-                        int num_branches = Instance.ac.discreteBranches.Length;
-                        for (int branch_id = 0; branch_id < num_branches; branch_id++)
-                        {
-                            Tensor disc_act_batch_branch_i = Tensor.Cat(null, cont_act_batches[b][branch_id]);
-                            Tensor disc_prob_batch_branch_i = Tensor.Cat(null, cont_probs_batches[b][branch_id]);
-                            UpdateDiscreteBranchNetwork(
-                                states_batch,
-                                advantages_batch,
-                                disc_act_batch_branch_i,
-                                disc_prob_batch_branch_i,
-                                branch_id);
+                        Tensor disc_act_batch = Tensor.Cat(null, cont_act_batches[b]);
+                        Tensor disc_prob_batch = Tensor.Cat(null, cont_probs_batches[b]);
+                        UpdateDiscreteBranchNetwork(
+                            states_batch,
+                            advantages_batch,
+                            disc_act_batch,
+                            disc_prob_batch);
 
-                        }
+                        
                     }
                 }
 
                 // Step schedulers after each epoch
                 ac.criticScheduler.Step();
-                if (ac.IsUsingContinuousActions)
-                {
-                    ac.actorMuScheduler.Step();
-                    ac.actorSigmaScheduler.Step();
-                }
-                if (ac.IsUsingDiscreteActions)
-                {
-                    for (int i = 0; i < ac.actorDiscretesSchedulers.Length; i++)
-                    {
-                        ac.actorDiscretesSchedulers[i].Step();
-                    }
-                }
+                ac.actorMuScheduler?.Step();
+                ac.actorSigmaScheduler?.Step();
+                ac.actorDiscreteScheduler?.Step();
 
 
                 // Save statistics info
@@ -373,10 +353,10 @@ namespace DeepUnity
         /// <summary>
         /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>)  where * = <em>Observations Shape</em><br></br>
         /// <paramref name="advantages"/> - <em>A</em> | Tensor(<em>Batch Size, 1</em>) <br></br>
-        /// <paramref name="actions"/> - <em>a</em> | Tensor (<em>Batch Size, Discrete Branchᵢ</em>) <br></br>
-        /// <paramref name="piOld"/> - <em>πθold(a|s) </em>| Tensor (<em>Batch Size, Discrete Branchᵢ</em>) <br></br>
+        /// <paramref name="actions"/> - <em>a</em> | Tensor (<em>Batch Size, Discrete Actions</em>) <br></br>
+        /// <paramref name="piOld"/> - <em>πθold(a|s) </em>| Tensor (<em>Batch Size, Discrete Actions</em>) <br></br>
         /// </summary>
-        private void UpdateDiscreteBranchNetwork(Tensor states, Tensor advantages, Tensor actions, Tensor piOld, int discreteBranchId)
+        private void UpdateDiscreteBranchNetwork(Tensor states, Tensor advantages, Tensor actions, Tensor piOld)
         {
             throw new NotImplementedException();
 

@@ -35,6 +35,7 @@ namespace DeepUnity
             for (int i = 0; i < T; i++)
                 Vw_s[i] = crticNetwork.Predict(frames[i].state);
 
+            // Parse each timestep
             for (int t = 0; t < T; t++)
             {
                 float discount = 1f;
@@ -45,9 +46,11 @@ namespace DeepUnity
                     v_t += discount * frames[t_i].reward;
                     discount *= gamma;
 
+                    // stop if this is a terminal step
                     if (frames[t_i].done[0] == 1)
                         break;
 
+                    // if t[i] is in horizon range or is the last step in the memory, recursive train
                     if(t_i - t == horizon || t_i == T - 1)
                     {
                         v_t += discount * Vw_s[T - 1];

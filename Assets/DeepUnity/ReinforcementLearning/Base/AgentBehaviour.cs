@@ -12,37 +12,43 @@ namespace DeepUnity
     /// until the agent is completely finished.
     /// </summary>
     [Serializable]
-    public class AgentBehaviour : ScriptableObject
+    public sealed class AgentBehaviour : ScriptableObject
     {
-
         [Header("Behaviour Properties")]
         [SerializeField, ReadOnly] public string behaviourName;
         [SerializeField, HideInInspector] private bool assetCreated = false;
         [SerializeField, ReadOnly] public int observationSize;
         [SerializeField, ReadOnly] public int continuousDim;
-        [SerializeField, ReadOnly] public int[] discreteBranches;
+        [SerializeField, ReadOnly] public int discreteDim;
 
         [Header("Neural Networks")]
         [SerializeField] public NeuralNetwork critic;
         [SerializeField] public NeuralNetwork actorMu;
         [SerializeField] public NeuralNetwork actorSigma;
-        [SerializeField] public NeuralNetwork[] actorDiscretes;
+        [SerializeField] public NeuralNetwork actorDiscrete;
 
 
 
 
-        [Space(25), Header("Behaviour Configurations")]
+        [ Header("Behaviour Configurations")]
         [SerializeField, Tooltip("The frames per second runned by the physics engine. Time.fixedDeltaTime = 1 / targetFPS")]
         [Range(30, 100)]
         public int targetFPS = 50;
 
-        [Space]
+        [SerializeField, Tooltip("Network forward progapation is runned on this device when the agents interfere with the environment. It is recommended to be kept on CPU." +
+           " The best way to find the optimal device is to check the number of fps when running out multiple environments.")]
+        public Device inferenceDevice = Device.CPU;
+
+        [SerializeField, Tooltip("Network computation is runned on this device when training on batches. It is highly recommended to be set on GPU if it is available.")]
+        public Device trainingDevice = Device.GPU;
+
         [SerializeField, Tooltip("Auto-normalize input observations.")]
         public bool normalizeObservations = false;
+
         [ReadOnly, SerializeField, Tooltip("Observations normalizer data.")] 
         public ZScoreNormalizer normalizer;
 
-        [Space]
+        [Header("Standard Deviation for Continuous Actions")]
         [SerializeField, Tooltip("The standard deviation for Continuous Actions")] 
         public StandardDeviationType standardDeviation = StandardDeviationType.Fixed;
         [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
@@ -51,91 +57,67 @@ namespace DeepUnity
         [Tooltip("Sigma network's output is multiplied by this number. Modify this value to change the exploration/exploitation ratio.")]
         [SerializeField, Range(0.1f, 3f)]
         public float standardDeviationScale = 1f;
-
-        [Space]
-        [SerializeField, Tooltip("Network forward progapation is runned on this device when the agents interfere with the environment. It is recommended to be kept on CPU." +
-           " The best way to find the optimal device is to check the number of fps when running out multiple environments.")]
-        public Device inferenceDevice = Device.CPU;
-        [SerializeField, Tooltip("Network computation is runned on this device when training on batches. It is highly recommended to be set on GPU if it is available.")]
-        public Device trainingDevice = Device.GPU;
+        
 
         
 
         public Optimizer criticOptimizer { get; private set; }
         public Optimizer actorMuOptimizer { get; private set; }
         public Optimizer actorSigmaOptimizer { get; private set; }
-        public Optimizer[] actorDiscretesOptimizers { get; private set; }
+        public Optimizer actorDiscreteOptimizer { get; private set; }
 
         public LRScheduler criticScheduler { get; private set; }
         public LRScheduler actorMuScheduler { get; private set; }
         public LRScheduler actorSigmaScheduler { get; private set; }
-        public LRScheduler[] actorDiscretesSchedulers { get; private set; }
+        public LRScheduler actorDiscreteScheduler { get; private set; }
 
         public bool IsUsingContinuousActions { get => continuousDim > 0; }
-        public bool IsUsingDiscreteActions { get => discreteBranches != null && discreteBranches.Length > 0; }
+        public bool IsUsingDiscreteActions { get => discreteDim > 0; }
 
 
-        private AgentBehaviour(string behaviourName, int stateSize, int continuousActions, int[] discreteBranches)
+        private AgentBehaviour(string behaviourName, int stateSize, int continuousActions, int discreteActions)
         {
             this.behaviourName = behaviourName;
             this.observationSize = stateSize;
             this.continuousDim = continuousActions;
-            this.discreteBranches = discreteBranches;
+            this.discreteDim = discreteActions;
             normalizer = new ZScoreNormalizer(stateSize);
             assetCreated = true;
 
             //------------------ NETWORK INITIALIZATION ----------------//
-            // const int H_128 = 128;
+
             const int H_64 = 64;
-            // const int H_32 = 32;
             const InitType INIT_W = InitType.LeCun_Uniform;
             const InitType INIT_B = InitType.LeCun_Uniform;
-            const Device dev = Device.CPU;
 
             critic = new NeuralNetwork(
-                new Dense(stateSize, H_64, INIT_W, INIT_B, device: dev),
+                new Dense(stateSize, H_64, INIT_W, INIT_B),
                 new ReLU(),
-                new Dense(H_64, H_64, INIT_W, INIT_B, device: dev),
+                new Dense(H_64, H_64, INIT_W, INIT_B),
                 new ReLU(),
-                new Dense(H_64, 1, INIT_W, INIT_B, device: dev));
+                new Dense(H_64, 1, INIT_W, INIT_B));
 
-            if(IsUsingContinuousActions)
-            {
-                actorMu = new NeuralNetwork(
-                new Dense(stateSize, H_64, INIT_W, INIT_B, device: dev),
+            actorMu = new NeuralNetwork(
+            new Dense(stateSize, H_64, INIT_W, INIT_B),
+            new ReLU(),
+            new Dense(H_64, H_64, INIT_W, INIT_B),
+            new ReLU(),
+            new Dense(H_64, continuousActions, INIT_W, INIT_B),
+            new Tanh());
+
+            actorSigma = new NeuralNetwork(
+                new Dense(stateSize, H_64, INIT_W, INIT_B),
                 new ReLU(),
-                new Dense(H_64, H_64, INIT_W, INIT_B, device: dev),
+                new Dense(H_64, continuousActions, INIT_W, INIT_B),
+                new Exp()); // Softplus()
+            
+            actorDiscrete = new NeuralNetwork(
+                new Dense(stateSize, H_64, INIT_W, INIT_B),
                 new ReLU(),
-                new Dense(H_64, continuousActions, INIT_W, INIT_B, device: dev),
-                new Tanh());
-
-                actorSigma = new NeuralNetwork(
-                    new Dense(stateSize, H_64, INIT_W, INIT_B, device: dev),
-                    new ReLU(),
-                    new Dense(H_64, continuousActions, INIT_W, INIT_B, device: dev),
-                    new Exp()); // Softplus()
-            }
-            if(IsUsingDiscreteActions)
-            {
-                actorDiscretes = new NeuralNetwork[discreteBranches.Length];
-                for (int i = 0; i < actorDiscretes.Length; i++)
-                {
-                    if (discreteBranches[i] < 2)
-                    {
-                        ConsoleMessage.Warning("Any discrete branch's value must be greater than 1.");
-                        return;
-                    }
-
-                    actorDiscretes[i] = new NeuralNetwork(
-                        new Dense(stateSize, H_64, INIT_W, INIT_B, device: dev),
-                        new ReLU(),
-                        new Dense(H_64, H_64, INIT_W, INIT_B, device: dev),
-                        new ReLU(),
-                        new Dense(H_64, discreteBranches[i], INIT_W, INIT_B, device: dev),
-                        new Softmax());
-                }
-            }
-
+                new Dense(H_64, H_64, INIT_W, INIT_B),
+                new ReLU(),
+                new Dense(H_64, discreteActions, INIT_W, INIT_B),
+                new Softmax());              
             
             //----------------------------------------------------------//
         }
@@ -159,14 +141,11 @@ namespace DeepUnity
 
             if (IsUsingDiscreteActions)
             {
-                for (int i = 0; i < actorDiscretes.Length; i++)
+                var learnables = actorDiscrete.Parameters();
+                foreach (var item in learnables)
                 {
-                    var learnables = actorDiscretes[i].Parameters();
-                    foreach (var item in learnables)
-                    {
-                        item.device = device;
-                    }
-                }
+                    item.device = device;
+                }            
             }
         }
         public void SetCriticDevice(Device device)
@@ -202,11 +181,8 @@ namespace DeepUnity
            
             if(IsUsingDiscreteActions)
             {
-                actorDiscretesOptimizers = new Optimizer[discreteBranches == null ? 0 : discreteBranches.Length];
-                for (int i = 0; i < actorDiscretes.Length; i++)
-                {
-                    actorDiscretesOptimizers[i] = new Adam(actorDiscretes[i].Parameters(), hp.learningRate);
-                }
+                actorDiscreteOptimizer = new Adam(actorDiscrete.Parameters(), hp.learningRate);
+            
             }
         }
         public void InitSchedulers(Hyperparameters hp)
@@ -234,11 +210,7 @@ namespace DeepUnity
           
             if(IsUsingDiscreteActions)
             {
-                actorDiscretesSchedulers = new LRScheduler[discreteBranches == null ? 0 : discreteBranches.Length];
-                for (int i = 0; i < actorDiscretes.Length; i++)
-                {
-                    actorDiscretesSchedulers[i] = new LRScheduler(actorDiscretesOptimizers[i], step_size, gamma);
-                }
+                actorDiscreteScheduler = new LRScheduler(actorDiscreteOptimizer, step_size, gamma);         
             }
             
 
@@ -275,24 +247,29 @@ namespace DeepUnity
             probs = Tensor.Probability(action, mu, sigma);
         }
         /// <summary>
-        /// Input: <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
-        /// Output: <paramref name="mus"/> - <em>μ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
-        /// OutputL <paramref name="sigmas"/> - <em>σ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
+        /// Input: <paramref name="stateBatch"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
+        /// Output: <paramref name="muBatch"/> - <em>μ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
+        /// OutputL <paramref name="sigmaBatch"/> - <em>σ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
         /// </summary>
-        public void ContinuousForward(Tensor states, out Tensor mus, out Tensor sigmas)
+        public void ContinuousForward(Tensor stateBatch, out Tensor muBatch, out Tensor sigmaBatch)
         {
             if (!IsUsingContinuousActions)
             {
-                mus = null;
-                sigmas = null;
+                muBatch = null;
+                sigmaBatch = null;
                 return;
             }
 
-            mus = actorMu.Forward(states);
-            sigmas = standardDeviation == StandardDeviationType.Trainable ?
-                           actorSigma.Forward(states) * standardDeviationScale :
-                           Tensor.Fill(standardDeviationValue, mus.Shape);
+            muBatch = actorMu.Forward(stateBatch);
+            sigmaBatch = standardDeviation == StandardDeviationType.Trainable ?
+                           actorSigma.Forward(stateBatch) * standardDeviationScale :
+                           Tensor.Fill(standardDeviationValue, muBatch.Shape);
         }
+        /// <summary>
+        /// Input: <paramref name="state"/> - <em>sₜ</em> | Tensor (<em>Observations</em>) <br></br>
+        /// Output: <paramref name="action"/> - <em>aₜ</em> |  Tensor (<em>1</em>) <br></br>
+        /// Extra Output: <paramref name="probs"/> - <em>πθ(aₜ|sₜ)</em> | Tensor (<em>Discrete Actions</em>)
+        /// </summary>
         public void DiscretePredict(Tensor state, out Tensor action, out Tensor probs)
         {
             if (!IsUsingDiscreteActions)
@@ -301,20 +278,23 @@ namespace DeepUnity
                 probs = null;
                 return;
             }
-
-            if (actorDiscretes[0] == null)
+            if (actorDiscrete == null)
             {
-                ConsoleMessage.Warning($"Some network assets are not attached to {behaviourName} behaviour asset!");
+                ConsoleMessage.Warning($"<i>NeuralNetwork</i> assets are not attached to <b>{behaviourName}</b> behaviour asset!");
                 EditorApplication.isPlaying = false;
                 action = null;
                 probs = null;
                 return;
             }
 
-            action = null;
-            probs = null;
+            probs = actorDiscrete.Predict(state);
+            action = Tensor.ArgMax(probs, -1);
         }
-        public void DiscreteForward(Tensor statesBatch, out Tensor probs)
+        /// <summary>
+        /// Input: <paramref name="stateBatch"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
+        /// Output: <paramref name="probs"/> - <em>p</em> | Tensor (<em>Batch Size, Discrete Actions</em>) <br></br>
+        /// </summary>
+        public void DiscreteForward(Tensor stateBatch, out Tensor probs)
         {
             if (!IsUsingDiscreteActions)
             {
@@ -322,7 +302,7 @@ namespace DeepUnity
                 return;
             }
 
-            probs = null;
+            probs = actorDiscrete.Forward(stateBatch);
         }
 
 
@@ -332,7 +312,7 @@ namespace DeepUnity
         /// Creates a new Agent behaviour folder containing all auxiliar neural networks, or loads it if already exists one for this behaviour.
         /// </summary>
         /// <returns></returns>
-        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int continuousActions, int[] discreteActions)
+        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int continuousActions, int discreteActions)
         {          
             var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
 
@@ -362,10 +342,7 @@ namespace DeepUnity
             
             if(newAgBeh.IsUsingDiscreteActions)
             {
-                for (int i = 0; i < newAgBeh.actorDiscretes.Length; i++)
-                {
-                    newAgBeh.actorDiscretes[i].CreateAsset($"{name}/actorDiscrete{i}");
-                }
+                newAgBeh.actorDiscrete.CreateAsset($"{name}/actorDiscrete");
             }
 
             return newAgBeh;
@@ -382,19 +359,10 @@ namespace DeepUnity
 
             ConsoleMessage.Info($"Agent behaviour <b><i>{behaviourName}</i></b> autosaved.");
 
-            critic.Save();
-
-            if(IsUsingContinuousActions)
-            {
-                actorMu.Save();
-                actorSigma.Save();
-            }
-           
-            if(IsUsingDiscreteActions)
-                for (int i = 0; i < actorDiscretes.Length; i++)
-                {
-                    actorDiscretes[i].Save();
-                }
+            critic.Save(); 
+            actorMu?.Save();
+            actorSigma?.Save();
+            actorDiscrete?.Save();
 
         }
     }

@@ -8,6 +8,7 @@ namespace DeepUnity
     /// </summary>
     public class StateResetter
     {
+        private static GameObject Instance;
         private Transform parent;
         private List<Transform> initialTransformsCopies;
         private List<Rigidbody> rigidBodies;
@@ -15,6 +16,11 @@ namespace DeepUnity
 
         public StateResetter(Transform parent)
         {
+            if(Instance == null)
+            {
+                Instance = new GameObject("[DeepUnity] Initial Transform References");
+            }
+
             this.parent = parent;
             this.initialTransformsCopies = new List<Transform>();
             this.rigidBodies = new List<Rigidbody>();
@@ -33,16 +39,17 @@ namespace DeepUnity
 
         private void GetAllTransforms(Transform parent)
         {
-            Transform clone = new GameObject($"[DeepUnity] Transform reference of GameObject: {parent.GetInstanceID()}").transform;
+            Transform transformClone = new GameObject($"[DeepUnity] To GameObject: {parent.gameObject.name}").transform;
 
             // warning: do not assign the parent otherwise infinite loop
-            clone.position = parent.position;
-            clone.rotation = parent.rotation;
-            clone.localScale = parent.localScale;
-            clone.localRotation = parent.localRotation;
-            clone.localEulerAngles = parent.localEulerAngles;
+            transformClone.parent = Instance.transform;
+            transformClone.position = parent.position;
+            transformClone.rotation = parent.rotation;
+            transformClone.localScale = parent.localScale;
+            transformClone.localRotation = parent.localRotation;
+            transformClone.localEulerAngles = parent.localEulerAngles;
 
-            initialTransformsCopies.Add(clone);
+            initialTransformsCopies.Add(transformClone);
 
 
             foreach (Transform child in parent)

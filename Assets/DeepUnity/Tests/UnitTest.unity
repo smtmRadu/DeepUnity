@@ -1667,7 +1667,8 @@ MonoBehaviour:
   policyUpdateTimePerIteration: ' - '
   inferenceTimeRatio: '- / -'
   policyUpdateTimeRatio: '- / -'
-  totalSteps: 0
+  episodeCount: 0
+  stepCount: 0
   iterations: 0
   parallelAgents: 0
   episodeReward:
@@ -1743,8 +1744,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 50
-  performAction: 0
-  periodBetweenDecisions: 1
+  decisionPeriod: 1
+  takeActionsBetweenDecisions: 0
 --- !u!114 &1358288206
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1759,7 +1760,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   spaceSize: 3
   continuousActions: 1
-  discreteBranches: 
+  discreteActions: 0
   model: {fileID: 11400000, guid: dc15503be39846144ae81a1e47d160da, type: 2}
   hp: {fileID: 11400000, guid: 97cda5ca48312c7449b77ebf408a2254, type: 2}
   behaviourType: 2
@@ -2069,7 +2070,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1427153574}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1085.9392, y: 604.3242, z: -590}
+  m_LocalPosition: {x: 0.577, y: 9.79, z: -20.53}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2227,7 +2228,8 @@ MonoBehaviour:
   policyUpdateTimePerIteration: ' - '
   inferenceTimeRatio: '- / -'
   policyUpdateTimeRatio: '- / -'
-  totalSteps: 0
+  episodeCount: 0
+  stepCount: 0
   iterations: 0
   parallelAgents: 0
   episodeReward:
@@ -2303,8 +2305,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 50
-  performAction: 0
-  periodBetweenDecisions: 1
+  decisionPeriod: 1
+  takeActionsBetweenDecisions: 0
 --- !u!114 &1559807788
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2319,7 +2321,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   spaceSize: 3
   continuousActions: 1
-  discreteBranches: 
+  discreteActions: 0
   model: {fileID: 11400000, guid: dc15503be39846144ae81a1e47d160da, type: 2}
   hp: {fileID: 11400000, guid: 97cda5ca48312c7449b77ebf408a2254, type: 2}
   behaviourType: 2
@@ -2382,7 +2384,8 @@ MonoBehaviour:
   policyUpdateTimePerIteration: ' - '
   inferenceTimeRatio: '- / -'
   policyUpdateTimeRatio: '- / -'
-  totalSteps: 0
+  episodeCount: 0
+  stepCount: 0
   iterations: 0
   parallelAgents: 0
   episodeReward:
@@ -2458,8 +2461,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 50
-  performAction: 0
-  periodBetweenDecisions: 1
+  decisionPeriod: 1
+  takeActionsBetweenDecisions: 0
 --- !u!114 &1636844841
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2474,7 +2477,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   spaceSize: 3
   continuousActions: 1
-  discreteBranches: 
+  discreteActions: 0
   model: {fileID: 11400000, guid: dc15503be39846144ae81a1e47d160da, type: 2}
   hp: {fileID: 11400000, guid: 97cda5ca48312c7449b77ebf408a2254, type: 2}
   behaviourType: 2
@@ -2522,7 +2525,8 @@ MonoBehaviour:
   policyUpdateTimePerIteration: ' - '
   inferenceTimeRatio: '- / -'
   policyUpdateTimeRatio: '- / -'
-  totalSteps: 0
+  episodeCount: 0
+  stepCount: 0
   iterations: 0
   parallelAgents: 0
   episodeReward:
@@ -2598,8 +2602,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 50
-  performAction: 0
-  periodBetweenDecisions: 1
+  decisionPeriod: 1
+  takeActionsBetweenDecisions: 0
 --- !u!114 &1636929566
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2614,7 +2618,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   spaceSize: 3
   continuousActions: 1
-  discreteBranches: 
+  discreteActions: 0
   model: {fileID: 11400000, guid: dc15503be39846144ae81a1e47d160da, type: 2}
   hp: {fileID: 11400000, guid: 97cda5ca48312c7449b77ebf408a2254, type: 2}
   behaviourType: 2
@@ -2765,7 +2769,8 @@ MonoBehaviour:
   policyUpdateTimePerIteration: ' - '
   inferenceTimeRatio: '- / -'
   policyUpdateTimeRatio: '- / -'
-  totalSteps: 0
+  episodeCount: 0
+  stepCount: 0
   iterations: 0
   parallelAgents: 0
   episodeReward:
@@ -2841,8 +2846,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 50
-  performAction: 0
-  periodBetweenDecisions: 1
+  decisionPeriod: 1
+  takeActionsBetweenDecisions: 0
 --- !u!114 &1752796454
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2857,7 +2862,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   spaceSize: 3
   continuousActions: 1
-  discreteBranches: 
+  discreteActions: 0
   model: {fileID: 11400000, guid: dc15503be39846144ae81a1e47d160da, type: 2}
   hp: {fileID: 11400000, guid: 97cda5ca48312c7449b77ebf408a2254, type: 2}
   behaviourType: 2
@@ -2878,7 +2883,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1766928150
 Transform:
   m_ObjectHideFlags: 0
