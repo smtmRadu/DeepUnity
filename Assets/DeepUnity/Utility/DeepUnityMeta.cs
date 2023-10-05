@@ -164,6 +164,17 @@ namespace DeepUnity
         Trainable
     }
 
+    public enum NetworkSize
+    {
+        [Tooltip("A neural network with 2 layers and 32 hidden units.")]
+        Small,
+        [Tooltip("A neural network with 2 layers and 64 hidden units.")]
+        Medium,
+        [Tooltip("A neural network with 2 layers and 128 hidden units.")]
+        Large,
+        [Tooltip("A neural network with 2 layers and 256 hidden units.")]
+        VeryLarge
+    }
     public enum UseSensorsType
     {
         [Tooltip("Does not collect automatically the observation values from attached sensors. All attached sensors observation vectors can be added manually inside CollectObservations() method.")]

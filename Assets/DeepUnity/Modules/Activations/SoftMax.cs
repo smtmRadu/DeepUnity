@@ -3,6 +3,9 @@ using System;
 namespace DeepUnity
 {
     // https://www.youtube.com/watch?v=09c7bkxpv9I
+    // This one is a bit more special comparing to other activations.
+    // Softmax derivative can be also obtain without computing each output grad wrt other output value, but this is the correct way.
+
     /// <summary>
     /// <b>Applies the Softmax function over the last input's dimension H (-1).</b> <br></br>
     /// Input: <b>(*, H)</b> or <b>(H)</b> for unbatched input <br></br>
@@ -10,10 +13,8 @@ namespace DeepUnity
     /// where * = any shape and H = features_num
     /// </summary>
     [Serializable]
-    public class Softmax : IModule
+    public class Softmax : Activation
     {
-        private Tensor InputCache { get; set; }
-
         /// <summary>
         /// <b>Applies the Softmax function over the last input's dimension H (-1).</b> <br></br>
         /// Input: <b>(*, H)</b> or <b>(H)</b> for unbatched input <br></br>
@@ -21,25 +22,26 @@ namespace DeepUnity
         /// where * = any shape and H = features_num
         /// </summary>
         public Softmax() { }
-        public Tensor Predict(Tensor input)
+        public override Tensor Predict(Tensor input)
         {
-            // softmax(x[i]) = e^x[i] / sum{j:1->N}(e^x[j]])
-            Tensor exp = Tensor.Exp(input);
-            Tensor exp_sum = Tensor.Sum(exp, -1, true);
-            exp_sum = Tensor.Expand(exp_sum, -1, exp.Size(-1));
-            return exp / exp_sum;
+            return Activate(input);
         }
-        public Tensor Forward(Tensor input)
+        public override Tensor Forward(Tensor input)
         {
-            InputCache = input;
-            return Predict(input);
+            InputCache = Tensor.Identity(input);
+            return Activate(input);
         }
-        public Tensor Backward(Tensor dLdY)
+        public override Tensor Backward(Tensor dLdY)
+        {
+            return Derivative(dLdY);
+        }
+
+        protected override Tensor Derivative(Tensor y)
         {
             // Use InputCache to calculate dLdX
-            Tensor s = Predict(InputCache);
+            Tensor s = Activate(InputCache);
 
-            bool isBatched = dLdY.Rank == 2;
+            bool isBatched = y.Rank == 2;
             int B = isBatched ? s.Size(-2) : 1;
             int C = s.Size(-1);
 
@@ -62,14 +64,23 @@ namespace DeepUnity
                         }
 
                         // dL/dX = dL/dY * dY/dX
-                        dLdX[b, i] += dLdY[b, j] * dSi_dxj;
+                        dLdX[b, i] += y[b, j] * dSi_dxj;
                     }
                 }
             }
-            
+
 
             return dLdX;
         }
+        protected override Tensor Activate(Tensor x)
+        {
+            // softmax(x[i]) = e^x[i] / sum{j:1->N}(e^x[j]])
+            Tensor exp = Tensor.Exp(x);
+            Tensor exp_sum = Tensor.Sum(exp, -1, true);
+            exp_sum = Tensor.Expand(exp_sum, -1, exp.Size(-1));
+            return exp / exp_sum;
+        }
+
     }
 
 }

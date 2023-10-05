@@ -16,7 +16,7 @@ namespace DeepUnity
        
         public MemoryBuffer()
         {
-            frames = new(1280);
+            frames = new();
         }
 
         public void Add(TimestepBuffer timestep)

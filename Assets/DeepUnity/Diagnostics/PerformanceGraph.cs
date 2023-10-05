@@ -1,7 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Security.Cryptography;
-using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 
@@ -10,7 +7,7 @@ namespace DeepUnity
     /// <summary>
     /// A board to keep track of the evolution of loss or accuracy.
     /// </summary>
-    [Serializable]
+    [Serializable] // must be serializable...
     public class PerformanceGraph
     {
         [ReadOnly, SerializeField] AnimationCurve graph;
@@ -19,7 +16,8 @@ namespace DeepUnity
         [ReadOnly, SerializeField, Tooltip("The mean of all values.")] float mean;
 
         private float time_step_size = 0.1f;
-        private int next_squash = 10;
+        private int next_squash = 10;        
+
 
         /// <summary>
         /// A board to keep track of the evolution of loss or accuracy.
@@ -48,14 +46,14 @@ namespace DeepUnity
         /// </summary>
         /// <param name="value"></param>
         public void Append(float value)
-        {
-           
+        {         
             current = value;
             graph.AddKey(time_step_size * steps, value);
 
-            // when reaches 1, squash them to half.
+            // when reaches 1 on X axis, squash them to half.
             if (steps % next_squash == 0)
             {
+                // Squash the lengths on X
                 next_squash *= 2;
                 time_step_size = 1f / next_squash;
 
@@ -66,7 +64,6 @@ namespace DeepUnity
                     keys[i].time = time_step_size * i;
                 }
                 graph.keys = keys;
-                
             }
 
             
@@ -129,6 +126,7 @@ namespace DeepUnity
             EditorGUI.PropertyField(currentRect, currentProperty);
             EditorGUI.PropertyField(countRect, countProperty);
             EditorGUI.PropertyField(meanRect, meanProperty);
+            
             EditorGUI.EndProperty();
         }
     }

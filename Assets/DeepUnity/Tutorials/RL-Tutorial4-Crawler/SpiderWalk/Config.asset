@@ -14,20 +14,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   learningRate: 0.0003
   gradClipNorm: 0.5
-  numEpoch: 8
+  numEpoch: 6
   batchSize: 256
-  bufferSize: 2048
+  bufferSize: 4096
   normalizeAdvantages: 1
+  shuffleTrainingData: 1
   learningRateSchedule: 0
   schedulerStepSize: 8
   schedulerDecay: 0.99
   horizon: 64
-  beta: 0.005
+  beta: 0.003
   epsilon: 0.2
   gamma: 0.99
   lambda: 0.95
   earlyStopping: 0
   targetKL: 0.015
-  betaScheduler: 0
-  epsilonScheduler: 0
+  timescale: 9.53
   debug: 0

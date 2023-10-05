@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -21,17 +22,24 @@ namespace DeepUnity
         [SerializeField, ReadOnly] public int continuousDim;
         [SerializeField, ReadOnly] public int discreteDim;
 
-        [Header("Neural Networks")]
+        [Header("Neural Networks & Hyperparameters")]    
         [SerializeField] public NeuralNetwork critic;
-        [SerializeField] public NeuralNetwork actorMu;
-        [SerializeField] public NeuralNetwork actorSigma;
-        [SerializeField] public NeuralNetwork actorDiscrete;
+        [SerializeField] public NeuralNetwork actorContinuousMu;
+        [SerializeField] public NeuralNetwork actorContinuousSigma;
+        [Tooltip("Neural Network used for Behavioral Cloning")]
+        [SerializeField] public NeuralNetwork discriminatorContinuous;
 
+        [Space]
+        [SerializeField] public NeuralNetwork actorDiscrete;
+        [Tooltip("Neural Network used for Behavioral Cloning")]
+        [SerializeField] public NeuralNetwork discriminatorDiscrete;
+        [Space, Tooltip("The scriptable object file containing the training hyperparameters.")]
+        [SerializeField] public Hyperparameters config;
 
 
 
         [ Header("Behaviour Configurations")]
-        [SerializeField, Tooltip("The frames per second runned by the physics engine. Time.fixedDeltaTime = 1 / targetFPS")]
+        [SerializeField, Tooltip("The frames per second runned by the physics engine. [Time.fixedDeltaTime = 1 / targetFPS]")]
         [Range(30, 100)]
         public int targetFPS = 50;
 
@@ -50,7 +58,7 @@ namespace DeepUnity
 
         [Header("Standard Deviation for Continuous Actions")]
         [SerializeField, Tooltip("The standard deviation for Continuous Actions")] 
-        public StandardDeviationType standardDeviation = StandardDeviationType.Fixed;
+        public StandardDeviationType standardDeviation = StandardDeviationType.Trainable;
         [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
         [SerializeField, Range(0.001f, 3f)] 
         public float standardDeviationValue = 1.5f;
@@ -59,80 +67,106 @@ namespace DeepUnity
         public float standardDeviationScale = 1f;
         
 
-        
-
         public Optimizer criticOptimizer { get; private set; }
         public Optimizer actorMuOptimizer { get; private set; }
         public Optimizer actorSigmaOptimizer { get; private set; }
         public Optimizer actorDiscreteOptimizer { get; private set; }
+        public Optimizer discriminatorContinuousOptimizer { get; private set; }
+        public Optimizer discriminatorDiscreteOptimizer { get; private set; }
 
         public LRScheduler criticScheduler { get; private set; }
         public LRScheduler actorMuScheduler { get; private set; }
         public LRScheduler actorSigmaScheduler { get; private set; }
         public LRScheduler actorDiscreteScheduler { get; private set; }
+        public LRScheduler discriminatorContinuousScheduler{ get; private set; }
+        public LRScheduler discriminatorDiscreteScheduler { get; private set; }
 
         public bool IsUsingContinuousActions { get => continuousDim > 0; }
         public bool IsUsingDiscreteActions { get => discreteDim > 0; }
 
-
-        private AgentBehaviour(string behaviourName, int stateSize, int continuousActions, int discreteActions)
+        private AgentBehaviour(in int STATE_SIZE, in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS)
         {
-            this.behaviourName = behaviourName;
-            this.observationSize = stateSize;
-            this.continuousDim = continuousActions;
-            this.discreteDim = discreteActions;
-            normalizer = new ZScoreNormalizer(stateSize);
-            assetCreated = true;
-
             //------------------ NETWORK INITIALIZATION ----------------//
-
-            const int H_64 = 64;
-            const InitType INIT_W = InitType.LeCun_Uniform;
-            const InitType INIT_B = InitType.LeCun_Uniform;
+            const InitType INIT_W = InitType.HE_Normal;
+            const InitType INIT_B = InitType.HE_Normal;
 
             critic = new NeuralNetwork(
-                new Dense(stateSize, H_64, INIT_W, INIT_B),
-                new ReLU(),
-                new Dense(H_64, H_64, INIT_W, INIT_B),
-                new ReLU(),
-                new Dense(H_64, 1, INIT_W, INIT_B));
+                        new IModule[] {
+                            new Dense(STATE_SIZE, HIDDEN_UNITS, INIT_W, INIT_B), new ReLU() }.
+                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
+                    );
 
-            actorMu = new NeuralNetwork(
-            new Dense(stateSize, H_64, INIT_W, INIT_B),
-            new ReLU(),
-            new Dense(H_64, H_64, INIT_W, INIT_B),
-            new ReLU(),
-            new Dense(H_64, continuousActions, INIT_W, INIT_B),
-            new Tanh());
+            Debug.Log(STATE_SIZE);
+            Debug.Log(CONTINUOUS_ACTIONS_NUM);
+            Debug.Log(DISCRETE_ACTIONS_NUM);
 
-            actorSigma = new NeuralNetwork(
-                new Dense(stateSize, H_64, INIT_W, INIT_B),
-                new ReLU(),
-                new Dense(H_64, continuousActions, INIT_W, INIT_B),
-                new Exp()); // Softplus()
+            if(CONTINUOUS_ACTIONS_NUM > 0)
+            {
+                actorContinuousMu = new NeuralNetwork(
+                        new IModule[] {
+                            new Dense(STATE_SIZE, HIDDEN_UNITS, INIT_W, INIT_B), new ReLU() }.
+                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Tanh() }).ToArray()
+                    );
+
+                actorContinuousSigma = new NeuralNetwork(
+                        new IModule[] {
+                            new Dense(STATE_SIZE, HIDDEN_UNITS, INIT_W, INIT_B), new ReLU() }.
+                            Concat(CreateHiddenLayers(NUM_LAYERS - 1, HIDDEN_UNITS, INIT_W, INIT_B)). // Sigma network is a bit smaller for efficiency. This network is typically not important to be large
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Exp() }).ToArray()
+                    );
+
+                discriminatorContinuous = new NeuralNetwork(
+                        new IModule[] {
+                            new Dense(CONTINUOUS_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B),new ReLU() }.
+                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, 2, INIT_W, INIT_B), new Sigmoid() }).ToArray()
+                    );
+            }
             
-            actorDiscrete = new NeuralNetwork(
-                new Dense(stateSize, H_64, INIT_W, INIT_B),
-                new ReLU(),
-                new Dense(H_64, H_64, INIT_W, INIT_B),
-                new ReLU(),
-                new Dense(H_64, discreteActions, INIT_W, INIT_B),
-                new Softmax());              
-            
-            //----------------------------------------------------------//
+            if(DISCRETE_ACTIONS_NUM > 0)
+            {
+                actorDiscrete = new NeuralNetwork(
+                        new IModule[] {
+                            new Dense(STATE_SIZE, HIDDEN_UNITS, INIT_W, INIT_B),new ReLU() }.
+                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, DISCRETE_ACTIONS_NUM, INIT_W, INIT_B), new Softmax() }).ToArray()
+                    );
+                discriminatorDiscrete = new NeuralNetwork(
+                        new IModule[] {
+                            new Dense(DISCRETE_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B),new ReLU() }.
+                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, 2, INIT_W, INIT_B), new Sigmoid() }).ToArray()
+                    );
+            }
+
+            static IModule[] CreateHiddenLayers(int numLayers, int hidUnits, InitType INIT_W, InitType INIT_B)
+            {
+                if (numLayers == 1)
+                    return new IModule[] { };
+                else if (numLayers == 2)
+                    return new IModule[] { new Dense(hidUnits, hidUnits, INIT_W, INIT_B), new ReLU() };
+                else if (numLayers == 3)
+                    return new IModule[] { new Dense(hidUnits, hidUnits, INIT_W, INIT_B), new ReLU(), 
+                                           new Dense(hidUnits, hidUnits, INIT_W, INIT_B), new ReLU() };
+                else
+                    throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
+
+            }
         }
 
         public void SetActorDevice(Device device)
         {
             if (IsUsingContinuousActions)
             { 
-                var learnables = actorMu.Parameters();
+                var learnables = actorContinuousMu.Parameters();
                 foreach (var item in learnables)
                 {
                     item.device = device;
                 }
 
-                learnables = actorSigma.Parameters();
+                learnables = actorContinuousSigma.Parameters();
                 foreach (var item in learnables)
                 {
                     item.device = device;
@@ -159,14 +193,14 @@ namespace DeepUnity
 
             // Due to benchmark performances, critic last dense (which has the output features = 1), is working faster on CPU.
         }
-        public void InitOptimisers(Hyperparameters hp)
+        public void InitOptimisers(Hyperparameters hp, float imitationStrength = 1f)
         {
             if (criticOptimizer != null)
                 return;
 
-            if (critic == null)
+            if (critic == null || config == null)
             {
-                ConsoleMessage.Warning($"Some network assets are not attached to {behaviourName} behaviour asset!");
+                ConsoleMessage.Warning($"Critic Neural Network & Config assets are not attached to {behaviourName} behaviour asset!");
                 EditorApplication.isPlaying = false;
                 return;
             }
@@ -175,24 +209,38 @@ namespace DeepUnity
             
             if(IsUsingContinuousActions)
             {
-                actorMuOptimizer = new Adam(actorMu.Parameters(), hp.learningRate);
-                actorSigmaOptimizer = new Adam(actorSigma.Parameters(), hp.learningRate);
+                if (actorContinuousMu == null || actorContinuousSigma == null || discriminatorContinuous == null)
+                {
+                    ConsoleMessage.Warning($"Neural Network assets for continuous actions are not attached to {behaviourName} behaviour asset!");
+                    EditorApplication.isPlaying = false;
+                    return;
+                }
+                actorMuOptimizer = new Adam(actorContinuousMu.Parameters(), hp.learningRate);
+                actorSigmaOptimizer = new Adam(actorContinuousSigma.Parameters(), hp.learningRate);
+                discriminatorContinuousOptimizer = new Adam(discriminatorContinuous.Parameters(), hp.learningRate * imitationStrength);
             }
            
             if(IsUsingDiscreteActions)
             {
+                if (actorDiscrete == null || discriminatorDiscrete == null)
+                {
+                    ConsoleMessage.Warning($"Neural Network assets for discrete actions are not attached to {behaviourName} behaviour asset!");
+                    EditorApplication.isPlaying = false;
+                    return;
+                }
                 actorDiscreteOptimizer = new Adam(actorDiscrete.Parameters(), hp.learningRate);
+                discriminatorDiscreteOptimizer = new Adam(discriminatorDiscrete.Parameters(), hp.learningRate * imitationStrength);
             
             }
         }
         public void InitSchedulers(Hyperparameters hp)
         {
-            if (criticScheduler != null)
+            if (criticScheduler != null) // One way init
                 return;
 
             if (critic == null)
             {
-                ConsoleMessage.Warning($"Some network assets are not attached to {behaviourName} behaviour asset!");
+                ConsoleMessage.Warning($"Neural Network & Config assets are not attached to {behaviourName} behaviour asset!");
                 EditorApplication.isPlaying = false;
                 return;
             }
@@ -206,11 +254,13 @@ namespace DeepUnity
             {
                 actorMuScheduler = new LRScheduler(actorMuOptimizer, step_size, gamma);
                 actorSigmaScheduler = new LRScheduler(actorSigmaOptimizer, step_size, gamma);
+                discriminatorContinuousScheduler = new LRScheduler(discriminatorContinuousOptimizer, step_size, gamma);
             }
           
             if(IsUsingDiscreteActions)
             {
-                actorDiscreteScheduler = new LRScheduler(actorDiscreteOptimizer, step_size, gamma);         
+                actorDiscreteScheduler = new LRScheduler(actorDiscreteOptimizer, step_size, gamma);
+                discriminatorDiscreteScheduler = new LRScheduler(discriminatorDiscreteOptimizer, step_size, gamma);
             }
             
 
@@ -230,18 +280,18 @@ namespace DeepUnity
                 probs = null;
                 return;
             }
-            if (actorMu == null)
+            if (actorContinuousMu == null)
             {
-                ConsoleMessage.Warning($"<i>NeuralNetwork</i> assets are not attached to <b>{behaviourName}</b> behaviour asset!");
+                ConsoleMessage.Warning($"<i>NeuralNetwork</i> assets are not attached to <b>{behaviourName}</b> behaviour asset");
                 EditorApplication.isPlaying = false;
                 action = null;
                 probs = null;
                 return;
             }
 
-            Tensor mu = actorMu.Predict(state);
+            Tensor mu = actorContinuousMu.Predict(state);
             Tensor sigma = standardDeviation == StandardDeviationType.Trainable ?
-                            actorSigma.Predict(state) * standardDeviationScale :
+                            actorContinuousSigma.Predict(state) * standardDeviationScale :
                             Tensor.Fill(standardDeviationValue, mu.Shape);
             action = mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
             probs = Tensor.Probability(action, mu, sigma);
@@ -260,49 +310,57 @@ namespace DeepUnity
                 return;
             }
 
-            muBatch = actorMu.Forward(stateBatch);
+            muBatch = actorContinuousMu.Forward(stateBatch);
             sigmaBatch = standardDeviation == StandardDeviationType.Trainable ?
-                           actorSigma.Forward(stateBatch) * standardDeviationScale :
+                           actorContinuousSigma.Forward(stateBatch) * standardDeviationScale :
                            Tensor.Fill(standardDeviationValue, muBatch.Shape);
         }
         /// <summary>
         /// Input: <paramref name="state"/> - <em>sₜ</em> | Tensor (<em>Observations</em>) <br></br>
-        /// Output: <paramref name="action"/> - <em>aₜ</em> |  Tensor (<em>1</em>) <br></br>
-        /// Extra Output: <paramref name="probs"/> - <em>πθ(aₜ|sₜ)</em> | Tensor (<em>Discrete Actions</em>)
+        /// Output: <paramref name="action"/> - <em>aₜ</em> |  Tensor (<em>Discrete Actions</em>) (one hot embedding)<br></br>
+        /// Extra Output: <paramref name="phi"/> - <em>φₜ</em> | Tensor (<em>Discrete Actions</em>)
         /// </summary>
-        public void DiscretePredict(Tensor state, out Tensor action, out Tensor probs)
+        public void DiscretePredict(Tensor state, out Tensor action, out Tensor phi)
         {
+           
             if (!IsUsingDiscreteActions)
             {
                 action = null;
-                probs = null;
-                return;
-            }
-            if (actorDiscrete == null)
-            {
-                ConsoleMessage.Warning($"<i>NeuralNetwork</i> assets are not attached to <b>{behaviourName}</b> behaviour asset!");
-                EditorApplication.isPlaying = false;
-                action = null;
-                probs = null;
+                phi = null;
                 return;
             }
 
-            probs = actorDiscrete.Predict(state);
-            action = Tensor.ArgMax(probs, -1);
+            if (actorDiscrete == null)
+            {
+                ConsoleMessage.Warning($"<i>NeuralNetwork</i> assets are not attached to <b>{behaviourName}</b> behaviour asset");
+                EditorApplication.isPlaying = false;
+                action = null;
+                phi = null;
+                return;
+            }
+            
+            phi = actorDiscrete.Predict(state);
+
+            // φₜ - Normalzed Probabilities (through softmax) - parametrizes Multinomial probability distribution
+            // δₜ - Multinomial Probability Distribution
+            int[] discreteActionsIndexes = Tensor.Arange(0, discreteDim, 1f).ToArray().Select(x => (int)x).ToArray();
+            int sample = Utils.Random.Sample(collection: discreteActionsIndexes, probs: phi.ToArray());
+            action = Tensor.Zeros(phi.Shape);
+            action[sample] = 1f;
         }
         /// <summary>
         /// Input: <paramref name="stateBatch"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
-        /// Output: <paramref name="probs"/> - <em>p</em> | Tensor (<em>Batch Size, Discrete Actions</em>) <br></br>
+        /// Output: <paramref name="phi"/> - <em>φ </em> | Tensor (<em>Batch Size, Discrete Actions</em>) <br></br>
         /// </summary>
-        public void DiscreteForward(Tensor stateBatch, out Tensor probs)
+        public void DiscreteForward(Tensor stateBatch, out Tensor phi)
         {
             if (!IsUsingDiscreteActions)
             {
-                probs = null;
+                phi = null;
                 return;
             }
 
-            probs = actorDiscrete.Forward(stateBatch);
+            phi = actorDiscrete.Forward(stateBatch);        
         }
 
 
@@ -312,7 +370,7 @@ namespace DeepUnity
         /// Creates a new Agent behaviour folder containing all auxiliar neural networks, or loads it if already exists one for this behaviour.
         /// </summary>
         /// <returns></returns>
-        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int continuousActions, int discreteActions)
+        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int continuousActions, int discreteActions, int numLayers, int hidUnits)
         {          
             var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
 
@@ -321,28 +379,38 @@ namespace DeepUnity
                 ConsoleMessage.Info($"Behaviour {name} asset loaded.");
                 return instance;
             }
-                
 
-            AgentBehaviour newAgBeh = new AgentBehaviour(name, stateSize, continuousActions, discreteActions);
+
+            AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, continuousActions, discreteActions, numLayers, hidUnits);
+            newAgBeh.behaviourName = name;
+            newAgBeh.observationSize = stateSize;
+            newAgBeh.continuousDim = continuousActions;
+            newAgBeh.discreteDim = discreteActions;
+            newAgBeh.normalizer = new ZScoreNormalizer(stateSize);
+            newAgBeh.assetCreated = true;
+
+
 
             // Create the asset
             if (!Directory.Exists($"Assets/{name}"))
                 Directory.CreateDirectory($"Assets/{name}");
             AssetDatabase.CreateAsset(newAgBeh, $"Assets/{name}/{name}.asset");
-            AssetDatabase.SaveAssets();
 
             // Create aux assets
+            newAgBeh.config = Hyperparameters.CreateOrLoadAsset(name);
             newAgBeh.critic.CreateAsset($"{name}/critic");
 
             if(newAgBeh.IsUsingContinuousActions)
             {
-                newAgBeh.actorMu.CreateAsset($"{name}/actorMu");
-                newAgBeh.actorSigma.CreateAsset($"{name}/actorSigma");
+                newAgBeh.actorContinuousMu.CreateAsset($"{name}/actorContinuousMu");
+                newAgBeh.actorContinuousSigma.CreateAsset($"{name}/actorContinuousSigma");
+                newAgBeh.discriminatorContinuous.CreateAsset($"{name}/discriminatorContinuous");
             }
             
             if(newAgBeh.IsUsingDiscreteActions)
             {
                 newAgBeh.actorDiscrete.CreateAsset($"{name}/actorDiscrete");
+                newAgBeh.discriminatorDiscrete.CreateAsset($"{name}/discriminatorDiscrete");
             }
 
             return newAgBeh;
@@ -360,8 +428,8 @@ namespace DeepUnity
             ConsoleMessage.Info($"Agent behaviour <b><i>{behaviourName}</i></b> autosaved.");
 
             critic.Save(); 
-            actorMu?.Save();
-            actorSigma?.Save();
+            actorContinuousMu?.Save();
+            actorContinuousSigma?.Save();
             actorDiscrete?.Save();
 
         }
@@ -375,26 +443,41 @@ namespace DeepUnity
             serializedObject.Update();
             List<string> dontDrawMe = new() { "m_Script" };
 
-            SerializedProperty sd = serializedObject.FindProperty("standardDeviation");
+            AgentBehaviour script = (AgentBehaviour)target;
 
-            if(sd.enumValueIndex == (int)StandardDeviationType.Trainable)
+            if(!script.IsUsingContinuousActions)
             {
+                dontDrawMe.Add("actorContinuousMu");
+                dontDrawMe.Add("actorContinuousSigma");
+                dontDrawMe.Add("discriminatorContinuous");
+                dontDrawMe.Add("standardDeviation");
                 dontDrawMe.Add("standardDeviationValue");
+                dontDrawMe.Add("standardDeviationScale");
             }
             else
             {
-                dontDrawMe.Add("standardDeviationScale");
+                if (script.standardDeviation == StandardDeviationType.Trainable)
+                {
+                    dontDrawMe.Add("standardDeviationValue");
+                }
+                else
+                {
+                    dontDrawMe.Add("standardDeviationScale");
+                }
             }
 
-            SerializedProperty fixedSd = serializedObject.FindProperty("standardDeviationValue");
-            if (fixedSd.floatValue <= 0f)
+            if(!script.IsUsingDiscreteActions)
             {
-                ConsoleMessage.Warning("Standard deviation is 0. Please make it positive to avoid erros!");
-                EditorGUILayout.HelpBox("Standard deviation is 0. Please make it positive to avoid errors!", MessageType.Warning);
+                dontDrawMe.Add("actorDiscrete");
+                dontDrawMe.Add("discriminatorDiscrete");
             }
 
-            SerializedProperty norm = serializedObject.FindProperty("normalizeObservations");
-            if(!norm.boolValue)
+            if(script.standardDeviationValue <= 0)
+            {
+                script.standardDeviationValue = 1f;
+            }
+
+            if(!script.normalizeObservations)
             {
                 dontDrawMe.Add("normalizer");
             }

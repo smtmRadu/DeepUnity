@@ -13,7 +13,7 @@ namespace DeepUnity
     /// <b>Applies normalization over the last dimension (H) of the input.</b> 
     /// </summary>
     [Serializable]
-    public class LayerNorm: Learnable, IModule, IModuleS
+    public class LayerNorm: Learnable, IModule, IModule2
     {
         // Epsilon should be 1e-5f as default, but i keep it on default 1e-8f
         // Just a good reference paper to learn from, i made this just by adapting batchnorm layer.

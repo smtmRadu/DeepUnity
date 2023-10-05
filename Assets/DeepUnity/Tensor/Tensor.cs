@@ -132,6 +132,14 @@ namespace DeepUnity
             Array.Copy(other.ToArray(), clone.data, other.Count());
             return clone;
         }
+        /// <summary>
+        /// Returns a one dimensional tensor of size <b>Ceil((end - start) / step)</b>.
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <param name="step"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
         public static Tensor Arange(float start, float end, float step)
         {
             if (step == 0)

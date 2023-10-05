@@ -6,7 +6,7 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class RNNCell : Learnable, IModuleS, ISelfOptimizable
+    public class RNNCell : Learnable, IModule2, ISelfOptimizable
     {
         [SerializeField] private NonLinearity nonlinearity;
 

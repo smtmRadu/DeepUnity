@@ -7,6 +7,9 @@ using System.Linq;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// Note: TrainingStatistics Track ram usage increases over time. Planning long training sessions may require more RAM memory.
+    /// </summary>
     [DisallowMultipleComponent, AddComponentMenu("DeepUnity/Training Statistics")]
     public class TrainingStatistics : MonoBehaviour
     {
@@ -53,13 +56,21 @@ namespace DeepUnity
 
         [Space(20)]
         [Header("Environment")]
-        [Tooltip("Cumulated reward on each episode.")] public PerformanceGraph episodeReward = new PerformanceGraph();
-        [Tooltip("Steps required in each episode.")] public PerformanceGraph episodeLength = new PerformanceGraph();
+        [Tooltip("Cumulated reward on each episode.")] 
+        public PerformanceGraph cumulativeReward = new PerformanceGraph();
+        [Tooltip("Steps required in each episode.")] 
+        public PerformanceGraph episodeLength = new PerformanceGraph();
+
         [Header("Losses")]
-        [Tooltip("Mean loss of policy function on each epoch")] public PerformanceGraph policyLoss = new PerformanceGraph();
-        [Tooltip("Mean MSE of value function on each epoch")]public PerformanceGraph valueLoss = new PerformanceGraph();
+        [Tooltip("Mean loss of policy function on each epoch")] 
+        public PerformanceGraph policyLoss = new PerformanceGraph();
+        [Tooltip("Mean MSE of value function on each epoch")]
+        public PerformanceGraph valueLoss = new PerformanceGraph();
+
         [Header("Policy")]
+        [Tooltip("Learning rate decay on each epoch.")]
         public PerformanceGraph learningRate = new PerformanceGraph();
+        [Tooltip("Clipping factor decay on each epoch")]
         public PerformanceGraph epsilon = new PerformanceGraph();
 
         /// <summary>
@@ -87,7 +98,7 @@ namespace DeepUnity
 
             if (!Directory.Exists($"Assets/{behaviourName}"))
             {
-                ConsoleMessage.Warning($"{behaviourName} behaviour folder has been moved from Assets folder, or it's name was changed! The training session log was saved in Assets/Logs in consequence.");
+                ConsoleMessage.Info($"{behaviourName} behaviour folder has been moved from Assets folder, or it's name was changed! The training session log was saved in Assets/Logs in consequence.");
 
                 if (!Directory.Exists($"Assets/Logs"))
                     Directory.CreateDirectory($"Assets/Logs");
@@ -183,7 +194,7 @@ namespace DeepUnity
             y += 50;
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Graphs]</text>");
             y += 20;
-            DrawGraph(svgBuilder, episodeReward.Keys, ref y, 50, 200, 500, "Episode Reward");
+            DrawGraph(svgBuilder, cumulativeReward.Keys, ref y, 50, 200, 500, "Episode Reward");
             y += 20;
             DrawGraph(svgBuilder, episodeLength.Keys, ref y, 50, 200, 500, "Episode Length");
             y += 20;
@@ -262,6 +273,11 @@ namespace DeepUnity
 
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
 
+            // Depending on the version, Performance Graph may require or not increasingly needed RAM memory.
+            if(EditorApplication.isPlaying)
+            {
+                EditorGUILayout.HelpBox("Training Statistics may require considerable free RAM for overnight training sessions.", MessageType.Info);
+            }
           
             serializedObject.ApplyModifiedProperties();
         }

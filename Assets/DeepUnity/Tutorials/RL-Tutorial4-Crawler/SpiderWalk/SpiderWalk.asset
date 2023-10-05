@@ -16,12 +16,17 @@ MonoBehaviour:
   assetCreated: 1
   observationSize: 94
   continuousDim: 12
-  discreteBranches: 
+  discreteDim: 0
   critic: {fileID: 11400000, guid: 9c5170b34eca81a4f8e6ce5b9b2179b6, type: 2}
-  actorMu: {fileID: 11400000, guid: 13406ebeea8f60e41b9d57433b12537f, type: 2}
-  actorSigma: {fileID: 11400000, guid: dc8b301c74b042d42a32e9ee06c6eea8, type: 2}
-  actorDiscretes: []
+  actorContinuousMu: {fileID: 11400000, guid: 13406ebeea8f60e41b9d57433b12537f, type: 2}
+  actorContinuousSigma: {fileID: 11400000, guid: dc8b301c74b042d42a32e9ee06c6eea8, type: 2}
+  discriminatorContinuous: {fileID: 11400000, guid: 742156c425059b74986bb525998e9acc, type: 2}
+  actorDiscrete: {fileID: 0}
+  discriminatorDiscrete: {fileID: 0}
+  config: {fileID: 11400000, guid: 11ce996bd68b2b14c85aea0ba6657630, type: 2}
   targetFPS: 50
+  inferenceDevice: 0
+  trainingDevice: 1
   normalizeObservations: 0
   normalizer:
     step: 0
@@ -220,7 +225,5 @@ MonoBehaviour:
       - 0
       shape: 5e000000
   standardDeviation: 0
-  standardDeviationValue: 1.48
+  standardDeviationValue: 0.99
   standardDeviationScale: 2
-  inferenceDevice: 0
-  trainingDevice: 1

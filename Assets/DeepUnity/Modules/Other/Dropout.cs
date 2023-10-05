@@ -10,7 +10,7 @@ namespace DeepUnity
     /// where B = batch_size and * = input_shape.
     /// </summary>
     [Serializable]
-    public class Dropout : IModule, IModuleS
+    public class Dropout : IModule, IModule2
     {
         [SerializeField] private float dropout;
         public Tensor InputCache { get; set; }

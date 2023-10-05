@@ -120,6 +120,9 @@ namespace DeepUnity
             sb.Append("]");
             return sb.ToString();
         }
+        /// <summary>
+        /// Returns the hex value of the given r, g & b values in range [0, 1].
+        /// </summary>
         public static string HexOf(float r, float g, float b)
         {
             int ri = (int)(r * 255.0f);
@@ -128,6 +131,9 @@ namespace DeepUnity
 
             return string.Format("#{0:X2}{1:X2}{2:X2}", ri, gi, bi);
         }
+        /// <summary>
+        /// Returns the hex value of the given r, g & b values in range [0, 255].
+        /// </summary>
         public static string HexOf(int r, int g, int b)
         {
             return string.Format("#{0:X2}{1:X2}{2:X2}", r, g, b);
@@ -561,6 +567,48 @@ namespace DeepUnity
                 {
                     return (int)(RNG.NextDouble() * (maxExclusive - minInclusive) + minInclusive);
                 }
+            }
+            /// <summary>
+            /// Samples a random element in the collection given the probs. If probs is null, uniform distribution of probabilities is applied. 
+            /// </summary>
+            public static T Sample<T>(in IEnumerable<T> collection,in IEnumerable<float> probs = null)
+            {
+                if(probs != null && collection.Count() != probs.Count())
+                {
+                    throw new ArgumentException("Collection must have the same length as probs.");
+                }
+                if(collection == null || collection.Count() == 0)
+                {
+                    throw new ArgumentException("Collection is empty.");
+                }
+
+                if(probs == null)
+                {
+                    float surpass = 0f;
+                    float random = Random.Value;
+                    foreach (var item in collection)
+                    {
+                        surpass += 1f / collection.Count();
+                        if(surpass >= random)
+                        {
+                            return item;
+                        }
+                    }
+                }
+                else
+                {
+                   
+                    float surpass = 0f;
+                    float random = Random.Value;
+                    for (int i = 0; i < collection.Count(); i++)
+                    {
+                        surpass += probs.ElementAt(i);
+                        if (surpass >= random)
+                            return collection.ElementAt(i);
+                    }
+                }
+
+                throw new Exception("Probs must always sum 1.");
             }
             public static bool Bernoulli(float p = 0.5f) => Value < p;
             public static float Gaussian(float mean = 0f, float stddev = 1f)

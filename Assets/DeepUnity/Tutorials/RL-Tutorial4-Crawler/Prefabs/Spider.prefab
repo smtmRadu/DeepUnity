@@ -2419,7 +2419,6 @@ GameObject:
   - component: {fileID: 3277267077938968892}
   - component: {fileID: 2273284490549027019}
   - component: {fileID: 5806263877956343436}
-  - component: {fileID: 5934619029939632008}
   m_Layer: 0
   m_Name: Spider
   m_TagString: Spider
@@ -2449,7 +2448,7 @@ Transform:
   - {fileID: 296242968508963872}
   - {fileID: 1347635701646845898}
   m_Father: {fileID: 0}
-  m_RootOrder: -1
+  m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: -90, z: 0}
 --- !u!33 &6423754323637704521
 MeshFilter:
@@ -2590,8 +2589,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 2000
-  performAction: 0
-  periodBetweenDecisions: 0.5
+  decisionPeriod: 1
+  takeActionsBetweenDecisions: 0
 --- !u!114 &5806263877956343436
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2604,12 +2603,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 21f96d24e68dc1b4bb45c7614ff1dc27, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  model: {fileID: 11400000, guid: b52f624152f2bfc48b75b140795381b8, type: 2}
-  hp: {fileID: 11400000, guid: 11ce996bd68b2b14c85aea0ba6657630, type: 2}
-  behaviourType: 2
   spaceSize: 94
   continuousActions: 12
-  discreteBranches: 
+  discreteActions: 0
+  model: {fileID: 11400000, guid: b52f624152f2bfc48b75b140795381b8, type: 2}
+  behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 2
   target: {fileID: 0}
@@ -2623,85 +2621,6 @@ MonoBehaviour:
   thigh3: {fileID: 2617768508306203519}
   thigh4: {fileID: 4300124400385522714}
   speed: 10
---- !u!114 &5934619029939632008
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7596263110853264572}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  start: ' - '
-  end: ' - '
-  realTrainingTime: ' - '
-  trainingTime: 0
-  totalSteps: 0
-  iterations: 0
-  parallelAgents: 0
-  episodeReward:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  episodeLength:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  policyLoss:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  valueLoss:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  learningRate:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  epsilon:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
 --- !u!1 &7852556128638947000
 GameObject:
   m_ObjectHideFlags: 0

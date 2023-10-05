@@ -21,11 +21,11 @@ namespace DeepUnity
     [DisallowMultipleComponent, AddComponentMenu("DeepUnity/Decision Requester")]
     public class DecisionRequester : MonoBehaviour
     {
-        
+
         [Tooltip("The maximum decisions/steps in one agent's episode. Set to a positive integer to limit the episode length to that many steps. Set to 0 for unlimited episode length.")]
         [Min(0)] public int maxStep = 1000;
 
-        [Tooltip("The agents makes a decision once in this frames interval - ActionBuffer actions are resampled. An action is performed immediately afterwards - OnActionReceved() is called.")] 
+        [Tooltip("The agents makes a decision once in this frames interval - ActionBuffer actions are resampled. An action is performed immediately afterwards - OnActionReceved() is called.")]
         [Range(1, 50)] public int decisionPeriod = 1;
 
         [Tooltip("If true, OnActionReceived() is called every single frame, using the last decision. Otherwise, it is called only after each decision. Has no effect when Decision Period is 1 or in Heuristic Mode.")]
@@ -72,17 +72,17 @@ namespace DeepUnity
                 EditorGUILayout.HelpBox("Episode's steps are unlimited.", MessageType.None);
             }
 
-            if(decisionPeriod.intValue == 1)
+            if (decisionPeriod.intValue == 1)
             {
                 dontDrawMe.Add("takeActionsBetweenDecisions");
             }
-            
+
 
             targetScript.maxStep = EditorGUILayout.IntField("Max Step", targetScript.maxStep);
             EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
 
-            string decPeriodSec = (decisionPeriod.intValue * Time.fixedDeltaTime).ToString("0.00");
-            EditorGUILayout.HelpBox($"The agent takes a decision once every {decPeriodSec} seconds.", MessageType.None);
+            // string decPeriodSec = (decisionPeriod.intValue * Time.fixedDeltaTime).ToString("0.00");
+            // EditorGUILayout.HelpBox($"The agent takes a decision once every {decPeriodSec} seconds.", MessageType.None);
 
             dontDrawMe.Add("maxStep");
 
@@ -92,5 +92,4 @@ namespace DeepUnity
         }
     }
 }
-
 

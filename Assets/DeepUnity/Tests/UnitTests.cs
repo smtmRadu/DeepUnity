@@ -2,6 +2,7 @@ using UnityEngine;
 using DeepUnity;
 using System.Collections.Generic;
 using UnityEngine.UI;
+using System.Linq;
 
 namespace kbRadu
 {
@@ -23,6 +24,15 @@ namespace kbRadu
         public int index = 0;
         public int whatIsIt = 0;
         List<(Tensor, Tensor)> train;
+
+
+        public float[] results;
+
+        private void FixedUpdate()
+        {
+            graph.Append(Random.value);
+        }
+
 
         void TestCrossEntropy()
         {

@@ -15,13 +15,18 @@ MonoBehaviour:
   behaviourName: MoveToGoal
   assetCreated: 1
   observationSize: 4
-  continuousDim: 2
-  discreteBranches: 
+  continuousDim: 0
+  discreteDim: 4
   critic: {fileID: 0}
-  actorMu: {fileID: 0}
-  actorSigma: {fileID: 0}
-  actorDiscretes: []
+  actorContinuousMu: {fileID: 0}
+  actorContinuousSigma: {fileID: 0}
+  discriminatorContinuous: {fileID: 0}
+  actorDiscrete: {fileID: 0}
+  discriminatorDiscrete: {fileID: 0}
+  config: {fileID: 0}
   targetFPS: 50
+  inferenceDevice: 0
+  trainingDevice: 1
   normalizeObservations: 0
   normalizer:
     step: 0
@@ -39,8 +44,6 @@ MonoBehaviour:
       - 0
       - 0
       shape: 04000000
-  standardDeviation: 0
+  standardDeviation: 1
   standardDeviationValue: 1.5
   standardDeviationScale: 1
-  inferenceDevice: 0
-  trainingDevice: 1

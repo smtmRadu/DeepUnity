@@ -125,10 +125,18 @@ namespace DeepUnityTutorials
 
         private void OnTriggerEnter(Collider other)
         {
-            AddReward(+1f);
+            if(other.CompareTag("Goal"))
+            {
+                AddReward(+1f);
 
-            checkPoints.Add(other.gameObject);
-            other.gameObject.SetActive(false);
+                checkPoints.Add(other.gameObject);
+                other.gameObject.SetActive(false);
+            }
+            else if(other.CompareTag("Terminal"))
+            {
+                AddReward(+10f);
+                EndEpisode();
+            }
         }
     }
 

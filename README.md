@@ -1,5 +1,5 @@
 # DeepUnity
-![version](https://img.shields.io/badge/version-v0.9.4-blue)
+![version](https://img.shields.io/badge/version-v0.9.5-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO).
 
@@ -176,7 +176,7 @@ public class MoveToGoal : Agent
     }
 }
 ```
-_This example considers an agent (with 4 space size and 2 continuous actions) positioned in a middle of an arena that moves forward, backward, left or right (Decision Period is 1), and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the goal, and penalized by 1 point if he is hitting a wall (or falls of the floor), and on every collision the episode ends._
+_This example considers an agent (with 4 space size and 4 discrete actions) positioned in a middle of an arena that moves forward, backward, left or right (Decision Period is 1), and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the goal, and penalized by 1 point if he is hitting a wall (or falls of the floor), and on every collision the episode ends._
 
 ![agent](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/agent.gif?raw=true)
 
@@ -184,7 +184,7 @@ _This example considers an agent (with 4 space size and 2 continuous actions) po
 
 TIPS: 
 - **Parallel training** is one option to use your device at maximum efficiency. After inserting your agent inside an Environment GameObject, you can duplicate that environment several times along the scene before starting the training session. Another solution is to increase the timescale of the simulation. Both ways can be used concurrently.
-- Editor FPS must not be lower than **TargetFPS** value (default: 50, the frame rate of physics simulation; to modify, check Behaviour asset), otherwise there will be loss of information and the agent might not perform as expected.
+
 - In order to properly get use of _AddReward()_ and _EndEpisode()_ consult the diagram below. These methos work well being called inside _OnTriggerXXX()_ or _OnCollisionXXX()_, as well as inside _OnActionReceived()_ rightafter actions are performed.
 - **Decision Period** high values increases overall performance of the training session, but lacks when it comes to agent inference accuracy. Typically, use a higher value for broader parallel environments, then decrease this value to 1 to fine-tune the agent.
 - **Input Normalization** plays a huge role in policy convergence. To outcome this problem, observations can be auto-normalized by checking the corresponding box inside behaviour asset, but instead, is highly recommended to manually normalize all input values before adding them to the __SensorBuffer__. **Vector2**, **Vector3** and **Quaternion** variables can be normalized by calling **_.normalized_**. Single values can be normalized within [0, 1] or [-1, 1] ranges by using the formula **normalized_value = (value - min) / (max - min)**.

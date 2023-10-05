@@ -5,7 +5,6 @@ namespace DeepUnityTutorials
 {
     public class SpiderWalk : Agent
     {
-        [Header("Attributes")]
         [SerializeField] Transform target;
         [SerializeField] Transform directionArrow;
 
@@ -31,6 +30,14 @@ namespace DeepUnityTutorials
         }
         public override void OnEpisodeBegin()
         {
+            float random_angle = Utils.Random.Range(0f, 360f);
+            const float distance = 15f;
+
+            float random_rad = Mathf.Rad2Deg * random_angle;
+            float x = distance * Mathf.Cos(random_rad);
+            float z = distance * Mathf.Sin(random_rad);
+
+            target.localPosition = new Vector3(x, target.localPosition.y, z);
             // target.localPosition = new Vector3(Random.Range(-35f, 35f), target.position.y, Random.Range(-35f, 35f));
         }
         public override void CollectObservations(SensorBuffer sensorBuffer)
@@ -90,8 +97,8 @@ namespace DeepUnityTutorials
             shin4.SetTargetAngularVelocity(actionBuffer.ContinuousActions[11] * speed, 0, 0);
 
             // AddReward(+0.0005f);
-            AddReward(transform.localPosition.y / 100f);
-            AddReward(Mathf.Clamp(1f / Vector3.Distance(transform.position, target.position), 0, 1f) / 100f);
+            AddReward(transform.localPosition.y / 500f);
+            AddReward(Mathf.Clamp(1f / Vector3.Distance(transform.position, target.position), 0, 1f) / 500f);
 
             // Point the arrow towards the target
             directionArrow.rotation = Quaternion.LookRotation(target.position - transform.position) * Quaternion.Euler(0, 90f, 0);

@@ -23,10 +23,11 @@ MonoBehaviour:
   schedulerStepSize: 8
   schedulerDecay: 0.99
   horizon: 72
-  beta: 0.004
+  beta: 0.006
   epsilon: 0.2
   gamma: 0.99
   lambda: 0.95
   earlyStopping: 0
   targetKL: 0.015
+  timescale: 1
   debug: 0

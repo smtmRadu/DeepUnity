@@ -16,7 +16,7 @@ MonoBehaviour:
   gradClipNorm: 0.5
   numEpoch: 8
   batchSize: 512
-  bufferSize: 9216
+  bufferSize: 8192
   normalizeAdvantages: 1
   shuffleTrainingData: 1
   learningRateSchedule: 0
@@ -29,3 +29,5 @@ MonoBehaviour:
   lambda: 0.95
   earlyStopping: 0
   targetKL: 0.015
+  timescale: 2
+  debug: 0

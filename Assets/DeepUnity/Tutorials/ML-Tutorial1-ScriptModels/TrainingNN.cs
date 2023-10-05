@@ -44,17 +44,18 @@ namespace DeepUnityTutorials
         {
             if (net == null)
             {
+                InitType init = InitType.HE_Normal;
                 net = new NeuralNetwork(
-                 new Dense(2, hiddenSize, InitType.HE_Normal, InitType.HE_Normal),
+                 new Dense(2, hiddenSize, init, init),
                  // new LayerNorm(),                
-                 new GELU(),
-                 new Dense(hiddenSize, hiddenSize, InitType.HE_Normal, InitType.HE_Normal, device: device),
+                 new LeakyReLU(),
+                 new Dense(hiddenSize, hiddenSize, init, init, device: device),
                  // new BatchNorm(hiddenSize),
-                 new GELU(),
+                 new LeakyReLU(),
                  // new Dropout(0.3f),
-                 new Dense(hiddenSize, hiddenSize, InitType.HE_Normal, InitType.HE_Normal, device: device),
-                 new Softplus(),
-                 new Dense(hiddenSize, 1, InitType.HE_Normal, InitType.HE_Normal)
+                 new Dense(hiddenSize, hiddenSize, init, init, device: device),
+                 new LeakyReLU(),
+                 new Dense(hiddenSize, 1, init, init)
                  );//.CreateAsset("Tutorial2");
             }
 

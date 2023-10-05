@@ -717,7 +717,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 621327369}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.1, y: 28.56034, z: -131.4}
+  m_LocalPosition: {x: 0, y: 0, z: -73}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -954,7 +954,7 @@ MonoBehaviour:
   MatShape: {x: 64, y: 128}
   batchSize: 64
   lr: 0.001
-  Runs: 100
+  Runs: 1000
   rnn_network: {fileID: 11400000, guid: 7fb1cc86ea6c8bd44980b4c2cc2966ca, type: 2}
   net: {fileID: 0}
   image: {fileID: 1095767907}
@@ -971,6 +971,7 @@ MonoBehaviour:
     mean: 0
   index: 0
   whatIsIt: 0
+  results: []
 --- !u!4 &752495707
 Transform:
   m_ObjectHideFlags: 0
@@ -1671,7 +1672,7 @@ MonoBehaviour:
   stepCount: 0
   iterations: 0
   parallelAgents: 0
-  episodeReward:
+  cumulativeReward:
     graph:
       serializedVersion: 2
       m_Curve: []
@@ -1761,8 +1762,9 @@ MonoBehaviour:
   spaceSize: 3
   continuousActions: 1
   discreteActions: 0
+  numLayers: 2
+  hidUnits: 64
   model: {fileID: 11400000, guid: dc15503be39846144ae81a1e47d160da, type: 2}
-  hp: {fileID: 11400000, guid: 97cda5ca48312c7449b77ebf408a2254, type: 2}
   behaviourType: 2
   onEpisodeEnd: 0
   useSensors: 0
@@ -2002,7 +2004,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!81 &1427153575
 AudioListener:
   m_ObjectHideFlags: 0
@@ -2070,7 +2072,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1427153574}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.577, y: 9.79, z: -20.53}
+  m_LocalPosition: {x: 0.577, y: 9.79, z: 132.6}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2232,7 +2234,7 @@ MonoBehaviour:
   stepCount: 0
   iterations: 0
   parallelAgents: 0
-  episodeReward:
+  cumulativeReward:
     graph:
       serializedVersion: 2
       m_Curve: []
@@ -2322,8 +2324,9 @@ MonoBehaviour:
   spaceSize: 3
   continuousActions: 1
   discreteActions: 0
+  numLayers: 2
+  hidUnits: 64
   model: {fileID: 11400000, guid: dc15503be39846144ae81a1e47d160da, type: 2}
-  hp: {fileID: 11400000, guid: 97cda5ca48312c7449b77ebf408a2254, type: 2}
   behaviourType: 2
   onEpisodeEnd: 0
   useSensors: 0
@@ -2388,7 +2391,7 @@ MonoBehaviour:
   stepCount: 0
   iterations: 0
   parallelAgents: 0
-  episodeReward:
+  cumulativeReward:
     graph:
       serializedVersion: 2
       m_Curve: []
@@ -2478,8 +2481,9 @@ MonoBehaviour:
   spaceSize: 3
   continuousActions: 1
   discreteActions: 0
+  numLayers: 2
+  hidUnits: 64
   model: {fileID: 11400000, guid: dc15503be39846144ae81a1e47d160da, type: 2}
-  hp: {fileID: 11400000, guid: 97cda5ca48312c7449b77ebf408a2254, type: 2}
   behaviourType: 2
   onEpisodeEnd: 0
   useSensors: 0
@@ -2529,7 +2533,7 @@ MonoBehaviour:
   stepCount: 0
   iterations: 0
   parallelAgents: 0
-  episodeReward:
+  cumulativeReward:
     graph:
       serializedVersion: 2
       m_Curve: []
@@ -2619,8 +2623,9 @@ MonoBehaviour:
   spaceSize: 3
   continuousActions: 1
   discreteActions: 0
+  numLayers: 2
+  hidUnits: 64
   model: {fileID: 11400000, guid: dc15503be39846144ae81a1e47d160da, type: 2}
-  hp: {fileID: 11400000, guid: 97cda5ca48312c7449b77ebf408a2254, type: 2}
   behaviourType: 2
   onEpisodeEnd: 0
   useSensors: 0
@@ -2773,7 +2778,7 @@ MonoBehaviour:
   stepCount: 0
   iterations: 0
   parallelAgents: 0
-  episodeReward:
+  cumulativeReward:
     graph:
       serializedVersion: 2
       m_Curve: []
@@ -2863,8 +2868,9 @@ MonoBehaviour:
   spaceSize: 3
   continuousActions: 1
   discreteActions: 0
+  numLayers: 2
+  hidUnits: 64
   model: {fileID: 11400000, guid: dc15503be39846144ae81a1e47d160da, type: 2}
-  hp: {fileID: 11400000, guid: 97cda5ca48312c7449b77ebf408a2254, type: 2}
   behaviourType: 2
   onEpisodeEnd: 0
   useSensors: 0

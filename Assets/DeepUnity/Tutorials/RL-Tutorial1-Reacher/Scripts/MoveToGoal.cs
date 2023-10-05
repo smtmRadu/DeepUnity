@@ -26,30 +26,71 @@ public class MoveToGoal : Agent
     }
     public override void OnActionReceived(ActionBuffer actionBuffer)
     {
-        float xmov = actionBuffer.ContinuousActions[0];
-        float zmov = actionBuffer.ContinuousActions[1];
+        if(model.IsUsingContinuousActions)
+        {
+            float xmov = actionBuffer.ContinuousActions[0];
+            float zmov = actionBuffer.ContinuousActions[1];
 
-        transform.position += new Vector3(xmov, 0, zmov) * Time.fixedDeltaTime * speed;
+            transform.position += new Vector3(xmov, 0, zmov) * Time.fixedDeltaTime * speed;
+        }
+
+        if(model.IsUsingDiscreteActions)
+        {
+            switch(actionBuffer.DiscreteAction)
+            {
+                case 0:
+                    transform.position += new Vector3(0, 0, 1) * Time.fixedDeltaTime * speed;
+                    break;
+                case 1:
+                    transform.position += new Vector3(-1, 0, 0) * Time.fixedDeltaTime * speed;
+                    break;
+                case 2:
+                    transform.position += new Vector3(0, 0, -1) * Time.fixedDeltaTime * speed;
+                    break;
+                case 3:
+                    transform.position += new Vector3(1, 0, 0) * Time.fixedDeltaTime * speed;
+                    break;
+
+
+            }
+        }
+
+        
 
         AddReward(-0.0025f);
     }
-    public override void Heuristic(ActionBuffer actionBuffer)
+    public override void Heuristic(ActionBuffer actionsOut)
     {
-        float xmov = 0;
-        float zmov = 0;
+        if(model.IsUsingContinuousActions)
+        {
+            float xmov = 0;
+            float zmov = 0;
 
-        if (Input.GetKey(KeyCode.W))
-            zmov = 1;
-        else if(Input.GetKey(KeyCode.S))
-            zmov = -1;
+            if (Input.GetKey(KeyCode.W))
+                zmov = 1;
+            else if (Input.GetKey(KeyCode.S))
+                zmov = -1;
 
-        if (Input.GetKey(KeyCode.D))
-            xmov = 1;
-        else if (Input.GetKey(KeyCode.A))
-            xmov = -1;
+            if (Input.GetKey(KeyCode.D))
+                xmov = 1;
+            else if (Input.GetKey(KeyCode.A))
+                xmov = -1;
 
-        actionBuffer.ContinuousActions[0] = xmov;
-        actionBuffer.ContinuousActions[1] = zmov;
+            actionsOut.ContinuousActions[0] = xmov;
+            actionsOut.ContinuousActions[1] = zmov;
+        }
+        
+        if(model.IsUsingDiscreteActions)
+        {
+            if (Input.GetKey(KeyCode.W))
+                actionsOut.DiscreteAction = 0;
+            else if(Input.GetKey(KeyCode.A))
+                actionsOut.DiscreteAction = 1;
+            else if (Input.GetKey(KeyCode.S))
+                actionsOut.DiscreteAction = 2;
+            else if (Input.GetKey(KeyCode.D))
+                actionsOut.DiscreteAction = 3;
+        }
     }  
 
     private void OnTriggerEnter(Collider other)

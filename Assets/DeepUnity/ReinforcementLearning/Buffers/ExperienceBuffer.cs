@@ -18,11 +18,11 @@ namespace DeepUnity
         public Tensor[] ValueTargets { get => frames.Select(x => x.value_target).ToArray(); }
         public Tensor[] Advantages { get => frames.Select(x => x.advantage).ToArray(); }
 
-        public List<TimestepBuffer> frames;
+        private readonly List<TimestepBuffer> frames;
 
-        public ExperienceBuffer(int capacity)
+        public ExperienceBuffer()
         {
-            frames = new List<TimestepBuffer>(capacity);
+            frames = new List<TimestepBuffer>();
         }
 
         public void Shuffle()

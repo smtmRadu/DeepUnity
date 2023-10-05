@@ -44,7 +44,7 @@ namespace DeepUnity
         [Tooltip("[Typical range: 32 - 2048] How many steps of experience to collect per-agent before adding it to the experience buffer.")]
         [Min(1)] public int horizon = 64;
 
-        [Tooltip("[Typical range: 1e-4 - 1e-2] Entropy regularization.")]
+        [Tooltip("[Typical range: 1e-4 - 1e-2] Entropy regularization for trainable standard deviation. Also used for Shannon entropy in discrete action space, but multiplied by 10.")]
         [Min(0f)] public float beta = 5e-3f;
 
         [Tooltip("[Typical range: 0.1 - 0.3] Clip factor.")]
@@ -120,7 +120,7 @@ namespace DeepUnity
                 dontDrawMe.Add("targetKL");
 
             if (EditorApplication.isPlaying)
-                EditorGUILayout.HelpBox("All hyperparameters values can be modified at runtime. Hyperparameters (this Config file) have no effect but when the agent is learning.", MessageType.Info);
+                EditorGUILayout.HelpBox("Hyperparameters values can be modified at runtime. Config file has no effect but when the agent is learning.", MessageType.Info);
 
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
             serializedObject.ApplyModifiedProperties();
