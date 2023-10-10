@@ -11,6 +11,9 @@ using System.CodeDom;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// RNN models require low learning rate on training due to divergence. Also gradient clipping norm helps with this.
+    /// </summary>
     [Serializable]
     public class RNN : Model<RNN, (Tensor, Tensor)>, ISerializationCallbackReceiver
     {

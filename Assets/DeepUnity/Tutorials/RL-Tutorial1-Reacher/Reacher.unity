@@ -963,12 +963,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   spaceSize: 4
+  stackedInputs: 1
   continuousActions: 0
-  discreteActions: 4
+  discreteActions: 5
+  type: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 534c8fb478f10c64a80c567766b5c653, type: 2}
-  behaviourType: 2
+  model: {fileID: 11400000, guid: 1fb7abdd3ca073f458cb51f2bbebe6fd, type: 2}
+  behaviourType: 1
   imitationStrength: 1
   onEpisodeEnd: 2
   useSensors: 0
@@ -987,9 +989,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d26371695edfbcd4580ca6f6048d885d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxStep: 200
+  maxStep: 600
   decisionPeriod: 2
-  takeActionsBetweenDecisions: 0
+  takeActionsBetweenDecisions: 1
 --- !u!65 &2031687196
 BoxCollider:
   m_ObjectHideFlags: 0

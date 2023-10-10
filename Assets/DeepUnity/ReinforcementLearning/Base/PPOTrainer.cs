@@ -72,6 +72,12 @@ namespace DeepUnity
             }
 
             Time.timeScale = Instance.hp.timescale;
+
+            // Check if max steps reached
+            if(Instance.statisticsTrack && Instance.statisticsTrack.stepCount >= Instance.hp.maxSteps)
+            {
+                EditorApplication.isPlaying = false;
+            }
         }
         private void Update()
         {
@@ -113,7 +119,7 @@ namespace DeepUnity
             {
                 EditorApplication.playModeStateChanged += Autosave1;
                 EditorApplication.pauseStateChanged += Autosave2;
-                GameObject go = new GameObject("[DeepUnity] Trainer");
+                GameObject go = new GameObject("[DeepUnity] Trainer - PPO");
                 go.AddComponent<PPOTrainer>();
                 Instance.parallelAgents = new();
                 Instance.ac = agent.model;

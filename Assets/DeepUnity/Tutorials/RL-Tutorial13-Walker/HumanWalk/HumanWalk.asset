@@ -321,5 +321,5 @@ MonoBehaviour:
       - 0
       shape: 8e000000
   standardDeviation: 0
-  standardDeviationValue: 1
+  standardDeviationValue: 0.72
   standardDeviationScale: 1

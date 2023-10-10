@@ -270,7 +270,7 @@ namespace DeepUnity
             cs.SetBuffer(kernel, "result", this.data);
             cs.Dispatch(kernel, 1, 1, 1);
 
-            TensorGPUDisposer.tensors.AddLast(this);
+            TensorGPUAutoDisposer.tensors.AddLast(this);
             GC.Collect();
         }
         public static TensorGPU Reshape(TensorGPU tensor, params int[] newShape)
@@ -1445,6 +1445,9 @@ namespace DeepUnity
         {
             return base.GetHashCode();
         }
+        /// <summary>
+        /// Deallocates the Tensor from VRAM.
+        /// </summary>
         public void Dispose()
         {
             if (disposed)
@@ -1464,7 +1467,7 @@ namespace DeepUnity
             data = new ComputeBuffer(serialized_data.Length, 4);
             disposed = false;
             data.SetData(serialized_data);
-            TensorGPUDisposer.tensors.AddLast(this);
+            TensorGPUAutoDisposer.tensors.AddLast(this);
         }
 
         // inside use      
@@ -1524,14 +1527,14 @@ namespace DeepUnity
 
 
     [InitializeOnLoad]
-    internal sealed class TensorGPUDisposer
+    internal sealed class TensorGPUAutoDisposer
     {
         public readonly static LinkedList<TensorGPU> tensors = new LinkedList<TensorGPU>();
-        static TensorGPUDisposer()
+        static TensorGPUAutoDisposer()
         {
             EditorApplication.playModeStateChanged += DisposeAllTensors;
         }
-        private TensorGPUDisposer() { }
+        private TensorGPUAutoDisposer() { }
         private static void DisposeAllTensors(PlayModeStateChange state)
         {
             if (state == PlayModeStateChange.ExitingPlayMode)

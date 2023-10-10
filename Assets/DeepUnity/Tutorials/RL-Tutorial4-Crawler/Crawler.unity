@@ -867,6 +867,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 466268335}
     m_Modifications:
+    - target: {fileID: 280457100673142555, guid: 222e768c35eb94a499e62512af02450a, type: 3}
+      propertyPath: m_LowAngularXLimit.limit
+      value: -25
+      objectReference: {fileID: 0}
+    - target: {fileID: 280457100673142555, guid: 222e768c35eb94a499e62512af02450a, type: 3}
+      propertyPath: m_HighAngularXLimit.limit
+      value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 1640279596211062971, guid: 222e768c35eb94a499e62512af02450a, type: 3}
+      propertyPath: m_IsKinematic
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 2273284490549027019, guid: 222e768c35eb94a499e62512af02450a, type: 3}
       propertyPath: maxStep
       value: 0
@@ -923,6 +935,30 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3001009159324470208, guid: 222e768c35eb94a499e62512af02450a, type: 3}
+      propertyPath: m_LowAngularXLimit.limit
+      value: -25
+      objectReference: {fileID: 0}
+    - target: {fileID: 3001009159324470208, guid: 222e768c35eb94a499e62512af02450a, type: 3}
+      propertyPath: m_HighAngularXLimit.limit
+      value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 3046750344219315625, guid: 222e768c35eb94a499e62512af02450a, type: 3}
+      propertyPath: m_LowAngularXLimit.limit
+      value: -25
+      objectReference: {fileID: 0}
+    - target: {fileID: 3046750344219315625, guid: 222e768c35eb94a499e62512af02450a, type: 3}
+      propertyPath: m_HighAngularXLimit.limit
+      value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 3389677780220336562, guid: 222e768c35eb94a499e62512af02450a, type: 3}
+      propertyPath: m_LowAngularXLimit.limit
+      value: -25
+      objectReference: {fileID: 0}
+    - target: {fileID: 3389677780220336562, guid: 222e768c35eb94a499e62512af02450a, type: 3}
+      propertyPath: m_HighAngularXLimit.limit
+      value: 5
+      objectReference: {fileID: 0}
     - target: {fileID: 5806263877956343436, guid: 222e768c35eb94a499e62512af02450a, type: 3}
       propertyPath: model
       value: 
@@ -945,7 +981,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5806263877956343436, guid: 222e768c35eb94a499e62512af02450a, type: 3}
       propertyPath: behaviourType
-      value: 2
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5806263877956343436, guid: 222e768c35eb94a499e62512af02450a, type: 3}
       propertyPath: discreteActions

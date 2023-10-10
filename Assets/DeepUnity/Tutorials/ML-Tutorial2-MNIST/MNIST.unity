@@ -652,7 +652,7 @@ GameObject:
   - component: {fileID: 944636989}
   - component: {fileID: 944636988}
   m_Layer: 0
-  m_Name: Train
+  m_Name: Train - MNIST - Recognition
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1389,7 +1389,7 @@ GameObject:
   - component: {fileID: 1466539172}
   - component: {fileID: 1466539171}
   m_Layer: 5
-  m_Name: GENERATION
+  m_Name: Test - MNIST - Generation
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1474,7 +1474,7 @@ RectTransform:
   - {fileID: 2021160822}
   - {fileID: 1119027579}
   m_Father: {fileID: 0}
-  m_RootOrder: 4
+  m_RootOrder: 3
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
@@ -1492,7 +1492,7 @@ GameObject:
   - component: {fileID: 1539047896}
   - component: {fileID: 1539047895}
   m_Layer: 0
-  m_Name: Test
+  m_Name: Test - MNIST - Recognition
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1899,13 +1899,13 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1774734169}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0, y: 0, z: 0}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
-  m_RootOrder: 3
+  m_Father: {fileID: 1820971849}
+  m_RootOrder: -1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1794536639
 GameObject:
@@ -1970,7 +1970,7 @@ GameObject:
   - component: {fileID: 1820971847}
   - component: {fileID: 1820971846}
   m_Layer: 5
-  m_Name: RECOGNITION
+  m_Name: Play - MNIST - Recognition
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2059,6 +2059,7 @@ RectTransform:
   - {fileID: 2101666735}
   - {fileID: 1459484844}
   - {fileID: 1663557169}
+  - {fileID: 1774734172}
   m_Father: {fileID: 0}
   m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -2213,6 +2214,75 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1930490591}
   m_CullTransparentMesh: 1
+--- !u!1 &1946006904
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1946006906}
+  - component: {fileID: 1946006905}
+  m_Layer: 0
+  m_Name: Train - MNIST - Generation
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!114 &1946006905
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1946006904}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 580cc8d8a16579f439b2eb57eb199535, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  displays: []
+  discriminator: {fileID: 0}
+  generator: {fileID: 0}
+  batch_size: 64
+  perform: 1
+  G_graph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  D_graph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+--- !u!4 &1946006906
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1946006904}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 686.2061, y: 121.69298, z: 874.5393}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 4
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1947859505
 GameObject:
   m_ObjectHideFlags: 0

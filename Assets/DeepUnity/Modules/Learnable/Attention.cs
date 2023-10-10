@@ -14,7 +14,8 @@ namespace DeepUnity
     /// https://pytorch.org/docs/stable/generated/torch.nn.MultiheadAttention.html
     /// https://www.youtube.com/watch?v=aw3H-wPuRcw
     /// https://machinelearningmastery.com/the-attention-mechanism-from-scratch/
-    /// A. Liang Transformer March 21, 2023 Transformer Attention Derivative
+    /// A. Liang Transformer March 21, 2023 Transformer Attention Derivative - https://say-hello2y.github.io/2022-09-07/attention-gradient
+    
     /// <summary>
     /// <b>Applies a Scaled Dot-Product Attention over the input.</b> <br></br>
     /// Input: <b>(B, T, H)</b> or <b>(T, H)</b> for unbatched input. <br></br>
@@ -45,7 +46,6 @@ namespace DeepUnity
         [NonSerialized] private Tensor W_O_grad;
 
 
-
         [SerializeField] private float scale;
         [SerializeField] private int d;
 
@@ -66,7 +66,7 @@ namespace DeepUnity
         /// <param name="embed_dim">Total dimension of the model.</param>
         /// <param name="scale">Apply scale in self dot-product attention.</param>
         public Attention((int, int) input_shape, int embed_dim, float scale = 1f) : 
-            base(Device.CPU, InitType.HE_Normal, InitType.HE_Normal, new int[1], new int[1], 1, 1)
+            base(Device.CPU, InitType.HE_Normal, InitType.HE_Normal, new int[] {1}, new int[] {1}, 1, 1)
         {
 
             throw new NotSupportedException("Attention layer is not implemented yet.");
@@ -82,8 +82,9 @@ namespace DeepUnity
             W_K = Tensor.RandomNormal((0f, 0.3f), H, d);
             W_V = Tensor.RandomNormal((0f, 0.3f), H, d);
             W_O = Tensor.RandomNormal((0f, 0.3f), d, H);
-        }
 
+            softmax = new Softmax();
+        }
         public Tensor Predict(Tensor input)
         {
             // softmax(Q * KT / Sqrt(D)) * V [Scaled Dot-Product Attention, page 4]
@@ -129,14 +130,14 @@ namespace DeepUnity
         {
             float gamma = 1f / MathF.Sqrt(d);
 
-            Tensor I = null; // I s only on diagonal and edges
+            Tensor I = GetIMatrix(); // I s only on diagonal and edges
             Tensor P = GetPMatrix(); // P is identity matrix of size n x n
             Tensor A = GetAMatrix(); // A is a bit more complicated
             Tensor S = GetSMatrix(); // S is also more complicated
             Tensor V_prime = Tensor.MatMulGPU(ValueCache, W_V);
 
             // df(X) / dX
-            Tensor dLossdInput = null;
+            Tensor dLossdInput = null;  ///  Where is d f(X) / d X ?
 
             // df(x) / dA
             Tensor dLossdA = Tensor.MatMulGPU(dLossdInput, W_O.Transpose(0, 1));
@@ -145,7 +146,7 @@ namespace DeepUnity
             Tensor part2 = Tensor.MatMulGPU(dLossdInput, W_O.Transpose(0, 1));
             part2 = Tensor.MatMulGPU(part2, V_prime.Transpose(0, 1));
             part2 *= S;
-            part2 *= GetIpsilonMatrix(A.Exp(), I);
+            part2 *= GetIpsilonMatrix(Tensor.MatMulGPU(A.Exp(), I));
             part2 = Tensor.MatMulGPU(part2, I.Transpose(0, 1));
             part2 *= A.Exp();
             dLossdA -= part2;
@@ -153,21 +154,25 @@ namespace DeepUnity
             // df(X) / dWV
             Tensor dLossdWV = Tensor.MatMulGPU(A.Transpose(0, 1), dLossdInput);
             dLossdWV = Tensor.MatMulGPU(dLossdWV, W_O.Transpose(0, 1));
+            W_V_grad = dLossdWV;
 
             // df(X) / dWQ
             Tensor dLossdWQ = gamma * Tensor.MatMulGPU(QueryCache.Transpose(0, 1), dLossdA);
             dLossdWQ = Tensor.MatMulGPU(dLossdWQ, P.Transpose(0, 1));
             dLossdWQ = Tensor.MatMulGPU(dLossdWQ, KeyCache);
             dLossdWQ = Tensor.MatMulGPU(dLossdWQ, W_K);
+            W_Q_grad = dLossdWQ;
 
             // df(X) / dWK
             Tensor dLossdWK = gamma * Tensor.MatMulGPU(KeyCache.Transpose(0, 1), P);
             dLossdWK = Tensor.MatMulGPU(dLossdWK, dLossdA.Transpose(0, 1));
             dLossdWK = Tensor.MatMulGPU(dLossdWK, QueryCache);
             dLossdWK = Tensor.MatMulGPU(dLossdWK, W_Q);
+            W_K_grad = dLossdWK;
 
             // df(X)/ dWO
             Tensor dLossdWO = HeadCache.Transpose(0, 1) * dLossdInput;
+            W_O_grad = dLossdWO;
 
             return dLossdInput;
         }
@@ -175,11 +180,31 @@ namespace DeepUnity
         public void SelfOptimise(float lr)
         {
             // optimise value
+
+            W_Q -= lr * W_Q_grad;
+            W_O -= lr * W_O_grad;
+            W_K -= lr * W_K_grad;
+            W_V -= lr * W_V_grad;
         }
 
-        private  Tensor GetIpsilonMatrix(Tensor A, Tensor I)
+        private  Tensor GetIpsilonMatrix(Tensor X)
         {
-            return Tensor.Zeros(10, 10);
+            return Tensor.Ones(X.Shape) / X;
+        }
+
+        private Tensor GetIMatrix()
+        {
+            int n = W_O.Size(-1); // num_features
+            var mat = Tensor.Zeros(n, n);
+            for (int i = 0; i < n; i++)
+            {
+                for (int j = 0; j < n; j++)
+                {
+                    if(i == 0 || j == 0 || (i == n - 1) || (j == n - 1) || i == j)
+                    { mat[i, j] = 1; }
+                }
+            }
+            return mat;
         }
         private Tensor GetPMatrix()
         {

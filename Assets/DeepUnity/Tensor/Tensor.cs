@@ -468,7 +468,7 @@ namespace DeepUnity
         public static Tensor operator +(Tensor left, Tensor right)
         {
             if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise addition (+).");
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and Right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise addition (+).");
 
             Tensor result = new(left.shape);
 
@@ -486,7 +486,7 @@ namespace DeepUnity
         public static Tensor operator -(Tensor left, Tensor right)
         {
             if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise subtraction (-).");
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and Right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise subtraction (-).");
 
             Tensor result = new(left.shape);
             for (int i = 0; i < result.data.Length; i++)
@@ -502,7 +502,7 @@ namespace DeepUnity
         public static Tensor operator *(Tensor left, Tensor right)
         {
            if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise multiplication (*).");
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and Right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise multiplication (*).");
 
             Tensor result = new(left.shape);
 
@@ -520,7 +520,7 @@ namespace DeepUnity
         public static Tensor operator /(Tensor left, Tensor right)
         {
             if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise division (/).");
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and Right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise division (/).");
 
             Tensor result = new(left.shape);
 
@@ -1338,6 +1338,10 @@ namespace DeepUnity
 
             for (int i = 1; i < tensors.Length; i++)
             {
+                if (tensors[i] == null)
+                {
+                    throw new ArgumentException($"Tensors argument contains a null tensor on index {i}.");
+                }
                 if (!tensors[i - 1].shape.SequenceEqual(tensors[i].shape))
                 {
                     throw new ArgumentException($"Tensors must have the same shape in order to be joined ([{tensors[i - 1].shape.ToCommaSeparatedString()}] != [{tensors[i].shape.ToCommaSeparatedString()}])");

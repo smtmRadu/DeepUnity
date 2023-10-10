@@ -64,7 +64,7 @@ namespace DeepUnity
         [Header("Losses")]
         [Tooltip("Mean loss of policy function on each epoch")] 
         public PerformanceGraph policyLoss = new PerformanceGraph();
-        [Tooltip("Mean MSE of value function on each epoch")]
+        [Tooltip("Mean MSE of value function on each epoch. Also used for the discriminator loss in Heuristic Training.")]
         public PerformanceGraph valueLoss = new PerformanceGraph();
 
         [Header("Policy")]
@@ -118,7 +118,7 @@ namespace DeepUnity
         {
             StringBuilder svgBuilder = new StringBuilder();
 
-            svgBuilder.AppendLine(@"<svg width=""1000"" height=""2500"" xmlns=""http://www.w3.org/2000/svg"">");
+            svgBuilder.AppendLine(@"<svg width=""2000"" height=""2500"" xmlns=""http://www.w3.org/2000/svg"">");
             int y = 20;
            
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""26"" fill=""black""> [{behaviourName}] Training Session</text>");
@@ -172,17 +172,15 @@ namespace DeepUnity
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Space Size: {ab.observationSize}</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Continuous Actions: {ab.continuousDim}</text>");
+            string std_value = ab.standardDeviation == StandardDeviationType.Fixed ? $"Value: {ab.standardDeviationValue}" : $"Scale: {ab.standardDeviationScale}";
+            string if_using_cont_acts = ab.IsUsingContinuousActions ? std_value : "";
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Continuous Actions: {ab.continuousDim} [Standard Deviation: {ab.standardDeviation}]     [{if_using_cont_acts}]</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Discrete Actions: {ab.discreteDim}</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">TargetFPS: {ab.targetFPS} (physics update rate)</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Observations Normalization: {ab.normalizeObservations}</text>");
-            y += 20;
-            string std_value = ab.standardDeviation == StandardDeviationType.Fixed ? $"Value: {ab.standardDeviationValue}" : $"Scale: {ab.standardDeviationScale}";
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Standard Deviation: {ab.standardDeviation}    [{std_value}]</text>");
-
             y += 50;
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Decision Requester]</text>");
             y += 20;
@@ -191,12 +189,14 @@ namespace DeepUnity
             string decPer = dr.decisionPeriod == 1 ? "1" : $"{dr.decisionPeriod}      [Actions Between Decisions: {dr.takeActionsBetweenDecisions}]";
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Decision Period: {decPer}</text>");
 
+
+            /// Generate graphs
             y += 50;
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Graphs]</text>");
             y += 20;
-            DrawGraph(svgBuilder, cumulativeReward.Keys, ref y, 50, 200, 500, "Episode Reward");
+            DrawGraph(svgBuilder, cumulativeReward.Keys, ref y, 50, 200, 500, $"Episode Reward ({episodeCount})");
             y += 20;
-            DrawGraph(svgBuilder, episodeLength.Keys, ref y, 50, 200, 500, "Episode Length");
+            DrawGraph(svgBuilder, episodeLength.Keys, ref y, 50, 200, 500, $"Episode Length ({episodeCount})");
             y += 20;
             DrawGraph(svgBuilder, policyLoss.Keys, ref y, 50, 200, 500, "Policy Loss");
             y += 20;
@@ -205,6 +205,18 @@ namespace DeepUnity
             DrawGraph(svgBuilder, learningRate.Keys, ref y, 50, 200, 500, "Learning Rate");
             y += 20;
             DrawGraph(svgBuilder, epsilon.Keys, ref y, 50, 200, 500, "Epsilon");
+
+            // Generate smoothed out graphs
+            y -= 120;
+            y -= 200 * 6;
+            y -= 50 * 6;
+            cumulativeReward.Smooth(0.05f);
+            episodeLength.Smooth(0.05f);
+            y += 20;
+            DrawGraph(svgBuilder, cumulativeReward.Keys, ref y, 750, 200, 500, "Simplified");
+            y += 20;
+            DrawGraph(svgBuilder, episodeLength.Keys, ref y, 750, 200, 500, "Simplified");
+
 
             svgBuilder.AppendLine(@"</svg>");
 

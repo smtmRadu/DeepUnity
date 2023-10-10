@@ -3,7 +3,7 @@ using DeepUnity;
 
 public class MoveToGoal : Agent
 {
-    [Header("Properties")]
+    // Generally this agent must show significant progress in 100k steps of training.
     public float speed = 10f;
     public Transform target;
     public float norm_scale = 8f;
@@ -39,15 +39,17 @@ public class MoveToGoal : Agent
             switch(actionBuffer.DiscreteAction)
             {
                 case 0:
-                    transform.position += new Vector3(0, 0, 1) * Time.fixedDeltaTime * speed;
                     break;
                 case 1:
-                    transform.position += new Vector3(-1, 0, 0) * Time.fixedDeltaTime * speed;
+                    transform.position += new Vector3(0, 0, 1) * Time.fixedDeltaTime * speed;
                     break;
                 case 2:
-                    transform.position += new Vector3(0, 0, -1) * Time.fixedDeltaTime * speed;
+                    transform.position += new Vector3(-1, 0, 0) * Time.fixedDeltaTime * speed;
                     break;
                 case 3:
+                    transform.position += new Vector3(0, 0, -1) * Time.fixedDeltaTime * speed;
+                    break;
+                case 4:
                     transform.position += new Vector3(1, 0, 0) * Time.fixedDeltaTime * speed;
                     break;
 
@@ -82,14 +84,16 @@ public class MoveToGoal : Agent
         
         if(model.IsUsingDiscreteActions)
         {
+
+            actionsOut.DiscreteAction = 0;
             if (Input.GetKey(KeyCode.W))
-                actionsOut.DiscreteAction = 0;
-            else if(Input.GetKey(KeyCode.A))
                 actionsOut.DiscreteAction = 1;
-            else if (Input.GetKey(KeyCode.S))
+            else if(Input.GetKey(KeyCode.A))
                 actionsOut.DiscreteAction = 2;
-            else if (Input.GetKey(KeyCode.D))
+            else if (Input.GetKey(KeyCode.S))
                 actionsOut.DiscreteAction = 3;
+            else if (Input.GetKey(KeyCode.D))
+                actionsOut.DiscreteAction = 4;
         }
     }  
 

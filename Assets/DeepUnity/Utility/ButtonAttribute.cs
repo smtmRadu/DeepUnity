@@ -4,12 +4,17 @@ using UnityEngine;
 namespace DeepUnity
 {
     /// <summary>
-    /// Displays a button inspector that executes a public method. Can be placed over any field of the class.
+    /// Displays a button inspector that executes a public method. 
+    /// Usage: Place [Button("_Name of the Method_")] attribute over any field of the class.
     /// </summary>
     public class ButtonAttribute : PropertyAttribute
     {
         public string methodToInvoke;
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="methodName">The name of the method to be called on click.</param>
         public ButtonAttribute(string methodName)
         {
             methodToInvoke = methodName;

@@ -310,13 +310,15 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1705870258}
+  - component: {fileID: 1705870260}
+  - component: {fileID: 1705870259}
   m_Layer: 0
   m_Name: Agent
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1705870258
 Transform:
   m_ObjectHideFlags: 0
@@ -332,6 +334,46 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 4
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1705870259
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1705870255}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d19326dd845fd745a112df50288798b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  spaceSize: 0
+  stackedInputs: 1
+  continuousActions: 0
+  discreteActions: 0
+  type: 0
+  numLayers: 2
+  hidUnits: 64
+  model: {fileID: 0}
+  behaviourType: 2
+  imitationStrength: 1
+  onEpisodeEnd: 2
+  useSensors: 1
+  env: {fileID: 1990979783}
+--- !u!114 &1705870260
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1705870255}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d26371695edfbcd4580ca6f6048d885d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxStep: 1000
+  decisionPeriod: 1
+  takeActionsBetweenDecisions: 0
 --- !u!1 &1764226525
 GameObject:
   m_ObjectHideFlags: 0
@@ -458,11 +500,14 @@ MonoBehaviour:
   wallPrefab: {fileID: 7342430159984400689, guid: 12292e8146908ea40a2c6d3abdf2f1fe, type: 3}
   coinPrefab: {fileID: 5204145309390083931, guid: 615c32727c55237448a59a50ec92b358, type: 3}
   agentPrefab: {fileID: 482048745747307435, guid: 9d8bdf4d73b183344a88379d15cfd381, type: 3}
-  RequestActionIntervalInSeconds: 1
   width: 30
   height: 20
   wallsPercentage: 0.3
-  coinsNumber: 3
+  coinsNumber: 5
+  a: 0
+  b: 0
+  c: 0
+  d: 0
 --- !u!4 &1990979784
 Transform:
   m_ObjectHideFlags: 0

@@ -19,7 +19,7 @@ namespace DeepUnity
         public NeuralNetwork(params IModule[] modules) => this.modules = modules;
 
         /// <summary>
-        /// Same as forward but faster. Method used only for network utility.
+        /// Forward used only for network utility.
         /// </summary>
         /// <param name="input"></param>
         /// <returns></returns>
@@ -46,6 +46,11 @@ namespace DeepUnity
             }
             return output;
         }     
+        /// <summary>
+        /// Backpropagates the loss derivative and computes the gradients of learnable parameters.
+        /// </summary>
+        /// <param name="lossDerivative"></param>
+        /// <returns></returns>
         public override Tensor Backward(Tensor lossDerivative)
         {
             Tensor loss = modules[modules.Length - 1].Backward(lossDerivative);
@@ -56,7 +61,10 @@ namespace DeepUnity
             return loss;
         }
 
-
+        /// <summary>
+        /// Get all <see cref="Learnable"/> modules of this model.
+        /// </summary>
+        /// <returns></returns>
         public override Learnable[] Parameters() => modules.OfType<Learnable>().ToArray();     
         public override string Summary()
         {

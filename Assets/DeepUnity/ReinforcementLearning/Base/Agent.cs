@@ -11,10 +11,17 @@ namespace DeepUnity
     [DisallowMultipleComponent, RequireComponent(typeof(DecisionRequester))]
     public abstract class Agent : MonoBehaviour
     {
+        [Tooltip("The number of observations received at a specific timestep.")]
         [SerializeField, Min(1), HideInInspector] private int spaceSize = 0;
+        [Tooltip("The inputs are enqueued in a queue buffer. t1 = [0, 0, x1] -> t2 = [0, x1, x2] -> t3 = [x1, x2, x3] -> t4 = [x2, x3, x4] -> .... For now they are disabled.")]
+        [SerializeField, Range(1, 32), HideInInspector, ReadOnly] private int stackedInputs = 1;
+        [Tooltip("Number of Continuous Actions in continuous actions space. Values in range [-1, 1].")]
         [SerializeField, Min(0), HideInInspector] private int continuousActions = 0;
+        [Tooltip("Number of discrete actions in discrete action space. Actions indexes [0, 1, .. n - 1]. Consider to include a 'NO_ACTION' index also (especially when working heuristically).")]
         [SerializeField, Min(0), HideInInspector] private int discreteActions = 0;
-        [Tooltip("Number of hidden layers ")]
+        [Tooltip("Arhitecture of the neural network")]
+        [SerializeField, HideInInspector] private ModelType type = ModelType.NN;
+        [Tooltip("Number of hidden layers")]
         [SerializeField, Min(1), HideInInspector] private int numLayers = 2;
         [Tooltip("Number of units in a hidden layer in the model.")]
         [SerializeField, Min(32), HideInInspector] private int hidUnits = 64;
@@ -36,15 +43,15 @@ namespace DeepUnity
         private TimestepBuffer Timestep { get; set; }    
         private List<ISensor> Sensors { get; set; }
         private StateResetter PositionReseter { get; set; }
-        private SensorBuffer Observations { get; set; }
-        private ActionBuffer Actions { get; set; }
+        private SensorBuffer ObservationsBuffer { get; set; }
+        private ActionBuffer ActionsBuffer { get; set; }
         public int EpisodeStepCount { get; private set; } = 0;
         public float EpsiodeCumulativeReward { get; private set; } = 0f;
         private int FixedFramesCount { get; set; } = -1;
 
         public virtual void Awake()
         {
-            if (!this.enabled)
+            if (!enabled)
                 return;
 
             // Check if model is ok
@@ -98,7 +105,7 @@ namespace DeepUnity
         }
         public virtual void Start()
         {
-            if (!this.enabled)
+            if (!enabled)
                 return;
 
             if (behaviourType == BehaviourType.Learn)
@@ -106,12 +113,18 @@ namespace DeepUnity
                 TrainingStatistics pf;
                 TryGetComponent(out pf);
                 PerformanceTrack = pf;
-
-                Trainer.Subscribe(this);
+                OnEpisodeBegin();
+                PPOTrainer.Subscribe(this);
             }
 
-            if(behaviourType == BehaviourType.Learn || behaviourType == BehaviourType.Heuristic)
+            if(behaviourType == BehaviourType.Heuristic)
+            {
+                TrainingStatistics pf;
+                TryGetComponent(out pf);
+                PerformanceTrack = pf;
                 OnEpisodeBegin();
+                HeuristicTrainer.Subscribe(this);
+            }
 
         }
         public virtual void FixedUpdate()
@@ -131,7 +144,7 @@ namespace DeepUnity
                     PerformDecision();
                     PerformAction();
                     break;
-            }        
+            }
         }
   
         private void PostTimestep()
@@ -139,7 +152,7 @@ namespace DeepUnity
             if (behaviourType == BehaviourType.Off)
                 return;
 
-            if (FixedFramesCount <= 0)
+            if (FixedFramesCount == 0)
                 return;
 
             if (!DecisionRequester.IsFrameBeforeDecisionFrame(FixedFramesCount))
@@ -149,15 +162,14 @@ namespace DeepUnity
             {
                 Memory.Add(Timestep);
 
-                // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state
-                if (EpisodeStepCount == DecisionRequester.maxStep)
+                // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state (maxStep == 0 means unlimited steps per episode)
+                if (EpisodeStepCount == DecisionRequester.maxStep && DecisionRequester.maxStep != 0)
                     EndEpisode();
 
                 PPOTrainer.SendMemory(Memory);
 
                 if (Timestep?.done[0] == 1)
                 {
-
                     if (PerformanceTrack)
                     {
                         PerformanceTrack.episodeCount++;
@@ -170,6 +182,7 @@ namespace DeepUnity
 
 
                     PositionReseter?.Reset();
+                    // ObservationsBuffer.FlushStack();
                     OnEpisodeBegin();
                 }
             }
@@ -178,10 +191,10 @@ namespace DeepUnity
                 Memory.Add(Timestep);
 
                 // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state
-                if (EpisodeStepCount == DecisionRequester.maxStep)
+                if (EpisodeStepCount == DecisionRequester.maxStep && DecisionRequester.maxStep != 0)
                     EndEpisode();
 
-                HeuristicTrainer.TrainOnMemoryBatch(Memory);
+                HeuristicTrainer.SendMemory(Memory);
 
                 if (Timestep?.done[0] == 1)
                 {
@@ -210,17 +223,19 @@ namespace DeepUnity
             if (behaviourType == BehaviourType.Heuristic)
             {
                 // For now, in heuristic mode, only manual control is available
-                Observations.Clear();
-                Actions.Clear();
+                ObservationsBuffer.Clear();
+                ActionsBuffer.Clear();
 
                 // Collect new observations
-                if (useSensors == UseSensorsType.ObservationsVector) Sensors.ForEach(x => Observations.AddObservationRange(x.GetObservationsVector()));
-                else if (useSensors == UseSensorsType.CompressedObservationsVector) Sensors.ForEach(x => Observations.AddObservationRange(x.GetCompressedObservationsVector()));
-                CollectObservations(Observations);
+                if (useSensors == UseSensorsType.ObservationsVector) Sensors.ForEach(x => ObservationsBuffer.AddObservationRange(x.GetObservationsVector()));
+                else if (useSensors == UseSensorsType.CompressedObservationsVector) Sensors.ForEach(x => ObservationsBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
+                CollectObservations(ObservationsBuffer);
+                // ObservationsBuffer.PushToStack(ObservationsBuffer.TimestepObservation);
+                
 
                 // Check SensorBuffer is fullfilled
                 int missing = 0;
-                if (!Observations.IsFulfilled(out missing))
+                if (!ObservationsBuffer.IsFulfilled(out missing))
                 {
                     ConsoleMessage.Warning($"SensorBuffer is missing {missing} observations. Please add {missing} more observations values or reduce the space size.");
                     EditorApplication.isPlaying = false;
@@ -229,26 +244,36 @@ namespace DeepUnity
 
                 // Normalize the observations if neccesary
                 if (model.normalizeObservations)
-                    Observations.ObservationTensor = model.normalizer.Normalize(Observations.ObservationTensor);
-
+                    Timestep.state = model.normalizer.Normalize(ObservationsBuffer.Observations);
+                else
+                    Timestep.state = ObservationsBuffer.Observations.Clone() as Tensor;
+                
                 // Collect user input actions
-                Timestep.state = Tensor.Identity(Observations.ObservationTensor);
-                Heuristic(Actions);
-                OnActionReceived(Actions);
+                Heuristic(ActionsBuffer);
+                OnActionReceived(ActionsBuffer);
 
+                // Check if there was any input received in case for discrete actions, because we need a dedicated No_Action index.
+                if (model.IsUsingDiscreteActions && ActionsBuffer.DiscreteAction == -1)
+                {
+                    ConsoleMessage.Warning("When using Discrete Actions for Heuristic Training, consider the 'NO_ACTION' case also when not introducing any input beside the already selected discrete actions");
+                    EditorApplication.isPlaying = false;    
+                    return;
+                }
+
+                
                 if(model.IsUsingContinuousActions)
-                    Timestep.action_continuous = Tensor.Constant(Actions.ContinuousActions);
+                    Timestep.action_continuous = Tensor.Constant(ActionsBuffer.ContinuousActions);
 
                 if (model.IsUsingDiscreteActions)
                 {
                     // Convert from action index to One Hot embedding vector
                     Timestep.action_discrete = Tensor.Zeros(model.discreteDim);
-                    Timestep.action_discrete[Actions.DiscreteAction] = 1f;
+                    Timestep.action_discrete[ActionsBuffer.DiscreteAction] = 1f;
                 }
             }
             else
             {
-                OnActionReceived(Actions);
+                OnActionReceived(ActionsBuffer);
             }
 
            
@@ -262,17 +287,18 @@ namespace DeepUnity
                 return;
 
             
-            Observations.Clear();
-            Actions.Clear();
+            ObservationsBuffer.Clear();
+            ActionsBuffer.Clear();
 
             // Collect new observations
-            if (useSensors == UseSensorsType.ObservationsVector) Sensors.ForEach(x => Observations.AddObservationRange(x.GetObservationsVector()));
-            else if (useSensors == UseSensorsType.CompressedObservationsVector) Sensors.ForEach(x => Observations.AddObservationRange(x.GetCompressedObservationsVector()));
-            CollectObservations(Observations);
+            if (useSensors == UseSensorsType.ObservationsVector) Sensors.ForEach(x => ObservationsBuffer.AddObservationRange(x.GetObservationsVector()));
+            else if (useSensors == UseSensorsType.CompressedObservationsVector) Sensors.ForEach(x => ObservationsBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
+            CollectObservations(ObservationsBuffer);
+            // ObservationsBuffer.PushToStack(ObservationsBuffer.TimestepObservation);
 
             // Check SensorBuffer is fullfilled
             int missing = 0;
-            if (!Observations.IsFulfilled(out missing))
+            if (!ObservationsBuffer.IsFulfilled(out missing))
             {
                 ConsoleMessage.Warning($"SensorBuffer is missing {missing} observations. Please add {missing} more observations values or reduce the space size.");
                 EditorApplication.isPlaying = false;
@@ -282,28 +308,36 @@ namespace DeepUnity
             // Normalize the observations if neccesary
             if (model.normalizeObservations)
             {
-                if (behaviourType == BehaviourType.Learn)
-                    model.normalizer.Update(Observations.ObservationTensor);
+                Tensor st = ObservationsBuffer.Observations.Clone() as Tensor;
 
-                Observations.ObservationTensor = model.normalizer.Normalize(Observations.ObservationTensor);
+                if (behaviourType == BehaviourType.Learn)
+                {
+                    model.normalizer.Update(st);
+                }
+
+                Timestep.state = model.normalizer.Normalize(st);
+                
+            }
+            else
+            {
+                Timestep.state = ObservationsBuffer.Observations.Clone() as Tensor;
             }
 
             // Set state[t], action[t] & pi[t]
-            Timestep.state = Tensor.Identity(Observations.ObservationTensor);
             model.ContinuousPredict(Timestep.state, out Timestep.action_continuous, out Timestep.prob_continuous);
             model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.prob_discrete);
 
             // Run agent's actions and clip them
-            Actions.ContinuousActions = model.IsUsingContinuousActions ? Timestep.action_continuous.Clip(-1f, 1f).ToArray() : null;
-            Actions.DiscreteAction = model.IsUsingDiscreteActions ? (int)Timestep.action_discrete.ArgMax(-1)[0] : -1;
+            ActionsBuffer.ContinuousActions = model.IsUsingContinuousActions ? Timestep.action_continuous.Clip(-1f, 1f).ToArray() : null;
+            ActionsBuffer.DiscreteAction = model.IsUsingDiscreteActions ? (int)Timestep.action_discrete.ArgMax(-1)[0] : -1;
         }
+
         // Init
         public void BakeModel()
         {
             if(spaceSize == 0)
             {
-                ConsoleMessage.Warning("Cannot bake model with space size equal to 0");
-                return;
+                ConsoleMessage.Info("SensorBuffer vector size was set to 0. ObservationsTensor must be modified directly.");
             }
             if(continuousActions == 0 && discreteActions == 0)
             {
@@ -311,7 +345,7 @@ namespace DeepUnity
                 return;
             }
 
-            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, continuousActions, discreteActions, numLayers, hidUnits);
+            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, stackedInputs, continuousActions, discreteActions, type, numLayers, hidUnits);
 
             continuousActions = model.continuousDim;
             discreteActions = model.discreteDim;
@@ -321,8 +355,8 @@ namespace DeepUnity
             Memory = new MemoryBuffer();
             Timestep = new TimestepBuffer(EpisodeStepCount);
 
-            Observations = new SensorBuffer(model.observationSize);
-            Actions = new ActionBuffer(model.continuousDim, model.discreteDim);
+            ObservationsBuffer = new SensorBuffer(model.observationSize);
+            ActionsBuffer = new ActionBuffer(model.continuousDim, model.discreteDim);
         }
         private void InitSensors(Transform parent)
         {
@@ -423,7 +457,10 @@ namespace DeepUnity
             var script = (Agent)target;
 
             // Runtime inspector things
-            if (EditorApplication.isPlaying && serializedObject.FindProperty("behaviourType").enumValueIndex == (int)BehaviourType.Learn && script.enabled && script.model)
+            if (EditorApplication.isPlaying &&        
+                script.behaviourType == BehaviourType.Learn
+                && script.enabled 
+                && script.model)
             {
                 // Draw Step
                 int currentStep = script.EpisodeStepCount;
@@ -461,37 +498,102 @@ namespace DeepUnity
                 //                         MessageType.None);
             }
 
+            if (EditorApplication.isPlaying &&
+                script.behaviourType == BehaviourType.Heuristic
+                && script.enabled
+                && script.model)
+            {
+                EditorGUILayout.HelpBox("Control the agent behaviour until the buffer is fullfiled.", MessageType.None);
+                // Draw buffer 
+                float bufferFillPercentage = script.Memory.Count / ((float)script.model.config.bufferSize) * 100f;
+                StringBuilder sb = new StringBuilder();
+                sb.Append("Buffer [");
+                sb.Append(script.Memory.Count);
+                sb.Append(" / ");
+                sb.Append(script.model.config.bufferSize);
+                sb.Append($"] \n[");
+                for (float i = 1.25f; i <= 100f; i += 1.25f)
+                {
+                    if (i == 47.5f)
+                        sb.Append($"{bufferFillPercentage.ToString("00.0")}%");
+                    else if (i > 47.5f && i <= 53.75f)
+                        continue;
+                    else if (i <= bufferFillPercentage)
+                        sb.Append("▮");
+                    else
+                        sb.Append("▯");
+                }
+                sb.Append("]");
+                EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
+
+            }
+
+
             // All fields drawn
             if (serializedObject.FindProperty("model").objectReferenceValue == null)
             {
-                 EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+                EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
 
-                if (GUILayout.Button("Bake model"))
+
+
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("Bake model", GUILayout.Width(EditorGUIUtility.labelWidth * 2.32f)))
                 {
                     script.BakeModel();
                 }
 
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.PrefixLabel("Num Layers");
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("numLayers"), GUIContent.none);
-                EditorGUILayout.PrefixLabel("Hidden Units");
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("hidUnits"), GUIContent.none);
-                EditorGUILayout.Space(5f);
+                // Create a Rect for the second field with a specific width
+                Rect propertyFieldRect = GUILayoutUtility.GetRect(0, EditorGUIUtility.singleLineHeight);
+                propertyFieldRect.width = 50; // Adjust the width as needed
+
+                SerializedProperty typeProperty = serializedObject.FindProperty("type");
+                EditorGUI.BeginDisabledGroup(true);
+                EditorGUI.PropertyField(propertyFieldRect, typeProperty, GUIContent.none);
+                EditorGUI.EndDisabledGroup();
                 EditorGUILayout.EndHorizontal();
+
+
+
+
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label("Num Layers", GUILayout.Width(EditorGUIUtility.labelWidth / 1.08f));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("numLayers"), GUIContent.none, GUILayout.Width(50f));
+                GUILayout.Label("Hidden Units", GUILayout.Width(EditorGUIUtility.labelWidth / 1.08f));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("hidUnits"), GUIContent.none, GUILayout.Width(50f));
+                EditorGUILayout.EndHorizontal();
+
 
                 EditorGUILayout.Space();
 
+                EditorGUILayout.LabelField("Observations");
                 EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.Space(20);
                 EditorGUILayout.PrefixLabel("Space Size");
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("spaceSize"), GUIContent.none);
                 EditorGUILayout.EndHorizontal();
-                
+
                 EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.Space(20);
+                if (serializedObject.FindProperty("type").enumValueIndex == (int)ModelType.RNN)
+                    EditorGUILayout.PrefixLabel("Sequence Length");
+                else
+                    EditorGUILayout.PrefixLabel("Stacked Inputs");
+                EditorGUI.BeginDisabledGroup(true);
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("stackedInputs"), GUIContent.none);
+                EditorGUI.EndDisabledGroup();
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.Space(5);
+
+                EditorGUILayout.LabelField("Actions");
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.Space(20);
                 EditorGUILayout.PrefixLabel("Continuous Actions");
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("continuousActions"), GUIContent.none);
                 EditorGUILayout.EndHorizontal();
 
                 EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.Space(20);
                 EditorGUILayout.PrefixLabel("Discrete Actions");
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("discreteActions"), GUIContent.none);
                 EditorGUILayout.EndHorizontal();

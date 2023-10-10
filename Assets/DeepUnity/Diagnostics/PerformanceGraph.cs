@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 
@@ -78,6 +81,45 @@ namespace DeepUnity
             steps = 0;
             mean = 0f;
         }
+
+        /// <summary>
+        /// Smooths out the keyframes by computing pairwise means of neighbour nodes. 
+        /// The nodes are reduced to smooth_factor * total_keyframes number.
+        /// </summary>
+        /// <param name="smooth_factor">a value in range (0, 1)</param>
+        public void Smooth(float smooth_factor)
+        {
+            if (smooth_factor >= 1f || smooth_factor <= 0.01f)
+                throw new ArgumentException($"Smooth factor must be in range (0.01, 1). Received {smooth_factor}.");
+            
+            var keys = graph.keys.ToList();
+
+            var smoothed_out_keys = new List<Keyframe>();
+
+            for (int i = 0; i < keys.Count; i += (int) (1f / smooth_factor))
+            {
+                var mean_value = 0f;
+                var last_time = 0f;
+                int no_in_batch = 0;
+                for (int j = 0; j < (int) (1f / smooth_factor); j++)
+                {
+                    if (i + j == keys.Count)
+                        break;
+
+                    no_in_batch++;
+                    mean_value += keys[i + j].value;
+                    last_time = keys[i + j].time;
+                }
+                mean_value /= no_in_batch;
+                smoothed_out_keys.Add(new Keyframe(last_time, mean_value));
+            }
+
+            graph.keys = smoothed_out_keys.ToArray();
+
+
+
+        }
+
         public Keyframe[] Keys { get => graph.keys; }
     }
 

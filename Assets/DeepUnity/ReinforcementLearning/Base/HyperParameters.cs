@@ -11,6 +11,9 @@ namespace DeepUnity
     {
         [Header("Training Configuration")]
 
+        [Tooltip("[Typical range: 1e5 - 1e7] The maximum length in steps of this training session.")]
+        [Min(1e5f)] public int maxSteps = (int)1e9;
+
         [Tooltip("[Typical range: 1e-5 - 1e-3] Initial learning rate for Adam optimizer (both for Policy and Value networks).")]
         [Min(1e-8f)] public float learningRate = 3e-4f;
 

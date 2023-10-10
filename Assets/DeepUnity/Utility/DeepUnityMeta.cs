@@ -152,11 +152,6 @@ namespace DeepUnity
         [Tooltip("When the episode ends, environment's transforms and rigidbodies (including the agent) are reinitialized. OnEpisodeBegin() is called afterwards.")]
         ResetEnvironment
     }
-    public enum ActionType
-    {
-        Continuous,
-        Discrete
-    }
 
     public enum StandardDeviationType
     {
@@ -164,17 +159,19 @@ namespace DeepUnity
         Trainable
     }
 
-    public enum NetworkSize
+    public enum AverageType
     {
-        [Tooltip("A neural network with 2 layers and 32 hidden units.")]
-        Small,
-        [Tooltip("A neural network with 2 layers and 64 hidden units.")]
-        Medium,
-        [Tooltip("A neural network with 2 layers and 128 hidden units.")]
-        Large,
-        [Tooltip("A neural network with 2 layers and 256 hidden units.")]
-        VeryLarge
+        Weighted,
+        Micro,
     }
+
+    public enum ModelType
+    {
+        NN,
+        CNN,
+        RNN
+    }
+
     public enum UseSensorsType
     {
         [Tooltip("Does not collect automatically the observation values from attached sensors. All attached sensors observation vectors can be added manually inside CollectObservations() method.")]

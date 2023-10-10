@@ -62,7 +62,7 @@ namespace DeepUnityTutorials
             int digit = (int)Tensor.ArgMax(label, -1)[0];
             var output = network.Predict(input);
             float acc = Metrics.Accuracy(output, label);
-           
+             
             if(acc == 0)
             {
                 wrong[digit]++;

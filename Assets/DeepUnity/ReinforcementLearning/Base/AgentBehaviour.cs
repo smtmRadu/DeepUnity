@@ -19,6 +19,7 @@ namespace DeepUnity
         [SerializeField, ReadOnly] public string behaviourName;
         [SerializeField, HideInInspector] private bool assetCreated = false;
         [SerializeField, ReadOnly] public int observationSize;
+        [SerializeField, ReadOnly, Min(1)] public int stackedInputsNum;
         [SerializeField, ReadOnly] public int continuousDim;
         [SerializeField, ReadOnly] public int discreteDim;
 
@@ -84,61 +85,72 @@ namespace DeepUnity
         public bool IsUsingContinuousActions { get => continuousDim > 0; }
         public bool IsUsingDiscreteActions { get => discreteDim > 0; }
 
-        private AgentBehaviour(in int STATE_SIZE, in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS)
+        private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in ModelType arch, in int NUM_LAYERS, in int HIDDEN_UNITS)
         {
-            //------------------ NETWORK INITIALIZATION ----------------//
+          
             const InitType INIT_W = InitType.HE_Normal;
             const InitType INIT_B = InitType.HE_Normal;
+            //------------------ NETWORK INITIALIZATION ----------------//
 
-            critic = new NeuralNetwork(
-                        new IModule[] {
-                            new Dense(STATE_SIZE, HIDDEN_UNITS, INIT_W, INIT_B), new ReLU() }.
-                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
-                    );
-
-            Debug.Log(STATE_SIZE);
-            Debug.Log(CONTINUOUS_ACTIONS_NUM);
-            Debug.Log(DISCRETE_ACTIONS_NUM);
-
-            if(CONTINUOUS_ACTIONS_NUM > 0)
+            switch(arch)
             {
-                actorContinuousMu = new NeuralNetwork(
-                        new IModule[] {
-                            new Dense(STATE_SIZE, HIDDEN_UNITS, INIT_W, INIT_B), new ReLU() }.
-                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Tanh() }).ToArray()
+                case ModelType.NN:
+                    critic = new NeuralNetwork(
+                   new IModule[] {
+                       new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                       Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                       Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
                     );
+                    if (CONTINUOUS_ACTIONS_NUM > 0)
+                    {
+                        actorContinuousMu = new NeuralNetwork(
+                                new IModule[] {
+                            new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                                    Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Tanh() }).ToArray()
+                            );
 
-                actorContinuousSigma = new NeuralNetwork(
-                        new IModule[] {
-                            new Dense(STATE_SIZE, HIDDEN_UNITS, INIT_W, INIT_B), new ReLU() }.
-                            Concat(CreateHiddenLayers(NUM_LAYERS - 1, HIDDEN_UNITS, INIT_W, INIT_B)). // Sigma network is a bit smaller for efficiency. This network is typically not important to be large
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Exp() }).ToArray()
-                    );
+                        actorContinuousSigma = new NeuralNetwork(
+                                new IModule[] {
+                            new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                                    Concat(CreateHiddenLayers(NUM_LAYERS - 1, HIDDEN_UNITS, INIT_W, INIT_B)). // Sigma network is a bit smaller for efficiency. This network is typically not important to be large
+                                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Exp() }).ToArray()  // Also Softplus can be used
+                            );
 
-                discriminatorContinuous = new NeuralNetwork(
-                        new IModule[] {
-                            new Dense(CONTINUOUS_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B),new ReLU() }.
-                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, 2, INIT_W, INIT_B), new Sigmoid() }).ToArray()
-                    );
+                        discriminatorContinuous = new NeuralNetwork(
+                                new IModule[] {
+                            new Dense(CONTINUOUS_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B),CreateActivation() }.
+                                    Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B), new Sigmoid() }).ToArray()
+                            );
+                    }
+
+                    if (DISCRETE_ACTIONS_NUM > 0)
+                    {
+                        actorDiscrete = new NeuralNetwork(
+                                new IModule[] {
+                            new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B),new LeakyReLU() }.
+                                    Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, DISCRETE_ACTIONS_NUM, INIT_W, INIT_B), new Softmax() }).ToArray()
+                            );
+                        discriminatorDiscrete = new NeuralNetwork(
+                                new IModule[] {
+                            new Dense(DISCRETE_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                                    Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B), new Sigmoid() }).ToArray()
+                            );
+                    }
+
+                    break;
+                case ModelType.CNN:
+                    throw new ArgumentException("CNN was not introduced yet to RL");
+                case ModelType.RNN:
+                    throw new ArgumentException("RNN was not introduced yet to RL");
             }
-            
-            if(DISCRETE_ACTIONS_NUM > 0)
+
+            static Activation CreateActivation()
             {
-                actorDiscrete = new NeuralNetwork(
-                        new IModule[] {
-                            new Dense(STATE_SIZE, HIDDEN_UNITS, INIT_W, INIT_B),new ReLU() }.
-                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, DISCRETE_ACTIONS_NUM, INIT_W, INIT_B), new Softmax() }).ToArray()
-                    );
-                discriminatorDiscrete = new NeuralNetwork(
-                        new IModule[] {
-                            new Dense(DISCRETE_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B),new ReLU() }.
-                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, 2, INIT_W, INIT_B), new Sigmoid() }).ToArray()
-                    );
+                return new LeakyReLU();
             }
 
             static IModule[] CreateHiddenLayers(int numLayers, int hidUnits, InitType INIT_W, InitType INIT_B)
@@ -146,10 +158,10 @@ namespace DeepUnity
                 if (numLayers == 1)
                     return new IModule[] { };
                 else if (numLayers == 2)
-                    return new IModule[] { new Dense(hidUnits, hidUnits, INIT_W, INIT_B), new ReLU() };
+                    return new IModule[] { new Dense(hidUnits, hidUnits, INIT_W, INIT_B), CreateActivation() };
                 else if (numLayers == 3)
-                    return new IModule[] { new Dense(hidUnits, hidUnits, INIT_W, INIT_B), new ReLU(), 
-                                           new Dense(hidUnits, hidUnits, INIT_W, INIT_B), new ReLU() };
+                    return new IModule[] { new Dense(hidUnits, hidUnits, INIT_W, INIT_B), CreateActivation(), 
+                                           new Dense(hidUnits, hidUnits, INIT_W, INIT_B), CreateActivation() };
                 else
                     throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
 
@@ -262,7 +274,6 @@ namespace DeepUnity
                 actorDiscreteScheduler = new LRScheduler(actorDiscreteOptimizer, step_size, gamma);
                 discriminatorDiscreteScheduler = new LRScheduler(discriminatorDiscreteOptimizer, step_size, gamma);
             }
-            
 
         }
 
@@ -370,20 +381,21 @@ namespace DeepUnity
         /// Creates a new Agent behaviour folder containing all auxiliar neural networks, or loads it if already exists one for this behaviour.
         /// </summary>
         /// <returns></returns>
-        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int continuousActions, int discreteActions, int numLayers, int hidUnits)
+        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int continuousActions, int discreteActions, ModelType architecture, int numLayers, int hidUnits)
         {          
             var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
 
             if (instance != null)
             {
-                ConsoleMessage.Info($"Behaviour {name} asset loaded.");
+                ConsoleMessage.Info($"Behaviour {name} asset loaded");
                 return instance;
             }
 
 
-            AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, continuousActions, discreteActions, numLayers, hidUnits);
+            AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, stackedInputs, continuousActions, discreteActions, architecture, numLayers, hidUnits);
             newAgBeh.behaviourName = name;
             newAgBeh.observationSize = stateSize;
+            newAgBeh.stackedInputsNum = stackedInputs;
             newAgBeh.continuousDim = continuousActions;
             newAgBeh.discreteDim = discreteActions;
             newAgBeh.normalizer = new ZScoreNormalizer(stateSize);
@@ -430,8 +442,9 @@ namespace DeepUnity
             critic.Save(); 
             actorContinuousMu?.Save();
             actorContinuousSigma?.Save();
+            discriminatorContinuous?.Save();
             actorDiscrete?.Save();
-
+            discriminatorDiscrete?.Save();
         }
     }
 

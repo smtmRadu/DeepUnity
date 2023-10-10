@@ -17,8 +17,10 @@ namespace DeepUnityTutorials
         [SerializeField] private NeuralNetwork discriminator;
         [SerializeField] private NeuralNetwork generator;
 
+        
+        const int latent_dim = 128;
+
         [Button("SaveNetworks")]
-        [SerializeField] private int latent_dim = 10;
         [SerializeField] private int batch_size = 64;
         [SerializeField] private WhatToDo perform = WhatToDo.Train;
 
@@ -37,28 +39,35 @@ namespace DeepUnityTutorials
             {
                 discriminator = new NeuralNetwork(
                     new Flatten(),
-                    new Dense(784, 256, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
+                    new Dense(784, 1024, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
                     new ReLU(),
                     new Dropout(0.3f),
-           
-                    new Dense(256, 64, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
+                
+                    new Dense(1024, 512, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
                     new ReLU(),
                     new Dropout(0.3f),
 
-                    new Dense(64, 1, device: Device.CPU),
+                    new Dense(512, 256, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
+                    new ReLU(),
+                    new Dropout(0.3f),
+
+                    new Dense(256, 1, device: Device.CPU),
                     new Sigmoid()
                     ).CreateAsset("discriminator");
             }
             if (generator == null)
             {
                 generator = new NeuralNetwork(
-                    new Dense(latent_dim, 128, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
+                    new Dense(latent_dim, 256, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
+                    new ReLU(),
+                
+                    new Dense(256, 512, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
                     new ReLU(),
 
-                    new Dense(128, 256, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
+                    new Dense(512, 1024, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
                     new ReLU(),
 
-                    new Dense(256, 784, device: Device.GPU),
+                    new Dense(1024, 784, device: Device.GPU),
                     new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 }),
                     new Tanh()
                     ).CreateAsset("generator");
@@ -95,6 +104,9 @@ namespace DeepUnityTutorials
                     Utils.Shuffle(dataset);
 
                 }
+
+                if (batch_index % 64 == 0)
+                    SaveNetworks();
 
                 // Train Discriminator
                 var real_data = Tensor.Cat(null, Utils.GetRange(dataset, batch_index, batch_size));

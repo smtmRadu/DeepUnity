@@ -41,7 +41,7 @@ namespace DeepUnityTutorials
         public override void CollectObservations(SensorBuffer sensorBuffer)
         {
             // 10 info per joint
-
+   
             // Mid body - 40
             sensorBuffer.AddObservation(headJoint.transform.rotation.normalized);
             sensorBuffer.AddObservation(headJoint.rb.velocity.normalized);

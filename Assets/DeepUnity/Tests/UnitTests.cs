@@ -2,7 +2,6 @@ using UnityEngine;
 using DeepUnity;
 using System.Collections.Generic;
 using UnityEngine.UI;
-using System.Linq;
 
 namespace kbRadu
 {
@@ -28,11 +27,38 @@ namespace kbRadu
 
         public float[] results;
 
-        private void FixedUpdate()
+        private float adder = 1.01f;
+
+        private void Start()
         {
-            graph.Append(Random.value);
+            rnn_network = new RNN(10, 20, 2).CreateAsset("rnn");
+            optim = new Adam(rnn_network.Parameters(), lr: 1e-4f);
         }
 
+        Tensor input = Tensor.RandomNormal(6, 64, 10); // (L, B, H_in) 
+        Tensor h0 = Tensor.Zeros(2, 64, 20);  // (num_layers, B, H_out)
+        Tensor targ = Tensor.RandomNormal(6, 64, 20);
+        private void Update()
+        {
+            
+            optim.ZeroGrad();
+            var output = rnn_network.Forward((input, h0));
+            var loss = Loss.MSE(output.Item1, targ);
+            rnn_network.Backward((loss.Derivative, null));
+            optim.Step();
+
+            graph.Append(loss.Item);
+        }
+        void TestAttention()
+        {
+            Attention att = new Attention((28, 28), 6);
+
+            Tensor input = Tensor.Random01(28, 28);
+
+            print(input);
+
+            print(att.Forward(input));
+        }
 
         void TestCrossEntropy()
         {
@@ -179,16 +205,6 @@ namespace kbRadu
             
 
             // print(output.ToLineSeparatedString());
-        }
-        void TestRNN()
-        {
-            rnn_network = new RNN(10, 20, 2).CreateAsset("rnn");
-            var input = Tensor.RandomNormal(6, 3, 10); // (L, B, H_in) 
-            var h0 = Tensor.RandomNormal(2, 3, 20);  // (num_layers, B, H_out)
-            var output = rnn_network.Forward((input, h0));
-            rnn_network.Backward(output);
-            // print("output" + output.Item1);
-            // print("h_n" + output.Item2);
         }
 
 
