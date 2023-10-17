@@ -6,15 +6,15 @@ namespace DeepUnity
     {
         public static void Warning(string message)
         {
-            Debug.Log($"<color=#fcba03>Warning! {message}.</color>");
+            Debug.Log($"<color=#fcba03><b>[WARNING]</b> {message}.</color>");
         }
         public static void Error(string message)
         {
-            Debug.Log($"<color=red>Error! {message}.</color>");
+            Debug.Log($"<color=red><b>[ERROR]</b> {message}.</color>");
         }     
         public static void Info(string message)
         {
-            Debug.Log($"<color=#03a9fc> {message}.</color>");
+            Debug.Log($"<color=#03a9fc><b>[INFO]</b> {message}.</color>");
         }
     }
 

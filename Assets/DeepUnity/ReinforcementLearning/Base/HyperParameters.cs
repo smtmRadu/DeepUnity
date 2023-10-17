@@ -2,7 +2,6 @@ using System;
 using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
-using DeepUnityTutorials;
 
 namespace DeepUnity
 {
@@ -12,7 +11,7 @@ namespace DeepUnity
         [Header("Training Configuration")]
 
         [Tooltip("[Typical range: 1e5 - 1e7] The maximum length in steps of this training session.")]
-        [Min(1e5f)] public int maxSteps = (int)1e9;
+        [Min(1e5f)] public long maxSteps = 2_000_000_000;
 
         [Tooltip("[Typical range: 1e-5 - 1e-3] Initial learning rate for Adam optimizer (both for Policy and Value networks).")]
         [Min(1e-8f)] public float learningRate = 3e-4f;
@@ -20,14 +19,14 @@ namespace DeepUnity
         [Tooltip("[Typical range: 0 - 1] Global Gradient Clipping max norm value. Set to 0 to turn off.")]
         [Min(0)] public float gradClipNorm = 0.5f;
 
-        [Tooltip("[Typical range: 3 - 10] Number of epochs per buffer.")]
-        [Min(3)] public int numEpoch = 8;
-
         [Tooltip("[Typical range: (Continuous) 512 - 5120, (Discrete) 32 - 512] Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer size.")]
         [Min(32)] public int batchSize = 512;
 
         [Tooltip("[Typical range: 2048 - 409600] Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch size. Typically a larger buffer size corresponds to more stable training updates.")]
         [Min(512)] public int bufferSize = 10240;
+
+        [Tooltip("[Typical range: 3 - 10] Number of epochs per buffer.")]
+        [Min(3)] public int numEpoch = 8;
 
         [Tooltip("Apply normalization to advantages over the memory buffer.")]
         public bool normalizeAdvantages = true;
@@ -35,10 +34,8 @@ namespace DeepUnity
         [Tooltip("Shuffle the training data each epoch. Increases generalization and convergence and avoid batch effects (in BatchNorm). Decreases policy update time.")]
         public bool shuffleTrainingData = true;
 
-        [Tooltip("Applies linear decay on learning rate.")]
-        [SerializeField] public bool learningRateSchedule = false;
-        [SerializeField] public int schedulerStepSize = 8;
-        [SerializeField] public float schedulerDecay = 0.99f;
+        [Tooltip("Applies logarithmic decay on learning rate with respect to the maxSteps. When maxSteps is reached, lr will be 0.")]
+        [SerializeField] public bool LRSchedule = false;
 
 
 
@@ -59,11 +56,11 @@ namespace DeepUnity
         [Tooltip("[Typical range: 0.9 - 0.95] GAE factor.")]
         [ReadOnly, Min(0)] public float lambda = 0.95f;
 
-        [ReadOnly, Tooltip("Use early stopping")]
-        public bool earlyStopping = false;
+        [Tooltip("Use of KLE")]
+        public KLType KLDivergence = KLType.Off;
 
         [Tooltip("Kullback-Leibler divergence target value")]
-        [Min(0)] public float targetKL = 0.015f;
+        [Min(0.015f)] public float targetKL = 0.015f;
 
         // [ReadOnly, Tooltip("Applies linear decay on beta.")]
         // public bool betaScheduler = false;
@@ -75,7 +72,9 @@ namespace DeepUnity
         [Tooltip("Timescale of the training session.")]
         [Min(1f)] public float timescale = 1f;
         [Tooltip("Debug the train_data into a file.")]
-        [HideInInspector] public bool debug = false;
+        // [HideInInspector] 
+        [Space(150), HideInInspector]
+        public bool debug = false;
 
 
         private void Awake()
@@ -111,15 +110,14 @@ namespace DeepUnity
             serializedObject.Update();
             List<string> dontDrawMe = new List<string>() { "m_Script" };
 
-            SerializedProperty lrs = serializedObject.FindProperty("learningRateSchedule");
+            SerializedProperty lrs = serializedObject.FindProperty("LRSchedule");
             if(!lrs.boolValue)
             {
                 dontDrawMe.Add("schedulerStepSize");
                 dontDrawMe.Add("schedulerDecay");
             }
 
-            SerializedProperty es = serializedObject.FindProperty("earlyStopping");
-            if (!es.boolValue)
+            if (serializedObject.FindProperty("KLDivergence").enumValueIndex == (int)KLType.Off)
                 dontDrawMe.Add("targetKL");
 
             if (EditorApplication.isPlaying)

@@ -1,5 +1,4 @@
 using UnityEngine;
-
 using DeepUnity;
 
 
@@ -7,8 +6,8 @@ namespace DeepUnityTutorials
 {
     public class HumanWalk : Agent
     {
-        public float highStrengthJointsForce = 1000;
-        public float lowStrengthJointsForce = 600;
+        public float highStrengthJointsForce = 40;
+        public float lowStrengthJointsForce = 20;
 
 
         [Header("Body")]
@@ -30,14 +29,19 @@ namespace DeepUnityTutorials
         public JointScript leftLegJoint;
         public JointScript leftShinJoint;
         public JointScript leftFootJoint;
-        public IsGroundedScript leftFootIsGrounded;
+        public GroundContact leftFootIsGrounded;
 
         [Header("Right leg")]
         public JointScript rightLegJoint;      
         public JointScript rightShinJoint;       
         public JointScript rightFootJoint;
-        public IsGroundedScript rightFootIsGrounded;
+        public GroundContact rightFootIsGrounded;
 
+        public override void Awake()
+        {
+            base.Awake();
+            Physics.gravity = new Vector3(0, -30f, 0);
+        }
         public override void CollectObservations(SensorBuffer sensorBuffer)
         {
             // 10 info per joint
@@ -123,23 +127,23 @@ namespace DeepUnityTutorials
         public override void OnActionReceived(ActionBuffer actionBuffer)
         {
 
-            headJoint.SetTargetAngularVelocity(actionBuffer.ContinuousActions[0] * lowStrengthJointsForce, actionBuffer.ContinuousActions[1] * lowStrengthJointsForce, actionBuffer.ContinuousActions[2] * lowStrengthJointsForce);
-            stomachJoint.SetTargetAngularVelocity(actionBuffer.ContinuousActions[3] * lowStrengthJointsForce, actionBuffer.ContinuousActions[4] * lowStrengthJointsForce, actionBuffer.ContinuousActions[5] * lowStrengthJointsForce);
-            torsoJoint.SetTargetAngularVelocity(actionBuffer.ContinuousActions[6] * lowStrengthJointsForce, actionBuffer.ContinuousActions[7] * lowStrengthJointsForce, actionBuffer.ContinuousActions[8] * lowStrengthJointsForce);
+            headJoint.SetAngularVelocity(actionBuffer.ContinuousActions[0] * lowStrengthJointsForce, actionBuffer.ContinuousActions[1] * lowStrengthJointsForce, actionBuffer.ContinuousActions[2] * lowStrengthJointsForce);
+            stomachJoint.SetAngularVelocity(actionBuffer.ContinuousActions[3] * lowStrengthJointsForce, actionBuffer.ContinuousActions[4] * lowStrengthJointsForce, actionBuffer.ContinuousActions[5] * lowStrengthJointsForce);
+            torsoJoint.SetAngularVelocity(actionBuffer.ContinuousActions[6] * lowStrengthJointsForce, actionBuffer.ContinuousActions[7] * lowStrengthJointsForce, actionBuffer.ContinuousActions[8] * lowStrengthJointsForce);
             
-            leftArmJoint.SetTargetAngularVelocity(actionBuffer.ContinuousActions[9] * lowStrengthJointsForce, actionBuffer.ContinuousActions[10] * lowStrengthJointsForce, actionBuffer.ContinuousActions[11] * lowStrengthJointsForce);
-            leftForearmJoint.SetTargetAngularVelocity(actionBuffer.ContinuousActions[12] * lowStrengthJointsForce, 0f, 0f);
+            leftArmJoint.SetAngularVelocity(actionBuffer.ContinuousActions[9] * lowStrengthJointsForce, actionBuffer.ContinuousActions[10] * lowStrengthJointsForce, actionBuffer.ContinuousActions[11] * lowStrengthJointsForce);
+            leftForearmJoint.SetAngularVelocity(actionBuffer.ContinuousActions[12] * lowStrengthJointsForce, 0f, 0f);
 
-            rightArmJoint.SetTargetAngularVelocity(actionBuffer.ContinuousActions[13] * lowStrengthJointsForce, actionBuffer.ContinuousActions[14] * lowStrengthJointsForce, actionBuffer.ContinuousActions[15] * lowStrengthJointsForce);
-            rightForearmJoint.SetTargetAngularVelocity(actionBuffer.ContinuousActions[16] * lowStrengthJointsForce, 0f, 0f);
+            rightArmJoint.SetAngularVelocity(actionBuffer.ContinuousActions[13] * lowStrengthJointsForce, actionBuffer.ContinuousActions[14] * lowStrengthJointsForce, actionBuffer.ContinuousActions[15] * lowStrengthJointsForce);
+            rightForearmJoint.SetAngularVelocity(actionBuffer.ContinuousActions[16] * lowStrengthJointsForce, 0f, 0f);
 
-            leftLegJoint.SetTargetAngularVelocity(actionBuffer.ContinuousActions[17] * highStrengthJointsForce, actionBuffer.ContinuousActions[18] * highStrengthJointsForce, actionBuffer.ContinuousActions[19] * highStrengthJointsForce);
-            leftShinJoint.SetTargetAngularVelocity(actionBuffer.ContinuousActions[20] * highStrengthJointsForce, 0f, 0f);
-            leftFootJoint.SetTargetAngularVelocity(actionBuffer.ContinuousActions[21] * lowStrengthJointsForce, actionBuffer.ContinuousActions[22] * lowStrengthJointsForce, 0f);
+            leftLegJoint.SetAngularVelocity(actionBuffer.ContinuousActions[17] * highStrengthJointsForce, actionBuffer.ContinuousActions[18] * highStrengthJointsForce, actionBuffer.ContinuousActions[19] * highStrengthJointsForce);
+            leftShinJoint.SetAngularVelocity(actionBuffer.ContinuousActions[20] * highStrengthJointsForce, 0f, 0f);
+            leftFootJoint.SetAngularVelocity(actionBuffer.ContinuousActions[21] * lowStrengthJointsForce, actionBuffer.ContinuousActions[22] * lowStrengthJointsForce, 0f);
             
-            rightLegJoint.SetTargetAngularVelocity(actionBuffer.ContinuousActions[23] * highStrengthJointsForce, actionBuffer.ContinuousActions[24] * highStrengthJointsForce, actionBuffer.ContinuousActions[25] * highStrengthJointsForce);
-            rightShinJoint.SetTargetAngularVelocity(actionBuffer.ContinuousActions[26] * highStrengthJointsForce, 0f, 0f);
-            rightFootJoint.SetTargetAngularVelocity(actionBuffer.ContinuousActions[27] * lowStrengthJointsForce, actionBuffer.ContinuousActions[28] * lowStrengthJointsForce, 0f);
+            rightLegJoint.SetAngularVelocity(actionBuffer.ContinuousActions[23] * highStrengthJointsForce, actionBuffer.ContinuousActions[24] * highStrengthJointsForce, actionBuffer.ContinuousActions[25] * highStrengthJointsForce);
+            rightShinJoint.SetAngularVelocity(actionBuffer.ContinuousActions[26] * highStrengthJointsForce, 0f, 0f);
+            rightFootJoint.SetAngularVelocity(actionBuffer.ContinuousActions[27] * lowStrengthJointsForce, actionBuffer.ContinuousActions[28] * lowStrengthJointsForce, 0f);
 
             AddReward(+0.0025f); // Constant existential reward
             AddReward(headJoint.transform.position.y / 1000f); // reward for keeping the head up

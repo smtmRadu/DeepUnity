@@ -15,15 +15,16 @@ MonoBehaviour:
   behaviourName: HumanWalk
   assetCreated: 1
   observationSize: 142
+  stackedInputsNum: 1
   continuousDim: 29
   discreteDim: 0
-  critic: {fileID: 11400000, guid: 45caf3ddac77afc439a7046b8dbc365d, type: 2}
-  actorContinuousMu: {fileID: 11400000, guid: 76be2df0be9599e4dbd876af95744c32, type: 2}
-  actorContinuousSigma: {fileID: 11400000, guid: 6b43aac55629c7d4eb30bbd0018807b5, type: 2}
-  discriminatorContinuous: {fileID: 11400000, guid: d83cc4482b2549549883d4946c3822a4, type: 2}
+  critic: {fileID: 11400000, guid: 5fea2d74890269e41be5a30aeb8811a9, type: 2}
+  actorContinuousMu: {fileID: 11400000, guid: 8d3a1208143edc14c8ee2382b76d80a3, type: 2}
+  actorContinuousSigma: {fileID: 11400000, guid: 272b39f861079df44884a1e43d3405c0, type: 2}
+  discriminatorContinuous: {fileID: 11400000, guid: 17d1519aa4d64c3499f8671ab3ae27e5, type: 2}
   actorDiscrete: {fileID: 0}
   discriminatorDiscrete: {fileID: 0}
-  config: {fileID: 11400000, guid: abd9a090a9db8c645bbbd6a60511b21e, type: 2}
+  config: {fileID: 11400000, guid: 7e43d9afc497763498e9196d607f21b5, type: 2}
   targetFPS: 50
   inferenceDevice: 0
   trainingDevice: 1
@@ -321,5 +322,5 @@ MonoBehaviour:
       - 0
       shape: 8e000000
   standardDeviation: 0
-  standardDeviationValue: 0.72
+  standardDeviationValue: 1.35
   standardDeviationScale: 1

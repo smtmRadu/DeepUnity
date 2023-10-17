@@ -73,9 +73,9 @@ namespace DeepUnityTutorials
         {
             List<float> ball_info = new List<float>();
             Vector3 pos = ball.localPosition;
-            ball_info.Add(pos.x);
+            ball_info.Add(pos.x / 30f);
             ball_info.Add(pos.y);
-            ball_info.Add(pos.z);
+            ball_info.Add(pos.z / 15f);
             Vector3 vel = ball_rb.velocity.normalized;
             ball_info.Add(vel.x);
             ball_info.Add(vel.y);

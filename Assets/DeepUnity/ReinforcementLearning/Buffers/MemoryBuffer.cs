@@ -106,10 +106,15 @@ namespace DeepUnity
                 sb.Append($" \t| {i.ToString("000")}");
                 sb.Append($" | t: {(frames[i].index).ToString("000")}");
                 sb.Append($" | s[t]: [{frames[i].state.ToArray().ToCommaSeparatedString()}]");
-                sb.Append($" | a[t]: [{frames[i].action_continuous.ToArray().ToCommaSeparatedString()}]");
+                sb.Append($" | a_continuous[t]: [{frames[i].action_continuous?.ToArray().ToCommaSeparatedString()}]");
+                sb.Append($" | a_discrete[t]: [{frames[i].action_discrete?.ToArray().ToCommaSeparatedString()}]");
                 sb.Append($" | r[t]: {frames[i].reward[0].ToString("0.000")}");
-                sb.Append($" | VTarget[t]: {frames[i].value_target[0].ToString("0.000")}");
-                sb.Append($" | A[t]: {frames[i].advantage[0].ToString("0.000")}");
+                if (frames[i].value_target != null)
+                {
+                    sb.Append($" | VTarget[t]: {frames[i].value_target[0].ToString("0.000")}");
+                    sb.Append($" | A[t]: {frames[i].advantage[0].ToString("0.000")}");
+                }
+                
                 
                            
                 sb.Append("\n");

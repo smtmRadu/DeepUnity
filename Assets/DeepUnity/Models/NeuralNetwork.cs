@@ -47,7 +47,7 @@ namespace DeepUnity
             return output;
         }     
         /// <summary>
-        /// Backpropagates the loss derivative and computes the gradients of learnable parameters.
+        /// Backpropagates the loss derivative wrt. output and computes the gradients of learnable parameters.
         /// </summary>
         /// <param name="lossDerivative"></param>
         /// <returns></returns>

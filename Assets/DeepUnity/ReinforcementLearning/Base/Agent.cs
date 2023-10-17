@@ -20,7 +20,7 @@ namespace DeepUnity
         [Tooltip("Number of discrete actions in discrete action space. Actions indexes [0, 1, .. n - 1]. Consider to include a 'NO_ACTION' index also (especially when working heuristically).")]
         [SerializeField, Min(0), HideInInspector] private int discreteActions = 0;
         [Tooltip("Arhitecture of the neural network")]
-        [SerializeField, HideInInspector] private ModelType type = ModelType.NN;
+        [SerializeField, HideInInspector] private ModelType archType = ModelType.NN;
         [Tooltip("Number of hidden layers")]
         [SerializeField, Min(1), HideInInspector] private int numLayers = 2;
         [Tooltip("Number of units in a hidden layer in the model.")]
@@ -28,9 +28,7 @@ namespace DeepUnity
 
         [SerializeField, HideInInspector] public AgentBehaviour model;
         [SerializeField, HideInInspector] public BehaviourType behaviourType = BehaviourType.Learn;
-        [Tooltip("Learning rate of the imitation relative to the learning rate in config file.")]
-        [SerializeField, HideInInspector, Range(0, 1)] public float imitationStrength = 1f;
-     
+
         [Space]
         [SerializeField, HideInInspector, Tooltip("What happens after the episode ends? You can reset the agent's/environment's position and rigidbody automatically using this. OnEpisodeBegin() is called afterwards in any situation.")]
         private OnEpisodeEndType onEpisodeEnd = OnEpisodeEndType.ResetEnvironment;
@@ -73,9 +71,8 @@ namespace DeepUnity
 
             if(behaviourType == BehaviourType.Heuristic && DecisionRequester.decisionPeriod > 1)
             {
-                ConsoleMessage.Warning("In Heuristic mode, Decision Period of the DecisionRequester must be always 1.");
-                EditorApplication.isPlaying = false;
-                return;
+                DecisionRequester.decisionPeriod = 1;
+                ConsoleMessage.Info("Heuristic Mode enabled, Decision Requester's decision period was set to 1");
             }
 
             Time.fixedDeltaTime = 1f / model.targetFPS;
@@ -214,6 +211,8 @@ namespace DeepUnity
 
             // Reset timestep
             Timestep = new TimestepBuffer(++EpisodeStepCount);
+
+            if (PerformanceTrack) PerformanceTrack.stepCount++;
         }
         private void PerformAction()
         {
@@ -345,7 +344,7 @@ namespace DeepUnity
                 return;
             }
 
-            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, stackedInputs, continuousActions, discreteActions, type, numLayers, hidUnits);
+            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, stackedInputs, continuousActions, discreteActions, archType, numLayers, hidUnits);
 
             continuousActions = model.continuousDim;
             discreteActions = model.discreteDim;
@@ -456,7 +455,7 @@ namespace DeepUnity
 
             var script = (Agent)target;
 
-            // Runtime inspector things
+            // Runtime Learn displays
             if (EditorApplication.isPlaying &&        
                 script.behaviourType == BehaviourType.Learn
                 && script.enabled 
@@ -492,12 +491,13 @@ namespace DeepUnity
                 }
                 sb.Append("]");
                 EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
+                EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
 
-                
                 // EditorGUILayout.HelpBox($"Reward [{script.EpsiodeCumulativeReward}]",
                 //                         MessageType.None);
             }
 
+            // Runtime Heuristic displays
             if (EditorApplication.isPlaying &&
                 script.behaviourType == BehaviourType.Heuristic
                 && script.enabled
@@ -525,11 +525,11 @@ namespace DeepUnity
                 }
                 sb.Append("]");
                 EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
-
+                EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
             }
 
 
-            // All fields drawn
+            // On model create field draw
             if (serializedObject.FindProperty("model").objectReferenceValue == null)
             {
                 EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
@@ -546,7 +546,7 @@ namespace DeepUnity
                 Rect propertyFieldRect = GUILayoutUtility.GetRect(0, EditorGUIUtility.singleLineHeight);
                 propertyFieldRect.width = 50; // Adjust the width as needed
 
-                SerializedProperty typeProperty = serializedObject.FindProperty("type");
+                SerializedProperty typeProperty = serializedObject.FindProperty("archType");
                 EditorGUI.BeginDisabledGroup(true);
                 EditorGUI.PropertyField(propertyFieldRect, typeProperty, GUIContent.none);
                 EditorGUI.EndDisabledGroup();
@@ -574,7 +574,7 @@ namespace DeepUnity
 
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.Space(20);
-                if (serializedObject.FindProperty("type").enumValueIndex == (int)ModelType.RNN)
+                if (serializedObject.FindProperty("archType").enumValueIndex == (int)ModelType.RNN)
                     EditorGUILayout.PrefixLabel("Sequence Length");
                 else
                     EditorGUILayout.PrefixLabel("Stacked Inputs");
@@ -601,21 +601,17 @@ namespace DeepUnity
                 EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
             }
 
-          
+         
             EditorGUILayout.PropertyField(serializedObject.FindProperty("model"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("behaviourType"));
-
-            if (script.behaviourType == BehaviourType.Heuristic)
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("imitationStrength"));
-
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("onEpisodeEnd"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("useSensors"));
-            EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
-
-
-           
+            if(script.behaviourType != BehaviourType.Off)
+            {
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("onEpisodeEnd"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("useSensors"));
+            }
+            
+            EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);           
             DrawPropertiesExcluding(serializedObject, drawNow);
-
             serializedObject.ApplyModifiedProperties();
 
            

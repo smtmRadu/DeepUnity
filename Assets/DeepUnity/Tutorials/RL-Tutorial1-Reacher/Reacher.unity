@@ -966,12 +966,11 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 0
   discreteActions: 5
-  type: 0
+  archType: 0
   numLayers: 2
   hidUnits: 64
   model: {fileID: 11400000, guid: 1fb7abdd3ca073f458cb51f2bbebe6fd, type: 2}
   behaviourType: 1
-  imitationStrength: 1
   onEpisodeEnd: 2
   useSensors: 0
   speed: 10
@@ -990,7 +989,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 600
-  decisionPeriod: 2
+  decisionPeriod: 1
   takeActionsBetweenDecisions: 1
 --- !u!65 &2031687196
 BoxCollider:

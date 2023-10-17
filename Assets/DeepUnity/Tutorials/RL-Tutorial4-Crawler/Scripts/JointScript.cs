@@ -10,14 +10,19 @@ namespace DeepUnityTutorials
         {
             joint = GetComponent<ConfigurableJoint>();
             rb = GetComponent<Rigidbody>();
+
+            var jd = new JointDrive() { positionDamper = 1000, maximumForce = 3.402823e+38f };
+            joint.angularXDrive = jd;
+
+            var jd2 = new JointDrive() { positionDamper = 1000, maximumForce = 3.402823e+38f };
+            joint.angularYZDrive = jd2;
         }
-        public void SetTargetAngularVelocity(float x, float y, float z)
+        public void SetAngularVelocity(float x, float y, float z)
         {
             joint.targetAngularVelocity = new Vector3(x, y, z);
         }
     }
 
 }
-
 
 

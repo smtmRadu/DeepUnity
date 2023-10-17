@@ -33,7 +33,9 @@ namespace DeepUnity
 
         private bool TrainFlag { get; set; } = false;
         private int batch_index = 0;
-        private int current_epoch = 0;
+
+        private float epoch_generator_loss = 0f;
+        private float epoch_discriminator_loss = 0f;
 
         private void Awake()
         {
@@ -59,7 +61,7 @@ namespace DeepUnity
                 Instance.ac = agent.model;
                 Instance.hp = agent.model.config;
                 Instance.trainingStatistics = agent.PerformanceTrack;
-                Instance.ac.InitOptimisers(Instance.hp, agent.imitationStrength);
+                Instance.ac.InitOptimisers(Instance.hp);
                 Instance.ac.InitSchedulers(Instance.hp);
                 Instance.train_data = new ExperienceBuffer();
             }
@@ -79,29 +81,25 @@ namespace DeepUnity
                 Instance.ac.Save();
             }
 
-
-            if(TrainFlag)
+            if (!TrainFlag)
+                return;
+     
+            if(batch_index == Instance.states_batches.Count - 1)
             {
-               
-                if(batch_index == Instance.states_batches.Count - 1)
-                {
-                    batch_index = 0;
-                    current_epoch++;
-                }
+                Instance.trainingStatistics?.policyLoss.Append(epoch_generator_loss / batch_index);
+                Instance.trainingStatistics?.valueLoss.Append(epoch_discriminator_loss / batch_index);
+                epoch_generator_loss = 0f;
+                epoch_discriminator_loss = 0f;
 
-                if(current_epoch >= Instance.hp.numEpoch)
-                {
-                    TrainFlag = false;
-                    Instance.ag.enabled = true;
-                    current_epoch = 0;
-                    return;
-                }
-
-
-                TrainOnBatch(Instance.batch_index);
-
-                batch_index++;
+                batch_index = 0;
+                Instance.trainingStatistics.iterations++;
+                if(Instance.hp.shuffleTrainingData) Instance.train_data.Shuffle();
             }
+
+            TrainOnBatch(Instance.batch_index);
+
+            batch_index++;
+            
         }
         private static void Autosave1(PlayModeStateChange state)
         {
@@ -129,8 +127,7 @@ namespace DeepUnity
                     Instance.disc_act_batches = Utils.Split(Instance.train_data.DiscreteActions, Instance.hp.batchSize).Select(x => Tensor.Cat(null, x)).ToList();
 
                 Instance.TrainFlag = true;
-                Instance.ag.enabled = false;
-
+                Instance.ag.behaviourType = BehaviourType.Off;
             }
         }
 
@@ -161,8 +158,8 @@ namespace DeepUnity
 
                 Instance.ac.discriminatorContinuousOptimizer.ClipGradNorm(Instance.hp.gradClipNorm);
                 Instance.ac.discriminatorContinuousOptimizer.Step();
-
-                Instance.trainingStatistics?.valueLoss.Append(loss_fake.Item + loss_real.Item);
+                Instance.epoch_discriminator_loss += loss_fake.Item + loss_real.Item;
+                
                 
 
 
@@ -174,9 +171,10 @@ namespace DeepUnity
                 Loss loss = Loss.BinaryCrossEntropy(DGz, DiscriminatorRealTarget(Instance.hp.batchSize));
                 var generatorLossDiff = Instance.ac.discriminatorContinuous.Backward(loss.Derivative);
                 Instance.ac.actorContinuousMu.Backward(generatorLossDiff);
-                Instance.ac.actorMuOptimizer.Step();
 
-                Instance.trainingStatistics?.policyLoss.Append(loss.Item);
+                Instance.ac.actorMuOptimizer.ClipGradNorm(Instance.hp.gradClipNorm);
+                Instance.ac.actorMuOptimizer.Step();
+                Instance.epoch_generator_loss += loss.Item;
             }
 
             
@@ -184,7 +182,6 @@ namespace DeepUnity
             {
                 Tensor disc_act_batch_real = Instance.disc_act_batches[batch_index];
 
-                Debug.Log(states_batch);
                 Tensor disc_act_batch_fake;
                 Instance.ac.DiscreteForward(states_batch, out disc_act_batch_fake);
 
@@ -201,8 +198,7 @@ namespace DeepUnity
 
                 Instance.ac.discriminatorDiscreteOptimizer.ClipGradNorm(Instance.hp.gradClipNorm);
                 Instance.ac.discriminatorDiscreteOptimizer.Step();
-
-                Instance.trainingStatistics?.valueLoss.Append(loss_fake.Item + loss_real.Item);
+                Instance.epoch_discriminator_loss += loss_fake.Item + loss_real.Item;
 
 
 
@@ -214,8 +210,10 @@ namespace DeepUnity
                 Loss loss = Loss.BinaryCrossEntropy(DGz, DiscriminatorRealTarget(Instance.hp.batchSize));
                 var generatorLossDiff = Instance.ac.discriminatorDiscrete.Backward(loss.Derivative);
                 Instance.ac.actorDiscrete.Backward(generatorLossDiff);
+
+                Instance.ac.actorDiscreteOptimizer.ClipGradNorm(Instance.hp.gradClipNorm);
                 Instance.ac.actorDiscreteOptimizer.Step();
-                Instance.trainingStatistics?.policyLoss.Append(loss.Item);
+                Instance.epoch_generator_loss += loss.Item;
             }
 
         }

@@ -205,7 +205,7 @@ namespace DeepUnityTutorials
         {
             generator.Save();
             discriminator.Save();
-            print("Networks saved");
+            ConsoleMessage.Info("Networks saved");
         }
 
         private enum WhatToDo

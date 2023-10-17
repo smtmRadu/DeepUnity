@@ -216,7 +216,7 @@ GameObject:
   - component: {fileID: 215521139}
   - component: {fileID: 215521138}
   m_Layer: 6
-  m_Name: BlueGoalArea (1)
+  m_Name: PinkGoalArea
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -387,10 +387,10 @@ PrefabInstance:
       addedObject: {fileID: 1205608277}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: cece77c66ae28de47b3c19eaffe73320, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1205608276}
+      addedObject: {fileID: 1205608275}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: cece77c66ae28de47b3c19eaffe73320, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1205608275}
+      addedObject: {fileID: 1205608276}
   m_SourcePrefab: {fileID: 100100000, guid: cece77c66ae28de47b3c19eaffe73320, type: 3}
 --- !u!64 &740616958
 MeshCollider:
@@ -557,14 +557,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   spaceSize: 2
+  stackedInputs: 1
   continuousActions: 2
   discreteActions: 0
-  model: {fileID: 11400000, guid: babfe5f9bd5798b4893962a6c101cc88, type: 2}
+  archType: 0
+  numLayers: 2
+  hidUnits: 64
+  model: {fileID: 11400000, guid: 2b2876225ce71754bbc9326a09938ed5, type: 2}
   behaviourType: 2
+  imitationStrength: 1
   onEpisodeEnd: 1
   useSensors: 1
   speed: 5000
-  rotationSpeed: 5000
+  rotationSpeed: 3000
   teammate: {fileID: 1205608276}
   type: 0
   team: 0
@@ -581,8 +586,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 0
-  decisionPeriod: 1
-  takeActionsBetweenDecisions: 0
+  decisionPeriod: 5
+  takeActionsBetweenDecisions: 1
 --- !u!1001 &1111911721
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -658,13 +663,10 @@ PrefabInstance:
       addedObject: {fileID: 1544481190}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 54a49811650fbbd48a49be1a498e7547, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1544481189}
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 54a49811650fbbd48a49be1a498e7547, type: 3}
-      insertIndex: -1
       addedObject: {fileID: 1544481188}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 54a49811650fbbd48a49be1a498e7547, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1544481191}
+      addedObject: {fileID: 1544481189}
   m_SourcePrefab: {fileID: 100100000, guid: 54a49811650fbbd48a49be1a498e7547, type: 3}
 --- !u!1 &1157186959 stripped
 GameObject:
@@ -768,14 +770,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   spaceSize: 2
+  stackedInputs: 1
   continuousActions: 2
   discreteActions: 0
-  model: {fileID: 11400000, guid: babfe5f9bd5798b4893962a6c101cc88, type: 2}
+  archType: 0
+  numLayers: 2
+  hidUnits: 64
+  model: {fileID: 11400000, guid: 2b2876225ce71754bbc9326a09938ed5, type: 2}
   behaviourType: 2
+  imitationStrength: 1
   onEpisodeEnd: 1
   useSensors: 1
   speed: 5000
-  rotationSpeed: 5000
+  rotationSpeed: 3000
   teammate: {fileID: 1544481189}
   type: 0
   team: 1
@@ -792,8 +799,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 0
-  decisionPeriod: 1
-  takeActionsBetweenDecisions: 0
+  decisionPeriod: 5
+  takeActionsBetweenDecisions: 1
 --- !u!1 &1205608269 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: cece77c66ae28de47b3c19eaffe73320, type: 3}
@@ -896,14 +903,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   spaceSize: 50
+  stackedInputs: 1
   continuousActions: 3
   discreteActions: 0
-  model: {fileID: 11400000, guid: babfe5f9bd5798b4893962a6c101cc88, type: 2}
+  archType: 0
+  numLayers: 2
+  hidUnits: 64
+  model: {fileID: 11400000, guid: 2b2876225ce71754bbc9326a09938ed5, type: 2}
   behaviourType: 2
+  imitationStrength: 1
   onEpisodeEnd: 1
   useSensors: 1
   speed: 5000
-  rotationSpeed: 5000
+  rotationSpeed: 3000
   teammate: {fileID: 914492865}
   type: 1
   team: 0
@@ -920,8 +932,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 0
-  decisionPeriod: 1
-  takeActionsBetweenDecisions: 0
+  decisionPeriod: 5
+  takeActionsBetweenDecisions: 1
 --- !u!1 &1256562349
 GameObject:
   m_ObjectHideFlags: 0
@@ -1480,14 +1492,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   spaceSize: 50
+  stackedInputs: 1
   continuousActions: 3
   discreteActions: 0
-  model: {fileID: 11400000, guid: babfe5f9bd5798b4893962a6c101cc88, type: 2}
+  archType: 0
+  numLayers: 2
+  hidUnits: 64
+  model: {fileID: 11400000, guid: 2b2876225ce71754bbc9326a09938ed5, type: 2}
   behaviourType: 2
+  imitationStrength: 1
   onEpisodeEnd: 1
   useSensors: 1
   speed: 5000
-  rotationSpeed: 5000
+  rotationSpeed: 3000
   teammate: {fileID: 1157186966}
   type: 1
   team: 1
@@ -1504,95 +1521,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 0
-  decisionPeriod: 1
-  takeActionsBetweenDecisions: 0
---- !u!114 &1544481191
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1544481182}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  startedAt: ' - '
-  finishedAt: ' - '
-  trainingSessionTime: ' - '
-  policyUpdateSecondsElapsed: 0
-  inferenceSecondsElapsed: 0
-  inferenceTime: ' - '
-  inferenceTimePerAgent: ' - '
-  policyUpdateTime: ' - '
-  policyUpdateTimePerIteration: ' - '
-  inferenceTimeRatio: '- / -'
-  policyUpdateTimeRatio: '- / -'
-  episodeCount: 0
-  stepCount: 0
-  iterations: 0
-  parallelAgents: 0
-  episodeReward:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  episodeLength:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  policyLoss:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  valueLoss:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  learningRate:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  epsilon:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
+  decisionPeriod: 5
+  takeActionsBetweenDecisions: 1
 --- !u!1 &1657343856
 GameObject:
   m_ObjectHideFlags: 0
@@ -1771,7 +1701,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1741984443}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 78.4, y: -53, z: -38.5}
+  m_LocalPosition: {x: 78.4, y: -28.7, z: -38.5}
   m_LocalScale: {x: 4187.3345, y: 37.2279, z: 2869.5078}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1857,10 +1787,10 @@ PrefabInstance:
       addedObject: {fileID: 914492866}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 9cda5d87600994f4ea74e68ebe230b16, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 914492865}
+      addedObject: {fileID: 914492864}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 9cda5d87600994f4ea74e68ebe230b16, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 914492864}
+      addedObject: {fileID: 914492865}
   m_SourcePrefab: {fileID: 100100000, guid: 9cda5d87600994f4ea74e68ebe230b16, type: 3}
 --- !u!1 &1801920439
 GameObject:
@@ -2035,10 +1965,10 @@ PrefabInstance:
       addedObject: {fileID: 1157186967}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 0ca4b1a2f54dfb549ba4ff2c23b84008, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1157186966}
+      addedObject: {fileID: 1157186965}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 0ca4b1a2f54dfb549ba4ff2c23b84008, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1157186965}
+      addedObject: {fileID: 1157186966}
   m_SourcePrefab: {fileID: 100100000, guid: 0ca4b1a2f54dfb549ba4ff2c23b84008, type: 3}
 --- !u!1 &1831887710
 GameObject:
@@ -2355,12 +2285,12 @@ Transform:
   - {fileID: 1157186960}
   - {fileID: 914492859}
   - {fileID: 1205608270}
+  - {fileID: 1436403461}
+  - {fileID: 215521137}
   - {fileID: 1843261841}
   - {fileID: 1256562350}
-  - {fileID: 1436403461}
   - {fileID: 1363399622}
   - {fileID: 871723862}
-  - {fileID: 215521137}
   m_Father: {fileID: 0}
   m_RootOrder: 4
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}

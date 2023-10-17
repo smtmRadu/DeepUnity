@@ -407,11 +407,11 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 2
   discreteActions: 0
-  type: 0
+  archType: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 5b7dc6b5a708abe469e686b052399a75, type: 2}
-  behaviourType: 2
+  model: {fileID: 11400000, guid: f920b9c200f26e548b7f6043ea282e7a, type: 2}
+  behaviourType: 1
   imitationStrength: 1
   onEpisodeEnd: 2
   useSensors: 0
@@ -428,7 +428,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d26371695edfbcd4580ca6f6048d885d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxStep: 5000
+  maxStep: 0
   decisionPeriod: 1
   takeActionsBetweenDecisions: 0
 --- !u!54 &742690639
@@ -458,7 +458,7 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
---- !u!114 &742690645
+--- !u!114 &742690642
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -623,7 +623,7 @@ PrefabInstance:
       addedObject: {fileID: 742690637}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 21d76b183ef818740a5fcb147a81dcab, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 742690645}
+      addedObject: {fileID: 742690642}
   m_SourcePrefab: {fileID: 100100000, guid: 21d76b183ef818740a5fcb147a81dcab, type: 3}
 --- !u!1 &1198115734 stripped
 GameObject:
@@ -647,7 +647,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 54ee1ab4e5f587a4abd7ff2e530f4c87, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  noise: 0
+  noise: 50
 --- !u!135 &1198115737
 SphereCollider:
   m_ObjectHideFlags: 0

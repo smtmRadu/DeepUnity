@@ -148,10 +148,7 @@ namespace DeepUnity
                     throw new ArgumentException("RNN was not introduced yet to RL");
             }
 
-            static Activation CreateActivation()
-            {
-                return new LeakyReLU();
-            }
+            static Activation CreateActivation() => new LeakyReLU();
 
             static IModule[] CreateHiddenLayers(int numLayers, int hidUnits, InitType INIT_W, InitType INIT_B)
             {
@@ -183,6 +180,12 @@ namespace DeepUnity
                 {
                     item.device = device;
                 }
+
+                learnables = discriminatorContinuous.Parameters();
+                foreach (var item in learnables)
+                {
+                    item.device = device;
+                }
             }
 
             if (IsUsingDiscreteActions)
@@ -191,7 +194,13 @@ namespace DeepUnity
                 foreach (var item in learnables)
                 {
                     item.device = device;
-                }            
+                }
+
+                learnables = discriminatorDiscrete.Parameters();
+                foreach (var item in learnables)
+                {
+                    item.device = device;
+                }
             }
         }
         public void SetCriticDevice(Device device)
@@ -205,7 +214,7 @@ namespace DeepUnity
 
             // Due to benchmark performances, critic last dense (which has the output features = 1), is working faster on CPU.
         }
-        public void InitOptimisers(Hyperparameters hp, float imitationStrength = 1f)
+        public void InitOptimisers(Hyperparameters hp)
         {
             if (criticOptimizer != null)
                 return;
@@ -229,7 +238,7 @@ namespace DeepUnity
                 }
                 actorMuOptimizer = new Adam(actorContinuousMu.Parameters(), hp.learningRate);
                 actorSigmaOptimizer = new Adam(actorContinuousSigma.Parameters(), hp.learningRate);
-                discriminatorContinuousOptimizer = new Adam(discriminatorContinuous.Parameters(), hp.learningRate * imitationStrength);
+                discriminatorContinuousOptimizer = new Adam(discriminatorContinuous.Parameters(), hp.learningRate);
             }
            
             if(IsUsingDiscreteActions)
@@ -241,7 +250,7 @@ namespace DeepUnity
                     return;
                 }
                 actorDiscreteOptimizer = new Adam(actorDiscrete.Parameters(), hp.learningRate);
-                discriminatorDiscreteOptimizer = new Adam(discriminatorDiscrete.Parameters(), hp.learningRate * imitationStrength);
+                discriminatorDiscreteOptimizer = new Adam(discriminatorDiscrete.Parameters(), hp.learningRate);
             
             }
         }
@@ -257,8 +266,11 @@ namespace DeepUnity
                 return;
             }
 
-            int step_size = hp.learningRateSchedule ? hp.schedulerStepSize : 1_000_000;
-            float gamma = hp.learningRateSchedule ? hp.schedulerDecay : 1f;
+            // LR 0 = initialLR * (gamma^n) => gamma = nth-root(initialLr);
+            int total_epochs = (int)hp.maxSteps / hp.bufferSize * hp.numEpoch;
+            int step_size = 1;
+            float gamma = Mathf.Pow(hp.learningRate, 1f / total_epochs);
+
 
             criticScheduler = new LRScheduler(criticOptimizer, step_size, gamma);
 
@@ -434,10 +446,10 @@ namespace DeepUnity
         {
             if(!assetCreated)
             {
-                ConsoleMessage.Warning("Cannot save the Behaviour because it requires compilation first.");
+                ConsoleMessage.Warning("Cannot save the Behaviour because it requires compilation first");
             }
 
-            ConsoleMessage.Info($"Agent behaviour <b><i>{behaviourName}</i></b> autosaved.");
+            ConsoleMessage.Info($"Agent behaviour <b><i>{behaviourName}</i></b> autosaved");
 
             critic.Save(); 
             actorContinuousMu?.Save();

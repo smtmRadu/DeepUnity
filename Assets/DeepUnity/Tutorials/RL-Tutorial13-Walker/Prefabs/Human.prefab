@@ -99,7 +99,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 10.5
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -448,7 +448,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 13.1
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -712,7 +712,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 3.25
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -976,7 +976,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 0.65
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -1010,7 +1010,7 @@ SphereCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 3
   m_Radius: 0.4456545
   m_Center: {x: 0.00000032782557, y: 0.0000009536743, z: -0.00000014901161}
@@ -1142,7 +1142,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 8.22
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -1339,7 +1339,7 @@ Transform:
   m_Children:
   - {fileID: 834703531598327492}
   m_Father: {fileID: 0}
-  m_RootOrder: 0
+  m_RootOrder: 4
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &4374702432847661853
 MonoBehaviour:
@@ -1353,8 +1353,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d26371695edfbcd4580ca6f6048d885d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxStep: 0
-  decisionPeriod: 3
+  maxStep: 3000
+  decisionPeriod: 2
   takeActionsBetweenDecisions: 1
 --- !u!114 &546248161663639523
 MonoBehaviour:
@@ -1363,23 +1363,25 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2845474860398019253}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8af86a4dd5ffc89499f334413dd02930, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   spaceSize: 142
+  stackedInputs: 1
   continuousActions: 29
   discreteActions: 0
+  archType: 0
   numLayers: 2
-  hidUnits: 256
-  model: {fileID: 11400000, guid: 74d0e1e16777670448543611e389828c, type: 2}
+  hidUnits: 128
+  model: {fileID: 11400000, guid: 62b8854381f261a43b4c21d6b7c486eb, type: 2}
   behaviourType: 2
   imitationStrength: 1
   onEpisodeEnd: 1
   useSensors: 0
-  highStrengthJointsForce: 1000
-  lowStrengthJointsForce: 600
+  highStrengthJointsForce: 30
+  lowStrengthJointsForce: 15
   headJoint: {fileID: 8802758777195985044}
   stomachJoint: {fileID: 2275825762565441426}
   torsoJoint: {fileID: 6176533643580391218}
@@ -1496,7 +1498,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 4.75
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -1762,7 +1764,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 10.5
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -2029,7 +2031,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 20.1
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -2180,7 +2182,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 1.43
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -2443,7 +2445,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 4.75
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -2710,7 +2712,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 13.7
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -2976,7 +2978,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 1.87
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -3242,7 +3244,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 1.87
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -3507,7 +3509,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 1.43
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -3768,7 +3770,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 0.65
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -3802,7 +3804,7 @@ SphereCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 3
   m_Radius: 0.44565463
   m_Center: {x: -0.00000062584877, y: 0.0000009536743, z: -0.00000014901161}
@@ -3933,7 +3935,7 @@ Rigidbody:
   serializedVersion: 4
   m_Mass: 3.25
   m_Drag: 0
-  m_AngularDrag: 0.05
+  m_AngularDrag: 0
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}

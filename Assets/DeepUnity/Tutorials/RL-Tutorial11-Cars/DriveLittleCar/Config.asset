@@ -12,11 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5970f7530cba1f0499a4a3dbe7d27f96, type: 3}
   m_Name: Config
   m_EditorClassIdentifier: 
+  maxSteps: 1000000000
   learningRate: 0.0003
   gradClipNorm: 0.5
+  batchSize: 500
+  bufferSize: 9000
   numEpoch: 8
-  batchSize: 1000
-  bufferSize: 16000
   normalizeAdvantages: 1
   shuffleTrainingData: 1
   learningRateSchedule: 0
@@ -29,5 +30,5 @@ MonoBehaviour:
   lambda: 0.95
   earlyStopping: 0
   targetKL: 0.015
-  timescale: 1
+  timescale: 20
   debug: 0

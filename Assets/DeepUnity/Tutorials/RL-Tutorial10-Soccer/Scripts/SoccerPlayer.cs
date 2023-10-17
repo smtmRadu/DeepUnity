@@ -5,7 +5,6 @@ namespace DeepUnityTutorials
 {
     public class SoccerPlayer : Agent
     {
-        [Header("Properties")]
         [SerializeField] public float speed = 5000f;
         [SerializeField] public float rotationSpeed = 5000f;
         [SerializeField] private SoccerPlayer teammate;
@@ -43,6 +42,7 @@ namespace DeepUnityTutorials
 
         public override void OnActionReceived(ActionBuffer actionBuffer)
         {
+
             rb.AddForce(new Vector3(actionBuffer.ContinuousActions[0], 0, actionBuffer.ContinuousActions[1]) * speed);
             rb.AddTorque(new Vector3(0, actionBuffer.ContinuousActions[2] * rotationSpeed, 0));
 

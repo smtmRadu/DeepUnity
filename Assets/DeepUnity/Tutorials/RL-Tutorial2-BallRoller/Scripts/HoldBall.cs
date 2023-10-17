@@ -16,7 +16,7 @@ namespace DeepUnityTutorials
         {
             // 10 observations
             sensorBuffer.AddObservation(transform.rotation.normalized);
-            sensorBuffer.AddObservation(ball.velocity.normalized);
+            sensorBuffer.AddObservation(ball.velocity);
             sensorBuffer.AddObservation(ball.gameObject.transform.position - transform.position);
         }
         public override void OnActionReceived(ActionBuffer actionBuffer)
@@ -25,21 +25,16 @@ namespace DeepUnityTutorials
             float xRot = actionBuffer.ContinuousActions[0];
             float zRot = actionBuffer.ContinuousActions[1];
 
-            // if (transform.rotation.x > -0.25f && transform.rotation.x < 0.25f)
             transform.Rotate(new Vector3(1, 0, 0), xRot * rotationSpeed);
-
-            //if (transform.rotation.z > -0.25f && transform.rotation.z < 0.25f)
             transform.Rotate(new Vector3(0, 0, 1), zRot * rotationSpeed);
 
             if (ball.gameObject.transform.position.y < transform.position.y)
             {
-                SetReward(-1f);
-
                 EndEpisode();
             }
             else
             {
-                SetReward(0.1f);
+                SetReward(0.025f);
             }
         }
 

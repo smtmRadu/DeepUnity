@@ -13,7 +13,7 @@ namespace DeepUnityTutorials
 
         [SerializeField] float outrange = 10f;
         Vector3 initialPosition;
-        private void Awake()
+        public override void Awake()
         {
             base.Awake();
             selfrb = GetComponent<Rigidbody>();

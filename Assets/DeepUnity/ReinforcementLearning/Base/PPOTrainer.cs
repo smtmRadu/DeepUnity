@@ -8,8 +8,9 @@ using System.Diagnostics;
 namespace DeepUnity
 {
     /// <summary>
-    /// https://fse.studenttheses.ub.rug.nl/25709/1/mAI_2021_BickD.pdf
-    /// https://link.springer.com/article/10.1007/BF00992696
+    /// [1] https://fse.studenttheses.ub.rug.nl/25709/1/mAI_2021_BickD.pdf
+    /// [2] https://link.springer.com/article/10.1007/BF00992696
+    /// [3] https://ieeexplore.ieee.org/document/9520424
     /// </summary>
     public sealed class PPOTrainer : MonoBehaviour
     {
@@ -52,7 +53,7 @@ namespace DeepUnity
                 if (Instance.statisticsTrack != null)
                 {
                     Instance.statisticsTrack.parallelAgents = Instance.parallelAgents.Count;
-                    Instance.statisticsTrack.stepCount += Instance.hp.bufferSize * parallelAgents.Count;
+                    // Instance.statisticsTrack.stepCount += Instance.hp.bufferSize * parallelAgents.Count;
                     Instance.statisticsTrack.iterations++;
                     Instance.statisticsTrack.policyUpdateSecondsElapsed += (float)clock.Elapsed.TotalSeconds;
                     Instance.statisticsTrack.policyUpdateTime = $"{(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) % 60)} sec";
@@ -74,10 +75,8 @@ namespace DeepUnity
             Time.timeScale = Instance.hp.timescale;
 
             // Check if max steps reached
-            if(Instance.statisticsTrack && Instance.statisticsTrack.stepCount >= Instance.hp.maxSteps)
-            {
-                EditorApplication.isPlaying = false;
-            }
+            if (Instance.statisticsTrack && Instance.statisticsTrack.stepCount >= Instance.hp.maxSteps)
+                EndTrainingSession($"Max Steps reached ({Instance.hp.maxSteps})");
         }
         private void Update()
         {
@@ -171,6 +170,12 @@ namespace DeepUnity
                 
         }
         private static void Autosave2(PauseState state) => Instance.ac.Save();
+        private static void EndTrainingSession(string reason)
+        {
+            ConsoleMessage.Info("Training Session Ended! " + reason);
+            Instance.ac.Save();
+            EditorApplication.isPlaying = false;
+        }
       
 
         // PPO algorithm
@@ -185,7 +190,6 @@ namespace DeepUnity
             ac.SetActorDevice(ac.trainingDevice);
             for (int epoch_index = 0; epoch_index < hp.numEpoch; epoch_index++)
             {
-
                 // shuffle the dataset
                 if (hp.shuffleTrainingData && epoch_index > 0)
                     train_data.Shuffle();
@@ -199,37 +203,61 @@ namespace DeepUnity
                 List<Tensor[]> disc_act_batches = Utils.Split(train_data.DiscreteActions, hp.batchSize);
                 List<Tensor[]> disc_probs_batches = Utils.Split(train_data.DiscreteProbabilities, hp.batchSize);
 
+                // θ new. New probabilities of the policy used for early stopping/rollback
+                Tensor cont_probs_new = null;
+                Tensor cont_probs_old = null;
+                Tensor disc_probs_new = null;
+                Tensor disc_probs_old = null;
+              
+
                 for (int b = 0; b < states_batches.Count; b++)
                 {
                     Tensor states_batch = Tensor.Cat(null, states_batches[b]);
                     Tensor advantages_batch = Tensor.Cat(null, advantages_batches[b]);
                     Tensor value_targets_batch = Tensor.Cat(null, value_targets_batches[b]);
-
+                   
                     UpdateCritic(states_batch, value_targets_batch);
 
                     if (Instance.ac.IsUsingContinuousActions)
                     {
                         Tensor cont_act_batch = Tensor.Cat(null, cont_act_batches[b]);
-                        Tensor cont_probs_batch = Tensor.Cat(null, cont_probs_batches[b]);
+                        cont_probs_old = Tensor.Cat(null, cont_probs_batches[b]);
                         UpdateContinuousNetwork(
                             states_batch,
                             advantages_batch,
                             cont_act_batch,
-                            cont_probs_batch);
+                            cont_probs_old,
+                            out cont_probs_new);
                     }
                     if (Instance.ac.IsUsingDiscreteActions)
                     {
                         Tensor disc_act_batch = Tensor.Cat(null, disc_act_batches[b]);
-                        Tensor disc_prob_batch = Tensor.Cat(null, disc_probs_batches[b]);
+                        disc_probs_old = Tensor.Cat(null, disc_probs_batches[b]);
                         UpdateDiscreteNetwork(
                             states_batch,
                             advantages_batch,
                             disc_act_batch,
-                            disc_prob_batch);
-
-                        
+                            disc_probs_old,
+                            out disc_probs_new);                
                     }
+
                 }
+
+                // Check KL Divergence based on the last Minibatch (see [3])
+                if (Instance.hp.KLDivergence != KLType.Off)
+                {
+                    // Though even if i should stop for them separatelly (i mean i can let for one to continue the training if kl is small) i will let it simple..
+                    float kldiv_cont = Instance.ac.IsUsingContinuousActions ? ComputeKLDivergence(cont_probs_new, cont_probs_old) : 0;
+                    float kldiv_disc = Instance.ac.IsUsingDiscreteActions ? ComputeKLDivergence(disc_probs_new, disc_probs_old) : 0;
+
+                    if (kldiv_cont > Instance.hp.targetKL || kldiv_disc > Instance.hp.targetKL)
+                    {
+                        ConsoleMessage.Info($"Early Stopping Triggered ({Instance.hp.KLDivergence})");
+                        break;
+                    }
+                    // for rollback is the same but we need to cache the old state of the network....
+                }
+
 
                 // Step schedulers after each epoch
                 ac.criticScheduler.Step();
@@ -275,7 +303,7 @@ namespace DeepUnity
         /// <paramref name="actions"/> - <em>a</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
         /// <paramref name="piOld"/> - <em>πθold(a|s) </em>| Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
         /// </summary>
-        private void UpdateContinuousNetwork(Tensor states, Tensor advantages, Tensor actions, Tensor piOld)
+        private void UpdateContinuousNetwork(Tensor states, Tensor advantages, Tensor actions, Tensor piOld, out Tensor pi)
         {
             int batch_size = states.Rank == 2 ? states.Size(0) : 1;
             int continuous_actions_num = actions.Size(-1);
@@ -284,7 +312,7 @@ namespace DeepUnity
             Tensor mu;
             Tensor sigma;
             Instance.ac.ContinuousForward(states, out mu, out sigma);
-            Tensor pi = Tensor.Probability(actions, mu, sigma);
+            pi = Tensor.Probability(actions, mu, sigma);
 
             Tensor ratio = pi / piOld; // a.k.a pₜ(θ) = πθ(a|s) / πθold(a|s)
 
@@ -329,11 +357,14 @@ namespace DeepUnity
             // δ-LClip / δπθ(a|s)  (20) Bick.D
             Tensor dmLClip_dPi = -1f * (dmindx * advantages + dmindy * advantages * dclipdx) / piOld;
 
+            if(dmLClip_dPi.Contains(float.NaN)) return;
+            
 
             // Entropy bonus added if σ is trainable (entropy is just a constant so no need really for differentiation)
             if (ac.standardDeviation == StandardDeviationType.Trainable)
-            {          
-                Tensor H_Entropy = Tensor.Log(MathF.Sqrt(2f * MathF.PI * MathF.E) * sigma);
+            {
+                const float sqrt_2pie = 4.132731f;
+                Tensor H_Entropy = Tensor.Log(sqrt_2pie * sigma); // sqrt(2 * PI * E) = 4.132731
                 dmLClip_dPi -= H_Entropy * hp.beta;
             }
 
@@ -350,7 +381,7 @@ namespace DeepUnity
 
             if(ac.standardDeviation == StandardDeviationType.Trainable)
             {
-                // δπθ(a|s) / δσ = πθ(a|s) * (x - μ)^2 / σ^3    (Simple statistical gradient-following for connectionst Reinforcement Learning (pag 14)
+                // δπθ(a|s) / δσ = πθ(a|s) * ((x - μ)^2 - σ^2) / σ^3    (Simple statistical gradient-following for connectionst Reinforcement Learning (pag 14))
                 Tensor dPi_dSigma = pi * ((actions - mu).Pow(2) - sigma.Pow(2)) / sigma.Pow(3);
 
                 // δ-LClip / δμ = (δ-LClip / δπθ(a|s)) * (δπθ(a|s) / δσ)
@@ -369,12 +400,11 @@ namespace DeepUnity
         /// <paramref name="actions"/> - <em>a</em> | Tensor (<em>Batch Size, Discrete Actions</em>) - One Hot Vectors<br></br> 
         /// <paramref name="piOld"/> - <em>πθold(a|s) </em>| Tensor (<em>Batch Size, Discrete Actions</em>) <br></br>
         /// </summary>
-        private void UpdateDiscreteNetwork(Tensor states, Tensor advantages, Tensor actions, Tensor piOld)
+        private void UpdateDiscreteNetwork(Tensor states, Tensor advantages, Tensor actions, Tensor piOld, out Tensor pi)
         {
             int batch_size = states.Rank == 2 ? states.Size(0) : 1;
             int discrete_actions_num = piOld.Size(-1);
 
-            Tensor pi;
             Instance.ac.DiscreteForward(states, out pi);
 
             Tensor ratio = pi / piOld;
@@ -434,7 +464,21 @@ namespace DeepUnity
             ac.actorDiscreteOptimizer.ClipGradNorm(hp.gradClipNorm);
             ac.actorDiscreteOptimizer.Step();
         }
-
+        /// <summary>
+        /// DKL(θ, θold) = DKL(πθ(•|s), πθold(•|s)) <br></br>
+        /// DKL(p||q) = sum(p * ln(p/q))
+        /// <br></br>
+        /// Copmutes the KL Divergence between and the old and the new policy.
+        /// </summary>
+        /// <param name="probs_new">πθ(a|s)</param>
+        /// <param name="probs_old">πθold(a|s)</param>
+        private static float ComputeKLDivergence(Tensor probs_new, Tensor probs_old)
+        {
+            Tensor KL = probs_new * Tensor.Log(probs_new / probs_old);
+            KL = KL.Mean(0);
+            KL = KL.Sum(0);
+            return KL[0];
+        }
     }
 
     [CustomEditor(typeof(PPOTrainer), true), CanEditMultipleObjects]

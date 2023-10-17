@@ -15,12 +15,16 @@ MonoBehaviour:
   behaviourName: DriveLittleCar
   assetCreated: 1
   observationSize: 13
+  stackedInputsNum: 0
   continuousDim: 3
   discreteDim: 0
   critic: {fileID: 11400000, guid: 7f2707570dac46c418a14b148b639633, type: 2}
   actorContinuousMu: {fileID: 11400000, guid: 698e55a20ec77774ab17b15f31fe45ba, type: 2}
   actorContinuousSigma: {fileID: 11400000, guid: d45d92ba47434e244926beef94e0fd8f, type: 2}
+  discriminatorContinuous: {fileID: 11400000, guid: c68ad992daee2b0499fcd838da9e305c, type: 2}
   actorDiscrete: {fileID: 0}
+  discriminatorDiscrete: {fileID: 0}
+  config: {fileID: 11400000, guid: 0f52f4bdfee9b094b90847a771b97575, type: 2}
   targetFPS: 50
   inferenceDevice: 0
   trainingDevice: 1
@@ -60,5 +64,5 @@ MonoBehaviour:
       - 0
       shape: 0d000000
   standardDeviation: 1
-  standardDeviationValue: 1
+  standardDeviationValue: 0.17
   standardDeviationScale: 1

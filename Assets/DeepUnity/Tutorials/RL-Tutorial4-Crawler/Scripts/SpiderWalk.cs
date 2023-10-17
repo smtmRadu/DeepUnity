@@ -86,18 +86,18 @@ namespace DeepUnityTutorials
 
         public override void OnActionReceived(ActionBuffer actionBuffer)
         {
-            thigh1.SetTargetAngularVelocity(actionBuffer.ContinuousActions[0] * speed, actionBuffer.ContinuousActions[1] * speed, 0);
-            thigh2.SetTargetAngularVelocity(actionBuffer.ContinuousActions[2] * speed, actionBuffer.ContinuousActions[3] * speed, 0);
-            thigh3.SetTargetAngularVelocity(actionBuffer.ContinuousActions[4] * speed, actionBuffer.ContinuousActions[5] * speed, 0);
-            thigh4.SetTargetAngularVelocity(actionBuffer.ContinuousActions[6] * speed, actionBuffer.ContinuousActions[7] * speed, 0);
+            thigh1.SetAngularVelocity(actionBuffer.ContinuousActions[0] * speed, actionBuffer.ContinuousActions[1] * speed, 0);
+            thigh2.SetAngularVelocity(actionBuffer.ContinuousActions[2] * speed, actionBuffer.ContinuousActions[3] * speed, 0);
+            thigh3. SetAngularVelocity(actionBuffer.ContinuousActions[4] * speed, actionBuffer.ContinuousActions[5] * speed, 0);
+            thigh4.SetAngularVelocity(actionBuffer.ContinuousActions[6] * speed, actionBuffer.ContinuousActions[7] * speed, 0);
 
-            shin1.SetTargetAngularVelocity(actionBuffer.ContinuousActions[8] * speed, 0, 0);
-            shin2.SetTargetAngularVelocity(actionBuffer.ContinuousActions[9] * speed, 0, 0);
-            shin3.SetTargetAngularVelocity(actionBuffer.ContinuousActions[10] * speed, 0, 0);
-            shin4.SetTargetAngularVelocity(actionBuffer.ContinuousActions[11] * speed, 0, 0);
+            shin1.SetAngularVelocity(actionBuffer.ContinuousActions[8] * speed, 0, 0);
+            shin2.SetAngularVelocity(actionBuffer.ContinuousActions[9] * speed, 0, 0);
+            shin3.SetAngularVelocity(actionBuffer.ContinuousActions[10] * speed, 0, 0);
+            shin4.SetAngularVelocity(actionBuffer.ContinuousActions[11] * speed, 0, 0);
 
             // AddReward(+0.0005f);
-            AddReward(transform.localPosition.y / 500f);
+            AddReward(transform.localPosition.y / 1000f);
             AddReward(Mathf.Clamp(1f / Vector3.Distance(transform.position, target.position), 0, 1f) / 500f);
 
             // Point the arrow towards the target
@@ -122,8 +122,12 @@ namespace DeepUnityTutorials
 
         private void OnCollisionEnter(Collision collision)
         {
-            AddReward(-1f);
-            EndEpisode();
+            if(collision.collider.CompareTag("Floor"))
+            {
+                AddReward(-1f);
+                EndEpisode();
+            }
+          
         }
 
         private void OnTriggerEnter(Collider other)

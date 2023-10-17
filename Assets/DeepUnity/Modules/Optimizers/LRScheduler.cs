@@ -10,9 +10,9 @@ namespace DeepUnity
         private int currentEpoch;
 
         /// <summary>
-        /// Decays the learning rate of each parameter group by gamma every step_size epochs. 
+        /// Decays the learning rate of each parameter group by <paramref name="gamma"/> every <paramref name="step_size"/> epochs. 
         /// Notice that such decay can happen simultaneously with other changes to the learning rate from outside this schedule (see Adagrad)
-        /// When last_epoch=-1, sets initial lr as lr.
+        /// When current_epoch = <paramref name="last_epoch"/>, learning rate is reinitialized.
         /// </summary>
         /// <param name="optimizer"></param>
         /// <param name="step_size">Period of learning rate decay.</param>
@@ -20,6 +20,11 @@ namespace DeepUnity
         /// <param name="last_epoch">The index of last epoch. </param>
  	    public LRScheduler(Optimizer optimizer, int step_size, float gamma = 0.1f, int last_epoch = -1)
         {
+            if (step_size <= 0)
+                throw new System.ArgumentException("Step size cannot be equal or less 0");
+            if (gamma <= 0f || gamma >= 1f)
+                throw new System.ArgumentException("Gamma must be in (0, 1) range.");
+
             this.optimizer = optimizer;
             initialLR = optimizer.learningRate;
             stepSize = step_size;

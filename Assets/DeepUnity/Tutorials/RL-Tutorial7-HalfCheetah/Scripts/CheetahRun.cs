@@ -9,19 +9,22 @@ namespace DeepUnityTutorials
         [Header("Properties")]
         public float jointsSpeed = 2000f;
         [SerializeField] List<HingeJoint2D> joints;
-
-        float lastHeadX = 0f;
+        public GroundContact2D contact1;
+        public GroundContact2D contact2;
 
         public override void CollectObservations(SensorBuffer sensorBuffer)
         {
             // 15 info from raysensor
             // 14 info from joints
+            // 2 bool values
             foreach (var item in joints)
             {
                 sensorBuffer.AddObservation(item.jointAngle / item.limits.max);
                 sensorBuffer.AddObservation(item.jointSpeed / jointsSpeed);
             }
 
+            sensorBuffer.AddObservation(contact1.IsGrounded);
+            sensorBuffer.AddObservation(contact2.IsGrounded);
 
         }
         public override void OnActionReceived(ActionBuffer actionBuffer)
@@ -33,9 +36,8 @@ namespace DeepUnityTutorials
                 joints[i].motor = motor;
             }
 
-            float reward = joints[0].transform.position.x - lastHeadX;
+            float reward = joints[0].transform.position.x;
             AddReward(reward / 100f);
-            lastHeadX = joints[0].transform.position.x;
         }
 
 

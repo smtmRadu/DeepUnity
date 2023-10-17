@@ -15,13 +15,19 @@ MonoBehaviour:
   behaviourName: CheetahRun
   assetCreated: 1
   observationSize: 31
+  stackedInputsNum: 1
   continuousDim: 7
-  discreteBranches: 
-  critic: {fileID: 11400000, guid: f366c598af2a7c144a56b717d20ebd81, type: 2}
-  actorMu: {fileID: 11400000, guid: 7a5bb1859e65dca439a8421d111edfbf, type: 2}
-  actorSigma: {fileID: 11400000, guid: 77d6adf5ed2533147881bf37807b7911, type: 2}
-  actorDiscretes: []
+  discreteDim: 0
+  critic: {fileID: 0}
+  actorContinuousMu: {fileID: 0}
+  actorContinuousSigma: {fileID: 0}
+  discriminatorContinuous: {fileID: 0}
+  actorDiscrete: {fileID: 0}
+  discriminatorDiscrete: {fileID: 0}
+  config: {fileID: 0}
   targetFPS: 50
+  inferenceDevice: 0
+  trainingDevice: 1
   normalizeObservations: 0
   normalizer:
     step: 0
@@ -93,8 +99,6 @@ MonoBehaviour:
       - 0
       - 0
       shape: 1f000000
-  standardDeviation: 0
-  standardDeviationValue: 1.75
-  standardDeviationScale: 2
-  inferenceDevice: 0
-  trainingDevice: 1
+  standardDeviation: 1
+  standardDeviationValue: 1.5
+  standardDeviationScale: 1
