@@ -31,10 +31,9 @@ namespace DeepUnity
         public void ComputeAdvantagesAndReturns(in float gamma, in float lambda, in int horizon, NeuralNetwork crticNetwork)
         {
             int T = Count;
-            Tensor[] Vw_s = new Tensor[T];
-            for (int i = 0; i < T; i++)
-                Vw_s[i] = crticNetwork.Predict(frames[i].state);
-
+            Tensor all_states = Tensor.Cat(null, frames.Select(x => x.state).ToArray());
+            Tensor Vw_s = crticNetwork.Predict(all_states).Reshape(T);
+            
             // Parse each timestep
             for (int t = 0; t < T; t++)
             {

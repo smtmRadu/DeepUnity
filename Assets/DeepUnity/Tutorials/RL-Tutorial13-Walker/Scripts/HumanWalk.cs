@@ -37,88 +37,83 @@ namespace DeepUnityTutorials
         public JointScript rightFootJoint;
         public GroundContact rightFootIsGrounded;
 
-        public override void Awake()
-        {
-            base.Awake();
-            Physics.gravity = new Vector3(0, -30f, 0);
-        }
-        public override void CollectObservations(SensorBuffer sensorBuffer)
+        public override void CollectObservations(StateBuffer stateBuffer)
         {
             // 10 info per joint
    
             // Mid body - 40
-            sensorBuffer.AddObservation(headJoint.transform.rotation.normalized);
-            sensorBuffer.AddObservation(headJoint.rb.velocity.normalized);
-            sensorBuffer.AddObservation(headJoint.rb.angularVelocity.normalized);
+            stateBuffer.AddObservation(headJoint.transform.rotation.normalized);
+            stateBuffer.AddObservation(headJoint.rb.velocity.normalized);
+            stateBuffer.AddObservation(headJoint.rb.angularVelocity.normalized);
 
-            sensorBuffer.AddObservation(stomachJoint.transform.rotation.normalized);
-            sensorBuffer.AddObservation(stomachJoint.rb.velocity.normalized);
-            sensorBuffer.AddObservation(stomachJoint.rb.angularVelocity.normalized);
+            stateBuffer.AddObservation(stomachJoint.transform.rotation.normalized);
+            stateBuffer.AddObservation(stomachJoint.rb.velocity.normalized);
+            stateBuffer.AddObservation(stomachJoint.rb.angularVelocity.normalized);
 
-            sensorBuffer.AddObservation(torsoJoint.transform.rotation.normalized);
-            sensorBuffer.AddObservation(torsoJoint.rb.velocity.normalized);
-            sensorBuffer.AddObservation(torsoJoint.rb.angularVelocity.normalized);
+            stateBuffer.AddObservation(torsoJoint.transform.rotation.normalized);
+            stateBuffer.AddObservation(torsoJoint.rb.velocity.normalized);
+            stateBuffer.AddObservation(torsoJoint.rb.angularVelocity.normalized);
 
-            sensorBuffer.AddObservation(chest.transform.rotation.normalized);
-            sensorBuffer.AddObservation(chestRigidbody.velocity.normalized);
-            sensorBuffer.AddObservation(chestRigidbody.angularVelocity.normalized);
+            stateBuffer.AddObservation(chest.transform.rotation.normalized);
+            stateBuffer.AddObservation(chestRigidbody.velocity.normalized);
+            stateBuffer.AddObservation(chestRigidbody.angularVelocity.normalized);
 
             // Left arm - 20
 
-            sensorBuffer.AddObservation(leftArmJoint.transform.rotation.normalized);
-            sensorBuffer.AddObservation(leftArmJoint.rb.velocity.normalized);
-            sensorBuffer.AddObservation(leftArmJoint.rb.angularVelocity.normalized);
+            stateBuffer.AddObservation(leftArmJoint.transform.rotation.normalized);
+            stateBuffer.AddObservation(leftArmJoint.rb.velocity.normalized);
+            stateBuffer.AddObservation(leftArmJoint.rb.angularVelocity.normalized);
 
-            sensorBuffer.AddObservation(leftForearmJoint.transform.rotation.normalized);
-            sensorBuffer.AddObservation(leftForearmJoint.rb.velocity.normalized);
-            sensorBuffer.AddObservation(leftForearmJoint.rb.angularVelocity.normalized);
+            stateBuffer.AddObservation(leftForearmJoint.transform.rotation.normalized);
+            stateBuffer.AddObservation(leftForearmJoint.rb.velocity.normalized);
+            stateBuffer.AddObservation(leftForearmJoint.rb.angularVelocity.normalized);
 
 
             // Right arm - 20
 
-            sensorBuffer.AddObservation(rightArmJoint.transform.rotation.normalized);
-            sensorBuffer.AddObservation(rightArmJoint.rb.velocity.normalized);
-            sensorBuffer.AddObservation(rightArmJoint.rb.angularVelocity.normalized);
+            stateBuffer.AddObservation(rightArmJoint.transform.rotation.normalized);
+            stateBuffer.AddObservation(rightArmJoint.rb.velocity.normalized);
+            stateBuffer.AddObservation(rightArmJoint.rb.angularVelocity.normalized);
                                        
-            sensorBuffer.AddObservation(rightForearmJoint.transform.rotation.normalized);
-            sensorBuffer.AddObservation(rightForearmJoint.rb.velocity.normalized);
-            sensorBuffer.AddObservation(rightForearmJoint.rb.angularVelocity.normalized);
+            stateBuffer.AddObservation(rightForearmJoint.transform.rotation.normalized);
+            stateBuffer.AddObservation(rightForearmJoint.rb.velocity.normalized);
+            stateBuffer.AddObservation(rightForearmJoint.rb.angularVelocity.normalized);
 
 
             // Left leg - 31
 
 
-            sensorBuffer.AddObservation(leftLegJoint.transform.rotation.normalized);
-            sensorBuffer.AddObservation(leftLegJoint.rb.velocity.normalized);
-            sensorBuffer.AddObservation(leftLegJoint.rb.angularVelocity.normalized);
+            stateBuffer.AddObservation(leftLegJoint.transform.rotation.normalized);
+            stateBuffer.AddObservation(leftLegJoint.rb.velocity.normalized);
+            stateBuffer.AddObservation(leftLegJoint.rb.angularVelocity.normalized);
 
-            sensorBuffer.AddObservation(leftShinJoint.transform.rotation.normalized);
-            sensorBuffer.AddObservation(leftShinJoint.rb.velocity.normalized);
-            sensorBuffer.AddObservation(leftShinJoint.rb.angularVelocity.normalized);
+            stateBuffer.AddObservation(leftShinJoint.transform.rotation.normalized);
+            stateBuffer.AddObservation(leftShinJoint.rb.velocity.normalized);
+            stateBuffer.AddObservation(leftShinJoint.rb.angularVelocity.normalized);
 
-            sensorBuffer.AddObservation(leftFootJoint.transform.rotation.normalized);
-            sensorBuffer.AddObservation(leftFootJoint.rb.velocity.normalized);
-            sensorBuffer.AddObservation(leftFootJoint.rb.angularVelocity.normalized);
+            stateBuffer.AddObservation(leftFootJoint.transform.rotation.normalized);
+            stateBuffer.AddObservation(leftFootJoint.rb.velocity.normalized);
+            stateBuffer.AddObservation(leftFootJoint.rb.angularVelocity.normalized);
 
-            sensorBuffer.AddObservation(leftFootIsGrounded.IsGrounded);
+            stateBuffer.AddObservation(leftFootIsGrounded.IsGrounded);
 
 
 
             // Right Leg - 31
 
-            sensorBuffer.AddObservation(rightLegJoint.transform.rotation.normalized);
-            sensorBuffer.AddObservation(rightLegJoint.rb.velocity.normalized);
-            sensorBuffer.AddObservation(rightLegJoint.rb.angularVelocity.normalized);
+            stateBuffer.AddObservation(rightLegJoint.transform.rotation.normalized);
+            stateBuffer.AddObservation(rightLegJoint.rb.velocity.normalized);
+            stateBuffer.AddObservation(rightLegJoint.rb.angularVelocity.normalized);
                                        
-            sensorBuffer.AddObservation(rightShinJoint.transform.rotation.normalized);
-            sensorBuffer.AddObservation(rightShinJoint.rb.velocity.normalized);
-            sensorBuffer.AddObservation(rightShinJoint.rb.angularVelocity.normalized);
+            stateBuffer.AddObservation(rightShinJoint.transform.rotation.normalized);
+            stateBuffer.AddObservation(rightShinJoint.rb.velocity.normalized);
+            stateBuffer.AddObservation(rightShinJoint.rb.angularVelocity.normalized);
                                       
-            sensorBuffer.AddObservation(rightFootJoint.transform.rotation.normalized);
-            sensorBuffer.AddObservation(rightFootJoint.rb.velocity.normalized);
-            sensorBuffer.AddObservation(rightFootJoint.rb.angularVelocity.normalized);
+            stateBuffer.AddObservation(rightFootJoint.transform.rotation.normalized);
+            stateBuffer.AddObservation(rightFootJoint.rb.velocity.normalized);
+            stateBuffer.AddObservation(rightFootJoint.rb.angularVelocity.normalized);
 
-            sensorBuffer.AddObservation(rightFootIsGrounded.IsGrounded);
+            stateBuffer.AddObservation(rightFootIsGrounded.IsGrounded);
 
 
             // 80 + 62 = 142
@@ -145,8 +140,8 @@ namespace DeepUnityTutorials
             rightShinJoint.SetAngularVelocity(actionBuffer.ContinuousActions[26] * highStrengthJointsForce, 0f, 0f);
             rightFootJoint.SetAngularVelocity(actionBuffer.ContinuousActions[27] * lowStrengthJointsForce, actionBuffer.ContinuousActions[28] * lowStrengthJointsForce, 0f);
 
-            AddReward(+0.0025f); // Constant existential reward
-            AddReward(headJoint.transform.position.y / 1000f); // reward for keeping the head up
+            AddReward(+0.025f); // Constant existential reward
+            AddReward(headJoint.transform.position.y / 100f); // reward for keeping the head up
         }
     }
 

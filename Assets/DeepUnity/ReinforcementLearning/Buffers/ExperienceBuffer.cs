@@ -93,11 +93,14 @@ namespace DeepUnity
         public void NormalizeAdvantages()
         {
             float mean = frames.Average(x => x.advantage[0]);
-            float var = frames.Sum(x => (x.advantage[0] - mean) * (x.advantage[0] - mean)) / (Count - 1);
-            float std = MathF.Sqrt(var) + Utils.EPSILON;
+            float variance = frames.Sum(x => (x.advantage[0] - mean) * (x.advantage[0] - mean)) / (Count - 1); // with bessel correction
+            float std = MathF.Sqrt(variance);
+
+            if (std < 0)
+                return;
 
             for (int i = 0; i < Count; i++)
-                frames[i].advantage = (frames[i].advantage - mean) / std;
+                frames[i].advantage = (frames[i].advantage - mean) / (std + Utils.EPSILON);
         }
 
         public void Clear()

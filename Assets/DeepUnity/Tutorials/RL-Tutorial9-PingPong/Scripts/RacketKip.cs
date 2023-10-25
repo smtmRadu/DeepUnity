@@ -19,7 +19,7 @@ namespace DeepUnityTutorials
             selfrb = GetComponent<Rigidbody>();
             initialPosition = transform.position;
         }
-        public override void CollectObservations(SensorBuffer sensorBuffer)
+        public override void CollectObservations(StateBuffer sensorBuffer)
         {
             sensorBuffer.AddObservation(transform.rotation);
 

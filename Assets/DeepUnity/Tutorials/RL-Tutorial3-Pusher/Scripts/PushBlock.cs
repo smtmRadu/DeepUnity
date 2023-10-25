@@ -9,7 +9,6 @@ namespace DeepUnityTutorials
     {
         [Header("Properties")]
         public Transform box;
-        public Transform arena;
         public float speed = 3000f;
         public float rotationSpeed = 100f;
         private Rigidbody rb;
@@ -27,14 +26,16 @@ namespace DeepUnityTutorials
             float randx = Utils.Random.Range(6f, 52f);
             float randz = Utils.Random.Range(15f, 48f);
             box.localPosition = new Vector3(randx, box.localPosition.y, randz);
+            box.transform.Rotate(0, Utils.Random.Range(0f, 360f), 0);
 
             // Reposition agent
             randx = Utils.Random.Range(6f, 52f);
             randz = Utils.Random.Range(15f, 48f);
             transform.localPosition = new Vector3(randx, transform.localPosition.y, randz);
+            transform.Rotate(0, Utils.Random.Range(0f, 360f), 0);
 
         }
-        public override void CollectObservations(SensorBuffer sensorBuffer)
+        public override void CollectObservations(StateBuffer sensorBuffer)
         {
             // + 60
             sensorBuffer.AddObservation(rb.velocity.normalized); // + 3

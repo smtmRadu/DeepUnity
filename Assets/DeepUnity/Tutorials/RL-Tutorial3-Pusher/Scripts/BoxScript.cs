@@ -10,10 +10,8 @@ namespace DeepUnityTutorials
 
         private void OnTriggerEnter(Collider other)
         {
-            if (other.CompareTag("Goal"))
+            if (other.CompareTag("Terminal"))
                 partnerAgent.AddReward(1f);
-            else if (other.CompareTag("Wall"))
-                partnerAgent.AddReward(-1f);
 
             partnerAgent.EndEpisode();
         }

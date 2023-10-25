@@ -716,7 +716,7 @@ namespace DeepUnity
         /// <summary>
         /// Matrix multiplication where matrices are loaded on GPU where operations are done. Efficient for matrices large matrices, where output's dimensions <b>N * M * P > 100,000</b>. <br></br>
         /// Left: <b>(J, 1, N, M)</b> <br></br>
-        /// Right: <b>(K, N, M)</b> <br></br>
+        /// Right: <b>(K, N, P)</b> <br></br>
         /// 
         /// <br></br>
         /// <em>
@@ -1149,20 +1149,18 @@ namespace DeepUnity
             return elem2.Exp() / elem1;
         }
         /// <summary>
-        /// Computes the element-wise Kullback-Leibler divergence. Measures the distance between two data distributions showing how different the two distributions are from each other.
+        /// Filters out NaN values by replacing them with the specified argument.
         /// </summary>
-        /// <param name="mu1"></param>
-        /// <param name="sig1"></param>
-        /// <param name="mu2"></param>
-        /// <param name="sig2"></param>
+        /// <param name="nan_replacement">The value that replaces the NaN</param>
         /// <returns></returns>
-        public static Tensor KLDivergence(Tensor mu1, Tensor sig1, Tensor mu2, Tensor sig2)
+        public static Tensor FilterNaN(Tensor tensor, float nan_replacement = 0f)
         {
-            var var1 = sig1 * sig1;
-            var var2 = sig2 * sig2;
-
-            return Log((sig2 / (sig1 + Utils.EPSILON)) + Utils.EPSILON) +
-                (var1 + (mu1 - mu2) * (mu1 - mu2)) / (2f * var2) - 0.5f;
+            return tensor.Select(x =>
+            {
+                if (float.IsNaN(x))
+                    return nan_replacement;
+                return x;
+            });
         }
 
         #endregion Special
@@ -1424,20 +1422,6 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
-        /// All tensors must have the same shape. <br></br>
-        /// If <b>axis == null</b>, all tensors are Unsqueezed(0). <br></br>
-        /// Example: <br></br>
-        /// Cat(axis: 0,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (8,3) <br></br>
-        /// Cat(axis: 1,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (2,12) <br></br>
-        /// Car(axis: 1,    tensors: {(2,3)} => output (2,3) <br></br>
-        /// Cat(axis: null, tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (4,2,3) <br></br>
-        /// Cat(axis: null, tensors: {(2,3)} => output (1,2,3) <br></br>
-        /// </summary>
-        public static Tensor Cat(int? axis, IEnumerable<Tensor> tensors)
-        {
-            return Cat(axis, tensors.ToArray());
-        }
-        /// <summary>
         /// Expands the tensor along the specified axis. <br></br>
         /// Example: <br></br>
         /// Expand(tensor: (10, <b>4</b>, 12), axis: 1, times: 4) => output tensor: (10, <b>20</b>, 12)
@@ -1638,7 +1622,7 @@ namespace DeepUnity
             return Cat(axis, slices);
         }
         /// <summary>
-        /// /// Computes the mean along the speficied axis.
+        /// Computes the mean along the speficied axis.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>

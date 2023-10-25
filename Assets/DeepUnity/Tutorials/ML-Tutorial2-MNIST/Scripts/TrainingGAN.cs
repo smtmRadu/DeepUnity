@@ -109,7 +109,7 @@ namespace DeepUnityTutorials
                     SaveNetworks();
 
                 // Train Discriminator
-                var real_data = Tensor.Cat(null, Utils.GetRange(dataset, batch_index, batch_size));
+                var real_data = Tensor.Cat(null, Utils.GetRange(dataset, batch_index, batch_size).ToArray());
                 var fake_data = generator.Predict(GeneratorInput(batch_size, latent_dim));
                 var d_error = TrainDiscriminator(real_data, fake_data);
                 D_graph.Append(d_error);

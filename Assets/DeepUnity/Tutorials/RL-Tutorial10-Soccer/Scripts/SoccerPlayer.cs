@@ -21,7 +21,7 @@ namespace DeepUnityTutorials
             environment = transform.parent.GetComponent<SoccerEnvironmentScript>();
             rb = transform.GetComponent<Rigidbody>();
         }
-        public override void CollectObservations(SensorBuffer sensorBuffer)
+        public override void CollectObservations(StateBuffer sensorBuffer)
         {
             // Total = 25 + 13 + 3 + 9 = 
             // RaySensor info +25

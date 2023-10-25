@@ -8,7 +8,7 @@ namespace DeepUnityTutorials
         [SerializeField] Rigidbody @base;
         [SerializeField] Rigidbody weight;
         [SerializeField] private float speed = 1;
-        public override void CollectObservations(SensorBuffer sensorBuffer)
+        public override void CollectObservations(StateBuffer sensorBuffer)
         {
             sensorBuffer.AddObservation(@base.velocity.normalized);
             sensorBuffer.AddObservation(@base.angularVelocity.normalized);

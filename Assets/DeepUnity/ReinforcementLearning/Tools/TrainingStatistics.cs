@@ -68,10 +68,11 @@ namespace DeepUnity
         public PerformanceGraph valueLoss = new PerformanceGraph();
 
         [Header("Policy")]
+        [Tooltip("The entropy H of the policy")]
+        public PerformanceGraph entropy = new PerformanceGraph();
         [Tooltip("Learning rate decay on each epoch.")]
         public PerformanceGraph learningRate = new PerformanceGraph();
-        [Tooltip("Clipping factor decay on each epoch")]
-        public PerformanceGraph epsilon = new PerformanceGraph();
+        
 
         /// <summary>
         /// Returns the path of the file.
@@ -204,7 +205,7 @@ namespace DeepUnity
             y += 20;
             DrawGraph(svgBuilder, learningRate.Keys, ref y, 50, 200, 500, "Learning Rate");
             y += 20;
-            DrawGraph(svgBuilder, epsilon.Keys, ref y, 50, 200, 500, "Epsilon");
+            DrawGraph(svgBuilder, entropy.Keys, ref y, 50, 200, 500, "Entropy");
 
             // Generate smoothed out graphs
             y -= 120;

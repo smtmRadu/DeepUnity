@@ -12,7 +12,7 @@ namespace DeepUnityTutorials
         public GroundContact2D contact1;
         public GroundContact2D contact2;
 
-        public override void CollectObservations(SensorBuffer sensorBuffer)
+        public override void CollectObservations(StateBuffer sensorBuffer)
         {
             // 15 info from raysensor
             // 14 info from joints

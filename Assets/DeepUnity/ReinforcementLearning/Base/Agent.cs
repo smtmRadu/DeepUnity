@@ -41,7 +41,7 @@ namespace DeepUnity
         private TimestepBuffer Timestep { get; set; }    
         private List<ISensor> Sensors { get; set; }
         private StateResetter PositionReseter { get; set; }
-        private SensorBuffer ObservationsBuffer { get; set; }
+        private StateBuffer StatesBuffer { get; set; }
         private ActionBuffer ActionsBuffer { get; set; }
         public int EpisodeStepCount { get; private set; } = 0;
         public float EpsiodeCumulativeReward { get; private set; } = 0f;
@@ -222,19 +222,19 @@ namespace DeepUnity
             if (behaviourType == BehaviourType.Heuristic)
             {
                 // For now, in heuristic mode, only manual control is available
-                ObservationsBuffer.Clear();
+                StatesBuffer.Clear();
                 ActionsBuffer.Clear();
 
                 // Collect new observations
-                if (useSensors == UseSensorsType.ObservationsVector) Sensors.ForEach(x => ObservationsBuffer.AddObservationRange(x.GetObservationsVector()));
-                else if (useSensors == UseSensorsType.CompressedObservationsVector) Sensors.ForEach(x => ObservationsBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
-                CollectObservations(ObservationsBuffer);
+                if (useSensors == UseSensorsType.ObservationsVector) Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetObservationsVector()));
+                else if (useSensors == UseSensorsType.CompressedObservationsVector) Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
+                CollectObservations(StatesBuffer);
                 // ObservationsBuffer.PushToStack(ObservationsBuffer.TimestepObservation);
                 
 
                 // Check SensorBuffer is fullfilled
                 int missing = 0;
-                if (!ObservationsBuffer.IsFulfilled(out missing))
+                if (!StatesBuffer.IsFulfilled(out missing))
                 {
                     ConsoleMessage.Warning($"SensorBuffer is missing {missing} observations. Please add {missing} more observations values or reduce the space size.");
                     EditorApplication.isPlaying = false;
@@ -243,9 +243,9 @@ namespace DeepUnity
 
                 // Normalize the observations if neccesary
                 if (model.normalizeObservations)
-                    Timestep.state = model.normalizer.Normalize(ObservationsBuffer.Observations);
+                    Timestep.state = model.normalizer.Normalize(StatesBuffer.State);
                 else
-                    Timestep.state = ObservationsBuffer.Observations.Clone() as Tensor;
+                    Timestep.state = StatesBuffer.State.Clone() as Tensor;
                 
                 // Collect user input actions
                 Heuristic(ActionsBuffer);
@@ -286,18 +286,18 @@ namespace DeepUnity
                 return;
 
             
-            ObservationsBuffer.Clear();
+            StatesBuffer.Clear();
             ActionsBuffer.Clear();
 
             // Collect new observations
-            if (useSensors == UseSensorsType.ObservationsVector) Sensors.ForEach(x => ObservationsBuffer.AddObservationRange(x.GetObservationsVector()));
-            else if (useSensors == UseSensorsType.CompressedObservationsVector) Sensors.ForEach(x => ObservationsBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
-            CollectObservations(ObservationsBuffer);
+            if (useSensors == UseSensorsType.ObservationsVector) Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetObservationsVector()));
+            else if (useSensors == UseSensorsType.CompressedObservationsVector) Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
+            CollectObservations(StatesBuffer);
             // ObservationsBuffer.PushToStack(ObservationsBuffer.TimestepObservation);
 
             // Check SensorBuffer is fullfilled
             int missing = 0;
-            if (!ObservationsBuffer.IsFulfilled(out missing))
+            if (!StatesBuffer.IsFulfilled(out missing))
             {
                 ConsoleMessage.Warning($"SensorBuffer is missing {missing} observations. Please add {missing} more observations values or reduce the space size.");
                 EditorApplication.isPlaying = false;
@@ -307,7 +307,7 @@ namespace DeepUnity
             // Normalize the observations if neccesary
             if (model.normalizeObservations)
             {
-                Tensor st = ObservationsBuffer.Observations.Clone() as Tensor;
+                Tensor st = StatesBuffer.State.Clone() as Tensor;
 
                 if (behaviourType == BehaviourType.Learn)
                 {
@@ -319,7 +319,7 @@ namespace DeepUnity
             }
             else
             {
-                Timestep.state = ObservationsBuffer.Observations.Clone() as Tensor;
+                Timestep.state = StatesBuffer.State.Clone() as Tensor;
             }
 
             // Set state[t], action[t] & pi[t]
@@ -327,7 +327,7 @@ namespace DeepUnity
             model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.prob_discrete);
 
             // Run agent's actions and clip them
-            ActionsBuffer.ContinuousActions = model.IsUsingContinuousActions ? Timestep.action_continuous.Clip(-1f, 1f).ToArray() : null;
+            ActionsBuffer.ContinuousActions = model.IsUsingContinuousActions ? Tensor.FilterNaN(Timestep.action_continuous.Clip(-1f, 1f)).ToArray() : null;
             ActionsBuffer.DiscreteAction = model.IsUsingDiscreteActions ? (int)Timestep.action_discrete.ArgMax(-1)[0] : -1;
         }
 
@@ -354,7 +354,7 @@ namespace DeepUnity
             Memory = new MemoryBuffer();
             Timestep = new TimestepBuffer(EpisodeStepCount);
 
-            ObservationsBuffer = new SensorBuffer(model.observationSize);
+            StatesBuffer = new StateBuffer(model.observationSize);
             ActionsBuffer = new ActionBuffer(model.continuousDim, model.discreteDim);
         }
         private void InitSensors(Transform parent)
@@ -379,18 +379,18 @@ namespace DeepUnity
         /// </summary>
         public virtual void OnEpisodeBegin() { }
         /// <summary>
-        /// Fulfill <b>SensorBuffer</b>  <paramref name="sensorBuffer"/> argument with [normalized] observations using <em>AddObservation()</em> method.
+        /// Fulfill <b>StateBuffer</b>  <paramref name="stateBuffer"/> argument with [normalized] observations using <em>AddObservation()</em> method.
         /// <br></br>
         /// <br></br>
         /// <em>Example: <br></br>
-        /// <paramref name="sensorBuffer"/>.AddObservation(transform.position.normalized) <br></br>
-        /// <paramref name="sensorBuffer"/>.AddObservation(transform.rotation.x / 360f) <br></br>
-        /// <paramref name="sensorBuffer"/>.AddObservation(rb.angularVelocity.normalized) <br></br>
+        /// <paramref name="stateBuffer"/>.AddObservation(transform.position.normalized) <br></br>
+        /// <paramref name="stateBuffer"/>.AddObservation(transform.rotation.x / 360f) <br></br>
+        /// <paramref name="stateBuffer"/>.AddObservation(rb.angularVelocity.normalized) <br></br>
         /// </em>
         /// 
         /// </summary>
-        /// <param name="sensorBuffer"></param>
-        public virtual void CollectObservations(SensorBuffer sensorBuffer) { }
+        /// <param name="stateBuffer"></param>
+        public virtual void CollectObservations(StateBuffer stateBuffer) { }
         /// <summary>
         /// Assign an action for each <em>Continuous</em> or <em>Discrete</em> value inside <b>ActionBuffer</b>'s arrays.
         /// <br></br>

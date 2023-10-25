@@ -40,7 +40,7 @@ namespace DeepUnityTutorials
             target.localPosition = new Vector3(x, target.localPosition.y, z);
             // target.localPosition = new Vector3(Random.Range(-35f, 35f), target.position.y, Random.Range(-35f, 35f));
         }
-        public override void CollectObservations(SensorBuffer sensorBuffer)
+        public override void CollectObservations(StateBuffer sensorBuffer)
         {
             // RaySensor
             // +1

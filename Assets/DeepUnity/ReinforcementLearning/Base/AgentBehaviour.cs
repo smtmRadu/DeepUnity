@@ -62,7 +62,7 @@ namespace DeepUnity
         public StandardDeviationType standardDeviation = StandardDeviationType.Trainable;
         [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
         [SerializeField, Range(0.001f, 3f)] 
-        public float standardDeviationValue = 1.5f;
+        public float standardDeviationValue = 1f;
         [Tooltip("Sigma network's output is multiplied by this number. Modify this value to change the exploration/exploitation ratio.")]
         [SerializeField, Range(0.1f, 3f)]
         public float standardDeviationScale = 1f;
@@ -88,8 +88,8 @@ namespace DeepUnity
         private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in ModelType arch, in int NUM_LAYERS, in int HIDDEN_UNITS)
         {
           
-            const InitType INIT_W = InitType.HE_Normal;
-            const InitType INIT_B = InitType.HE_Normal;
+            const InitType INIT_W = InitType.HE_Uniform;
+            const InitType INIT_B = InitType.Zeros;
             //------------------ NETWORK INITIALIZATION ----------------//
 
             switch(arch)

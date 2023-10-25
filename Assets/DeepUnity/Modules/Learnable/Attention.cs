@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.Windows;
 
 
 /// This module is not going to be released due to high computational requirements....
@@ -31,10 +32,10 @@ namespace DeepUnity
     {
         // Caches used for each operation in order to compute the gradients
         private Tensor InputCache { get; set; }
-        private Tensor QueryCache { get; set; }
-        private Tensor KeyCache { get; set; }   
-        private Tensor ValueCache { get; set; }
-        private Tensor HeadCache { get; set; }
+        private Tensor[] QueryCache { get; set; }
+        private Tensor[] KeyCache { get; set; }   
+        private Tensor[] ValueCache { get; set; }
+        private Tensor[] HeadCache { get; set; }
 
         [SerializeField] private Tensor W_Q;
         [SerializeField] private Tensor W_K;
@@ -70,7 +71,7 @@ namespace DeepUnity
         {
 
             throw new NotSupportedException("Attention layer is not implemented yet.");
-
+            // remember that tr() is trace of the matrix *
             this.scale = scale;
             this.d = embed_dim;
 
@@ -78,103 +79,151 @@ namespace DeepUnity
             // This will produce the same output shape as the input.
             int T = input_shape.Item1;
             int H = input_shape.Item2;    
-            W_Q = Tensor.RandomNormal((0f, 0.3f), H, d);
-            W_K = Tensor.RandomNormal((0f, 0.3f), H, d);
-            W_V = Tensor.RandomNormal((0f, 0.3f), H, d);
-            W_O = Tensor.RandomNormal((0f, 0.3f), d, H);
+            W_Q = Tensor.RandomNormal((0f, 0.2f), H, d);
+            W_K = Tensor.RandomNormal((0f, 0.2f), H, d);
+            W_V = Tensor.RandomNormal((0f, 0.2f), H, d);
+            W_O = Tensor.RandomNormal((0f, 0.2f), d, H);
 
             softmax = new Softmax();
         }
+        /// <summary>
+        /// Input: <b>(B, T, H)</b> or <b>(T, H)</b> for unbatched input. <br></br>
+        /// Output: <b>(B, T, H)</b> or <b>(T, H)</b> for unbatched input. <br></br>
+        /// where B = batch_size, T = sequence_length / channels, H = num_features.<br></br>
+        /// </summary>
+        /// <param name="input"></param>
+        /// <returns></returns>
         public Tensor Predict(Tensor input)
         {
             // softmax(Q * KT / Sqrt(D)) * V [Scaled Dot-Product Attention, page 4]
             // input shape (B, T, H)
+            int batch_size = input.Rank == 3 ? input.Size(0) : 1;
 
-            Tensor Q = Tensor.MatMulGPU(input, W_Q); // (T, H) * (H, D) = (T, D)
-            Tensor K = Tensor.MatMulGPU(input, W_K); // (T, D)
-            Tensor V = Tensor.MatMulGPU(input, W_V); // (T, D)
+            Tensor[] batches = batch_size == 1 ? new Tensor[] { input } : input.Split(0, 1);
+            Tensor[] sdp = new Tensor[batch_size];
 
+            for (int i = 0; i < batches.Length; i++)
+            {
+                Tensor slice = batches[i];
+
+                Tensor Q = Tensor.MatMulGPU(slice, W_Q); // (T, H) * (H, D) = (T, D)
+                Tensor K = Tensor.MatMulGPU(slice, W_K); // (T, D)
+                Tensor V = Tensor.MatMulGPU(slice, W_V); // (T, D)
+
+
+                Tensor scaled_dot_product = Tensor.MatMulGPU(Q, K.Transpose(0, 1)); // (T, T)
+                scaled_dot_product *= scale;
+                scaled_dot_product /= MathF.Sqrt(d);
+                scaled_dot_product = softmax.Forward(scaled_dot_product);
+                scaled_dot_product = Tensor.MatMulGPU(scaled_dot_product, V); // (T, T) * (T, D) = (T, D)
+
+                scaled_dot_product = Tensor.MatMulGPU(scaled_dot_product, W_O); // reshape the SDP to obtain the same output's shape as input's.
+                sdp[i] = scaled_dot_product;
+            }
             
-            Tensor scaled_dot_product = Tensor.MatMulGPU(Q, K.Transpose(0, 1)); // (T, T)
-            scaled_dot_product *= scale;
-            scaled_dot_product /= MathF.Sqrt(d);
-            scaled_dot_product = softmax.Forward(scaled_dot_product);
-            scaled_dot_product = Tensor.MatMulGPU(scaled_dot_product, V); // (T, T) * (T, D) = (T, D)
-
-            scaled_dot_product = Tensor.MatMulGPU(scaled_dot_product, W_O); // reshape the SDP to obtain the same output's shape as input's.
-            return input + scaled_dot_product;
+            return input + Tensor.Cat(null, sdp);
         }
-
+        /// <summary>
+        /// Input: <b>(B, T, H)</b> or <b>(T, H)</b> for unbatched input. <br></br>
+        /// Output: <b>(B, T, H)</b> or <b>(T, H)</b> for unbatched input. <br></br>
+        /// where B = batch_size, T = sequence_length / channels, H = num_features.<br></br>
+        /// </summary>
+        /// <param name="input"></param>
+        /// <returns></returns>
         public Tensor Forward(Tensor input)
         {
+           
             InputCache = Tensor.Identity(input);
+            int batch_size = input.Rank == 3 ? input.Size(0) : 1;
 
-            Tensor Q = Tensor.MatMulGPU(input, W_Q); // (T, H) * (H, D) = (T, D)
-            Tensor K = Tensor.MatMulGPU(input, W_K); // (T, D)
-            Tensor V = Tensor.MatMulGPU(input, W_V); // (T, D)
-            QueryCache = Tensor.Identity(Q);
-            KeyCache = Tensor.Identity(K);
-            ValueCache = Tensor.Identity(V);
+            Tensor[] batches = batch_size == 1 ? new Tensor[] { input } : input.Split(0, 1);
+            Tensor[] sdp = new Tensor[batch_size];
 
-            Tensor scaled_dot_product = Tensor.MatMulGPU(Q, K.Transpose(0, 1)); // (T, T)
-            scaled_dot_product *= scale;
-            scaled_dot_product /= MathF.Sqrt(d);
-            scaled_dot_product = softmax.Forward(scaled_dot_product);
-            scaled_dot_product = Tensor.MatMulGPU(scaled_dot_product, V); // (T, T) * (T, D) = (T, D)
+            QueryCache = new Tensor[batch_size];
+            KeyCache = new Tensor[batch_size];
+            ValueCache = new Tensor[batch_size];
+            HeadCache = new Tensor[batch_size];
 
-            HeadCache = Tensor.Identity(scaled_dot_product);
-            scaled_dot_product = Tensor.MatMulGPU(scaled_dot_product, W_O); // reshape the SDP to obtain the same output's shape as input's.
-            return input + scaled_dot_product;
+            for (int i = 0; i < batches.Length; i++)
+            {
+                Tensor slice = batches[i];
+                Tensor Q = Tensor.MatMulGPU(slice, W_Q); // (T, H) * (H, D) = (T, D)
+                Tensor K = Tensor.MatMulGPU(slice, W_K); // (T, D)
+                Tensor V = Tensor.MatMulGPU(slice, W_V); // (T, D)
+                QueryCache[i] = Tensor.Identity(Q);
+                KeyCache[i] = Tensor.Identity(K);
+                ValueCache[i] = Tensor.Identity(V);
+
+                Tensor scaled_dot_product = Tensor.MatMulGPU(Q, K.Transpose(0, 1)); // (T, T)
+                scaled_dot_product *= scale;
+                scaled_dot_product /= MathF.Sqrt(d);
+                scaled_dot_product = softmax.Forward(scaled_dot_product);
+                scaled_dot_product = Tensor.MatMulGPU(scaled_dot_product, V); // (T, T) * (T, D) = (T, D)
+
+                HeadCache[i] = Tensor.Identity(scaled_dot_product);
+                scaled_dot_product = Tensor.MatMulGPU(scaled_dot_product, W_O); // reshape the SDP to obtain the same output's shape as input's.
+                sdp[i] = scaled_dot_product;
+            }
+
+            return input + Tensor.Cat(null, sdp);
         }
-        public Tensor Backward(Tensor loss)
+        public Tensor Backward(Tensor dfx_dx)
         {
             float gamma = 1f / MathF.Sqrt(d);
+            int batch_size = dfx_dx.Rank == 3 ? dfx_dx.Size(0) : 1;
 
-            Tensor I = GetIMatrix(); // I s only on diagonal and edges
-            Tensor P = GetPMatrix(); // P is identity matrix of size n x n
-            Tensor A = GetAMatrix(); // A is a bit more complicated
-            Tensor S = GetSMatrix(); // S is also more complicated
-            Tensor V_prime = Tensor.MatMulGPU(ValueCache, W_V);
+            Tensor[] batches = batch_size == 1 ? new Tensor[] { dfx_dx } : dfx_dx.Split(0, 1);
+            Tensor[] dSDP = new Tensor[batch_size];
 
-            // df(X) / dX
-            Tensor dLossdInput = null;  ///  Where is d f(X) / d X ?
+            for (int i = 0; i < batches.Length; i++)
+            {
+                Tensor I = GetIMatrix(); // I s only on diagonal and edges
+                Tensor P = GetPMatrix(); // P is identity matrix of size n x n
+                Tensor A = GetAMatrix(i); // A is a bit more complicated
+                Tensor S = GetSMatrix(i); // S is also more complicated
+                Tensor V_prime = Tensor.MatMulGPU(ValueCache[i], W_V);
 
-            // df(x) / dA
-            Tensor dLossdA = Tensor.MatMulGPU(dLossdInput, W_O.Transpose(0, 1));
-            dLossdA = Tensor.MatMulGPU(dLossdA, V_prime.Transpose(0, 1));
-            dLossdA *= S;
-            Tensor part2 = Tensor.MatMulGPU(dLossdInput, W_O.Transpose(0, 1));
-            part2 = Tensor.MatMulGPU(part2, V_prime.Transpose(0, 1));
-            part2 *= S;
-            part2 *= GetIpsilonMatrix(Tensor.MatMulGPU(A.Exp(), I));
-            part2 = Tensor.MatMulGPU(part2, I.Transpose(0, 1));
-            part2 *= A.Exp();
-            dLossdA -= part2;
+                // df(x) / dA
+                Tensor dLossdA = Tensor.MatMulGPU(dfx_dx, W_O.Transpose(0, 1));
+                dLossdA = Tensor.MatMulGPU(dLossdA, V_prime.Transpose(0, 1));
+                dLossdA *= S;
+                Tensor part2 = Tensor.MatMulGPU(dfx_dx, W_O.Transpose(0, 1));
+                part2 = Tensor.MatMulGPU(part2, V_prime.Transpose(0, 1));
+                part2 *= S;
+                part2 *= GetIpsilonMatrix(Tensor.MatMulGPU(A.Exp(), I));
+                part2 = Tensor.MatMulGPU(part2, I.Transpose(0, 1));
+                part2 *= A.Exp();
+                dLossdA -= part2;
 
-            // df(X) / dWV
-            Tensor dLossdWV = Tensor.MatMulGPU(A.Transpose(0, 1), dLossdInput);
-            dLossdWV = Tensor.MatMulGPU(dLossdWV, W_O.Transpose(0, 1));
-            W_V_grad = dLossdWV;
+                // df(X) / dWV
+                Tensor dLossdWV = Tensor.MatMulGPU(A.Transpose(0, 1), dfx_dx);
+                dLossdWV = Tensor.MatMulGPU(dLossdWV, W_O.Transpose(0, 1));
+                W_V_grad += dLossdWV / batch_size;
 
-            // df(X) / dWQ
-            Tensor dLossdWQ = gamma * Tensor.MatMulGPU(QueryCache.Transpose(0, 1), dLossdA);
-            dLossdWQ = Tensor.MatMulGPU(dLossdWQ, P.Transpose(0, 1));
-            dLossdWQ = Tensor.MatMulGPU(dLossdWQ, KeyCache);
-            dLossdWQ = Tensor.MatMulGPU(dLossdWQ, W_K);
-            W_Q_grad = dLossdWQ;
+                // df(X) / dWQ
+                Tensor dLossdWQ = gamma * Tensor.MatMulGPU(QueryCache[i].Transpose(0, 1), dLossdA);
+                dLossdWQ = Tensor.MatMulGPU(dLossdWQ, P.Transpose(0, 1));
+                dLossdWQ = Tensor.MatMulGPU(dLossdWQ, KeyCache[i]);
+                dLossdWQ = Tensor.MatMulGPU(dLossdWQ, W_K);
+                W_Q_grad += dLossdWQ / batch_size;
 
-            // df(X) / dWK
-            Tensor dLossdWK = gamma * Tensor.MatMulGPU(KeyCache.Transpose(0, 1), P);
-            dLossdWK = Tensor.MatMulGPU(dLossdWK, dLossdA.Transpose(0, 1));
-            dLossdWK = Tensor.MatMulGPU(dLossdWK, QueryCache);
-            dLossdWK = Tensor.MatMulGPU(dLossdWK, W_Q);
-            W_K_grad = dLossdWK;
+                // df(X) / dWK
+                Tensor dLossdWK = gamma * Tensor.MatMulGPU(KeyCache[i].Transpose(0, 1), P);
+                dLossdWK = Tensor.MatMulGPU(dLossdWK, dLossdA.Transpose(0, 1));
+                dLossdWK = Tensor.MatMulGPU(dLossdWK, QueryCache[i]);
+                dLossdWK = Tensor.MatMulGPU(dLossdWK, W_Q);
+                W_K_grad += dLossdWK / batch_size;
 
-            // df(X)/ dWO
-            Tensor dLossdWO = HeadCache.Transpose(0, 1) * dLossdInput;
-            W_O_grad = dLossdWO;
+                // df(X)/ dWO
+                Tensor dLossdWO = HeadCache[i].Transpose(0, 1) * dfx_dx;
+                W_O_grad += dLossdWO / batch_size;
+            }
 
-            return dLossdInput;
+                
+
+            // now let's differentiate the scaled dot product.
+            // return Tensor.Cat(null, dSDP);
+            return null;
         }
 
         public void SelfOptimise(float lr)
@@ -216,22 +265,21 @@ namespace DeepUnity
             }
             return mat;
         }
-        private Tensor GetAMatrix()
+        private Tensor GetAMatrix(int batch_index)
         {
-            Tensor A = Tensor.MatMulGPU(QueryCache, W_Q);
+            Tensor A = Tensor.MatMulGPU(QueryCache[batch_index], W_Q);
             A = Tensor.MatMulGPU(A, W_K.Transpose(0, 1));
-            A = Tensor.MatMulGPU(A, KeyCache.Transpose(0, 1));
+            A = Tensor.MatMulGPU(A, KeyCache[batch_index].Transpose(0, 1));
             A /= MathF.Sqrt(d);
             A = new Softmax().Forward(A);
-            A = Tensor.MatMulGPU(A, ValueCache);
+            A = Tensor.MatMulGPU(A, ValueCache[batch_index]);
             return A;
         }
-
-        private Tensor GetSMatrix()
+        private Tensor GetSMatrix(int batch_index)
         {
-            Tensor S = Tensor.MatMulGPU(QueryCache, W_Q);
+            Tensor S = Tensor.MatMulGPU(QueryCache[batch_index], W_Q);
             S = Tensor.MatMulGPU(S, W_K.Transpose(0, 1));
-            S = Tensor.MatMulGPU(S, KeyCache.Transpose(0, 1));
+            S = Tensor.MatMulGPU(S, KeyCache[batch_index].Transpose(0, 1));
             S /= MathF.Sqrt(d);
             S = new Softmax().Forward(S);
             return S;

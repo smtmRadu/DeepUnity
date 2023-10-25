@@ -28,7 +28,7 @@ namespace DeepUnity
         [Tooltip("[Typical range: 3 - 10] Number of epochs per buffer.")]
         [Min(3)] public int numEpoch = 8;
 
-        [Tooltip("Apply normalization to advantages over the memory buffer.")]
+        [Tooltip("Apply normalization to advantages over the training data.")]
         public bool normalizeAdvantages = true;
 
         [Tooltip("Shuffle the training data each epoch. Increases generalization and convergence and avoid batch effects (in BatchNorm). Decreases policy update time.")]
