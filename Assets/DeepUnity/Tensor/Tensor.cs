@@ -2340,7 +2340,6 @@ namespace DeepUnity
                 FastSqueeze(result, axis);
             return result;
         }
-
         public static Tensor Pow(Tensor tensor, float power)
         {
             Tensor result = new(tensor.shape);

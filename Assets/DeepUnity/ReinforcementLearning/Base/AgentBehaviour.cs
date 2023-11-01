@@ -63,9 +63,6 @@ namespace DeepUnity
         [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
         [SerializeField, Range(0.001f, 3f)] 
         public float standardDeviationValue = 1f;
-        [Tooltip("Sigma network's output is multiplied by this number. Modify this value to change the exploration/exploitation ratio.")]
-        [SerializeField, Range(0.1f, 3f)]
-        public float standardDeviationScale = 1f;
         
 
         public Optimizer criticOptimizer { get; private set; }
@@ -96,30 +93,30 @@ namespace DeepUnity
             {
                 case ModelType.NN:
                     critic = new NeuralNetwork(
-                   new IModule[] {
-                       new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                       new IModule[] 
+                       { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
                        Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                        Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
                     );
                     if (CONTINUOUS_ACTIONS_NUM > 0)
                     {
                         actorContinuousMu = new NeuralNetwork(
-                                new IModule[] {
-                            new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                                new IModule[] 
+                                { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
                                     Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                                     Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Tanh() }).ToArray()
                             );
 
                         actorContinuousSigma = new NeuralNetwork(
-                                new IModule[] {
-                            new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                                new IModule[] 
+                                { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
                                     Concat(CreateHiddenLayers(NUM_LAYERS - 1, HIDDEN_UNITS, INIT_W, INIT_B)). // Sigma network is a bit smaller for efficiency. This network is typically not important to be large
-                                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Exp() }).ToArray()  // Also Softplus can be used
+                                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Exp() }).ToArray()  // Also Softplus can be used, but it returns very low values => no exploration
                             );
 
                         discriminatorContinuous = new NeuralNetwork(
-                                new IModule[] {
-                            new Dense(CONTINUOUS_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B),CreateActivation() }.
+                                new IModule[] 
+                                { new Dense(CONTINUOUS_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B),CreateActivation() }.
                                     Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                                     Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B), new Sigmoid() }).ToArray()
                             );
@@ -128,14 +125,14 @@ namespace DeepUnity
                     if (DISCRETE_ACTIONS_NUM > 0)
                     {
                         actorDiscrete = new NeuralNetwork(
-                                new IModule[] {
-                            new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B),new LeakyReLU() }.
+                                new IModule[] 
+                                { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B),new LeakyReLU() }.
                                     Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                                     Concat(new IModule[] { new Dense(HIDDEN_UNITS, DISCRETE_ACTIONS_NUM, INIT_W, INIT_B), new Softmax() }).ToArray()
                             );
                         discriminatorDiscrete = new NeuralNetwork(
-                                new IModule[] {
-                            new Dense(DISCRETE_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                                new IModule[] 
+                                { new Dense(DISCRETE_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
                                     Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                                     Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B), new Sigmoid() }).ToArray()
                             );
@@ -314,8 +311,9 @@ namespace DeepUnity
 
             Tensor mu = actorContinuousMu.Predict(state);
             Tensor sigma = standardDeviation == StandardDeviationType.Trainable ?
-                            actorContinuousSigma.Predict(state) * standardDeviationScale :
+                            actorContinuousSigma.Predict(state):
                             Tensor.Fill(standardDeviationValue, mu.Shape);
+
             action = mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
             probs = Tensor.Probability(action, mu, sigma);
         }
@@ -335,7 +333,7 @@ namespace DeepUnity
 
             muBatch = actorContinuousMu.Forward(stateBatch);
             sigmaBatch = standardDeviation == StandardDeviationType.Trainable ?
-                           actorContinuousSigma.Forward(stateBatch) * standardDeviationScale :
+                           actorContinuousSigma.Forward(stateBatch):
                            Tensor.Fill(standardDeviationValue, muBatch.Shape);
         }
         /// <summary>
@@ -426,15 +424,15 @@ namespace DeepUnity
 
             if(newAgBeh.IsUsingContinuousActions)
             {
-                newAgBeh.actorContinuousMu.CreateAsset($"{name}/actorContinuousMu");
-                newAgBeh.actorContinuousSigma.CreateAsset($"{name}/actorContinuousSigma");
-                newAgBeh.discriminatorContinuous.CreateAsset($"{name}/discriminatorContinuous");
+                newAgBeh.actorContinuousMu.CreateAsset($"{name}/mu");
+                newAgBeh.actorContinuousSigma.CreateAsset($"{name}/sigma");
+                newAgBeh.discriminatorContinuous.CreateAsset($"{name}/discriminator_continuous");
             }
             
             if(newAgBeh.IsUsingDiscreteActions)
             {
-                newAgBeh.actorDiscrete.CreateAsset($"{name}/actorDiscrete");
-                newAgBeh.discriminatorDiscrete.CreateAsset($"{name}/discriminatorDiscrete");
+                newAgBeh.actorDiscrete.CreateAsset($"{name}/discrete");
+                newAgBeh.discriminatorDiscrete.CreateAsset($"{name}/discriminator_discrete");
             }
 
             return newAgBeh;
@@ -484,10 +482,6 @@ namespace DeepUnity
                 if (script.standardDeviation == StandardDeviationType.Trainable)
                 {
                     dontDrawMe.Add("standardDeviationValue");
-                }
-                else
-                {
-                    dontDrawMe.Add("standardDeviationScale");
                 }
             }
 

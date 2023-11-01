@@ -23,6 +23,7 @@ namespace DeepUnity
                 return  1f - tanh * tanh;
             });
         }
+        public override object Clone() => new Tanh();
     }
 
 }

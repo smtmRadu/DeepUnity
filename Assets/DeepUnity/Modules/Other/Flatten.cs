@@ -64,6 +64,8 @@ namespace DeepUnity
             return Tensor.Reshape(loss, InputShapeCache);
         }
 
+
+        public object Clone() => new Flatten(this.startAxis, this.endAxis);
     }
 
 }

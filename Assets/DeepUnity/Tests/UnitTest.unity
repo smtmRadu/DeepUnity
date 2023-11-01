@@ -485,7 +485,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 527252065}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: -1.5779992, z: 0}
+  m_LocalPosition: {x: 0, y: -1.85, z: 0}
   m_LocalScale: {x: 0.75250995, y: 0.75250995, z: 0.75250995}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -604,7 +604,7 @@ ConfigurableJoint:
   m_Anchor: {x: 0, y: 0.99999905, z: 0}
   m_Axis: {x: 1, y: 0, z: 0}
   m_AutoConfigureConnectedAnchor: 1
-  m_ConnectedAnchor: {x: 0, y: -0.8254899, z: 0.0000009553061}
+  m_ConnectedAnchor: {x: 0.0000015956759, y: -1.0974898, z: -0.000011001766}
   serializedVersion: 3
   m_SecondaryAxis: {x: 0, y: 1, z: 0}
   m_XMotion: 0
@@ -690,7 +690,7 @@ ConfigurableJoint:
   m_SwapBodies: 0
   m_BreakForce: Infinity
   m_BreakTorque: Infinity
-  m_EnableCollision: 0
+  m_EnableCollision: 1
   m_EnablePreprocessing: 1
   m_MassScale: 1
   m_ConnectedMassScale: 1
@@ -792,6 +792,7 @@ GameObject:
   - component: {fileID: 574050251}
   - component: {fileID: 574050250}
   - component: {fileID: 574050249}
+  - component: {fileID: 574050254}
   m_Layer: 0
   m_Name: werw
   m_TagString: Untagged
@@ -915,6 +916,22 @@ Transform:
   m_Father: {fileID: 1833766344}
   m_RootOrder: -1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &574050254
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 574050248}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0417462f17fa91146a9428483b2049c2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxJointSpring: 1000
+  jointDamper: 10
+  maxJointForce: 2500
+  bodyPartsList: []
 --- !u!1 &621327369
 GameObject:
   m_ObjectHideFlags: 0
@@ -967,16 +984,17 @@ MonoBehaviour:
     steps: 0
     current: 0
     mean: 0
+  learningRate: 0.01
   hiddenSize: 32
-  trainingSamples: 256
-  batch_size: 64
+  trainingSamples: 1024
+  batch_size: 128
   validationSamples: 32
   scheduler_step_size: 1000000
   scheduler_gamma: 0.99
   rotationSpeed: 0.35
   dataScale: 0.15
   timerStopEpoch: 100
-  drawScale: 200
+  drawScale: 150
 --- !u!4 &621327371
 Transform:
   m_ObjectHideFlags: 0
@@ -1224,7 +1242,7 @@ MonoBehaviour:
   lr: 0.001
   Runs: 878
   rnn_network: {fileID: 11400000, guid: 7fb1cc86ea6c8bd44980b4c2cc2966ca, type: 2}
-  net: {fileID: 0}
+  net: {fileID: 11400000, guid: 036d00a1e52cff84c97181633b5dead2, type: 2}
   image: {fileID: 1095767907}
   image2: {fileID: 0}
   graph:
@@ -2579,7 +2597,7 @@ Transform:
   m_GameObject: {fileID: 1833766340}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 4.698023, y: -4.2, z: 156.3}
-  m_LocalScale: {x: 11.272, y: 11.272, z: 11.272}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 574050253}

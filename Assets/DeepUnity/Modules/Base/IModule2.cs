@@ -6,6 +6,7 @@ namespace DeepUnity
     public interface IModule2
     {
         public Tensor Backward(Tensor loss);
+        public object Clone();
     }
 
     [System.Serializable]

@@ -8,6 +8,9 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// All values added to the state buffer are clipped in range [-5, 5]
+    /// </summary>
     public class StateBuffer
     {
         public readonly int Capacity;
@@ -43,19 +46,20 @@ namespace DeepUnity
 
         // Overloads
         /// <summary>
-        /// Adds a one dimensional observation. Base method for all other AddObservation() methods.
+        /// Adds a one dimensional observation, clipped between [-10, 10] for stability. Base method for all other AddObservation() methods.
         /// </summary>
         /// <param name="observation"></param>
         public void AddObservation(float observation)
         {
             if (Capacity - position_index < 1)
-                throw new System.InsufficientMemoryException($"SensorBuffer overflow. Please add observations considering a capacity of {Capacity}.");
+                throw new InsufficientMemoryException($"SensorBuffer overflow. Consider the capacity is {Capacity}.");
 
             if (float.IsNaN(observation))
-                throw new ArgumentException("float.NaN value observation added to the SensorBuffer.");
-
-
-            State[position_index++] = observation;
+            {
+                ConsoleMessage.Warning("float.NaN value observation added to the SensorBuffer replaced with 0");
+                observation = 0f;
+            }
+            State[position_index++] = Utils.Clip(observation, -5f, 5f);
         }
         /// <summary>
         /// Adds a one dimensional observation. The bool value is converted to float, 0 for false and 1 for true respectively.

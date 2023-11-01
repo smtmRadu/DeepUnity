@@ -1,5 +1,5 @@
-
 using System;
+
 namespace DeepUnity
 {
     // https://www.youtube.com/watch?v=09c7bkxpv9I
@@ -80,8 +80,7 @@ namespace DeepUnity
             exp_sum = Tensor.Expand(exp_sum, -1, exp.Size(-1));
             return exp / exp_sum;
         }
-
+        public override object Clone() => new Softmax();
     }
 
 }
-

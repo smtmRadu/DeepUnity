@@ -1,5 +1,5 @@
 # DeepUnity
-![version](https://img.shields.io/badge/version-v0.9.5.3-blue)
+![version](https://img.shields.io/badge/version-v0.9.5.4-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO).
 
@@ -187,7 +187,7 @@ TIPS:
 
 - In order to properly get use of _AddReward()_ and _EndEpisode()_ consult the diagram below. These methos work well being called inside _OnTriggerXXX()_ or _OnCollisionXXX()_, as well as inside _OnActionReceived()_ rightafter actions are performed.
 - **Decision Period** high values increases overall performance of the training session, but lacks when it comes to agent inference accuracy. Typically, use a higher value for broader parallel environments, then decrease this value to 1 to fine-tune the agent.
-- **Input Normalization** plays a huge role in policy convergence. To outcome this problem, observations can be auto-normalized by checking the corresponding box inside behaviour asset, but instead, is highly recommended to manually normalize all input values before adding them to the __SensorBuffer__. **Vector2**, **Vector3** and **Quaternion** variables can be normalized by calling **_.normalized_**. Single values can be normalized within [0, 1] or [-1, 1] ranges by using the formula **normalized_value = (value - min) / (max - min)**.
+- **Input Normalization** plays a huge role in policy convergence. To outcome this problem, observations can be auto-normalized by checking the corresponding box inside behaviour asset, but instead, is highly recommended to manually normalize all input values before adding them to the __SensorBuffer__. Scalar values can be normalized within [0, 1] or [-1, 1] ranges by using the formula **normalized_value = (value - min) / (max - min)**.
 - The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. It is not recommended to use them, but if neccesary, in order to override them, call the their **base** each time, respecting the logic of the diagram below.
 
 ![rl](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_schema.jpg?raw=true)

@@ -91,6 +91,13 @@ namespace DeepUnity
         {
             modules = serializedModules.Select(x => IModuleWrapper.Unwrap(x)).ToArray();
         }
+
+        public override object Clone()
+        {
+            var cloned_modules = this.modules.Select(x => (IModule)x.Clone()).ToArray();
+            var net = new NeuralNetwork(cloned_modules);
+            return net;
+        }
     }
 
     // If you turn this ON you will not see the param updates in the inspector

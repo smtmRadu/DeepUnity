@@ -218,7 +218,7 @@ namespace DeepUnity
                     for (int w = 0; w < width; w++)
                     {
                         Vector3 position = origin000 + new Vector3(w, h, d) * scale;
-                        string[] tags = UnityEditorInternal.InternalEditorUtility.tags;
+                        // string[] tags = UnityEditorInternal.InternalEditorUtility.tags;
 
                         if (world == World.World3d)
                         {
@@ -254,8 +254,6 @@ namespace DeepUnity
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-
-            var script = target as GridSensor;
 
             List<string> _dontDrawMe = new List<string>() { "m_Script" };
 

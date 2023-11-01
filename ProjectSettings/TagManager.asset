@@ -9,12 +9,12 @@ TagManager:
   - Box
   - Wall
   - Goal
-  - Spider
-  - Floor
   - Agent
   - Ball
   - Car
-  - Terminal
+  - Target
+  - Ground
+  - Obstacle
   layers:
   - Default
   - TransparentFX

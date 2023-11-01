@@ -24,5 +24,7 @@ namespace DeepUnity
                 return mishDerivative;
             });
         }
+
+        public override object Clone() => new Mish();
     }
 }

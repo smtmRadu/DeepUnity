@@ -29,6 +29,7 @@ namespace DeepUnity
         private float meanPolicyLoss = 0f;
         private float meanValueLoss = 0f;
         private float meanEntropy = 0f;
+        [SerializeField, ReadOnly] private int currentSteps = 0;
         private readonly DateTime timeWhenTheTrainingStarted = DateTime.Now;
         
 
@@ -53,8 +54,7 @@ namespace DeepUnity
 
                 if (Instance.statisticsTrack != null)
                 {
-                    Instance.statisticsTrack.parallelAgents = Instance.parallelAgents.Count;
-                    // Instance.statisticsTrack.stepCount += Instance.hp.bufferSize * parallelAgents.Count;
+                    Instance.statisticsTrack.parallelAgents = Instance.parallelAgents.Count;          
                     Instance.statisticsTrack.iterations++;
                     Instance.statisticsTrack.policyUpdateSecondsElapsed += (float)clock.Elapsed.TotalSeconds;
                     Instance.statisticsTrack.policyUpdateTime = $"{(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) % 60)} sec";
@@ -76,7 +76,7 @@ namespace DeepUnity
             Time.timeScale = Instance.hp.timescale;
 
             // Check if max steps reached
-            if (Instance.statisticsTrack && Instance.statisticsTrack.stepCount >= Instance.hp.maxSteps)
+            if (Instance.currentSteps >= Instance.hp.maxSteps)
                 EndTrainingSession($"Max Steps reached ({Instance.hp.maxSteps})");
         }
         private void Update()
@@ -209,7 +209,6 @@ namespace DeepUnity
                 Tensor cont_probs_old = null;
                 Tensor disc_probs_new = null;
                 Tensor disc_probs_old = null;
-              
 
                 for (int b = 0; b < states_batches.Count; b++)
                 {
@@ -260,12 +259,11 @@ namespace DeepUnity
                 }
 
 
-                // Step schedulers after each epoch
+                // Step LR schedulers after each epoch
                 ac.criticScheduler.Step();
                 ac.actorMuScheduler?.Step();
                 ac.actorSigmaScheduler?.Step();
                 ac.actorDiscreteScheduler?.Step();
-
 
                 // Save statistics info
                 statisticsTrack?.learningRate.Append(ac.criticScheduler.CurrentLR);
@@ -357,9 +355,6 @@ namespace DeepUnity
             // ∂-LClip / ∂πθ(a|s)  (20) Bick.D
             Tensor dmLClip_dPi = -1f * (dmindx * advantages + dmindy * advantages * dclipdx) / piOld;
 
-            if(dmLClip_dPi.Contains(float.NaN)) return;
-            
-
             // Entropy bonus added if σ is trainable (entropy is just a constant so no need really for differentiation)
             if (ac.standardDeviation == StandardDeviationType.Trainable)
             {
@@ -371,6 +366,9 @@ namespace DeepUnity
                 Tensor dmH_dPi = sigma.Select(x => 1f / x);
                 dmLClip_dPi += dmH_dPi * hp.beta;
             }
+
+            if (dmLClip_dPi.Contains(float.NaN)) return;
+
 
             // ∂πθ(a|s) / ∂μ = πθ(a|s) * (x - μ) / σ^2   (26) Bick.D
             Tensor dPi_dMu = pi * (actions - mu) / sigma.Pow(2);

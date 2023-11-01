@@ -107,5 +107,16 @@ namespace DeepUnity
 
             return dLdX;
         }
+
+        public object Clone()
+        {
+            LayerNorm laynorm = new LayerNorm();
+            laynorm.step = this.step;
+            laynorm.gamma = (Tensor)this.gamma.Clone();
+            laynorm.beta = (Tensor)this.beta.Clone();
+            laynorm.runningMean = (Tensor)this.runningMean.Clone(); 
+            laynorm.runningVar = (Tensor)this.runningVar.Clone();
+            return laynorm;
+        }
     }
 }

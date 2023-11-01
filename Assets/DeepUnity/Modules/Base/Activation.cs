@@ -1,3 +1,5 @@
+using Unity.VisualScripting;
+
 namespace DeepUnity
 {
     /// <summary>
@@ -23,6 +25,7 @@ namespace DeepUnity
         {
             return Derivative(InputCache) * loss;
         }
+        public abstract object Clone();
     }
 }
 

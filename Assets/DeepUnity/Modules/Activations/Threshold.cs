@@ -20,6 +20,8 @@ namespace DeepUnity
         }
         protected override Tensor Activate(Tensor x) => x.Select(k => k > threshold ? threshold : value);
         protected override Tensor Derivative(Tensor x) => x.Select(k => k > threshold ? 1f : 0f);
+
+        public override object Clone() => new Threshold(threshold, value);
     }
 }
 

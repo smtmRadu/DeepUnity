@@ -1,7 +1,6 @@
 using System;
 using UnityEditor;
 using UnityEngine;
-using System.Collections.Generic;
 
 namespace DeepUnity
 {
@@ -62,25 +61,28 @@ namespace DeepUnity
         [Tooltip("Kullback-Leibler divergence target value")]
         [Min(0.015f)] public float targetKL = 0.015f;
 
-        // [ReadOnly, Tooltip("Applies linear decay on beta.")]
-        // public bool betaScheduler = false;
-        // 
-        // [ReadOnly, Tooltip("Applies linear decay on epsilon.")]
-        // public bool epsilonScheduler = false;
+        // [Tooltip("Applies linear decay on beta with respect to the maxSteps. When maxSteps is reached, beta will be 0.")]
+        // [SerializeField] public bool betaSchedule = true;
+
 
         [Space(50)]
         [Tooltip("Timescale of the training session.")]
         [Min(1f)] public float timescale = 1f;
         [Tooltip("Debug the train_data into a file.")]
         // [HideInInspector] 
-        [Space(150), HideInInspector]
+        [Space(150)]
         public bool debug = false;
 
 
         private void Awake()
         {
             if (bufferSize % batchSize != 0)
-                ConsoleMessage.Warning("Buffer size must be multiple of batch size");
+            {
+                ConsoleMessage.Info($"Buffer size must be multiple of batch size. Old value ({bufferSize}) was changed to {bufferSize}.");
+                int lowbound = bufferSize / batchSize;
+                bufferSize = batchSize * lowbound;           
+            }
+               
         }
         /// <summary>
         /// Creates a new Hyperparameters asset in the <em>behaviour</em> folder.
@@ -102,30 +104,6 @@ namespace DeepUnity
             return hp;
         }
     }
-    [CustomEditor(typeof(Hyperparameters), true), CanEditMultipleObjects]
-    class ScriptlessHP : Editor
-    {
-        public override void OnInspectorGUI()
-        {
-            serializedObject.Update();
-            List<string> dontDrawMe = new List<string>() { "m_Script" };
-
-            SerializedProperty lrs = serializedObject.FindProperty("LRSchedule");
-            if(!lrs.boolValue)
-            {
-                dontDrawMe.Add("schedulerStepSize");
-                dontDrawMe.Add("schedulerDecay");
-            }
-
-            if (serializedObject.FindProperty("KLDivergence").enumValueIndex == (int)KLType.Off)
-                dontDrawMe.Add("targetKL");
-
-            if (EditorApplication.isPlaying)
-                EditorGUILayout.HelpBox("Hyperparameters values can be modified at runtime. Config file has no effect but when the agent is learning.", MessageType.Info);
-
-            DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
-            serializedObject.ApplyModifiedProperties();
-        }
-    }
+   
 }
 

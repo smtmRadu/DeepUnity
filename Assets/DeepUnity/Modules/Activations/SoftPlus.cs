@@ -25,6 +25,7 @@ namespace DeepUnity
                 return 1f / (1 + embx);
             });
         }
+        public override object Clone() => new Softplus(beta);
     }
 
 }

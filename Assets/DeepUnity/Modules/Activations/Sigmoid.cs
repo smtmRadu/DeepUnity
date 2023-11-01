@@ -21,5 +21,7 @@ namespace DeepUnity
                 return  sigmoid * (1f - sigmoid);
             });
         }
+
+        public override object Clone() => new Sigmoid();
     }
 }

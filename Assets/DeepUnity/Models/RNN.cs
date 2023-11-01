@@ -26,26 +26,6 @@ namespace DeepUnity
         /// 
         /// Inputs: (input, h_0). <br></br>
         /// input:  <b>(L, H_in)</b> for unbatched input, <b>(L, B, H_in)</b> when batch_first = false or <b>(B, L, H_in)</b> when batch_first = true. <br></br>
-        /// h_0:    <b>(num_layers, H_out)</b> for unbatched input, or <b>(num_layers, B, H_out)</b>. <br></br>
-        /// 
-        /// <br></br>
-        /// Outputs: (output, h_n). <br></br>
-        /// output: <b>(L, H_in)</b> for unbatched input, or <b>(L, B, H_out)</b> when batch_first = false or <b>(B, L, H_out)</b> when batch_first = true. <br></br>
-        /// h_n: <b>(num_layers, H_out)</b> for unbatched input or <b>(num_layers, B, H_out)</b>. <br></br>
-        /// 
-        /// <br></br>
-        /// where B = batch_size, L = sequence_length, H_in = input_size, H_out = hidden_size.
-        /// </summary>
-        /// <param name="modules">RNNCell, Dropout or LayerNorm.</param>
-        public RNN(bool batch_first = false, params IModule2[] modules)
-        {
-            this.batchFirst = batch_first;
-            this.modules = modules;
-        }
-        /// <summary>
-        /// 
-        /// Inputs: (input, h_0). <br></br>
-        /// input:  <b>(L, H_in)</b> for unbatched input, <b>(L, B, H_in)</b> when batch_first = false or <b>(B, L, H_in)</b> when batch_first = true. <br></br>
         /// h_0:    <b>(num_layers, H_in)</b> for unbatched input, or <b>(num_layers, B, H_in)</b>. <br></br>
         /// 
         /// <br></br>
@@ -299,6 +279,13 @@ namespace DeepUnity
         public void OnAfterDeserialize()
         {
             modules = serializedModules.Select(x => IModule2Wrapper.Unwrap(x)).ToArray();
+        }
+
+        public override object Clone()
+        {
+            var rnn_clone = new RNN(2, 2,batch_first:this.batchFirst);
+            rnn_clone.modules = this.modules.Select(x => (IModule2) x.Clone()).ToArray();
+            return rnn_clone;
         }
     }
 

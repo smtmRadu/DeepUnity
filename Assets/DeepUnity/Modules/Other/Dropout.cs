@@ -43,6 +43,8 @@ namespace DeepUnity
         {
             return loss.Zip(InputCache, (l, i) => i != 0f ? l : 0f);
         }
+
+        public object Clone() => new Dropout(this.dropout);
     }
 
 }

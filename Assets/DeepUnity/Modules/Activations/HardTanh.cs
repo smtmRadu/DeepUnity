@@ -33,6 +33,8 @@ namespace DeepUnity
             this.min_value = min_val;
             this.max_value = max_val;
         }
+
+        public override object Clone() => new HardTanh();
     }
 }
 

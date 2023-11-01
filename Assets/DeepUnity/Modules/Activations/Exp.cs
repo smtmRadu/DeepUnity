@@ -1,5 +1,4 @@
 using System;
-
 namespace DeepUnity
 {
     [Serializable]
@@ -7,5 +6,7 @@ namespace DeepUnity
     {
         protected override Tensor Activate(Tensor x) => x.Exp();
         protected override Tensor Derivative(Tensor x) => x.Exp();
+
+        public override object Clone() => new Exp();
     }
 }

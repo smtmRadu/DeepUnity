@@ -228,6 +228,18 @@ namespace DeepUnity
             InputCache = new();
             HiddenCache = new();
         }
+        public object Clone()
+        {
+            var rnncell = new RNNCell(1, 1, this.nonlinearity);
+            rnncell.InputCache = new Stack<Tensor>();
+            rnncell.HiddenCache = new Stack<Tensor>();
+            rnncell.Activations = new Stack<Activation>();
+            rnncell.gamma = (Tensor)this.gamma.Clone();
+            rnncell.beta = (Tensor)this.beta.Clone();
+            rnncell.recurrentGamma = (Tensor)this.recurrentGamma.Clone();
+            rnncell.recurrentBeta = (Tensor)this.recurrentBeta.Clone();
+            return rnncell;
+        }
     }
 }
 

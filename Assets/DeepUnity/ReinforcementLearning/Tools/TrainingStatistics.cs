@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Text;
-using UnityEditor;
+﻿using System.Text;
 using UnityEngine;
 using System.IO;
 using System.Linq;
@@ -165,7 +163,6 @@ namespace DeepUnity
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Training Data Shuffle: {hp.shuffleTrainingData}</text>");
             y += 20;
-            // string step_lr_details = !hp.learningRateSchedule? "" : $"[Step Size: {hp.schedulerStepSize}]    [Decay: {hp.schedulerDecay}]";
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Learning Rate Schedule: {hp.LRSchedule}    {""}</text>");
 
             y += 50;
@@ -173,9 +170,8 @@ namespace DeepUnity
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Space Size: {ab.observationSize}</text>");
             y += 20;
-            string std_value = ab.standardDeviation == StandardDeviationType.Fixed ? $"Value: {ab.standardDeviationValue}" : $"Scale: {ab.standardDeviationScale}";
-            string if_using_cont_acts = ab.IsUsingContinuousActions ? std_value : "";
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Continuous Actions: {ab.continuousDim} [Standard Deviation: {ab.standardDeviation}]     [{if_using_cont_acts}]</text>");
+            string std_value = ab.standardDeviation == StandardDeviationType.Fixed ?  $"[Value: {ab.standardDeviationValue}]" : "";
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Continuous Actions: {ab.continuousDim} [Standard Deviation: {ab.standardDeviation}]     {std_value}</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Discrete Actions: {ab.discreteDim}</text>");
             y += 20;
@@ -267,63 +263,6 @@ namespace DeepUnity
             yOffset += height + 30;
         }
     }
-
-
-
-
-
-
-
-
-
-    [CustomEditor(typeof(TrainingStatistics)), CanEditMultipleObjects]
-    class CustomAgentPerformanceTrackerEditor : Editor
-    {
-        public override void OnInspectorGUI()
-        {
-            List<string> dontDrawMe = new List<string>() { "m_Script" };
-
-            TrainingStatistics script = (TrainingStatistics)target;
-
-            /*if(EditorApplication.isPlaying)
-            {
-                float sessionProgress = script.stepCount / ((float)PPOTrainer.SessionMaxSteps) * 100f;
-                StringBuilder sb = new StringBuilder();
-                sb.Append("Progress [");
-                sb.Append(script.stepCount);
-                sb.Append(" / ");
-                sb.Append(PPOTrainer.SessionMaxSteps);
-                sb.Append($"] \n[");
-                for (float i = 1.25f; i <= 100f; i += 1.25f)
-                {
-                    if (i == 47.5f)
-                        sb.Append($"{sessionProgress.ToString("00.0")}%");
-                    else if (i > 47.5f && i <= 53.75f)
-                        continue;
-                    else if (i <= sessionProgress)
-                        sb.Append("▮");
-                    else
-                        sb.Append("▯");
-                }
-                sb.Append("]");
-                EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
-                EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
-
-            }
-            */
-
-            DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
-
-            // Depending on the version, Performance Graph may require or not increasingly needed RAM memory.
-            if(EditorApplication.isPlaying)
-            {
-                EditorGUILayout.HelpBox("Training Statistics may require considerable free RAM for overnight training sessions.", MessageType.Info);
-            }
-          
-            serializedObject.ApplyModifiedProperties();
-        }
-    }
-
 }
 
 

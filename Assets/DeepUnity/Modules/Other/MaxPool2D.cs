@@ -246,5 +246,7 @@ namespace DeepUnity
             return gradInput;
         }
 
+        public object Clone() => new MaxPool2D(this.kernel_size, this.padding, this.padding_mode);
+
     }
 }

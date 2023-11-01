@@ -30,6 +30,7 @@ namespace DeepUnity
                 return dgelu;
             });
         }
+        public override object Clone() => new GELU();
     }
 }
 

@@ -550,6 +550,7 @@ void Mean(int3 id : SV_DispatchThreadID)
     int a = axisToDim(axis, r1);
     
     if (a == 3)
+    {
         for (int l = 0; l < b1; l++)
         {
             for (int k = 0; k < c1; k++)
@@ -569,26 +570,31 @@ void Mean(int3 id : SV_DispatchThreadID)
             }
 
         }
+    }
     else if (a == 2)
-        for (int l = 0; l < b1; l++)
-        {
-            for (int k = 0; k < c1; k++)
+    {
+    
+            for (int l = 0; l < b1; l++)
             {
-                for (int i = 0; i < w1; i++)
+                for (int k = 0; k < c1; k++)
                 {
-                    float sum = 0.0;
-                    for (int j = 0; j < h1; j++)
+                    for (int i = 0; i < w1; i++)
                     {
-                        sum += data1_get(l, k, j, i);
+                        float sum = 0.0;
+                        for (int j = 0; j < h1; j++)
+                        {
+                            sum += data1_get(l, k, j, i);
 
+                        }
+                        sum /= float(h1);
+                        result_set(l, k, 0, i, sum);
                     }
-                    sum /= float(h1);
-                    result_set(l, k, 0, i, sum);
                 }
             }
-        }
+    }
     else if (a == 1)
-        for (int l = 0; l < b1; l++)
+    {
+        for (int l = 0;l <b1; l++)
         {
             for (int j = 0; j < h1; j++)
             {
@@ -604,12 +610,13 @@ void Mean(int3 id : SV_DispatchThreadID)
                 }
             }
         }
+    }
     else if (a == 0)
+    {  
         for (int k = 0; k < c1; k++)
         {
             for (int j = 0; j < h1; j++)
-            {
-               
+            {             
                 for (int i = 0; i < w1; i++)
                 {
                     float sum = 0.0;
@@ -623,8 +630,7 @@ void Mean(int3 id : SV_DispatchThreadID)
                 }
             }
         }
-       
-
+    }
 }
 
 #pragma kernel Var
@@ -632,9 +638,9 @@ void Mean(int3 id : SV_DispatchThreadID)
 void Var(int3 id : SV_DispatchThreadID)
 {
     int a = axisToDim(axis, r1);
-    
+    int l;
     if (a == 3)
-        for (int l = 0; l < b1; l++)
+        for (l = 0; l < b1; l++)
         {
             for (int k = 0; k < c1; k++)
             {
@@ -656,7 +662,7 @@ void Var(int3 id : SV_DispatchThreadID)
 
         }
     else if (a == 2)
-        for (int l = 0; l < b1; l++)
+        for (l = 0; l < b1; l++)
         {
             for (int k = 0; k < c1; k++)
             {
@@ -678,7 +684,7 @@ void Var(int3 id : SV_DispatchThreadID)
             }
         }
     else if (a == 1)
-        for (int l = 0; l < b1; l++)
+        for (l = 0; l < b1; l++)
         {
             for (int j = 0; j < h1; j++)
             {
@@ -707,7 +713,7 @@ void Var(int3 id : SV_DispatchThreadID)
                 {
                     float sum = 0.0;
                     float sumsqr = 0.0;
-                    for (int l = 0; l < b1; l++)
+                    for (l = 0; l < b1; l++)
                     {
                         float v = data1_get(l, k, j, i);
                         sum += v;
@@ -730,6 +736,7 @@ void Std(int3 id : SV_DispatchThreadID)
     int a = axisToDim(axis, r1);
     
     if (a == 3)
+    {   
         for (int l = 0; l < b1; l++)
         {
             for (int k = 0; k < c1; k++)
@@ -755,6 +762,7 @@ void Std(int3 id : SV_DispatchThreadID)
             }
 
         }
+    }
     else if (a == 2)
         for (int l = 0; l < b1; l++)
         {
@@ -781,6 +789,7 @@ void Std(int3 id : SV_DispatchThreadID)
             }
         }
     else if (a == 1)
+    {
         for (int l = 0; l < b1; l++)
         {
             for (int j = 0; j < h1; j++)
@@ -804,6 +813,7 @@ void Std(int3 id : SV_DispatchThreadID)
                 }
             }
         }
+    }
     else if (a == 0)
         for (int k = 0; k < c1; k++)
         {
@@ -864,6 +874,8 @@ void Sum(int3 id : SV_DispatchThreadID)
 
         }
     else if (a == 2)
+    {
+   
         for (int l = 0; l < b1; l++)
         {
             for (int k = 0; k < c1; k++)
@@ -885,7 +897,10 @@ void Sum(int3 id : SV_DispatchThreadID)
                 }
             }
         }
+    }
     else if (a == 1)
+    {
+    
         for (int l = 0; l < b1; l++)
         {
             for (int j = 0; j < h1; j++)
@@ -905,6 +920,7 @@ void Sum(int3 id : SV_DispatchThreadID)
                 }
             }
         }
+    }
     else if (a == 0)
         for (int k = 0; k < c1; k++)
         {
@@ -961,6 +977,8 @@ void Min(int3 id : SV_DispatchThreadID)
 
         }
     else if (a == 2)
+    {
+    
         for (int l = 0; l < b1; l++)
         {
             for (int k = 0; k < c1; k++)
@@ -983,7 +1001,10 @@ void Min(int3 id : SV_DispatchThreadID)
                 }
             }
         }
+    }
     else if (a == 1)
+    {
+    
         for (int l = 0; l < b1; l++)
         {
             for (int j = 0; j < h1; j++)
@@ -1003,6 +1024,7 @@ void Min(int3 id : SV_DispatchThreadID)
                 }
             }
         }
+    }
     else if (a == 0)
         for (int k = 0; k < c1; k++)
         {
@@ -1055,6 +1077,8 @@ void Max(int3 id : SV_DispatchThreadID)
 
         }
     else if (a == 2)
+    {
+    
         for (int l = 0; l < b1; l++)
         {
             for (int k = 0; k < c1; k++)
@@ -1072,7 +1096,10 @@ void Max(int3 id : SV_DispatchThreadID)
                 }
             }
         }
+    }
     else if (a == 1)
+    {
+    
         for (int l = 0; l < b1; l++)
         {
             for (int j = 0; j < h1; j++)
@@ -1088,6 +1115,7 @@ void Max(int3 id : SV_DispatchThreadID)
                 }
             }
         }
+    }
     else if (a == 0)
         for (int k = 0; k < c1; k++)
         {

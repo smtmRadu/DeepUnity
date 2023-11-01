@@ -284,6 +284,18 @@ namespace DeepUnity
             S = new Softmax().Forward(S);
             return S;
         }
+
+        public object Clone()
+        {
+            var att = new Attention((1, 1), this.d, this.scale);
+            att.W_Q = (Tensor)this.W_Q.Clone();
+            att.W_K = (Tensor)this.W_K.Clone();
+            att.W_V = (Tensor)this.W_V.Clone();
+            att.W_O = (Tensor)this.W_O.Clone();
+            att.softmax = (Softmax)this.softmax.Clone();
+            return att;
+
+        }
     }
 
 }

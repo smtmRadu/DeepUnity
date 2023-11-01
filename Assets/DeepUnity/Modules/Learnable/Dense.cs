@@ -176,6 +176,13 @@ namespace DeepUnity
                 return Tensor.MatMulGPU(loss, gamma).Squeeze(0);
 
         }
+        public object Clone()
+        {
+            var dense = new Dense(1, 1, device: this.device);
+            dense.gamma = (Tensor) this.gamma.Clone();
+            dense.beta = (Tensor) this.beta.Clone();
+            return dense;
+        }
     }
 
 }

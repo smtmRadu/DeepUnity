@@ -1,10 +1,11 @@
+using DeepUnityTutorials;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace DeepUnity
 {
     /// <summary>
-    /// A tool used to reset all Transform and RigidBody[2D] components of a GameObject, including all it's children GameObjects of any degree.<br />
+    /// A tool used to reset all Transform, RigidBody[2D] and BodyController components of a GameObject, including all it's children GameObjects of any degree.<br />
     /// </summary>
     public class StateResetter
     {
@@ -13,6 +14,7 @@ namespace DeepUnity
         private List<Transform> initialTransformsCopies;
         private List<Rigidbody> rigidBodies;
         private List<Rigidbody2D> rigidBodies2D;
+        private BodyController bodyController;
 
         public StateResetter(Transform parent)
         {
@@ -25,6 +27,7 @@ namespace DeepUnity
             this.initialTransformsCopies = new List<Transform>();
             this.rigidBodies = new List<Rigidbody>();
             this.rigidBodies2D = new List<Rigidbody2D>();
+            this.bodyController = parent.GetComponent<BodyController>();
             GetAllTransforms(parent);
             GetAllRigidBodies(parent);
             GetAllRigidBodies2D(parent);
@@ -35,6 +38,12 @@ namespace DeepUnity
             ResetAllTransforms(parent, ref transformsStart);
             ResetAllRigidBodies();
             ResetAllRigidBodies2D();
+            bodyController?.bodyPartsList.ForEach(part => {
+                part.CurrentStrength = 0f;
+                part.CurrentNormalizedStrength = 0f;
+                part.CurrentEulerRotation = Vector3.zero;
+                part.CurrentNormalizedRotation = Vector3.zero;
+            });
         }
 
         private void GetAllTransforms(Transform parent)

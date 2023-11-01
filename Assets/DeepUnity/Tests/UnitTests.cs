@@ -29,9 +29,8 @@ namespace kbRadu
 
         private void Start()
         {
-            Vector3 x = new Vector3(0f, 0.02f, 0.5f);
-            print(x);
-            print(x.normalized);
+            float t = 1.2f;
+            print(Mathf.Lerp(12, 14, t));
         }
         // private void Start()
         // {

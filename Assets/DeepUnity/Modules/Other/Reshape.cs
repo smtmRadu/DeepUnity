@@ -81,6 +81,8 @@ namespace DeepUnity
             }
         }
 
+        public object Clone() => new Reshape(this.inputShape, this.outputShape);
+
     }
 }
 

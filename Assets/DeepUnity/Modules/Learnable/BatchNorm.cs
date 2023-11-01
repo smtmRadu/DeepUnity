@@ -147,11 +147,11 @@ namespace DeepUnity
 
             var dLdxHat = dLdY * gamma.Unsqueeze(0).Expand(0, m); // [batch, outs]
 
-            var dLdVarB = Tensor.Mean(
+            var dLdVarB = Tensor.Sum(
                          dLdxHat * xCentered * (-1f / 2f) * (std.Pow(2f) + Utils.EPSILON).Pow(-3f / 2f),
                          axis: 0,
                          keepDim: true).Expand(0, m); 
-            var dLdMuB = Tensor.Mean(
+            var dLdMuB = Tensor.Sum(
                          dLdxHat * -1f / std + dLdVarB * -2f * xCentered / m,
                          axis: 0,
                          keepDim: true).Expand(0, m);
@@ -159,8 +159,8 @@ namespace DeepUnity
             var dLdX = dLdxHat * 1f / std + dLdVarB * 2f * xCentered / m + dLdMuB * (1f / m);
 
 
-            var dLdGamma = Tensor.Mean(dLdY * xHat, 0);
-            var dLdBeta = Tensor.Mean(dLdY, 0);
+            var dLdGamma = Tensor.Sum(dLdY * xHat, 0);
+            var dLdBeta = Tensor.Sum(dLdY, 0);
 
             gammaGrad += dLdGamma;
             betaGrad += dLdBeta;
@@ -168,7 +168,15 @@ namespace DeepUnity
             return dLdX;
         }
 
-
+        public object Clone()
+        {
+            BatchNorm laynorm = new BatchNorm(this.num_features, this.momentum);
+            laynorm.gamma = (Tensor)this.gamma.Clone();
+            laynorm.beta = (Tensor)this.beta.Clone();
+            laynorm.runningMean = (Tensor)this.runningMean.Clone();
+            laynorm.runningVar = (Tensor)this.runningVar.Clone();
+            return laynorm;
+        }
 
         // TIPS for improvement
         // increase learn rate

@@ -209,6 +209,21 @@ namespace DeepUnity
             return stringBuilder.ToString();
         }
 
+        public override object Clone()
+        {
+            IModule[] cloned_back = backboneModules.Select(x => (IModule)x.Clone()).ToArray();
+            var multihead = new MultiheadNN(cloned_back);
+            foreach (var item in inputHeadsModules)
+            {
+                multihead.AddInputHead((IModule)item.Clone());
+            }
+            foreach (var item in outputHeadsModules)
+            {
+                multihead.AddOutputHead((IModule)item.Clone());
+            }
+            return multihead;
+        }
+
 
     }
 }

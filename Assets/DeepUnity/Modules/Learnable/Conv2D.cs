@@ -552,6 +552,16 @@ namespace DeepUnity
 
             return inputGrad;
         }
+
+
+
+        public object Clone()
+        {
+            var conv = new Conv2D((inputShape[0], inputShape[1], inputShape[2]), outChannels, kernel_shape: (this.kernelHeight, this.kernelWidth), device: this.device);
+            conv.gamma = (Tensor)this.gamma.Clone();
+            conv.beta = (Tensor)this.beta.Clone();
+            return conv;
+        }
     }
 }
 

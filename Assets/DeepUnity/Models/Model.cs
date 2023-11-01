@@ -8,7 +8,7 @@ namespace DeepUnity
 {
     /// <typeparam name="NeuralNetworkType">Type of the network class that inherits.</typeparam>
     [Serializable]
-    public abstract class Model<NeuralNetworkType, InputOutputType> : ScriptableObject where NeuralNetworkType : Model<NeuralNetworkType, InputOutputType>
+    public abstract class Model<NeuralNetworkType, IOType> : ScriptableObject, ICloneable where NeuralNetworkType : Model<NeuralNetworkType, IOType>
     {
         [SerializeField, ReadOnly] private int version = 1;
         [SerializeField, HideInInspector] private bool assetCreated = false;
@@ -19,19 +19,19 @@ namespace DeepUnity
         /// <param name="input"></param>
         /// <returns></returns>
         /// <exception cref="NotSupportedException"></exception>
-        public abstract InputOutputType Predict(InputOutputType input);
+        public abstract IOType Predict(IOType input);
         /// <summary>
         /// Forwards the input and caches it on all layers.
         /// </summary>
         /// <param name="input"></param>
         /// <returns></returns>
-        public abstract InputOutputType Forward(InputOutputType input);
+        public abstract IOType Forward(IOType input);
         /// <summary>
         /// Backpropagates the <paramref name="lossDerivative"/> and computes the gradients.
         /// </summary>
         /// <param name="lossDerivative">Derivative of the loss function w.r.t output (dLdY).</param>
         /// <returns>The backpropagated loss derivative.</returns>
-        public abstract InputOutputType Backward(InputOutputType lossDerivative);
+        public abstract IOType Backward(IOType lossDerivative);
         /// <summary>
         /// Get all <typeparamref name="Learnable"/> modules.
         /// </summary>
@@ -42,6 +42,7 @@ namespace DeepUnity
         /// </summary>
         /// <returns></returns>
         public abstract string Summary();
+        public abstract object Clone();
 
 
         /// <summary>
@@ -72,7 +73,7 @@ namespace DeepUnity
             AssetDatabase.CreateAsset(this, $"Assets/{name}.asset");
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssetIfDirty(this);
-            Debug.Log($"<color=#03a9fc>[<b>{name}</b> <i>{GetType().Name}</i> asset created]</color>");
+            ConsoleMessage.Info($"<b>{name}</b> <i>{GetType().Name}</i> asset created");
             return (NeuralNetworkType)this;
         }
         /// <summary>
@@ -86,11 +87,10 @@ namespace DeepUnity
         {
             if (!assetCreated)
             {
-                Debug.LogError($"<color=#ff3636>[<b>{name}</b> <i>{GetType().Name}</i> model cannot be saved because the asset was not created]</color>");
+                ConsoleMessage.Error($"<b>{name}</b> <i>{GetType().Name}</i> model cannot be saved because the asset was not created]");
                 return;
             }
             version++;
-            // Debug.Log($"<color=#03a9fc>[{name} model saved]</color>");
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssetIfDirty(this);
         }
