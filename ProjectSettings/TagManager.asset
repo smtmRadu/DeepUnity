@@ -15,6 +15,9 @@ TagManager:
   - Target
   - Ground
   - Obstacle
+  - Enemy
+  - Fire
+  - Key
   layers:
   - Default
   - TransparentFX

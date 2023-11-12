@@ -1,5 +1,5 @@
 # DeepUnity
-![version](https://img.shields.io/badge/version-v0.9.5.4-blue)
+![version](https://img.shields.io/badge/version-v0.9.5.5-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO).
 

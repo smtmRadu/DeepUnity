@@ -6,7 +6,7 @@ namespace DeepUnityTutorials
     public class Jumper : Agent
     {
         public float speed = 2.5f;
-        public float rotationSpeed = 1.5f;
+        public float rotationSpeed = 2.5f;
         public float jumpPower = 4.15f;
         Rigidbody rb;
 
@@ -41,18 +41,23 @@ namespace DeepUnityTutorials
         }
         public override void OnActionReceived(ActionBuffer actionBuffer)
         {
+            Vector3 movement;
             switch(actionBuffer.DiscreteAction)
             {
                 case 0:
                     break; //No Action
                 case 1:
-                    rb.velocity = new Vector3(speed, rb.velocity.y, 0); break;
+                    movement = transform.right * speed;
+                    rb.velocity = new Vector3(movement.x, rb.velocity.y, movement.z); break;
                 case 2:
-                    rb.velocity = new Vector3(-speed, rb.velocity.y, 0); break;
+                    movement = -transform.right * speed;
+                    rb.velocity = new Vector3(movement.x, rb.velocity.y, movement.z); break;
                 case 3:
-                    rb.velocity = new Vector3(0, rb.velocity.y, speed); break;
+                    movement = transform.forward * speed;
+                    rb.velocity = new Vector3(movement.x, rb.velocity.y, movement.z); break;
                 case 4:
-                    rb.velocity = new Vector3(0, rb.velocity.y, -speed); break;
+                    movement = -transform.forward * speed;
+                    rb.velocity = new Vector3(movement.x, rb.velocity.y, movement.z); break;
                 case 5:
                     if(isGrounded)
                     {
@@ -62,9 +67,9 @@ namespace DeepUnityTutorials
                     }         
                     break;
                 case 6:
-                    rb.angularVelocity = new Vector3(0, rotationSpeed, 0f); break;
+                    transform.Rotate(0, rotationSpeed, 0);break;
                 case 7:
-                    rb.angularVelocity = new Vector3(0, -rotationSpeed, 0f); break;
+                    transform.Rotate(0, -rotationSpeed, 0); break;
 
             }
 
@@ -74,13 +79,13 @@ namespace DeepUnityTutorials
         public override void Heuristic(ActionBuffer actionOut)
         {
             if (Input.GetKey(KeyCode.A))
-                actionOut.DiscreteAction = 2;
-            else if (Input.GetKey(KeyCode.D))
-                actionOut.DiscreteAction = 1;
-            else if (Input.GetKey(KeyCode.W))
-                actionOut.DiscreteAction = 3;
-            else if (Input.GetKey(KeyCode.S))
                 actionOut.DiscreteAction = 4;
+            else if (Input.GetKey(KeyCode.D))
+                actionOut.DiscreteAction = 3;
+            else if (Input.GetKey(KeyCode.W))
+                actionOut.DiscreteAction = 2;
+            else if (Input.GetKey(KeyCode.S))
+                actionOut.DiscreteAction = 1;
             else if (Input.GetKey(KeyCode.Space))
                 actionOut.DiscreteAction = 5;
             else if (Input.GetKey(KeyCode.E))

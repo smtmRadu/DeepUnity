@@ -78,8 +78,8 @@ namespace DeepUnity
 
                 if (parameters[i] is Learnable L)
                 {
-                    if (weightDecay != 0)
-                        L.gammaGrad = L.gammaGrad + weightDecay * L.gamma;
+                    if (lambda != 0)
+                        L.gammaGrad = L.gammaGrad + lambda * L.gamma;
 
 
                     vGamma[i] = alpha * vGamma[i] + (1f - alpha) * Tensor.Pow(L.gammaGrad, 2f);
@@ -102,17 +102,17 @@ namespace DeepUnity
                         buffGamma[i] = momentum * buffGamma[i] + L.gammaGrad / (Tensor.Sqrt(vBarGamma) + Utils.EPSILON);
                         buffBeta[i] = momentum * buffBeta[i] + L.betaGrad / (Tensor.Sqrt(vBarBeta) + Utils.EPSILON);
                 
-                        L.gamma = L.gamma - learningRate * buffGamma[i];
-                        L.beta = L.beta - learningRate * buffBeta[i];
+                        L.gamma = L.gamma - lr * buffGamma[i];
+                        L.beta = L.beta - lr * buffBeta[i];
                     }
                     else
                     {
-                        L.gamma = L.gamma - learningRate * L.gammaGrad / (Tensor.Sqrt(vBarGamma) + Utils.EPSILON);
-                        L.beta = L.beta - learningRate * L.betaGrad / (Tensor.Sqrt(vBarBeta) + Utils.EPSILON);
+                        L.gamma = L.gamma - lr * L.gammaGrad / (Tensor.Sqrt(vBarGamma) + Utils.EPSILON);
+                        L.beta = L.beta - lr * L.betaGrad / (Tensor.Sqrt(vBarBeta) + Utils.EPSILON);
                     }
                 }
                 if (parameters[i] is ISelfOptimizable S)
-                    S.SelfOptimise(learningRate);
+                    S.SelfOptimise(lr);
             });
         }
     }

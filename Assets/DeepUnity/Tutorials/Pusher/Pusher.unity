@@ -194,6 +194,111 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   partnerAgent: {fileID: 1900760539}
+--- !u!1 &47025462
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 47025463}
+  - component: {fileID: 47025466}
+  - component: {fileID: 47025465}
+  - component: {fileID: 47025464}
+  m_Layer: 0
+  m_Name: Terminal (1)
+  m_TagString: Target
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &47025463
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 47025462}
+  m_LocalRotation: {x: -0, y: -0, z: -2.6765504e-24, w: 1}
+  m_LocalPosition: {x: 25, y: -78, z: -9.1892}
+  m_LocalScale: {x: 589.0769, y: 108.76612, z: 695.92285}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1375687224}
+  m_RootOrder: -1
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!65 &47025464
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 47025462}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!23 &47025465
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 47025462}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: ad86b910cb7c8fa40abc55b22a8024da, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!33 &47025466
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 47025462}
+  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!1 &422593906
 GameObject:
   m_ObjectHideFlags: 0
@@ -593,6 +698,7 @@ Transform:
   - {fileID: 1532522096080609280}
   - {fileID: 1900760537}
   - {fileID: 30804915}
+  - {fileID: 47025463}
   m_Father: {fileID: 0}
   m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
@@ -824,6 +930,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: b6fbebdd7b2fe0042bb75cc92fdd3190, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1900760539}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: b6fbebdd7b2fe0042bb75cc92fdd3190, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1900760543}
   m_SourcePrefab: {fileID: 100100000, guid: b6fbebdd7b2fe0042bb75cc92fdd3190, type: 3}
 --- !u!1 &1819626036
 GameObject:
@@ -1027,7 +1136,7 @@ MonoBehaviour:
   hidUnits: 64
   model: {fileID: 11400000, guid: c7ce009f37c2d8a438887c4a0e7fd39f, type: 2}
   behaviourType: 2
-  onEpisodeEnd: 0
+  onEpisodeEnd: 2
   useSensors: 1
   box: {fileID: 30804915}
   speed: 5000
@@ -1047,6 +1156,93 @@ MonoBehaviour:
   maxStep: 750
   decisionPeriod: 2
   takeActionsBetweenDecisions: 1
+--- !u!114 &1900760543
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1900760532}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  startedAt: ' - '
+  finishedAt: ' - '
+  trainingSessionTime: ' - '
+  policyUpdateSecondsElapsed: 0
+  inferenceSecondsElapsed: 0
+  inferenceTime: ' - '
+  inferenceTimePerAgent: ' - '
+  policyUpdateTime: ' - '
+  policyUpdateTimePerIteration: ' - '
+  inferenceTimeRatio: '- / -'
+  policyUpdateTimeRatio: '- / -'
+  episodeCount: 0
+  stepCount: 0
+  iterations: 0
+  parallelAgents: 0
+  cumulativeReward:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  episodeLength:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  policyLoss:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  valueLoss:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  entropy:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  learningRate:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
 --- !u!1 &1995016857
 GameObject:
   m_ObjectHideFlags: 0

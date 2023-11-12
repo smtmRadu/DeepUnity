@@ -52,7 +52,6 @@ public class GenerateMNIST : MonoBehaviour
             item.device = Device.GPU;
         }
     }
-
     private Tensor GeneratorInput(int batch_size, int latent_dim)
     {
         return Tensor.RandomNormal(batch_size, latent_dim);

@@ -30,10 +30,11 @@ namespace DeepUnity
                 EditorGUILayout.HelpBox(cumReward, MessageType.None);
 
                 // Draw buffer 
-                float bufferFillPercentage = script.Memory.Count * PPOTrainer.ParallelAgentsCount / ((float)script.model.config.bufferSize) * 100f;
+                int buff_count = PPOTrainer.BufferCount;
+                float bufferFillPercentage = buff_count / ((float)script.model.config.bufferSize) * 100f;
                 StringBuilder sb = new StringBuilder();
                 sb.Append("Buffer [");
-                sb.Append(script.Memory.Count * PPOTrainer.ParallelAgentsCount);
+                sb.Append(buff_count);
                 sb.Append(" / ");
                 sb.Append(script.model.config.bufferSize);
                 sb.Append($"] \n[");
@@ -56,38 +57,6 @@ namespace DeepUnity
                 //                         MessageType.None);
             }
 
-            // Runtime Heuristic displays
-            if (EditorApplication.isPlaying &&
-                script.behaviourType == BehaviourType.Heuristic
-                && script.enabled
-                && script.model)
-            {
-                EditorGUILayout.HelpBox("Control the agent behaviour until the buffer is fullfiled.", MessageType.None);
-                // Draw buffer 
-                float bufferFillPercentage = script.Memory.Count / ((float)script.model.config.bufferSize) * 100f;
-                StringBuilder sb = new StringBuilder();
-                sb.Append("Buffer [");
-                sb.Append(script.Memory.Count);
-                sb.Append(" / ");
-                sb.Append(script.model.config.bufferSize);
-                sb.Append($"] \n[");
-                for (float i = 1.25f; i <= 100f; i += 1.25f)
-                {
-                    if (i == 47.5f)
-                        sb.Append($"{bufferFillPercentage.ToString("00.0")}%");
-                    else if (i > 47.5f && i <= 53.75f)
-                        continue;
-                    else if (i <= bufferFillPercentage)
-                        sb.Append("▮");
-                    else
-                        sb.Append("▯");
-                }
-                sb.Append("]");
-                EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
-                EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
-            }
-
-
             // On model create field draw
             if (serializedObject.FindProperty("model").objectReferenceValue == null)
             {
@@ -96,22 +65,11 @@ namespace DeepUnity
 
 
                 EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button("Bake model", GUILayout.Width(EditorGUIUtility.labelWidth * 2.32f)))
-                {
-                    script.BakeModel();
-                }
-
-                // Create a Rect for the second field with a specific width
-                Rect propertyFieldRect = GUILayoutUtility.GetRect(0, EditorGUIUtility.singleLineHeight);
-                propertyFieldRect.width = 50; // Adjust the width as needed
-
-                SerializedProperty typeProperty = serializedObject.FindProperty("archType");
-                EditorGUI.BeginDisabledGroup(true);
-                EditorGUI.PropertyField(propertyFieldRect, typeProperty, GUIContent.none);
-                EditorGUI.EndDisabledGroup();
+                if (GUILayout.Button("Bake model"))
+                    script.BakeModel();            
                 EditorGUILayout.EndHorizontal();
 
-
+                EditorGUILayout.Space();
 
 
                 EditorGUILayout.BeginHorizontal();
@@ -133,10 +91,7 @@ namespace DeepUnity
 
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.Space(20);
-                if (serializedObject.FindProperty("archType").enumValueIndex == (int)ModelType.RNN)
-                    EditorGUILayout.PrefixLabel("Sequence Length");
-                else
-                    EditorGUILayout.PrefixLabel("Stacked Inputs");
+                EditorGUILayout.PrefixLabel("Stacked Inputs");
                 EditorGUI.BeginDisabledGroup(true);
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("stackedInputs"), GUIContent.none);
                 EditorGUI.EndDisabledGroup();

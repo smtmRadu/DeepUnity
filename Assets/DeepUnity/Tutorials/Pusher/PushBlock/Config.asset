@@ -21,12 +21,12 @@ MonoBehaviour:
   normalizeAdvantages: 1
   shuffleTrainingData: 1
   LRSchedule: 0
-  horizon: 72
-  beta: 0.005
+  horizon: 128
+  beta: 0.002
   epsilon: 0.2
   gamma: 0.99
   lambda: 0.95
   KLDivergence: 0
   targetKL: 0.015
-  timescale: 8.02
+  timeScale: 9.95
   debug: 0

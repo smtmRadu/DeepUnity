@@ -23,19 +23,29 @@ namespace DeepUnity
         [SerializeField, ReadOnly] public int continuousDim;
         [SerializeField, ReadOnly] public int discreteDim;
 
-        [Header("Neural Networks & Hyperparameters")]    
-        [SerializeField] public NeuralNetwork critic;
-        [SerializeField] public NeuralNetwork actorContinuousMu;
-        [SerializeField] public NeuralNetwork actorContinuousSigma;
-        [Tooltip("Neural Network used for Behavioral Cloning")]
-        [SerializeField] public NeuralNetwork discriminatorContinuous;
-
-        [Space]
-        [SerializeField] public NeuralNetwork actorDiscrete;
-        [Tooltip("Neural Network used for Behavioral Cloning")]
-        [SerializeField] public NeuralNetwork discriminatorDiscrete;
-        [Space, Tooltip("The scriptable object file containing the training hyperparameters.")]
+        [Header("Hyperparameters")]
+        [Tooltip("The scriptable object file containing the training hyperparameters.")]    
         [SerializeField] public Hyperparameters config;
+        
+        [Header("Critic")]
+        [SerializeField] public NeuralNetwork vNetwork;
+        [SerializeField] public NeuralNetwork q1Network;
+        [SerializeField] public NeuralNetwork q2Network;
+        
+        [Space]
+
+        [Header("Policy")]
+        [SerializeField] public NeuralNetwork muNetwork;
+        [SerializeField] public NeuralNetwork sigmaNetwork;
+        [SerializeField] public NeuralNetwork discreteNetwork;
+        [Space]
+
+        [Header("Discriminator")]
+        [Tooltip("Neural Network used for Behavioral Cloning")]
+        [SerializeField] public NeuralNetwork discContNetwork;
+        [Tooltip("Neural Network used for Behavioral Cloning")]
+        [SerializeField] public NeuralNetwork discDiscNetwork;
+        
 
 
 
@@ -63,87 +73,99 @@ namespace DeepUnity
         [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
         [SerializeField, Range(0.001f, 3f)] 
         public float standardDeviationValue = 1f;
-        
 
-        public Optimizer criticOptimizer { get; private set; }
-        public Optimizer actorMuOptimizer { get; private set; }
-        public Optimizer actorSigmaOptimizer { get; private set; }
-        public Optimizer actorDiscreteOptimizer { get; private set; }
-        public Optimizer discriminatorContinuousOptimizer { get; private set; }
-        public Optimizer discriminatorDiscreteOptimizer { get; private set; }
+        public Optimizer vOptimizer { get; private set; }
+        public Optimizer q1Optimizer { get; private set; }
+        public Optimizer q2Optimizer { get; private set; }
+        public Optimizer muOptimizer { get; private set; }
+        public Optimizer sigmaOptimizer { get; private set; }
+        public Optimizer discreteOptimizer { get; private set; }
+        public Optimizer dContOptimizer { get; private set; }
+        public Optimizer dDiscOptimizer { get; private set; }
 
-        public LRScheduler criticScheduler { get; private set; }
-        public LRScheduler actorMuScheduler { get; private set; }
-        public LRScheduler actorSigmaScheduler { get; private set; }
-        public LRScheduler actorDiscreteScheduler { get; private set; }
-        public LRScheduler discriminatorContinuousScheduler{ get; private set; }
-        public LRScheduler discriminatorDiscreteScheduler { get; private set; }
+        public LRScheduler vScheduler { get; private set; }
+        public LRScheduler q1Scheduler { get; private set; }
+        public LRScheduler q2Scheduler { get; private set; }
+        public LRScheduler muScheduler { get; private set; }
+        public LRScheduler sigmaScheduler { get; private set; }
+        public LRScheduler discreteScheduler { get; private set; }
+        public LRScheduler dContScheduler{ get; private set; }
+        public LRScheduler dDiscScheduler { get; private set; }
 
         public bool IsUsingContinuousActions { get => continuousDim > 0; }
         public bool IsUsingDiscreteActions { get => discreteDim > 0; }
 
-        private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in ModelType arch, in int NUM_LAYERS, in int HIDDEN_UNITS)
+        private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS)
         {
           
             const InitType INIT_W = InitType.HE_Uniform;
             const InitType INIT_B = InitType.Zeros;
             //------------------ NETWORK INITIALIZATION ----------------//
 
-            switch(arch)
+            // Initialize value network V(st)
+            vNetwork = new NeuralNetwork(
+               new IModule[] 
+               { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+               Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+               Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
+            );
+
+
+            // Initialize q networks Q(st,at)
+            q1Network = new NeuralNetwork(
+               new IModule[]
+               { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+               Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+               Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
+            );
+            q2Network = new NeuralNetwork(
+               new IModule[]
+               { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+               Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+               Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
+            );
+
+            // Initialize PI
+            if (CONTINUOUS_ACTIONS_NUM > 0)
             {
-                case ModelType.NN:
-                    critic = new NeuralNetwork(
-                       new IModule[] 
-                       { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
-                       Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                       Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
+                muNetwork = new NeuralNetwork(
+                        new IModule[] 
+                        { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Tanh() }).ToArray()
                     );
-                    if (CONTINUOUS_ACTIONS_NUM > 0)
-                    {
-                        actorContinuousMu = new NeuralNetwork(
-                                new IModule[] 
-                                { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
-                                    Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Tanh() }).ToArray()
-                            );
 
-                        actorContinuousSigma = new NeuralNetwork(
-                                new IModule[] 
-                                { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
-                                    Concat(CreateHiddenLayers(NUM_LAYERS - 1, HIDDEN_UNITS, INIT_W, INIT_B)). // Sigma network is a bit smaller for efficiency. This network is typically not important to be large
-                                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Exp() }).ToArray()  // Also Softplus can be used, but it returns very low values => no exploration
-                            );
+                sigmaNetwork = new NeuralNetwork(
+                        new IModule[] 
+                        { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                            Concat(CreateHiddenLayers(NUM_LAYERS - 1, HIDDEN_UNITS, INIT_W, INIT_B)). // Sigma network is a bit smaller for efficiency. This network is typically not important to be large
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Exp() }).ToArray()  // Also Softplus can be used, but it returns very low values => no exploration
+                    );
 
-                        discriminatorContinuous = new NeuralNetwork(
-                                new IModule[] 
-                                { new Dense(CONTINUOUS_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B),CreateActivation() }.
-                                    Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B), new Sigmoid() }).ToArray()
-                            );
-                    }
-
-                    if (DISCRETE_ACTIONS_NUM > 0)
-                    {
-                        actorDiscrete = new NeuralNetwork(
-                                new IModule[] 
-                                { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B),new LeakyReLU() }.
-                                    Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, DISCRETE_ACTIONS_NUM, INIT_W, INIT_B), new Softmax() }).ToArray()
-                            );
-                        discriminatorDiscrete = new NeuralNetwork(
-                                new IModule[] 
-                                { new Dense(DISCRETE_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
-                                    Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B), new Sigmoid() }).ToArray()
-                            );
-                    }
-
-                    break;
-                case ModelType.CNN:
-                    throw new ArgumentException("CNN was not introduced yet to RL");
-                case ModelType.RNN:
-                    throw new ArgumentException("RNN was not introduced yet to RL");
+                discContNetwork = new NeuralNetwork(
+                        new IModule[] 
+                        { new Dense(CONTINUOUS_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B),CreateActivation() }.
+                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B), new Sigmoid() }).ToArray()
+                    );
             }
+
+            if (DISCRETE_ACTIONS_NUM > 0)
+            {
+                discreteNetwork = new NeuralNetwork(
+                        new IModule[] 
+                        { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B),new LeakyReLU() }.
+                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, DISCRETE_ACTIONS_NUM, INIT_W, INIT_B), new Softmax() }).ToArray()
+                    );
+                discDiscNetwork = new NeuralNetwork(
+                        new IModule[] 
+                        { new Dense(DISCRETE_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B), new Sigmoid() }).ToArray()
+                    );
+            }
+
 
             static Activation CreateActivation() => new LeakyReLU();
 
@@ -162,23 +184,12 @@ namespace DeepUnity
             }
         }
 
-        public void SetActorDevice(Device device)
+        
+        public void SetDDevice(Device device)
         {
             if (IsUsingContinuousActions)
-            { 
-                var learnables = actorContinuousMu.Parameters();
-                foreach (var item in learnables)
-                {
-                    item.device = device;
-                }
-
-                learnables = actorContinuousSigma.Parameters();
-                foreach (var item in learnables)
-                {
-                    item.device = device;
-                }
-
-                learnables = discriminatorContinuous.Parameters();
+            {
+                var learnables = discContNetwork.Parameters();
                 foreach (var item in learnables)
                 {
                     item.device = device;
@@ -187,22 +198,44 @@ namespace DeepUnity
 
             if (IsUsingDiscreteActions)
             {
-                var learnables = actorDiscrete.Parameters();
-                foreach (var item in learnables)
-                {
-                    item.device = device;
-                }
-
-                learnables = discriminatorDiscrete.Parameters();
+                var learnables = discDiscNetwork.Parameters();
                 foreach (var item in learnables)
                 {
                     item.device = device;
                 }
             }
         }
-        public void SetCriticDevice(Device device)
+        public void SetPiDevice(Device device)
         {
-            var learnables = critic.Parameters();
+            if (IsUsingContinuousActions)
+            {
+                var learnables = muNetwork.Parameters();
+                foreach (var item in learnables)
+                {
+                    item.device = device;
+                }
+
+                learnables = sigmaNetwork.Parameters();
+                foreach (var item in learnables)
+                {
+                    item.device = device;
+                }
+
+            }
+
+            if (IsUsingDiscreteActions)
+            {
+                var learnables = discreteNetwork.Parameters();
+                foreach (var item in learnables)
+                {
+                    item.device = device;
+                }
+            }
+        }
+        public void SetVDevice(Device device)
+        {
+
+            var learnables = vNetwork.Parameters();
             for (int i = 0; i < learnables.Length - 1; i++)
             {
                 learnables[i].device = device;
@@ -211,77 +244,113 @@ namespace DeepUnity
 
             // Due to benchmark performances, critic last dense (which has the output features = 1), is working faster on CPU.
         }
-        public void InitOptimisers(Hyperparameters hp)
+        public void SetQDevice(Device device)
         {
-            if (criticOptimizer != null)
-                return;
+            var learnables = q1Network.Parameters();
+            for (int i = 0; i < learnables.Length - 1; i++)
+            {
+                learnables[i].device = device;
+            }
+            learnables[learnables.Length - 1].device = Device.CPU;
 
-            if (critic == null || config == null)
+            learnables = q2Network.Parameters();
+            for (int i = 0; i < learnables.Length - 1; i++)
             {
-                ConsoleMessage.Warning($"Critic Neural Network & Config assets are not attached to {behaviourName} behaviour asset!");
-                EditorApplication.isPlaying = false;
-                return;
+                learnables[i].device = device;
             }
+            learnables[learnables.Length - 1].device = Device.CPU;
 
-            criticOptimizer = new Adam(critic.Parameters(), hp.learningRate);  
-            
-            if(IsUsingContinuousActions)
-            {
-                if (actorContinuousMu == null || actorContinuousSigma == null || discriminatorContinuous == null)
-                {
-                    ConsoleMessage.Warning($"Neural Network assets for continuous actions are not attached to {behaviourName} behaviour asset!");
-                    EditorApplication.isPlaying = false;
-                    return;
-                }
-                actorMuOptimizer = new Adam(actorContinuousMu.Parameters(), hp.learningRate);
-                actorSigmaOptimizer = new Adam(actorContinuousSigma.Parameters(), hp.learningRate);
-                discriminatorContinuousOptimizer = new Adam(discriminatorContinuous.Parameters(), hp.learningRate);
-            }
-           
-            if(IsUsingDiscreteActions)
-            {
-                if (actorDiscrete == null || discriminatorDiscrete == null)
-                {
-                    ConsoleMessage.Warning($"Neural Network assets for discrete actions are not attached to {behaviourName} behaviour asset!");
-                    EditorApplication.isPlaying = false;
-                    return;
-                }
-                actorDiscreteOptimizer = new Adam(actorDiscrete.Parameters(), hp.learningRate);
-                discriminatorDiscreteOptimizer = new Adam(discriminatorDiscrete.Parameters(), hp.learningRate);
-            
-            }
         }
-        public void InitSchedulers(Hyperparameters hp)
+
+
+        public void InitOptimisers(Hyperparameters hp, TrainerType trainer)
         {
-            if (criticScheduler != null) // One way init
-                return;
 
-            if (critic == null)
+            if(trainer == TrainerType.SAC)
             {
-                ConsoleMessage.Warning($"Neural Network & Config assets are not attached to {behaviourName} behaviour asset!");
-                EditorApplication.isPlaying = false;
-                return;
+                vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate);
+                q1Optimizer = new Adam(q1Network.Parameters(), hp.learningRate);
+                q2Optimizer = new Adam(q2Network.Parameters(), hp.learningRate);
+                muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate);
+                sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate);
             }
+            else if(trainer == TrainerType.PPO)
+            {
+                vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate);
 
-            // LR 0 = initialLR * (gamma^n) => gamma = nth-root(initialLr);
+                if (IsUsingContinuousActions)
+                {
+                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate);
+                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate);
+                }
+                
+                if(IsUsingDiscreteActions)
+                {
+                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate);
+                }
+            }
+            else if(trainer == TrainerType.GAIL)
+            {
+                if (IsUsingContinuousActions)
+                {
+                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate);
+                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate);
+                    dContOptimizer = new Adam(discContNetwork.Parameters(), hp.learningRate);
+                }
+
+                if (IsUsingDiscreteActions)
+                {
+                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate);
+                    dDiscOptimizer = new Adam(discDiscNetwork.Parameters(), hp.learningRate);
+                }
+            }                    
+        }
+        public void InitSchedulers(Hyperparameters hp, TrainerType trainer)
+        {
+            // LR 0 = initialLR * (gamma^n) => gamma = nth-root(initial_lr);
+
             int total_epochs = (int)hp.maxSteps / hp.bufferSize * hp.numEpoch;
             int step_size = 1;
             float gamma = Mathf.Pow(hp.learningRate, 1f / total_epochs);
 
 
-            criticScheduler = new LRScheduler(criticOptimizer, step_size, gamma);
-
-            if (IsUsingContinuousActions)
+            if (trainer == TrainerType.SAC)
             {
-                actorMuScheduler = new LRScheduler(actorMuOptimizer, step_size, gamma);
-                actorSigmaScheduler = new LRScheduler(actorSigmaOptimizer, step_size, gamma);
-                discriminatorContinuousScheduler = new LRScheduler(discriminatorContinuousOptimizer, step_size, gamma);
+                vScheduler = new LRScheduler(vOptimizer, step_size, gamma);
+                q1Scheduler = new LRScheduler(q1Optimizer, step_size, gamma);
+                q2Scheduler = new LRScheduler(q1Optimizer, step_size, gamma);
+                muScheduler = new LRScheduler(muOptimizer, step_size, gamma);
+                sigmaScheduler = new LRScheduler(sigmaOptimizer, step_size, gamma);
             }
-          
-            if(IsUsingDiscreteActions)
+            else if (trainer == TrainerType.PPO)
             {
-                actorDiscreteScheduler = new LRScheduler(actorDiscreteOptimizer, step_size, gamma);
-                discriminatorDiscreteScheduler = new LRScheduler(discriminatorDiscreteOptimizer, step_size, gamma);
+                vScheduler = new LRScheduler(vOptimizer, step_size, gamma);
+
+                if (IsUsingContinuousActions)
+                {
+                    muScheduler = new LRScheduler(muOptimizer, step_size, gamma);
+                    sigmaScheduler = new LRScheduler(sigmaOptimizer, step_size, gamma);
+                }
+
+                if (IsUsingDiscreteActions)
+                {
+                    discreteScheduler = new LRScheduler(discreteOptimizer, step_size, gamma);
+                }
+            }
+            else if (trainer == TrainerType.GAIL)
+            {
+                if (IsUsingContinuousActions)
+                { 
+                    muScheduler = new LRScheduler(muOptimizer, step_size, gamma);
+                    sigmaScheduler = new LRScheduler(sigmaOptimizer, step_size, gamma);
+                    dContScheduler = new LRScheduler(dContOptimizer, step_size, gamma);
+                }
+
+                if (IsUsingDiscreteActions)
+                {
+                    discreteScheduler = new LRScheduler(discreteOptimizer, step_size, gamma);
+                    discreteScheduler = new LRScheduler(dDiscOptimizer, step_size, gamma);   
+                }
             }
 
         }
@@ -292,7 +361,7 @@ namespace DeepUnity
         /// Output: <paramref name="action"/> - <em>aₜ</em> |  Tensor (<em>Continuous Actions</em>) <br></br>
         /// Extra Output: <paramref name="probs"/> - <em>πθ(aₜ|sₜ)</em> | Tensor (<em>Continuous Actions</em>)
         /// </summary>
-        public void ContinuousPredict(Tensor state, out Tensor action, out Tensor probs)
+        public void ContinuousPredict(Tensor state, bool reparametrized, out Tensor action, out Tensor probs)
         {
             if (!IsUsingContinuousActions)
             {
@@ -300,21 +369,19 @@ namespace DeepUnity
                 probs = null;
                 return;
             }
-            if (actorContinuousMu == null)
-            {
-                ConsoleMessage.Warning($"<i>NeuralNetwork</i> assets are not attached to <b>{behaviourName}</b> behaviour asset");
-                EditorApplication.isPlaying = false;
-                action = null;
-                probs = null;
-                return;
-            }
 
-            Tensor mu = actorContinuousMu.Predict(state);
+            Tensor mu = muNetwork.Predict(state);
             Tensor sigma = standardDeviation == StandardDeviationType.Trainable ?
-                            actorContinuousSigma.Predict(state):
+                            sigmaNetwork.Predict(state).Clip(Utils.EPSILON, 5f) :
                             Tensor.Fill(standardDeviationValue, mu.Shape);
 
-            action = mu.Zip(sigma, (x, y) => Utils.Random.Gaussian(x, y));
+            action = mu.Zip(sigma, (x, y) => 
+            {
+                if (reparametrized)
+                    return Utils.Random.ReparametrizedNormal(x, y);
+                else
+                    return Utils.Random.Normal(x, y); 
+            });
             probs = Tensor.Probability(action, mu, sigma);
         }
         /// <summary>
@@ -331,9 +398,9 @@ namespace DeepUnity
                 return;
             }
 
-            muBatch = actorContinuousMu.Forward(stateBatch);
+            muBatch = muNetwork.Forward(stateBatch);
             sigmaBatch = standardDeviation == StandardDeviationType.Trainable ?
-                           actorContinuousSigma.Forward(stateBatch):
+                           sigmaNetwork.Forward(stateBatch).Clip(Utils.EPSILON, 5f):
                            Tensor.Fill(standardDeviationValue, muBatch.Shape);
         }
         /// <summary>
@@ -351,16 +418,7 @@ namespace DeepUnity
                 return;
             }
 
-            if (actorDiscrete == null)
-            {
-                ConsoleMessage.Warning($"<i>NeuralNetwork</i> assets are not attached to <b>{behaviourName}</b> behaviour asset");
-                EditorApplication.isPlaying = false;
-                action = null;
-                phi = null;
-                return;
-            }
-            
-            phi = actorDiscrete.Predict(state);
+            phi = discreteNetwork.Predict(state);
 
             // φₜ - Normalzed Probabilities (through softmax) - parametrizes Multinomial probability distribution
             // δₜ - Multinomial Probability Distribution
@@ -381,9 +439,48 @@ namespace DeepUnity
                 return;
             }
 
-            phi = actorDiscrete.Forward(stateBatch);        
+            phi = discreteNetwork.Forward(stateBatch);        
         }
 
+        public Tensor Q1Forward(Tensor stateBatch, Tensor actionBatch)
+        {
+            int batch_size = stateBatch.Size(0);
+            int state_size = stateBatch.Size(1);
+            int action_size = stateBatch.Size(1);
+            Tensor input = Tensor.Zeros(batch_size, state_size + action_size);
+            for (int i = 0; i < batch_size; i++)
+            {
+                for (int f = 0; f < state_size; f++)
+                {
+                    input[i, f] = stateBatch[i, f];
+                }
+                for (int f = state_size; f < state_size + action_size; f++)
+                {
+                    input[i, f] = actionBatch[i, f];
+                }
+            }
+            return q1Network.Forward(input);           
+        }
+        public Tensor Q2Forward(Tensor stateBatch, Tensor actionBatch)
+        {
+            int batch_size = stateBatch.Size(0);
+            int state_size = stateBatch.Size(1);
+            int action_size = stateBatch.Size(1);
+            Tensor input = Tensor.Zeros(batch_size, state_size + action_size);
+            for (int i = 0; i < batch_size; i++)
+            {
+                for (int f = 0; f < state_size; f++)
+                {
+                    input[i, f] = stateBatch[i, f];
+                }
+                for (int f = state_size; f < state_size + action_size; f++)
+                {
+                    input[i, f] = actionBatch[i, f];
+                }
+            }
+
+            return q2Network.Forward(input);
+        }
 
 
 
@@ -391,7 +488,7 @@ namespace DeepUnity
         /// Creates a new Agent behaviour folder containing all auxiliar neural networks, or loads it if already exists one for this behaviour.
         /// </summary>
         /// <returns></returns>
-        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int continuousActions, int discreteActions, ModelType architecture, int numLayers, int hidUnits)
+        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int continuousActions, int discreteActions, int numLayers, int hidUnits)
         {          
             var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
 
@@ -402,7 +499,7 @@ namespace DeepUnity
             }
 
 
-            AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, stackedInputs, continuousActions, discreteActions, architecture, numLayers, hidUnits);
+            AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, stackedInputs, continuousActions, discreteActions, numLayers, hidUnits);
             newAgBeh.behaviourName = name;
             newAgBeh.observationSize = stateSize;
             newAgBeh.stackedInputsNum = stackedInputs;
@@ -420,19 +517,21 @@ namespace DeepUnity
 
             // Create aux assets
             newAgBeh.config = Hyperparameters.CreateOrLoadAsset(name);
-            newAgBeh.critic.CreateAsset($"{name}/critic");
+            newAgBeh.vNetwork.CreateAsset($"{name}/V");
+            newAgBeh.q1Network.CreateAsset($"{name}/Q1");
+            newAgBeh.q2Network.CreateAsset($"{name}/Q2");
 
-            if(newAgBeh.IsUsingContinuousActions)
+            if (newAgBeh.IsUsingContinuousActions)
             {
-                newAgBeh.actorContinuousMu.CreateAsset($"{name}/mu");
-                newAgBeh.actorContinuousSigma.CreateAsset($"{name}/sigma");
-                newAgBeh.discriminatorContinuous.CreateAsset($"{name}/discriminator_continuous");
+                newAgBeh.muNetwork.CreateAsset($"{name}/Mu");
+                newAgBeh.sigmaNetwork.CreateAsset($"{name}/Sigma");
+                newAgBeh.discContNetwork.CreateAsset($"{name}/Disc_Cont");
             }
             
             if(newAgBeh.IsUsingDiscreteActions)
             {
-                newAgBeh.actorDiscrete.CreateAsset($"{name}/discrete");
-                newAgBeh.discriminatorDiscrete.CreateAsset($"{name}/discriminator_discrete");
+                newAgBeh.discreteNetwork.CreateAsset($"{name}/Discrete");
+                newAgBeh.discDiscNetwork.CreateAsset($"{name}/Disc_Disc");
             }
 
             return newAgBeh;
@@ -449,12 +548,95 @@ namespace DeepUnity
 
             ConsoleMessage.Info($"Agent behaviour <b><i>{behaviourName}</i></b> autosaved");
 
-            critic.Save(); 
-            actorContinuousMu?.Save();
-            actorContinuousSigma?.Save();
-            discriminatorContinuous?.Save();
-            actorDiscrete?.Save();
-            discriminatorDiscrete?.Save();
+            vNetwork?.Save();
+            q1Network?.Save();
+            q2Network?.Save();  
+            muNetwork?.Save();
+            sigmaNetwork?.Save();
+            discreteNetwork?.Save();
+            discContNetwork?.Save();
+            discDiscNetwork?.Save();
+        }
+        /// <summary>
+        /// Before using, checks if config file or neural networks are not attached to this scriptable object.
+        /// </summary>
+        /// <returns></returns>
+        public List<string> CheckForMissingAssets()
+        {
+            if (config == null)
+            {
+                return new List<string>() { "Config" };
+            }
+
+            var trainer = config.trainer;
+            var whatIsMissing = new List<string>();
+
+            if (trainer == TrainerType.PPO)
+            {
+                if (!vNetwork)
+                    whatIsMissing.Add("Value Network");
+
+                if (IsUsingContinuousActions)
+                {
+                    if (!muNetwork)
+                        whatIsMissing.Add("Mu Network");
+
+                    if (!sigmaNetwork)
+                        whatIsMissing.Add("Sigma Network");
+                }
+
+                if (IsUsingDiscreteActions)
+                {
+                    if (!discreteNetwork)
+                        whatIsMissing.Add("Discrete Network");
+                }
+
+            }
+            else if (trainer == TrainerType.SAC)
+            {
+                if (!vNetwork)
+                    whatIsMissing.Add("Value Network 1");
+
+                if (!q1Network)
+                    whatIsMissing.Add("Q Network 1");
+
+                if (!q2Network)
+                    whatIsMissing.Add("Q Network 2");
+
+                if (IsUsingContinuousActions)
+                {
+                    if (!muNetwork)
+                        whatIsMissing.Add("Mu Network");
+
+                    if (!sigmaNetwork)
+                        whatIsMissing.Add("Sigma Network");
+                }
+            }
+            else if (trainer == TrainerType.GAIL)
+            {
+                if (IsUsingContinuousActions)
+                {
+                    if (!muNetwork)
+                        whatIsMissing.Add("Mu Network");
+
+                    if (!sigmaNetwork)
+                        whatIsMissing.Add("Sigma Network");
+
+                    if (!discContNetwork)
+                        whatIsMissing.Add("Discriminator Continuous Network");
+                }
+
+                if (IsUsingDiscreteActions)
+                {
+                    if (!discreteNetwork)
+                        whatIsMissing.Add("Discrete Network");
+
+                    if (!discDiscNetwork)
+                        whatIsMissing.Add("Discriminator Discrete Network");
+                }
+            }
+
+            return whatIsMissing;
         }
     }
 
@@ -468,14 +650,11 @@ namespace DeepUnity
 
             AgentBehaviour script = (AgentBehaviour)target;
 
-            if(!script.IsUsingContinuousActions)
+            // See or not standard deviation
+            if (!script.IsUsingContinuousActions)
             {
-                dontDrawMe.Add("actorContinuousMu");
-                dontDrawMe.Add("actorContinuousSigma");
-                dontDrawMe.Add("discriminatorContinuous");
                 dontDrawMe.Add("standardDeviation");
                 dontDrawMe.Add("standardDeviationValue");
-                dontDrawMe.Add("standardDeviationScale");
             }
             else
             {
@@ -485,13 +664,9 @@ namespace DeepUnity
                 }
             }
 
-            if(!script.IsUsingDiscreteActions)
-            {
-                dontDrawMe.Add("actorDiscrete");
-                dontDrawMe.Add("discriminatorDiscrete");
-            }
 
-            if(script.standardDeviationValue <= 0)
+
+            if (script.standardDeviationValue <= 0)
             {
                 script.standardDeviationValue = 1f;
             }

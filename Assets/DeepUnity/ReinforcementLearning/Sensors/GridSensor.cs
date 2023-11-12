@@ -33,7 +33,7 @@ namespace DeepUnity
 
         [Space(10)]
         [SerializeField] Color missColor = Color.gray;
-        Color defaultHitColor = Color.black;
+        [SerializeField] Color missingMaterialColor = new Color(1f, 0f, 0.95f);//pink
 
         private void Awake()
         {
@@ -41,7 +41,7 @@ namespace DeepUnity
         }
         private void OnDrawGizmos()
         {
-            Vector3 origin000 = transform.position + (Vector3.one - new Vector3(width, height, depth)) * scale / 2f + new Vector3(xOffset, yOffset, zOffset) * scale;
+            Vector3 origin000 = transform.position + transform.rotation * (Vector3.one - new Vector3(width, height, depth)) * scale / 2f + new Vector3(xOffset, yOffset, zOffset) * scale;
 
             // Compute positions
             for (int d = 0; d < depth; d++)
@@ -50,71 +50,76 @@ namespace DeepUnity
                 {
                     for (int w = 0; w < width; w++)
                     {
-                        Vector3 position = origin000 + new Vector3(w, h, d) * scale;
+                        Vector3 localPosition = new Vector3(w, h, d) * scale;
+                        Vector3 position = origin000 + transform.rotation * localPosition;
 
                         if (world == World.World3d)
                         {
-                            Collider[] hits = Physics.OverlapBox(position, Vector3.one * scale * castScale / 2f, new Quaternion(0, 0, 0, 1), layerMask);
- 
+                            Collider[] hits = Physics.OverlapBox(position, Vector3.one * scale * castScale / 2f, transform.rotation, layerMask);
+
                             if (hits.Length > 0)
                             {
                                 Renderer rend;
                                 hits[0].gameObject.TryGetComponent(out rend);
-                                Gizmos.color = rend != null ? rend.sharedMaterial.color : defaultHitColor;
+                                Gizmos.color = rend != null ? rend.sharedMaterial.color : missingMaterialColor;
                             }
                             else
                                 Gizmos.color = missColor;
 
+                            // Apply the rotation to the Gizmos drawing
+                            Gizmos.matrix = Matrix4x4.TRS(position, transform.rotation, Vector3.one);
                             Gizmos.color = new Color(Gizmos.color.r, Gizmos.color.g, Gizmos.color.b, 0.6f);
-                            Gizmos.DrawWireCube(position, Vector3.one * scale * castScale);
+                            Gizmos.DrawWireCube(Vector3.zero, Vector3.one * scale * castScale);
                             Gizmos.color = new Color(Gizmos.color.r, Gizmos.color.g, Gizmos.color.b, 0.2f);
-                            Gizmos.DrawCube(position, Vector3.one * scale * castScale);
-                            
-                           
+                            Gizmos.DrawCube(Vector3.zero, Vector3.one * scale * castScale);
+
+                            // Reset the Gizmos matrix to its original state
+                            Gizmos.matrix = Matrix4x4.identity;
                         }
-                        else if(world == World.World2d)
+                        else if (world == World.World2d)
                         {
                             if (d > 0)
                                 return;
 
-                            Collider2D hit = Physics2D.OverlapBox(position, Vector2.one * scale * castScale, 0);
+                            Collider2D hit = Physics2D.OverlapBox(position, Vector2.one * scale * castScale, transform.rotation.z);
                             bool gotHit = hit != null;
-
+                            
                             if (gotHit)
                             {
                                 SpriteRenderer sr;
                                 hit.gameObject.TryGetComponent(out sr);
-                                Gizmos.color = sr != null ? sr.color : defaultHitColor;
+                                Gizmos.color = sr != null ? sr.color : missingMaterialColor;
                             }
                             else
                                 Gizmos.color = missColor;
+
+                            // Apply the rotation to the Gizmos drawing
+                            Gizmos.matrix = Matrix4x4.TRS(new Vector3(position.x, position.y, transform.position.z), transform.rotation, Vector3.one);
                             Gizmos.color = new Color(Gizmos.color.r, Gizmos.color.g, Gizmos.color.b, 0.6f);
-                            Gizmos.DrawWireCube(new Vector3(position.x, position.y, transform.position.z), Vector3.one * scale * castScale);
+                            Gizmos.DrawWireCube(Vector3.zero, Vector3.one * scale * castScale);
                             Gizmos.color = new Color(Gizmos.color.r, Gizmos.color.g, Gizmos.color.b, 0.4f);
-                            Gizmos.DrawCube(new Vector3(position.x, position.y, transform.position.z), Vector3.one * scale * castScale);
+                            Gizmos.DrawCube(Vector3.zero, Vector3.one * scale * castScale);
+
+                            // Reset the Gizmos matrix to its original state
+                            Gizmos.matrix = Matrix4x4.identity;
                         }
-                       
                     }
                 }
             }
-           
-
         }
 
+
         /// <summary>
-        /// - HasOverlappedObject is 1 if true, otherwise 0.<br></br>
-        /// - OverlappedObjectTagIndex is One Hot Encoded,  where the first spot represents a non-detectable tag. <br></br>
-        /// Example: <br></br> 
-        /// <b>[cell 1: <em>HasOverlappedObject</em>, NonDetectableTag, DetectableTag[0], DetectableTag[1], ... DetectableTag[n-1], <br></br>
-        /// cell 2: <em>HasOverlappedObject</em>, NonDetectableTag, DetectableTag[0], DetectableTag[1], ... DetectableTag[n-1], ..... ]</b>
+        /// Embedds the observations into a float[]. OverlappedObjectTagindex is One Hot Encoded, where the first spot represents a non-detectable tag. <br></br>
+        /// Example: <b>[<em>HasOverlappedObject, NonDetectableTag</em>, DetectableTag[0], DetectableTag[1], ... DetectableTag[n-1]]</b>
         /// </summary>
-        /// <returns>Returns a float[] of <b>length = width * height * depth * (2 + num_detectable_tags)</b></returns>
+        /// <returns>Returns a float[] of length = width * height * depth * (2 + num_detectable_tags)</returns>
         public float[] GetObservationsVector()
         {
             CastGrid();
             int cellDataSize = 2 + detectableTags.Length;
             float[] vector = new float[cellDataSize * Observations.GetLength(0) * Observations.GetLength(1) * Observations.GetLength(2)];
-            int index = 0; 
+            int index = 0;
             for (int k = 0; k < depth; k++)
             {
                 for (int h = 0; h < height; h++)
@@ -143,19 +148,15 @@ namespace DeepUnity
         }
 
         /// <summary>
-        ///  - HasOverlappedObject is 1 if true, otherwise 0.<br></br>
-        ///  - If DetectableTags.Length > 0, OverlappedObejctTagIndex is normalized in range [0, 1]. If the OverlappedObjectTag is not contained into DetectableTags, the value is -1. <br></br>
-        /// Example: <br></br>
-        /// if DetectableTags.Length > 0: <b>[cell 1: HasOverlappedObject, NormalizedOverlappedObjectTagIndex, cell 2: HasOverlappedObject, NormalizedOverlappedObjectTagIndex, .....]</b> <br></br>
-        /// else: <b>[cell 1: HasOverlappedObject, cell 2: HasOverlappedObject, .....]</b>
-        /// 
+        /// Scales down in range [0, 1] the OverlappedObjectTagIndex. If the OverlappedObjectTagIndex is -1, it the remains -1. <br></br>
+        /// Example: <b>[HasOverlappedObject, OverlappedObjectTagIndex]</b>
         /// </summary>
-        /// <returns>Returns a float[] of <b>length = width * height * depth * 2</b> if DetectableTags.Length > 0 else <b>width * height * depth</b>.</returns>
+        /// <returns>Returns a float[] of length = width * height * depth * 2.</returns>
         public float[] GetCompressedObservationsVector()
         {
             CastGrid();
 
-            if(detectableTags.Length > 0)
+            if (detectableTags.Length > 0)
             {
                 float[] vector = new float[2 * Observations.GetLength(0) * Observations.GetLength(1) * Observations.GetLength(2)];
                 int index = 0;
@@ -208,7 +209,7 @@ namespace DeepUnity
 
         private void CastGrid()
         {
-            Vector3 origin000 = transform.position + (Vector3.one - new Vector3(width, height, depth)) * scale / 2f + new Vector3(xOffset, yOffset, zOffset) * scale;
+            Vector3 origin000 = transform.position + transform.rotation * (Vector3.one - new Vector3(width, height, depth)) * scale / 2f + new Vector3(xOffset, yOffset, zOffset) * scale;
 
             // Compute positions
             for (int d = 0; d < depth; d++)
@@ -217,24 +218,24 @@ namespace DeepUnity
                 {
                     for (int w = 0; w < width; w++)
                     {
-                        Vector3 position = origin000 + new Vector3(w, h, d) * scale;
-                        // string[] tags = UnityEditorInternal.InternalEditorUtility.tags;
+                        Vector3 localPosition = new Vector3(w, h, d) * scale;
+                        Vector3 position = origin000 + transform.rotation * localPosition;
 
                         if (world == World.World3d)
                         {
-                            Collider[] hits = Physics.OverlapBox(position, Vector3.one * scale * castScale / 2f, new Quaternion(0, 0, 0, 1), layerMask);
+                            Collider[] hits = Physics.OverlapBox(position, Vector3.one * scale * castScale / 2f, transform.rotation, layerMask);
 
                             GridCellInfo cellInfo = new GridCellInfo();
                             cellInfo.HasOverlappedObject = hits.Length > 0;
                             cellInfo.OverlappedObjectTagIndex = hits.Length > 0 && detectableTags != null ? Array.IndexOf(detectableTags, hits[0].tag) : -1;
-                            Observations[d,h,w] = cellInfo;
+                            Observations[d, h, w] = cellInfo;
                         }
                         else if (world == World.World2d)
                         {
                             if (d > 0)
                                 return;
 
-                            Collider2D hit = Physics2D.OverlapBox(position, Vector2.one * scale * castScale, 0);
+                            Collider2D hit = Physics2D.OverlapBox(position, Vector2.one * scale * castScale, transform.rotation.z);
                             GridCellInfo cellInfo = new GridCellInfo();
                             cellInfo.HasOverlappedObject = hit;
                             cellInfo.OverlappedObjectTagIndex = hit && detectableTags != null ? Array.IndexOf(detectableTags, hit.tag) : -1;
@@ -255,6 +256,8 @@ namespace DeepUnity
         {
             serializedObject.Update();
 
+            var script = target as GridSensor;
+
             List<string> _dontDrawMe = new List<string>() { "m_Script" };
 
 
@@ -262,7 +265,7 @@ namespace DeepUnity
 
             if (sr.enumValueIndex == (int)World.World2d)
             {
-                _dontDrawMe.Add("deep");
+                _dontDrawMe.Add("depth");
                 _dontDrawMe.Add("zOffset");
 
             }
@@ -273,7 +276,7 @@ namespace DeepUnity
             SerializedProperty depth = serializedObject.FindProperty("depth");
 
             CheckTags(detTags);
-           
+
             DrawPropertiesExcluding(serializedObject, _dontDrawMe.ToArray());
 
             int vecDim = sr.enumValueIndex == (int)World.World2d ?
@@ -285,7 +288,7 @@ namespace DeepUnity
                 width.intValue * height.intValue * depth.intValue;
             if (detTags.arraySize > 0)
                 compVecDim *= 2;
-            
+
             EditorGUILayout.HelpBox($"Observations Vector contains {vecDim} float values. Compressed Observations Vector contains {compVecDim} float values.", MessageType.Info);
 
 
@@ -332,4 +335,3 @@ namespace DeepUnity
         }
     }
 }
-

@@ -22,7 +22,7 @@ namespace DeepUnity
             return x.Select(x =>
             {
                 float embx = MathF.Exp(-beta * x);
-                return 1f / (1 + embx);
+                return embx / (1 + embx);
             });
         }
         public override object Clone() => new Softplus(beta);

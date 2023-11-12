@@ -20,7 +20,7 @@ MonoBehaviour:
   discreteDim: 0
   critic: {fileID: 11400000, guid: c5dd8007c986c0b499411724e63da98e, type: 2}
   actorContinuousMu: {fileID: 11400000, guid: 9afbea2f41797de4d99407aef6b646c8, type: 2}
-  actorContinuousSigma: {fileID: 11400000, guid: a8ec6433ae568dd48b2cb1039d22db89, type: 2}
+  actorContinuousSigma: {fileID: 11400000, guid: 46aec0cd1a65d12468e1244eeff66c86, type: 2}
   discriminatorContinuous: {fileID: 11400000, guid: 2865011a71db05142bb4d56a0e5e981f, type: 2}
   actorDiscrete: {fileID: 0}
   discriminatorDiscrete: {fileID: 0}
@@ -28,7 +28,7 @@ MonoBehaviour:
   targetFPS: 100
   inferenceDevice: 0
   trainingDevice: 1
-  normalizeObservations: 1
+  normalizeObservations: 0
   normalizer:
     step: 0
     mean:

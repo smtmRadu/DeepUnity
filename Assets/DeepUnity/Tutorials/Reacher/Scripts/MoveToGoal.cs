@@ -4,6 +4,14 @@ using DeepUnity;
 public class MoveToGoal : Agent
 {
     // Generally this agent must show significant progress in 100k steps of training.
+    // Test config for 100.000 steps: 
+    //      Decision Period: 1
+    //      Max Step: 1000
+    //      Buffer Size = 4096
+    //      Batch Size = 256
+    //      Horizon = 64
+    //      LR Schedule == Off
+    // Results: 
     public float speed = 10f;
     public Transform target;
     public float norm_scale = 8f;

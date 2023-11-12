@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 using System.Diagnostics;
+using System.Linq;
+using static TMPro.SpriteAssetUtilities.TexturePacker_JsonArray;
 
 namespace DeepUnity
 {
@@ -12,183 +13,64 @@ namespace DeepUnity
     /// [2] https://link.springer.com/article/10.1007/BF00992696
     /// [3] https://ieeexplore.ieee.org/document/9520424
     /// </summary>
-    public sealed class PPOTrainer : MonoBehaviour
+    public sealed class PPOTrainer : DeepUnityTrainer
     {
-        private static PPOTrainer Instance { get; set; }
-        public static int ParallelAgentsCount { get { if (Instance == null) return 0; return Instance.parallelAgents.Count; } }
-        [ReadOnly, SerializeField] private List<Agent> parallelAgents;
-        [ReadOnly, SerializeField] private Hyperparameters hp;
-        [ReadOnly, SerializeField] private TrainingStatistics statisticsTrack;
-        [ReadOnly, SerializeField] private AgentBehaviour ac;
-        [Tooltip("Minutes period between autosaving processes to maintain process safety.")]
-        [SerializeField, Min(1)] private int autosave = 5;
-
-
-        private ExperienceBuffer train_data;
-        private float autosaveSecondsElapsed = 0f;
         private float meanPolicyLoss = 0f;
         private float meanValueLoss = 0f;
         private float meanEntropy = 0f;
-        [SerializeField, ReadOnly] private int currentSteps = 0;
-        private readonly DateTime timeWhenTheTrainingStarted = DateTime.Now;
-        
 
-        private void Awake()
+
+        protected override void FixedUpdate()
         {
-            if (Instance != null && Instance != this)
+            // If agents cumulativelly collected enough data to fill up the buffer (it can surpass for multiple agents)
+            if (BufferCount >= hp.bufferSize)
             {
-                Destroy(this);
-            }
-            else
-            {
-                Instance = this;
-            }
-        }
-        private void FixedUpdate()
-        {
-            if (Instance.train_data.IsFull(Instance.hp.bufferSize))
-            {
+                foreach (var agent_memory in parallelAgents.Select(x => x.Memory))
+                {
+                    if (agent_memory.Count == 0)
+                        continue;
+
+                    agent_memory.GAE(hp.gamma, hp.lambda, hp.horizon, model.vNetwork);
+                    train_data.TryAppend(agent_memory, hp.bufferSize);
+                    if (hp.debug) Utils.DebugInFile(agent_memory.ToString());
+                    agent_memory.Clear();
+                }
+
                 Stopwatch clock = Stopwatch.StartNew();
                 Train();
                 clock.Stop();
 
-                if (Instance.statisticsTrack != null)
+                if (track != null)
                 {
-                    Instance.statisticsTrack.parallelAgents = Instance.parallelAgents.Count;          
-                    Instance.statisticsTrack.iterations++;
-                    Instance.statisticsTrack.policyUpdateSecondsElapsed += (float)clock.Elapsed.TotalSeconds;
-                    Instance.statisticsTrack.policyUpdateTime = $"{(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.statisticsTrack.policyUpdateSecondsElapsed) % 60)} sec";
-                    Instance.statisticsTrack.policyUpdateTimePerIteration = $"{(int)clock.Elapsed.TotalHours} hrs : {(int)(clock.Elapsed.TotalMinutes) % 60} min : {(int)(clock.Elapsed.TotalSeconds) % 60} sec";
+                    track.parallelAgents = parallelAgents.Count;
+                    track.iterations++;
+                    track.policyUpdateSecondsElapsed += (float)clock.Elapsed.TotalSeconds;
+                    track.policyUpdateTime = $"{(int)(Math.Ceiling(track.policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(track.policyUpdateSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(track.policyUpdateSecondsElapsed) % 60)} sec";
+                    track.policyUpdateTimePerIteration = $"{(int)clock.Elapsed.TotalHours} hrs : {(int)(clock.Elapsed.TotalMinutes) % 60} min : {(int)(clock.Elapsed.TotalSeconds) % 60} sec";
 
                     float totalTimeElapsed = (float)(DateTime.Now - timeWhenTheTrainingStarted).TotalSeconds;
-                    Instance.statisticsTrack.inferenceTimeRatio = (Instance.statisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count / totalTimeElapsed).ToString("0.000");
-                    Instance.statisticsTrack.policyUpdateTimeRatio = (Instance.statisticsTrack.policyUpdateSecondsElapsed / totalTimeElapsed).ToString("0.000");
+                    track.inferenceTimeRatio = (track.inferenceSecondsElapsed * parallelAgents.Count / totalTimeElapsed).ToString("0.000");
+                    track.policyUpdateTimeRatio = (track.policyUpdateSecondsElapsed / totalTimeElapsed).ToString("0.000");
                 }
+                currentSteps += hp.bufferSize;
             }
 
-            // Autosaves the ac
-            if (Instance.autosaveSecondsElapsed >= Instance.autosave * 60f)
-            {
-                Instance.autosaveSecondsElapsed = 0f;
-                Instance.ac.Save();
-            }
-
-            Time.timeScale = Instance.hp.timescale;
-
-            // Check if max steps reached
-            if (Instance.currentSteps >= Instance.hp.maxSteps)
-                EndTrainingSession($"Max Steps reached ({Instance.hp.maxSteps})");
-        }
-        private void Update()
-        {
-            // Only Updating the training statistics here...
-            if (Instance.statisticsTrack != null)
-            {
-                TimeSpan timeElapsed = DateTime.Now - Instance.timeWhenTheTrainingStarted;
-                Instance.statisticsTrack.trainingSessionTime =
-                    $"{(int)timeElapsed.TotalHours} hrs : {(int)timeElapsed.TotalMinutes % 60} min : {(int)timeElapsed.TotalSeconds % 60} sec";
-
-
-                Instance.statisticsTrack.inferenceSecondsElapsed += Time.deltaTime;
-                Instance.statisticsTrack.inferenceTime = 
-                    $"{(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) / 3600)} hrs : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed * Instance.parallelAgents.Count) % 60)} sec";
-                Instance.statisticsTrack.inferenceTimePerAgent =
-                    $"{(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(Instance.statisticsTrack.inferenceSecondsElapsed) % 60)} sec";
-             }
-
-            // Autosave process 
-            Instance.autosaveSecondsElapsed += Time.deltaTime;
-        }
-
-
-        // Methods use to interact with the agents
-        public static void SendMemory(in MemoryBuffer agent_memory)
-        {
-            if (agent_memory.Count * Instance.parallelAgents.Count >= Instance.hp.bufferSize)
-            {
-                agent_memory.ComputeAdvantagesAndReturns(Instance.hp.gamma, Instance.hp.lambda, Instance.hp.horizon, Instance.ac.critic);
-                Instance.train_data.Add(agent_memory, Instance.hp.bufferSize);
-                if (Instance.hp.debug) Utils.DebugInFile(agent_memory.ToString());
-                agent_memory.Clear();
-            }
-        }    
-        public static void Subscribe(Agent agent)
-        {
-            if(Instance == null)
-            {
-                EditorApplication.playModeStateChanged += Autosave1;
-                EditorApplication.pauseStateChanged += Autosave2;
-                GameObject go = new GameObject("[DeepUnity] Trainer - PPO");
-                go.AddComponent<PPOTrainer>();
-                Instance.parallelAgents = new();
-                Instance.ac = agent.model;
-                Instance.hp = agent.model.config;
-                Instance.ac.InitOptimisers(Instance.hp);
-                Instance.ac.InitSchedulers(Instance.hp);
-                Instance.train_data = new ExperienceBuffer();
-                Instance.ac.SetCriticDevice(Instance.ac.trainingDevice); // critic is always set on training
-            }
-
-            // Assign common attributes to all agents (based on the last agent that subscribes - this one is actually the first in the Hierarchy)
-            Instance.parallelAgents.ForEach(x =>
-            {
-                x.PerformanceTrack = agent.PerformanceTrack;
-                x.DecisionRequester.decisionPeriod = agent.DecisionRequester.decisionPeriod;
-                x.DecisionRequester.maxStep = agent.DecisionRequester.maxStep;
-                x.DecisionRequester.takeActionsBetweenDecisions = agent.DecisionRequester.takeActionsBetweenDecisions;
-            });
-
-            if (agent.PerformanceTrack != null)
-            {
-                Instance.statisticsTrack = agent.PerformanceTrack;
-            }
-
-            if(agent.model.config == null)
-            {
-                ConsoleMessage.Warning("Config file is not attached to the behaviour model");
-                EditorApplication.isPlaying = false;
-            }
-
-            Instance.parallelAgents.Add(agent);
-        }
-
-
-        // Methods used to save the Actor Critic network when editor state changes.
-        private static void Autosave1(PlayModeStateChange state)
-        {
-            Instance.ac.Save();
-            if (state == PlayModeStateChange.ExitingPlayMode && Instance.statisticsTrack != null)
-            {
-                Instance.statisticsTrack.startedAt = Instance.timeWhenTheTrainingStarted.ToLongTimeString() + ", " + Instance.timeWhenTheTrainingStarted.ToLongDateString();
-                Instance.statisticsTrack.finishedAt = DateTime.Now.ToLongTimeString() + ", " + DateTime.Now.ToLongDateString();
-
-                if(Instance.statisticsTrack.iterations > 0)
-                {
-                    string pth = Instance.statisticsTrack.ExportAsSVG(Instance.ac.behaviourName, Instance.hp, Instance.ac, Instance.parallelAgents[0].DecisionRequester);
-                    UnityEngine.Debug.Log($"<color=#57f542>Training Session statistics log saved at <b><i>{pth}</i></b>.</color>");
-                    AssetDatabase.Refresh();
-                }               
-            }
-                
-        }
-        private static void Autosave2(PauseState state) => Instance.ac.Save();
-        private static void EndTrainingSession(string reason)
-        {
-            ConsoleMessage.Info("Training Session Ended! " + reason);
-            Instance.ac.Save();
-            EditorApplication.isPlaying = false;
+            base.FixedUpdate();
         }
         
+
+
 
         // PPO Algorithm
         private void Train()
         {
             // 1. Normalize advantages
-            if (hp.normalizeAdvantages) 
-                train_data.NormalizeAdvantages();
+            if (hp.normalizeAdvantages)
+                NormalizeAdvantages(train_data);
 
             // 2. Gradient descent over N epochs
-            ac.SetActorDevice(ac.trainingDevice);
+            model.SetVDevice(model.trainingDevice); // This is always on training device because it is used to compute the values of the entire train_data of states once..
+            model.SetPiDevice(model.trainingDevice);
             for (int epoch_index = 0; epoch_index < hp.numEpoch; epoch_index++)
             {
                 // shuffle the dataset
@@ -216,9 +98,9 @@ namespace DeepUnity
                     Tensor advantages_batch = Tensor.Cat(null, advantages_batches[b]);
                     Tensor value_targets_batch = Tensor.Cat(null, value_targets_batches[b]);
                    
-                    UpdateCritic(states_batch, value_targets_batch);
+                    UpdateValueNetwork(states_batch, value_targets_batch);
 
-                    if (Instance.ac.IsUsingContinuousActions)
+                    if (model.IsUsingContinuousActions)
                     {
                         Tensor cont_act_batch = Tensor.Cat(null, cont_act_batches[b]);
                         cont_probs_old = Tensor.Cat(null, cont_probs_batches[b]);
@@ -229,7 +111,7 @@ namespace DeepUnity
                             cont_probs_old,
                             out cont_probs_new);
                     }
-                    if (Instance.ac.IsUsingDiscreteActions)
+                    if (model.IsUsingDiscreteActions)
                     {
                         Tensor disc_act_batch = Tensor.Cat(null, disc_act_batches[b]);
                         disc_probs_old = Tensor.Cat(null, disc_probs_batches[b]);
@@ -244,54 +126,58 @@ namespace DeepUnity
                 }
 
                 // Check KL Divergence based on the last Minibatch (see [3])
-                if (Instance.hp.KLDivergence != KLType.Off)
+                if (hp.KLDivergence != KLType.Off)
                 {
                     // Though even if i should stop for them separatelly (i mean i can let for one to continue the training if kl is small) i will let it simple..
-                    float kldiv_cont = Instance.ac.IsUsingContinuousActions ? ComputeKLDivergence(cont_probs_new, cont_probs_old) : 0;
-                    float kldiv_disc = Instance.ac.IsUsingDiscreteActions ? ComputeKLDivergence(disc_probs_new, disc_probs_old) : 0;
+                    float kldiv_cont = model.IsUsingContinuousActions ? ComputeKLDivergence(cont_probs_new, cont_probs_old) : 0;
+                    float kldiv_disc = model.IsUsingDiscreteActions ? ComputeKLDivergence(disc_probs_new, disc_probs_old) : 0;
 
-                    if (kldiv_cont > Instance.hp.targetKL || kldiv_disc > Instance.hp.targetKL)
+                    if (kldiv_cont > hp.targetKL || kldiv_disc > hp.targetKL)
                     {
-                        ConsoleMessage.Info($"Early Stopping Triggered (kl: {kldiv_cont} | {kldiv_disc})({Instance.hp.KLDivergence})");
+                        ConsoleMessage.Info($"Early Stopping Triggered (kl: {kldiv_cont} | {kldiv_disc})({hp.KLDivergence})");
                         break;
                     }
                     // for rollback is the same but we need to cache the old state of the network....
                 }
 
 
-                // Step LR schedulers after each epoch
-                ac.criticScheduler.Step();
-                ac.actorMuScheduler?.Step();
-                ac.actorSigmaScheduler?.Step();
-                ac.actorDiscreteScheduler?.Step();
+                // Step LR schedulers after each epoch (this allows selection at runtime)
+                if(hp.LRSchedule)
+                {
+                    model.vScheduler.Step();
+                    model.muScheduler?.Step();
+                    model.sigmaScheduler?.Step();
+                    model.discreteScheduler?.Step();
+                }
+                
 
                 // Save statistics info
-                statisticsTrack?.learningRate.Append(ac.criticScheduler.CurrentLR);
-                statisticsTrack?.policyLoss.Append(meanPolicyLoss / hp.batchSize);
-                statisticsTrack?.valueLoss.Append(meanValueLoss / hp.batchSize);
-                statisticsTrack?.entropy.Append(meanEntropy / (Instance.ac.IsUsingContinuousActions && Instance.ac.IsUsingDiscreteActions ? hp.batchSize * 2 : hp.batchSize));
+                track?.learningRate.Append(model.vScheduler.CurrentLR);
+                track?.policyLoss.Append(meanPolicyLoss / hp.batchSize);
+                track?.valueLoss.Append(meanValueLoss / hp.batchSize);
+                track?.entropy.Append(meanEntropy / (model.IsUsingContinuousActions && model.IsUsingDiscreteActions ? hp.batchSize * 2 : hp.batchSize));
                 meanPolicyLoss = 0f;
                 meanValueLoss = 0f;
                 meanEntropy = 0f;
             }
-            ac.SetActorDevice(ac.inferenceDevice);
+            model.SetPiDevice(model.inferenceDevice);
 
             // 3. Clear the train buffer
             train_data.Clear();
         }
         /// <summary>
         /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>) where * = <em>Observations Shape</em><br></br>
-        /// <paramref name="targets"/> - <em>Vtarget</em> | Tensor(<em>Batch Size, 1</em>)
+        /// <paramref name="value_targets"/> - <em>Vtarget</em> | Tensor(<em>Batch Size, 1</em>)
         /// </summary>
-        private void UpdateCritic(Tensor states, Tensor targets)
+        private void UpdateValueNetwork(Tensor states, Tensor value_targets)
         {
-            Tensor values = ac.critic.Forward(states);
-            Loss criticLoss = Loss.MSE(values, targets);
+            Tensor values = model.vNetwork.Forward(states);
+            Loss criticLoss = Loss.MSE(values, value_targets);
 
-            ac.criticOptimizer.ZeroGrad();
-            ac.critic.Backward(criticLoss.Derivative);
-            ac.criticOptimizer.ClipGradNorm(hp.gradClipNorm);
-            ac.criticOptimizer.Step();
+            model.vOptimizer.ZeroGrad();
+            model.vNetwork.Backward(criticLoss.Derivative * 0.5f);
+            model.vOptimizer.ClipGradNorm(hp.gradClipNorm);
+            model.vOptimizer.Step();
 
             meanValueLoss += criticLoss.Item;
         }
@@ -307,9 +193,8 @@ namespace DeepUnity
             int continuous_actions_num = actions.Size(-1);
 
             // Forwards pass
-            Tensor mu;
-            Tensor sigma;
-            Instance.ac.ContinuousForward(states, out mu, out sigma);
+            Tensor mu, sigma;
+            model.ContinuousForward(states, out mu, out sigma);
             pi = Tensor.Probability(actions, mu, sigma);
 
             Tensor ratio = pi / piOld; // a.k.a pₜ(θ) = πθ(a|s) / πθold(a|s)
@@ -356,7 +241,7 @@ namespace DeepUnity
             Tensor dmLClip_dPi = -1f * (dmindx * advantages + dmindy * advantages * dclipdx) / piOld;
 
             // Entropy bonus added if σ is trainable (entropy is just a constant so no need really for differentiation)
-            if (ac.standardDeviation == StandardDeviationType.Trainable)
+            if (model.standardDeviation == StandardDeviationType.Trainable)
             {
                 // H(πθ(a|s)) = 1/2 * log(2πeσ^2) 
                 Tensor H = 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2));
@@ -376,12 +261,12 @@ namespace DeepUnity
 
             // ∂-LClip / ∂μ = (∂-LClip / ∂πθ(a|s)) * (∂πθ(a|s) / ∂μ)
             Tensor dmLClip_dMu = dmLClip_dPi * dPi_dMu;
-            ac.actorMuOptimizer.ZeroGrad();
-            ac.actorContinuousMu.Backward(dmLClip_dMu);
-            ac.actorMuOptimizer.ClipGradNorm(hp.gradClipNorm);
-            ac.actorMuOptimizer.Step();
+            model.muOptimizer.ZeroGrad();
+            model.muNetwork.Backward(dmLClip_dMu);
+            model.muOptimizer.ClipGradNorm(hp.gradClipNorm);
+            model.muOptimizer.Step();
 
-            if(ac.standardDeviation == StandardDeviationType.Trainable)
+            if(model.standardDeviation == StandardDeviationType.Trainable)
             {
                 // ∂πθ(a|s) / ∂σ = πθ(a|s) * ((x - μ)^2 - σ^2) / σ^3    (Simple statistical gradient-following for connectionst Reinforcement Learning (pag 14))
                 Tensor dPi_dSigma = pi * ((actions - mu).Pow(2) - sigma.Pow(2)) / sigma.Pow(3);
@@ -389,10 +274,10 @@ namespace DeepUnity
                 // ∂-LClip / ∂μ = (∂-LClip / ∂πθ(a|s)) * (∂πθ(a|s) / ∂σ)
                 Tensor dmLClip_dSigma = dmLClip_dPi * dPi_dSigma;
 
-                ac.actorSigmaOptimizer.ZeroGrad();
-                ac.actorContinuousSigma.Backward(dmLClip_dSigma);
-                ac.actorSigmaOptimizer.ClipGradNorm(hp.gradClipNorm);
-                ac.actorSigmaOptimizer.Step();
+                model.sigmaOptimizer.ZeroGrad();
+                model.sigmaNetwork.Backward(dmLClip_dSigma);
+                model.sigmaOptimizer.ClipGradNorm(hp.gradClipNorm);
+                model.sigmaOptimizer.Step();
             }
            
         }
@@ -407,7 +292,7 @@ namespace DeepUnity
             int batch_size = states.Rank == 2 ? states.Size(0) : 1;
             int discrete_actions_num = piOld.Size(-1);
 
-            Instance.ac.DiscreteForward(states, out pi);
+            model.DiscreteForward(states, out pi);
 
             Tensor ratio = pi / piOld;
             // Compute L CLIP
@@ -462,12 +347,12 @@ namespace DeepUnity
             meanEntropy += H.Mean(0).Mean(0)[0];
 
             Tensor dmH_dPhi = pi.Log() + 1;
-            dmLClip_dPhi += dmH_dPhi * Instance.hp.beta * 10f;
+            dmLClip_dPhi += dmH_dPhi * hp.beta * 10f;
 
-            ac.actorDiscreteOptimizer.ZeroGrad();
-            ac.actorDiscrete.Backward(dmLClip_dPhi);
-            ac.actorDiscreteOptimizer.ClipGradNorm(hp.gradClipNorm);
-            ac.actorDiscreteOptimizer.Step();
+            model.discreteOptimizer.ZeroGrad();
+            model.discreteNetwork.Backward(dmLClip_dPhi);
+            model.discreteOptimizer.ClipGradNorm(hp.gradClipNorm);
+            model.discreteOptimizer.Step();
         }
         /// <summary>
         /// DKL(θ, θold) = DKL(πθ(•|s), πθold(•|s)) <br></br>
@@ -484,6 +369,20 @@ namespace DeepUnity
             KL = KL.Sum(0);
             return KL[0];
         }
+        private static void NormalizeAdvantages(ExperienceBuffer vec)
+        {
+            float mean = vec.frames.Average(x => x.advantage[0]);
+            float variance = vec.frames.Sum(x => (x.advantage[0] - mean) * (x.advantage[0] - mean)) / (vec.Count - 1); // with bessel correction
+            float std = MathF.Sqrt(variance);
+
+            if (std <= 0) // It can be 0 either because there is only one frame when extracted, or all advantages were the same
+                return;
+
+            for (int i = 0; i < vec.Count; i++)
+                vec.frames[i].advantage = (vec.frames[i].advantage - mean) / std;
+
+        }
+
     }
 
     [CustomEditor(typeof(PPOTrainer), true), CanEditMultipleObjects]

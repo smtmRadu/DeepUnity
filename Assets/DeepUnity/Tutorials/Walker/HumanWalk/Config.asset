@@ -13,20 +13,20 @@ MonoBehaviour:
   m_Name: Config
   m_EditorClassIdentifier: 
   maxSteps: 2000000000
-  learningRate: 0.0003
+  learningRate: 0.0001
   gradClipNorm: 0.5
-  batchSize: 512
-  bufferSize: 10240
+  batchSize: 300
+  bufferSize: 6000
   numEpoch: 8
   normalizeAdvantages: 1
   shuffleTrainingData: 1
-  LRSchedule: 0
+  LRSchedule: 1
   horizon: 72
-  beta: 0.005
+  beta: 0.0005
   epsilon: 0.2
   gamma: 0.99
   lambda: 0.95
   KLDivergence: 0
   targetKL: 0.015
-  timescale: 2.51
+  timescale: 2.5
   debug: 0

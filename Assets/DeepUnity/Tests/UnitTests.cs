@@ -2,11 +2,14 @@ using UnityEngine;
 using DeepUnity;
 using System.Collections.Generic;
 using UnityEngine.UI;
+using System;
+using Unity.VisualScripting;
 
 namespace kbRadu
 {
     public class UnitTests : MonoBehaviour
     {
+        public Material material;
         public Device TestDevice;
         public Vector2Int MatShape = new Vector2Int(64, 64);
         public int batchSize = 32;
@@ -24,14 +27,40 @@ namespace kbRadu
         public int whatIsIt = 0;
         List<(Tensor, Tensor)> train;
 
+     
 
         public float[] results;
 
+        Tensor[] thetas;
+
+        public class Wrap
+        {
+            public TestClass t;
+            public Wrap(TestClass x) => this.t = x; 
+        }
+        public class TestClass
+        {
+            public int value = 1;
+        }
         private void Start()
         {
-            float t = 1.2f;
-            print(Mathf.Lerp(12, 14, t));
+            Tensor s = Tensor.Random01(4, 3);
+            Tensor a = Tensor.Random01(4, 2);
+
+            print(s);
+            print(a);
+            print(Tensor.Cat(1, s, a));
+
         }
+        // private void Update()
+        // {
+        //     var param = net.Parameters();
+        //     for (int i = 0; i < param.Item1.Length; i++)
+        //     {
+        //         param.Item1[i] = Tensor.Random01(param.Item1[i].Shape);
+        //     }
+        //     
+        // }
         // private void Start()
         // {
         //     rnn_network = new RNN(10, 20, 2).CreateAsset("rnn");

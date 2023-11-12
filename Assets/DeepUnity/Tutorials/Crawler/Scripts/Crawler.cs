@@ -25,7 +25,7 @@ namespace DeepUnityTutorials
         [SerializeField] Transform foot4;
 
         BodyController controller;
-
+        Vector3 dirToTarget;
         public override void Awake()
         {
             base.Awake();
@@ -71,7 +71,7 @@ namespace DeepUnityTutorials
             // Total 126
 
             // + 12
-            Vector3 dirToTarget = target.position - controller.bodyPartsDict[transform].rb.position;
+            dirToTarget = target.position - controller.bodyPartsDict[transform].rb.position;
             stateBuffer.AddObservation(dirToTarget.normalized); //3
             stateBuffer.AddObservation(controller.bodyPartsDict[transform].rb.position); //3
             stateBuffer.AddObservation(transform.forward); //3
@@ -106,9 +106,27 @@ namespace DeepUnityTutorials
 
           
         }
+
+        private void OnDrawGizmos()
+        {
+            Gizmos.color = Color.red; // You can change the color as desired
+
+            // Calculate the rotation (90 degrees around Y-axis)
+            Quaternion rotation = Quaternion.Euler(0f, -90f, 0f);
+
+            // Apply the rotation to the forward vector
+            Vector3 rotatedForward = rotation * transform.forward;
+
+            // Calculate the end point of the rotated line
+            Vector3 endPoint = transform.position + rotatedForward * 5f;
+
+            // Draw the line using Gizmos.DrawLine
+            Gizmos.DrawLine(transform.position, endPoint);
+        }
         public override void OnActionReceived(ActionBuffer actionBuffer)
         {
             // Total 20
+
 
             float[] act_vec = actionBuffer.ContinuousActions;
 
@@ -132,8 +150,9 @@ namespace DeepUnityTutorials
             controller.bodyPartsDict[shin3].SetJointStrength(act_vec[18]);
             controller.bodyPartsDict[shin4].SetJointStrength(act_vec[19]);
 
-            AddReward(transform.localPosition.y / 100f);
-            AddReward(1f / Vector3.Distance(transform.position, target.position) / 50f);
+            AddReward(0.05f * transform.localPosition.y); // Reward for head height
+            AddReward(0.01f * Vector3.Dot(dirToTarget.normalized,  Quaternion.Euler(0f, -90f, 0f) * transform.forward)); // Reward for looking at the target
+            AddReward(0.01f / Vector3.Distance(transform.position, target.position)); // Reward for getting close to the target
 
             // Point the arrow towards the target
             directionArrow.rotation = Quaternion.LookRotation(target.position - transform.position) * Quaternion.Euler(0, 90f, 0);

@@ -53,8 +53,8 @@ namespace DeepUnity
             {
                 if (parameters[i] is Learnable P)
                 {
-                    if (weightDecay != 0f)
-                        P.gammaGrad = P.gammaGrad + weightDecay * P.gamma;
+                    if (lambda != 0f)
+                        P.gammaGrad = P.gammaGrad + lambda * P.gamma;
 
                     vGamma[i] = vGamma[i] * rho + Tensor.Pow(P.gammaGrad, 2f) * (1f - rho);
                     vBeta[i] = vBeta[i] * rho + Tensor.Pow(P.betaGrad, 2f) * (1f - rho);
@@ -66,11 +66,11 @@ namespace DeepUnity
                     uGamma[i] = uGamma[i] * rho + Tensor.Pow(dxGamma, 2f) * (1f - rho);
                     uBeta[i] = uBeta[i] * rho + Tensor.Pow(dxBeta, 2f) * (1f - rho);
 
-                    P.gamma = P.gamma - learningRate * dxGamma;
-                    P.beta = P.beta - learningRate * dxBeta;
+                    P.gamma = P.gamma - lr * dxGamma;
+                    P.beta = P.beta - lr * dxBeta;
                 }
                 if (parameters[i] is ISelfOptimizable S)
-                    S.SelfOptimise(learningRate / 100f);
+                    S.SelfOptimise(lr / 100f);
             });
         }
     }

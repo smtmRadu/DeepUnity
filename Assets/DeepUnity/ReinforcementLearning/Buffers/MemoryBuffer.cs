@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Unity.VisualScripting;
@@ -28,73 +27,57 @@ namespace DeepUnity
             frames.Clear();
         }
 
-        public void ComputeAdvantagesAndReturns(in float gamma, in float lambda, in int horizon, NeuralNetwork crticNetwork)
+        /// <summary>
+        /// This method computes the generalized advantage estimation, value function targets and q function targets. 
+        /// </summary>
+        /// <param name="gamma"></param>
+        /// <param name="lambda"></param>
+        /// <param name="horizon"></param>
+        /// <param name="crticNetwork"></param>
+        public void GAE(in float gamma, in float lambda, in int horizon, NeuralNetwork crticNetwork)
         {
             int T = Count;
-            Tensor all_states = Tensor.Cat(null, frames.Select(x => x.state).ToArray());
-            Tensor Vw_s = crticNetwork.Predict(all_states).Reshape(T);
-            
-            // Parse each timestep
-            for (int t = 0; t < T; t++)
+            Tensor[] all_states_plus_lastNextState = new Tensor[T + 1];
+            for (int i = 0; i < T; i++)
+                all_states_plus_lastNextState[i] = frames[i].state;
+            all_states_plus_lastNextState[T] = frames[T - 1].nextState;
+
+            // Vw_s has length of T + 1
+            Tensor Vw_s = crticNetwork.Predict(Tensor.Cat(null, all_states_plus_lastNextState)).Reshape(T + 1);
+           
+            // Generalized Advantage Estimation
+            for (int timestep = 0; timestep < T; timestep++)
             {
                 float discount = 1f;
-                Tensor v_t = Tensor.Constant(0);
-
-                for (int t_i = t; t_i < T; t_i++)
+                Tensor Ahat_t = Tensor.Constant(0);
+            
+                for (int t = timestep; t < T; t++) // In GAE for last step advantage is 0.. kind of lose of information but it works :)
                 {
-                    v_t += discount * frames[t_i].reward;
-                    discount *= gamma;
-
-                    // stop if this is a terminal step
-                    if (frames[t_i].done[0] == 1)
+                    Tensor r_t = frames[t].reward;
+                    float V_st = Vw_s[t];
+                    float V_next_st = frames[t].done[0] == 1 ? 0 : Vw_s[t + 1];  // if the state is terminal, next value is set to 0.
+            
+                    Tensor delta_t = r_t + gamma * V_next_st - V_st;
+                    Ahat_t += discount * delta_t;
+                    discount *= gamma * lambda;
+            
+                    if (frames[t].done[0] == 1)
                         break;
 
-                    // if t[i] is in horizon range or is the last step in the memory, recursive train
-                    if(t_i - t == horizon || t_i == T - 1)
-                    {
-                        v_t += discount * Vw_s[T - 1];
+                    if (t - timestep == horizon)
                         break;
-                    }
                 }
+            
+                Tensor Vt_target = Ahat_t + Vw_s[timestep];
+                Tensor Qt_target = frames[timestep].reward + gamma * Vw_s[timestep + 1]; // a.k.a Qhat
 
-                Tensor a_t = v_t - Vw_s[t];
-
-                frames[t].value_target = v_t;
-                frames[t].advantage = a_t;
-            }
-
-            // for (int timestep = 0; timestep < T; timestep++)
-            // {
-            //     float discount = 1f;
-            //     Tensor a_t = Tensor.Constant(0);
-            // 
-            //     for (int t = timestep; t < T - 1; t++)
-            //     {
-            //         float mask = 1f - frames[t].done[0];
-            //         Tensor d_t = frames[t].reward + gamma * Vw_s[t + 1] * mask - Vw_s[t];
-            //         a_t += discount * d_t;
-            //         discount *= gamma * lambda;
-            //
-            //         if (frames[t].done[0] == 1)
-            //             break;
-            //     }
-            // 
-            //     Tensor v_t = a_t + V_s[timestep];
-            // 
-            //     frames[timestep].value_target = v_t;
-            //     frames[timestep].advantage = a_t;
-            // }     
+                frames[timestep].q_target = Qt_target;
+                frames[timestep].value_target = Vt_target;
+                frames[timestep].advantage = Ahat_t;
+            }     
 
         }
-        public void NormalizeAdvantages()
-        {
-            float mean = frames.Average(x => x.advantage[0]);
-            float var = frames.Sum(x => (x.advantage[0] - mean) * (x.advantage[0] - mean)) / (Count - 1);
-            float std = MathF.Sqrt(var) + Utils.EPSILON;
-
-            for (int i = 0; i < Count; i++)
-                frames[i].advantage = (frames[i].advantage - mean) / std;
-        }
+        
         public override string ToString()
         {
             StringBuilder sb = new StringBuilder();
@@ -105,17 +88,20 @@ namespace DeepUnity
                 sb.Append($" \t| {i.ToString("000")}");
                 sb.Append($" | t: {(frames[i].index).ToString("000")}");
                 sb.Append($" | s[t]: [{frames[i].state.ToArray().ToCommaSeparatedString()}]");
-                sb.Append($" | a_continuous[t]: [{frames[i].action_continuous?.ToArray().ToCommaSeparatedString()}]");
-                sb.Append($" | a_discrete[t]: [{frames[i].action_discrete?.ToArray().ToCommaSeparatedString()}]");
+                sb.Append($" | s'[t]: [{frames[i].nextState.ToArray().ToCommaSeparatedString()}]");
+                sb.Append($" | a_cont[t]: [{frames[i].action_continuous?.ToArray().ToCommaSeparatedString()}]");
+                sb.Append($" | a_disc[t]: [{frames[i].action_discrete?.ToArray().ToCommaSeparatedString()}]");
                 sb.Append($" | r[t]: {frames[i].reward[0].ToString("0.000")}");
+                
                 if (frames[i].value_target != null)
-                {
-                    sb.Append($" | VTarget[t]: {frames[i].value_target[0].ToString("0.000")}");
+                    sb.Append($" | V[t]: {frames[i].value_target[0].ToString("0.000")}");
+
+                if (frames[i].advantage != null)
                     sb.Append($" | A[t]: {frames[i].advantage[0].ToString("0.000")}");
-                }
-                
-                
-                           
+
+                if (frames[i].q_target != null)
+                    sb.Append($" | Q[t]: {frames[i].q_target[0].ToString("0.000")}");
+                                     
                 sb.Append("\n");
 
                 if (frames[i].done[0] == 1)

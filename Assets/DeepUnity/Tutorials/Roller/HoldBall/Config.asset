@@ -15,20 +15,18 @@ MonoBehaviour:
   maxSteps: 1000000000
   learningRate: 0.00009
   gradClipNorm: 0.5
-  numEpoch: 8
   batchSize: 512
   bufferSize: 8192
+  numEpoch: 8
   normalizeAdvantages: 1
   shuffleTrainingData: 1
-  learningRateSchedule: 1
-  schedulerStepSize: 8
-  schedulerDecay: 0.99
+  LRSchedule: 0
   horizon: 72
   beta: 0.005
   epsilon: 0.2
   gamma: 0.99
   lambda: 0.95
-  earlyStopping: 0
+  KLDivergence: 0
   targetKL: 0.015
-  timescale: 6.17
+  timeScale: 10.64
   debug: 0

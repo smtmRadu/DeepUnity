@@ -36,11 +36,11 @@ namespace DeepUnity
             {
                 if (parameters[i] is Learnable L)
                 {
-                    var gammaBar = learningRate / (1 + (t - 1) * learningRateDecay);
+                    var gammaBar = lr / (1 + (t - 1) * learningRateDecay);
 
-                    if (weightDecay != 0f)
+                    if (lambda != 0f)
                     {
-                        L.gammaGrad = L.gammaGrad + weightDecay * L.gammaGrad;
+                        L.gammaGrad = L.gammaGrad + lambda * L.gamma;
                     }
 
                     stateSum_W[i] = stateSum_W[i] + Tensor.Pow(L.gammaGrad, 2f);
@@ -51,7 +51,7 @@ namespace DeepUnity
                 }
 
                 if (parameters[i] is ISelfOptimizable S)
-                    S.SelfOptimise(learningRate);
+                    S.SelfOptimise(lr);
             });
 
         }

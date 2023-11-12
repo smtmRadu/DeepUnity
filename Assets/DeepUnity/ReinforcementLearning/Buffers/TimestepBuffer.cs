@@ -5,15 +5,22 @@ namespace DeepUnity
     public class TimestepBuffer : ICloneable
     {
         public int index;
+
         public Tensor state;
+        public Tensor nextState;
+
         public Tensor action_continuous;
         public Tensor prob_continuous;      
         public Tensor action_discrete;
         public Tensor prob_discrete;
+
         public Tensor reward;
+        public Tensor done;
+
         public Tensor advantage;
         public Tensor value_target;
-        public Tensor done;
+        public Tensor q_target;
+       
       
         public TimestepBuffer(int index)
         {
@@ -28,6 +35,7 @@ namespace DeepUnity
 
             clone.index = index;
             clone.state = state;
+            clone.nextState = nextState;
             clone.action_continuous = action_continuous;
             clone.action_discrete = action_discrete;
             clone.reward = reward;

@@ -11,6 +11,7 @@ namespace DeepUnity
     {
         public int Count { get => frames.Count; }
         public Tensor[] States { get => frames.Select(x => x.state).ToArray(); }
+        public Tensor[] NextStates { get => frames.Select(x => x.nextState).ToArray(); }
         public Tensor[] ContinuousActions { get => frames.Select(x => x.action_continuous).ToArray(); }
         public Tensor[] ContinuousProbabilities { get => frames.Select(x => x.prob_continuous).ToArray(); }
         public Tensor[] DiscreteActions { get => frames.Select(x => x.action_discrete).ToArray(); }
@@ -18,13 +19,12 @@ namespace DeepUnity
         public Tensor[] ValueTargets { get => frames.Select(x => x.value_target).ToArray(); }
         public Tensor[] Advantages { get => frames.Select(x => x.advantage).ToArray(); }
 
-        private readonly List<TimestepBuffer> frames;
+        public readonly List<TimestepBuffer> frames;
 
         public ExperienceBuffer()
         {
             frames = new List<TimestepBuffer>();
         }
-
         public void Shuffle()
         {
             for (int i = Count - 1; i > 0; i--)
@@ -35,6 +35,10 @@ namespace DeepUnity
                 temp = frames[i].state;
                 frames[i].state = frames[r].state;
                 frames[r].state = temp;
+
+                temp = frames[i].nextState;
+                frames[i].nextState = frames[r].nextState;
+                frames[r].nextState = temp;
 
                 if (frames[i].action_continuous != null)
                 {
@@ -70,17 +74,26 @@ namespace DeepUnity
                 frames[i].value_target = frames[r].value_target;
                 frames[r].value_target = temp;
 
-                // These are not really neccesarry to be shuffled
                 temp = frames[i].done;
                 frames[i].done = frames[r].done;
                 frames[r].done = temp;
             }
         }
+        /// <summary>
+        /// Checks if the buffer is full. There can be no overflow.
+        /// </summary>
+        /// <param name="buffer_size"></param>
+        /// <returns></returns>
         public bool IsFull(int buffer_size)
         {
             return Count == buffer_size;
         }
-        public void Add(MemoryBuffer agentMemory, int buffer_size)
+        /// <summary>
+        /// Adds agent's memory to the training data by the limit of the buffer_size.
+        /// </summary>
+        /// <param name="agentMemory"></param>
+        /// <param name="buffer_size"></param>
+        public void TryAppend(MemoryBuffer agentMemory, int buffer_size)
         {
             foreach (var frm in agentMemory.frames)
             {
@@ -90,19 +103,6 @@ namespace DeepUnity
                 frames.Add(frm.Clone() as TimestepBuffer);
             }
         }
-        public void NormalizeAdvantages()
-        {
-            float mean = frames.Average(x => x.advantage[0]);
-            float variance = frames.Sum(x => (x.advantage[0] - mean) * (x.advantage[0] - mean)) / (Count - 1); // with bessel correction
-            float std = MathF.Sqrt(variance);
-
-            if (std < 0)
-                return;
-
-            for (int i = 0; i < Count; i++)
-                frames[i].advantage = (frames[i].advantage - mean) / (std + Utils.EPSILON);
-        }
-
         public void Clear()
         {
             frames.Clear();

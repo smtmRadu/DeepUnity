@@ -139,8 +139,8 @@ namespace DeepUnity
         Inference,
         [Tooltip("Exploring behaviour. Learning: YES. Scene resets: YES.")]
         Learn,
-        [Tooltip("Imitation learning. Learning: YES. Scene resets: YES.")]
-        Heuristic,
+        [Tooltip("Manual control. Learning: NO. Scene resets: YES.")]
+        Manual,
     }
 
     public enum OnEpisodeEndType
@@ -190,6 +190,16 @@ namespace DeepUnity
         ObservationsVector,
         [Tooltip("Automatically collects CompressedObservationsVector from attached sensors.")]
         CompressedObservationsVector
+    }
+
+    public enum TrainerType
+    {
+        [Tooltip("Proximal Policy Optimization")]
+        PPO,
+        [Tooltip("Soft Actor-Critic")]
+        SAC,
+        [Tooltip("Generative Adversial Imitation Learning")]
+        GAIL
     }
 
 }

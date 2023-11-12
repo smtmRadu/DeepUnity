@@ -18,13 +18,15 @@ MonoBehaviour:
   stackedInputsNum: 1
   continuousDim: 20
   discreteDim: 0
-  critic: {fileID: 11400000, guid: 33a089612d2c39e4f8bb639c77d13126, type: 2}
-  actorContinuousMu: {fileID: 11400000, guid: 018aeeeabd675854eb4d738eef760a22, type: 2}
-  actorContinuousSigma: {fileID: 11400000, guid: d42e9608f0d9fb74cbea096f61b1fbb9, type: 2}
-  discriminatorContinuous: {fileID: 11400000, guid: 611f4aad9b5dcd1449f57f5e079f4bd1, type: 2}
-  actorDiscrete: {fileID: 0}
-  discriminatorDiscrete: {fileID: 0}
   config: {fileID: 11400000, guid: da81f10291f667648aa26accb8c710a3, type: 2}
+  vNetwork: {fileID: 11400000, guid: 33a089612d2c39e4f8bb639c77d13126, type: 2}
+  q1Network: {fileID: 0}
+  q2Network: {fileID: 0}
+  muNetwork: {fileID: 11400000, guid: 018aeeeabd675854eb4d738eef760a22, type: 2}
+  sigmaNetwork: {fileID: 11400000, guid: d42e9608f0d9fb74cbea096f61b1fbb9, type: 2}
+  discreteNetwork: {fileID: 0}
+  discContNetwork: {fileID: 0}
+  discDiscNetwork: {fileID: 0}
   targetFPS: 50
   inferenceDevice: 0
   trainingDevice: 1
@@ -290,4 +292,4 @@ MonoBehaviour:
       - 0
       shape: 7e000000
   standardDeviation: 0
-  standardDeviationValue: 0.75
+  standardDeviationValue: 0.7

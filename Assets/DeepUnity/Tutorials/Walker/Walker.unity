@@ -193,7 +193,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 168d28cf924268a43a4539a3ffde4c1a, type: 3}
       propertyPath: m_Name
-      value: Floor
+      value: Ground
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 168d28cf924268a43a4539a3ffde4c1a, type: 3}
       propertyPath: m_IsActive
@@ -594,11 +594,11 @@ PrefabInstance:
       objectReference: {fileID: 214787721}
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: behaviourType
-      value: 1
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 7046486768281223026, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: m_Name
-      value: Human
+      value: Humanoid
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -71,8 +71,8 @@ namespace DeepUnity
                 if (parameters[i] is Learnable L)
                 {
                     // Weight decay is not applied on biases
-                    if (weightDecay != 0)
-                        L.gammaGrad = L.gammaGrad + weightDecay * L.gamma;
+                    if (lambda != 0)
+                        L.gammaGrad = L.gammaGrad + lambda * L.gamma;
 
                     mGamma[i] = beta1 * mGamma[i] + (1f - beta1) * L.gammaGrad;
                     mBeta[i] = beta1 * mBeta[i] + (1f - beta1) * L.betaGrad;
@@ -80,12 +80,12 @@ namespace DeepUnity
                     uGamma[i] = Tensor.Maximum(beta2 * uGamma[i], Tensor.Abs(L.gammaGrad) + Utils.EPSILON);
                     uBeta[i] = Tensor.Maximum(beta2 * uBeta[i], Tensor.Abs(L.betaGrad) + Utils.EPSILON);
 
-                    L.gamma = L.gamma - learningRate * mGamma[i] / ((1f - beta1_t) * uGamma[i]);
-                    L.beta = L.beta - learningRate * mBeta[i] / ((1f - beta1_t) * uBeta[i]);
+                    L.gamma = L.gamma - lr * mGamma[i] / ((1f - beta1_t) * uGamma[i]);
+                    L.beta = L.beta - lr * mBeta[i] / ((1f - beta1_t) * uBeta[i]);
                 }
 
                 if (parameters[i] is ISelfOptimizable S)
-                    S.SelfOptimise(learningRate * 5f);
+                    S.SelfOptimise(lr * 5f);
             });
 
 

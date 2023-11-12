@@ -1136,10 +1136,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0417462f17fa91146a9428483b2049c2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxJointSpring: 40000
-  jointDamper: 1500
+  maxJointSpring: 6000
+  jointDamper: 100
   maxJointForce: 10000
-  bodyPartsList: []
 --- !u!114 &5861685757233713677
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1156,11 +1155,10 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 20
   discreteActions: 0
-  archType: 0
   numLayers: 2
   hidUnits: 64
   model: {fileID: 11400000, guid: 3c6311ceb9aa30041a84cda50b531933, type: 2}
-  behaviourType: 1
+  behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 0
   target: {fileID: 1818032103}

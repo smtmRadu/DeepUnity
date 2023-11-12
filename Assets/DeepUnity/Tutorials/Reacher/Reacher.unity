@@ -966,10 +966,9 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 0
   discreteActions: 5
-  archType: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 1fb7abdd3ca073f458cb51f2bbebe6fd, type: 2}
+  model: {fileID: 11400000, guid: e27c42c7d87191840952cf379b55f45a, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0
@@ -988,7 +987,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d26371695edfbcd4580ca6f6048d885d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxStep: 500
+  maxStep: 1000
   decisionPeriod: 1
   takeActionsBetweenDecisions: 1
 --- !u!65 &2031687196

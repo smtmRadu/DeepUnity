@@ -26,7 +26,7 @@ namespace DeepUnity
         [Range(1, 50), SerializeField] public int decisionPeriod = 1;
 
         [Tooltip("If true, OnActionReceived() is called every single frame, using the last decision. Otherwise, it is called only after each decision. Has no effect when Decision Period is 1 or in Heuristic Mode.")]
-        [SerializeField] public bool takeActionsBetweenDecisions = false;
+        [SerializeField] public bool takeActionsBetweenDecisions = true;
 
         public bool IsFrameBeforeDecisionFrame(int fixedFramesCount)
         {

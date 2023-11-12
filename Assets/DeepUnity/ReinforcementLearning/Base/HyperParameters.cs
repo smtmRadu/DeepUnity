@@ -9,10 +9,13 @@ namespace DeepUnity
     {
         [Header("Training Configuration")]
 
+        [Tooltip("Algorithm used in training the agent. Note that SAC requires different hyperparameters")]
+        public TrainerType trainer = TrainerType.PPO;
+
         [Tooltip("[Typical range: 1e5 - 1e7] The maximum length in steps of this training session.")]
         [Min(1e5f)] public long maxSteps = 2_000_000_000;
 
-        [Tooltip("[Typical range: 1e-5 - 1e-3] Initial learning rate for Adam optimizer (both for Policy and Value networks).")]
+        [Tooltip("[Typical range: 1e-5 - 1e-3] Initial learning rate for Adam optimizer (both all networks).")]
         [Min(1e-8f)] public float learningRate = 3e-4f;
 
         [Tooltip("[Typical range: 0 - 1] Global Gradient Clipping max norm value. Set to 0 to turn off.")]
@@ -41,7 +44,7 @@ namespace DeepUnity
 
         [Header("PPO-specific Configuration")]
         [Tooltip("[Typical range: 32 - 2048] How many steps of experience to collect per-agent before adding it to the experience buffer.")]
-        [Min(1)] public int horizon = 64;
+        [Min(32)] public int horizon = 64; // Note that Time Horizon for non-Gae estimation must be way higher
 
         [Tooltip("[Typical range: 1e-4 - 1e-2] Entropy regularization for trainable standard deviation. Also used for Shannon entropy in discrete action space, but multiplied by 10.")]
         [Min(0f)] public float beta = 5e-3f;
@@ -50,10 +53,10 @@ namespace DeepUnity
         [Min(0.1f)] public float epsilon = 0.2f;
 
         [Tooltip("[Typical range: 0.96 - 0.99] Discount factor.")]
-        [Min(0)] public float gamma = 0.99f;
+        [Min(0.001f)] public float gamma = 0.99f;
 
         [Tooltip("[Typical range: 0.9 - 0.95] GAE factor.")]
-        [ReadOnly, Min(0)] public float lambda = 0.95f;
+        [Min(0.001f)] public float lambda = 0.95f;
 
         [Tooltip("Use of KLE")]
         public KLType KLDivergence = KLType.Off;
@@ -67,10 +70,10 @@ namespace DeepUnity
 
         [Space(50)]
         [Tooltip("Timescale of the training session.")]
-        [Min(1f)] public float timescale = 1f;
+        [Min(1f)] public float timeScale = 1f;
         [Tooltip("Debug the train_data into a file.")]
-        // [HideInInspector] 
-        [Space(150)]
+        //[HideInInspector] 
+        [Space(100)]
         public bool debug = false;
 
 

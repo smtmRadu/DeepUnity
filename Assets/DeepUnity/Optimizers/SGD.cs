@@ -55,8 +55,8 @@ namespace DeepUnity
                 // pytorch implementation
                 if (parameters[i] is Learnable P)
                 {
-                    if (weightDecay != 0f)
-                        P.gammaGrad = P.gammaGrad + weightDecay * P.gamma;
+                    if (lambda != 0f)
+                        P.gammaGrad = P.gammaGrad + lambda * P.gamma;
 
                     if (momentum != 0f)
                     {
@@ -84,17 +84,17 @@ namespace DeepUnity
                     }
                     if (maximize)
                     {
-                        P.gamma = P.gamma + learningRate * P.gammaGrad;
-                        P.beta = P.beta + learningRate * P.betaGrad;
+                        P.gamma = P.gamma + lr * P.gammaGrad;
+                        P.beta = P.beta + lr * P.betaGrad;
                     }
                     else
                     {
-                        P.gamma = P.gamma - learningRate * P.gammaGrad;
-                        P.beta = P.beta - learningRate * P.betaGrad;
+                        P.gamma = P.gamma - lr * P.gammaGrad;
+                        P.beta = P.beta - lr * P.betaGrad;
                     }
                 }
                 if (parameters[i] is ISelfOptimizable S)
-                    S.SelfOptimise(learningRate);
+                    S.SelfOptimise(lr);
             });
         }
     }

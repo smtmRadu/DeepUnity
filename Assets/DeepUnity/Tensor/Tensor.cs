@@ -9,7 +9,7 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public sealed class Tensor : IEquatable<Tensor>, IEquatable<TensorGPU>, ICloneable
+    public class Tensor : IEquatable<Tensor>, IEquatable<TensorGPU>, ICloneable
     {
         [ReadOnly, SerializeField] private float[] data;
         [ReadOnly, SerializeField] private int[] shape;
@@ -350,7 +350,7 @@ namespace DeepUnity
             Tensor t = new(shape);
             for (int i = 0; i < t.data.Length; i++)
             {
-                t.data[i] = Utils.Random.Gaussian();
+                t.data[i] = Utils.Random.Normal();
             }
             return t;
         }
@@ -359,7 +359,7 @@ namespace DeepUnity
             Tensor t = new(shape);
             for (int i = 0; i < t.data.Length; i++)
             {
-                t.data[i] = Utils.Random.Gaussian(mean_sd.Item1, mean_sd.Item2);
+                t.data[i] = Utils.Random.Normal(mean_sd.Item1, mean_sd.Item2);
             }
             return t;
         }

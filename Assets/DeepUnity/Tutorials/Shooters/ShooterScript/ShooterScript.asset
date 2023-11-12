@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
+  m_Name: ShooterScript
+  m_EditorClassIdentifier: 
+  behaviourName: ShooterScript
+  assetCreated: 1
+  observationSize: 1
+  stackedInputsNum: 1
+  continuousDim: 0
+  discreteDim: 9
+  critic: {fileID: 11400000, guid: 05bea7d28c2510d45a26afb2bb67aa39, type: 2}
+  actorContinuousMu: {fileID: 0}
+  actorContinuousSigma: {fileID: 0}
+  discriminatorContinuous: {fileID: 0}
+  actorDiscrete: {fileID: 11400000, guid: 1e866cdf87f376742a8388c696b52473, type: 2}
+  discriminatorDiscrete: {fileID: 11400000, guid: 682f742c508b9704c8988ecb2040a85b, type: 2}
+  config: {fileID: 11400000, guid: b43fca45c8ac66a44a2fe475e1cfc58c, type: 2}
+  targetFPS: 50
+  inferenceDevice: 1
+  trainingDevice: 1
+  normalizeObservations: 0
+  normalizer:
+    step: 0
+    mean:
+      data:
+      - 0
+      shape: 01000000
+    m2:
+      data:
+      - 0
+      shape: 01000000
+  standardDeviation: 1
+  standardDeviationValue: 1

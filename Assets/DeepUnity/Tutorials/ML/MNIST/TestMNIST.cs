@@ -3,87 +3,139 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-
 namespace DeepUnityTutorials
 {
-    public class TestMNIST : MonoBehaviour
+    public class TrainMNIST : MonoBehaviour
     {
-        [SerializeField] private NeuralNetwork network;
-        [SerializeField] Device inferenceDevice = Device.CPU;
+        [SerializeField] NeuralNetwork network;
+        [SerializeField] new string name = "MNIST_MODEL";
+        [SerializeField] private float lr = 0.0002f;
+        [SerializeField] private int schedulerStepSize = 1;
+        [SerializeField] private float schedulerDecay = 0.5f;
+        [SerializeField] private int batch_size = 64;
+        [SerializeField] private bool augment_data = false;
+        [SerializeField] private PerformanceGraph accuracyGraph;
+        [SerializeField] private PerformanceGraph lossGraph;
+        Optimizer optim;
+        LRScheduler scheduler;
+        List<(Tensor, Tensor)> train = new();
+        List<(Tensor, Tensor)[]> train_batches;
+        int epochIndex = 1;
+        int batch_index = 0;
 
-        List<(Tensor, Tensor)> test = new();
-        public string completed = "0/0";
-        public string accuracy = "0%";
-
-        private int[] right = new int[10];
-        private int[] wrong = new int[10];
-        public List<float> accuracyPerDigit = new List<float>()
-        {
-            0f,
-            0f,
-            0f,
-            0f,
-            0f,
-            0f,
-            0f,
-            0f,
-            0f,
-            0f,
-        };
-        int sample_index = 0;
         public void Start()
         {
-            foreach (var item in network.Parameters())
-            {
-                item.device = inferenceDevice;
-            }
-            Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out _, out test, DatasetSettings.LoadTestOnly);
-            Debug.Log("MNIST Dataset test loaded.");
+            Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out train, out _, DatasetSettings.LoadTrainOnly);
+            Debug.Log("MNIST Dataset loaded.");
 
             if (network == null)
             {
-                Debug.Log("Please load a network to test.");
+                network = new NeuralNetwork(
+                     new Conv2D((1, 28, 28), 5, 3, device: Device.GPU),
+                     new ReLU(),
+                     new MaxPool2D(2),
+                     new Conv2D((5, 13, 13), 10, 3, device: Device.GPU),
+                     new ReLU(),
+                     new MaxPool2D(2),
+                     new Flatten(-3, -1),
+                     new Dense(250, 128, device: Device.GPU),
+                     new Dropout(0.2f),
+                     new Dense(128, 10),
+                     new Softmax()
+                     ).CreateAsset(name);
+
+                // network = new Sequential(
+                //     new Flatten(),
+                //     new Dense(784, 10, init: InitType.Glorot_Uniform, device: Device.GPU),
+                //     new Softmax()
+                //     ).Compile(name);
+
+                // network = new Sequential(
+                //     new Conv2D((1, 28, 28), 5, 3, Device.GPU),
+                //     new Sigmoid(),
+                //     new Flatten(),
+                //     new Dense(5 * 26 * 26, 100, device: Device.GPU),
+                //     new Sigmoid(),
+                //     new Dense(100, 10),
+                //     new Softmax()
+                //     );
+
+                // network = new Sequential(
+                //     new Flatten(),
+                //     new Dense(784, 100, init: InitType.HE_Normal, device: Device.GPU),
+                //     new ReLU(),
+                //     new Dense(100, 10, InitType.HE_Normal, device: Device.GPU),
+                //     new Softmax()).Compile(name);
+
+                Debug.Log("Network created.");
             }
-            print($"Total test samples {test.Count}.");
+
+            optim = new Adam(network.Parameters(), lr: lr);
+            scheduler = new LRScheduler(optim, schedulerStepSize, schedulerDecay);
+            accuracyGraph = new PerformanceGraph();
+            lossGraph = new PerformanceGraph();
+            Utils.Shuffle(train);
+            train_batches = Utils.Split(train, batch_size);
+            print($"Total train samples {train.Count}.");
+            print($"Total train batches {train_batches.Count}.");
             print("Network used: " + network.Summary());
-            Utils.Shuffle(test);
         }
 
         public void Update()
         {
-            if (sample_index == test.Count)
-                return; // case test finished
+            if (batch_index % 100 == 0)
+                network.Save();
 
-            (Tensor, Tensor) sample = test[sample_index++];
-
-            var input = sample.Item1;
-            var label = sample.Item2;
-
-            int digit = (int)Tensor.ArgMax(label, -1)[0];
-            var output = network.Predict(input);
-            float acc = Metrics.Accuracy(output, label);
-             
-            if(acc == 0)
+            // Case when epoch finished
+            if (batch_index == train_batches.Count - 1)
             {
-                wrong[digit]++;
+                batch_index = 0;
+
+                network.Save();
+                Utils.Shuffle(train);
+                scheduler.Step();
+
+                print($"Epoch {epochIndex++} | LR: {scheduler.CurrentLR}%");
             }
-            else
+
+
+            (Tensor, Tensor)[] train_batch = train_batches[batch_index];
+
+            Tensor input = Tensor.Cat(null, train_batch.Select(x =>
             {
-                right[digit]++;
-            }
-            accuracyPerDigit[digit] = right[digit] / ((float)right[digit] + wrong[digit]) * 100f;
+                Tensor img = x.Item1;
+                if (augment_data)
+                    img = AugmentImage(img);
+                return img;
+            }).ToArray());
 
-            accuracy = $"{accuracyPerDigit.Average()}%";
+            Tensor target = Tensor.Cat(null, train_batch.Select(x => x.Item2).ToArray());
 
+            Tensor prediction = network.Forward(input);
+            Loss loss = Loss.CrossEntropy(prediction, target);
 
-            completed = $"{sample_index}/{test.Count}";
+            optim.ZeroGrad();
+            network.Backward(loss.Derivative);
+            optim.ClipGradNorm(0.5f);
+            optim.Step();
 
-           
+            float acc = Metrics.Accuracy(prediction, target);
+            accuracyGraph.Append(acc);
+            lossGraph.Append(loss.Item);
 
+            Debug.Log($"Epoch: {epochIndex} | Batch: {batch_index++}/{train_batches.Count} | Acc: {acc * 100f}% | Loss: {loss.Item}");
         }
 
+
+        public Tensor AugmentImage(Tensor image)
+        {
+            Tensor tex = Utils.ImageProcessing.Zoom(image, Utils.Random.Range(0.7f, 1.4f));
+            tex = Utils.ImageProcessing.Rotate(tex, Utils.Random.Range(-60f, 60f));
+            tex = Utils.ImageProcessing.Offset(tex, Utils.Random.Range(-5f, 5f), Utils.Random.Range(-5f, 5f));
+            tex = Utils.ImageProcessing.Noise(tex, Utils.Random.Range(0.05f, 0.15f), Utils.Random.Range(0.20f, 0.30f));
+            return tex;
+        }
     }
 
 }
-
 

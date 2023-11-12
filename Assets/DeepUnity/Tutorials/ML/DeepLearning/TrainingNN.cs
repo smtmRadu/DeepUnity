@@ -51,13 +51,13 @@ namespace DeepUnityTutorials
                  // new LayerNorm(),                
                  new LeakyReLU(),
                  new Dense(hiddenSize, hiddenSize, init, InitType.Zeros, device: device),
-                 new BatchNorm(hiddenSize),
+                 // new BatchNorm(hiddenSize),
                  new LeakyReLU(),
                  // new Dropout(0.3f),
                  new Dense(hiddenSize, hiddenSize, init, InitType.Zeros, device: device),
                  new LeakyReLU(),
                  new Dense(hiddenSize, 1, init, InitType.Zeros)
-                 );//.CreateAsset("Tutorial2");
+                 );
             }
 
             optimizer = new Adam(net.Parameters(), lr: learningRate);
@@ -105,7 +105,7 @@ namespace DeepUnityTutorials
             TrainLossGraph.Append(loss.Item);
             optimizer.ZeroGrad();
             net.Backward(loss.Derivative);
-            optimizer.ClipGradNorm(1f);
+            // optimizer.ClipGradNorm(1f);
             optimizer.Step();
 
 

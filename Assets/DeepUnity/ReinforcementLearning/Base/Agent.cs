@@ -18,8 +18,6 @@ namespace DeepUnity
         [SerializeField, Min(0), HideInInspector] private int continuousActions = 0;
         [Tooltip("Number of discrete actions in discrete action space. Actions indexes [0, 1, .. n - 1]. Consider to include a 'NO_ACTION' index also (especially when working heuristically).")]
         [SerializeField, Min(0), HideInInspector] private int discreteActions = 0;
-        [Tooltip("Arhitecture of the neural network")]
-        [SerializeField, HideInInspector] private ModelType archType = ModelType.NN;
         [Tooltip("Number of hidden layers")]
         [SerializeField, Min(1), HideInInspector] private int numLayers = 2;
         [Tooltip("Number of units in a hidden layer in the model.")]
@@ -44,7 +42,7 @@ namespace DeepUnity
         private ActionBuffer ActionsBuffer { get; set; }
         public int EpisodeStepCount { get; private set; } = 0;
         public float EpsiodeCumulativeReward { get; private set; } = 0f;
-        private int FixedFramesCount { get; set; } = -1;
+        private int EpisodeFixedFramesCount { get; set; } = -1;
 
         public virtual void Awake()
         {
@@ -59,6 +57,14 @@ namespace DeepUnity
                 return;
             }
 
+            List<string> missingComponents = model.CheckForMissingAssets();
+            if(missingComponents.Count > 0)
+            {
+                ConsoleMessage.Error($"Agent behaviour is missing the following assets {string.Join(", ", missingComponents)}");
+                EditorApplication.isPlaying = false;
+                return;
+            }
+
             if (model.targetFPS < 30 || model.targetFPS > 100)
             {
                 ConsoleMessage.Warning($"Behaviour's TargetFPS ({model.targetFPS}) allowed range is [30, 100].");
@@ -66,14 +72,14 @@ namespace DeepUnity
                 return;
             }
 
+
+            // Check Decision Requester
             DecisionRequester = GetComponent<DecisionRequester>();
 
-            if(behaviourType == BehaviourType.Heuristic && DecisionRequester.decisionPeriod > 1)
-            {
+            if(behaviourType == BehaviourType.Manual)
                 DecisionRequester.decisionPeriod = 1;
-                ConsoleMessage.Info("Heuristic Mode enabled, Decision Requester's decision period was set to 1");
-            }
 
+            // Setup 
             Time.fixedDeltaTime = 1f / model.targetFPS;
             Sensors = new List<ISensor>();
             InitSensors(transform);
@@ -110,100 +116,81 @@ namespace DeepUnity
                 TryGetComponent(out pf);
                 PerformanceTrack = pf;
                 OnEpisodeBegin();
-                PPOTrainer.Subscribe(this);
+                DeepUnityTrainer.Subscribe(this, model.config.trainer);                
             }
-
-            if(behaviourType == BehaviourType.Heuristic)
-            {
-                TrainingStatistics pf;
-                TryGetComponent(out pf);
-                PerformanceTrack = pf;
-                OnEpisodeBegin();
-                HeuristicTrainer.Subscribe(this);
-            }
-
         }
         public virtual void FixedUpdate()
         {
-            FixedFramesCount++;
+            EpisodeFixedFramesCount++;
 
             PostTimestep();
 
-            switch(DecisionRequester.RequestEvent(FixedFramesCount))
+            switch(DecisionRequester.RequestEvent(EpisodeFixedFramesCount))
             {
                 case DecisionRequester.AgentEvent.None:
                     break;
                 case DecisionRequester.AgentEvent.Action:
-                    PerformAction();
+                    if (behaviourType != BehaviourType.Off)
+                        OnActionReceived(ActionsBuffer);
                     break;
                 case DecisionRequester.AgentEvent.DecisionAndAction:
                     PerformDecision();
-                    PerformAction();
+                    if(behaviourType != BehaviourType.Off)
+                        OnActionReceived(ActionsBuffer);
                     break;
             }
         }
   
         private void PostTimestep()
         {
+            // Generally saves the previous timestep
             if (behaviourType == BehaviourType.Off)
                 return;
 
-            if (FixedFramesCount == 0)
+            if (EpisodeFixedFramesCount == 0)
                 return;
 
-            if (!DecisionRequester.IsFrameBeforeDecisionFrame(FixedFramesCount))
+            if (!DecisionRequester.IsFrameBeforeDecisionFrame(EpisodeFixedFramesCount))
                 return;
 
             if(behaviourType == BehaviourType.Learn)
             {
+                // Observe s'
+                // OBSERVATION PROCESS ------------------------------------------------------------------
+                // Collect new observations
+                StatesBuffer.Clear();
+                if (useSensors == UseSensorsType.ObservationsVector)
+                    Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetObservationsVector()));
+                else if (useSensors == UseSensorsType.CompressedObservationsVector)
+                    Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
+                CollectObservations(StatesBuffer);
+
+                // Normalize the observations if neccesary
+                Timestep.nextState = StatesBuffer.State.Clone() as Tensor;
+                if (model.normalizeObservations)
+                    Timestep.nextState = model.normalizer.Normalize(Timestep.state);
+                // OBSERVATION PROCESS ------------------------------------------------------------------                  
+
                 Memory.Add(Timestep);
 
                 // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state (maxStep == 0 means unlimited steps per episode)
                 if (EpisodeStepCount == DecisionRequester.maxStep && DecisionRequester.maxStep != 0)
-                    EndEpisode();
-
-                PPOTrainer.SendMemory(Memory);
-
-                if (Timestep?.done[0] == 1)
-                {
-                    if (PerformanceTrack)
-                    {
-                        PerformanceTrack.episodeCount++;
-                        PerformanceTrack.episodeLength.Append(EpisodeStepCount);
-                        PerformanceTrack.cumulativeReward.Append(EpsiodeCumulativeReward);
-                    }
-
-                    EpisodeStepCount = 0;
-                    EpsiodeCumulativeReward = 0f;
-
-
-                    PositionReseter?.Reset();
-                    // ObservationsBuffer.FlushStack();
-                    OnEpisodeBegin();
-                }
-            }
-            else if(behaviourType == BehaviourType.Heuristic)
+                    EndEpisode();         
+            }            
+            
+            // These checkup applies also for Manual and Inference..
+            if(Timestep?.done[0] == 1)
             {
-                Memory.Add(Timestep);
-
-                // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state
-                if (EpisodeStepCount == DecisionRequester.maxStep && DecisionRequester.maxStep != 0)
-                    EndEpisode();
-
-                HeuristicTrainer.SendMemory(Memory);
-
-                if (Timestep?.done[0] == 1)
+                if (PerformanceTrack) // These are mainly for Learning
                 {
-                    EpisodeStepCount = 0;
-                    EpsiodeCumulativeReward = 0f;
-
-
-                    PositionReseter?.Reset();
-                    OnEpisodeBegin();
+                    PerformanceTrack.episodeCount++;
+                    PerformanceTrack.episodeLength.Append(EpisodeStepCount);
+                    PerformanceTrack.cumulativeReward.Append(EpsiodeCumulativeReward);
                 }
-            }
-            else if(Timestep?.done[0] == 1)
-            {
+
+                EpisodeStepCount = 0;
+                EpsiodeCumulativeReward = 0f;
+                EpisodeFixedFramesCount = 0; // Used to make the agent take a decision in the first step of the new epiode
                 PositionReseter?.Reset();
                 OnEpisodeBegin();
             }
@@ -213,120 +200,56 @@ namespace DeepUnity
 
             if (PerformanceTrack) PerformanceTrack.stepCount++;
         }
-        private void PerformAction()
-        {
-            if (behaviourType == BehaviourType.Off)
-                return;
-
-            if (behaviourType == BehaviourType.Heuristic)
-            {
-                // For now, in heuristic mode, only manual control is available
-                StatesBuffer.Clear();
-                ActionsBuffer.Clear();
-
-                // Collect new observations
-                if (useSensors == UseSensorsType.ObservationsVector) Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetObservationsVector()));
-                else if (useSensors == UseSensorsType.CompressedObservationsVector) Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
-                CollectObservations(StatesBuffer);
-                // ObservationsBuffer.PushToStack(ObservationsBuffer.TimestepObservation);
-                
-
-                // Check SensorBuffer is fullfilled
-                int missing = 0;
-                if (!StatesBuffer.IsFulfilled(out missing))
-                {
-                    ConsoleMessage.Warning($"SensorBuffer is missing {missing} observations. Please add {missing} more observations values or reduce the space size.");
-                    EditorApplication.isPlaying = false;
-                    return;
-                }
-
-                // Normalize the observations if neccesary
-                if (model.normalizeObservations)
-                    Timestep.state = model.normalizer.Normalize(StatesBuffer.State);
-                else
-                    Timestep.state = StatesBuffer.State.Clone() as Tensor;
-                
-                // Collect user input actions
-                Heuristic(ActionsBuffer);
-                OnActionReceived(ActionsBuffer);
-
-                // Check if there was any input received in case for discrete actions, because we need a dedicated No_Action index.
-                if (model.IsUsingDiscreteActions && ActionsBuffer.DiscreteAction == -1)
-                {
-                    ConsoleMessage.Warning("When using Discrete Actions for Heuristic Training, consider the 'NO_ACTION' case also when not introducing any input beside the already selected discrete actions");
-                    EditorApplication.isPlaying = false;    
-                    return;
-                }
-
-                
-                if(model.IsUsingContinuousActions)
-                    Timestep.action_continuous = Tensor.Constant(ActionsBuffer.ContinuousActions);
-
-                if (model.IsUsingDiscreteActions)
-                {
-                    // Convert from action index to One Hot embedding vector
-                    Timestep.action_discrete = Tensor.Zeros(model.discreteDim);
-                    Timestep.action_discrete[ActionsBuffer.DiscreteAction] = 1f;
-                }
-            }
-            else
-            {
-                OnActionReceived(ActionsBuffer);
-            }
-
-           
-        }
         private void PerformDecision()
         {
             if (behaviourType == BehaviourType.Off)
                 return;
 
-            if (behaviourType == BehaviourType.Heuristic)
+            if (behaviourType == BehaviourType.Manual)
+            {
+                Heuristic(ActionsBuffer);
                 return;
+            }
 
-            
-            StatesBuffer.Clear();
-            ActionsBuffer.Clear();
-
+            // OBSERVATION PROCESS ------------------------------------------------------------------
             // Collect new observations
-            if (useSensors == UseSensorsType.ObservationsVector) Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetObservationsVector()));
-            else if (useSensors == UseSensorsType.CompressedObservationsVector) Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
+            StatesBuffer.Clear();
+            if (useSensors == UseSensorsType.ObservationsVector)
+                Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetObservationsVector()));
+            else if (useSensors == UseSensorsType.CompressedObservationsVector) 
+                Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
             CollectObservations(StatesBuffer);
-            // ObservationsBuffer.PushToStack(ObservationsBuffer.TimestepObservation);
 
             // Check SensorBuffer is fullfilled
             int missing = 0;
             if (!StatesBuffer.IsFulfilled(out missing))
             {
-                ConsoleMessage.Warning($"SensorBuffer is missing {missing} observations. Please add {missing} more observations values or reduce the space size.");
+                ConsoleMessage.Warning($"SensorBuffer is missing {missing} observations. Please add {missing} more observations values or reduce the space size");
                 EditorApplication.isPlaying = false;
                 return;
             }
 
             // Normalize the observations if neccesary
-            if (model.normalizeObservations)
+            Timestep.state = StatesBuffer.State.Clone() as Tensor;
+            if(model.normalizeObservations)
             {
-                Tensor st = StatesBuffer.State.Clone() as Tensor;
-
-                if (behaviourType == BehaviourType.Learn)
-                {
-                    model.normalizer.Update(st);
-                }
-
-                Timestep.state = model.normalizer.Normalize(st);               
+                model.normalizer.Update(Timestep.state);
+                Timestep.state = model.normalizer.Normalize(Timestep.state);
             }
-            else
-            {
-                Timestep.state = StatesBuffer.State.Clone() as Tensor;
-            }
+            // OBSERVATION PROCESS ------------------------------------------------------------------
 
+
+
+            // ACTION PROCESS -----------------------------------------------------------------------
             // Set state[t], action[t] & pi[t]
-            model.ContinuousPredict(Timestep.state, out Timestep.action_continuous, out Timestep.prob_continuous);
+            ActionsBuffer.Clear();
+            model.ContinuousPredict(Timestep.state, false, out Timestep.action_continuous, out Timestep.prob_continuous);
             model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.prob_discrete);
 
             // Run agent's actions and clip them
-            ActionsBuffer.ContinuousActions = model.IsUsingContinuousActions ? Timestep.action_continuous.Clip(-1f, 1f).ToArray() : null;
+            ActionsBuffer.ContinuousActions = model.IsUsingContinuousActions ? new Tanh().Forward(Timestep.action_continuous).ToArray() : null; // values also can be clipped in [-1,1] directly
             ActionsBuffer.DiscreteAction = model.IsUsingDiscreteActions ? (int)Timestep.action_discrete.ArgMax(-1)[0] : -1;
+            // ACTION PROCESS -----------------------------------------------------------------------
         }
 
         // Init
@@ -342,7 +265,7 @@ namespace DeepUnity
                 return;
             }
 
-            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, stackedInputs, continuousActions, discreteActions, archType, numLayers, hidUnits);
+            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, stackedInputs, continuousActions, discreteActions, numLayers, hidUnits);
 
             continuousActions = model.continuousDim;
             discreteActions = model.discreteDim;
@@ -357,10 +280,15 @@ namespace DeepUnity
         }
         private void InitSensors(Transform parent)
         {
-            ISensor sensor = parent.GetComponent<ISensor>();
+            ISensor[] sensors = parent.GetComponents<ISensor>();
 
-            if (sensor != null)
-                Sensors.Add(sensor);
+            if(sensors != null && sensors.Length > 0)
+            {
+                foreach (var s in sensors)
+                {
+                    Sensors.Add(s);
+                }
+            }
 
             foreach (Transform child in parent)
             {

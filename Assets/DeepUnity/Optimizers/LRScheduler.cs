@@ -26,7 +26,7 @@ namespace DeepUnity
                 throw new System.ArgumentException("Gamma must be in (0, 1) range.");
 
             this.optimizer = optimizer;
-            initialLR = optimizer.learningRate;
+            initialLR = optimizer.lr;
             stepSize = step_size;
             decay = gamma;
             lastEpoch = last_epoch;
@@ -39,12 +39,12 @@ namespace DeepUnity
             currentEpoch++;
 
             if(currentEpoch % stepSize == 0)
-                optimizer.learningRate *= decay;
+                optimizer.lr *= decay;
 
             if(currentEpoch == lastEpoch)
-                optimizer.learningRate = initialLR;  
+                optimizer.lr = initialLR;  
         }
-        public float CurrentLR { get => optimizer.learningRate; }
+        public float CurrentLR { get => optimizer.lr; }
     }
 }
 

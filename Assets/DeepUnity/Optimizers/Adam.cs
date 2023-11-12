@@ -74,7 +74,7 @@ namespace DeepUnity
                     vHat = vGamma[i] / (1f - beta2_t);
 
                     // Update parameters
-                    P.gamma = P.gamma * (1f - weightDecay) - learningRate * mHat / (Tensor.Sqrt(vHat) + Utils.EPSILON);
+                    P.gamma = P.gamma * (1f - lambda) - lr * mHat / (Tensor.Sqrt(vHat) + Utils.EPSILON);
 
 
                     // Update biased first momentum estimate
@@ -90,11 +90,11 @@ namespace DeepUnity
                     vHat = vBeta[i] / (1f - beta2_t);
 
                     // Update parameters 
-                    P.beta = P.beta - learningRate * mHat / (Tensor.Sqrt(vHat) + Utils.EPSILON);
+                    P.beta = P.beta - lr * mHat / (Tensor.Sqrt(vHat) + Utils.EPSILON);
                 }
 
                 if (parameters[i] is ISelfOptimizable S)
-                    S.SelfOptimise(learningRate * 10f);
+                    S.SelfOptimise(lr * 10f);
             });
 
         }

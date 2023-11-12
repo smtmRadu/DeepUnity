@@ -9,11 +9,15 @@ using UnityEngine;
 namespace DeepUnity
 {
     /// <summary>
-    /// All values added to the state buffer are clipped in range [-5, 5]
+    /// All values added to the state buffer are clipped in range [-Clip, Clip]
     /// </summary>
     public class StateBuffer
     {
         public readonly int Capacity;
+        /// <summary>
+        /// The limit used to clip the observations value
+        /// </summary>
+        private readonly float Clip = 5f;
         public Tensor State { get; set; }
         private int position_index { get; set; }
        
@@ -59,7 +63,7 @@ namespace DeepUnity
                 ConsoleMessage.Warning("float.NaN value observation added to the SensorBuffer replaced with 0");
                 observation = 0f;
             }
-            State[position_index++] = Utils.Clip(observation, -5f, 5f);
+            State[position_index++] = Utils.Clip(observation, -Clip, Clip);
         }
         /// <summary>
         /// Adds a one dimensional observation. The bool value is converted to float, 0 for false and 1 for true respectively.

@@ -91,14 +91,12 @@ namespace DeepUnity
                     return '-';
             }).ToArray());
 
-            string name = $"[{behaviourName}]TrainingSession_{extra}";
+            string name = $"[{behaviourName}]Log_{extra}";
 
             string path = $"Assets/{behaviourName}/Logs/{name}.svg";
 
             if (!Directory.Exists($"Assets/{behaviourName}"))
             {
-                ConsoleMessage.Info($"{behaviourName} behaviour folder has been moved from Assets folder, or it's name was changed! The training session log was saved in Assets/Logs in consequence.");
-
                 if (!Directory.Exists($"Assets/Logs"))
                     Directory.CreateDirectory($"Assets/Logs");
 
@@ -147,6 +145,8 @@ namespace DeepUnity
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Parallel Agents: " + parallelAgents + @"</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Timescale: " + Time.timeScale + @"</text>");
+            y += 20;
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Trainer: " + hp.trainer + @"</text>");
 
             y += 50;
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Hyperparameters]</text>");

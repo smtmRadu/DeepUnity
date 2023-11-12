@@ -9,15 +9,15 @@ namespace DeepUnity
     {
         protected Learnable[] parameters;
 
-        public float learningRate;
-        protected float weightDecay;
+        public float lr;
+        protected float lambda;
         protected int t; // step counter
 
         protected Optimizer(Learnable[] param, float lr, float L2Penalty)
         {
             parameters = param;
-            learningRate = lr;
-            weightDecay = L2Penalty;
+            this.lr = lr;
+            lambda = L2Penalty;
             t = 0;       
         }
         public abstract void Step();

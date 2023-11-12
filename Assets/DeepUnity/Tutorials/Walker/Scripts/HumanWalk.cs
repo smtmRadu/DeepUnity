@@ -1,11 +1,11 @@
 using UnityEngine;
 using DeepUnity;
 
-
 namespace DeepUnityTutorials
 {
     public class HumanWalk : Agent
     {
+        // Spring: 3000 | Damper: 100 | MaxForce: 6000
         public Transform target;
 
         [Header("Body Parts 16")]
@@ -126,7 +126,6 @@ namespace DeepUnityTutorials
             var jdDict = bodyController.bodyPartsDict;
 
             float[] actions_vector = actionBuffer.ContinuousActions;
-
 
             jdDict[head].SetJointTargetRotation(actions_vector[0], actions_vector[1], actions_vector[2]);
             jdDict[stomach].SetJointTargetRotation(actions_vector[3], actions_vector[4], actions_vector[5]);

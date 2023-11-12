@@ -174,7 +174,7 @@ namespace DeepUnityTutorials
                 return;
 
             var paramst = generator.Parameters();
-            
+
             foreach (var item in paramst)
             {
                 item.device = Device.CPU;
@@ -200,7 +200,7 @@ namespace DeepUnityTutorials
             }
 
         }
-       
+
         public void SaveNetworks()
         {
             generator.Save();

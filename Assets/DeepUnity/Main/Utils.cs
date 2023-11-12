@@ -611,7 +611,7 @@ namespace DeepUnity
                 throw new Exception("Probs must always sum 1.");
             }
             public static bool Bernoulli(float p = 0.5f) => Value < p;
-            public static float Gaussian(float mean = 0f, float stddev = 1f)
+            public static float Normal(float mean = 0f, float stddev = 1f)
             {
                 // x1 must be > 0 to avoid log(0)
                 float x1;
@@ -621,17 +621,17 @@ namespace DeepUnity
 
                 var entropy = MathF.Sqrt(-2.0f * MathF.Log(x1)) * MathF.Cos(2.0f * MathF.PI * x2);
                 return entropy * stddev + mean;
-            }           
-            public static float Gaussian(float mean, float stddev, out float entropy)
+            }
+            public static float ReparametrizedNormal(float mean = 0f, float stddev = 1f, float scale = Utils.EPSILON)
             {
-                // x1 must be > 0 to avoid log(0)
                 float x1;
                 lock (RNG)
                     x1 = (float)(1.0 - RNG.NextDouble());
+
                 float x2 = Value;
 
-                entropy = MathF.Sqrt(-2.0f * MathF.Log(x1)) * MathF.Cos(2.0f * MathF.PI * x2);
-                return entropy * stddev + mean;
+                var entropy = MathF.Sqrt(-2.0f * MathF.Log(x1)) * MathF.Cos(2.0f * MathF.PI * x2);
+                return mean + stddev * (entropy * scale);
             }
         }
     }
