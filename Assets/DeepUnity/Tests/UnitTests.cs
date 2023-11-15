@@ -27,29 +27,16 @@ namespace kbRadu
         public int whatIsIt = 0;
         List<(Tensor, Tensor)> train;
 
-     
+    
 
-        public float[] results;
-
-        Tensor[] thetas;
-
-        public class Wrap
-        {
-            public TestClass t;
-            public Wrap(TestClass x) => this.t = x; 
-        }
-        public class TestClass
-        {
-            public int value = 1;
-        }
         private void Start()
         {
-            Tensor s = Tensor.Random01(4, 3);
-            Tensor a = Tensor.Random01(4, 2);
+            Tensor param = Tensor.Random01(10);
+            Tensor[] paramarr = new Tensor[] { param };
+            print(paramarr[0]);
 
-            print(s);
-            print(a);
-            print(Tensor.Cat(1, s, a));
+            param += 9;
+            print(paramarr[0]);
 
         }
         // private void Update()
@@ -99,7 +86,7 @@ namespace kbRadu
                 new Tanh(),
                 new Dense(100, 5),
                 new Softmax());
-            var optim = new Adam(net.GetLearnables());
+            var optim = new Adam(net.Parameters(), net.Gradients());
 
             Tensor input = Tensor.Random01(2048, 10);
             Tensor targets = Tensor.Zeros(2048, 5);
@@ -253,232 +240,7 @@ namespace kbRadu
        
 
 
-        void DenseTest()
-        {
-           
-           
 
-            print("64x64--------------------------------------------------------------------------------------------------------------");
-            Dense dense = new Dense(64, 64, device: Device.CPU);
-            Tensor input = Tensor.Random01(batchSize, 64);
-
-            var out_cpu = dense.Forward(input);        
-            var back_cpu = dense.Backward(out_cpu);    
-            var gammaGrad_cpu = dense.gammaGrad;       
-            var betaGrad_cpu = dense.betaGrad;         
-              
-            dense.device = Device.GPU;
-            dense.gammaGrad = Tensor.Zeros(dense.gammaGrad.Shape);
-            dense.betaGrad = Tensor.Zeros(dense.betaGrad.Shape);
-            var out_GPU = dense.Forward(input);
-            var back_GPU = dense.Backward(out_GPU);
-            var gammaGrad_GPU = dense.gammaGrad;
-            var betaGrad_GPU = dense. betaGrad;
-
-            print("out: " + out_cpu.Equals(out_GPU));
-            print("back " + back_cpu.Equals(back_GPU));
-            print("gammaG " + gammaGrad_cpu.Equals(gammaGrad_GPU));
-            print("betaG " + betaGrad_cpu.Equals(betaGrad_GPU));
-
-            print(out_cpu);
-            print(back_cpu);
-            print(gammaGrad_cpu);
-            print(betaGrad_cpu);
-
-            print(out_GPU);
-            print(back_GPU);
-            print(gammaGrad_GPU);
-            print(betaGrad_GPU);
-
-
-
-            print("64x1--------------------------------------------------------------------------------------------------------------");
-            dense = new Dense(64, 1, device: Device.CPU);
-            input = Tensor.Random01(batchSize, 64);
-
-            out_cpu = dense.Forward(input);
-            back_cpu = dense.Backward(out_cpu);
-            gammaGrad_cpu = dense.gammaGrad;
-            betaGrad_cpu = dense.betaGrad;
-
-            dense.device = Device.GPU; 
-            dense.gammaGrad = Tensor.Zeros(dense.gammaGrad.Shape);
-            dense.betaGrad = Tensor.Zeros(dense.betaGrad.Shape);
-
-            out_GPU = dense.Forward(input);
-            back_GPU = dense.Backward(out_GPU);
-            gammaGrad_GPU = dense.gammaGrad;
-            betaGrad_GPU = dense.betaGrad;
-
-            print("out: " + out_cpu.Equals(out_GPU));
-            print("back " + back_cpu.Equals(back_GPU));
-            print("gammaG " + gammaGrad_cpu.Equals(gammaGrad_GPU));
-            print("betaG " + betaGrad_cpu.Equals(betaGrad_GPU));
-
-            print(out_cpu);
-            print(back_cpu);
-            print(gammaGrad_cpu);
-            print(betaGrad_cpu);
-
-            print(out_GPU);
-            print(back_GPU);
-            print(gammaGrad_GPU);
-            print(betaGrad_GPU);
-
-
-
-
-
-
-           
-
-            print("1x64 --------------------------------------------------------------------------------------------------------------");
-            dense = new Dense(1, 64, device: Device.CPU);
-            input = Tensor.Random01(batchSize, 1);
-
-            out_cpu = dense.Forward(input);
-            back_cpu = dense.Backward(out_cpu);
-            gammaGrad_cpu = dense.gammaGrad;
-            betaGrad_cpu = dense.betaGrad;
-
-            dense.device = Device.GPU;
-            dense.gammaGrad = Tensor.Zeros(dense.gammaGrad.Shape);
-            dense.betaGrad = Tensor.Zeros(dense.betaGrad.Shape);
-
-            out_GPU = dense.Forward(input);
-            back_GPU = dense.Backward(out_GPU);
-            gammaGrad_GPU = dense.gammaGrad;
-            betaGrad_GPU = dense.betaGrad;
-
-            print("out: " + out_cpu.Equals(out_GPU));
-            print("back " + back_cpu.Equals(back_GPU));
-            print("gammaG " + gammaGrad_cpu.Equals(gammaGrad_GPU));
-            print("betaG " + betaGrad_cpu.Equals(betaGrad_GPU));
-
-            print(out_cpu);
-            print(back_cpu);
-            print(gammaGrad_cpu);
-            print(betaGrad_cpu);
-
-            print(out_GPU);
-            print(back_GPU);
-            print(gammaGrad_GPU);
-            print(betaGrad_GPU);
-
-
-            print("=============================================no batch===============================================================================");
-
-           
-
-            print("64x64--------------------------------------------------------------------------------------------------------------");
-            dense = new Dense(64, 64, device: Device.CPU);
-            input = Tensor.Random01(64);
-
-            out_cpu = dense.Forward(input);
-            back_cpu = dense.Backward(out_cpu);
-            gammaGrad_cpu = dense.gammaGrad;
-            betaGrad_cpu = dense.betaGrad;
-
-            dense.device = Device.GPU;
-            dense.gammaGrad = Tensor.Zeros(dense.gammaGrad.Shape);
-            dense.betaGrad = Tensor.Zeros(dense.betaGrad.Shape);
-
-            out_GPU = dense.Forward(input);
-            back_GPU = dense.Backward(out_GPU);
-            gammaGrad_GPU = dense.gammaGrad;
-            betaGrad_GPU = dense.betaGrad;
-
-            print("out: " + out_cpu.Equals(out_GPU));
-            print("back " + back_cpu.Equals(back_GPU));
-            print("gammaG " + gammaGrad_cpu.Equals(gammaGrad_GPU));
-            print("betaG " + betaGrad_cpu.Equals(betaGrad_GPU));
-
-            print(out_cpu);
-            print(back_cpu);
-            print(gammaGrad_cpu);
-            print(betaGrad_cpu);
-
-            print(out_GPU);
-            print(back_GPU);
-            print(gammaGrad_GPU);
-            print(betaGrad_GPU);
-
-
-
-            print("64x1--------------------------------------------------------------------------------------------------------------");
-            dense = new Dense(64, 1, device: Device.CPU);
-            input = Tensor.Random01(64);
-
-            out_cpu = dense.Forward(input);
-            back_cpu = dense.Backward(out_cpu);
-            gammaGrad_cpu = dense.gammaGrad;
-            betaGrad_cpu = dense.betaGrad;
-
-            dense.device = Device.GPU;
-            dense.gammaGrad = Tensor.Zeros(dense.gammaGrad.Shape);
-            dense.betaGrad = Tensor.Zeros(dense.betaGrad.Shape);
-
-            out_GPU = dense.Forward(input);
-            back_GPU = dense.Backward(out_GPU);
-            gammaGrad_GPU = dense.gammaGrad;
-            betaGrad_GPU = dense.betaGrad;
-
-            print("out: " + out_cpu.Equals(out_GPU));
-            print("back " + back_cpu.Equals(back_GPU));
-            print("gammaG " + gammaGrad_cpu.Equals(gammaGrad_GPU));
-            print("betaG " + betaGrad_cpu.Equals(betaGrad_GPU));
-
-            print(out_cpu);
-            print(back_cpu);
-            print(gammaGrad_cpu);
-            print(betaGrad_cpu);
-
-            print(out_GPU);
-            print(back_GPU);
-            print(gammaGrad_GPU);
-            print(betaGrad_GPU);
-
-
-
-
-
-
-
-
-            print("1x64 --------------------------------------------------------------------------------------------------------------");
-            dense = new Dense(1, 64, device: Device.CPU);
-            input = Tensor.Random01(1);
-
-
-            out_cpu = dense.Forward(input);
-            back_cpu = dense.Backward(out_cpu);
-            gammaGrad_cpu = dense.gammaGrad;
-            betaGrad_cpu = dense.betaGrad;
-
-            dense.device = Device.GPU;
-            dense.gammaGrad = Tensor.Zeros(dense.gammaGrad.Shape);
-            dense.betaGrad = Tensor.Zeros(dense.betaGrad.Shape);
-
-            out_GPU = dense.Forward(input);
-            back_GPU = dense.Backward(out_GPU);
-            gammaGrad_GPU = dense.gammaGrad;
-            betaGrad_GPU = dense.betaGrad;
-
-            print("out: " + out_cpu.Equals(out_GPU));
-            print("back " + back_cpu.Equals(back_GPU));
-            print("gammaG " + gammaGrad_cpu.Equals(gammaGrad_GPU));
-            print("betaG " + betaGrad_cpu.Equals(betaGrad_GPU));
-
-            print(out_cpu);
-            print(back_cpu);
-            print(gammaGrad_cpu);
-            print(betaGrad_cpu);
-
-            print(out_GPU);
-            print(back_GPU);
-            print(gammaGrad_GPU);
-            print(betaGrad_GPU);
-        }
         void DenseBenchmark()
         {
             Tensor input = Tensor.Fill(2, batchSize, MatShape.x);
@@ -494,60 +256,6 @@ namespace kbRadu
             TimeKeeper.Stop();
         }
 
-
-        void Conv2DTest()
-        {
-           
-            print("Batch included");
-            Tensor input = Tensor.Random01(1, 1, 28, 28);
-            Conv2D conv2d = new Conv2D((1, 28, 28), 5, 3, device: Device.CPU);
-            var output = conv2d.Forward(input);
-            var back = conv2d.Backward(output);
-            var gammaG = conv2d.gammaGrad;
-            var betaG = conv2d.betaGrad;
-            print(output);
-            print(back);
-            print(gammaG);
-            print(betaG);
-
-            conv2d.device = Device.GPU;
-            conv2d.gammaGrad = Tensor.Zeros(conv2d.gammaGrad.Shape);
-            conv2d.betaGrad = Tensor.Zeros(conv2d.betaGrad.Shape);
-            output = conv2d.Forward(input);
-            back = conv2d.Backward(output);
-            gammaG = conv2d.gammaGrad;
-            betaG = conv2d.betaGrad;
-            print(output);
-            print(back);
-            print(gammaG);
-            print(betaG);
-
-
-
-            print("Batch not included");
-            input = Tensor.Random01(1, 28, 28);
-            conv2d = new Conv2D((1, 28, 28), 5, 3, device: Device.CPU);
-            output = conv2d.Forward(input);
-            back = conv2d.Backward(output);
-            gammaG = conv2d.gammaGrad;
-            betaG = conv2d.betaGrad;
-            print(output);
-            print(back);
-            print(gammaG);
-            print(betaG);
-
-            conv2d.device = Device.GPU;
-            conv2d.gammaGrad = Tensor.Zeros(conv2d.gammaGrad.Shape);
-            conv2d.betaGrad = Tensor.Zeros(conv2d.betaGrad.Shape);
-            output = conv2d.Forward(input);
-            back = conv2d.Backward(output);
-            gammaG = conv2d.gammaGrad;
-            betaG = conv2d.betaGrad;
-            print(output);
-            print(back);
-            print(gammaG);
-            print(betaG);
-        }
         void Conv2DBenchmark()
         {
             Conv2D c = new Conv2D((1, 28, 28), 64, 3, device: TestDevice);

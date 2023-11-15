@@ -13,6 +13,8 @@ namespace DeepUnity
         [SerializeField, ReadOnly] private int version = 1;
         [SerializeField, HideInInspector] private bool assetCreated = false;
 
+
+
         /// <summary>
         /// Forwards the input without caching it on the layers.
         /// </summary>
@@ -32,17 +34,28 @@ namespace DeepUnity
         /// <param name="lossDerivative">Derivative of the loss function w.r.t output (dLdY).</param>
         /// <returns>The backpropagated loss derivative.</returns>
         public abstract IOType Backward(IOType lossDerivative);
+
+
+
+
         /// <summary>
-        /// Get all <typeparamref name="Learnable"/> modules.
+        /// Get all <typeparamref name="ILearnable"/> modules.
         /// </summary>
         /// <returns></returns>
-        public abstract Learnable[] GetLearnables();
+        public abstract Tensor[] Parameters();
+        /// <summary>
+        /// Get all <see cref="ILearnable"/> modules gradients.
+        /// </summary>
+        /// <returns></returns>
+        public abstract Tensor[] Gradients();
         /// <summary>
         /// Displays information about this neural network.
         /// </summary>
         /// <returns></returns>
         public abstract string Summary();
-        public abstract object Clone();
+
+
+     
 
 
         /// <summary>
@@ -94,7 +107,12 @@ namespace DeepUnity
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssetIfDirty(this);
         }
-        
+        /// <summary>
+        /// Clones all of this network's characteristics. All modules with all the data are cloned as new.
+        /// </summary>
+        /// <returns></returns>
+        public abstract object Clone();
+
     }
 
 }

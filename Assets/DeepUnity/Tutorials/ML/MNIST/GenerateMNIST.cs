@@ -26,12 +26,12 @@ public class GenerateMNIST : MonoBehaviour
         if (displays.Count == 0)
             return;
 
-        var paramst = generator.GetLearnables();
-
-        foreach (var item in paramst)
-        {
-            item.device = Device.CPU;
-        }
+        // var paramst = generator.GetLearnables();
+        // 
+        // foreach (var item in paramst)
+        // {
+        //     item.device = Device.CPU;
+        // }
 
         foreach (var dis in displays)
         {
@@ -47,10 +47,10 @@ public class GenerateMNIST : MonoBehaviour
             display.Apply();
         }
 
-        foreach (var item in paramst)
-        {
-            item.device = Device.GPU;
-        }
+        // foreach (var item in paramst)
+        // {
+        //     item.device = Device.GPU;
+        // }
     }
     private Tensor GeneratorInput(int batch_size, int latent_dim)
     {

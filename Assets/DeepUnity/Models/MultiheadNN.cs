@@ -130,17 +130,37 @@ namespace DeepUnity
         }
 
 
-        public override Learnable[] GetLearnables()
+        public override Tensor[] Parameters()
         {
-            List<Learnable> parameters = new List<Learnable>();
-            foreach (var item in inputHeadsModules)
+            List<Tensor> parameters = new List<Tensor>();
+            foreach (var item in inputHeadsModules.OfType<ILearnable>())
             {
-                parameters.AddRange(item.OfType<Learnable>());
+                parameters.AddRange(item.Parameters());
             }
-            parameters.AddRange(backboneModules.OfType<Learnable>());
-            foreach (var item in outputHeadsModules)
+            foreach (var item in backboneModules.OfType<ILearnable>())
             {
-                parameters.AddRange(item.OfType<Learnable>());
+                parameters.AddRange(item.Parameters());
+            }
+            foreach (var item in outputHeadsModules.OfType<ILearnable>())
+            {
+                parameters.AddRange(item.Parameters());
+            }
+            return parameters.ToArray();
+        }
+        public override Tensor[] Gradients()
+        {
+            List<Tensor> parameters = new List<Tensor>();
+            foreach (var item in inputHeadsModules.OfType<ILearnable>())
+            {
+                parameters.AddRange(item.Gradients());
+            }
+            foreach (var item in backboneModules.OfType<ILearnable>())
+            {
+                parameters.AddRange(item.Gradients());
+            }
+            foreach (var item in outputHeadsModules.OfType<ILearnable>())
+            {
+                parameters.AddRange(item.Gradients());
             }
             return parameters.ToArray();
         }
@@ -202,9 +222,9 @@ namespace DeepUnity
                 }
 
             }
-            int total_params = inputHeadsModules.Sum(x => x.OfType<Learnable>().Sum(x => x.ParametersCount()));
-            total_params += backboneModules.OfType<Learnable>().Sum(x => x.ParametersCount());
-            total_params += outputHeadsModules.Sum(x => x.OfType<Learnable>().Sum(x => x.ParametersCount()));
+            int total_params = inputHeadsModules.Sum(x => x.OfType<ILearnable>().Sum(x => x.ParametersCount()));
+            total_params += backboneModules.OfType<ILearnable>().Sum(x => x.ParametersCount());
+            total_params += outputHeadsModules.Sum(x => x.OfType<ILearnable>().Sum(x => x.ParametersCount()));
             stringBuilder.AppendLine($"Parameters: {total_params}");
             return stringBuilder.ToString();
         }

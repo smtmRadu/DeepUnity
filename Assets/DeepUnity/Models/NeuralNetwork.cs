@@ -13,7 +13,7 @@ namespace DeepUnity
     [Serializable]
     public class NeuralNetwork : Model<NeuralNetwork, Tensor>, ISerializationCallbackReceiver
     {
-        [NonSerialized] private IModule[] modules;
+        [NonSerialized] public IModule[] modules;
         [SerializeField] private IModuleWrapper[] serializedModules;
 
         public NeuralNetwork(params IModule[] modules) => this.modules = modules;
@@ -62,10 +62,32 @@ namespace DeepUnity
         }
 
         /// <summary>
-        /// Get all <see cref="Learnable"/> modules of this model.
+        /// Get all <see cref="ILearnable"/> modules of this model.
         /// </summary>
         /// <returns></returns>
-        public override Learnable[] GetLearnables() => modules.OfType<Learnable>().ToArray();     
+        public override Tensor[] Parameters()
+        {
+            List<Tensor> param = new();
+            foreach (var item in modules.OfType<ILearnable>())
+            {
+                param.AddRange(item.Parameters());
+            }
+            return param.ToArray();
+        }
+
+        /// <summary>
+        /// Get all <see cref="ILearnable"/> modules gradients of this model.
+        /// </summary>
+        /// <returns></returns>
+        public override Tensor[] Gradients()
+        {
+            List<Tensor> grads = new();
+            foreach (var item in modules.OfType<ILearnable>())
+            {
+                grads.AddRange(item.Gradients());
+            }
+            return grads.ToArray();
+        }
         public override string Summary()
         {
             StringBuilder stringBuilder = new StringBuilder();
@@ -77,7 +99,7 @@ namespace DeepUnity
             {
                 stringBuilder.AppendLine($"         {module.GetType().Name}");
             }
-            stringBuilder.AppendLine($"Parameters: {modules.Where(x => x is Learnable).Select(x => (Learnable)x).Sum(x => x.ParametersCount())}");
+            stringBuilder.AppendLine($"Parameters: {modules.Where(x => x is ILearnable).Select(x => (ILearnable)x).Sum(x => x.ParametersCount())}");
             return stringBuilder.ToString();
         }
 
@@ -91,7 +113,6 @@ namespace DeepUnity
         {
             modules = serializedModules.Select(x => IModuleWrapper.Unwrap(x)).ToArray();
         }
-
         public override object Clone()
         {
             var cloned_modules = this.modules.Select(x => (IModule)x.Clone()).ToArray();

@@ -70,7 +70,7 @@ namespace DeepUnityTutorials
                 Debug.Log("Network created.");
             }
 
-            optim = new Adam(network.GetLearnables(), lr: lr);
+            optim = new Adam(network.Parameters(), network.Gradients(), lr: lr);
             scheduler = new LRScheduler(optim, schedulerStepSize, schedulerDecay);
             accuracyGraph = new PerformanceGraph();
             lossGraph = new PerformanceGraph();

@@ -1,8 +1,7 @@
-using DeepUnity;
 using System;
 using UnityEngine;
 
-namespace kbRadu
+namespace DeepUnity
 {
     [Serializable]
     public class ELU : Activation

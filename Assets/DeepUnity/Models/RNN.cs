@@ -263,15 +263,39 @@ namespace DeepUnity
             {
                 stringBuilder.AppendLine($"         {module.GetType().Name}");
             }
-            stringBuilder.AppendLine($"Parameters: {modules.Where(x => x is Learnable).Select(x => (Learnable)x).Sum(x => x.ParametersCount())}");
+            stringBuilder.AppendLine($"Parameters: {modules.Where(x => x is ILearnable).Select(x => (ILearnable)x).Sum(x => x.ParametersCount())}");
             return stringBuilder.ToString();
         }
-        public override Learnable[] GetLearnables()
+
+
+
+        /// <summary>
+        /// Get all <see cref="ILearnable"/> modules of this model.
+        /// </summary>
+        /// <returns></returns>
+        public override Tensor[] Parameters()
         {
-            return modules.OfType<Learnable>().ToArray();
+            List<Tensor> param = new();
+            foreach (var item in modules.OfType<ILearnable>())
+            {
+                param.AddRange(item.Parameters());
+            }
+            return param.ToArray();
         }
 
-
+        /// <summary>
+        /// Get all <see cref="ILearnable"/> modules gradients of this model.
+        /// </summary>
+        /// <returns></returns>
+        public override Tensor[] Gradients()
+        {
+            List<Tensor> grads = new();
+            foreach (var item in modules.OfType<ILearnable>())
+            {
+                grads.AddRange(item.Gradients());
+            }
+            return grads.ToArray();
+        }
         public void OnBeforeSerialize()
         {
             serializedModules = modules.Select(x => IModule2Wrapper.Wrap(x)).ToArray();

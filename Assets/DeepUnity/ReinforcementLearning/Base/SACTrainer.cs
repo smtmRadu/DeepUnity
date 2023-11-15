@@ -166,11 +166,11 @@ namespace DeepUnity
         }
         public void UpdateTargetNetworks()
         {
-            Learnable[] phi1 = model.q1Network.GetLearnables();
-            Learnable[] phi2 = model.q2Network.GetLearnables();
+            Tensor[] phi1 = model.q1Network.Parameters();
+            Tensor[] phi2 = model.q2Network.Parameters();
 
-            Learnable[] phi_targ1 = Qtarg1.GetLearnables();
-            Learnable[] phi_targ2 = Qtarg2.GetLearnables();
+            Tensor[] phi_targ1 = Qtarg1.Parameters();
+            Tensor[] phi_targ2 = Qtarg2.Parameters();
 
 
             // We update the target q functions softly...
@@ -178,11 +178,8 @@ namespace DeepUnity
 
             for (int i = 0; i < phi1.Length; i++)
             {
-                phi_targ1[i].gamma = hp.tau * phi_targ1[i].gamma + (1f - hp.tau) * phi1[i].gamma;
-                phi_targ1[i].beta = hp.tau * phi_targ1[i].beta + (1f - hp.tau) * phi1[i].beta;
-
-                phi_targ2[i].gamma = hp.tau * phi_targ2[i].gamma + (1f - hp.tau) * phi2[i].gamma;
-                phi_targ2[i].beta = hp.tau * phi_targ2[i].beta + (1f - hp.tau) * phi2[i].beta;
+                phi_targ1[i].AssignAs(hp.tau * phi_targ1[i] + (1f - hp.tau) * phi1[i]);
+                phi_targ2[i].AssignAs(hp.tau * phi_targ2[i] + (1f - hp.tau) * phi2[i]);
             }        
         }
 

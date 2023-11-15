@@ -2432,6 +2432,11 @@ namespace DeepUnity
 
 
         #region Instance opeations
+        public void AssignAs(Tensor other)
+        {
+            this.data = other.data.ToArray();
+            this.shape = other.shape.ToArray();
+        }
         public int Size(int axis)
         {
             HandleAxis(this, ref axis);

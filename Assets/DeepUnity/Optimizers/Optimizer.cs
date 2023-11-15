@@ -1,23 +1,20 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-
 namespace DeepUnity
 {
+    // Note that parameters and gradients value should not be reassigned elsewhere, only the values of the tensors inside
     public abstract class Optimizer
     {
-        protected Learnable[] parameters;
-
+        protected Tensor[] parameters;
+        protected Tensor[] gradients;
         public float lr;
         protected float lambda;
         protected int t; // step counter
 
-        protected Optimizer(Learnable[] param, float lr, float L2Penalty)
+        protected Optimizer(Tensor[] parameters, Tensor[] gradients, float lr, float weightDecay)
         {
-            parameters = param;
+            this.parameters = parameters;
+            this.gradients = gradients;
             this.lr = lr;
-            lambda = L2Penalty;
+            lambda = weightDecay;
             t = 0;       
         }
         public abstract void Step();
@@ -27,9 +24,9 @@ namespace DeepUnity
         /// </summary>
         public void ZeroGrad()
         {
-            foreach (var param in parameters)
+            foreach (var grad in gradients)
             {
-                param.ZeroGrad();
+                grad.AssignAs(grad.Select(x => 0));
             }
         }
         /// <summary>
@@ -37,9 +34,9 @@ namespace DeepUnity
         /// </summary>
         public void ClipGradValue(float clip_value)
         {
-            foreach (var param in parameters)
+            foreach (var param in gradients)
             {
-                param.ClipGradValue(clip_value);
+                param.Clip(-clip_value, clip_value);
             }
         }
         /// <summary>
@@ -54,46 +51,19 @@ namespace DeepUnity
             int totalCount = 0;
             foreach (var param in parameters)
             {
-                totalCount += param.gamma.Count();
-                totalCount += param.beta.Count();
-
-                if (param is RNNCell r)
-                {
-                    totalCount += r.recurrentGamma.Count();
-                    totalCount += r.recurrentBeta.Count();
-                }
+                totalCount += param.Count();
             }
 
             // Concatenate all gradients in a single tensor vector
             Tensor vector = Tensor.Zeros(totalCount);
             int index = 0;
-            foreach (var param in parameters)
+            foreach (var param in gradients)
             {
-                float[] gradG = param.gammaGrad.ToArray();
-                float[] gradB = param.betaGrad.ToArray();
+                float[] gradTheta = param.ToArray();
 
-                for (int i = 0; i < gradG.Length; i++)
+                for (int i = 0; i < gradTheta.Length; i++)
                 {
-                    vector[index++] = gradG[i];
-                }
-                for (int i = 0; i < gradB.Length; i++)
-                {
-                    vector[index++] = gradB[i];
-                }
-
-                if(param is RNNCell r)
-                {
-                    float[] rgradG = r.recurrentGammaGrad.ToArray();
-                    float[] rgradB = r.recurrentBetaGrad.ToArray();
-
-                    for (int i = 0; i < gradG.Length; i++)
-                    {
-                        vector[index++] = rgradG[i];
-                    }
-                    for (int i = 0; i < gradB.Length; i++)
-                    {
-                        vector[index++] = rgradB[i];
-                    }
+                    vector[index++] = gradTheta[i];
                 }
             }
 
@@ -105,109 +75,12 @@ namespace DeepUnity
 
             float scale = max_norm / norm[0];
 
-            foreach (var item in parameters)
+            foreach (var item in gradients)
             {
-                item.gammaGrad *= scale;
-                item.betaGrad *= scale;
+                item.AssignAs(item * scale);
 
-                if(item is RNNCell r)
-                {
-                    r.recurrentGammaGrad *= scale;
-                    r.recurrentBetaGrad *= scale;
-                }
             }     
         }
-
-
         
     }
-
-    /// <summary>
-    /// [Deprecated]
-    /// </summary>
-    [Serializable]
-    internal class OptimizerWrapper
-    {
-        public string name;
-
-        [Space]
-        public Adam adam;
-        public SGD sgd;       
-        public Adadelta adadelta;
-        public Adagrad adagrad;
-        public RMSProp rmsprop;
-        public Adamax adamax;
-
-        private OptimizerWrapper(Optimizer optimizer)
-        {
-            // Initialize the fields based on the optimizer type
-
-            name = optimizer.GetType().Name;
-            if (optimizer is Adam adamOptimizer)
-            {
-                adam = adamOptimizer;
-            }
-            else if (optimizer is SGD sgdOptimizer)
-            {
-                sgd = sgdOptimizer;
-            }
-            else if (optimizer is RMSProp rmspropOptimizer)
-            {
-                rmsprop = rmspropOptimizer;
-            }
-            else if (optimizer is Adadelta adadeltaOptimizer)
-            {
-                adadelta = adadeltaOptimizer;
-            }
-            else if (optimizer is Adagrad adagradOptimizer)
-            {
-                adagrad = adagradOptimizer;
-            }
-            else if (optimizer is Adamax adamaxOptimizer)
-            {
-                adamax = adamaxOptimizer;
-            }
-            else
-                throw new Exception("Unhandled optimizer type on wrapping.");
-        }
-
-        public static OptimizerWrapper Wrap(Optimizer optimizer)
-        {
-            return new OptimizerWrapper(optimizer);
-        }     
-        public static Optimizer Unwrap(OptimizerWrapper optimizerWrapper)
-        {
-            Optimizer optimizer;
-
-            if (typeof(Adam).Name.Equals(optimizerWrapper.name))
-            {
-                optimizer = optimizerWrapper.adam;
-            }
-            else if (typeof(SGD).Name.Equals(optimizerWrapper.name))
-            {
-                optimizer = optimizerWrapper.sgd;
-            }
-            else if(typeof(RMSProp).Name.Equals(optimizerWrapper.name))
-            {
-                optimizer = optimizerWrapper.rmsprop;
-            }
-            else if(typeof(Adadelta).Name.Equals(optimizerWrapper.name))
-            {
-                optimizer = optimizerWrapper.adadelta;
-            }
-            else if(typeof(Adagrad).Name.Equals(optimizerWrapper.name))
-            {
-                optimizer = optimizerWrapper.adagrad;
-            }
-            else if(typeof(Adamax).Name.Equals(optimizerWrapper.name))
-            {
-                optimizer = optimizerWrapper.adamax;
-            }
-            else
-                throw new Exception("Unhandled optimizer type on unwrapping.");
-
-            return optimizer;
-        }
-    }
-
 }

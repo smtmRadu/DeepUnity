@@ -48,19 +48,19 @@ namespace DeepUnityTutorials
                 InitType init = InitType.HE_Uniform;
                 net = new NeuralNetwork(
                  new Dense(2, hiddenSize, init, InitType.Zeros),
-                 // new LayerNorm(),                
+                 new LayerNorm(),                
                  new LeakyReLU(),
                  new Dense(hiddenSize, hiddenSize, init, InitType.Zeros, device: device),
-                 // new BatchNorm(hiddenSize),
+                 new BatchNorm(hiddenSize),
                  new LeakyReLU(),
                  // new Dropout(0.3f),
                  new Dense(hiddenSize, hiddenSize, init, InitType.Zeros, device: device),
                  new LeakyReLU(),
                  new Dense(hiddenSize, 1, init, InitType.Zeros)
-                 );
+                 ).CreateAsset("test");
             }
 
-            optimizer = new Adam(net.GetLearnables(), lr: learningRate);
+            optimizer = new Adam(net.Parameters(), net.Gradients(), lr: learningRate);
             scheduler = new LRScheduler(optimizer, scheduler_step_size, scheduler_gamma);
 
 

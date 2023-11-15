@@ -1,12 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using UnityEngine;
 
 namespace DeepUnity
 {
     [Serializable]
-    public class RNNCell : Learnable, IModule2, ISelfOptimizable
+    public class RNNCell : ILearnable, IModule2
     {
         [SerializeField] private NonLinearity nonlinearity;
 
@@ -14,13 +15,16 @@ namespace DeepUnity
         [NonSerialized] private Stack<Tensor> InputCache;
         [NonSerialized] private Stack<Tensor> HiddenCache;
         [NonSerialized] private Stack<Activation> Activations;
-       
 
-        
-        [SerializeField, Tooltip("weight hidden->hidden")]          public Tensor recurrentGamma;
-        [SerializeField, Tooltip("bias hidden->hidden")]            public Tensor recurrentBeta;
-        [NonSerialized, Tooltip("weight hidden->hidden gradient")]  public Tensor recurrentGammaGrad;
-        [NonSerialized, Tooltip("bias hidden->hidden gradient")]    public Tensor recurrentBetaGrad;
+
+        [SerializeField] private Tensor weights;
+        [SerializeField] private Tensor biases;
+        [NonSerialized]  private Tensor weightsGrad;
+        [NonSerialized]  private Tensor biasesGrad;
+        [SerializeField, Tooltip("weight hidden->hidden")]          private Tensor recurrentWeights;
+        [SerializeField, Tooltip("bias hidden->hidden")]            private Tensor recurrentBiases;
+        [NonSerialized, Tooltip("weight hidden->hidden gradient")]  private Tensor recurrentWeightsGrad;
+        [NonSerialized, Tooltip("bias hidden->hidden gradient")]    private Tensor recurrentBiasesGrad;
 
 
         /// <summary>
@@ -31,14 +35,7 @@ namespace DeepUnity
         /// <param name="input_size"></param>
         /// <param name="hidden_size"></param>
         /// <param name="nonlinearity"></param>
-        public RNNCell(int input_size, int hidden_size, NonLinearity nonlinearity = NonLinearity.Tanh) : 
-            base(Device.CPU,
-                InitType.Glorot_Uniform,
-                InitType.Zeros,
-                new int[] {hidden_size, input_size},
-                new int[] {hidden_size},
-                input_size,
-                hidden_size) 
+        public RNNCell(int input_size, int hidden_size, NonLinearity nonlinearity = NonLinearity.Tanh)
         {
             this.nonlinearity = nonlinearity;
             InputCache = new Stack<Tensor>();
@@ -49,10 +46,14 @@ namespace DeepUnity
             float sqrtK = MathF.Sqrt(1f / hidden_size);
             var range = (-sqrtK, sqrtK);
 
-            recurrentGamma = Tensor.RandomRange(range, hidden_size, hidden_size);  // weight_hh
-            recurrentBeta = Tensor.RandomRange(range, hidden_size);                // bias_hh
-            recurrentGammaGrad = Tensor.Zeros(hidden_size, hidden_size);  // weight_hh_g
-            recurrentBetaGrad = Tensor.Zeros(hidden_size);                // bias_hh_g
+            weights = Initializer.InitializeParameter(new int[] { hidden_size, input_size }, input_size, hidden_size, InitType.Glorot_Uniform);
+            biases = Initializer.InitializeParameter(new int[] { hidden_size }, input_size, hidden_size, InitType.Zeros);
+            weightsGrad = Tensor.Zeros(weights.Shape);
+            biasesGrad = Tensor.Zeros(biases.Shape);
+            recurrentWeights = Tensor.RandomRange(range, hidden_size, hidden_size);  // weight_hh
+            recurrentBiases = Tensor.RandomRange(range, hidden_size);                // bias_hh
+            recurrentWeightsGrad = Tensor.Zeros(hidden_size, hidden_size);  // weight_hh_g
+            recurrentBiasesGrad = Tensor.Zeros(hidden_size);                // bias_hh_g
         }
 
         /// <summary>
@@ -64,11 +65,11 @@ namespace DeepUnity
         /// <returns><b>h_n</b>: <b>(B, H_out)</b> or <b>(H_out)</b> for unbatched input.</returns>
         public Tensor Forward(Tensor input, Tensor hidden)
         {
-            if(input.Size(-1) != gamma.Size(-1))
-                throw new ShapeException($"Input last dimension ({input.Size(-1)}) must be equal to input_size ({gamma.Size(-1)})");
+            if(input.Size(-1) != weights.Size(-1))
+                throw new ShapeException($"Input last dimension ({input.Size(-1)}) must be equal to input_size ({weights.Size(-1)})");
 
-            if(hidden.Size(-1) != gamma.Size(-2))
-                throw new ShapeException($"Hidden last dimension ({hidden.Size(-2)}) must be equal to hidden_size ({gamma.Size(-2)})");
+            if(hidden.Size(-1) != weights.Size(-2))
+                throw new ShapeException($"Hidden last dimension ({hidden.Size(-2)}) must be equal to hidden_size ({weights.Size(-2)})");
 
             InputCache.Push(Tensor.Identity(input));
             HiddenCache.Push(Tensor.Identity(hidden));
@@ -95,16 +96,16 @@ namespace DeepUnity
             Tensor H_Prime;
             if(batch_size == 1)
             {
-                H_Prime = Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + beta +
-                                 Tensor.MatMul(hidden, Tensor.Transpose(recurrentGamma, 0, 1)) + recurrentBeta;
+                H_Prime = Tensor.MatMul(input, Tensor.Transpose(weights, 0, 1)) + biases +
+                                 Tensor.MatMul(hidden, Tensor.Transpose(recurrentWeights, 0, 1)) + recurrentBiases;
                
             }
             else
             {
-                H_Prime = Tensor.MatMul(input, Tensor.Transpose(gamma, 0, 1)) + 
-                                 Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size) +
-                                 Tensor.MatMul(hidden, Tensor.Transpose(recurrentGamma, 0, 1)) + 
-                                 Tensor.Expand(Tensor.Unsqueeze(recurrentBeta, 0), 0, batch_size);
+                H_Prime = Tensor.MatMul(input, Tensor.Transpose(weights, 0, 1)) + 
+                                 Tensor.Expand(Tensor.Unsqueeze(biases, 0), 0, batch_size) +
+                                 Tensor.MatMul(hidden, Tensor.Transpose(recurrentWeights, 0, 1)) + 
+                                 Tensor.Expand(Tensor.Unsqueeze(recurrentBiases, 0), 0, batch_size);
             }
 
             return Activations.Peek().Forward(H_Prime);
@@ -139,105 +140,71 @@ namespace DeepUnity
             Tensor transposedLoss = Tensor.Transpose(h_n_grad, 0, 1);
 
             // compute gradients wrt parameters.
-            gammaGrad += Tensor.MatMul(transposedLoss, InputCache_t) / batch_size;
-            betaGrad += Tensor.Mean(transposedLoss, axis: 1);
-            recurrentGammaGrad += Tensor.MatMul(transposedLoss, H_0Cache_t) / batch_size;
-            recurrentBetaGrad += Tensor.Mean(transposedLoss, axis: 1);
+            weightsGrad.AssignAs(weightsGrad + Tensor.MatMul(transposedLoss, InputCache_t) / batch_size);
+            biasesGrad.AssignAs(biasesGrad + Tensor.Mean(transposedLoss, axis: 1));
+            recurrentWeightsGrad.AssignAs(recurrentWeightsGrad + Tensor.MatMul(transposedLoss, H_0Cache_t) / batch_size);
+            recurrentBiasesGrad.AssignAs(recurrentBiasesGrad + Tensor.Mean(transposedLoss, axis: 1));
 
             // compute gradients wrt InputCache.
-            Tensor inputGrad = Tensor.MatMul(h_n_grad, gamma);
+            Tensor inputGrad = Tensor.MatMul(h_n_grad, weights);
             return inputGrad.Squeeze(-2);
         }
 
-        public void SelfOptimise(float lr)
+        public void SetDevice(Device device) { return; }
+        public int ParametersCount()
         {
-            recurrentGamma = -lr * recurrentGammaGrad;
-            recurrentBeta = -lr * recurrentBetaGrad;
+            return weights.Count() + biases.Count() + recurrentWeights.Count() + recurrentBiases.Count();
         }
-        public override void ZeroGrad()
+        public Tensor[] Parameters()
         {
-            base.ZeroGrad();
-            recurrentGammaGrad = Tensor.Zeros(recurrentGammaGrad.Shape);
-            recurrentBetaGrad = Tensor.Zeros(recurrentBetaGrad.Shape);
+            return new Tensor[] { weights, biases, recurrentWeights, recurrentBiases };
         }
-        public override void ClipGradValue(float clip_value)
+        public Tensor[] Gradients()
         {
-            base.ClipGradValue(clip_value);
-            recurrentGammaGrad = Tensor.Clip(recurrentGammaGrad, -clip_value, clip_value);
-            recurrentBetaGrad = Tensor.Clip(recurrentBetaGrad, -clip_value, clip_value);
+            if (weightsGrad == null)
+                OnAfterDeserialize();
+            return new Tensor[] { weightsGrad, biasesGrad, recurrentWeightsGrad, recurrentBiasesGrad };
         }
-        public override void ClipGradNorm(float max_norm)
+        public virtual void OnBeforeSerialize()
         {
-            // Maybe it can be modified in the future ...
 
-            Tensor normG = Tensor.Norm(gammaGrad, NormType.ManhattanL1);
-
-            if (normG[0] > max_norm)
-            {
-                float scale = max_norm / normG[0];
-                gammaGrad *= scale;
-            }
-
-            Tensor normB = Tensor.Norm(betaGrad, NormType.ManhattanL1);
-
-            if (normB[0] > max_norm)
-            {
-                float scale = max_norm / normB[0];
-                betaGrad *= scale;
-            }
-
-            Tensor rnormG = Tensor.Norm(recurrentGammaGrad, NormType.ManhattanL1);
-
-            if (rnormG[0] > max_norm)
-            {
-                float scale = max_norm / rnormG[0];
-                recurrentGammaGrad *= scale;
-            }
-
-            Tensor rnormB = Tensor.Norm(recurrentBetaGrad, NormType.ManhattanL1);
-
-            if (rnormB[0] > max_norm)
-            {
-                float scale = max_norm / rnormB[0];
-                recurrentBetaGrad *= scale;
-            }
-            
-        }       
-        public override int ParametersCount()
-        {
-            return base.ParametersCount() + recurrentGamma.Count() + recurrentBeta.Count();
         }
-        public override void OnBeforeSerialize() { }
-        public override void OnAfterDeserialize()
+        public virtual void OnAfterDeserialize()
         {
-            base.OnAfterDeserialize();
+            // This function is actually having 2 workers on serialization.
+            // If shape int[] was not deserialized, we need to break this worker.
+            // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
+
+            if (weights.Shape == null)
+                return;
+
+            if (weights.Shape.Length == 0)
+                return;
 
             InputCache = new Stack<Tensor>();
             HiddenCache = new Stack<Tensor>();
             Activations = new Stack<Activation>();
 
-            if (recurrentGamma.Shape == null)
-                return;
+            // do not check if gamma is != null...
+            this.weightsGrad = Tensor.Zeros(weights.Shape);
+            this.biasesGrad = Tensor.Zeros(biases.Shape);
 
-            if (recurrentGamma.Shape.Length == 0)
-                return;
+            recurrentWeightsGrad = Tensor.Zeros(recurrentWeights.Shape);  // weight_hh_g
+            recurrentBiasesGrad = Tensor.Zeros(recurrentBiases.Shape);    // bias_hh_g  
 
-            recurrentGammaGrad = Tensor.Zeros(recurrentGamma.Shape);  // weight_hh_g
-            recurrentBetaGrad = Tensor.Zeros(recurrentBeta.Shape);    // bias_hh_g  
-
-            InputCache = new();
-            HiddenCache = new();
         }
+      
+       
         public object Clone()
         {
             var rnncell = new RNNCell(1, 1, this.nonlinearity);
             rnncell.InputCache = new Stack<Tensor>();
             rnncell.HiddenCache = new Stack<Tensor>();
             rnncell.Activations = new Stack<Activation>();
-            rnncell.gamma = (Tensor)this.gamma.Clone();
-            rnncell.beta = (Tensor)this.beta.Clone();
-            rnncell.recurrentGamma = (Tensor)this.recurrentGamma.Clone();
-            rnncell.recurrentBeta = (Tensor)this.recurrentBeta.Clone();
+            rnncell.weights = (Tensor)this.weights.Clone();
+            rnncell.biases = (Tensor)this.biases.Clone();
+            rnncell.recurrentWeights = (Tensor)this.recurrentWeights.Clone();
+            rnncell.recurrentBiases = (Tensor)this.recurrentBiases.Clone();
             return rnncell;
         }
     }

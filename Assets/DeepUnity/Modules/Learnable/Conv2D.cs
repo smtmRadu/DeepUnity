@@ -25,7 +25,7 @@ namespace DeepUnity
     /// W_out = W_in - kernel.width + 1
     /// </summary>
     [Serializable]
-    public class Conv2D : Learnable, IModule 
+    public class Conv2D : ILearnable, IModule 
     {
         
         private Tensor InputCache { get; set; }
@@ -34,6 +34,12 @@ namespace DeepUnity
         [SerializeField] private int outChannels;
         [SerializeField] private int kernelWidth;
         [SerializeField] private int kernelHeight;
+
+        [SerializeField] private Device device;
+        [SerializeField] private Tensor kernels;
+        [SerializeField] private Tensor biases;
+        [NonSerialized] private Tensor kernelsGrad;
+        [NonSerialized] private Tensor biasesGrad;
 
         // Biases are applied over the final output. Biases (out_channels, out_height, out_width).
         // input shape  = (B, iC, H, W)
@@ -57,14 +63,7 @@ namespace DeepUnity
         /// <param name="kernel_size"></param>
         /// <param name="gamma_init">Initializer used for weights.</param>
         /// <param name="beta_init">Initializer used for biases.</param>
-        public Conv2D((int, int, int) input_shape, int out_channels, int kernel_size, InitType gamma_init = InitType.LeCun_Uniform, InitType beta_init = InitType.LeCun_Uniform, Device device = Device.CPU) : 
-            base(device, 
-                gamma_init,
-                beta_init, 
-                new int[] { out_channels, input_shape.Item1, kernel_size, kernel_size },
-                new int[] { out_channels, input_shape.Item2 - kernel_size + 1, input_shape.Item3 - kernel_size + 1},
-                input_shape.Item1 * kernel_size * kernel_size,
-                out_channels)
+        public Conv2D((int, int, int) input_shape, int out_channels, int kernel_size, InitType gamma_init = InitType.LeCun_Uniform, InitType beta_init = InitType.LeCun_Uniform, Device device = Device.CPU) 
         {
             if (input_shape.Item1 < 1)
                 throw new ArgumentException("Cannot have less than 1 input channels.");
@@ -75,10 +74,16 @@ namespace DeepUnity
             if(kernel_size < 2)
                 throw new ArgumentException("Cannot have less than 2 kernel size.");
 
+            this.device = device;
             this.inputShape = new int[] { input_shape.Item1, input_shape.Item2, input_shape.Item3 };
             this.outChannels = out_channels;
             this.kernelWidth = kernel_size;
-            this.kernelHeight = kernel_size;                    
+            this.kernelHeight = kernel_size;
+
+            kernels = Initializer.InitializeParameter(new int[] { out_channels, input_shape.Item1, kernel_size, kernel_size }, input_shape.Item1 * kernel_size * kernel_size, out_channels, gamma_init);
+            biases = Initializer.InitializeParameter(new int[] { out_channels, input_shape.Item2 - kernel_size + 1, input_shape.Item3 - kernel_size + 1 }, input_shape.Item1 * kernel_size * kernel_size, out_channels, gamma_init);
+            kernelsGrad = Tensor.Zeros(kernels.Shape);
+            biasesGrad = Tensor.Zeros(biases.Shape);
         }
         /// <summary>
         /// Input: (<b>B</b>, <b>C_in</b>, <b>H_in</b>, <b>W_in</b>) or (<b>C_in</b>, <b>H_in</b>, <b>W_in</b>) for unbatched input.<br/>
@@ -94,14 +99,7 @@ namespace DeepUnity
         /// <param name="input_shape">(C_in, H, W)</param>
         /// <param name="gamma_init">Initializer used for weights.</param>
         /// <param name="beta_init">Initializer used for biases.</param>
-        public Conv2D((int, int, int) input_shape, int out_channels, (int, int) kernel_shape, InitType gamma_init = InitType.Glorot_Uniform, InitType beta_init = InitType.Zeros, Device device = Device.CPU) :
-             base(device,
-                gamma_init,
-                beta_init,
-                new int[] { out_channels, input_shape.Item1, kernel_shape.Item1, kernel_shape.Item2 },
-                new int[] { out_channels, input_shape.Item2 - kernel_shape.Item1 + 1, input_shape.Item3 - kernel_shape.Item2 + 1 },
-                input_shape.Item1 * kernel_shape.Item1 * kernel_shape.Item2,
-                out_channels)
+        public Conv2D((int, int, int) input_shape, int out_channels, (int, int) kernel_shape, InitType gamma_init = InitType.Glorot_Uniform, InitType beta_init = InitType.Zeros, Device device = Device.CPU)
         {
             if (input_shape.Item1 < 1)
                 throw new ArgumentException("Cannot have less than 1 input channels.");
@@ -116,6 +114,12 @@ namespace DeepUnity
             this.outChannels = out_channels;
             this.kernelWidth = kernel_shape.Item2;
             this.kernelHeight = kernel_shape.Item1;
+
+
+            kernels = Initializer.InitializeParameter(new int[] { out_channels, input_shape.Item1, kernel_shape.Item1, kernel_shape.Item2 }, input_shape.Item1 * kernel_shape.Item1 * kernel_shape.Item2, out_channels, gamma_init);
+            biases = Initializer.InitializeParameter(new int[] { out_channels, input_shape.Item2 - kernel_shape.Item1 + 1, input_shape.Item3 - kernel_shape.Item2 + 1 }, input_shape.Item1 * kernel_shape.Item1 * kernel_shape.Item2, out_channels, gamma_init);
+            kernelsGrad = Tensor.Zeros(kernels.Shape);
+            biasesGrad = Tensor.Zeros(biases.Shape);
         }
 
 
@@ -136,9 +140,9 @@ namespace DeepUnity
             if(device == Device.CPU)
             {
                 if (input.Rank == 3)
-                    return Correlate2DValid_input_kernels(input, gamma).Squeeze(-4) + beta; // if input (C, H, W), we keep the shape
+                    return Correlate2DValid_input_kernels(input, kernels).Squeeze(-4) + biases; // if input (C, H, W), we keep the shape
                 else
-                    return Correlate2DValid_input_kernels(input, gamma) + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
+                    return Correlate2DValid_input_kernels(input, kernels) + Tensor.Expand(Tensor.Unsqueeze(biases, 0), 0, batch_size);
             }
             else
             {
@@ -155,8 +159,8 @@ namespace DeepUnity
                 inputBuffer.SetData(input.ToArray());
                 cs.SetBuffer(0, "input", inputBuffer);
 
-                ComputeBuffer gammaBuffer = new ComputeBuffer(gamma.Count(), 4);
-                gammaBuffer.SetData(gamma.ToArray());
+                ComputeBuffer gammaBuffer = new ComputeBuffer(kernels.Count(), 4);
+                gammaBuffer.SetData(kernels.ToArray());
                 cs.SetBuffer(0, "gamma", gammaBuffer);
 
                 ComputeBuffer outputBuffer = new ComputeBuffer(batch_size * C_out * H_out * W_out, 4);
@@ -185,9 +189,9 @@ namespace DeepUnity
                 outputBuffer.Release();
 
                 if(input.Rank == 3)
-                    return result.Squeeze(-4) + beta;
+                    return result.Squeeze(-4) + biases;
                 else
-                    return result + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
+                    return result + Tensor.Expand(Tensor.Unsqueeze(biases, 0), 0, batch_size);
             }
         }
 
@@ -209,9 +213,9 @@ namespace DeepUnity
 
             if(device == Device.CPU)
             {
-                gammaGrad += Correlate2DValid_input_loss(InputCache, loss) / batch_size;
-                betaGrad += isBatched ? Tensor.Mean(loss, -4) : loss;
-                return Convolve2DFull_loss_gamma(loss, gamma);
+                kernelsGrad.AssignAs(kernelsGrad + Correlate2DValid_input_loss(InputCache, loss) / batch_size);
+                biasesGrad.AssignAs(biasesGrad + (isBatched ? Tensor.Mean(loss, -4) : loss));
+                return Convolve2DFull_loss_gamma(loss, kernels);
             }
             else 
             {
@@ -246,23 +250,23 @@ namespace DeepUnity
                 inputBuffer.SetData(InputCache.ToArray());
                 cs.SetBuffer(KINDEX, "input", inputBuffer);
                 
-                ComputeBuffer gammaGradBuffer = new ComputeBuffer(gammaGrad.Count(), 4);
-                gammaGradBuffer.SetData(gammaGrad.ToArray());
+                ComputeBuffer gammaGradBuffer = new ComputeBuffer(kernelsGrad.Count(), 4);
+                gammaGradBuffer.SetData(kernelsGrad.ToArray());
                 cs.SetBuffer(KINDEX, "gamma_grad", gammaGradBuffer);
                 
                 if(KINDEX == 1)
                     cs.Dispatch(1,
-                        (gamma.Size(-1) + 2) / 3,
-                        (gamma.Size(-2) + 2) / 3,
+                        (kernels.Size(-1) + 2) / 3,
+                        (kernels.Size(-2) + 2) / 3,
                         (C_out + 63) / 64);
                 else
                     cs.Dispatch(2,
-                        (gamma.Size(-1) + 4) / 5,
-                        (gamma.Size(-2) + 4) / 5,
+                        (kernels.Size(-1) + 4) / 5,
+                        (kernels.Size(-2) + 4) / 5,
                         (C_out + 31) / 32);
 
-                gammaGrad = Tensor.Constant(gammaGradBuffer).Reshape(gammaGrad.Shape);
-                betaGrad += isBatched ? Tensor.Mean(loss, -4) : loss;  // faster on CPU
+                kernelsGrad.AssignAs(kernelsGrad + Tensor.Constant(gammaGradBuffer).Reshape(kernelsGrad.Shape));
+                biasesGrad.AssignAs(biasesGrad + (isBatched ? Tensor.Mean(loss, -4) : loss));  // faster on CPU
 
                 inputBuffer.Release();
                 gammaGradBuffer.Release();
@@ -275,8 +279,8 @@ namespace DeepUnity
                 // Computes the gradient of the loss wrt input. -------------------------------------------------------------------------
                 cs.SetBuffer(3, "loss", lossBuffer);
 
-                ComputeBuffer gammaBuffer = new ComputeBuffer(gamma.Count(), 4);
-                gammaBuffer.SetData(gamma.ToArray());
+                ComputeBuffer gammaBuffer = new ComputeBuffer(kernels.Count(), 4);
+                gammaBuffer.SetData(kernels.ToArray());
                 cs.SetBuffer(3, "gamma", gammaBuffer);
 
                 ComputeBuffer inputGradBuffer = new ComputeBuffer(InputCache.Count(), 4);
@@ -558,9 +562,47 @@ namespace DeepUnity
         public object Clone()
         {
             var conv = new Conv2D((inputShape[0], inputShape[1], inputShape[2]), outChannels, kernel_shape: (this.kernelHeight, this.kernelWidth), device: this.device);
-            conv.gamma = (Tensor)this.gamma.Clone();
-            conv.beta = (Tensor)this.beta.Clone();
+            conv.kernels = (Tensor)this.kernels.Clone();
+            conv.biases = (Tensor)this.biases.Clone();
             return conv;
+        }
+
+
+        public void SetDevice(Device device) => this.device = device;
+        public int ParametersCount()
+        {
+            return kernels.Count() + biases.Count();
+        }
+        public Tensor[] Parameters()
+        {
+            return new Tensor[] { kernels, biases };
+        }
+        public Tensor[] Gradients()
+        {
+            if (kernelsGrad == null)
+                OnAfterDeserialize();
+            return new Tensor[] { kernelsGrad, biasesGrad };
+        }
+        public virtual void OnBeforeSerialize()
+        {
+
+        }
+        public virtual void OnAfterDeserialize()
+        {
+            // This function is actually having 2 workers on serialization.
+            // If shape int[] was not deserialized, we need to break this worker.
+            // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
+
+            if (kernels.Shape == null)
+                return;
+
+            if (kernels.Shape.Length == 0)
+                return;
+
+            // do not check if gamma is != null...
+            this.kernelsGrad = Tensor.Zeros(kernels.Shape);
+            this.biasesGrad = Tensor.Zeros(biases.Shape);
+
         }
     }
 }

@@ -13,7 +13,7 @@ namespace DeepUnity
     /// <b>Applies normalization over the last dimension (H) of the input.</b> 
     /// </summary>
     [Serializable]
-    public class LayerNorm: Learnable, IModule, IModule2
+    public class LayerNorm: ILearnable, IModule, IModule2
     {
         // Epsilon should be 1e-5f as default, but i keep it on default 1e-8f
         // Just a good reference paper to learn from, i made this just by adapting batchnorm layer.
@@ -29,6 +29,11 @@ namespace DeepUnity
         [SerializeField] private Tensor runningMean;
         [SerializeField] private Tensor runningVar;
 
+        [SerializeField] private Tensor gamma;
+        [SerializeField] private Tensor beta;
+        [NonSerialized] private Tensor gammaGrad;
+        [NonSerialized] private Tensor betaGrad;
+
 
         /// <summary>
         /// <b>Placed before the non-linear activation function. </b>    <br />
@@ -37,17 +42,15 @@ namespace DeepUnity
         /// where  B = batch_size and H = in_features.<br />
         /// <b>Applies normalization over the last dimension (H) of the input.</b> 
         /// </summary>
-        public LayerNorm() :
-            base(Device.CPU,
-                InitType.Ones,
-                InitType.Zeros,
-                new int[] { 1 },
-                new int[] { 1 },
-                1,
-                1)
+        public LayerNorm()
         {
             runningMean = Tensor.Zeros(1);
             runningVar = Tensor.Ones(1);
+
+            gamma = Tensor.Ones(1);
+            beta = Tensor.Zeros(1);
+            gammaGrad = Tensor.Zeros(1);
+            betaGrad = Tensor.Zeros(1);
             step = 0;
         }
         public Tensor Predict(Tensor input)
@@ -102,8 +105,8 @@ namespace DeepUnity
             Tensor dLdGamma = Tensor.Mean(dLdY + xCentered, 0);
             Tensor dLdBeta = Tensor.Mean(dLdY, 0);
 
-            gammaGrad += dLdGamma.Mean(0);
-            betaGrad += dLdBeta.Mean(0);
+            gammaGrad.AssignAs(gammaGrad + dLdGamma.Mean(0));
+            betaGrad.AssignAs(betaGrad + dLdBeta.Mean(0));
 
             return dLdX;
         }
@@ -117,6 +120,44 @@ namespace DeepUnity
             laynorm.runningMean = (Tensor)this.runningMean.Clone(); 
             laynorm.runningVar = (Tensor)this.runningVar.Clone();
             return laynorm;
+        }
+
+
+        public void SetDevice(Device device) { return; }
+        public int ParametersCount()
+        {
+            return gamma.Count() + beta.Count();
+        }
+        public Tensor[] Parameters()
+        {
+            return new Tensor[] { gamma, beta };
+        }
+        public Tensor[] Gradients()
+        {
+            if (gammaGrad == null)
+                OnAfterDeserialize();
+            return new Tensor[] { gammaGrad, betaGrad };
+        }
+        public virtual void OnBeforeSerialize()
+        {
+
+        }
+        public virtual void OnAfterDeserialize()
+        {
+            // This function is actually having 2 workers on serialization.
+            // If shape int[] was not deserialized, we need to break this worker.
+            // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
+
+            if (gamma.Shape == null)
+                return;
+
+            if (gamma.Shape.Length == 0)
+                return;
+
+            // do not check if gamma is != null...
+            this.gammaGrad = Tensor.Zeros(gamma.Shape);
+            this.betaGrad = Tensor.Zeros(beta.Shape);
+
         }
     }
 }

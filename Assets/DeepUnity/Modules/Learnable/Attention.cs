@@ -1,4 +1,5 @@
 using System;
+using Unity.VisualScripting.Antlr3.Runtime;
 using UnityEngine;
 using UnityEngine.Windows;
 
@@ -28,7 +29,7 @@ namespace DeepUnity
     /// <em>TIPS: <br></br>
     ///     For images (C, H, W), the shape must be flattened into (T, H*), where T = C and H* = H · W. </em><br></br>
     /// </summary>
-    public class Attention : Learnable, IModule, ISelfOptimizable
+    public class Attention : ILearnable, IModule
     {
         // Caches used for each operation in order to compute the gradients
         private Tensor InputCache { get; set; }
@@ -66,8 +67,7 @@ namespace DeepUnity
         /// <param name="input_shape">(T, H)</param>
         /// <param name="embed_dim">Total dimension of the model.</param>
         /// <param name="scale">Apply scale in self dot-product attention.</param>
-        public Attention((int, int) input_shape, int embed_dim, float scale = 1f) : 
-            base(Device.CPU, InitType.HE_Normal, InitType.HE_Normal, new int[] {1}, new int[] {1}, 1, 1)
+        public Attention((int, int) input_shape, int embed_dim, float scale = 1f)
         {
 
             throw new NotSupportedException("Attention layer is not implemented yet.");
@@ -226,16 +226,6 @@ namespace DeepUnity
             return null;
         }
 
-        public void SelfOptimise(float lr)
-        {
-            // optimise value
-
-            W_Q -= lr * W_Q_grad;
-            W_O -= lr * W_O_grad;
-            W_K -= lr * W_K_grad;
-            W_V -= lr * W_V_grad;
-        }
-
         private  Tensor GetIpsilonMatrix(Tensor X)
         {
             return Tensor.Ones(X.Shape) / X;
@@ -295,6 +285,51 @@ namespace DeepUnity
             att.softmax = (Softmax)this.softmax.Clone();
             return att;
 
+        }
+
+
+
+        public void SetDevice(Device device)
+        {
+            return;
+        }
+        public int ParametersCount()
+        {
+            return W_Q.Count() + W_K.Count() + W_V.Count() + W_O.Count();
+        }
+        public Tensor[] Parameters()
+        {
+            return new Tensor[] { W_Q , W_K , W_V, W_O };
+        }                          
+        public Tensor[] Gradients()
+        {
+            if (W_Q_grad == null)
+            {
+                OnAfterDeserialize();
+            }
+            return new Tensor[] { W_Q_grad, W_K_grad, W_V_grad, W_O_grad };
+        }
+        public virtual void OnBeforeSerialize()
+        {
+
+        }
+        public virtual void OnAfterDeserialize()
+        {
+            // This function is actually having 2 workers on serialization.
+            // If shape int[] was not deserialized, we need to break this worker.
+            // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
+
+            if (W_Q.Shape == null)
+                return;
+
+            if (W_Q.Shape.Length == 0)
+                return;
+
+            // do not check if gamma is != null...
+            this.W_Q_grad = Tensor.Zeros(W_Q.Shape);
+            this.W_K_grad = Tensor.Zeros(W_K.Shape);
+            this.W_V_grad = Tensor.Zeros(W_V.Shape);
+            this.W_O_grad = Tensor.Zeros(W_O.Shape);
         }
     }
 

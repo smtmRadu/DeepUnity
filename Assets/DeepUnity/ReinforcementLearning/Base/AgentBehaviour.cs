@@ -111,19 +111,7 @@ namespace DeepUnity
             );
 
 
-            // Initialize q networks Q(st,at)
-            q1Network = new NeuralNetwork(
-               new IModule[]
-               { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
-               Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-               Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B) }).ToArray()
-            );
-            q2Network = new NeuralNetwork(
-               new IModule[]
-               { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
-               Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-               Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B) }).ToArray()
-            );
+           
 
             // Initialize PI
             if (CONTINUOUS_ACTIONS_NUM > 0)
@@ -141,6 +129,21 @@ namespace DeepUnity
                             Concat(CreateHiddenLayers(NUM_LAYERS - 1, HIDDEN_UNITS, INIT_W, INIT_B)). // Sigma network is a bit smaller for efficiency. This network is typically not important to be large
                             Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, InitType.Glorot_Uniform, InitType.Zeros), new Exp() }).ToArray()  // Also Softplus can be used, but it returns very low values => no exploration,                          
                     ); // Note that we use Glorot Init before Exp activation func.. for smaller weights
+
+                // Initialize q networks Q(st,at)
+                q1Network = new NeuralNetwork(
+                   new IModule[]
+                   { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                   Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                   Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B) }).ToArray()
+                );
+
+                q2Network = new NeuralNetwork(
+                   new IModule[]
+                   { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                   Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                   Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B) }).ToArray()
+                );
 
                 discContNetwork = new NeuralNetwork(
                         new IModule[] 
@@ -189,19 +192,17 @@ namespace DeepUnity
         {
             if (IsUsingContinuousActions)
             {
-                var learnables = discContNetwork.GetLearnables();
-                foreach (var item in learnables)
+                foreach (var item in discContNetwork.modules.OfType<ILearnable>())
                 {
-                    item.device = device;
+                    item.SetDevice(device);
                 }
             }
-
+            
             if (IsUsingDiscreteActions)
             {
-                var learnables = discDiscNetwork.GetLearnables();
-                foreach (var item in learnables)
+                foreach (var item in discDiscNetwork.modules.OfType<ILearnable>())
                 {
-                    item.device = device;
+                    item.SetDevice(device);
                 }
             }
         }
@@ -209,57 +210,48 @@ namespace DeepUnity
         {
             if (IsUsingContinuousActions)
             {
-                var learnables = muNetwork.GetLearnables();
-                foreach (var item in learnables)
+                foreach (var item in muNetwork.modules.OfType<ILearnable>())
                 {
-                    item.device = device;
+                    item.SetDevice(device);
                 }
 
-                learnables = sigmaNetwork.GetLearnables();
-                foreach (var item in learnables)
+                foreach (var item in muNetwork.modules.OfType<ILearnable>())
                 {
-                    item.device = device;
+                    item.SetDevice(device);
                 }
-
             }
 
             if (IsUsingDiscreteActions)
             {
-                var learnables = discreteNetwork.GetLearnables();
-                foreach (var item in learnables)
+                foreach (var item in discreteNetwork.modules.OfType<ILearnable>())
                 {
-                    item.device = device;
+                    item.SetDevice(device);
                 }
+
             }
         }
         public void SetVDevice(Device device)
         {
-
-            var learnables = vNetwork.GetLearnables();
-            for (int i = 0; i < learnables.Length - 1; i++)
+            var lrn = vNetwork.modules.OfType<ILearnable>().ToArray();
+            for (int i = 0; i < lrn.Length - 1; i++)
             {
-                learnables[i].device = device;
+                lrn[i].SetDevice(device);   
             }
-            learnables[learnables.Length - 1].device = Device.CPU;
+            lrn[lrn.Length - 1].SetDevice(Device.CPU);
 
             // Due to benchmark performances, critic last dense (which has the output features = 1), is working faster on CPU.
         }
         public void SetQDevice(Device device)
         {
-            var learnables = q1Network.GetLearnables();
-            for (int i = 0; i < learnables.Length - 1; i++)
+            foreach (var item in q1Network.modules.OfType<ILearnable>())
             {
-                learnables[i].device = device;
+                item.SetDevice(device);
             }
-            learnables[learnables.Length - 1].device = Device.CPU;
 
-            learnables = q2Network.GetLearnables();
-            for (int i = 0; i < learnables.Length - 1; i++)
+            foreach (var item in q2Network.modules.OfType<ILearnable>())
             {
-                learnables[i].device = device;
+                item.SetDevice(device);
             }
-            learnables[learnables.Length - 1].device = Device.CPU;
-
         }
 
 
@@ -267,40 +259,40 @@ namespace DeepUnity
         {
             if(trainer == TrainerType.SAC)
             {
-                vOptimizer = new Adam(vNetwork.GetLearnables(), hp.learningRate);
-                q1Optimizer = new Adam(q1Network.GetLearnables(), hp.learningRate);
-                q2Optimizer = new Adam(q2Network.GetLearnables(), hp.learningRate);
-                muOptimizer = new Adam(muNetwork.GetLearnables(), hp.learningRate);
-                sigmaOptimizer = new Adam(sigmaNetwork.GetLearnables(), hp.learningRate);
+                vOptimizer = new Adam(vNetwork.Parameters(), vNetwork.Gradients(), hp.learningRate);
+                q1Optimizer = new Adam(q1Network.Parameters(), q1Network.Gradients(), hp.learningRate);
+                q2Optimizer = new Adam(q2Network.Parameters(), q2Network.Gradients(), hp.learningRate);
+                muOptimizer = new Adam(muNetwork.Parameters(), muNetwork.Gradients(), hp.learningRate);
+                sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), sigmaNetwork.Gradients(), hp.learningRate);
             }
             else if(trainer == TrainerType.PPO)
             {
-                vOptimizer = new Adam(vNetwork.GetLearnables(), hp.learningRate);
+                vOptimizer = new Adam(vNetwork.Parameters(), vNetwork.Gradients(), hp.learningRate);
 
                 if (IsUsingContinuousActions)
                 {
-                    muOptimizer = new Adam(muNetwork.GetLearnables(), hp.learningRate);
-                    sigmaOptimizer = new Adam(sigmaNetwork.GetLearnables(), hp.learningRate);
+                    muOptimizer = new Adam(muNetwork.Parameters(), muNetwork.Gradients(), hp.learningRate);
+                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), sigmaNetwork.Gradients(), hp.learningRate);
                 }
                 
                 if(IsUsingDiscreteActions)
                 {
-                    discreteOptimizer = new Adam(discreteNetwork.GetLearnables(), hp.learningRate);
+                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), discreteNetwork.Gradients(), hp.learningRate);
                 }
             }
             else if(trainer == TrainerType.GAIL)
             {
                 if (IsUsingContinuousActions)
                 {
-                    muOptimizer = new Adam(muNetwork.GetLearnables(), hp.learningRate);
-                    sigmaOptimizer = new Adam(sigmaNetwork.GetLearnables(), hp.learningRate);
-                    dContOptimizer = new Adam(discContNetwork.GetLearnables(), hp.learningRate);
+                    muOptimizer = new Adam(muNetwork.Parameters(), muNetwork.Gradients(), hp.learningRate) ;
+                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), sigmaNetwork.Gradients(), hp.learningRate);
+                    dContOptimizer = new Adam(discContNetwork.Parameters(), discContNetwork.Gradients(), hp.learningRate);
                 }
 
                 if (IsUsingDiscreteActions)
                 {
-                    discreteOptimizer = new Adam(discreteNetwork.GetLearnables(), hp.learningRate);
-                    dDiscOptimizer = new Adam(discDiscNetwork.GetLearnables(), hp.learningRate);
+                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), discreteNetwork.Gradients(), hp.learningRate);
+                    dDiscOptimizer = new Adam(discDiscNetwork.Parameters(), discDiscNetwork.Gradients(), hp.learningRate);
                 }
             }                    
         }
@@ -532,22 +524,15 @@ namespace DeepUnity
 
             // Create aux assets
             newAgBeh.config = Hyperparameters.CreateOrLoadAsset(name);
-            newAgBeh.vNetwork.CreateAsset($"{name}/V");
-            newAgBeh.q1Network.CreateAsset($"{name}/Q1");
-            newAgBeh.q2Network.CreateAsset($"{name}/Q2");
-
-            if (newAgBeh.IsUsingContinuousActions)
-            {
-                newAgBeh.muNetwork.CreateAsset($"{name}/Mu");
-                newAgBeh.sigmaNetwork.CreateAsset($"{name}/Sigma");
-                newAgBeh.discContNetwork.CreateAsset($"{name}/Disc_Cont");
-            }
+            newAgBeh.vNetwork?.CreateAsset($"{name}/V");
+            newAgBeh.muNetwork?.CreateAsset($"{name}/Mu");
+            newAgBeh.sigmaNetwork?.CreateAsset($"{name}/Sigma");
+            newAgBeh.discContNetwork?.CreateAsset($"{name}/Disc_Cont");
+            newAgBeh.q1Network?.CreateAsset($"{name}/Q1");
+            newAgBeh.q2Network?.CreateAsset($"{name}/Q2");
+            newAgBeh.discreteNetwork?.CreateAsset($"{name}/Discrete");
+            newAgBeh.discDiscNetwork?.CreateAsset($"{name}/Disc_Disc");
             
-            if(newAgBeh.IsUsingDiscreteActions)
-            {
-                newAgBeh.discreteNetwork.CreateAsset($"{name}/Discrete");
-                newAgBeh.discDiscNetwork.CreateAsset($"{name}/Disc_Disc");
-            }
 
             return newAgBeh;
         }

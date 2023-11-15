@@ -21,7 +21,7 @@ namespace DeepUnity
     /// </em>
     /// </summary>
     [Serializable]
-    public class BatchNorm : Learnable, IModule
+    public class BatchNorm : ILearnable, IModule, ISerializationCallbackReceiver
     {
         // https://arxiv.org/pdf/1502.03167.pdf
 
@@ -35,6 +35,11 @@ namespace DeepUnity
         // Learnable parameters
         [SerializeField] private Tensor runningMean;
         [SerializeField] private Tensor runningVar;
+
+        [SerializeField] private Tensor gamma;
+        [SerializeField] private Tensor beta;
+        [NonSerialized] private Tensor gammaGrad;
+        [NonSerialized] private Tensor betaGrad;
 
 
         /// <summary>
@@ -56,20 +61,18 @@ namespace DeepUnity
         /// </summary>
         /// <param name="num_features">Input's last axis dimension (H).</param>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
-        public BatchNorm(int num_features, float momentum = 0.9f) : 
-            base(Device.CPU,
-                InitType.Ones,
-                InitType.Zeros,
-                new int[] {num_features},
-                new int[] {num_features},
-                num_features,
-                num_features)
+        public BatchNorm(int num_features, float momentum = 0.9f)
         {
             if (num_features < 1)
                 throw new ArgumentException($"BatchNorm layer cannot have num_layers < 1. (Received arg: {num_features})");
 
             this.num_features = num_features;
             this.momentum = momentum;
+
+            gamma = Tensor.Ones(num_features);
+            beta = Tensor.Zeros(num_features);
+            gammaGrad = Tensor.Zeros(num_features);
+            betaGrad = Tensor.Zeros(num_features);
 
             runningVar = Tensor.Ones(num_features);
             runningMean = Tensor.Zeros(num_features);          
@@ -162,8 +165,8 @@ namespace DeepUnity
             var dLdGamma = Tensor.Sum(dLdY * xHat, 0);
             var dLdBeta = Tensor.Sum(dLdY, 0);
 
-            gammaGrad += dLdGamma;
-            betaGrad += dLdBeta;
+            gammaGrad.AssignAs(gammaGrad + dLdGamma);
+            betaGrad.AssignAs(betaGrad + dLdBeta);
 
             return dLdX;
         }
@@ -176,6 +179,45 @@ namespace DeepUnity
             laynorm.runningMean = (Tensor)this.runningMean.Clone();
             laynorm.runningVar = (Tensor)this.runningVar.Clone();
             return laynorm;
+        }
+
+        /// <summary>
+        /// Returns the number of all learnable parameters of this <see cref="Learnable"/> module.
+        /// </summary>
+        public virtual int ParametersCount() => gamma.Count() + beta.Count();
+
+
+        public void SetDevice(Device device) { return; }
+        public Tensor[] Parameters()
+        {
+            return new Tensor[] { gamma, beta };
+        }
+        public Tensor[] Gradients()
+        {
+            if (gammaGrad == null)
+                OnAfterDeserialize();
+            return new Tensor[] { gammaGrad, betaGrad };
+        }
+        public virtual void OnBeforeSerialize()
+        {
+
+        }
+        public virtual void OnAfterDeserialize()
+        {
+            // This function is actually having 2 workers on serialization.
+            // If shape int[] was not deserialized, we need to break this worker.
+            // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
+
+            if (gamma.Shape == null)
+                return;
+
+            if (gamma.Shape.Length == 0)
+                return;
+
+            // do not check if gamma is != null...
+            this.gammaGrad = Tensor.Zeros(gamma.Shape);
+            this.betaGrad = Tensor.Zeros(beta.Shape);
+
         }
 
         // TIPS for improvement

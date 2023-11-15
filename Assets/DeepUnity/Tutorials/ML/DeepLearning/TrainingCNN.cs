@@ -67,7 +67,7 @@ namespace DeepUnityTutorials
                 //     new Softmax());
             }
 
-            optim = new SGD(network.GetLearnables(), lr: 0.1f, momentum: 0.9f);
+            optim = new Adam(network.Parameters(), network.Gradients());
 
             Utils.Shuffle(train);
             train_batches = Utils.Split(train, batch_size);
