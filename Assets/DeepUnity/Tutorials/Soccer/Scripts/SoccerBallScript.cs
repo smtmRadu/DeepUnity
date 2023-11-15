@@ -18,7 +18,7 @@ namespace DeepUnityTutorials
             else if (other.name == "BlueGoal")
                 env.PinkTeamScored();
             else if (other.name == "OutOfBounds")
-                env.StartNewRound();
+                env.StartNewRound(true);
         }
     }
 }

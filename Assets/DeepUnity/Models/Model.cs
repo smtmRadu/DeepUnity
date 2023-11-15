@@ -36,7 +36,7 @@ namespace DeepUnity
         /// Get all <typeparamref name="Learnable"/> modules.
         /// </summary>
         /// <returns></returns>
-        public abstract Learnable[] Parameters();
+        public abstract Learnable[] GetLearnables();
         /// <summary>
         /// Displays information about this neural network.
         /// </summary>

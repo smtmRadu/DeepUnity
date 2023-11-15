@@ -14,20 +14,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   trainer: 0
   maxSteps: 2000000000
-  learningRate: 0.0003
-  gradClipNorm: 0.5
+  horizon: 128
+  learningRate: 0.0001
+  gamma: 0.99
   batchSize: 512
   bufferSize: 8192
-  numEpoch: 8
-  normalizeAdvantages: 1
-  shuffleTrainingData: 1
+  gradClipNorm: 0.5
   LRSchedule: 0
-  horizon: 128
+  numEpoch: 8
   beta: 0.001
   epsilon: 0.2
-  gamma: 0.99
   lambda: 0.95
   KLDivergence: 0
   targetKL: 0.015
-  timeScale: 8.59
+  updateSteps: 1000
+  updatesNum: 1
+  entropy: 1
+  saveReplayBuffer: 0
+  tau: 0.005
+  saveRecordBuffer: 0
+  timeScale: 4.13
   debug: 0

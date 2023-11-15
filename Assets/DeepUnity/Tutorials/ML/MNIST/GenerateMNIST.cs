@@ -26,7 +26,7 @@ public class GenerateMNIST : MonoBehaviour
         if (displays.Count == 0)
             return;
 
-        var paramst = generator.Parameters();
+        var paramst = generator.GetLearnables();
 
         foreach (var item in paramst)
         {

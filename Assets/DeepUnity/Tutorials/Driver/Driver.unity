@@ -3077,17 +3077,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: acb01c1f399afe1418070c3ff4de54c5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  spaceSize: 22
+  spaceSize: 141
   stackedInputs: 1
   continuousActions: 3
   discreteActions: 0
-  archType: 0
   numLayers: 2
-  hidUnits: 64
-  model: {fileID: 11400000, guid: bc42e4dd91e77a9408001d860d5b6573, type: 2}
-  behaviourType: 1
+  hidUnits: 72
+  model: {fileID: 11400000, guid: ca9e7774fac6d524eba6c9ac69b4397b, type: 2}
+  behaviourType: 2
   onEpisodeEnd: 1
-  useSensors: 2
+  useSensors: 1
   rf_collider: {fileID: 1579101542}
   rb_collider: {fileID: 513718857}
   lf_collider: {fileID: 289542986}
@@ -3113,7 +3112,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 2000
-  decisionPeriod: 3
+  decisionPeriod: 1
   takeActionsBetweenDecisions: 1
 --- !u!1 &717069248
 GameObject:
@@ -10466,9 +10465,10 @@ GameObject:
   - component: {fileID: 713581567}
   - component: {fileID: 713581566}
   - component: {fileID: 919132147695439980}
+  - component: {fileID: 919132147695439981}
   m_Layer: 0
   m_Name: Car
-  m_TagString: Untagged
+  m_TagString: Car
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -10489,9 +10489,11 @@ MonoBehaviour:
   layerMask:
     serializedVersion: 2
     m_Bits: 127
-  detectableTags: []
-  rays: 9
-  fieldOfView: 180
+  detectableTags:
+  - Wall
+  - Car
+  rays: 20
+  fieldOfView: 90
   rotationOffset: 0
   distance: 30
   sphereCastRadius: 0.5
@@ -10499,7 +10501,37 @@ MonoBehaviour:
   yOffset: 0
   zOffset: 0
   tilt: 0
-  rayColor: {r: 0, g: 1, b: 0, a: 1}
+  rayColor: {r: 1, g: 0.963336, b: 0, a: 1}
+  missRayColor: {r: 1, g: 0, b: 0, a: 1}
+--- !u!114 &919132147695439981
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 919132147695439979}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  world: 0
+  layerMask:
+    serializedVersion: 2
+    m_Bits: 127
+  detectableTags:
+  - Wall
+  - Car
+  rays: 15
+  fieldOfView: 230
+  rotationOffset: 180
+  distance: 100
+  sphereCastRadius: 0.5
+  xOffset: 0
+  yOffset: 0
+  zOffset: 0
+  tilt: 0
+  rayColor: {r: 0, g: 0.59013414, b: 1, a: 1}
   missRayColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &919132147705563806
 GameObject:
@@ -10511,7 +10543,7 @@ GameObject:
   m_Component:
   - component: {fileID: 543450651960643620}
   m_Layer: 0
-  m_Name: track
+  m_Name: Track
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

@@ -11,15 +11,53 @@ namespace DeepUnity
             serializedObject.Update();
             List<string> dontDrawMe = new List<string>() { "m_Script" };
 
-            SerializedProperty lrs = serializedObject.FindProperty("LRSchedule");
-            if (!lrs.boolValue)
+            Hyperparameters script = (Hyperparameters)target;   
+
+            if(script.trainer == TrainerType.PPO)
             {
-                dontDrawMe.Add("schedulerStepSize");
-                dontDrawMe.Add("schedulerDecay");
+                if (script.KLDivergence == (int)KLType.Off)
+                    dontDrawMe.Add("targetKL");
+
+                dontDrawMe.Add("updateEvery");
+                dontDrawMe.Add("updateAfter");
+                dontDrawMe.Add("updatesNum");
+                dontDrawMe.Add("alpha");
+                dontDrawMe.Add("saveReplayBuffer");
+                dontDrawMe.Add("tau");
+
+
+                dontDrawMe.Add("saveRecordBuffer");
+            }
+            else if(script.trainer == TrainerType.SAC)
+            {
+                dontDrawMe.Add("numEpoch");
+                dontDrawMe.Add("beta");
+                dontDrawMe.Add("epsilon");
+                dontDrawMe.Add("lambda");
+                dontDrawMe.Add("KLDivergence");
+                dontDrawMe.Add("targetKL");
+
+                dontDrawMe.Add("saveRecordBuffer");
+            }
+            else if(script.trainer == TrainerType.GAIL)
+            {
+                dontDrawMe.Add("updateEvery");
+                dontDrawMe.Add("updateAfter");
+                dontDrawMe.Add("updatesNum");
+                dontDrawMe.Add("alpha");
+                dontDrawMe.Add("saveReplayBuffer");
+                dontDrawMe.Add("tau");
+
+
+                dontDrawMe.Add("numEpoch");
+                dontDrawMe.Add("beta");
+                dontDrawMe.Add("epsilon");
+                dontDrawMe.Add("lambda");
+                dontDrawMe.Add("KLDivergence");
+                dontDrawMe.Add("targetKL");
             }
 
-            if (serializedObject.FindProperty("KLDivergence").enumValueIndex == (int)KLType.Off)
-                dontDrawMe.Add("targetKL");
+            
 
 
 

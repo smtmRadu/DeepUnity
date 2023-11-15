@@ -50,10 +50,9 @@ namespace DeepUnityTutorials
         }
         public override void CollectObservations(StateBuffer sensorBuffer)
         {
-            // +9 RaySensor
-            // +4
+            // +140 RaySensor
+            // +1
             sensorBuffer.AddObservation((rf_collider.steerAngle + lf_collider.steerAngle) / (2 * maxSteerAngle));
-            sensorBuffer.AddObservation(rb.velocity);
         }
 
         public override void OnActionReceived(ActionBuffer actionBuffer)
@@ -134,7 +133,7 @@ namespace DeepUnityTutorials
             }
             else if(other.CompareTag("Target"))
             {
-                AddReward(+5f);
+                AddReward(+1f);
                 EndEpisode();
             }
         }

@@ -610,6 +610,49 @@ namespace DeepUnity
 
                 throw new Exception("Probs must always sum 1.");
             }
+            /// <summary>
+            /// Samples multiple elements in the collection given.
+            /// </summary>
+            /// <typeparam name="T"></typeparam>
+            /// <param name="no_samples"></param>
+            /// <param name="collection"></param>
+            /// <param name="replacement"></param>
+            /// <returns></returns>
+            /// <exception cref="ArgumentException"></exception>
+            public static T[] Sample<T>(int no_samples, in IEnumerable<T> collection, bool replacement = false)
+            {
+                if (no_samples <= 0)
+                {
+                    throw new ArgumentException("Number of samples must be greater than zero.");
+                }
+
+                if (collection == null || collection.Count() == 0)
+                {
+                    throw new ArgumentException("Collection is empty.");
+                }
+
+                if (!replacement && no_samples > collection.Count())
+                {
+                    throw new ArgumentException("Number of samples cannot exceed the size of the collection when replacement is not allowed.");
+                }
+
+                List<T> samples = new List<T>();
+                HashSet<int> sampledIndices = new HashSet<int>();
+
+                for (int sampleCount = 0; sampleCount < no_samples; sampleCount++)
+                {
+                    int index;
+                    do
+                    {
+                        index = Random.Range(0, collection.Count());
+                    } while (!replacement && sampledIndices.Contains(index));
+
+                    sampledIndices.Add(index);
+                    samples.Add(collection.ElementAt(index));
+                }
+
+                return samples.ToArray();
+            }
             public static bool Bernoulli(float p = 0.5f) => Value < p;
             public static float Normal(float mean = 0f, float stddev = 1f)
             {
@@ -622,16 +665,10 @@ namespace DeepUnity
                 var entropy = MathF.Sqrt(-2.0f * MathF.Log(x1)) * MathF.Cos(2.0f * MathF.PI * x2);
                 return entropy * stddev + mean;
             }
-            public static float ReparametrizedNormal(float mean = 0f, float stddev = 1f, float scale = Utils.EPSILON)
+            public static float ReparametrizedNormal(float mean = 0f, float stddev = 1f, float I = 1f)
             {
-                float x1;
-                lock (RNG)
-                    x1 = (float)(1.0 - RNG.NextDouble());
-
-                float x2 = Value;
-
-                var entropy = MathF.Sqrt(-2.0f * MathF.Log(x1)) * MathF.Cos(2.0f * MathF.PI * x2);
-                return mean + stddev * (entropy * scale);
+                float xi = Normal(0, I);
+                return mean + stddev * xi;
             }
         }
     }

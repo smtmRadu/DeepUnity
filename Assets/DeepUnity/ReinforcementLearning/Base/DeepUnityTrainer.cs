@@ -39,8 +39,9 @@ namespace DeepUnity
             }
         }
 
-        // Fixed Update holds: Train() when overriden
-        // Base Fixed Update holds: Autosave(), EndTrainingTrigger(), TimeScaleAdj()
+        /// <summary>
+        /// Autosave(), EndTrainingTrigger(), TimeScaleAdj()
+        /// </summary>
         protected virtual void FixedUpdate()
         {
             // Check if max steps reached
@@ -74,8 +75,7 @@ namespace DeepUnity
             }         
         }
 
-
-
+        protected virtual void Initialize() { }
         public static void Subscribe(Agent agent, TrainerType trainer)
         {
             if(Instance == null)
@@ -84,7 +84,6 @@ namespace DeepUnity
                 EditorApplication.pauseStateChanged += Autosave2;
                 GameObject go = new GameObject($"[DeepUnity] Trainer - {trainer}");        
                 
-
                 switch(trainer)
                 {
                     case TrainerType.PPO:
@@ -99,15 +98,15 @@ namespace DeepUnity
                     default: throw new ArgumentException("Unhandled trainer type");
                 }
 
+                
                 Instance.parallelAgents = new();           
                 Instance.hp = agent.model.config;
-                Instance.train_data = new ExperienceBuffer();
+                Instance.train_data = new ExperienceBuffer(Instance.hp.bufferSize);
                 Instance.model = agent.model;
                 Instance.model.InitOptimisers(Instance.hp, trainer);
-                Instance.model.InitSchedulers(Instance.hp, trainer);            
-      
+                Instance.model.InitSchedulers(Instance.hp, trainer);
+                Instance.Initialize();
             }
-
 
             // Assign common attributes to all agents (based on the last agent that subscribes - this one is actually the first in the Hierarchy)
             Instance.parallelAgents.ForEach(x =>
@@ -133,10 +132,12 @@ namespace DeepUnity
                 Instance.track.startedAt = Instance.timeWhenTheTrainingStarted.ToLongTimeString() + ", " + Instance.timeWhenTheTrainingStarted.ToLongDateString();
                 Instance.track.finishedAt = DateTime.Now.ToLongTimeString() + ", " + DateTime.Now.ToLongDateString();
 
+                
+
                 if (Instance.track.iterations > 0)
                 {
                     string pth = Instance.track.ExportAsSVG(Instance.model.behaviourName, Instance.hp, Instance.model, Instance.parallelAgents[0].DecisionRequester);
-                    UnityEngine.Debug.Log($"<color=#57f542>Training Session statistics log saved at <b><i>{pth}</i></b>.</color>");
+                    UnityEngine.Debug.Log($"<color=#57f542>Training Session log saved at <b><i>{pth}</i></b>.</color>");
                     AssetDatabase.Refresh();
                 }
             }

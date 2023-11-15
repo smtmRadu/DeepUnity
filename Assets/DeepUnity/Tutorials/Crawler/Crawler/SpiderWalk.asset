@@ -23,7 +23,7 @@ MonoBehaviour:
   q1Network: {fileID: 0}
   q2Network: {fileID: 0}
   muNetwork: {fileID: 11400000, guid: 018aeeeabd675854eb4d738eef760a22, type: 2}
-  sigmaNetwork: {fileID: 11400000, guid: d42e9608f0d9fb74cbea096f61b1fbb9, type: 2}
+  sigmaNetwork: {fileID: 11400000, guid: c011a0cfdacb7004d8bd57a19aa6fde9, type: 2}
   discreteNetwork: {fileID: 0}
   discContNetwork: {fileID: 0}
   discDiscNetwork: {fileID: 0}
@@ -291,5 +291,5 @@ MonoBehaviour:
       - 0
       - 0
       shape: 7e000000
-  standardDeviation: 0
-  standardDeviationValue: 0.7
+  standardDeviation: 1
+  standardDeviationValue: 0.75

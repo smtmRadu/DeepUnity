@@ -29,7 +29,7 @@ namespace DeepUnityTutorials
                     new ReLU(),
                     new Dense(64, 1)).CreateAsset("TutorialModel");
             }
-            optim = new Adam(network.Parameters(), 0.001f);
+            optim = new Adam(network.GetLearnables(), 0.001f);
             scheduler = new LRScheduler(optim, 30, 0.1f);
 
             // Generate training dataset

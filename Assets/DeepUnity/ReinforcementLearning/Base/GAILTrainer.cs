@@ -39,7 +39,7 @@ namespace DeepUnity
 
                     batch_index = 0;
                     track.iterations++;
-                    if (hp.shuffleTrainingData) train_data.Shuffle();
+                    train_data.Shuffle();
                 }
 
                 TrainOnBatch(batch_index);

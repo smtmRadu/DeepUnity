@@ -387,10 +387,13 @@ PrefabInstance:
       addedObject: {fileID: 1205608277}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: cece77c66ae28de47b3c19eaffe73320, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1205608275}
+      addedObject: {fileID: 1205608276}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: cece77c66ae28de47b3c19eaffe73320, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1205608276}
+      addedObject: {fileID: 1205608279}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: cece77c66ae28de47b3c19eaffe73320, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1205608278}
   m_SourcePrefab: {fileID: 100100000, guid: cece77c66ae28de47b3c19eaffe73320, type: 3}
 --- !u!64 &740616958
 MeshCollider:
@@ -513,37 +516,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 2.1559286, y: 2, z: 2.1559286}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &914492864
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 914492858}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  world: 0
-  layerMask:
-    serializedVersion: 2
-    m_Bits: 63
-  detectableTags:
-  - Ball
-  - Agent
-  - Wall
-  rays: 5
-  fieldOfView: 60
-  rotationOffset: 270
-  distance: 75
-  sphereCastRadius: 0.5
-  xOffset: 0
-  yOffset: 0
-  zOffset: 0
-  tilt: 0
-  rayColor: {r: 0, g: 1, b: 0, a: 1}
-  missRayColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &914492865
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -560,16 +532,14 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 2
   discreteActions: 0
-  archType: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 2b2876225ce71754bbc9326a09938ed5, type: 2}
+  model: {fileID: 11400000, guid: 02694c16d7df55444ad7e2421a39e02d, type: 2}
   behaviourType: 2
-  imitationStrength: 1
   onEpisodeEnd: 1
   useSensors: 1
-  speed: 5000
-  rotationSpeed: 3000
+  speed: 15
+  rotationSpeed: 5
   teammate: {fileID: 1205608276}
   type: 0
   team: 0
@@ -586,8 +556,74 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 0
-  decisionPeriod: 5
+  decisionPeriod: 2
   takeActionsBetweenDecisions: 1
+--- !u!114 &914492867
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 914492858}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  world: 0
+  layerMask:
+    serializedVersion: 2
+    m_Bits: 191
+  detectableTags:
+  - Ball
+  - Agent
+  - Wall
+  - PinkGoal
+  - BlueGoal
+  rays: 5
+  fieldOfView: 180
+  rotationOffset: 90
+  distance: 75
+  sphereCastRadius: 0.5
+  xOffset: 0
+  yOffset: 0
+  zOffset: 0
+  tilt: 0
+  rayColor: {r: 1, g: 0, b: 0.8616719, a: 1}
+  missRayColor: {r: 1, g: 0, b: 0, a: 1}
+--- !u!114 &914492868
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 914492858}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  world: 0
+  layerMask:
+    serializedVersion: 2
+    m_Bits: 191
+  detectableTags:
+  - Ball
+  - Agent
+  - Wall
+  - PinkGoal
+  - BlueGoal
+  rays: 15
+  fieldOfView: 45
+  rotationOffset: 270
+  distance: 75
+  sphereCastRadius: 0.5
+  xOffset: 0
+  yOffset: 0
+  zOffset: 0
+  tilt: 0
+  rayColor: {r: 1, g: 0, b: 0.7882905, a: 1}
+  missRayColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1001 &1111911721
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -663,10 +699,13 @@ PrefabInstance:
       addedObject: {fileID: 1544481190}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 54a49811650fbbd48a49be1a498e7547, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1544481188}
+      addedObject: {fileID: 1544481189}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 54a49811650fbbd48a49be1a498e7547, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1544481189}
+      addedObject: {fileID: 1544481192}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 54a49811650fbbd48a49be1a498e7547, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1544481191}
   m_SourcePrefab: {fileID: 100100000, guid: 54a49811650fbbd48a49be1a498e7547, type: 3}
 --- !u!1 &1157186959 stripped
 GameObject:
@@ -726,37 +765,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 2.1559286, y: 2, z: 2.1559286}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &1157186965
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1157186959}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  world: 0
-  layerMask:
-    serializedVersion: 2
-    m_Bits: 63
-  detectableTags:
-  - Ball
-  - Agent
-  - Wall
-  rays: 5
-  fieldOfView: 60
-  rotationOffset: 270
-  distance: 75
-  sphereCastRadius: 0.5
-  xOffset: 0
-  yOffset: 0
-  zOffset: 0
-  tilt: 0
-  rayColor: {r: 0, g: 1, b: 0, a: 1}
-  missRayColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &1157186966
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -773,16 +781,14 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 2
   discreteActions: 0
-  archType: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 2b2876225ce71754bbc9326a09938ed5, type: 2}
+  model: {fileID: 11400000, guid: 02694c16d7df55444ad7e2421a39e02d, type: 2}
   behaviourType: 2
-  imitationStrength: 1
   onEpisodeEnd: 1
   useSensors: 1
-  speed: 5000
-  rotationSpeed: 3000
+  speed: 15
+  rotationSpeed: 5
   teammate: {fileID: 1544481189}
   type: 0
   team: 1
@@ -799,8 +805,74 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 0
-  decisionPeriod: 5
+  decisionPeriod: 2
   takeActionsBetweenDecisions: 1
+--- !u!114 &1157186968
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1157186959}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  world: 0
+  layerMask:
+    serializedVersion: 2
+    m_Bits: 191
+  detectableTags:
+  - Ball
+  - Agent
+  - Wall
+  - PinkGoal
+  - BlueGoal
+  rays: 5
+  fieldOfView: 180
+  rotationOffset: 90
+  distance: 75
+  sphereCastRadius: 0.5
+  xOffset: 0
+  yOffset: 0
+  zOffset: 0
+  tilt: 0
+  rayColor: {r: 0, g: 0.5049424, b: 1, a: 1}
+  missRayColor: {r: 1, g: 0, b: 0, a: 1}
+--- !u!114 &1157186969
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1157186959}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  world: 0
+  layerMask:
+    serializedVersion: 2
+    m_Bits: 191
+  detectableTags:
+  - Ball
+  - Agent
+  - Wall
+  - PinkGoal
+  - BlueGoal
+  rays: 15
+  fieldOfView: 45
+  rotationOffset: 270
+  distance: 75
+  sphereCastRadius: 0.5
+  xOffset: 0
+  yOffset: 0
+  zOffset: 0
+  tilt: 0
+  rayColor: {r: 0, g: 0.4922409, b: 1, a: 1}
+  missRayColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &1205608269 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: cece77c66ae28de47b3c19eaffe73320, type: 3}
@@ -859,37 +931,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 2.1559286, y: 2, z: 2.1559286}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &1205608275
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1205608269}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  world: 0
-  layerMask:
-    serializedVersion: 2
-    m_Bits: 63
-  detectableTags:
-  - Ball
-  - Agent
-  - Wall
-  rays: 5
-  fieldOfView: 60
-  rotationOffset: 270
-  distance: 75
-  sphereCastRadius: 0.5
-  xOffset: 0
-  yOffset: 0
-  zOffset: 0
-  tilt: 0
-  rayColor: {r: 0, g: 1, b: 0, a: 1}
-  missRayColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &1205608276
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -906,16 +947,14 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 3
   discreteActions: 0
-  archType: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 2b2876225ce71754bbc9326a09938ed5, type: 2}
+  model: {fileID: 11400000, guid: 02694c16d7df55444ad7e2421a39e02d, type: 2}
   behaviourType: 2
-  imitationStrength: 1
   onEpisodeEnd: 1
   useSensors: 1
-  speed: 5000
-  rotationSpeed: 3000
+  speed: 15
+  rotationSpeed: 5
   teammate: {fileID: 914492865}
   type: 1
   team: 0
@@ -934,6 +973,72 @@ MonoBehaviour:
   maxStep: 0
   decisionPeriod: 5
   takeActionsBetweenDecisions: 1
+--- !u!114 &1205608278
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1205608269}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  world: 0
+  layerMask:
+    serializedVersion: 2
+    m_Bits: 191
+  detectableTags:
+  - Ball
+  - Agent
+  - Wall
+  - PinkGoal
+  - BlueGoal
+  rays: 5
+  fieldOfView: 180
+  rotationOffset: 90
+  distance: 75
+  sphereCastRadius: 0.5
+  xOffset: 0
+  yOffset: 0
+  zOffset: 0
+  tilt: 0
+  rayColor: {r: 1, g: 0, b: 0.8616719, a: 1}
+  missRayColor: {r: 1, g: 0, b: 0, a: 1}
+--- !u!114 &1205608279
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1205608269}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  world: 0
+  layerMask:
+    serializedVersion: 2
+    m_Bits: 191
+  detectableTags:
+  - Ball
+  - Agent
+  - Wall
+  - PinkGoal
+  - BlueGoal
+  rays: 15
+  fieldOfView: 45
+  rotationOffset: 270
+  distance: 75
+  sphereCastRadius: 0.5
+  xOffset: 0
+  yOffset: 0
+  zOffset: 0
+  tilt: 0
+  rayColor: {r: 1, g: 0, b: 0.7882905, a: 1}
+  missRayColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &1256562349
 GameObject:
   m_ObjectHideFlags: 0
@@ -1231,7 +1336,7 @@ GameObject:
   - component: {fileID: 1436403462}
   m_Layer: 0
   m_Name: PinkGoal
-  m_TagString: Goal
+  m_TagString: PinkGoal
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -1448,37 +1553,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 2.1559286, y: 2, z: 2.1559286}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &1544481188
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1544481182}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  world: 0
-  layerMask:
-    serializedVersion: 2
-    m_Bits: 63
-  detectableTags:
-  - Ball
-  - Agent
-  - Wall
-  rays: 5
-  fieldOfView: 60
-  rotationOffset: 270
-  distance: 75
-  sphereCastRadius: 0.5
-  xOffset: 0
-  yOffset: 0
-  zOffset: 0
-  tilt: 0
-  rayColor: {r: 0, g: 1, b: 0, a: 1}
-  missRayColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &1544481189
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1491,20 +1565,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eca7b52aa0c9e1143956b7d7062c5183, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  spaceSize: 50
+  spaceSize: 142
   stackedInputs: 1
-  continuousActions: 3
-  discreteActions: 0
-  archType: 0
+  continuousActions: 0
+  discreteActions: 7
   numLayers: 2
-  hidUnits: 64
-  model: {fileID: 11400000, guid: 2b2876225ce71754bbc9326a09938ed5, type: 2}
+  hidUnits: 80
+  model: {fileID: 11400000, guid: 02694c16d7df55444ad7e2421a39e02d, type: 2}
   behaviourType: 2
-  imitationStrength: 1
   onEpisodeEnd: 1
   useSensors: 1
-  speed: 5000
-  rotationSpeed: 3000
+  speed: 15
+  rotationSpeed: 5
   teammate: {fileID: 1157186966}
   type: 1
   team: 1
@@ -1521,8 +1593,74 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 0
-  decisionPeriod: 5
+  decisionPeriod: 2
   takeActionsBetweenDecisions: 1
+--- !u!114 &1544481191
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1544481182}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  world: 0
+  layerMask:
+    serializedVersion: 2
+    m_Bits: 191
+  detectableTags:
+  - Ball
+  - Agent
+  - Wall
+  - PinkGoal
+  - BlueGoal
+  rays: 5
+  fieldOfView: 180
+  rotationOffset: 90
+  distance: 75
+  sphereCastRadius: 0.5
+  xOffset: 0
+  yOffset: 0
+  zOffset: 0
+  tilt: 0
+  rayColor: {r: 0, g: 0.5049424, b: 1, a: 1}
+  missRayColor: {r: 1, g: 0, b: 0, a: 1}
+--- !u!114 &1544481192
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1544481182}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  world: 0
+  layerMask:
+    serializedVersion: 2
+    m_Bits: 191
+  detectableTags:
+  - Ball
+  - Agent
+  - Wall
+  - PinkGoal
+  - BlueGoal
+  rays: 15
+  fieldOfView: 45
+  rotationOffset: 270
+  distance: 75
+  sphereCastRadius: 0.5
+  xOffset: 0
+  yOffset: 0
+  zOffset: 0
+  tilt: 0
+  rayColor: {r: 0, g: 0.4922409, b: 1, a: 1}
+  missRayColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &1657343856
 GameObject:
   m_ObjectHideFlags: 0
@@ -1787,10 +1925,13 @@ PrefabInstance:
       addedObject: {fileID: 914492866}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 9cda5d87600994f4ea74e68ebe230b16, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 914492864}
+      addedObject: {fileID: 914492865}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 9cda5d87600994f4ea74e68ebe230b16, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 914492865}
+      addedObject: {fileID: 914492868}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 9cda5d87600994f4ea74e68ebe230b16, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 914492867}
   m_SourcePrefab: {fileID: 100100000, guid: 9cda5d87600994f4ea74e68ebe230b16, type: 3}
 --- !u!1 &1801920439
 GameObject:
@@ -1965,10 +2106,13 @@ PrefabInstance:
       addedObject: {fileID: 1157186967}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 0ca4b1a2f54dfb549ba4ff2c23b84008, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1157186965}
+      addedObject: {fileID: 1157186966}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 0ca4b1a2f54dfb549ba4ff2c23b84008, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1157186966}
+      addedObject: {fileID: 1157186969}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 0ca4b1a2f54dfb549ba4ff2c23b84008, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1157186968}
   m_SourcePrefab: {fileID: 100100000, guid: 0ca4b1a2f54dfb549ba4ff2c23b84008, type: 3}
 --- !u!1 &1831887710
 GameObject:
@@ -2076,7 +2220,7 @@ GameObject:
   - component: {fileID: 1843261842}
   m_Layer: 0
   m_Name: BlueGoal
-  m_TagString: Goal
+  m_TagString: BlueGoal
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -2537,7 +2681,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b25bf2a4aba4f96418179814902bbb2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  time_per_round: 15
+  time_per_round: 25
   ball: {fileID: 2064626470}
   pink_striker: {fileID: 914492865}
   pink_goalie: {fileID: 1205608276}

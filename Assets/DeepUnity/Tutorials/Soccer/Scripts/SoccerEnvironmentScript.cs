@@ -40,7 +40,7 @@ namespace DeepUnityTutorials
 
             current_round_time_left -= Time.deltaTime;
             if (current_round_time_left <= 0f)
-                StartNewRound();
+                StartNewRound(true);
             time_label.text = $"{(int)(current_round_time_left/60)}:{(int)current_round_time_left%60}";
         }
 
@@ -86,8 +86,14 @@ namespace DeepUnityTutorials
             ball_info.Add(angVel.z);
             return ball_info;
         }
-        public void StartNewRound()
+        public void StartNewRound(bool no_score = false)
         {
+            if(no_score)
+            {
+                pink_striker.AddReward(-1);
+                blue_striker.AddReward(-1);
+            }
+           
             pink_striker.EndEpisode();
             pink_goalie.EndEpisode();
             blue_striker.EndEpisode();

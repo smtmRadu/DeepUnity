@@ -35,7 +35,7 @@ namespace DeepUnity
         public TrainingStatistics PerformanceTrack { get; set; }
         public MemoryBuffer Memory { get; set; }
         public DecisionRequester DecisionRequester { get; private set; }
-        private TimestepBuffer Timestep { get; set; }    
+        private TimestepTuple Timestep { get; set; }    
         private List<ISensor> Sensors { get; set; }
         private StateResetter PositionReseter { get; set; }
         private StateBuffer StatesBuffer { get; set; }
@@ -196,7 +196,7 @@ namespace DeepUnity
             }
 
             // Reset timestep
-            Timestep = new TimestepBuffer(++EpisodeStepCount);
+            Timestep = new TimestepTuple(++EpisodeStepCount);
 
             if (PerformanceTrack) PerformanceTrack.stepCount++;
         }
@@ -243,7 +243,7 @@ namespace DeepUnity
             // ACTION PROCESS -----------------------------------------------------------------------
             // Set state[t], action[t] & pi[t]
             ActionsBuffer.Clear();
-            model.ContinuousPredict(Timestep.state, false, out Timestep.action_continuous, out Timestep.prob_continuous);
+            model.ContinuousPredict(Timestep.state, out Timestep.action_continuous, out Timestep.prob_continuous);
             model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.prob_discrete);
 
             // Run agent's actions and clip them
@@ -273,7 +273,7 @@ namespace DeepUnity
         private void InitBuffers()
         {
             Memory = new MemoryBuffer();
-            Timestep = new TimestepBuffer(EpisodeStepCount);
+            Timestep = new TimestepTuple(EpisodeStepCount);
 
             StatesBuffer = new StateBuffer(model.observationSize);
             ActionsBuffer = new ActionBuffer(model.continuousDim, model.discreteDim);

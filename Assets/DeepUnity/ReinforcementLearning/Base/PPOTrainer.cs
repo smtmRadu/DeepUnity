@@ -4,7 +4,6 @@ using UnityEditor;
 using UnityEngine;
 using System.Diagnostics;
 using System.Linq;
-using static TMPro.SpriteAssetUtilities.TexturePacker_JsonArray;
 
 namespace DeepUnity
 {
@@ -30,7 +29,7 @@ namespace DeepUnity
                     if (agent_memory.Count == 0)
                         continue;
 
-                    agent_memory.GAE(hp.gamma, hp.lambda, hp.horizon, model.vNetwork);
+                    GAE(agent_memory, hp.gamma, hp.lambda, hp.horizon, model.vNetwork);
                     train_data.TryAppend(agent_memory, hp.bufferSize);
                     if (hp.debug) Utils.DebugInFile(agent_memory.ToString());
                     agent_memory.Clear();
@@ -64,9 +63,8 @@ namespace DeepUnity
         // PPO Algorithm
         private void Train()
         {
-            // 1. Normalize advantages
-            if (hp.normalizeAdvantages)
-                NormalizeAdvantages(train_data);
+            // 1. Normalize A
+            NormalizeAdvantages(train_data);
 
             // 2. Gradient descent over N epochs
             model.SetVDevice(model.trainingDevice); // This is always on training device because it is used to compute the values of the entire train_data of states once..
@@ -74,7 +72,7 @@ namespace DeepUnity
             for (int epoch_index = 0; epoch_index < hp.numEpoch; epoch_index++)
             {
                 // shuffle the dataset
-                if (hp.shuffleTrainingData && epoch_index > 0)
+                if (epoch_index > 0)
                     train_data.Shuffle();
 
                 // unpack & split train_data into minibatches
@@ -271,7 +269,7 @@ namespace DeepUnity
                 // ∂πθ(a|s) / ∂σ = πθ(a|s) * ((x - μ)^2 - σ^2) / σ^3    (Simple statistical gradient-following for connectionst Reinforcement Learning (pag 14))
                 Tensor dPi_dSigma = pi * ((actions - mu).Pow(2) - sigma.Pow(2)) / sigma.Pow(3);
 
-                // ∂-LClip / ∂μ = (∂-LClip / ∂πθ(a|s)) * (∂πθ(a|s) / ∂σ)
+                // ∂-LClip / ∂σ = (∂-LClip / ∂πθ(a|s)) * (∂πθ(a|s) / ∂σ)
                 Tensor dmLClip_dSigma = dmLClip_dPi * dPi_dSigma;
 
                 model.sigmaOptimizer.ZeroGrad();
@@ -369,6 +367,58 @@ namespace DeepUnity
             KL = KL.Sum(0);
             return KL[0];
         }
+        /// <summary>
+        /// This method computes the generalized advantage estimation and value function targets.
+        /// </summary>
+        /// <param name="GAMMA"></param>
+        /// <param name="LAMBDA"></param>
+        /// <param name="HORIZON"></param>
+        /// <param name="valueNetwork"></param>
+        private static void GAE(in MemoryBuffer memory, in float GAMMA, in float LAMBDA, in int HORIZON, NeuralNetwork valueNetwork)
+        {
+            var frames = memory.frames;
+            int T = memory.Count;
+            Tensor[] all_states_plus_lastNextState = new Tensor[T + 1];
+            for (int i = 0; i < T; i++)
+                all_states_plus_lastNextState[i] = frames[i].state;
+            all_states_plus_lastNextState[T] = frames[T - 1].nextState;
+
+            // Vw_s has length of T + 1
+            Tensor Vw_s = valueNetwork.Predict(Tensor.Cat(null, all_states_plus_lastNextState)).Reshape(T + 1);
+
+            // Generalized Advantage Estimation
+            for (int timestep = 0; timestep < T; timestep++)
+            {
+                float discount = 1f;
+                Tensor Ahat_t = Tensor.Constant(0);
+
+                for (int t = timestep; t < T; t++) // In GAE for last step advantage is 0.. kind of lose of information but it works :)
+                {
+                    Tensor r_t = frames[t].reward;
+                    float V_st = Vw_s[t];
+                    float V_next_st = frames[t].done[0] == 1 ? 0 : Vw_s[t + 1];  // if the state is terminal, next value is set to 0.
+
+                    Tensor delta_t = r_t + GAMMA * V_next_st - V_st;
+                    Ahat_t += discount * delta_t;
+                    discount *= GAMMA * LAMBDA;
+
+                    if (frames[t].done[0] == 1)
+                        break;
+
+                    if (t - timestep == HORIZON)
+                        break;
+                }
+
+                Tensor Vtarget_t = Ahat_t + Vw_s[timestep];
+
+                frames[timestep].value_target = Vtarget_t;
+                frames[timestep].advantage = Ahat_t;
+            }
+        }    
+        /// <summary>
+        /// This method normalizez the advantage of the ExperienceBuffer
+        /// </summary>
+        /// <param name="vec"></param>
         private static void NormalizeAdvantages(ExperienceBuffer vec)
         {
             float mean = vec.frames.Average(x => x.advantage[0]);

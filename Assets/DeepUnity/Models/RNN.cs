@@ -266,7 +266,7 @@ namespace DeepUnity
             stringBuilder.AppendLine($"Parameters: {modules.Where(x => x is Learnable).Select(x => (Learnable)x).Sum(x => x.ParametersCount())}");
             return stringBuilder.ToString();
         }
-        public override Learnable[] Parameters()
+        public override Learnable[] GetLearnables()
         {
             return modules.OfType<Learnable>().ToArray();
         }

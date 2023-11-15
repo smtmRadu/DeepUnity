@@ -99,7 +99,7 @@ namespace kbRadu
                 new Tanh(),
                 new Dense(100, 5),
                 new Softmax());
-            var optim = new Adam(net.Parameters());
+            var optim = new Adam(net.GetLearnables());
 
             Tensor input = Tensor.Random01(2048, 10);
             Tensor targets = Tensor.Zeros(2048, 5);

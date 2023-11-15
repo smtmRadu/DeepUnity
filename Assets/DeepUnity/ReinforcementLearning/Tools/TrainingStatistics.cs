@@ -2,6 +2,7 @@
 using UnityEngine;
 using System.IO;
 using System.Linq;
+using UnityEditor;
 
 namespace DeepUnity
 {
@@ -79,6 +80,8 @@ namespace DeepUnity
         /// <returns></returns>
         public string ExportAsSVG(string behaviourName, Hyperparameters hp, AgentBehaviour behaviour, DecisionRequester decisionRequester)
         {
+            string behaviourAssetPath = AssetDatabase.GetAssetPath(behaviour);
+            
             string extra = new string(startedAt.Select(x =>
             {
                 if (char.IsLetterOrDigit(x))
@@ -91,21 +94,17 @@ namespace DeepUnity
                     return '-';
             }).ToArray());
 
-            string name = $"[{behaviourName}]Log_{extra}";
+           
+            string directoryPath = Path.Combine(Path.GetDirectoryName(behaviourAssetPath), "Logs");
+            string name = $"[{behaviourName}]_{extra}";
+            string path = Path.Combine(directoryPath, $"{name}.svg");
 
-            string path = $"Assets/{behaviourName}/Logs/{name}.svg";
 
-            if (!Directory.Exists($"Assets/{behaviourName}"))
+            if (!Directory.Exists(directoryPath))
             {
-                if (!Directory.Exists($"Assets/Logs"))
-                    Directory.CreateDirectory($"Assets/Logs");
+                Directory.CreateDirectory(directoryPath);
+            }
 
-                path = $"Assets/Logs/{name}.svg";
-            }
-            else if (!Directory.Exists($"Assets/{behaviourName}/Logs"))
-            {
-                Directory.CreateDirectory($"Assets/{behaviourName}/Logs");
-            }
 
             File.Create(path).Dispose();
             File.WriteAllText(path, GenerateSVG(behaviourName, hp, behaviour, decisionRequester));
@@ -158,10 +157,10 @@ namespace DeepUnity
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Time Horizon: {hp.horizon}</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Gradient Cliping Normalization: {hp.gradClipNorm}</text>");
-            y += 20;
+/*            y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Advantages Normalization: {hp.normalizeAdvantages}</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Training Data Shuffle: {hp.shuffleTrainingData}</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Training Data Shuffle: {hp.shuffleTrainingData}</text>");*/
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Learning Rate Schedule: {hp.LRSchedule}    {""}</text>");
 

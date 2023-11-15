@@ -18,6 +18,9 @@ TagManager:
   - Enemy
   - Fire
   - Key
+  - Spider
+  - BlueGoal
+  - PinkGoal
   layers:
   - Default
   - TransparentFX

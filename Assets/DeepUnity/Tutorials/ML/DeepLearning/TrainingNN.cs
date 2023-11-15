@@ -60,7 +60,7 @@ namespace DeepUnityTutorials
                  );
             }
 
-            optimizer = new Adam(net.Parameters(), lr: learningRate);
+            optimizer = new Adam(net.GetLearnables(), lr: learningRate);
             scheduler = new LRScheduler(optimizer, scheduler_step_size, scheduler_gamma);
 
 

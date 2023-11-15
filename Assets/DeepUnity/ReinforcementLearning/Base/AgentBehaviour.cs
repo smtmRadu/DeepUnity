@@ -116,13 +116,13 @@ namespace DeepUnity
                new IModule[]
                { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
                Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-               Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
+               Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B) }).ToArray()
             );
             q2Network = new NeuralNetwork(
                new IModule[]
                { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
                Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-               Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
+               Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B) }).ToArray()
             );
 
             // Initialize PI
@@ -139,8 +139,8 @@ namespace DeepUnity
                         new IModule[] 
                         { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
                             Concat(CreateHiddenLayers(NUM_LAYERS - 1, HIDDEN_UNITS, INIT_W, INIT_B)). // Sigma network is a bit smaller for efficiency. This network is typically not important to be large
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Exp() }).ToArray()  // Also Softplus can be used, but it returns very low values => no exploration
-                    );
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, InitType.Glorot_Uniform, InitType.Zeros), new Exp() }).ToArray()  // Also Softplus can be used, but it returns very low values => no exploration,                          
+                    ); // Note that we use Glorot Init before Exp activation func.. for smaller weights
 
                 discContNetwork = new NeuralNetwork(
                         new IModule[] 
@@ -189,7 +189,7 @@ namespace DeepUnity
         {
             if (IsUsingContinuousActions)
             {
-                var learnables = discContNetwork.Parameters();
+                var learnables = discContNetwork.GetLearnables();
                 foreach (var item in learnables)
                 {
                     item.device = device;
@@ -198,7 +198,7 @@ namespace DeepUnity
 
             if (IsUsingDiscreteActions)
             {
-                var learnables = discDiscNetwork.Parameters();
+                var learnables = discDiscNetwork.GetLearnables();
                 foreach (var item in learnables)
                 {
                     item.device = device;
@@ -209,13 +209,13 @@ namespace DeepUnity
         {
             if (IsUsingContinuousActions)
             {
-                var learnables = muNetwork.Parameters();
+                var learnables = muNetwork.GetLearnables();
                 foreach (var item in learnables)
                 {
                     item.device = device;
                 }
 
-                learnables = sigmaNetwork.Parameters();
+                learnables = sigmaNetwork.GetLearnables();
                 foreach (var item in learnables)
                 {
                     item.device = device;
@@ -225,7 +225,7 @@ namespace DeepUnity
 
             if (IsUsingDiscreteActions)
             {
-                var learnables = discreteNetwork.Parameters();
+                var learnables = discreteNetwork.GetLearnables();
                 foreach (var item in learnables)
                 {
                     item.device = device;
@@ -235,7 +235,7 @@ namespace DeepUnity
         public void SetVDevice(Device device)
         {
 
-            var learnables = vNetwork.Parameters();
+            var learnables = vNetwork.GetLearnables();
             for (int i = 0; i < learnables.Length - 1; i++)
             {
                 learnables[i].device = device;
@@ -246,14 +246,14 @@ namespace DeepUnity
         }
         public void SetQDevice(Device device)
         {
-            var learnables = q1Network.Parameters();
+            var learnables = q1Network.GetLearnables();
             for (int i = 0; i < learnables.Length - 1; i++)
             {
                 learnables[i].device = device;
             }
             learnables[learnables.Length - 1].device = Device.CPU;
 
-            learnables = q2Network.Parameters();
+            learnables = q2Network.GetLearnables();
             for (int i = 0; i < learnables.Length - 1; i++)
             {
                 learnables[i].device = device;
@@ -265,43 +265,42 @@ namespace DeepUnity
 
         public void InitOptimisers(Hyperparameters hp, TrainerType trainer)
         {
-
             if(trainer == TrainerType.SAC)
             {
-                vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate);
-                q1Optimizer = new Adam(q1Network.Parameters(), hp.learningRate);
-                q2Optimizer = new Adam(q2Network.Parameters(), hp.learningRate);
-                muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate);
-                sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate);
+                vOptimizer = new Adam(vNetwork.GetLearnables(), hp.learningRate);
+                q1Optimizer = new Adam(q1Network.GetLearnables(), hp.learningRate);
+                q2Optimizer = new Adam(q2Network.GetLearnables(), hp.learningRate);
+                muOptimizer = new Adam(muNetwork.GetLearnables(), hp.learningRate);
+                sigmaOptimizer = new Adam(sigmaNetwork.GetLearnables(), hp.learningRate);
             }
             else if(trainer == TrainerType.PPO)
             {
-                vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate);
+                vOptimizer = new Adam(vNetwork.GetLearnables(), hp.learningRate);
 
                 if (IsUsingContinuousActions)
                 {
-                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate);
-                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate);
+                    muOptimizer = new Adam(muNetwork.GetLearnables(), hp.learningRate);
+                    sigmaOptimizer = new Adam(sigmaNetwork.GetLearnables(), hp.learningRate);
                 }
                 
                 if(IsUsingDiscreteActions)
                 {
-                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate);
+                    discreteOptimizer = new Adam(discreteNetwork.GetLearnables(), hp.learningRate);
                 }
             }
             else if(trainer == TrainerType.GAIL)
             {
                 if (IsUsingContinuousActions)
                 {
-                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate);
-                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate);
-                    dContOptimizer = new Adam(discContNetwork.Parameters(), hp.learningRate);
+                    muOptimizer = new Adam(muNetwork.GetLearnables(), hp.learningRate);
+                    sigmaOptimizer = new Adam(sigmaNetwork.GetLearnables(), hp.learningRate);
+                    dContOptimizer = new Adam(discContNetwork.GetLearnables(), hp.learningRate);
                 }
 
                 if (IsUsingDiscreteActions)
                 {
-                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate);
-                    dDiscOptimizer = new Adam(discDiscNetwork.Parameters(), hp.learningRate);
+                    discreteOptimizer = new Adam(discreteNetwork.GetLearnables(), hp.learningRate);
+                    dDiscOptimizer = new Adam(discDiscNetwork.GetLearnables(), hp.learningRate);
                 }
             }                    
         }
@@ -361,7 +360,7 @@ namespace DeepUnity
         /// Output: <paramref name="action"/> - <em>aₜ</em> |  Tensor (<em>Continuous Actions</em>) <br></br>
         /// Extra Output: <paramref name="probs"/> - <em>πθ(aₜ|sₜ)</em> | Tensor (<em>Continuous Actions</em>)
         /// </summary>
-        public void ContinuousPredict(Tensor state, bool reparametrized, out Tensor action, out Tensor probs)
+        public void ContinuousPredict(Tensor state, out Tensor action, out Tensor probs)
         {
             if (!IsUsingContinuousActions)
             {
@@ -375,19 +374,13 @@ namespace DeepUnity
                             sigmaNetwork.Predict(state).Clip(Utils.EPSILON, 5f) :
                             Tensor.Fill(standardDeviationValue, mu.Shape);
 
-            action = mu.Zip(sigma, (x, y) => 
-            {
-                if (reparametrized)
-                    return Utils.Random.ReparametrizedNormal(x, y);
-                else
-                    return Utils.Random.Normal(x, y); 
-            });
+            action = mu.Zip(sigma, (x, y) => Utils.Random.Normal(x, y));
             probs = Tensor.Probability(action, mu, sigma);
         }
         /// <summary>
         /// Input: <paramref name="stateBatch"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
         /// Output: <paramref name="muBatch"/> - <em>μ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
-        /// OutputL <paramref name="sigmaBatch"/> - <em>σ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
+        /// Output: <paramref name="sigmaBatch"/> - <em>σ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
         /// </summary>
         public void ContinuousForward(Tensor stateBatch, out Tensor muBatch, out Tensor sigmaBatch)
         {
@@ -403,6 +396,28 @@ namespace DeepUnity
                            sigmaNetwork.Forward(stateBatch).Clip(Utils.EPSILON, 5f):
                            Tensor.Fill(standardDeviationValue, muBatch.Shape);
         }
+        /// <summary>
+        /// Input: <paramref name="stateBatch"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
+        /// Output: <paramref name="muBatch"/> - <em>μ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
+        /// Output: <paramref name="sigmaBatch"/> - <em>σ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
+        /// Output: <paramref name="action"/> - <em>aₜ</em> |  Tensor (<em>Continuous Actions</em>) <br></br>
+        /// </summary>
+        public void ContinuousReparametrizedForward(Tensor statesBatch, out Tensor actionsBatch, out Tensor muBatch, out Tensor sigmaBatch)
+        {
+            if (!IsUsingContinuousActions)
+            {
+                actionsBatch = null;
+                muBatch = null;
+                sigmaBatch = null;
+                return;
+            }
+
+            muBatch = muNetwork.Forward(statesBatch);
+            sigmaBatch = standardDeviation == StandardDeviationType.Trainable ?
+                           sigmaNetwork.Forward(statesBatch).Clip(Utils.EPSILON, 5f) :
+                           Tensor.Fill(standardDeviationValue, muBatch.Shape);
+            actionsBatch = muBatch.Zip(sigmaBatch, (x, y) => Utils.Random.ReparametrizedNormal(x, y));
+        }    
         /// <summary>
         /// Input: <paramref name="state"/> - <em>sₜ</em> | Tensor (<em>Observations</em>) <br></br>
         /// Output: <paramref name="action"/> - <em>aₜ</em> |  Tensor (<em>Discrete Actions</em>) (one hot embedding)<br></br>

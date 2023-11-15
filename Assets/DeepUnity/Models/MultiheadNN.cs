@@ -130,7 +130,7 @@ namespace DeepUnity
         }
 
 
-        public override Learnable[] Parameters()
+        public override Learnable[] GetLearnables()
         {
             List<Learnable> parameters = new List<Learnable>();
             foreach (var item in inputHeadsModules)

@@ -14,17 +14,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   behaviourName: SoccerPlayer
   assetCreated: 1
-  observationSize: 50
+  observationSize: 142
   stackedInputsNum: 1
-  continuousDim: 3
-  discreteDim: 0
-  critic: {fileID: 0}
-  actorContinuousMu: {fileID: 0}
-  actorContinuousSigma: {fileID: 0}
-  discriminatorContinuous: {fileID: 0}
-  actorDiscrete: {fileID: 0}
-  discriminatorDiscrete: {fileID: 0}
-  config: {fileID: 0}
+  continuousDim: 0
+  discreteDim: 7
+  config: {fileID: 11400000, guid: 509095f8fe61ee54983b640ac237fe2b, type: 2}
+  vNetwork: {fileID: 11400000, guid: 8ba02812128a1324592d5fddcafbd712, type: 2}
+  q1Network: {fileID: 0}
+  q2Network: {fileID: 0}
+  muNetwork: {fileID: 0}
+  sigmaNetwork: {fileID: 0}
+  discreteNetwork: {fileID: 11400000, guid: 2a84994360d61e448a6d755c8c9f20a2, type: 2}
+  discContNetwork: {fileID: 0}
+  discDiscNetwork: {fileID: 0}
   targetFPS: 50
   inferenceDevice: 0
   trainingDevice: 1
@@ -83,7 +85,99 @@ MonoBehaviour:
       - 0
       - 0
       - 0
-      shape: 32000000
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 8e000000
     m2:
       data:
       - 0
@@ -136,7 +230,98 @@ MonoBehaviour:
       - 0
       - 0
       - 0
-      shape: 32000000
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 8e000000
   standardDeviation: 1
-  standardDeviationValue: 1.5
-  standardDeviationScale: 1
+  standardDeviationValue: 1

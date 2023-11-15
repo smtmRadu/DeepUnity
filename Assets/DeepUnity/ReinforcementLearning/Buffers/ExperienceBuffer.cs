@@ -19,11 +19,11 @@ namespace DeepUnity
         public Tensor[] ValueTargets { get => frames.Select(x => x.value_target).ToArray(); }
         public Tensor[] Advantages { get => frames.Select(x => x.advantage).ToArray(); }
 
-        public readonly List<TimestepBuffer> frames;
+        public readonly List<TimestepTuple> frames;
 
-        public ExperienceBuffer()
+        public ExperienceBuffer(int alloc_size)
         {
-            frames = new List<TimestepBuffer>();
+            frames = new List<TimestepTuple>(alloc_size);
         }
         public void Shuffle()
         {
@@ -89,7 +89,7 @@ namespace DeepUnity
             return Count == buffer_size;
         }
         /// <summary>
-        /// Adds agent's memory to the training data by the limit of the buffer_size.
+        /// Try to add agent's memory to the training data by the limit of the buffer_size.
         /// </summary>
         /// <param name="agentMemory"></param>
         /// <param name="buffer_size"></param>
@@ -100,7 +100,7 @@ namespace DeepUnity
                 if (Count == buffer_size)
                     return;
 
-                frames.Add(frm.Clone() as TimestepBuffer);
+                frames.Add(frm.Clone() as TimestepTuple);
             }
         }
         public void Clear()

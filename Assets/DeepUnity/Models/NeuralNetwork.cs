@@ -65,7 +65,7 @@ namespace DeepUnity
         /// Get all <see cref="Learnable"/> modules of this model.
         /// </summary>
         /// <returns></returns>
-        public override Learnable[] Parameters() => modules.OfType<Learnable>().ToArray();     
+        public override Learnable[] GetLearnables() => modules.OfType<Learnable>().ToArray();     
         public override string Summary()
         {
             StringBuilder stringBuilder = new StringBuilder();
