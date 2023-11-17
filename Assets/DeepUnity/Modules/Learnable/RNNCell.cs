@@ -140,10 +140,10 @@ namespace DeepUnity
             Tensor transposedLoss = Tensor.Transpose(h_n_grad, 0, 1);
 
             // compute gradients wrt parameters.
-            weightsGrad.AssignAs(weightsGrad + Tensor.MatMul(transposedLoss, InputCache_t) / batch_size);
-            biasesGrad.AssignAs(biasesGrad + Tensor.Mean(transposedLoss, axis: 1));
-            recurrentWeightsGrad.AssignAs(recurrentWeightsGrad + Tensor.MatMul(transposedLoss, H_0Cache_t) / batch_size);
-            recurrentBiasesGrad.AssignAs(recurrentBiasesGrad + Tensor.Mean(transposedLoss, axis: 1));
+            Tensor.CopyTo(weightsGrad + Tensor.MatMul(transposedLoss, InputCache_t) / batch_size, weightsGrad);
+            Tensor.CopyTo(biasesGrad + Tensor.Mean(transposedLoss, axis: 1), biasesGrad);
+            Tensor.CopyTo(recurrentWeightsGrad + Tensor.MatMul(transposedLoss, H_0Cache_t) / batch_size, recurrentWeightsGrad);
+            Tensor.CopyTo(recurrentBiasesGrad + Tensor.Mean(transposedLoss, axis: 1), recurrentBiasesGrad);
 
             // compute gradients wrt InputCache.
             Tensor inputGrad = Tensor.MatMul(h_n_grad, weights);
@@ -155,16 +155,19 @@ namespace DeepUnity
         {
             return weights.Count() + biases.Count() + recurrentWeights.Count() + recurrentBiases.Count();
         }
-        public Tensor[] Parameters()
-        {
-            return new Tensor[] { weights, biases, recurrentWeights, recurrentBiases };
-        }
-        public Tensor[] Gradients()
+        public Parameter[] Parameters()
         {
             if (weightsGrad == null)
                 OnAfterDeserialize();
-            return new Tensor[] { weightsGrad, biasesGrad, recurrentWeightsGrad, recurrentBiasesGrad };
+
+            var w = new Parameter(weights, weightsGrad);
+            var b = new Parameter(biases, biasesGrad);
+            var rw = new Parameter(recurrentWeights, recurrentWeightsGrad);
+            var rb = new Parameter(recurrentBiases, recurrentBiasesGrad);
+
+            return new Parameter[] { w, b, rw, rb };
         }
+
         public virtual void OnBeforeSerialize()
         {
 

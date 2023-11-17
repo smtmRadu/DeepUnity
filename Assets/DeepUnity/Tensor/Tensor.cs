@@ -536,6 +536,16 @@ namespace DeepUnity
 
 
         #region Special
+        /// <summary>
+        /// Copies all data from <paramref name="fromTensor"/> and assignes them <paramref name="toTensor"/>.
+        /// </summary>
+        /// <param name="fromTensor"></param>
+        /// <param name="toTensor"></param>
+        public static void CopyTo(Tensor fromTensor, Tensor toTensor)
+        {
+            toTensor.data = fromTensor.data.ToArray();
+            toTensor.shape = fromTensor.shape.ToArray();
+        }
 
         /// <summary>
         /// Left: <b>(J, 1, N, M)</b> <br></br>
@@ -2432,11 +2442,6 @@ namespace DeepUnity
 
 
         #region Instance opeations
-        public void AssignAs(Tensor other)
-        {
-            this.data = other.data.ToArray();
-            this.shape = other.shape.ToArray();
-        }
         public int Size(int axis)
         {
             HandleAxis(this, ref axis);

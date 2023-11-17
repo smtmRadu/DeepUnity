@@ -9,9 +9,10 @@ namespace DeepUnityTutorials
     // https://machinelearningmastery.com/how-to-develop-a-convolutional-neural-network-from-scratch-for-mnist-handwritten-digit-classification/
     public class TrainingCNN : MonoBehaviour
     {
-        [Header("Learning MNIST digit recognition.")]
+        [Button("Save")]
         [SerializeField] NeuralNetwork network;
         [SerializeField] private int batch_size = 64;
+        [SerializeField] private float lr = 0.003f;
         [SerializeField] private PerformanceGraph accuracyGraph = new PerformanceGraph();
         [SerializeField] private PerformanceGraph lossGraph = new PerformanceGraph();
 
@@ -47,17 +48,20 @@ namespace DeepUnityTutorials
                 //      );
 
                 network = new NeuralNetwork(
-                    new Conv2D((1, 28, 28), 32, (3, 3), gamma_init: InitType.HE_Uniform, device: Device.GPU),
+                    new Conv2D((1, 28, 28), 32, (3, 3), gamma_init: InitType.HE_Uniform, InitType.HE_Uniform, device: Device.GPU), // out (32, 26, 26)
+                    new MaxPool2D(2), // out (32, 13, 13)
                     new ReLU(),
-                    new MaxPool2D(2),
+                    new Conv2D((32, 13, 13), 64, (3,3), gamma_init: InitType.HE_Uniform, InitType.HE_Uniform, device: Device.GPU), // out (64, 11, 11)
+                    new MaxPool2D(2), // out (64, 5, 5) 
+                    new ReLU(),
                     new Flatten(),
-                    new BatchNorm(5408),
-                    new Dense(5408, 100, gamma_init: InitType.HE_Uniform, device: Device.GPU),
+                    new Dense(64 * 5 * 5, 512, gamma_init: InitType.HE_Uniform, InitType.HE_Uniform, device: Device.GPU),
                     new ReLU(),
-                    new BatchNorm(100),
-                    new Dense(100, 10),
+                    new BatchNorm(512),
+                    new Dense(512, 10, InitType.HE_Uniform, InitType.HE_Uniform, device: Device.GPU),
                     new Softmax()
-                    ).CreateAsset("Tutorial3");
+
+                    ).CreateAsset("MNIST");
 
                 // network = new Sequential(
                 //     new Flatten(),
@@ -67,7 +71,7 @@ namespace DeepUnityTutorials
                 //     new Softmax());
             }
 
-            optim = new Adam(network.Parameters(), network.Gradients());
+            optim = new Adam(network.Parameters(), lr, weightDecay: 0.001f);
 
             Utils.Shuffle(train);
             train_batches = Utils.Split(train, batch_size);
@@ -91,7 +95,7 @@ namespace DeepUnityTutorials
             Tensor target = Tensor.Cat(null, train_batch.Select(x => x.Item2).ToArray());
 
             Tensor prediction = network.Forward(input);
-            Loss loss = Loss.CrossEntropy(prediction, target);
+            Loss loss = Loss.BinaryCrossEntropy(prediction, target);
 
             optim.ZeroGrad();
             network.Backward(loss.Derivative);
@@ -101,6 +105,11 @@ namespace DeepUnityTutorials
             lossGraph.Append(loss.Item);
             accuracyGraph.Append(train_acc);
             Debug.Log($"Epoch {epochIndex} | Batch {batch_index++}/{train_batches.Count} | Accuracy {train_acc * 100}%");
+        }
+
+        public void Save()
+        {
+            network.Save();
         }
     }
 

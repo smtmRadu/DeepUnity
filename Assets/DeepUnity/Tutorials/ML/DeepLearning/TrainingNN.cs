@@ -45,22 +45,22 @@ namespace DeepUnityTutorials
         {
             if (net == null)
             {
-                InitType init = InitType.HE_Uniform;
+                var init = InitType.HE_Normal;
                 net = new NeuralNetwork(
-                 new Dense(2, hiddenSize, init, InitType.Zeros),
-                 new LayerNorm(),                
-                 new LeakyReLU(),
-                 new Dense(hiddenSize, hiddenSize, init, InitType.Zeros, device: device),
-                 new BatchNorm(hiddenSize),
-                 new LeakyReLU(),
+                 new Dense(2, hiddenSize,init, init),
+                 // new LayerNorm(),
+                 new ReLU(),
+                 new Dense(hiddenSize, hiddenSize, init, init ,device: device),
+                 // new BatchNorm(hiddenSize),
+                 new ReLU(),
                  // new Dropout(0.3f),
-                 new Dense(hiddenSize, hiddenSize, init, InitType.Zeros, device: device),
-                 new LeakyReLU(),
-                 new Dense(hiddenSize, 1, init, InitType.Zeros)
-                 ).CreateAsset("test");
+                 new Dense(hiddenSize, hiddenSize, init, init, device: device),
+                 new ReLU(),
+                 new Dense(hiddenSize, 1)
+                 );
             }
 
-            optimizer = new Adam(net.Parameters(), net.Gradients(), lr: learningRate);
+            optimizer = new Adan(net.Parameters());
             scheduler = new LRScheduler(optimizer, scheduler_step_size, scheduler_gamma);
 
 
@@ -105,7 +105,7 @@ namespace DeepUnityTutorials
             TrainLossGraph.Append(loss.Item);
             optimizer.ZeroGrad();
             net.Backward(loss.Derivative);
-            // optimizer.ClipGradNorm(1f);
+            // optimizer.ClipGradNorm(0.5f);
             optimizer.Step();
 
 

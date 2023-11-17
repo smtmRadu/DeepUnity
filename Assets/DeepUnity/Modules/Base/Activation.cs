@@ -21,9 +21,10 @@ namespace DeepUnity
             return Activate(input);
 
         }
-        public virtual Tensor Backward(Tensor loss)
+        public virtual Tensor Backward(Tensor dLdY)
         {
-            return Derivative(InputCache) * loss;
+            // dl/dx = dl/dy * dy/dx
+            return dLdY * Derivative(InputCache);
         }
         public abstract object Clone();
     }

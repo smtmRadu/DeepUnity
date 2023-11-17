@@ -297,18 +297,18 @@ namespace DeepUnity
         {
             return W_Q.Count() + W_K.Count() + W_V.Count() + W_O.Count();
         }
-        public Tensor[] Parameters()
-        {
-            return new Tensor[] { W_Q , W_K , W_V, W_O };
-        }                          
-        public Tensor[] Gradients()
+        public Parameter[] Parameters()
         {
             if (W_Q_grad == null)
-            {
                 OnAfterDeserialize();
-            }
-            return new Tensor[] { W_Q_grad, W_K_grad, W_V_grad, W_O_grad };
-        }
+
+            var q = new Parameter(W_Q, W_Q_grad);
+            var k = new Parameter(W_K, W_K_grad);
+            var v = new Parameter(W_V, W_V_grad);
+            var o = new Parameter(W_O, W_O_grad);
+
+            return new Parameter[] { q , k , v , o  };
+        }                          
         public virtual void OnBeforeSerialize()
         {
 

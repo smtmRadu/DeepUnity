@@ -130,9 +130,9 @@ namespace DeepUnity
         }
 
 
-        public override Tensor[] Parameters()
+        public override Parameter[] Parameters()
         {
-            List<Tensor> parameters = new List<Tensor>();
+            List<Parameter> parameters = new List<Parameter>();
             foreach (var item in inputHeadsModules.OfType<ILearnable>())
             {
                 parameters.AddRange(item.Parameters());
@@ -144,23 +144,6 @@ namespace DeepUnity
             foreach (var item in outputHeadsModules.OfType<ILearnable>())
             {
                 parameters.AddRange(item.Parameters());
-            }
-            return parameters.ToArray();
-        }
-        public override Tensor[] Gradients()
-        {
-            List<Tensor> parameters = new List<Tensor>();
-            foreach (var item in inputHeadsModules.OfType<ILearnable>())
-            {
-                parameters.AddRange(item.Gradients());
-            }
-            foreach (var item in backboneModules.OfType<ILearnable>())
-            {
-                parameters.AddRange(item.Gradients());
-            }
-            foreach (var item in outputHeadsModules.OfType<ILearnable>())
-            {
-                parameters.AddRange(item.Gradients());
             }
             return parameters.ToArray();
         }

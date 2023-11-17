@@ -213,8 +213,8 @@ namespace DeepUnity
 
             if(device == Device.CPU)
             {
-                kernelsGrad.AssignAs(kernelsGrad + Correlate2DValid_input_loss(InputCache, loss) / batch_size);
-                biasesGrad.AssignAs(biasesGrad + (isBatched ? Tensor.Mean(loss, -4) : loss));
+                Tensor.CopyTo(kernelsGrad + Correlate2DValid_input_loss(InputCache, loss) / batch_size, kernelsGrad);
+                Tensor.CopyTo(biasesGrad + (isBatched ? Tensor.Mean(loss, -4) : loss), biasesGrad);
                 return Convolve2DFull_loss_gamma(loss, kernels);
             }
             else 
@@ -265,8 +265,8 @@ namespace DeepUnity
                         (kernels.Size(-2) + 4) / 5,
                         (C_out + 31) / 32);
 
-                kernelsGrad.AssignAs(kernelsGrad + Tensor.Constant(gammaGradBuffer).Reshape(kernelsGrad.Shape));
-                biasesGrad.AssignAs(biasesGrad + (isBatched ? Tensor.Mean(loss, -4) : loss));  // faster on CPU
+                Tensor.CopyTo(kernelsGrad + Tensor.Constant(gammaGradBuffer).Reshape(kernelsGrad.Shape), kernelsGrad);
+                Tensor.CopyTo(biasesGrad + (isBatched ? Tensor.Mean(loss, -4) : loss), biasesGrad);// faster on CPU
 
                 inputBuffer.Release();
                 gammaGradBuffer.Release();
@@ -573,15 +573,15 @@ namespace DeepUnity
         {
             return kernels.Count() + biases.Count();
         }
-        public Tensor[] Parameters()
-        {
-            return new Tensor[] { kernels, biases };
-        }
-        public Tensor[] Gradients()
+        public Parameter[] Parameters()
         {
             if (kernelsGrad == null)
                 OnAfterDeserialize();
-            return new Tensor[] { kernelsGrad, biasesGrad };
+
+            var k = new Parameter(kernels, kernelsGrad);
+            var b = new Parameter(biases, biasesGrad);
+
+            return new Parameter[] { k, b };
         }
         public virtual void OnBeforeSerialize()
         {

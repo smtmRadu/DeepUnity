@@ -26,8 +26,8 @@ namespace DeepUnity
         /// Input: <b>(B, C, H_in, W_in)</b> or <b>(C, H_in, W_in)</b> <br></br>
         /// Output: <b>(B, C, H_out, W_out)</b> or <b>(C, H_out, W_out)</b> <br></br>
         /// where <br></br>
-        /// H_out = Floor((H_in + 2 * padding - kernel_size - 1) / kernel_size + 1),<br />
-        /// W_out = Floor((W_in + 2 * padding - kernel_size - 1) / kernel_size + 1).<br />
+        /// H_out = Floor[(H_in + 2 * <paramref name="padding"/> - <paramref name="kernel_size"/>) / <paramref name="kernel_size"/> + 1],<br />
+        /// W_out = Floor[(W_in + 2 * <paramref name="padding"/> - <paramref name="kernel_size"/>) / <paramref name="kernel_size"/> + 1].<br />
         /// </summary>
         public MaxPool2D(int kernel_size, int padding = 0, PaddingType padding_mode = PaddingType.Mirror)
         {
@@ -62,9 +62,7 @@ namespace DeepUnity
 
 
             if (batch_size == 1)
-            {
-                LinkedList<float> values_pool = new LinkedList<float>();
-                
+            {               
                 // Foreach channel
                 for (int c = 0; c < channel_size; c++)
                 {
@@ -73,6 +71,7 @@ namespace DeepUnity
                     {
                         for (int i = 0; i < W_out; i++)
                         {
+                            float max_in_pool = float.MinValue;
                             // foreach pool element in the pool
                             for (int kj = 0; kj < kernel_size; kj++)
                             {
@@ -80,14 +79,15 @@ namespace DeepUnity
                                 {
                                     try
                                     {
-                                        values_pool.AddLast(input[0, c, j * kernel_size + kj, i * kernel_size + ki]);
+                                        float elem = input[0, c, j * kernel_size + kj, i * kernel_size + ki];
+                                        if (elem > max_in_pool)
+                                            max_in_pool = elem;
                                     }
                                     catch { }
                                 }
                             }
 
-                            pooled_input[0, c, j, i] = values_pool.Max();
-                            values_pool.Clear();
+                            pooled_input[0, c, j, i] = max_in_pool;
                         }
                     }
                 }
@@ -97,8 +97,6 @@ namespace DeepUnity
             {
                 Parallel.For(0, batch_size, b =>
                 {
-                    LinkedList<float> values_pool = new LinkedList<float>();
-
                     // Foreach channel
                     for (int c = 0; c < channel_size; c++)
                     {
@@ -107,6 +105,8 @@ namespace DeepUnity
                         {
                             for (int i = 0; i < W_out; i++)
                             {
+                                float max_in_pool = float.MinValue;
+
                                 // foreach pool element in the pool
                                 for (int kj = 0; kj < kernel_size; kj++)
                                 {
@@ -114,15 +114,15 @@ namespace DeepUnity
                                     {
                                         try
                                         {
-                                            values_pool.AddLast(input[b, c, j * kernel_size + kj, i * kernel_size + ki]);
+                                            float elem = input[b, c, j * kernel_size + kj, i * kernel_size + ki];
+                                            if (elem > max_in_pool)
+                                                max_in_pool = elem;
                                         }
                                         catch { }
-
                                     }
                                 }
 
-                                pooled_input[b, c, j, i] = values_pool.Max();
-                                values_pool.Clear();
+                                pooled_input[b, c, j, i] = max_in_pool;
                             }
                         }
                     }

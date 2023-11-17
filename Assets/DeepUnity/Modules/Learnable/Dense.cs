@@ -129,9 +129,8 @@ namespace DeepUnity
             if (device == Device.CPU)
             {
                 // compute the gradients
-                weigthsGrad.AssignAs(weigthsGrad + Tensor.MatMul(transposedLoss, InputCache) / batch_size);
-                biasesGrad.AssignAs(biasesGrad + Tensor.Mean(transposedLoss, axis: 1));
-
+                Tensor.CopyTo(weigthsGrad + Tensor.MatMul(transposedLoss, InputCache) / batch_size, weigthsGrad);
+                Tensor.CopyTo(biasesGrad + Tensor.Mean(transposedLoss, axis: 1), biasesGrad);
             }
             else
             {
@@ -164,8 +163,8 @@ namespace DeepUnity
                     (weigthsGrad.Size(-2) + 31) / 32,
                     1);
 
-                weigthsGrad.AssignAs(weigthsGrad + Tensor.Constant(gammaGradBuffer).Reshape(weigthsGrad.Shape));
-                biasesGrad.AssignAs(biasesGrad + Tensor.Constant(betaGradBuffer).Reshape(biasesGrad.Shape));
+                Tensor.CopyTo(weigthsGrad + Tensor.Constant(gammaGradBuffer).Reshape(weigthsGrad.Shape), weigthsGrad);
+                Tensor.CopyTo(biasesGrad + Tensor.Constant(betaGradBuffer).Reshape(biasesGrad.Shape), biasesGrad);
 
                 transposedLossBuffer.Release();
                 inputCacheBuffer.Release();
@@ -190,17 +189,17 @@ namespace DeepUnity
         {
             return weights.Count() + biases.Count();
         }
-        public Tensor[] Parameters()
-        {
-            return new Tensor[] { weights, biases };
-        }
-        
-        public Tensor[] Gradients()
+        public Parameter[] Parameters()
         {
             if (weigthsGrad == null)
                 OnAfterDeserialize();
-            return new Tensor[] { weigthsGrad, biasesGrad };
+
+            var w = new Parameter(weights, weigthsGrad);
+            var b = new Parameter(biases, biasesGrad);
+
+            return new Parameter[] { w, b };
         }
+        
         public object Clone()
         {
             var dense = new Dense(1, 1, device: this.device);

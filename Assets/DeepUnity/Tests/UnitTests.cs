@@ -31,12 +31,11 @@ namespace kbRadu
 
         private void Start()
         {
-            Tensor param = Tensor.Random01(10);
-            Tensor[] paramarr = new Tensor[] { param };
-            print(paramarr[0]);
+            var mp = new MaxPool2D(2);
 
-            param += 9;
-            print(paramarr[0]);
+            Tensor input = Tensor.Random01(3, 26, 26);
+            print(input);
+            print(mp.Forward(input));
 
         }
         // private void Update()
@@ -86,7 +85,7 @@ namespace kbRadu
                 new Tanh(),
                 new Dense(100, 5),
                 new Softmax());
-            var optim = new Adam(net.Parameters(), net.Gradients());
+            var optim = new Adam(net.Parameters());
 
             Tensor input = Tensor.Random01(2048, 10);
             Tensor targets = Tensor.Zeros(2048, 5);

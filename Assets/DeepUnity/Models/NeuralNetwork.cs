@@ -65,28 +65,14 @@ namespace DeepUnity
         /// Get all <see cref="ILearnable"/> modules of this model.
         /// </summary>
         /// <returns></returns>
-        public override Tensor[] Parameters()
+        public override Parameter[] Parameters()
         {
-            List<Tensor> param = new();
+            List<Parameter> param = new();
             foreach (var item in modules.OfType<ILearnable>())
             {
                 param.AddRange(item.Parameters());
             }
             return param.ToArray();
-        }
-
-        /// <summary>
-        /// Get all <see cref="ILearnable"/> modules gradients of this model.
-        /// </summary>
-        /// <returns></returns>
-        public override Tensor[] Gradients()
-        {
-            List<Tensor> grads = new();
-            foreach (var item in modules.OfType<ILearnable>())
-            {
-                grads.AddRange(item.Gradients());
-            }
-            return grads.ToArray();
         }
         public override string Summary()
         {

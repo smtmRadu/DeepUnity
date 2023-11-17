@@ -259,40 +259,40 @@ namespace DeepUnity
         {
             if(trainer == TrainerType.SAC)
             {
-                vOptimizer = new Adam(vNetwork.Parameters(), vNetwork.Gradients(), hp.learningRate);
-                q1Optimizer = new Adam(q1Network.Parameters(), q1Network.Gradients(), hp.learningRate);
-                q2Optimizer = new Adam(q2Network.Parameters(), q2Network.Gradients(), hp.learningRate);
-                muOptimizer = new Adam(muNetwork.Parameters(), muNetwork.Gradients(), hp.learningRate);
-                sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), sigmaNetwork.Gradients(), hp.learningRate);
+                vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate);
+                q1Optimizer = new Adam(q1Network.Parameters(), hp.learningRate);
+                q2Optimizer = new Adam(q2Network.Parameters(), hp.learningRate);
+                muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate);
+                sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate);
             }
             else if(trainer == TrainerType.PPO)
             {
-                vOptimizer = new Adam(vNetwork.Parameters(), vNetwork.Gradients(), hp.learningRate);
+                vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate);
 
                 if (IsUsingContinuousActions)
                 {
-                    muOptimizer = new Adam(muNetwork.Parameters(), muNetwork.Gradients(), hp.learningRate);
-                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), sigmaNetwork.Gradients(), hp.learningRate);
+                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate);
+                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate);
                 }
                 
                 if(IsUsingDiscreteActions)
                 {
-                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), discreteNetwork.Gradients(), hp.learningRate);
+                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate);
                 }
             }
             else if(trainer == TrainerType.GAIL)
             {
                 if (IsUsingContinuousActions)
                 {
-                    muOptimizer = new Adam(muNetwork.Parameters(), muNetwork.Gradients(), hp.learningRate) ;
-                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), sigmaNetwork.Gradients(), hp.learningRate);
-                    dContOptimizer = new Adam(discContNetwork.Parameters(), discContNetwork.Gradients(), hp.learningRate);
+                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate) ;
+                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate);
+                    dContOptimizer = new Adam(discContNetwork.Parameters(), hp.learningRate);
                 }
 
                 if (IsUsingDiscreteActions)
                 {
-                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), discreteNetwork.Gradients(), hp.learningRate);
-                    dDiscOptimizer = new Adam(discDiscNetwork.Parameters(), discDiscNetwork.Gradients(), hp.learningRate);
+                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate);
+                    dDiscOptimizer = new Adam(discDiscNetwork.Parameters(), hp.learningRate);
                 }
             }                    
         }

@@ -1157,7 +1157,7 @@ MonoBehaviour:
   discreteActions: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 3c6311ceb9aa30041a84cda50b531933, type: 2}
+  model: {fileID: 11400000, guid: 5c826e03f889fca4f82340bc04020adc, type: 2}
   behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 0
@@ -1201,7 +1201,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3184067032293294356, guid: cf5eb1e75eeeb9d4987e3a3150b7d3a0, type: 3}
       propertyPath: decisionPeriod
-      value: 2
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 3261661193619622716, guid: cf5eb1e75eeeb9d4987e3a3150b7d3a0, type: 3}
       propertyPath: onEpisodeEnd

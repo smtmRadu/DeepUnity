@@ -165,8 +165,8 @@ namespace DeepUnity
             var dLdGamma = Tensor.Sum(dLdY * xHat, 0);
             var dLdBeta = Tensor.Sum(dLdY, 0);
 
-            gammaGrad.AssignAs(gammaGrad + dLdGamma);
-            betaGrad.AssignAs(betaGrad + dLdBeta);
+            Tensor.CopyTo(gammaGrad + dLdGamma, gammaGrad);
+            Tensor.CopyTo(betaGrad + dLdBeta, betaGrad);
 
             return dLdX;
         }
@@ -188,16 +188,17 @@ namespace DeepUnity
 
 
         public void SetDevice(Device device) { return; }
-        public Tensor[] Parameters()
-        {
-            return new Tensor[] { gamma, beta };
-        }
-        public Tensor[] Gradients()
+        public Parameter[] Parameters()
         {
             if (gammaGrad == null)
                 OnAfterDeserialize();
-            return new Tensor[] { gammaGrad, betaGrad };
+
+            var g = new Parameter(gamma, gammaGrad);
+            var b = new Parameter(beta, betaGrad);
+
+            return new Parameter[] { g, b };
         }
+  
         public virtual void OnBeforeSerialize()
         {
 

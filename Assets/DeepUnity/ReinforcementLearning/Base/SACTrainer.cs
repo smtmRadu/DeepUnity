@@ -1,5 +1,4 @@
-﻿using System;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Linq;
 
 namespace DeepUnity
@@ -123,6 +122,10 @@ namespace DeepUnity
 
             // ∇θ = min[ Qφ1(s,ãθ(s)), Qφ2(s,ãθ(s))] - αlogπθ(ãθ(s)|s) ]
             Tensor piLoss = Tensor.Minimum(Q1_s_tildeas, Q2_s_tildeas) - logPi_tildeas_S;
+            Tensor neg_piLoss = logPi_tildeas_S - Tensor.Minimum(Q1_s_tildeas, Q2_s_tildeas);
+
+            // Tensor dmL_dPi = logPi_tildeas_S.Pow(-1f);
+
 
 
             // Consider we do gradient *ascent*, so we do negative of the loss function
@@ -166,11 +169,11 @@ namespace DeepUnity
         }
         public void UpdateTargetNetworks()
         {
-            Tensor[] phi1 = model.q1Network.Parameters();
-            Tensor[] phi2 = model.q2Network.Parameters();
+            Tensor[] phi1 = model.q1Network.Parameters().Select(x => x.theta).ToArray();
+            Tensor[] phi2 = model.q2Network.Parameters().Select(x => x.theta).ToArray();
 
-            Tensor[] phi_targ1 = Qtarg1.Parameters();
-            Tensor[] phi_targ2 = Qtarg2.Parameters();
+            Tensor[] phi_targ1 = Qtarg1.Parameters().Select(x => x.theta).ToArray();
+            Tensor[] phi_targ2 = Qtarg2.Parameters().Select(x => x.theta).ToArray();
 
 
             // We update the target q functions softly...
@@ -178,8 +181,8 @@ namespace DeepUnity
 
             for (int i = 0; i < phi1.Length; i++)
             {
-                phi_targ1[i].AssignAs(hp.tau * phi_targ1[i] + (1f - hp.tau) * phi1[i]);
-                phi_targ2[i].AssignAs(hp.tau * phi_targ2[i] + (1f - hp.tau) * phi2[i]);
+                Tensor.CopyTo(hp.tau * phi_targ1[i] + (1f - hp.tau) * phi1[i], phi_targ1[i]);
+                Tensor.CopyTo(hp.tau * phi_targ2[i] + (1f - hp.tau) * phi2[i], phi_targ2[i]);
             }        
         }
 

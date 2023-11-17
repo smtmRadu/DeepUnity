@@ -105,8 +105,8 @@ namespace DeepUnity
             Tensor dLdGamma = Tensor.Mean(dLdY + xCentered, 0);
             Tensor dLdBeta = Tensor.Mean(dLdY, 0);
 
-            gammaGrad.AssignAs(gammaGrad + dLdGamma.Mean(0));
-            betaGrad.AssignAs(betaGrad + dLdBeta.Mean(0));
+            Tensor.CopyTo(gammaGrad + dLdGamma.Mean(0), gammaGrad);
+            Tensor.CopyTo(betaGrad + dLdBeta.Mean(0), betaGrad);
 
             return dLdX;
         }
@@ -128,15 +128,15 @@ namespace DeepUnity
         {
             return gamma.Count() + beta.Count();
         }
-        public Tensor[] Parameters()
-        {
-            return new Tensor[] { gamma, beta };
-        }
-        public Tensor[] Gradients()
+        public Parameter[] Parameters()
         {
             if (gammaGrad == null)
                 OnAfterDeserialize();
-            return new Tensor[] { gammaGrad, betaGrad };
+
+            var g = new Parameter(gamma, gammaGrad);
+            var b = new Parameter(beta, betaGrad);
+
+            return new Parameter[] { g, b };
         }
         public virtual void OnBeforeSerialize()
         {

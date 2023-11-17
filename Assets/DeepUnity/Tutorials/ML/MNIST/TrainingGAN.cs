@@ -73,8 +73,8 @@ namespace DeepUnityTutorials
                     ).CreateAsset("generator");
             }
 
-            d_optim = new Adam(discriminator.Parameters(), discriminator.Gradients(), 0.0002f);
-            g_optim = new Adam(generator.Parameters(), generator.Gradients(), 0.0002f);
+            d_optim = new Adam(discriminator.Parameters(), 0.0002f);
+            g_optim = new Adam(generator.Parameters(), 0.0002f);
 
             List<(Tensor, Tensor)> data;
             Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out data, out _, DatasetSettings.LoadTrainOnly);

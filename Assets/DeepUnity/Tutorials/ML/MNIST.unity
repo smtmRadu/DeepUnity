@@ -650,15 +650,30 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 944636989}
-  - component: {fileID: 944636988}
+  - component: {fileID: 944636990}
   m_Layer: 0
   m_Name: Train - MNIST - Recognition
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
---- !u!114 &944636988
+  m_IsActive: 1
+--- !u!4 &944636989
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 944636987}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -3.6160786, y: 0.47151715, z: 7.3478174}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &944636990
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -667,16 +682,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 944636987}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: df1c42f166d333945804f9bd172f12a9, type: 3}
+  m_Script: {fileID: 11500000, guid: 45ec7b8831bf73c4bbed236ccf4948d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  network: {fileID: 11400000, guid: 621ce7da9860bcf4d9df1f661965d27c, type: 2}
-  name: MNIST_MODEL
-  lr: 0.0005
-  schedulerStepSize: 1
-  schedulerDecay: 0.95
-  batch_size: 128
-  augment_data: 1
+  network: {fileID: 0}
+  batch_size: 64
+  lr: 0.001
   accuracyGraph:
     graph:
       serializedVersion: 2
@@ -697,21 +708,6 @@ MonoBehaviour:
     steps: 0
     current: 0
     mean: 0
---- !u!4 &944636989
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 944636987}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -3.6160786, y: 0.47151715, z: 7.3478174}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_RootOrder: 0
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &975537020
 GameObject:
   m_ObjectHideFlags: 0
@@ -1511,20 +1507,32 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   network: {fileID: 11400000, guid: 621ce7da9860bcf4d9df1f661965d27c, type: 2}
-  inferenceDevice: 1
-  completed: 
-  accuracy: 
-  accuracyPerDigit:
-  - 0
-  - 0
-  - 0
-  - 0
-  - 0
-  - 0
-  - 0
-  - 0
-  - 0
-  - 0
+  name: MNIST_MODEL
+  lr: 0.0002
+  schedulerStepSize: 1
+  schedulerDecay: 0.5
+  batch_size: 64
+  augment_data: 0
+  accuracyGraph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  lossGraph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
 --- !u!4 &1539047896
 Transform:
   m_ObjectHideFlags: 0
@@ -1954,7 +1962,7 @@ MonoBehaviour:
   image: {fileID: 998186862}
   digitPredictionText: {fileID: 2101666738}
   softmaxOutputText: {fileID: 1459484847}
-  network: {fileID: 11400000, guid: 621ce7da9860bcf4d9df1f661965d27c, type: 2}
+  network: {fileID: 11400000, guid: eb6d087da4520f2469c00f64a61aaace, type: 2}
   brushRadius: 2
   brushStrength: 0.02
 --- !u!1 &1820971845

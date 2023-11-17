@@ -39,15 +39,10 @@ namespace DeepUnity
 
 
         /// <summary>
-        /// Get all <typeparamref name="ILearnable"/> modules.
+        /// Get all <typeparamref name="Parameter"/>s.
         /// </summary>
         /// <returns></returns>
-        public abstract Tensor[] Parameters();
-        /// <summary>
-        /// Get all <see cref="ILearnable"/> modules gradients.
-        /// </summary>
-        /// <returns></returns>
-        public abstract Tensor[] Gradients();
+        public abstract Parameter[] Parameters();
         /// <summary>
         /// Displays information about this neural network.
         /// </summary>
