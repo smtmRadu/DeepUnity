@@ -13,12 +13,12 @@ MonoBehaviour:
   m_Name: Config
   m_EditorClassIdentifier: 
   trainer: 0
-  maxSteps: 1000000000
+  maxSteps: 100000
   horizon: 64
   learningRate: 0.0003
   gamma: 0.99
   batchSize: 256
-  bufferSize: 2048
+  bufferSize: 4096
   gradClipNorm: 0.5
   LRSchedule: 0
   numEpoch: 8
@@ -27,11 +27,12 @@ MonoBehaviour:
   lambda: 0.95
   KLDivergence: 0
   targetKL: 0.015
-  updateSteps: 1000
+  updateEvery: 1000
+  updateAfter: 1000
   updatesNum: 1
-  entropy: 1
+  alpha: 0.2
   saveReplayBuffer: 0
   tau: 0.005
   saveRecordBuffer: 0
-  timeScale: 7.72
+  timeScale: 5.64
   debug: 0

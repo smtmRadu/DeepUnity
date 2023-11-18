@@ -963,13 +963,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   spaceSize: 4
-  stackedInputs: 1
+  stackedInputs: 6
   continuousActions: 0
   discreteActions: 5
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 4a891ebe24977db4e939ff37a5251f87, type: 2}
-  behaviourType: 2
+  model: {fileID: 11400000, guid: 1dc4c7d1ff5f2e744bc970e27980f5ad, type: 2}
+  behaviourType: 1
   onEpisodeEnd: 2
   useSensors: 0
   speed: 10

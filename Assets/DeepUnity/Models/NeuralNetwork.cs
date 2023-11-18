@@ -13,7 +13,7 @@ namespace DeepUnity
     [Serializable]
     public class NeuralNetwork : Model<NeuralNetwork, Tensor>, ISerializationCallbackReceiver
     {
-        [NonSerialized] public IModule[] modules;
+        [NonSerialized] private IModule[] modules;
         [SerializeField] private IModuleWrapper[] serializedModules;
 
         public NeuralNetwork(params IModule[] modules) => this.modules = modules;
@@ -73,6 +73,13 @@ namespace DeepUnity
                 param.AddRange(item.Parameters());
             }
             return param.ToArray();
+        }
+        public void SetDevice(Device device)
+        {
+            foreach (var item in modules.OfType<ILearnable>())
+            {
+                item.SetDevice(device);
+            }
         }
         public override string Summary()
         {

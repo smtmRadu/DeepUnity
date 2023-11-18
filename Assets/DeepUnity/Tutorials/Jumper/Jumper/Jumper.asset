@@ -14,17 +14,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   behaviourName: Jumper
   assetCreated: 1
-  observationSize: 251
-  stackedInputsNum: 1
+  observationSize: 150
+  stackedInputs: 1
   continuousDim: 0
   discreteDim: 8
-  critic: {fileID: 11400000, guid: ed902acf492b8034c820a2426b94722d, type: 2}
-  actorContinuousMu: {fileID: 0}
-  actorContinuousSigma: {fileID: 0}
-  discriminatorContinuous: {fileID: 0}
-  actorDiscrete: {fileID: 11400000, guid: 4d67fad8c0720854f9b6e943f635fb21, type: 2}
-  discriminatorDiscrete: {fileID: 11400000, guid: ba9fbf0ba1bf7cc4b85c083781fbfb89, type: 2}
-  config: {fileID: 11400000, guid: 09203d786d2fa0442ad2e91c1e2b58e3, type: 2}
+  config: {fileID: 0}
+  vNetwork: {fileID: 0}
+  q1Network: {fileID: 0}
+  q2Network: {fileID: 0}
+  muNetwork: {fileID: 0}
+  sigmaNetwork: {fileID: 0}
+  discreteNetwork: {fileID: 0}
+  discContNetwork: {fileID: 0}
+  discDiscNetwork: {fileID: 0}
   targetFPS: 50
   inferenceDevice: 0
   trainingDevice: 1
@@ -183,108 +185,7 @@ MonoBehaviour:
       - 0
       - 0
       - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      shape: fb000000
+      shape: 96000000
     m2:
       data:
       - 0
@@ -437,107 +338,6 @@ MonoBehaviour:
       - 0
       - 0
       - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      shape: fb000000
+      shape: 96000000
   standardDeviation: 1
   standardDeviationValue: 1

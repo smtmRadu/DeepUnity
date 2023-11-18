@@ -15,15 +15,16 @@ MonoBehaviour:
   behaviourName: MoveToGoal
   assetCreated: 1
   observationSize: 4
-  stackedInputsNum: 1
+  stackedInputs: 16
   continuousDim: 0
   discreteDim: 5
-  config: {fileID: 11400000, guid: 6597496350c62fe43b2ae6703aca93a5, type: 2}
-  qNetwork: {fileID: 0}
-  vNetwork: {fileID: 11400000, guid: 520fa60d82780ab40a3905437d23f79d, type: 2}
+  config: {fileID: 11400000, guid: eeb80fd9b57256445a5545837abd23c2, type: 2}
+  vNetwork: {fileID: 11400000, guid: d6977e637cd21584b996052b5a5aedb9, type: 2}
+  q1Network: {fileID: 0}
+  q2Network: {fileID: 0}
   muNetwork: {fileID: 0}
   sigmaNetwork: {fileID: 0}
-  discreteNetwork: {fileID: 11400000, guid: a5e22cb5586252344b76d20e017dd733, type: 2}
+  discreteNetwork: {fileID: 11400000, guid: 5740854b682df144fb088f5907b65be5, type: 2}
   discContNetwork: {fileID: 0}
   discDiscNetwork: {fileID: 0}
   targetFPS: 50
@@ -47,4 +48,4 @@ MonoBehaviour:
       - 0
       shape: 04000000
   standardDeviation: 1
-  standardDeviationValue: 2.55
+  standardDeviationValue: 1

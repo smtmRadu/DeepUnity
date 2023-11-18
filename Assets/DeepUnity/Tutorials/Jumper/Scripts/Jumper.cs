@@ -118,6 +118,13 @@ namespace DeepUnityTutorials
                 isGrounded = true;
             }
         }
+        private void OnCollisionExit(Collision collision)
+        {
+            if (collision.collider.CompareTag("Ground"))
+            {
+                isGrounded = false;
+            }
+        }
 
         private void OnTriggerEnter(Collider other)
         {

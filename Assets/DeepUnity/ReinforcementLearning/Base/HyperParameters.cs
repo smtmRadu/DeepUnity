@@ -53,7 +53,7 @@ namespace DeepUnity
         [Min(0.1f)] public float epsilon = 0.2f;
 
         [Tooltip("[Typical range: 0.9 - 1] GAE factor.")]
-        [Min(0.001f)] public float lambda = 0.95f;
+        [Min(0.001f)] public float lambda = 0.96f;
 
         [Tooltip("Use of KLE")]
         public KLType KLDivergence = KLType.Off;
@@ -96,7 +96,7 @@ namespace DeepUnity
         [Tooltip("Timescale of the training session.")]
         [Min(1f)] public float timeScale = 1f;
         [Tooltip("Debug the train_data into a file.")]
-        [HideInInspector] 
+        // [HideInInspector] 
         public bool debug = false;
 
 

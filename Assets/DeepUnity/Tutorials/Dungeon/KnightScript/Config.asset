@@ -12,21 +12,27 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5970f7530cba1f0499a4a3dbe7d27f96, type: 3}
   m_Name: Config
   m_EditorClassIdentifier: 
+  trainer: 0
   maxSteps: 2000000000
-  learningRate: 0.0003
-  gradClipNorm: 0.5
-  batchSize: 512
-  bufferSize: 10240
-  numEpoch: 8
-  normalizeAdvantages: 1
-  shuffleTrainingData: 1
-  LRSchedule: 0
-  horizon: 129
-  beta: 0.001
-  epsilon: 0.2
+  horizon: 128
+  learningRate: 0.0002
   gamma: 0.99
+  batchSize: 400
+  bufferSize: 8000
+  gradClipNorm: 0.5
+  LRSchedule: 0
+  numEpoch: 8
+  beta: 0.005
+  epsilon: 0.2
   lambda: 0.95
   KLDivergence: 0
   targetKL: 0.015
-  timeScale: 3.26
+  updateEvery: 1000
+  updateAfter: 1000
+  updatesNum: 1
+  alpha: 0.2
+  saveReplayBuffer: 0
+  tau: 0.005
+  saveRecordBuffer: 0
+  timeScale: 3.14
   debug: 0

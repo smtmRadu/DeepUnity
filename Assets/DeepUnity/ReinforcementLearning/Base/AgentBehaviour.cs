@@ -19,7 +19,7 @@ namespace DeepUnity
         [SerializeField, ReadOnly] public string behaviourName;
         [SerializeField, HideInInspector] private bool assetCreated = false;
         [SerializeField, ReadOnly] public int observationSize;
-        [SerializeField, ReadOnly, Min(1)] public int stackedInputsNum;
+        [SerializeField, ReadOnly, Min(1)] public int stackedInputs;
         [SerializeField, ReadOnly] public int continuousDim;
         [SerializeField, ReadOnly] public int discreteDim;
 
@@ -186,74 +186,6 @@ namespace DeepUnity
 
             }
         }
-
-        
-        public void SetDDevice(Device device)
-        {
-            if (IsUsingContinuousActions)
-            {
-                foreach (var item in discContNetwork.modules.OfType<ILearnable>())
-                {
-                    item.SetDevice(device);
-                }
-            }
-            
-            if (IsUsingDiscreteActions)
-            {
-                foreach (var item in discDiscNetwork.modules.OfType<ILearnable>())
-                {
-                    item.SetDevice(device);
-                }
-            }
-        }
-        public void SetPiDevice(Device device)
-        {
-            if (IsUsingContinuousActions)
-            {
-                foreach (var item in muNetwork.modules.OfType<ILearnable>())
-                {
-                    item.SetDevice(device);
-                }
-
-                foreach (var item in muNetwork.modules.OfType<ILearnable>())
-                {
-                    item.SetDevice(device);
-                }
-            }
-
-            if (IsUsingDiscreteActions)
-            {
-                foreach (var item in discreteNetwork.modules.OfType<ILearnable>())
-                {
-                    item.SetDevice(device);
-                }
-
-            }
-        }
-        public void SetVDevice(Device device)
-        {
-            var lrn = vNetwork.modules.OfType<ILearnable>().ToArray();
-            for (int i = 0; i < lrn.Length - 1; i++)
-            {
-                lrn[i].SetDevice(device);   
-            }
-            lrn[lrn.Length - 1].SetDevice(Device.CPU);
-
-            // Due to benchmark performances, critic last dense (which has the output features = 1), is working faster on CPU.
-        }
-        public void SetQDevice(Device device)
-        {
-            foreach (var item in q1Network.modules.OfType<ILearnable>())
-            {
-                item.SetDevice(device);
-            }
-
-            foreach (var item in q2Network.modules.OfType<ILearnable>())
-            {
-                item.SetDevice(device);
-            }
-        }
-
 
         public void InitOptimisers(Hyperparameters hp, TrainerType trainer)
         {
@@ -509,7 +441,7 @@ namespace DeepUnity
             AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, stackedInputs, continuousActions, discreteActions, numLayers, hidUnits);
             newAgBeh.behaviourName = name;
             newAgBeh.observationSize = stateSize;
-            newAgBeh.stackedInputsNum = stackedInputs;
+            newAgBeh.stackedInputs = stackedInputs;
             newAgBeh.continuousDim = continuousActions;
             newAgBeh.discreteDim = discreteActions;
             newAgBeh.normalizer = new ZScoreNormalizer(stateSize);

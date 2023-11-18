@@ -15,6 +15,15 @@ namespace DeepUnity
 
         private readonly Tensor[] gOld;
 
+        /// <summary>
+        /// ADAptive Nesterov momentum optimizer.
+        /// </summary>
+        /// <param name="parameters"></param>
+        /// <param name="lr"></param>
+        /// <param name="beta1"></param>
+        /// <param name="beta2"></param>
+        /// <param name="beta3"></param>
+        /// <param name="weightDecay"></param>
         public Adan(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.02f, float beta2 = 0.08f, float beta3 = 0.01f, float weightDecay = 0f) : base(parameters, lr, weightDecay)
         {
             this.beta1 = beta1;
@@ -70,6 +79,5 @@ namespace DeepUnity
             });
         }
     }
-
 }
 

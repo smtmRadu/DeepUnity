@@ -13,39 +13,58 @@ namespace DeepUnity
     /// </summary>
     public class StateBuffer
     {
-        public readonly int Capacity;
         /// <summary>
         /// The limit used to clip the observations value
         /// </summary>
-        private readonly float Clip = 5f;
-        public Tensor State { get; set; }
-        private int position_index { get; set; }
-       
- 	    public StateBuffer(int capacity)
+        private const float Clip = 5f;
+
+
+        public readonly int Capacity;
+        public readonly int StateSize;
+        public readonly int StackedInputs;
+
+        private LinkedList<float> StateVector;
+        public Tensor State
         {
-            State = Tensor.Zeros(capacity).Select(x => 0f);
-            this.Capacity = capacity;
-            position_index = 0;
-        }
-        public void Clear()
-        {
-            for (int i = 0; i < Capacity; i++)
+            get
             {
-                State[i] = 0;
+                Tensor state = Tensor.Zeros(Capacity);
+                int index = 0;
+                foreach (var item in StateVector)
+                {
+                    state[index++] = item;
+                }
+                return state;
             }
-            position_index = 0;
         }
-        public bool IsFulfilled(out int missingObs)
+       
+ 	    public StateBuffer(int state_size, int stacked_states)
         {
-            missingObs = Capacity - position_index;
-            return position_index == Capacity;
+            this.Capacity = state_size * stacked_states;
+            this.StateSize = state_size;
+            this.StackedInputs = stacked_states;
+            StateVector = new LinkedList<float>(Enumerable.Repeat(0f, StateSize * StackedInputs));
+        }
+        public void ResetToZero()
+        {
+            StateVector = new LinkedList<float>(Enumerable.Repeat(0f, StateSize * StackedInputs));
+
+        }
+        /// <summary>
+        /// Returns 0 if enough observations were added and no overflow.
+        /// More than 0 otherwise.
+        /// </summary>
+        /// <returns></returns>
+        public int IsOk()
+        {
+            return StateVector.Count % StateSize;
         }
         public override string ToString()
         {
             return $"[Observations [{State.ToArray().ToCommaSeparatedString()}]]";
 
         }
-
+       
 
 
         // Overloads
@@ -55,15 +74,17 @@ namespace DeepUnity
         /// <param name="observation"></param>
         public void AddObservation(float observation)
         {
-            if (Capacity - position_index < 1)
-                throw new InsufficientMemoryException($"SensorBuffer overflow. Consider the capacity is {Capacity}.");
+            if (StateVector.Count > Capacity)
+                throw new InsufficientMemoryException($"StateBuffer overflow. Consider the state size is {StateSize}.");
 
             if (float.IsNaN(observation))
             {
-                ConsoleMessage.Warning("float.NaN value observation added to the SensorBuffer replaced with 0");
+                ConsoleMessage.Warning("Float.NaN observation replaced with 0");
                 observation = 0f;
             }
-            State[position_index++] = Utils.Clip(observation, -Clip, Clip);
+            StateVector.RemoveFirst();
+            StateVector.AddLast(Utils.Clip(observation, -Clip, Clip));
+           
         }
         /// <summary>
         /// Adds a one dimensional observation. The bool value is converted to float, 0 for false and 1 for true respectively.
@@ -119,9 +140,6 @@ namespace DeepUnity
         public void AddObservationRange(IEnumerable observationsN)
         {
             IEnumerable<float> castedObservationCollection = observationsN.Cast<float>();
-
-            if (Capacity - position_index < castedObservationCollection.Count())
-                throw new System.InsufficientMemoryException($"SensorBuffer available space is {Capacity - position_index}. IEnumerable<float> observations is too large.");
 
             foreach (var item in castedObservationCollection)
             {

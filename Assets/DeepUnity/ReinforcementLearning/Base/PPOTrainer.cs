@@ -67,8 +67,10 @@ namespace DeepUnity
             NormalizeAdvantages(train_data);
 
             // 2. Gradient descent over N epochs
-            model.SetVDevice(model.trainingDevice); // This is always on training device because it is used to compute the values of the entire train_data of states once..
-            model.SetPiDevice(model.trainingDevice);
+            model.vNetwork.SetDevice(model.trainingDevice); // This is always on training device because it is used to compute the values of the entire train_data of states once..
+            model.muNetwork?.SetDevice(model.trainingDevice);
+            model.sigmaNetwork?.SetDevice(model.trainingDevice);
+            model.discreteNetwork?.SetDevice(model.trainingDevice);
             for (int epoch_index = 0; epoch_index < hp.numEpoch; epoch_index++)
             {
                 // shuffle the dataset
@@ -158,7 +160,9 @@ namespace DeepUnity
                 meanValueLoss = 0f;
                 meanEntropy = 0f;
             }
-            model.SetPiDevice(model.inferenceDevice);
+            model.muNetwork?.SetDevice(model.inferenceDevice);
+            model.sigmaNetwork?.SetDevice(model.inferenceDevice);
+            model.discreteNetwork?.SetDevice(model.inferenceDevice);
 
             // 3. Clear the train buffer
             train_data.Clear();

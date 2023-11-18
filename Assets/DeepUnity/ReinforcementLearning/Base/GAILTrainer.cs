@@ -1,10 +1,7 @@
-using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
-using Unity.VisualScripting;
 using UnityEditor;
-using UnityEngine;
+
 
 namespace DeepUnity
 {
@@ -64,8 +61,11 @@ namespace DeepUnity
                 TrainFlag = true;
                 parallelAgents[0].behaviourType = BehaviourType.Off;
 
-                model.SetDDevice(Device.GPU);
-                model.SetPiDevice(Device.GPU);
+                model.discContNetwork?.SetDevice(Device.GPU);
+                model.discDiscNetwork?.SetDevice(Device.GPU);
+                model.muNetwork?.SetDevice(Device.GPU);
+                model.sigmaNetwork?.SetDevice(Device.GPU);
+                model.discreteNetwork?.SetDevice(Device.GPU);
             }
 
 

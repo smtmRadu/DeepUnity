@@ -52,7 +52,7 @@ namespace DeepUnityTutorials
             stateBuffer.AddObservation(1);
             var view = camSensor.GetObservationPixels();
             Tensor tensorView = Tensor.Constant(view, (3, 64, 64));
-            stateBuffer.State = tensorView;
+            // stateBuffer.State = tensorView;
         }
         public override void OnActionReceived(ActionBuffer actionBuffer)
         {

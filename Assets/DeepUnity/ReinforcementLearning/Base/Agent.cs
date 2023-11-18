@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -13,7 +14,7 @@ namespace DeepUnity
         [Tooltip("The number of observations received at a specific timestep.")]
         [SerializeField, Min(1), HideInInspector] private int spaceSize = 0;
         [Tooltip("The inputs are enqueued in a queue buffer. t1 = [0, 0, x1] -> t2 = [0, x1, x2] -> t3 = [x1, x2, x3] -> t4 = [x2, x3, x4] -> .... For now they are disabled.")]
-        [SerializeField, Range(1, 32), HideInInspector, ReadOnly] private int stackedInputs = 1;
+        [SerializeField, Range(1, 32), HideInInspector] private int stackedInputs = 1;
         [Tooltip("Number of Continuous Actions in continuous actions space. Values in range [-1, 1].")]
         [SerializeField, Min(0), HideInInspector] private int continuousActions = 0;
         [Tooltip("Number of discrete actions in discrete action space. Actions indexes [0, 1, .. n - 1]. Consider to include a 'NO_ACTION' index also (especially when working heuristically).")]
@@ -43,6 +44,7 @@ namespace DeepUnity
         public int EpisodeStepCount { get; private set; } = 0;
         public float EpsiodeCumulativeReward { get; private set; } = 0f;
         private int EpisodeFixedFramesCount { get; set; } = -1;
+        private Tensor lastState { get; set; }
 
         public virtual void Awake()
         {
@@ -141,117 +143,7 @@ namespace DeepUnity
             }
         }
   
-        private void PostTimestep()
-        {
-            // Generally saves the previous timestep
-            if (behaviourType == BehaviourType.Off)
-                return;
-
-            if (EpisodeFixedFramesCount == 0)
-                return;
-
-            if (!DecisionRequester.IsFrameBeforeDecisionFrame(EpisodeFixedFramesCount))
-                return;
-
-            if(behaviourType == BehaviourType.Learn)
-            {
-                // Observe s'
-                // OBSERVATION PROCESS ------------------------------------------------------------------
-                // Collect new observations
-                StatesBuffer.Clear();
-                if (useSensors == UseSensorsType.ObservationsVector)
-                    Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetObservationsVector()));
-                else if (useSensors == UseSensorsType.CompressedObservationsVector)
-                    Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
-                CollectObservations(StatesBuffer);
-
-                // Normalize the observations if neccesary
-                Timestep.nextState = StatesBuffer.State.Clone() as Tensor;
-                if (model.normalizeObservations)
-                    Timestep.nextState = model.normalizer.Normalize(Timestep.state);
-                // OBSERVATION PROCESS ------------------------------------------------------------------                  
-
-                Memory.Add(Timestep);
-
-                // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state (maxStep == 0 means unlimited steps per episode)
-                if (EpisodeStepCount == DecisionRequester.maxStep && DecisionRequester.maxStep != 0)
-                    EndEpisode();         
-            }            
-            
-            // These checkup applies also for Manual and Inference..
-            if(Timestep?.done[0] == 1)
-            {
-                if (PerformanceTrack) // These are mainly for Learning
-                {
-                    PerformanceTrack.episodeCount++;
-                    PerformanceTrack.episodeLength.Append(EpisodeStepCount);
-                    PerformanceTrack.cumulativeReward.Append(EpsiodeCumulativeReward);
-                }
-
-                EpisodeStepCount = 0;
-                EpsiodeCumulativeReward = 0f;
-                EpisodeFixedFramesCount = 0; // Used to make the agent take a decision in the first step of the new epiode
-                PositionReseter?.Reset();
-                OnEpisodeBegin();
-            }
-
-            // Reset timestep
-            Timestep = new TimestepTuple(++EpisodeStepCount);
-
-            if (PerformanceTrack) PerformanceTrack.stepCount++;
-        }
-        private void PerformDecision()
-        {
-            if (behaviourType == BehaviourType.Off)
-                return;
-
-            if (behaviourType == BehaviourType.Manual)
-            {
-                Heuristic(ActionsBuffer);
-                return;
-            }
-
-            // OBSERVATION PROCESS ------------------------------------------------------------------
-            // Collect new observations
-            StatesBuffer.Clear();
-            if (useSensors == UseSensorsType.ObservationsVector)
-                Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetObservationsVector()));
-            else if (useSensors == UseSensorsType.CompressedObservationsVector) 
-                Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
-            CollectObservations(StatesBuffer);
-
-            // Check SensorBuffer is fullfilled
-            int missing = 0;
-            if (!StatesBuffer.IsFulfilled(out missing))
-            {
-                ConsoleMessage.Warning($"SensorBuffer is missing {missing} observations. Please add {missing} more observations values or reduce the space size");
-                EditorApplication.isPlaying = false;
-                return;
-            }
-
-            // Normalize the observations if neccesary
-            Timestep.state = StatesBuffer.State.Clone() as Tensor;
-            if(model.normalizeObservations)
-            {
-                model.normalizer.Update(Timestep.state);
-                Timestep.state = model.normalizer.Normalize(Timestep.state);
-            }
-            // OBSERVATION PROCESS ------------------------------------------------------------------
-
-
-
-            // ACTION PROCESS -----------------------------------------------------------------------
-            // Set state[t], action[t] & pi[t]
-            ActionsBuffer.Clear();
-            model.ContinuousPredict(Timestep.state, out Timestep.action_continuous, out Timestep.prob_continuous);
-            model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.prob_discrete);
-
-            // Run agent's actions and clip them
-            ActionsBuffer.ContinuousActions = model.IsUsingContinuousActions ? new Tanh().Forward(Timestep.action_continuous).ToArray() : null; // values also can be clipped in [-1,1] directly
-            ActionsBuffer.DiscreteAction = model.IsUsingDiscreteActions ? (int)Timestep.action_discrete.ArgMax(-1)[0] : -1;
-            // ACTION PROCESS -----------------------------------------------------------------------
-        }
-
+       
         // Init
         public void BakeModel()
         {
@@ -275,7 +167,7 @@ namespace DeepUnity
             Memory = new MemoryBuffer();
             Timestep = new TimestepTuple(EpisodeStepCount);
 
-            StatesBuffer = new StateBuffer(model.observationSize);
+            StatesBuffer = new StateBuffer(model.observationSize, model.stackedInputs);
             ActionsBuffer = new ActionBuffer(model.continuousDim, model.discreteDim);
         }
         private void InitSensors(Transform parent)
@@ -295,6 +187,119 @@ namespace DeepUnity
                 InitSensors(child);
             }
         }
+
+
+        // Loop
+        private void PostTimestep()
+        {
+            // Generally saves the previous timestep
+            if (behaviourType == BehaviourType.Off)
+                return;
+
+            if (EpisodeFixedFramesCount == 0)
+                return;
+
+            if (!DecisionRequester.IsFrameBeforeDecisionFrame(EpisodeFixedFramesCount))
+                return;
+
+            if (behaviourType == BehaviourType.Learn)
+            {
+                // Observe s'
+                lastState = GetState();
+                Timestep.nextState = lastState.Clone() as Tensor;
+
+                Memory.Add(Timestep);
+
+                // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state (maxStep == 0 means unlimited steps per episode)
+                if (EpisodeStepCount == DecisionRequester.maxStep && DecisionRequester.maxStep != 0)
+                    EndEpisode();
+            }
+
+            // These checkup applies also for Manual and Inference..
+            if (Timestep?.done[0] == 1)
+            {
+                if (PerformanceTrack) // These are mainly for Learning
+                {
+                    PerformanceTrack.episodeCount++;
+                    PerformanceTrack.episodeLength.Append(EpisodeStepCount);
+                    PerformanceTrack.cumulativeReward.Append(EpsiodeCumulativeReward);
+                }
+
+                StatesBuffer.ResetToZero(); // For Stacked inputs reset to 0 all sequence
+                lastState = null;// On Next episode there was no last state
+
+                EpisodeStepCount = 0;
+                EpsiodeCumulativeReward = 0f;
+                EpisodeFixedFramesCount = 0; // Used to make the agent take a decision in the first step of the new epiode
+               
+                PositionReseter?.Reset();
+                OnEpisodeBegin();
+            }
+
+            // Reset timestep
+            Timestep = new TimestepTuple(++EpisodeStepCount);
+
+            if (PerformanceTrack) PerformanceTrack.stepCount++;
+        }
+        private void PerformDecision()
+        {
+            if (behaviourType == BehaviourType.Off)
+                return;
+
+            if (behaviourType == BehaviourType.Manual)
+            {
+                Heuristic(ActionsBuffer);
+                return;
+            }
+
+            // OBSERVATION PROCESS ------------------------------------------------------------------
+            if (lastState == null)
+                Timestep.state = GetState();
+            else
+                Timestep.state = lastState;
+            // OBSERVATION PROCESS ------------------------------------------------------------------
+
+
+
+            // ACTION PROCESS -----------------------------------------------------------------------
+            // Set state[t], action[t] & pi[t]
+            ActionsBuffer.Clear();
+            model.ContinuousPredict(Timestep.state, out Timestep.action_continuous, out Timestep.prob_continuous);
+            model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.prob_discrete);
+
+            // Run agent's actions and clip them
+            ActionsBuffer.ContinuousActions = model.IsUsingContinuousActions ? new Tanh().Forward(Timestep.action_continuous).ToArray() : null; // values also can be clipped in [-1,1] directly
+            ActionsBuffer.DiscreteAction = model.IsUsingDiscreteActions ? (int)Timestep.action_discrete.ArgMax(-1)[0] : -1;
+            // ACTION PROCESS -----------------------------------------------------------------------
+        }
+        private Tensor GetState()
+        {
+            if (useSensors == UseSensorsType.ObservationsVector)
+                Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetObservationsVector()));
+            else if (useSensors == UseSensorsType.CompressedObservationsVector)
+                Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
+            CollectObservations(StatesBuffer);
+
+            // Check SensorBuffer is fullfilled
+            int ok_sbuff = StatesBuffer.IsOk();
+            if (ok_sbuff != 0)
+            {
+                ConsoleMessage.Warning($"Make sure you added exactly {model.observationSize} (difference of {ok_sbuff}).");
+                EditorApplication.isPlaying = false;
+                return null;
+            }
+
+            // Normalize the observations if neccesary
+            Tensor state = StatesBuffer.State.Clone() as Tensor;
+            if (model.normalizeObservations)
+            {
+                model.normalizer.Update(state);
+                state = model.normalizer.Normalize(state);
+            }
+
+            return state;
+        }
+
 
         // User call
         /// <summary>
@@ -348,6 +353,7 @@ namespace DeepUnity
         public void EndEpisode()
         {
             Timestep.done = Tensor.Constant(1);
+
         }
         /// <summary>
         /// Called only inside <b>OnActionReceived()</b>, and <b>OnTriggerXXX()</b> or <b>OnCollisionXXX()</b>. <br></br>

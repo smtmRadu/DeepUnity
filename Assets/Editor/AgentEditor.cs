@@ -92,9 +92,9 @@ namespace DeepUnity
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.Space(20);
                 EditorGUILayout.PrefixLabel("Stacked Inputs");
-                EditorGUI.BeginDisabledGroup(true);
+                //EditorGUI.BeginDisabledGroup(true);
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("stackedInputs"), GUIContent.none);
-                EditorGUI.EndDisabledGroup();
+                //EditorGUI.EndDisabledGroup();
                 EditorGUILayout.EndHorizontal();
 
                 EditorGUILayout.Space(5);

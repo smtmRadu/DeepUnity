@@ -11,6 +11,7 @@ namespace kbRadu
     {
         public Material material;
         public Device TestDevice;
+        public PerformanceGraph graph = new PerformanceGraph();
         public Vector2Int MatShape = new Vector2Int(64, 64);
         public int batchSize = 32;
         public float lr = 0.001f;
@@ -21,32 +22,16 @@ namespace kbRadu
         public RawImage image;
         public RawImage image2;
 
-        public PerformanceGraph graph = new PerformanceGraph();
+      
 
         public int index = 0;
         public int whatIsIt = 0;
         List<(Tensor, Tensor)> train;
 
-    
 
-        private void Start()
-        {
-            var mp = new MaxPool2D(2);
+        
 
-            Tensor input = Tensor.Random01(3, 26, 26);
-            print(input);
-            print(mp.Forward(input));
 
-        }
-        // private void Update()
-        // {
-        //     var param = net.Parameters();
-        //     for (int i = 0; i < param.Item1.Length; i++)
-        //     {
-        //         param.Item1[i] = Tensor.Random01(param.Item1[i].Shape);
-        //     }
-        //     
-        // }
         // private void Start()
         // {
         //     rnn_network = new RNN(10, 20, 2).CreateAsset("rnn");

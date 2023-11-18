@@ -72,19 +72,19 @@ namespace DeepUnity
 
             throw new NotSupportedException("Attention layer is not implemented yet.");
             // remember that tr() is trace of the matrix *
-            this.scale = scale;
-            this.d = embed_dim;
-
-            // For the sake of simplicity d_q, d_k and d_v are the same. 
-            // This will produce the same output shape as the input.
-            int T = input_shape.Item1;
-            int H = input_shape.Item2;    
-            W_Q = Tensor.RandomNormal((0f, 0.2f), H, d);
-            W_K = Tensor.RandomNormal((0f, 0.2f), H, d);
-            W_V = Tensor.RandomNormal((0f, 0.2f), H, d);
-            W_O = Tensor.RandomNormal((0f, 0.2f), d, H);
-
-            softmax = new Softmax();
+            // this.scale = scale;
+            // this.d = embed_dim;
+            // 
+            // // For the sake of simplicity d_q, d_k and d_v are the same. 
+            // // This will produce the same output shape as the input.
+            // int T = input_shape.Item1;
+            // int H = input_shape.Item2;    
+            // W_Q = Tensor.RandomNormal((0f, 0.2f), H, d);
+            // W_K = Tensor.RandomNormal((0f, 0.2f), H, d);
+            // W_V = Tensor.RandomNormal((0f, 0.2f), H, d);
+            // W_O = Tensor.RandomNormal((0f, 0.2f), d, H);
+            // 
+            // softmax = new Softmax();
         }
         /// <summary>
         /// Input: <b>(B, T, H)</b> or <b>(T, H)</b> for unbatched input. <br></br>

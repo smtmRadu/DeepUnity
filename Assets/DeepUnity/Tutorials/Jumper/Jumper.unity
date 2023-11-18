@@ -1099,7 +1099,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 2100000, guid: df7dc93adaff3484798dd39751f972a8, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1156,7 +1156,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1819234359}
   m_LocalRotation: {x: -0, y: 0, z: -0, w: 1}
-  m_LocalPosition: {x: 1.98, y: 7.83, z: 0.05}
+  m_LocalPosition: {x: 2.45, y: 7.83, z: 0.05}
   m_LocalScale: {x: 1, y: 2.3464, z: 17.513515}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1191,7 +1191,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1819234359}
-  m_Enabled: 0
+  m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -1451,7 +1451,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 9bffb7f78c7e2714dada91cf096f8877, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 2.16
+      value: 2.13
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 9bffb7f78c7e2714dada91cf096f8877, type: 3}
       propertyPath: m_LocalPosition.z
@@ -1548,10 +1548,10 @@ MonoBehaviour:
   scale: 0.8
   castScale: 0.9
   width: 5
-  height: 2
-  depth: 5
-  xOffset: 0
-  yOffset: 0
+  height: 3
+  depth: 2
+  xOffset: 0.5
+  yOffset: -0.84
   zOffset: 0
   missColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   missingMaterialColor: {r: 1, g: 0, b: 0.95, a: 1}
@@ -1567,20 +1567,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0c20084778c4aa44a804e77c7422a4db, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  spaceSize: 251
+  spaceSize: 150
   stackedInputs: 1
   continuousActions: 0
   discreteActions: 8
-  archType: 0
   numLayers: 2
-  hidUnits: 92
-  model: {fileID: 11400000, guid: e6546c2618c931d439fc2b3257dd0782, type: 2}
+  hidUnits: 88
+  model: {fileID: 11400000, guid: 2f6f6251a01faf14faad292c9c731db0, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 1
   speed: 2.5
   rotationSpeed: 2.5
-  jumpPower: 4.15
+  jumpPower: 4.5
   target: {fileID: 1498361647}
   box: {fileID: 938973864}
   bonus: {fileID: 1819234359}

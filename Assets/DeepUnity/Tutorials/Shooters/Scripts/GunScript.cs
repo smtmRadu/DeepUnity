@@ -22,7 +22,7 @@ namespace DeepUnityTutorials
         [SerializeField] private float RELOAD_TIME = 3f;
         [ReadOnly] public int currentMagAmmo;
 
-        private ParticleSystem particleSystem;
+        private ParticleSystem partSys;
 
 
         public WeaponState weaponState { get; private set; } = WeaponState.IdleCharged;
@@ -30,7 +30,7 @@ namespace DeepUnityTutorials
         event Action OnStateChanged;
         private void Awake()
         {
-            particleSystem = GetComponent<ParticleSystem>();
+            partSys = GetComponent<ParticleSystem>();
 
             currentMagAmmo = MAG_CAPACITY;
             OnStateChanged += UpdateText;
@@ -64,7 +64,7 @@ namespace DeepUnityTutorials
             weaponState = WeaponState.Shooting;
             OnStateChanged.Invoke();
             shootingAudio?.Play();
-            particleSystem?.Play();
+            partSys?.Play();
             var bullet = Instantiate(bulletPrefab, muzzle.position, transform.rotation);
             bullet.GetComponent<Rigidbody>().AddForce(-bullet.transform.forward * POWER, ForceMode.Impulse);
             yield return new WaitForSeconds(1f / FIRE_RATE);
