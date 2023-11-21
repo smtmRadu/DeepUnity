@@ -1191,7 +1191,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1819234359}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -1516,9 +1516,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 9bffb7f78c7e2714dada91cf096f8877, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2063609813}
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 9bffb7f78c7e2714dada91cf096f8877, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 2063609822}
   m_SourcePrefab: {fileID: 100100000, guid: 9bffb7f78c7e2714dada91cf096f8877, type: 3}
 --- !u!1 &2063609811 stripped
 GameObject:
@@ -1595,7 +1592,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d26371695edfbcd4580ca6f6048d885d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxStep: 1000
+  maxStep: 2000
   decisionPeriod: 1
   takeActionsBetweenDecisions: 1
 --- !u!4 &2063609817 stripped
@@ -1651,93 +1648,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 2.1559286, y: 2, z: 2.1559286}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &2063609822
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2063609811}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  startedAt: ' - '
-  finishedAt: ' - '
-  trainingSessionTime: ' - '
-  policyUpdateSecondsElapsed: 0
-  inferenceSecondsElapsed: 0
-  inferenceTime: ' - '
-  inferenceTimePerAgent: ' - '
-  policyUpdateTime: ' - '
-  policyUpdateTimePerIteration: ' - '
-  inferenceTimeRatio: '- / -'
-  policyUpdateTimeRatio: '- / -'
-  episodeCount: 0
-  stepCount: 0
-  iterations: 0
-  parallelAgents: 0
-  cumulativeReward:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  episodeLength:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  policyLoss:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  valueLoss:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  entropy:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  learningRate:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
 --- !u!1 &2088901248
 GameObject:
   m_ObjectHideFlags: 0

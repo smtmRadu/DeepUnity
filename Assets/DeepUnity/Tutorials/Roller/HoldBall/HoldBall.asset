@@ -15,16 +15,18 @@ MonoBehaviour:
   behaviourName: HoldBall
   assetCreated: 1
   observationSize: 10
-  stackedInputsNum: 1
+  stackedInputs: 5
   continuousDim: 2
   discreteDim: 0
-  critic: {fileID: 11400000, guid: 4307288f1c3bdbf4980527944499a6c5, type: 2}
-  actorContinuousMu: {fileID: 11400000, guid: fb97f401e4fe8104e864c56df1449441, type: 2}
-  actorContinuousSigma: {fileID: 11400000, guid: d1109f62189d8104a9f478732641fadb, type: 2}
-  discriminatorContinuous: {fileID: 11400000, guid: 587e3932a8672fa4195d58b8af4b38a4, type: 2}
-  actorDiscrete: {fileID: 0}
-  discriminatorDiscrete: {fileID: 0}
-  config: {fileID: 11400000, guid: 0d6c744541c51b447807cc1355580c2c, type: 2}
+  config: {fileID: 0}
+  vNetwork: {fileID: 0}
+  q1Network: {fileID: 0}
+  q2Network: {fileID: 0}
+  muNetwork: {fileID: 0}
+  sigmaNetwork: {fileID: 0}
+  discreteNetwork: {fileID: 0}
+  discContNetwork: {fileID: 0}
+  discDiscNetwork: {fileID: 0}
   targetFPS: 50
   inferenceDevice: 0
   trainingDevice: 1
@@ -57,6 +59,5 @@ MonoBehaviour:
       - 0
       - 0
       shape: 0a000000
-  standardDeviation: 0
-  standardDeviationValue: 0.6
-  standardDeviationScale: 1
+  standardDeviation: 1
+  standardDeviationValue: 1

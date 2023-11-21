@@ -22,16 +22,16 @@ namespace DeepUnity
         [Min(32)] public int horizon = 64; // Note that Time Horizon for non-Gae estimation must be way higher
 
         [Tooltip("[Typical range: 5e-6 - 3e-3] Initial learning rate for Adam optimizer (both all networks).")]
-        [Min(5e-6f)] public float learningRate = 3e-4f;
+        [Min(5e-6f)] public float learningRate = 2e-4f;
 
         [Tooltip("[Typical range: 0.8 - 0.9997] Discount factor.")]
         [Min(0.001f)] public float gamma = 0.99f;
 
         [Tooltip("[Typical range: (Continuous - PPO) 512 - 5120, (Continuous - SAC) 128 - 1024, (Discrete - PPO) 32 - 512] Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer size.")]
-        [Min(128)] public int batchSize = 512;
+        [Min(32)] public int batchSize = 256; //512
 
         [Tooltip("[Typical range: (PPO) 2048 - 409600, (SAC) 50000 - 1000000] Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch size. Typically a larger buffer size corresponds to more stable training updates.")]
-        [Min(2048)] public int bufferSize = 10240;
+        [Min(512)] public int bufferSize = 4096; //10240
 
         [Tooltip("[Typical range: 0 - 1] Global Gradient Clipping max norm value. Set to 0 to turn off.")]
         [Min(0)] public float gradClipNorm = 0.5f;
@@ -93,10 +93,12 @@ namespace DeepUnity
         // public ExperienceBuffer experience_buffer; .. to be loaded here
 
         [Space(50)]
+        [Tooltip("How does the timescale is adjusted during training.")]
+        public TimescaleAdjustmentType timescaleAdjustment = TimescaleAdjustmentType.Dynamic;
         [Tooltip("Timescale of the training session.")]
-        [Min(1f)] public float timeScale = 1f;
+        [Min(1f)] public float timescale = 1f;
         [Tooltip("Debug the train_data into a file.")]
-        // [HideInInspector] 
+        [HideInInspector] 
         public bool debug = false;
 
 

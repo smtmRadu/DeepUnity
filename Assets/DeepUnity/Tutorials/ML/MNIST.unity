@@ -641,73 +641,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 599096499}
   m_CullTransparentMesh: 1
---- !u!1 &944636987
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 944636989}
-  - component: {fileID: 944636990}
-  m_Layer: 0
-  m_Name: Train - MNIST - Recognition
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 0
---- !u!4 &944636989
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 944636987}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -3.6160786, y: 0.47151715, z: 7.3478174}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_RootOrder: 0
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &944636990
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 944636987}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 45ec7b8831bf73c4bbed236ccf4948d6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  network: {fileID: 0}
-  batch_size: 64
-  lr: 0.001
-  accuracyGraph:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  lossGraph:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
 --- !u!1 &975537020
 GameObject:
   m_ObjectHideFlags: 0
@@ -1385,7 +1318,7 @@ GameObject:
   - component: {fileID: 1466539172}
   - component: {fileID: 1466539171}
   m_Layer: 5
-  m_Name: Test - MNIST - Generation
+  m_Name: Test - GAN
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1470,7 +1403,7 @@ RectTransform:
   - {fileID: 2021160822}
   - {fileID: 1119027579}
   m_Father: {fileID: 0}
-  m_RootOrder: 3
+  m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
@@ -1486,15 +1419,30 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1539047896}
-  - component: {fileID: 1539047895}
+  - component: {fileID: 1539047897}
   m_Layer: 0
-  m_Name: Test - MNIST - Recognition
+  m_Name: Train - CNN
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 0
---- !u!114 &1539047895
+--- !u!4 &1539047896
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1539047894}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -3.6160786, y: 0.47151715, z: 7.3478174}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1539047897
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1503,16 +1451,18 @@ MonoBehaviour:
   m_GameObject: {fileID: 1539047894}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9cc8f121f935e7043b509c3f9dd3ec8b, type: 3}
+  m_Script: {fileID: 11500000, guid: 45ec7b8831bf73c4bbed236ccf4948d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  network: {fileID: 11400000, guid: 621ce7da9860bcf4d9df1f661965d27c, type: 2}
-  name: MNIST_MODEL
-  lr: 0.0002
-  schedulerStepSize: 1
-  schedulerDecay: 0.5
+  network: {fileID: 11400000, guid: eb6d087da4520f2469c00f64a61aaace, type: 2}
+  name: MNIST
+  lr: 0.0003
+  weightDecay: 0.001
+  schedulerStepSize: 10
+  schedulerDecay: 0.99
   batch_size: 64
-  augment_data: 0
+  augment_data: 1
+  augment_strength: 0.6
   accuracyGraph:
     graph:
       serializedVersion: 2
@@ -1533,21 +1483,6 @@ MonoBehaviour:
     steps: 0
     current: 0
     mean: 0
---- !u!4 &1539047896
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1539047894}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -3.6160786, y: 0.47151715, z: 7.3478174}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_RootOrder: 1
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1568539051
 GameObject:
   m_ObjectHideFlags: 0
@@ -1978,12 +1913,12 @@ GameObject:
   - component: {fileID: 1820971847}
   - component: {fileID: 1820971846}
   m_Layer: 5
-  m_Name: Play - MNIST - Recognition
+  m_Name: Play - CNN
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1820971846
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2069,7 +2004,7 @@ RectTransform:
   - {fileID: 1663557169}
   - {fileID: 1774734172}
   m_Father: {fileID: 0}
-  m_RootOrder: 2
+  m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
@@ -2233,7 +2168,7 @@ GameObject:
   - component: {fileID: 1946006906}
   - component: {fileID: 1946006905}
   m_Layer: 0
-  m_Name: Train - MNIST - Generation
+  m_Name: Train - GAN
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2289,7 +2224,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 4
+  m_RootOrder: 3
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1947859505
 GameObject:

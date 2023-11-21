@@ -28,10 +28,19 @@ namespace kbRadu
         public int whatIsIt = 0;
         List<(Tensor, Tensor)> train;
 
-
-        
-
-
+        ZScoreNormalizer norm = new ZScoreNormalizer(10);
+        private void Update()
+        {
+           if(index < 1000)
+            {
+                norm.Update(Tensor.RandomRange((-1f, 1f), 10));
+            }
+           else if(index == 1000)
+            {
+                print(norm.Normalize(Tensor.RandomRange((-1f, 1f), 10)));
+            }
+            index++;
+        }
         // private void Start()
         // {
         //     rnn_network = new RNN(10, 20, 2).CreateAsset("rnn");

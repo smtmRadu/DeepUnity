@@ -589,12 +589,20 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
+      propertyPath: model
+      value: 
+      objectReference: {fileID: 11400000, guid: 80d0dc6a0df8ed94f8c1daabb3350832, type: 2}
+    - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: target
       value: 
       objectReference: {fileID: 214787721}
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: behaviourType
       value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
+      propertyPath: stackedInputs
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 7046486768281223026, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: m_Name

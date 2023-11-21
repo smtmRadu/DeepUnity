@@ -202,5 +202,13 @@ namespace DeepUnity
         GAIL
     }
 
+    public enum TimescaleAdjustmentType
+    {
+        [Tooltip("Dynamic adjustment of timescale during training to get the maximum efficiency.")]
+        Dynamic,
+        [Tooltip("Manual adjustment of timescale during training.")]
+        Static
+    }
+
 }
 

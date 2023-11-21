@@ -15,23 +15,24 @@ MonoBehaviour:
   trainer: 0
   maxSteps: 2000000000
   horizon: 256
-  learningRate: 0.0001
+  learningRate: 0.0002
   gamma: 0.99
-  batchSize: 400
-  bufferSize: 8000
+  batchSize: 300
+  bufferSize: 6000
   gradClipNorm: 0.5
   LRSchedule: 0
   numEpoch: 8
-  beta: 0.007
+  beta: 0.005
   epsilon: 0.2
   lambda: 0.96
   KLDivergence: 0
   targetKL: 0.015
-  updateSteps: 1000
+  updateEvery: 1000
+  updateAfter: 1000
   updatesNum: 1
-  entropy: 1
+  alpha: 0.2
   saveReplayBuffer: 0
   tau: 0.005
   saveRecordBuffer: 0
-  timeScale: 1.57
+  timeScale: 1.88
   debug: 0

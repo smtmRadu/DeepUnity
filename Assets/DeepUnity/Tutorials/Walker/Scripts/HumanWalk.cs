@@ -168,10 +168,10 @@ namespace DeepUnityTutorials
 
             AddReward(head.position.y / 100f); // Constant reward for keeping head up
 
-            const float range = 50f;
+            const float range = 8f;
             if (transform.position.x < -range || transform.position.x > range ||
                 transform.position.z < -range || transform.position.z > range ||
-                transform.position.y < -range)
+                transform.position.y < -range || transform.position.y > range)
                 EndEpisode();
         }
     }

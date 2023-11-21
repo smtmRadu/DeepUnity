@@ -667,8 +667,8 @@ namespace DeepUnity
             }
             public static float ReparametrizedNormal(float mean = 0f, float stddev = 1f, float I = 1f)
             {
-                float xi = Normal(0, I);
-                return mean + stddev * xi;
+                float ksi = Normal(0, I);
+                return mean + stddev * ksi;
             }
         }
     }

@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 
@@ -40,11 +42,15 @@ namespace DeepUnity
         private List<ISensor> Sensors { get; set; }
         private StateResetter PositionReseter { get; set; }
         private StateBuffer StatesBuffer { get; set; }
-        private ActionBuffer ActionsBuffer { get; set; }
+        private ActionBuffer ActionsBuffer { get; set; }       
+        private Tensor lastState { get; set; }
         public int EpisodeStepCount { get; private set; } = 0;
         public float EpsiodeCumulativeReward { get; private set; } = 0f;
         private int EpisodeFixedFramesCount { get; set; } = -1;
-        private Tensor lastState { get; set; }
+
+
+        // Draw agent's memory.
+        private LinkedList<Vector3> lastKWorldPositions; // keeps track of the last K last positions in order to draw them
 
         public virtual void Awake()
         {
@@ -106,6 +112,9 @@ namespace DeepUnity
                     }
                     break;
             }
+
+            // Other
+            lastKWorldPositions = new LinkedList<Vector3>();
         }
         public virtual void Start()
         {
@@ -142,7 +151,24 @@ namespace DeepUnity
                     break;
             }
         }
-  
+        public virtual void OnDrawGizmos()
+        {
+            if (lastKWorldPositions == null)
+                return;
+
+            const float radiusRelativeToScale = 0.2f;
+            float alpha = 1f / lastKWorldPositions.Count;
+
+            float index = 1f;
+            Material m = GetComponent<MeshRenderer>().sharedMaterial;
+            Color c = m == null? Color.white : m.color;
+            foreach (var item in lastKWorldPositions)
+            {
+                Gizmos.color = new Color(c.r, c.g, c.b, alpha);
+                Gizmos.DrawSphere(item, transform.localScale.x * radiusRelativeToScale);
+                alpha = (index++) / lastKWorldPositions.Count;
+            }
+        }
        
         // Init
         public void BakeModel()
@@ -231,7 +257,8 @@ namespace DeepUnity
                 EpisodeStepCount = 0;
                 EpsiodeCumulativeReward = 0f;
                 EpisodeFixedFramesCount = 0; // Used to make the agent take a decision in the first step of the new epiode
-               
+
+                lastKWorldPositions.Clear();
                 PositionReseter?.Reset();
                 OnEpisodeBegin();
             }
@@ -251,6 +278,10 @@ namespace DeepUnity
                 Heuristic(ActionsBuffer);
                 return;
             }
+
+            lastKWorldPositions.AddLast(transform.position);
+            if (lastKWorldPositions.Count > model.stackedInputs)
+                lastKWorldPositions.RemoveFirst();
 
             // OBSERVATION PROCESS ------------------------------------------------------------------
             if (lastState == null)

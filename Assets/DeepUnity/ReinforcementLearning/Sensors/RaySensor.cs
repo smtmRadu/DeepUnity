@@ -106,7 +106,7 @@ namespace DeepUnity
         /// <b>[ray 1: <em>NormalizedDistance</em>, NonDetectableTag, DetectableTag[0], DetectableTag[1], ... DetectableTag[n-1], <br></br>
         ///  ray 2: <em>NormalizedDistance</em>, NonDetectableTag, DetectableTag[0], DetectableTag[1], ... DetectableTag[n-1], .....]</b>
         /// </summary>
-        /// <returns>Returns a float[] of <b>length = num_rays * (2 + num_detectable_tags)</b>.</returns>
+        /// <returns> a float[] of <b>length = num_rays * (2 + num_detectable_tags)</b>.</returns>
         public float[] GetObservationsVector()
         {
             CastRays();
@@ -139,7 +139,7 @@ namespace DeepUnity
         /// if DetectableTags.Length > 0: <b>[ray 1: NormalizedDistance, NormalizedHitTagIndex, ray 2: NormalizedDistance, NormalizedHitTagIndex, ..... ]</b> <br></br>
         /// else: <b>[ray 1: NormalizedDistance, ray 2: NormalizedDistance, ..... ]</b>
         /// </summary>
-        /// <returns>Returns a float[] of <b>length = num_rays * 2</b> if DetectableTags.Length > 0 else <b>num_rays</b></returns>
+        /// <returns>a float[] of <b>length = num_rays * 2</b> if DetectableTags.Length > 0 else <b>num_rays</b></returns>
         public float[] GetCompressedObservationsVector()
         {
             CastRays();
@@ -152,7 +152,6 @@ namespace DeepUnity
                 {
                     vector[index++] = rayInfo.NormalizedDistance;
 
-                    // OneHotEncode
                     if (rayInfo.HitTagIndex == -1)
                         vector[index++] = -1f;
                     else

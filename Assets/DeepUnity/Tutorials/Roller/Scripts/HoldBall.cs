@@ -18,7 +18,7 @@ namespace DeepUnityTutorials
         public override void CollectObservations(StateBuffer sensorBuffer)
         {
             // 10 observations
-            sensorBuffer.AddObservation(transform.rotation.normalized);
+            sensorBuffer.AddObservation(transform.rotation);
             sensorBuffer.AddObservation(ball.velocity);
             sensorBuffer.AddObservation(ball.gameObject.transform.position - transform.position);
         }

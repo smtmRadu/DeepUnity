@@ -10,8 +10,9 @@ namespace DeepUnityTutorials
         [SerializeField] NeuralNetwork network;
         [SerializeField] new string name = "MNIST_MODEL";
         [SerializeField] private float lr = 0.0002f;
+        [SerializeField] private float weightDecay = 0.001f;
         [SerializeField] private int schedulerStepSize = 1;
-        [SerializeField] private float schedulerDecay = 0.5f;
+        [SerializeField] private float schedulerDecay = 0.99f;
         [SerializeField] private int batch_size = 64;
         [SerializeField] private bool augment_data = false;
         [SerializeField] private PerformanceGraph accuracyGraph;
@@ -70,7 +71,8 @@ namespace DeepUnityTutorials
                 Debug.Log("Network created.");
             }
 
-            optim = new Adam(network.Parameters(),  lr: lr);
+            network.SetDevice(Device.GPU);
+            optim = new Adam(network.Parameters(),  lr: lr, weightDecay: weightDecay);
             scheduler = new LRScheduler(optim, schedulerStepSize, schedulerDecay);
             accuracyGraph = new PerformanceGraph();
             lossGraph = new PerformanceGraph();
@@ -83,7 +85,7 @@ namespace DeepUnityTutorials
 
         public void Update()
         {
-            if (batch_index % 100 == 0)
+            if (batch_index % 50 == 0)
                 network.Save();
 
             // Case when epoch finished

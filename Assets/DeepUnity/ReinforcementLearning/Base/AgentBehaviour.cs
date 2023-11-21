@@ -124,11 +124,13 @@ namespace DeepUnity
                     );
 
                 sigmaNetwork = new NeuralNetwork(
-                        new IModule[] 
-                        { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
-                            Concat(CreateHiddenLayers(NUM_LAYERS - 1, HIDDEN_UNITS, INIT_W, INIT_B)). // Sigma network is a bit smaller for efficiency. This network is typically not important to be large
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, InitType.Glorot_Uniform, InitType.Zeros), new Exp() }).ToArray()  // Also Softplus can be used, but it returns very low values => no exploration,                          
-                    ); // Note that we use Glorot Init before Exp activation func.. for smaller weights
+                             new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, InitType.Glorot_Uniform, InitType.Zeros),
+                             new Tanh(),
+                             new Dense(HIDDEN_UNITS, HIDDEN_UNITS, InitType.Glorot_Uniform, InitType.Zeros), // Sigma network is a bit smaller for efficiency. This network is typically not important to be large
+                             new Tanh(),
+                             new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, InitType.Glorot_Uniform, InitType.Zeros),
+                             new Softplus(1.5f, 6f) // Softplus(1.2, 3.5f) - less explorative params  // Also Exp() can be used, though without propoper weight init it might return NaN.values.                          
+                             ); // Note that we use Glorot Init before Exp activation func.. for smaller weights
 
                 // Initialize q networks Q(st,at)
                 q1Network = new NeuralNetwork(
@@ -295,7 +297,7 @@ namespace DeepUnity
 
             Tensor mu = muNetwork.Predict(state);
             Tensor sigma = standardDeviation == StandardDeviationType.Trainable ?
-                            sigmaNetwork.Predict(state).Clip(Utils.EPSILON, 5f) :
+                            sigmaNetwork.Predict(state) :
                             Tensor.Fill(standardDeviationValue, mu.Shape);
 
             action = mu.Zip(sigma, (x, y) => Utils.Random.Normal(x, y));
@@ -317,7 +319,7 @@ namespace DeepUnity
 
             muBatch = muNetwork.Forward(stateBatch);
             sigmaBatch = standardDeviation == StandardDeviationType.Trainable ?
-                           sigmaNetwork.Forward(stateBatch).Clip(Utils.EPSILON, 5f):
+                           sigmaNetwork.Forward(stateBatch):
                            Tensor.Fill(standardDeviationValue, muBatch.Shape);
         }
         /// <summary>
@@ -338,7 +340,7 @@ namespace DeepUnity
 
             muBatch = muNetwork.Forward(statesBatch);
             sigmaBatch = standardDeviation == StandardDeviationType.Trainable ?
-                           sigmaNetwork.Forward(statesBatch).Clip(Utils.EPSILON, 5f) :
+                           sigmaNetwork.Forward(statesBatch) :
                            Tensor.Fill(standardDeviationValue, muBatch.Shape);
             actionsBatch = muBatch.Zip(sigmaBatch, (x, y) => Utils.Random.ReparametrizedNormal(x, y));
         }    
@@ -444,7 +446,7 @@ namespace DeepUnity
             newAgBeh.stackedInputs = stackedInputs;
             newAgBeh.continuousDim = continuousActions;
             newAgBeh.discreteDim = discreteActions;
-            newAgBeh.normalizer = new ZScoreNormalizer(stateSize);
+            newAgBeh.normalizer = new ZScoreNormalizer(stateSize * stackedInputs);
             newAgBeh.assetCreated = true;
 
 
@@ -452,7 +454,7 @@ namespace DeepUnity
             // Create the asset
             if (!Directory.Exists($"Assets/{name}"))
                 Directory.CreateDirectory($"Assets/{name}");
-            AssetDatabase.CreateAsset(newAgBeh, $"Assets/{name}/{name}.asset");
+            AssetDatabase.CreateAsset(newAgBeh, $"Assets/{name}/_{name}.asset");
 
             // Create aux assets
             newAgBeh.config = Hyperparameters.CreateOrLoadAsset(name);

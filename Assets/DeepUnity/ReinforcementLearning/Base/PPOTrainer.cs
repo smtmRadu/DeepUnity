@@ -242,17 +242,10 @@ namespace DeepUnity
             // ∂-LClip / ∂πθ(a|s)  (20) Bick.D
             Tensor dmLClip_dPi = -1f * (dmindx * advantages + dmindy * advantages * dclipdx) / piOld;
 
-            // Entropy bonus added if σ is trainable (entropy is just a constant so no need really for differentiation)
-            if (model.standardDeviation == StandardDeviationType.Trainable)
-            {
-                // H(πθ(a|s)) = 1/2 * log(2πeσ^2) 
-                Tensor H = 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2));
-                meanEntropy += H.Mean(0).Mean(0)[0];
-
-                // ∂-H / ∂σ = 1 / σ
-                Tensor dmH_dPi = sigma.Select(x => 1f / x);
-                dmLClip_dPi += dmH_dPi * hp.beta;
-            }
+            // Entropy bonus added if σ is trainable
+            // H(πθ(a|s)) = 1/2 * log(2πeσ^2) 
+            Tensor H = 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2));
+            meanEntropy += H.Mean(0).Mean(0)[0];          
 
             if (dmLClip_dPi.Contains(float.NaN)) return;
 
@@ -273,8 +266,11 @@ namespace DeepUnity
                 // ∂πθ(a|s) / ∂σ = πθ(a|s) * ((x - μ)^2 - σ^2) / σ^3    (Simple statistical gradient-following for connectionst Reinforcement Learning (pag 14))
                 Tensor dPi_dSigma = pi * ((actions - mu).Pow(2) - sigma.Pow(2)) / sigma.Pow(3);
 
-                // ∂-LClip / ∂σ = (∂-LClip / ∂πθ(a|s)) * (∂πθ(a|s) / ∂σ)
-                Tensor dmLClip_dSigma = dmLClip_dPi * dPi_dSigma;
+                // ∂-H / ∂σ = -1/σ
+                Tensor dmH_dSigma = sigma.Select(x => -1f / x);
+
+                // ∂-LClip / ∂σ = (∂-LClip / ∂πθ(a|s)) * (∂πθ(a|s) / ∂σ) + β * (∂-H / ∂σ)
+                Tensor dmLClip_dSigma = dmLClip_dPi * dPi_dSigma + hp.beta * dmH_dSigma;
 
                 model.sigmaOptimizer.ZeroGrad();
                 model.sigmaNetwork.Backward(dmLClip_dSigma);
@@ -342,14 +338,16 @@ namespace DeepUnity
             Tensor dPi_dPhi = actions;
 
 
-            Tensor dmLClip_dPhi = dmLClip_dPi * dPi_dPhi;
-
             // Entropy bonus for discrete actions
+            // H = πθ(a|s) * log(πθ(a|s))
             Tensor H = pi * pi.Log();
             meanEntropy += H.Mean(0).Mean(0)[0];
 
+            // ∂-H / ∂φ = log(φ) + 1;
             Tensor dmH_dPhi = pi.Log() + 1;
-            dmLClip_dPhi += dmH_dPhi * hp.beta * 10f;
+
+            // ∂-L / ∂φ = (∂-L / ∂-πθ(a|s)) * (∂-πθ(a|s) / ∂φ) + β * (∂-H / ∂φ) 
+            Tensor dmLClip_dPhi = dmLClip_dPi * dPi_dPhi + hp.beta * 10f * dmH_dPhi;
 
             model.discreteOptimizer.ZeroGrad();
             model.discreteNetwork.Backward(dmLClip_dPhi);

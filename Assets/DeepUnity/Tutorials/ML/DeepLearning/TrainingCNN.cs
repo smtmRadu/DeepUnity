@@ -9,70 +9,76 @@ namespace DeepUnityTutorials
     // https://machinelearningmastery.com/how-to-develop-a-convolutional-neural-network-from-scratch-for-mnist-handwritten-digit-classification/
     public class TrainingCNN : MonoBehaviour
     {
-        [Button("Save")]
         [SerializeField] NeuralNetwork network;
+        [SerializeField] new string name = "MNIST_MODEL";
+        [SerializeField] private float lr = 0.0002f;
+        [SerializeField] private float weightDecay = 0.001f;
+        [SerializeField] private int schedulerStepSize = 1;
+        [SerializeField] private float schedulerDecay = 0.99f;
         [SerializeField] private int batch_size = 64;
-        [SerializeField] private float lr = 0.003f;
-        [SerializeField] private PerformanceGraph accuracyGraph = new PerformanceGraph();
-        [SerializeField] private PerformanceGraph lossGraph = new PerformanceGraph();
-
+        [SerializeField] private bool augment_data = false;
+        [SerializeField] private float augment_strength = 1f;
+        [SerializeField] private PerformanceGraph accuracyGraph;
+        [SerializeField] private PerformanceGraph lossGraph;
         Optimizer optim;
-
+        LRScheduler scheduler;
         List<(Tensor, Tensor)> train = new();
-        List<(Tensor, Tensor)> test = new();
-
-
-
+        List<(Tensor, Tensor)[]> train_batches;
         int epochIndex = 1;
         int batch_index = 0;
-        List<(Tensor, Tensor)[]> train_batches;
+
         public void Start()
         {
-            Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out train, out test, DatasetSettings.LoadTrainOnly);
+            Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out train, out _, DatasetSettings.LoadTrainOnly);
             Debug.Log("MNIST Dataset loaded.");
 
             if (network == null)
             {
-                // network = new Sequential(
-                //      new Conv2D((1, 28, 28), 5, 3, Device.GPU),                  
-                //      new ReLU(),
-                //      new MaxPool2D(2),                               
-                //      new Conv2D((5, 13, 13), 10, 3, Device.GPU),                
-                //      new ReLU(),
-                //      new MaxPool2D(2),                               
-                //      new Flatten(-3, -1),                            
-                //      new Dense(250, 128, device: Device.GPU),
-                //      new Dropout(0.2f),
-                //      new Dense(128, 10),
-                //      new Softmax()
-                //      );
-
                 network = new NeuralNetwork(
-                    new Conv2D((1, 28, 28), 32, (3, 3), gamma_init: InitType.HE_Uniform, InitType.HE_Uniform, device: Device.GPU), // out (32, 26, 26)
-                    new MaxPool2D(2), // out (32, 13, 13)
-                    new ReLU(),
-                    new Conv2D((32, 13, 13), 64, (3,3), gamma_init: InitType.HE_Uniform, InitType.HE_Uniform, device: Device.GPU), // out (64, 11, 11)
-                    new MaxPool2D(2), // out (64, 5, 5) 
-                    new ReLU(),
-                    new Flatten(),
-                    new Dense(64 * 5 * 5, 512, gamma_init: InitType.HE_Uniform, InitType.HE_Uniform, device: Device.GPU),
-                    new ReLU(),
-                    new BatchNorm(512),
-                    new Dense(512, 10, InitType.HE_Uniform, InitType.HE_Uniform, device: Device.GPU),
-                    new Softmax()
-
-                    ).CreateAsset("MNIST");
+                     new Conv2D((1, 28, 28), 5, 3, device: Device.GPU),
+                     new ReLU(),
+                     new MaxPool2D(2),
+                     new Conv2D((5, 13, 13), 10, 3, device: Device.GPU),
+                     new ReLU(),
+                     new MaxPool2D(2),
+                     new Flatten(-3, -1),
+                     new Dense(250, 128, device: Device.GPU),
+                     new Dropout(0.2f),
+                     new Dense(128, 10),
+                     new Softmax()
+                     ).CreateAsset(name);
 
                 // network = new Sequential(
                 //     new Flatten(),
-                //     new Dense(784, 64, device: Device.GPU),
+                //     new Dense(784, 10, init: InitType.Glorot_Uniform, device: Device.GPU),
+                //     new Softmax()
+                //     ).Compile(name);
+
+                // network = new Sequential(
+                //     new Conv2D((1, 28, 28), 5, 3, Device.GPU),
+                //     new Sigmoid(),
+                //     new Flatten(),
+                //     new Dense(5 * 26 * 26, 100, device: Device.GPU),
+                //     new Sigmoid(),
+                //     new Dense(100, 10),
+                //     new Softmax()
+                //     );
+
+                // network = new Sequential(
+                //     new Flatten(),
+                //     new Dense(784, 100, init: InitType.HE_Normal, device: Device.GPU),
                 //     new ReLU(),
-                //     new Dense(64, 10),
-                //     new Softmax());
+                //     new Dense(100, 10, InitType.HE_Normal, device: Device.GPU),
+                //     new Softmax()).Compile(name);
+
+                Debug.Log("Network created.");
             }
 
-            optim = new Adam(network.Parameters(), lr, weightDecay: 0.001f);
-
+            network.SetDevice(Device.GPU);
+            optim = new Adam(network.Parameters(), lr: lr, weightDecay: weightDecay);
+            scheduler = new LRScheduler(optim, schedulerStepSize, schedulerDecay);
+            accuracyGraph = new PerformanceGraph();
+            lossGraph = new PerformanceGraph();
             Utils.Shuffle(train);
             train_batches = Utils.Split(train, batch_size);
             print($"Total train samples {train.Count}.");
@@ -82,34 +88,57 @@ namespace DeepUnityTutorials
 
         public void Update()
         {
+            if (batch_index % 50 == 0)
+                network.Save();
+
+            // Case when epoch finished
             if (batch_index == train_batches.Count - 1)
             {
                 batch_index = 0;
-                print($"Epoch {epochIndex++}");
+
+                network.Save();
                 Utils.Shuffle(train);
+                scheduler.Step();
+
+                print($"Epoch {epochIndex++} | LR: {scheduler.CurrentLR}%");
             }
+
 
             (Tensor, Tensor)[] train_batch = train_batches[batch_index];
 
-            Tensor input = Tensor.Cat(null, train_batch.Select(x => x.Item1).ToArray());
+            Tensor input = Tensor.Cat(null, train_batch.Select(x =>
+            {
+                Tensor img = x.Item1;
+                if (augment_data)
+                    img = AugmentImage(img);
+                return img;
+            }).ToArray());
+
             Tensor target = Tensor.Cat(null, train_batch.Select(x => x.Item2).ToArray());
 
             Tensor prediction = network.Forward(input);
-            Loss loss = Loss.BinaryCrossEntropy(prediction, target);
+            Loss loss = Loss.CrossEntropy(prediction, target);
 
             optim.ZeroGrad();
             network.Backward(loss.Derivative);
+            optim.ClipGradNorm(0.5f);
             optim.Step();
 
-            float train_acc = Metrics.Accuracy(prediction, target);
+            float acc = Metrics.Accuracy(prediction, target);
+            accuracyGraph.Append(acc);
             lossGraph.Append(loss.Item);
-            accuracyGraph.Append(train_acc);
-            Debug.Log($"Epoch {epochIndex} | Batch {batch_index++}/{train_batches.Count} | Accuracy {train_acc * 100}%");
+
+            Debug.Log($"Epoch: {epochIndex} | Batch: {batch_index++}/{train_batches.Count} | Acc: {acc * 100f}% | Loss: {loss.Item}");
         }
 
-        public void Save()
+
+        public Tensor AugmentImage(Tensor image)
         {
-            network.Save();
+            Tensor tex = Utils.ImageProcessing.Zoom(image, Utils.Random.Range(0.7f * augment_strength, 1.4f * augment_strength));
+            tex = Utils.ImageProcessing.Rotate(tex, Utils.Random.Range(-60f * augment_strength, 60f * augment_strength));
+            tex = Utils.ImageProcessing.Offset(tex, Utils.Random.Range(-5f * augment_strength, 5f * augment_strength), Utils.Random.Range(-5f * augment_strength, 5f * augment_strength));
+            tex = Utils.ImageProcessing.Noise(tex, Utils.Random.Range(0.05f * augment_strength, 0.15f * augment_strength), Utils.Random.Range(0.20f * augment_strength, 0.30f * augment_strength));
+            return tex;
         }
     }
 

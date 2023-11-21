@@ -57,8 +57,23 @@ namespace DeepUnity
                 dontDrawMe.Add("targetKL");
             }
 
-            
+            dontDrawMe.Add("timescale");
 
+            DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
+
+            if (script.timescaleAdjustment == TimescaleAdjustmentType.Dynamic)
+            {
+               
+                // Add a read-only property drawer for the "timescale" field
+                EditorGUI.BeginDisabledGroup(true);
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("timescale"), true);
+                EditorGUI.EndDisabledGroup();
+            }
+            else
+            {
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("timescale"), true);
+            }
+            
 
 
             // if (EditorApplication.isPlaying)
@@ -66,7 +81,6 @@ namespace DeepUnity
             // DO not modify the values at runtime (lr will not change, may appear bugs when changing the buffer size to a smaller size when is already filled).
 
 
-            DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
             serializedObject.ApplyModifiedProperties();
         }
     }

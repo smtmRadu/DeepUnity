@@ -53,14 +53,12 @@ namespace DeepUnityTutorials
                     transform.Rotate(0, -rotationSpeed, 0); break;
 
             }
-
-            if (type == PlayerType.Striker)
-                AddReward(-0.0025f);
+            AddReward(-0.0015f);// Existential penalty 
         }
         private void OnCollisionEnter(Collision collision)
         {
-            if (type == PlayerType.Striker && collision.collider.CompareTag("Ball"))
-                AddReward(0.0025f);
+            if (collision.collider.CompareTag("Ball"))
+                AddReward(0.05f);
         }
         public enum PlayerType
         {
@@ -72,16 +70,16 @@ namespace DeepUnityTutorials
             Pink,
             Blue
         }
-
-        private void OnCollisionStay(Collision collision)
+        private void OnTriggerStay(Collider collider)
         {
-            if(type == PlayerType.Goalie)
+            if (type == PlayerType.Goalie)
             {
-                if (team == PlayerTeam.Pink && collision.collider.name == "PinkGoalArea")
-                    AddReward(+0.0025f);
-                else if (team == PlayerTeam.Blue && collision.collider.name == "BlueGoalArea")
-                    AddReward(+0.0025f);
+                if (team == PlayerTeam.Pink && collider.name == "PinkGoalArea")
+                    AddReward(+0.001f);
+                else if (team == PlayerTeam.Blue && collider.name == "BlueGoalArea")
+                    AddReward(+0.001f);
             }
+
         }
     }
 }

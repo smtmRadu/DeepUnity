@@ -24,8 +24,7 @@ namespace DeepUnity
                                    protected bool ended = false;
 
         protected readonly DateTime timeWhenTheTrainingStarted = DateTime.Now;
-        
-        
+
         
         private void Awake()
         {
@@ -48,9 +47,6 @@ namespace DeepUnity
             if (currentSteps >= hp.maxSteps)
                 EndTrainingSession($"Max Steps reached ({hp.maxSteps})");
 
-            // Adapt Timescale by config
-            Time.timeScale = hp.timeScale;
-
             // Autosaves the ac
             if (autosaveSecondsElapsed >= autosave * 60f)
             {
@@ -72,8 +68,24 @@ namespace DeepUnity
                     $"{(int)(Math.Ceiling(track.inferenceSecondsElapsed * parallelAgents.Count) / 3600)} hrs : {(int)(Math.Ceiling(track.inferenceSecondsElapsed * parallelAgents.Count) % 3600 / 60)} min : {(int)(Math.Ceiling(track.inferenceSecondsElapsed * parallelAgents.Count) % 60)} sec";
                 track.inferenceTimePerAgent =
                     $"{(int)(Math.Ceiling(track.inferenceSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(track.inferenceSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(track.inferenceSecondsElapsed) % 60)} sec";
-            }         
+            }           
         }
+
+        protected virtual void Update()
+        {
+            if(hp.timescaleAdjustment == TimescaleAdjustmentType.Dynamic)
+            {
+                const float timeScaleAdjustmentRate = 0.01f;
+
+                float currentFrameRate = 1f / Time.deltaTime;
+                float frameRateDifference = model.targetFPS - currentFrameRate;
+                hp.timescale = hp.timescale - frameRateDifference * timeScaleAdjustmentRate;
+                hp.timescale = Mathf.Clamp(hp.timescale, 1f, 30f);
+            }
+            
+            Time.timeScale = hp.timescale;
+        }
+
 
         protected virtual void Initialize() { }
         public static void Subscribe(Agent agent, TrainerType trainer)

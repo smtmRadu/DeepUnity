@@ -14,9 +14,9 @@ namespace DeepUnity
     public class StateBuffer
     {
         /// <summary>
-        /// The limit used to clip the observations value
+        /// For network stability we forcely clip the values between [-1.75, 1.75]
         /// </summary>
-        private const float Clip = 5f;
+        private const float Clip = 1.75f;
 
 
         public readonly int Capacity;

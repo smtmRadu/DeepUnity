@@ -534,7 +534,7 @@ MonoBehaviour:
   discreteActions: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 02694c16d7df55444ad7e2421a39e02d, type: 2}
+  model: {fileID: 11400000, guid: f50d866f2b14aaa4197551bf11518942, type: 2}
   behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 1
@@ -783,7 +783,7 @@ MonoBehaviour:
   discreteActions: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 02694c16d7df55444ad7e2421a39e02d, type: 2}
+  model: {fileID: 11400000, guid: f50d866f2b14aaa4197551bf11518942, type: 2}
   behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 1
@@ -949,7 +949,7 @@ MonoBehaviour:
   discreteActions: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 02694c16d7df55444ad7e2421a39e02d, type: 2}
+  model: {fileID: 11400000, guid: f50d866f2b14aaa4197551bf11518942, type: 2}
   behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 1
@@ -1571,7 +1571,7 @@ MonoBehaviour:
   discreteActions: 7
   numLayers: 2
   hidUnits: 80
-  model: {fileID: 11400000, guid: 02694c16d7df55444ad7e2421a39e02d, type: 2}
+  model: {fileID: 11400000, guid: f50d866f2b14aaa4197551bf11518942, type: 2}
   behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 1

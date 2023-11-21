@@ -1,5 +1,6 @@
 # DeepUnity
-![version](https://img.shields.io/badge/version-v0.9.5.7-blue)
+###### In development - does not currently accept Pull Requests, though feel free to Fork and expand upon it
+![version](https://img.shields.io/badge/version-v0.9.6-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO) and Soft Actor-Critic (SAC).
 
@@ -13,10 +14,7 @@ namespace DeepUnityTutorials
     public class Tutorial : MonoBehaviour
     {
         [Header("Learning z = x^2 + y^2.")]
-        [SerializeField] private NeuralNetwork network;
-        [SerializeField] private PerformanceGraph trainLossGraph = new PerformanceGraph();
-        [SerializeField] private PerformanceGraph validLossGraph = new PerformanceGraph();
-
+        public NeuralNetwork network;
         private Optimizer optim;
         private LRScheduler scheduler;
 
@@ -36,7 +34,7 @@ namespace DeepUnityTutorials
                     new ReLU(),
                     new Dense(64, 1)).CreateAsset("TutorialModel");
             }
-            optim = new Adam(network.Parameters(), 0.001f);
+            optim = new Adam(network.Parameters());
             scheduler = new LRScheduler(optim, 30, 0.1f);
 
             // Generate training dataset
@@ -73,15 +71,12 @@ namespace DeepUnityTutorials
                 train_loss += loss.Item;
             }
             train_loss /= input_batches.Length;
-            trainLossGraph.Append(train_loss);
-
+            
             // Validation
             Tensor valid_prediction = network.Predict(valid_inputs);
             float valid_loss = Metrics.MeanSquaredError(valid_prediction, valid_targets);
-            validLossGraph.Append(valid_loss);
-
             print($"Epoch: {Time.frameCount} - Train Loss: {train_loss} - Valid Loss: {valid_loss}");
-
+            
             scheduler.Step();
             network.Save();
         }
@@ -105,7 +100,7 @@ Also in order to decide the reward function and episode terminal state, or telli
 When the setup is ready, press the _Bake_ button, this way a behaviour along with all neural networks and hyperparameters assets are created inside a folder with the _behaviour's name_, located in _Assets/_ folder. From this point everything is ready to go. 
 
 To get into advanced training, check out the following assets created:
-- **Behaviour** can be set whether to use a fixed or trainable standard deviation for continuous actions, along with the associated exploration strength value. Inference devices are also available to be set, but is recommended to be kept on default. TargetFPS modifies the rate of physics update, being equal to _1 / Time.fixedDeltaTime (default: 50)_.
+- **Behaviour** can be set whether to use a fixed or trainable standard deviation for continuous actions, along with the associated exploration strength value. Inference and Training devices are also available to be set (set both on CPU if your machine lacks a graphics card). TargetFPS modifies the rate of physics update, being equal to _1 / Time.fixedDeltaTime (default: 50)_.
 - **Config** provides all hyperparameters necesarry for a custom training session.
 
 #### Behaviour script overriding example
@@ -183,25 +178,23 @@ _This example considers an agent (with 4 space size and 2 continuous actions) po
 
 
 TIPS: 
-- **Parallel training** is one option to use your device at maximum efficiency. After inserting your agent inside an Environment GameObject, you can duplicate that environment several times along the scene before starting the training session; this method is necessary for multi-agent co-op or adversarial training. Another solution is to increase the timescale of the simulation. Both ways can be used concurrently.
+- **Parallel training** is one option to use your device at maximum efficiency. After inserting your agent inside an Environment GameObject, you can duplicate that environment several times along the scene before starting the training session; this method is necessary for multi-agent co-op or adversarial training. Note that DeepUnity dynamically adapts the timescale of the simulation to get the maximum efficiency out of your machine.
 
 - In order to properly get use of _AddReward()_ and _EndEpisode()_ consult the diagram below. These methods work well being called inside _OnTriggerXXX()_ or _OnCollisionXXX()_, as well as inside _OnActionReceived()_ rightafter actions are performed. 
 
 - **Decision Period** high values increases overall performance of the training session, but lacks when it comes to agent inference accuracy. Typically, use a higher value for broader parallel environments, then decrease this value to 1 to fine-tune the agent.
 
-- **Input Normalization** plays a huge role in policy convergence. To outcome this problem, observations can be auto-normalized by checking the corresponding box inside behaviour asset, but instead, is highly recommended to manually normalize all input values before adding them to the __SensorBuffer__. Scalar values can be normalized within [0, 1] or [-1, 1] ranges by using the formula **normalized_value = (value - min) / (max - min)**.
+- **Input Normalization** plays a huge role in policy convergence. To outcome this problem, observations can be auto-normalized by checking the corresponding box inside behaviour asset, but instead, is highly recommended to manually normalize all input values before adding them to the __SensorBuffer__. Scalar values can be normalized within [0, 1] or [-1, 1] ranges by using the formula **normalized_value = (value - min) / (max - min)**. Note that inputs are clamped by default in [-1.75, 1.75] for network stability.
 
 - The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. If neccesary, in order to override them, call the their **base** each time, respecting the logic of the diagram below.
 
 ![rl](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_schema.jpg?raw=true)
 
-###### _A pole balancing itself using deep reinforcement learning (13 observations, 1 continuous action)_
-![pole](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/pole.gif?raw=true)
 
 
-All tutorials scripts are included inside _Assets/DeepUnity/Tutorials_ folder, containing all features provided by the framework, along with trained RL agents examples.
+All tutorials scripts are included inside _Assets/DeepUnity/Tutorials_ folder, containing all features provided by the framework and RL environments inspired from ML-Agents examples (note that not all of them have trained models attached).
 
-_A paper describing how to implement Proximal Policy Optimization (including neural networks) from scratch will be released soon..._
+_A paper describing how to implement nets, PPO and SAC from scratch will be released this spring..._
 
 ![rl](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/tensors.png?raw=true)
 
