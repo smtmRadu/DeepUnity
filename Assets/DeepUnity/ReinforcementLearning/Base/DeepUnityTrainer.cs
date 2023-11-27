@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -19,13 +18,14 @@ namespace DeepUnity
         [ReadOnly, SerializeField] protected ExperienceBuffer train_data;
 
 
-        [SerializeField, Min(1)]   protected int autosave = 5; protected float autosaveSecondsElapsed = 0f;
+        [SerializeField, Min(1)]   protected int autosave = 15; protected float autosaveSecondsElapsed = 0f;
         [SerializeField, ReadOnly] protected int currentSteps = 0;
                                    protected bool ended = false;
 
         protected readonly DateTime timeWhenTheTrainingStarted = DateTime.Now;
 
-        
+        [SerializeField] private float avgDeltaTime = 0.02f;
+        const float avgDeltaTimeMomentum = 0.96f;
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -68,24 +68,28 @@ namespace DeepUnity
                     $"{(int)(Math.Ceiling(track.inferenceSecondsElapsed * parallelAgents.Count) / 3600)} hrs : {(int)(Math.Ceiling(track.inferenceSecondsElapsed * parallelAgents.Count) % 3600 / 60)} min : {(int)(Math.Ceiling(track.inferenceSecondsElapsed * parallelAgents.Count) % 60)} sec";
                 track.inferenceTimePerAgent =
                     $"{(int)(Math.Ceiling(track.inferenceSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(track.inferenceSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(track.inferenceSecondsElapsed) % 60)} sec";
-            }           
-        }
+            }
 
-        protected virtual void Update()
-        {
-            if(hp.timescaleAdjustment == TimescaleAdjustmentType.Dynamic)
+
+           
+            if (hp.timescaleAdjustment == TimescaleAdjustmentType.Dynamic)
             {
-                const float timeScaleAdjustmentRate = 0.01f;
+                
+                const float timeScaleAdjustmentRate = 1e-4f;
 
-                float currentFrameRate = 1f / Time.deltaTime;
-                float frameRateDifference = model.targetFPS - currentFrameRate;
+                float currentFrameRate = 1f / avgDeltaTime;
+                float frameRateDifference = model.targetFPS * 0.125f - currentFrameRate;// i ve seen that on 12% is ok, almost the same with fixed static sigma value i will set
                 hp.timescale = hp.timescale - frameRateDifference * timeScaleAdjustmentRate;
                 hp.timescale = Mathf.Clamp(hp.timescale, 1f, 30f);
             }
-            
+
             Time.timeScale = hp.timescale;
         }
 
+        private void Update()
+        {
+            avgDeltaTime = avgDeltaTime * avgDeltaTimeMomentum + Time.deltaTime * (1f - avgDeltaTimeMomentum);
+        }
 
         protected virtual void Initialize() { }
         public static void Subscribe(Agent agent, TrainerType trainer)

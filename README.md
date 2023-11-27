@@ -1,6 +1,6 @@
 # DeepUnity
 ###### In development - does not currently accept Pull Requests, though feel free to Fork and expand upon it
-![version](https://img.shields.io/badge/version-v0.9.6-blue)
+![version](https://img.shields.io/badge/version-v0.9.6.1-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO) and Soft Actor-Critic (SAC).
 
@@ -92,15 +92,15 @@ In order to work with Reinforcement Learning tools, you must create a 2D or 3D a
 - _Heuristic()_ [Optional]
 - _OnEpisodeBegin()_ [Optional]
 
-Also in order to decide the reward function and episode terminal state, or telling the agent to perform actions on specific time frames, use the following calls:
+Also in order to decide the reward function and episode's terminal state, use the following calls:
 -  _AddReward(*reward*)_
 -  _SetReward(*reward*)_
 -  _EndEpsiode()_ 
 
-When the setup is ready, press the _Bake_ button, this way a behaviour along with all neural networks and hyperparameters assets are created inside a folder with the _behaviour's name_, located in _Assets/_ folder. From this point everything is ready to go. 
+When the setup is ready, press the _Bake_ button; a behaviour along with all neural networks and hyperparameters assets are created inside a folder with the _behaviour's name_, located in _Assets/_ folder. From this point everything is ready to go. 
 
 To get into advanced training, check out the following assets created:
-- **Behaviour** can be set whether to use a fixed or trainable standard deviation for continuous actions, along with the associated exploration strength value. Inference and Training devices are also available to be set (set both on CPU if your machine lacks a graphics card). TargetFPS modifies the rate of physics update, being equal to _1 / Time.fixedDeltaTime (default: 50)_.
+- **Behaviour** can be set whether to use a fixed or trainable standard deviation for continuous actions. Inference and Training devices are also available to be set (set both on CPU if your machine lacks a graphics card). TargetFPS modifies the rate of physics update, being equal to _1 / Time.fixedDeltaTime (default: 50)_.
 - **Config** provides all hyperparameters necesarry for a custom training session.
 
 #### Behaviour script overriding example
@@ -184,7 +184,7 @@ TIPS:
 
 - **Decision Period** high values increases overall performance of the training session, but lacks when it comes to agent inference accuracy. Typically, use a higher value for broader parallel environments, then decrease this value to 1 to fine-tune the agent.
 
-- **Input Normalization** plays a huge role in policy convergence. To outcome this problem, observations can be auto-normalized by checking the corresponding box inside behaviour asset, but instead, is highly recommended to manually normalize all input values before adding them to the __SensorBuffer__. Scalar values can be normalized within [0, 1] or [-1, 1] ranges by using the formula **normalized_value = (value - min) / (max - min)**. Note that inputs are clamped by default in [-1.75, 1.75] for network stability.
+- **Input Normalization** plays a huge role in policy convergence. To outcome this problem, observations can be auto-normalized by checking the corresponding box inside behaviour asset, but instead, is highly recommended to manually normalize all input values before adding them to the __SensorBuffer__. Scalar values can be normalized within [0, 1] or [-1, 1] ranges by using the formula **normalized_value = (value - min) / (max - min)**. Note that inputs are clamped by default in [-2.5, 2.5] for network stability.
 
 - The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. If neccesary, in order to override them, call the their **base** each time, respecting the logic of the diagram below.
 

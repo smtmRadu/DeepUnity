@@ -13,11 +13,6 @@ namespace DeepUnity
     /// </summary>
     public class StateBuffer
     {
-        /// <summary>
-        /// For network stability we forcely clip the values between [-1.75, 1.75]
-        /// </summary>
-        private const float Clip = 1.75f;
-
 
         public readonly int Capacity;
         public readonly int StateSize;
@@ -43,12 +38,16 @@ namespace DeepUnity
             this.Capacity = state_size * stacked_states;
             this.StateSize = state_size;
             this.StackedInputs = stacked_states;
-            StateVector = new LinkedList<float>(Enumerable.Repeat(0f, StateSize * StackedInputs));
+            ResetToZero();
         }
         public void ResetToZero()
         {
-            StateVector = new LinkedList<float>(Enumerable.Repeat(0f, StateSize * StackedInputs));
+            StateVector = new LinkedList<float>();
 
+            for (int i = 0; i < StateSize * StackedInputs; i++)
+            {
+                StateVector.AddLast(0f);
+            }
         }
         /// <summary>
         /// Returns 0 if enough observations were added and no overflow.
@@ -83,7 +82,7 @@ namespace DeepUnity
                 observation = 0f;
             }
             StateVector.RemoveFirst();
-            StateVector.AddLast(Utils.Clip(observation, -Clip, Clip));
+            StateVector.AddLast(observation);
            
         }
         /// <summary>
@@ -162,9 +161,9 @@ namespace DeepUnity
             for (int i = 0; i < typesNumber; i++)
             {
                 if (i == index)
-                    AddObservation(1);
+                    AddObservation(1f);
                 else
-                    AddObservation(0);
+                    AddObservation(0f);
             }
         }    
     }

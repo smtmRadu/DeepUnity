@@ -29,7 +29,7 @@ namespace DeepUnity
                     if (agent_memory.Count == 0)
                         continue;
 
-                    GAE(agent_memory, hp.gamma, hp.lambda, hp.horizon, model.vNetwork);
+                    ComputeGAE_andVtargets(agent_memory, hp.gamma, hp.lambda, hp.horizon, model.vNetwork);
                     train_data.TryAppend(agent_memory, hp.bufferSize);
                     if (hp.debug) Utils.DebugInFile(agent_memory.ToString());
                     agent_memory.Clear();
@@ -65,6 +65,9 @@ namespace DeepUnity
         {
             // 1. Normalize A
             NormalizeAdvantages(train_data);
+
+            // 2. Normalize VTargets. It seems like if we do this the convergence is very unstable.. Maybe it works better for large buffers, but i do not care
+            // NormalizeVTargets(train_data);
 
             // 2. Gradient descent over N epochs
             model.vNetwork.SetDevice(model.trainingDevice); // This is always on training device because it is used to compute the values of the entire train_data of states once..
@@ -175,13 +178,19 @@ namespace DeepUnity
         {
             Tensor values = model.vNetwork.Forward(states);
             Loss criticLoss = Loss.MSE(values, value_targets);
+            float lossItem = criticLoss.Item;
+
+            if (float.IsNaN(lossItem))
+                return;
+            else
+                meanValueLoss += criticLoss.Item;
 
             model.vOptimizer.ZeroGrad();
             model.vNetwork.Backward(criticLoss.Derivative * 0.5f);
             model.vOptimizer.ClipGradNorm(hp.gradClipNorm);
             model.vOptimizer.Step();
 
-            meanValueLoss += criticLoss.Item;
+            
         }
         /// <summary>
         /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>)  where * = <em>Observations Shape (default: Space Size)</em><br></br>
@@ -376,7 +385,7 @@ namespace DeepUnity
         /// <param name="LAMBDA"></param>
         /// <param name="HORIZON"></param>
         /// <param name="valueNetwork"></param>
-        private static void GAE(in MemoryBuffer memory, in float GAMMA, in float LAMBDA, in int HORIZON, NeuralNetwork valueNetwork)
+        private static void ComputeGAE_andVtargets(in MemoryBuffer memory, in float GAMMA, in float LAMBDA, in int HORIZON, NeuralNetwork valueNetwork)
         {
             var frames = memory.frames;
             int T = memory.Count;
@@ -434,7 +443,6 @@ namespace DeepUnity
                 vec.frames[i].advantage = (vec.frames[i].advantage - mean) / std;
 
         }
-
     }
 
     [CustomEditor(typeof(PPOTrainer), true), CanEditMultipleObjects]

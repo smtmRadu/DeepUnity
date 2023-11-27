@@ -373,7 +373,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 741658597}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.8516155, y: 1.5519986, z: -1.1531718}
+  m_LocalPosition: {x: -1.21, y: 1.5519986, z: -1.1531718}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1571,7 +1571,7 @@ MonoBehaviour:
   numLayers: 2
   hidUnits: 88
   model: {fileID: 11400000, guid: 2f6f6251a01faf14faad292c9c731db0, type: 2}
-  behaviourType: 2
+  behaviourType: 1
   onEpisodeEnd: 2
   useSensors: 1
   speed: 2.5

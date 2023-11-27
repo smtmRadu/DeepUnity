@@ -51,7 +51,7 @@ namespace DeepUnity
 
         // Draw agent's memory.
         private LinkedList<Vector3> lastKWorldPositions; // keeps track of the last K last positions in order to draw them
-
+        private const float observationsClip = 2.5f;
         public virtual void Awake()
         {
             if (!enabled)
@@ -160,8 +160,8 @@ namespace DeepUnity
             float alpha = 1f / lastKWorldPositions.Count;
 
             float index = 1f;
-            Material m = GetComponent<MeshRenderer>().sharedMaterial;
-            Color c = m == null? Color.white : m.color;
+            MeshRenderer meshRenderer = GetComponent<MeshRenderer>();
+            Color c = meshRenderer == null ? Color.white : meshRenderer.sharedMaterial.color;
             foreach (var item in lastKWorldPositions)
             {
                 Gizmos.color = new Color(c.r, c.g, c.b, alpha);
@@ -233,7 +233,7 @@ namespace DeepUnity
                 // Observe s'
                 lastState = GetState();
                 Timestep.nextState = lastState.Clone() as Tensor;
-
+              
                 Memory.Add(Timestep);
 
                 // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state (maxStep == 0 means unlimited steps per episode)
@@ -322,11 +322,13 @@ namespace DeepUnity
 
             // Normalize the observations if neccesary
             Tensor state = StatesBuffer.State.Clone() as Tensor;
-            if (model.normalizeObservations)
+            if (model.normalize)
             {
-                model.normalizer.Update(state);
-                state = model.normalizer.Normalize(state);
+                model.observationsNormalizer.Update(state);
+                state = model.observationsNormalizer.Normalize(state);
             }
+
+            state = state.Clip(-observationsClip, observationsClip);
 
             return state;
         }

@@ -34,5 +34,6 @@ MonoBehaviour:
   saveReplayBuffer: 0
   tau: 0.005
   saveRecordBuffer: 0
-  timeScale: 5.64
+  timescaleAdjustment: 0
+  timescale: 6.532756
   debug: 0

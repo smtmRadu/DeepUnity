@@ -15,13 +15,13 @@ MonoBehaviour:
   trainer: 0
   maxSteps: 2000000000
   horizon: 64
-  learningRate: 0.00014
+  learningRate: 0.0003
   gamma: 0.99
-  batchSize: 64
-  bufferSize: 1024
+  batchSize: 256
+  bufferSize: 4096
   gradClipNorm: 0.5
   LRSchedule: 0
-  numEpoch: 7
+  numEpoch: 8
   beta: 0.005
   epsilon: 0.2
   lambda: 0.96
@@ -34,6 +34,6 @@ MonoBehaviour:
   saveReplayBuffer: 0
   tau: 0.005
   saveRecordBuffer: 0
-  timescaleAdjustment: 0
-  timescale: 2.746273
   debug: 0
+  timescaleAdjustment: 0
+  timescale: 7.757288

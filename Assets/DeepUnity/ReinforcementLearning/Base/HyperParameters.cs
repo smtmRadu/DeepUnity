@@ -22,7 +22,7 @@ namespace DeepUnity
         [Min(32)] public int horizon = 64; // Note that Time Horizon for non-Gae estimation must be way higher
 
         [Tooltip("[Typical range: 5e-6 - 3e-3] Initial learning rate for Adam optimizer (both all networks).")]
-        [Min(5e-6f)] public float learningRate = 2e-4f;
+        [Min(5e-6f)] public float learningRate = 3e-4f;
 
         [Tooltip("[Typical range: 0.8 - 0.9997] Discount factor.")]
         [Min(0.001f)] public float gamma = 0.99f;
@@ -92,23 +92,29 @@ namespace DeepUnity
 
         // public ExperienceBuffer experience_buffer; .. to be loaded here
 
+        [HideInInspector]
+        [Tooltip("Debug the train_data into a file.")]
+        [Space(30)]
+        public bool debug = false;
+
+
+
         [Space(50)]
         [Tooltip("How does the timescale is adjusted during training.")]
         public TimescaleAdjustmentType timescaleAdjustment = TimescaleAdjustmentType.Dynamic;
         [Tooltip("Timescale of the training session.")]
         [Min(1f)] public float timescale = 1f;
-        [Tooltip("Debug the train_data into a file.")]
-        [HideInInspector] 
-        public bool debug = false;
-
+        
 
         private void Awake()
         {
             if (bufferSize % batchSize != 0)
             {
-                ConsoleMessage.Info($"Buffer size must be multiple of batch size. Old value ({bufferSize}) was changed to {bufferSize}.");
+                int old_buff_size = bufferSize;
                 int lowbound = bufferSize / batchSize;
-                bufferSize = batchSize * lowbound;           
+                bufferSize = batchSize * lowbound;
+                ConsoleMessage.Info($"Buffer size must be multiple of batch size. Old value ({old_buff_size}) was changed to {bufferSize}.");
+                         
             }
                
         }

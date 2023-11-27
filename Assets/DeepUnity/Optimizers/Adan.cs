@@ -1,8 +1,9 @@
 
 namespace DeepUnity
 {
-    // The implementation is took from the paper https://arxiv.org/pdf/2208.06677.pdf without restart condition
-    // and i added weight decay also
+    // The implementation is took from the paper https://arxiv.org/pdf/2208.06677.pdf
+
+    // lr = sqrt(batch_size / 256) * 6.25e-3 for lr scale depending on the batch sizes (check what Adan authors did for details in appendix)
     public class Adan : Optimizer
     {
         private readonly float beta1;
@@ -14,9 +15,11 @@ namespace DeepUnity
         private readonly Tensor[] n;
 
         private readonly Tensor[] gOld;
+        private readonly bool momentumRestart;
 
         /// <summary>
-        /// ADAptive Nesterov momentum optimizer.
+        /// ADAptive Nesterov momentum optimizer.<br></br>
+        /// Paper uses lr = 1e-2, with weight decay in [1e-3, 1e-2] range, and 3e-4 in RL with 0 weight decay.
         /// </summary>
         /// <param name="parameters"></param>
         /// <param name="lr"></param>
@@ -24,11 +27,14 @@ namespace DeepUnity
         /// <param name="beta2"></param>
         /// <param name="beta3"></param>
         /// <param name="weightDecay"></param>
-        public Adan(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.02f, float beta2 = 0.08f, float beta3 = 0.01f, float weightDecay = 0f) : base(parameters, lr, weightDecay)
+        /// <param name="momentumRestart">does restart condition is computed to restart the momentum? This may improve the convergence.</param>
+        public Adan(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.02f, float beta2 = 0.08f, float beta3 = 0.01f, float weightDecay = 0f, bool momentumRestart = false) 
+            : base(parameters, lr, weightDecay)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;
             this.beta3 = beta3;
+            this.momentumRestart = momentumRestart;
 
             m = new Tensor[parameters.Length];
             v = new Tensor[parameters.Length];
@@ -50,15 +56,11 @@ namespace DeepUnity
 
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
-                if (lambda != 0)
-                    Tensor.CopyTo(parameters[i].g + lambda * parameters[i].theta, parameters[i].g);
-
-
                 if (t == 1) 
                 {
                     m[i] = parameters[i].g.Clone() as Tensor;
                     n[i] = parameters[i].g.Pow(2f);
-                    // v[i] = 0 by default
+                    // v[i] = 0 by default from init
                 }
 
                 if(t == 2)

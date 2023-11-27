@@ -32,6 +32,11 @@ namespace DeepUnityTutorials
 
         BodyController bodyController;
 
+        const float stepReward = 0.005f; // Starting reward reward per step alive
+        const float rewardIncrementPerStep = 0.0001f; // reward increment while keeping alive (reseted on episode begin
+        float currentStepReward;
+
+
         public override void Awake()
         {
             base.Awake();
@@ -78,6 +83,8 @@ namespace DeepUnityTutorials
             float z = distance * Mathf.Sin(random_rad);
 
             target.position = new Vector3(x, target.position.y, z);
+
+            currentStepReward = stepReward;
         }
         public override void CollectObservations(StateBuffer stateBuffer)
         {
@@ -165,8 +172,8 @@ namespace DeepUnityTutorials
             jdDict[shinR].SetJointStrength(actions_vector[38]);
             jdDict[footR].SetJointStrength(actions_vector[39]);
 
-
-            AddReward(head.position.y / 100f); // Constant reward for keeping head up
+            currentStepReward += rewardIncrementPerStep;
+            AddReward(head.position.y * currentStepReward); // Constant reward for keeping head up
 
             const float range = 8f;
             if (transform.position.x < -range || transform.position.x > range ||

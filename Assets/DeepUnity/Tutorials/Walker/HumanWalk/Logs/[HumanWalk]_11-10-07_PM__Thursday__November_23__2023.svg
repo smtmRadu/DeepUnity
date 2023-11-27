@@ -1,0 +1,65 @@
+<svg width="2000" height="2500" xmlns="http://www.w3.org/2000/svg">
+<text x="10" y="20" font-family="Arial" font-size="26" fill="black"> [HumanWalk] Training Session</text>
+<text x="10" y="50" font-family="Arial" font-size="16" fill="black">[Statistics]</text>
+<text x="50" y="70" font-family="Arial" font-size="12" fill="black">Started at: 11:10:07 PM, Thursday, November 23, 2023</text>
+<text x="50" y="90" font-family="Arial" font-size="12" fill="black">Finished at: 11:10:54 PM, Thursday, November 23, 2023</text>
+<text x="50" y="110" font-family="Arial" font-size="12" fill="black">Training Session Time: 0 hrs : 0 min : 46 sec</text>
+<text x="50" y="130" font-family="Arial" font-size="12" fill="black">Inference Time: 0 hrs : 1 min : 37 sec       [Per agent: 0 hrs : 1 min : 37 sec]        [Device: CPU]</text>
+<text x="50" y="150" font-family="Arial" font-size="12" fill="black">Policy Update Time: 0 hrs : 0 min : 14 sec        [Per iteration: 0 hrs : 0 min : 7 sec]        [Device: GPU]</text>
+<text x="50" y="170" font-family="Arial" font-size="12" fill="black">Inference Time / Training Session Time: 1.945</text>
+<text x="50" y="190" font-family="Arial" font-size="12" fill="black">Policy Update Time / Training Session Time: 0.328</text>
+<text x="50" y="210" font-family="Arial" font-size="12" fill="black">Episode Count: 72</text>
+<text x="50" y="230" font-family="Arial" font-size="12" fill="black">Inference Steps: 4873    [Per agent: 4873]     [Per Episode (mean): 67]</text>
+<text x="50" y="250" font-family="Arial" font-size="12" fill="black">Iterations: 2</text>
+<text x="50" y="270" font-family="Arial" font-size="12" fill="black">Parallel Agents: 1</text>
+<text x="50" y="290" font-family="Arial" font-size="12" fill="black">Timescale: 3</text>
+<text x="50" y="310" font-family="Arial" font-size="12" fill="black">Trainer: PPO</text>
+<text x="10" y="360" font-family="Arial" font-size="16" fill="black">[Hyperparameters]</text>
+<text x="50" y="380" font-family="Arial" font-size="12" fill="black">Buffer Size: 2048        [Batch Size: 128       (x16)]</text>
+<text x="50" y="400" font-family="Arial" font-size="12" fill="black">Num Epoch: 8</text>
+<text x="50" y="420" font-family="Arial" font-size="12" fill="black">Time Horizon: 64</text>
+<text x="50" y="440" font-family="Arial" font-size="12" fill="black">Gradient Cliping Normalization: 0.5</text>
+<text x="50" y="460" font-family="Arial" font-size="12" fill="black">Learning Rate Schedule: False    </text>
+<text x="10" y="510" font-family="Arial" font-size="16" fill="black">[Behaviour]</text>
+<text x="50" y="530" font-family="Arial" font-size="12" fill="black">Space Size: 189</text>
+<text x="50" y="550" font-family="Arial" font-size="12" fill="black">Continuous Actions: 40 [Standard Deviation: Fixed]     [Value: 1.6]</text>
+<text x="50" y="570" font-family="Arial" font-size="12" fill="black">Discrete Actions: 0</text>
+<text x="50" y="590" font-family="Arial" font-size="12" fill="black">TargetFPS: 100 (physics update rate)</text>
+<text x="50" y="610" font-family="Arial" font-size="12" fill="black">Observations Normalization: True</text>
+<text x="10" y="660" font-family="Arial" font-size="16" fill="black">[Decision Requester]</text>
+<text x="50" y="680" font-family="Arial" font-size="12" fill="black">Max Step: 5000</text>
+<text x="50" y="700" font-family="Arial" font-size="12" fill="black">Decision Period: 2      [Actions Between Decisions: True]</text>
+<text x="10" y="750" font-family="Arial" font-size="16" fill="black">[Graphs]</text>
+<text x="50" y="770" font-family="Arial" font-size="12" fill="black">Episode Reward (72)</text>
+<text x="50" y="785" font-family="Arial" font-size="10" fill="black">4.56396</text>
+<text x="50" y="1000" font-family="Arial" font-size="10" fill="black">0.8952523</text>
+<path d="M50,932.6299 L56.25,794.8038 L62.5,851.6935 L68.75,944.3385 L75,942.8106 L81.25,923.689 L87.5,902.7815 L93.75,939.0807 L100,937.5574 L106.25,936.0587 L112.5,900.1025 L118.75,895.4464 L125,855.1517 L131.25,924.5356 L137.5,976.0629 L143.75,963.1671 L150,906.2742 L156.25,949.8407 L162.5,960.8718 L168.75,990 L175,886.2084 L181.25,917.7543 L187.5,928.6284 L193.75,921.1412 L200,850.8797 L206.25,942.2438 L212.5,956.1395 L218.75,921.4937 L225,889.687 L231.25,911.854 L237.5,978.5443 L243.75,927.4517 L250,962.1335 L256.25,949.0934 L262.5,837.7643 L268.75,876.4816 L275,814.6173 L281.25,916.0112 L287.5,977.8165 L293.75,971.2401 L300,815.4603 L306.25,810.0869 L312.5,967.2777 L318.75,933.2258 L325,962.2807 L331.25,926.5341 L337.5,950.0249 L343.75,875.0926 L350,790 L356.25,928.4748 L362.5,941.3335 L368.75,959.9207 L375,975.8243 L381.25,882.1265 L387.5,939.7208 L393.75,946.8451 L400,951.2998 L406.25,967.9836 L412.5,846.5084 L418.75,925.5682 L425,908.6607 L431.25,960.3677 L437.5,913.9008 L443.75,911.5681 L450,959.3542 L456.25,928.8736 L462.5,943.2228 L468.75,957.5085 L475,955.2561 L481.25,897.7634 L487.5,935.5836 L493.75,961.4374 " stroke="blue" fill="none" />
+<text x="50" y="1040" font-family="Arial" font-size="12" fill="black">Episode Length (72)</text>
+<text x="50" y="1055" font-family="Arial" font-size="10" fill="black">106</text>
+<text x="50" y="1270" font-family="Arial" font-size="10" fill="black">42</text>
+<path d="M50,1188.125 L56.25,1060 L62.5,1110 L68.75,1206.875 L75,1203.75 L81.25,1181.875 L87.5,1163.125 L93.75,1194.375 L100,1194.375 L106.25,1197.5 L112.5,1156.875 L118.75,1156.875 L125,1116.25 L131.25,1178.75 L137.5,1244.375 L143.75,1235 L150,1163.125 L156.25,1210 L162.5,1219.375 L168.75,1260 L175,1128.75 L181.25,1172.5 L187.5,1188.125 L193.75,1188.125 L200,1106.875 L206.25,1206.875 L212.5,1219.375 L218.75,1178.75 L225,1150.625 L231.25,1163.125 L237.5,1244.375 L243.75,1185 L250,1222.5 L256.25,1200.625 L262.5,1097.5 L268.75,1135 L275,1085 L281.25,1172.5 L287.5,1244.375 L293.75,1241.25 L300,1072.5 L306.25,1072.5 L312.5,1235 L318.75,1188.125 L325,1231.875 L331.25,1178.75 L337.5,1213.125 L343.75,1119.375 L350,1069.375 L356.25,1188.125 L362.5,1200.625 L368.75,1219.375 L375,1247.5 L381.25,1138.125 L387.5,1197.5 L393.75,1210 L400,1213.125 L406.25,1231.875 L412.5,1100.625 L418.75,1191.25 L425,1169.375 L431.25,1222.5 L437.5,1169.375 L443.75,1160 L450,1222.5 L456.25,1191.25 L462.5,1206.875 L468.75,1222.5 L475,1219.375 L481.25,1156.875 L487.5,1185 L493.75,1219.375 " stroke="blue" fill="none" />
+<text x="50" y="1310" font-family="Arial" font-size="12" fill="black">Policy Loss</text>
+<text x="50" y="1325" font-family="Arial" font-size="10" fill="black">0.05963552</text>
+<text x="50" y="1540" font-family="Arial" font-size="10" fill="black">0.005482388</text>
+<path d="M50,1390.27 L75,1528.152 L100,1520.753 L125,1522.161 L150,1522.005 L175,1521.128 L200,1514.937 L225,1522.778 L250,1330 L275,1515.902 L300,1523.107 L325,1520.631 L350,1515.044 L375,1518.231 L400,1519.437 L425,1530 " stroke="blue" fill="none" />
+<text x="50" y="1580" font-family="Arial" font-size="12" fill="black">Value Loss</text>
+<text x="50" y="1595" font-family="Arial" font-size="10" fill="black">0.006115227</text>
+<text x="50" y="1810" font-family="Arial" font-size="10" fill="black">0.002199985</text>
+<path d="M50,1708.05 L75,1738.58 L100,1754.158 L125,1767.395 L150,1777.812 L175,1786.711 L200,1793.998 L225,1800 L250,1600 L275,1645.103 L300,1676.783 L325,1698.884 L350,1715.62 L375,1729.345 L400,1741.006 L425,1751.219 " stroke="blue" fill="none" />
+<text x="50" y="1850" font-family="Arial" font-size="12" fill="black">Learning Rate</text>
+<text x="50" y="1865" font-family="Arial" font-size="10" fill="black">0.0001</text>
+<text x="50" y="2080" font-family="Arial" font-size="10" fill="black">0.0001</text>
+<path d="M50,2070 L75,2070 L100,2070 L125,2070 L150,2070 L175,2070 L200,2070 L225,2070 L250,2070 L275,2070 L300,2070 L325,2070 L350,2070 L375,2070 L400,2070 L425,2070 " stroke="blue" fill="none" />
+<text x="50" y="2120" font-family="Arial" font-size="12" fill="black">Entropy</text>
+<text x="50" y="2135" font-family="Arial" font-size="10" fill="black">0.2361179</text>
+<text x="50" y="2350" font-family="Arial" font-size="10" fill="black">0.2361179</text>
+<path d="M50,2340 L75,2340 L100,2340 L125,2340 L150,2340 L175,2340 L200,2340 L225,2340 L250,2340 L275,2340 L300,2340 L325,2340 L350,2340 L375,2340 L400,2340 L425,2340 " stroke="blue" fill="none" />
+<text x="750" y="770" font-family="Arial" font-size="12" fill="black">Simplified</text>
+<text x="750" y="785" font-family="Arial" font-size="10" fill="black">2.277653</text>
+<text x="750" y="1000" font-family="Arial" font-size="10" fill="black">1.967056</text>
+<path d="M862.5,826.5353 L981.25,790 L1100,868.6155 L1193.75,990 " stroke="blue" fill="none" />
+<text x="750" y="1040" font-family="Arial" font-size="12" fill="black">Simplified</text>
+<text x="750" y="1055" font-family="Arial" font-size="10" fill="black">69.52631</text>
+<text x="750" y="1270" font-family="Arial" font-size="10" fill="black">64</text>
+<path d="M862.5,1105.714 L981.25,1060 L1100,1166.667 L1193.75,1260 " stroke="blue" fill="none" />
+</svg>

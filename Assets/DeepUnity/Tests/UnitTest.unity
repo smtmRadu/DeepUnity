@@ -854,6 +854,8 @@ MonoBehaviour:
   image2: {fileID: 0}
   index: 0
   whatIsIt: 0
+  V_net: {fileID: 11400000, guid: 5df475cf16d850149829a246c9cd39c7, type: 2}
+  beh: {fileID: 11400000, guid: f760e2c06cc9bff4b8b29ae6992df343, type: 2}
 --- !u!4 &752495707
 Transform:
   m_ObjectHideFlags: 0

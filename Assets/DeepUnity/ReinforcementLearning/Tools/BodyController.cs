@@ -37,6 +37,13 @@ namespace DeepUnity
         /// </summary>
         public void SetJointTargetRotation(float x, float y, float z)
         {
+            if (float.IsNaN(x))
+                x = 0;
+            if (float.IsNaN(y))
+                y = 0;
+            if (float.IsNaN(z))
+                z = 0;
+
             x = (x + 1f) / 2f;
             y = (y + 1f) / 2f;
             z = (z + 1f) / 2f;
@@ -58,7 +65,9 @@ namespace DeepUnity
             /// </summary>
             /// <param name="strength"></param>
         public void SetJointStrength(float strength)
-            {
+        {
+            if (float.IsNaN(strength))
+                strength = 0f;
                 var rawVal = (strength + 1f) * 0.5f * Controller.maxJointForce;
                 var jd = new JointDrive
                 {
@@ -71,7 +80,7 @@ namespace DeepUnity
 
                 CurrentStrength = jd.maximumForce;
                 CurrentNormalizedStrength = CurrentStrength / Controller.maxJointForce;
-            }
+        }
     }
 
     /// <summary>

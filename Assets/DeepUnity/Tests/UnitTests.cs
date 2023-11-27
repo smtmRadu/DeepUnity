@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine.UI;
 using System;
 using Unity.VisualScripting;
+using System.Linq;
 
 namespace kbRadu
 {
@@ -26,20 +27,14 @@ namespace kbRadu
 
         public int index = 0;
         public int whatIsIt = 0;
-        List<(Tensor, Tensor)> train;
 
-        ZScoreNormalizer norm = new ZScoreNormalizer(10);
-        private void Update()
+        public NeuralNetwork V_net;
+        public AgentBehaviour beh;
+        private void Start()
         {
-           if(index < 1000)
-            {
-                norm.Update(Tensor.RandomRange((-1f, 1f), 10));
-            }
-           else if(index == 1000)
-            {
-                print(norm.Normalize(Tensor.RandomRange((-1f, 1f), 10)));
-            }
-            index++;
+            float val = -10.97313f;
+            print(Utils.Clip(val,-2f, 2f));
+
         }
         // private void Start()
         // {

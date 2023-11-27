@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -61,11 +62,11 @@ namespace DeepUnity
         [SerializeField, Tooltip("Network computation is runned on this device when training on batches. It is highly recommended to be set on GPU if it is available.")]
         public Device trainingDevice = Device.GPU;
 
-        [SerializeField, Tooltip("Auto-normalize input observations.")]
-        public bool normalizeObservations = false;
+        [SerializeField, Tooltip("Auto-normalize input observations and rewards for a stable training.")]
+        public bool normalize = true;
 
-        [ReadOnly, SerializeField, Tooltip("Observations normalizer data.")] 
-        public ZScoreNormalizer normalizer;
+        [ReadOnly, SerializeField, Tooltip("Observations normalizer.")] 
+        public RunningNormalizer observationsNormalizer;
 
         [Header("Standard Deviation for Continuous Actions")]
         [SerializeField, Tooltip("The standard deviation for Continuous Actions")] 
@@ -97,28 +98,26 @@ namespace DeepUnity
 
         private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS)
         {
-          
-            const InitType INIT_W = InitType.HE_Uniform;
+            static Activation HiddenActivation() => new Tanh();
+            const InitType INIT_W = InitType.Glorot_Uniform;
             const InitType INIT_B = InitType.Zeros;
+
             //------------------ NETWORK INITIALIZATION ----------------//
 
             // Initialize value network V(st)
             vNetwork = new NeuralNetwork(
                new IModule[] 
-               { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+               { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
             );
-
-
-           
 
             // Initialize PI
             if (CONTINUOUS_ACTIONS_NUM > 0)
             {
                 muNetwork = new NeuralNetwork(
                         new IModule[] 
-                        { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                        { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                             Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                             Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Tanh() }).ToArray()
                     );
@@ -135,21 +134,21 @@ namespace DeepUnity
                 // Initialize q networks Q(st,at)
                 q1Network = new NeuralNetwork(
                    new IModule[]
-                   { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                   { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                    Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B) }).ToArray()
                 );
 
                 q2Network = new NeuralNetwork(
                    new IModule[]
-                   { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                   { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                    Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B) }).ToArray()
                 );
 
                 discContNetwork = new NeuralNetwork(
                         new IModule[] 
-                        { new Dense(CONTINUOUS_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B),CreateActivation() }.
+                        { new Dense(CONTINUOUS_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B),HiddenActivation() }.
                             Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                             Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B), new Sigmoid() }).ToArray()
                     );
@@ -165,24 +164,21 @@ namespace DeepUnity
                     );
                 discDiscNetwork = new NeuralNetwork(
                         new IModule[] 
-                        { new Dense(DISCRETE_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B), CreateActivation() }.
+                        { new Dense(DISCRETE_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                             Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                             Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B), new Sigmoid() }).ToArray()
                     );
-            }
-
-
-            static Activation CreateActivation() => new LeakyReLU();
+            }         
 
             static IModule[] CreateHiddenLayers(int numLayers, int hidUnits, InitType INIT_W, InitType INIT_B)
             {
                 if (numLayers == 1)
                     return new IModule[] { };
                 else if (numLayers == 2)
-                    return new IModule[] { new Dense(hidUnits, hidUnits, INIT_W, INIT_B), CreateActivation() };
+                    return new IModule[] { new Dense(hidUnits, hidUnits, INIT_W, INIT_B), HiddenActivation() };
                 else if (numLayers == 3)
-                    return new IModule[] { new Dense(hidUnits, hidUnits, INIT_W, INIT_B), CreateActivation(), 
-                                           new Dense(hidUnits, hidUnits, INIT_W, INIT_B), CreateActivation() };
+                    return new IModule[] { new Dense(hidUnits, hidUnits, INIT_W, INIT_B), HiddenActivation(), 
+                                           new Dense(hidUnits, hidUnits, INIT_W, INIT_B), HiddenActivation() };
                 else
                     throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
 
@@ -446,7 +442,7 @@ namespace DeepUnity
             newAgBeh.stackedInputs = stackedInputs;
             newAgBeh.continuousDim = continuousActions;
             newAgBeh.discreteDim = discreteActions;
-            newAgBeh.normalizer = new ZScoreNormalizer(stateSize * stackedInputs);
+            newAgBeh.observationsNormalizer = new RunningNormalizer(stateSize * stackedInputs);
             newAgBeh.assetCreated = true;
 
 
@@ -605,9 +601,9 @@ namespace DeepUnity
                 script.standardDeviationValue = 1f;
             }
 
-            if(!script.normalizeObservations)
+            if(!script.normalize)
             {
-                dontDrawMe.Add("normalizer");
+                dontDrawMe.Add("observationsNormalizer");
             }
 
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());

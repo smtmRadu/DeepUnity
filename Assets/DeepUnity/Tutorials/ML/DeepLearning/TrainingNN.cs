@@ -45,7 +45,7 @@ namespace DeepUnityTutorials
         {
             if (net == null)
             {
-                var init = InitType.HE_Normal;
+                var init = InitType.HE_Uniform;
                 net = new NeuralNetwork(
                  new Dense(2, hiddenSize,init, init),
                  // new LayerNorm(),
@@ -60,7 +60,7 @@ namespace DeepUnityTutorials
                  );
             }
 
-            optimizer = new Adan(net.Parameters());
+            optimizer = new Adan(net.Parameters(), 0.001f);
             scheduler = new LRScheduler(optimizer, scheduler_step_size, scheduler_gamma);
 
 
@@ -105,7 +105,7 @@ namespace DeepUnityTutorials
             TrainLossGraph.Append(loss.Item);
             optimizer.ZeroGrad();
             net.Backward(loss.Derivative);
-            // optimizer.ClipGradNorm(0.5f);
+            optimizer.ClipGradNorm(0.5f);
             optimizer.Step();
 
 

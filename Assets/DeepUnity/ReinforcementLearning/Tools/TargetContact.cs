@@ -3,6 +3,9 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// Triggers only for colliders with Target tag. It doesn't apply for triggers.
+    /// </summary>
     [DisallowMultipleComponent]
     public class TargetContact : MonoBehaviour
     {
@@ -26,7 +29,6 @@ namespace DeepUnity
                 }
             }
         }
-
         void OnCollisionExit(Collision other)
         {
             if (other.transform.CompareTag(targetTag))
