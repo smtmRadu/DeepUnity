@@ -8,24 +8,21 @@ using UnityEngine;
 
 namespace DeepUnity
 {
-    /// <summary>
-    /// All values added to the state buffer are clipped in range [-Clip, Clip]
-    /// </summary>
-    public class StateBuffer
+    public class StateVector
     {
 
         public readonly int Capacity;
         public readonly int StateSize;
         public readonly int StackedInputs;
 
-        private LinkedList<float> StateVector;
+        private LinkedList<float> StateSequenceVector;
         public Tensor State
         {
             get
             {
                 Tensor state = Tensor.Zeros(Capacity);
                 int index = 0;
-                foreach (var item in StateVector)
+                foreach (var item in StateSequenceVector)
                 {
                     state[index++] = item;
                 }
@@ -33,7 +30,7 @@ namespace DeepUnity
             }
         }
        
- 	    public StateBuffer(int state_size, int stacked_states)
+ 	    public StateVector(int state_size, int stacked_states)
         {
             this.Capacity = state_size * stacked_states;
             this.StateSize = state_size;
@@ -42,11 +39,11 @@ namespace DeepUnity
         }
         public void ResetToZero()
         {
-            StateVector = new LinkedList<float>();
+            StateSequenceVector = new LinkedList<float>();
 
             for (int i = 0; i < StateSize * StackedInputs; i++)
             {
-                StateVector.AddLast(0f);
+                StateSequenceVector.AddLast(0f);
             }
         }
         /// <summary>
@@ -56,7 +53,7 @@ namespace DeepUnity
         /// <returns></returns>
         public int IsOk()
         {
-            return StateVector.Count % StateSize;
+            return StateSequenceVector.Count % StateSize;
         }
         public override string ToString()
         {
@@ -73,7 +70,7 @@ namespace DeepUnity
         /// <param name="observation"></param>
         public void AddObservation(float observation)
         {
-            if (StateVector.Count > Capacity)
+            if (StateSequenceVector.Count > Capacity)
                 throw new InsufficientMemoryException($"StateBuffer overflow. Consider the state size is {StateSize}.");
 
             if (float.IsNaN(observation))
@@ -81,8 +78,8 @@ namespace DeepUnity
                 ConsoleMessage.Warning("Float.NaN observation replaced with 0");
                 observation = 0f;
             }
-            StateVector.RemoveFirst();
-            StateVector.AddLast(observation);
+            StateSequenceVector.RemoveFirst();
+            StateSequenceVector.AddLast(observation);
            
         }
         /// <summary>

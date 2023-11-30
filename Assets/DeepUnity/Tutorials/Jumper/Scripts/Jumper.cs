@@ -22,7 +22,7 @@ namespace DeepUnityTutorials
             rb = GetComponent<Rigidbody>();
         }
 
-        public override void CollectObservations(StateBuffer stateBuffer)
+        public override void CollectObservations(StateVector stateBuffer)
         {
             stateBuffer.AddObservation(isGrounded);
         }

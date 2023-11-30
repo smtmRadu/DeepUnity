@@ -38,8 +38,8 @@ namespace DeepUnity
                 throw new ArgumentException("Out_features cannot be less than 1.");
 
             this.device = device;
-            weights = Initializer.InitializeParameter(new int[] {out_features, in_features}, in_features, out_features, gamma_init);
-            biases = Initializer.InitializeParameter(new int[] { out_features}, in_features, out_features, gamma_init);
+            weights = Initializer.CreateParameter(new int[] {out_features, in_features}, in_features, out_features, gamma_init);
+            biases = Initializer.CreateParameter(new int[] { out_features}, in_features, out_features, gamma_init);
             weigthsGrad = Tensor.Zeros(weights.Shape);
             biasesGrad = Tensor.Zeros(biases.Shape);
         }

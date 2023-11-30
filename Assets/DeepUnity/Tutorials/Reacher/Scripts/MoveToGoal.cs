@@ -25,7 +25,7 @@ public class MoveToGoal : Agent
         zrand = Random.Range(-norm_scale, norm_scale);
         transform.localPosition = new Vector3(xrand, 2.25f, zrand);
     }
-    public override void CollectObservations(StateBuffer sensorBuffer)
+    public override void CollectObservations(StateVector sensorBuffer)
     {
         sensorBuffer.AddObservation(transform.localPosition.x / norm_scale);
         sensorBuffer.AddObservation(transform.localPosition.z / norm_scale);

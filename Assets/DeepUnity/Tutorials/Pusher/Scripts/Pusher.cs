@@ -35,7 +35,7 @@ namespace DeepUnityTutorials
             transform.Rotate(0, Utils.Random.Range(0f, 360f), 0);
 
         }
-        public override void CollectObservations(StateBuffer sensorBuffer)
+        public override void CollectObservations(StateVector sensorBuffer)
         {
             // + 60
             sensorBuffer.AddObservation(rb.velocity.normalized); // + 3

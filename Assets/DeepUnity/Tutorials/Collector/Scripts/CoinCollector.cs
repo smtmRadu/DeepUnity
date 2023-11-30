@@ -13,7 +13,7 @@ namespace DeepUnityTutorials
         {
             env.GenerateMaze();
         }
-        public override void CollectObservations(StateBuffer sensorBuffer)
+        public override void CollectObservations(StateVector sensorBuffer)
         {
             // sensorBuffer.TimestepObservation = env.GetState();
         }

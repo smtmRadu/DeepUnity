@@ -41,7 +41,7 @@ namespace DeepUnity
         private TimestepTuple Timestep { get; set; }    
         private List<ISensor> Sensors { get; set; }
         private StateResetter PositionReseter { get; set; }
-        private StateBuffer StatesBuffer { get; set; }
+        private StateVector StatesBuffer { get; set; }
         private ActionBuffer ActionsBuffer { get; set; }       
         private Tensor lastState { get; set; }
         public int EpisodeStepCount { get; private set; } = 0;
@@ -51,7 +51,9 @@ namespace DeepUnity
 
         // Draw agent's memory.
         private LinkedList<Vector3> lastKWorldPositions; // keeps track of the last K last positions in order to draw them
-        private const float observationsClip = 2.5f;
+
+        private const float observationsClip = 3f;
+
         public virtual void Awake()
         {
             if (!enabled)
@@ -193,7 +195,7 @@ namespace DeepUnity
             Memory = new MemoryBuffer();
             Timestep = new TimestepTuple(EpisodeStepCount);
 
-            StatesBuffer = new StateBuffer(model.observationSize, model.stackedInputs);
+            StatesBuffer = new StateVector(model.observationSize, model.stackedInputs);
             ActionsBuffer = new ActionBuffer(model.continuousDim, model.discreteDim);
         }
         private void InitSensors(Transform parent)
@@ -305,23 +307,30 @@ namespace DeepUnity
         }
         private Tensor GetState()
         {
-            if (useSensors == UseSensorsType.ObservationsVector)
-                Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetObservationsVector()));
-            else if (useSensors == UseSensorsType.CompressedObservationsVector)
-                Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
-            CollectObservations(StatesBuffer);
+            Tensor state = null;
+            CollectObservations(out state); // custom state assignement
 
-            // Check SensorBuffer is fullfilled
-            int ok_sbuff = StatesBuffer.IsOk();
-            if (ok_sbuff != 0)
+            if(state == null) // if no custom state is used, check the StateVector
             {
-                ConsoleMessage.Warning($"Make sure you added exactly {model.observationSize} (difference of {ok_sbuff}).");
-                EditorApplication.isPlaying = false;
-                return null;
-            }
+                if (useSensors == UseSensorsType.ObservationsVector)
+                    Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetObservationsVector()));
+                else if (useSensors == UseSensorsType.CompressedObservationsVector)
+                    Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
+                CollectObservations(StatesBuffer);
 
-            // Normalize the observations if neccesary
-            Tensor state = StatesBuffer.State.Clone() as Tensor;
+                // Check StateVector is fullfilled
+                int ok_sbuff = StatesBuffer.IsOk();
+                if (ok_sbuff != 0)
+                {
+                    ConsoleMessage.Warning($"Make sure you added exactly {model.observationSize} (difference of {ok_sbuff}).");
+                    EditorApplication.isPlaying = false;
+                    return null;
+                }
+                state = StatesBuffer.State.Clone() as Tensor;
+            }
+           
+
+                   
             if (model.normalize)
             {
                 model.observationsNormalizer.Update(state);
@@ -343,18 +352,24 @@ namespace DeepUnity
         /// </summary>
         public virtual void OnEpisodeBegin() { }
         /// <summary>
-        /// Fulfill <b>StateBuffer</b>  <paramref name="stateBuffer"/> argument with [normalized] observations using <em>AddObservation()</em> method.
+        /// Fulfill <see cref="StateVector"/>  <paramref name="stateVector"/> argument with [normalized] observations using <em>AddObservation()</em> method.
+        /// Sequence is automatically generated when <b>stacked inputs</b> > 1.
         /// <br></br>
         /// <br></br>
         /// <em>Example: <br></br>
-        /// <paramref name="stateBuffer"/>.AddObservation(transform.position.normalized) <br></br>
-        /// <paramref name="stateBuffer"/>.AddObservation(transform.rotation.x / 360f) <br></br>
-        /// <paramref name="stateBuffer"/>.AddObservation(rb.angularVelocity.normalized) <br></br>
+        /// <paramref name="stateVector"/>.AddObservation(transform.position.normalized) <br></br>
+        /// <paramref name="stateVector"/>.AddObservation(transform.rotation.x / 360f) <br></br>
+        /// <paramref name="stateVector"/>.AddObservation(rb.angularVelocity.normalized) <br></br>
         /// </em>
         /// 
         /// </summary>
-        /// <param name="stateBuffer"></param>
-        public virtual void CollectObservations(StateBuffer stateBuffer) { }
+        /// <param name="stateVector"></param>
+        public virtual void CollectObservations(StateVector stateVector) { }
+        /// <summary>
+        /// Set a custom shaped state by setting up the state <see cref="Tensor"/>. Note that cannot be used in parallel with the StateVector arg method.
+        /// </summary>
+        /// <param name="stateTensor">The <see cref="Tensor"/> observation input.</param>
+        public virtual void CollectObservations(out Tensor stateTensor) { stateTensor = null; }
         /// <summary>
         /// Assign an action for each <em>Continuous</em> or <em>Discrete</em> value inside <b>ActionBuffer</b>'s arrays.
         /// <br></br>

@@ -32,8 +32,54 @@ namespace kbRadu
         public AgentBehaviour beh;
         private void Start()
         {
-            float val = -10.97313f;
-            print(Utils.Clip(val,-2f, 2f));
+            Tensor input = Tensor.Random01(3, 64, 89);
+
+            var inputcln = input.Clone() as Tensor;
+
+            MaxPool2D maxpl = new MaxPool2D(2);
+            Flatten flt = new Flatten();
+            Sigmoid sig = new Sigmoid();
+
+
+            print(inputcln);
+            inputcln = maxpl.Forward(inputcln);
+            print(inputcln);
+            inputcln = sig.Forward(inputcln);
+            print(inputcln);
+            inputcln = flt.Forward(inputcln);
+            print(inputcln);
+
+
+            // var nt = new NeuralNetwork(
+            //     new Conv2D((1, 32, 40), 2, 3), // 2, 30, 38
+            //     new MaxPool2D(2), //2 15 19
+            //     new Sigmoid(),
+            //     new Flatten(),
+            //     new Dense(570, 64, InitType.Glorot_Uniform, InitType.Zeros),
+            //     new Tanh(),
+            //     new Dense(64, 1, InitType.Glorot_Uniform, InitType.Zeros),
+            //     new Exp()
+            //     ).CreateAsset("policySigma");
+            // 
+            // nt = new NeuralNetwork(
+            //     new Conv2D((1, 32, 40), 2, 3), // 2, 30, 38
+            //     new MaxPool2D(2), //2 15 19
+            //     new Sigmoid(),
+            //     new Flatten(),
+            //     new Dense(570, 64, InitType.Glorot_Uniform, InitType.Zeros),
+            //     new Tanh(),
+            //     new Dense(64, 1, InitType.Glorot_Uniform, InitType.Zeros)
+            //     ).CreateAsset("policyMu");
+            // 
+            // nt = new NeuralNetwork(
+            //         new Conv2D((1, 32, 40), 2, 3), // 2, 30, 38
+            //         new MaxPool2D(2), //2 15 19
+            //         new Sigmoid(),
+            //         new Flatten(),
+            //         new Dense(570, 64, InitType.Glorot_Uniform, InitType.Zeros),
+            //         new Tanh(),
+            //         new Dense(64, 1, InitType.Glorot_Uniform, InitType.Zeros)
+            //         ).CreateAsset("value");
 
         }
         // private void Start()
@@ -195,7 +241,7 @@ namespace kbRadu
 
         void TestRNNCell()
         {
-            var rnn = new RNNCell(10, 20);
+            var rnn = new RecurrentDense(10, 20);
             var input = Tensor.Split(Tensor.RandomNormal(6, 3, 10), 0, 1);
             var hx = Tensor.RandomNormal(3, 20);
             var output = new List<Tensor>();

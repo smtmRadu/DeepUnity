@@ -14,7 +14,7 @@ namespace DeepUnity
     {
         public string name;
 
-        public RNNCell rnncell;
+        public RecurrentDense rnncell;
         public Dropout dropout;
         public LayerNorm layernorm;
 
@@ -22,7 +22,7 @@ namespace DeepUnity
         {
             name = module.GetType().Name;
 
-            if (module is RNNCell rnncellModule)
+            if (module is RecurrentDense rnncellModule)
             {
                 rnncell = rnncellModule;
             }
@@ -46,7 +46,7 @@ namespace DeepUnity
         {
             IModule2 module = null;
 
-            if (typeof(RNNCell).Name.Equals(moduleWrapper.name))
+            if (typeof(RecurrentDense).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.rnncell;
             }

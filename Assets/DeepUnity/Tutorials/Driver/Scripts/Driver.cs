@@ -48,7 +48,7 @@ namespace DeepUnityTutorials
             lf_collider.motorTorque = 0f;
             lb_collider.motorTorque = 0f;
         }
-        public override void CollectObservations(StateBuffer sensorBuffer)
+        public override void CollectObservations(StateVector sensorBuffer)
         {
             // +140 RaySensor
             // +1

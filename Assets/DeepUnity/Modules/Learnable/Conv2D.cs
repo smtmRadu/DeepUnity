@@ -76,8 +76,8 @@ namespace DeepUnity
 
             int fan_in = input_shape.Item1 * input_shape.Item2 * input_shape.Item3;
             int fan_out = out_channels * (input_shape.Item2 - kernel_size + 1) * (input_shape.Item3 - kernel_size + 1);
-            kernels = Initializer.InitializeParameter(new int[] { out_channels, input_shape.Item1, kernel_size, kernel_size }, fan_in, fan_out, gamma_init);
-            biases = Initializer.InitializeParameter(new int[] { out_channels, input_shape.Item2 - kernel_size + 1, input_shape.Item3 - kernel_size + 1 }, fan_in, fan_out, gamma_init);
+            kernels = Initializer.CreateParameter(new int[] { out_channels, input_shape.Item1, kernel_size, kernel_size }, fan_in, fan_out, gamma_init);
+            biases = Initializer.CreateParameter(new int[] { out_channels, input_shape.Item2 - kernel_size + 1, input_shape.Item3 - kernel_size + 1 }, fan_in, fan_out, gamma_init);
             kernelsGrad = Tensor.Zeros(kernels.Shape);
             biasesGrad = Tensor.Zeros(biases.Shape);
         }
@@ -113,8 +113,8 @@ namespace DeepUnity
 
             int fan_in = input_shape.Item1 * input_shape.Item2 * input_shape.Item3;
             int fan_out = out_channels * (input_shape.Item2 - kernel_shape.Item1 + 1) * (input_shape.Item3 - kernel_shape.Item1 + 1);
-            kernels = Initializer.InitializeParameter(new int[] { out_channels, input_shape.Item1, kernel_shape.Item1, kernel_shape.Item2 }, fan_in, fan_out, gamma_init);
-            biases = Initializer.InitializeParameter(new int[] { out_channels, input_shape.Item2 - kernel_shape.Item1 + 1, input_shape.Item3 - kernel_shape.Item2 + 1 }, fan_in, fan_out, gamma_init);
+            kernels = Initializer.CreateParameter(new int[] { out_channels, input_shape.Item1, kernel_shape.Item1, kernel_shape.Item2 }, fan_in, fan_out, gamma_init);
+            biases = Initializer.CreateParameter(new int[] { out_channels, input_shape.Item2 - kernel_shape.Item1 + 1, input_shape.Item3 - kernel_shape.Item2 + 1 }, fan_in, fan_out, gamma_init);
             kernelsGrad = Tensor.Zeros(kernels.Shape);
             biasesGrad = Tensor.Zeros(biases.Shape);
         }

@@ -68,7 +68,7 @@ namespace DeepUnityTutorials
         }
 
 
-        public override void CollectObservations(StateBuffer stateBuffer)
+        public override void CollectObservations(StateVector stateBuffer)
         {
 
             // Total 126

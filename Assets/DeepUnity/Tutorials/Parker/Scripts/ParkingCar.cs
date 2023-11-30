@@ -44,7 +44,7 @@ namespace DeepUnityTutorials
             // this.rb.angularVelocity = Vector3.zero;
         }
 
-        public override void CollectObservations(StateBuffer sensorBuffer)
+        public override void CollectObservations(StateVector sensorBuffer)
         {
             sensorBuffer.AddObservation(rb.velocity);
         }

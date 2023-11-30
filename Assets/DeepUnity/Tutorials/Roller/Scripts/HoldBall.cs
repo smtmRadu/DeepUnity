@@ -15,7 +15,7 @@ namespace DeepUnityTutorials
         {
             base.Awake();
         }
-        public override void CollectObservations(StateBuffer sensorBuffer)
+        public override void CollectObservations(StateVector sensorBuffer)
         {
             // 10 observations
             sensorBuffer.AddObservation(transform.rotation);

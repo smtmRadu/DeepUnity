@@ -82,7 +82,7 @@ namespace DeepUnity
 
         // public ExperienceBuffer experience buffer;... to be loaded here
 
-        [Tooltip("[Typicall range: 0.005 - 0.01] Polyak. How aggresively to update the target network used for boostraping value estimation.")]
+        [Tooltip("[Typicall range: 0.005 - 0.01] Inversed Polyak. How aggresively to update the target network used for boostraping value estimation.")]
         [Min(0.005f)] public float tau = 0.005f;
 
 

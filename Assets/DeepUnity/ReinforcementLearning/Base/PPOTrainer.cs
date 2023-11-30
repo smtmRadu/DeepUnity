@@ -200,7 +200,7 @@ namespace DeepUnity
         /// </summary>
         private void UpdateContinuousNetwork(Tensor states, Tensor advantages, Tensor actions, Tensor piOld, out Tensor pi)
         {
-            int batch_size = states.Rank == 2 ? states.Size(0) : 1;
+            int batch_size = states.Rank >= 2 ? states.Size(0) : 1;
             int continuous_actions_num = actions.Size(-1);
 
             // Forwards pass
@@ -228,6 +228,7 @@ namespace DeepUnity
             Tensor dmindy = Tensor.Zeros(batch_size, continuous_actions_num);
             Tensor dclipdx = Tensor.Zeros(batch_size, continuous_actions_num);
 
+
             for (int b = 0; b < batch_size; b++)
             {
                 for (int a = 0; a < continuous_actions_num; a++)
@@ -252,8 +253,8 @@ namespace DeepUnity
             Tensor dmLClip_dPi = -1f * (dmindx * advantages + dmindy * advantages * dclipdx) / piOld;
 
             // Entropy bonus added if σ is trainable
-            // H(πθ(a|s)) = 1/2 * log(2πeσ^2) 
-            Tensor H = 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2));
+            // H(πθ(a|s)) = -1/2 * log(2πeσ^2) 
+            Tensor H = - 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2));
             meanEntropy += H.Mean(0).Mean(0)[0];          
 
             if (dmLClip_dPi.Contains(float.NaN)) return;
@@ -296,7 +297,8 @@ namespace DeepUnity
         /// </summary>
         private void UpdateDiscreteNetwork(Tensor states, Tensor advantages, Tensor actions, Tensor piOld, out Tensor pi)
         {
-            int batch_size = states.Rank == 2 ? states.Size(0) : 1;
+            // Somehow pi is phi here (because the probabilities of the actions are directly given by the network), a little confusion but you get it :)
+            int batch_size = states.Rank >= 2 ? states.Size(0) : 1;
             int discrete_actions_num = piOld.Size(-1);
 
             model.DiscreteForward(states, out pi);
@@ -348,8 +350,8 @@ namespace DeepUnity
 
 
             // Entropy bonus for discrete actions
-            // H = πθ(a|s) * log(πθ(a|s))
-            Tensor H = pi * pi.Log();
+            // H = - φ * log(φ)
+            Tensor H = - pi * pi.Log();
             meanEntropy += H.Mean(0).Mean(0)[0];
 
             // ∂-H / ∂φ = log(φ) + 1;

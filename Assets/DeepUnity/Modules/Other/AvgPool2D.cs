@@ -48,8 +48,8 @@ namespace DeepUnity
             if (input.Rank < 3)
                 throw new ShapeException($"Input({input.Shape.ToCommaSeparatedString()}) must either be (B, C, H, W) or (C, H, W).");
 
-            int H_in = input.Size(-1);
-            int W_in = input.Size(-2);
+            int H_in = input.Size(-2);
+            int W_in = input.Size(-1);
             int H_out = (int)Math.Floor((H_in + 2 * padding - 1 * (kernel_size - 1) - 1) / (float)kernel_size + 1f);
             int W_out = (int)Math.Floor((W_in + 2 * padding - 1 * (kernel_size - 1) - 1) / (float)kernel_size + 1f);
 

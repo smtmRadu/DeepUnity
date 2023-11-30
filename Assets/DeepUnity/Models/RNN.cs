@@ -44,14 +44,14 @@ namespace DeepUnity
                 throw new ArgumentException($"An RNN must have at least one layer, not {num_layers}.");
             }
 
-            List<IModule2> moduleList = new() { new RNNCell(input_size, hidden_size, nonlinearity) };
+            List<IModule2> moduleList = new() { new RecurrentDense(input_size, hidden_size, nonlinearity) };
 
             for (int i = 1; i < num_layers; i++)
             {
                 if(dropout > 0 && i < num_layers - 1)
                     moduleList.Add(new Dropout(dropout));
 
-                moduleList.Add(new RNNCell(hidden_size, hidden_size, nonlinearity));
+                moduleList.Add(new RecurrentDense(hidden_size, hidden_size, nonlinearity));
             }
 
             modules = moduleList.ToArray();         
@@ -69,8 +69,8 @@ namespace DeepUnity
             if (input_clone.Rank != h_0_clone.Rank)
                 throw new Exception($"Input ({input_clone.Shape.ToCommaSeparatedString()}) or H_0({h_0_clone.Shape.ToCommaSeparatedString()}) must have the same rank.");
 
-            if (h_0_clone.Size(0) != modules.Count(x => x is RNNCell))
-                throw new Exception($"H_0 must have the first dimension equal to num_layers ({modules.Count(x => x is RNNCell)})");
+            if (h_0_clone.Size(0) != modules.Count(x => x is RecurrentDense))
+                throw new Exception($"H_0 must have the first dimension equal to num_layers ({modules.Count(x => x is RecurrentDense)})");
 
 
             bool isBatched = input_clone.Rank == 3;
@@ -126,7 +126,7 @@ namespace DeepUnity
             int rnncell_index = 0;
             foreach (var module in modules)
             {
-                if (module is RNNCell r)
+                if (module is RecurrentDense r)
                 {
                     for (int t = 0; t < input_sequence.Length; t++)
                     {

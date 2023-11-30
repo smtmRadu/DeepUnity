@@ -63,7 +63,7 @@ namespace DeepUnity
         public Device trainingDevice = Device.GPU;
 
         [SerializeField, Tooltip("Auto-normalize input observations and rewards for a stable training.")]
-        public bool normalize = true;
+        public bool normalize = false;
 
         [ReadOnly, SerializeField, Tooltip("Observations normalizer.")] 
         public RunningNormalizer observationsNormalizer;

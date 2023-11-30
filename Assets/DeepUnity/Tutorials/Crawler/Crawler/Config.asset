@@ -14,11 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   trainer: 0
   maxSteps: 2000000000
-  horizon: 64
+  horizon: 512
   learningRate: 0.0003
   gamma: 0.99
-  batchSize: 256
-  bufferSize: 4096
+  batchSize: 512
+  bufferSize: 10240
   gradClipNorm: 0.5
   LRSchedule: 0
   numEpoch: 8
@@ -36,4 +36,4 @@ MonoBehaviour:
   saveRecordBuffer: 0
   debug: 0
   timescaleAdjustment: 0
-  timescale: 7.757288
+  timescale: 7.4156313

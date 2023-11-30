@@ -47,7 +47,7 @@ namespace DeepUnityTutorials
             camSensor = GetComponent<CameraSensor>();
         }
 
-        public override void CollectObservations(StateBuffer stateBuffer)
+        public override void CollectObservations(StateVector stateBuffer)
         {
             stateBuffer.AddObservation(1);
             var view = camSensor.GetObservationPixels();

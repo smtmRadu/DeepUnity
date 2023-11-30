@@ -7,7 +7,7 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class RNNCell : ILearnable, IModule2
+    public class RecurrentDense : ILearnable, IModule2
     {
         [SerializeField] private NonLinearity nonlinearity;
 
@@ -35,7 +35,7 @@ namespace DeepUnity
         /// <param name="input_size"></param>
         /// <param name="hidden_size"></param>
         /// <param name="nonlinearity"></param>
-        public RNNCell(int input_size, int hidden_size, NonLinearity nonlinearity = NonLinearity.Tanh)
+        public RecurrentDense(int input_size, int hidden_size, NonLinearity nonlinearity = NonLinearity.Tanh)
         {
             this.nonlinearity = nonlinearity;
             InputCache = new Stack<Tensor>();
@@ -46,12 +46,12 @@ namespace DeepUnity
             float sqrtK = MathF.Sqrt(1f / hidden_size);
             var range = (-sqrtK, sqrtK);
 
-            weights = Initializer.InitializeParameter(new int[] { hidden_size, input_size }, input_size, hidden_size, InitType.Glorot_Uniform);
-            biases = Initializer.InitializeParameter(new int[] { hidden_size }, input_size, hidden_size, InitType.Zeros);
+            weights = Initializer.CreateParameter(new int[] { hidden_size, input_size }, input_size, hidden_size, InitType.Glorot_Uniform);
+            biases = Initializer.CreateParameter(new int[] { hidden_size }, input_size, hidden_size, InitType.Zeros);
             weightsGrad = Tensor.Zeros(weights.Shape);
             biasesGrad = Tensor.Zeros(biases.Shape);
-            recurrentWeights = Tensor.RandomRange(range, hidden_size, hidden_size);  // weight_hh
-            recurrentBiases = Tensor.RandomRange(range, hidden_size);                // bias_hh
+            recurrentWeights = Initializer.CreateParameter(new int[] { hidden_size, hidden_size }, hidden_size, hidden_size, InitType.Glorot_Uniform);
+            recurrentBiases = Initializer.CreateParameter(new int[] { hidden_size }, hidden_size, hidden_size, InitType.Zeros);
             recurrentWeightsGrad = Tensor.Zeros(hidden_size, hidden_size);  // weight_hh_g
             recurrentBiasesGrad = Tensor.Zeros(hidden_size);                // bias_hh_g
         }
@@ -200,7 +200,7 @@ namespace DeepUnity
        
         public object Clone()
         {
-            var rnncell = new RNNCell(1, 1, this.nonlinearity);
+            var rnncell = new RecurrentDense(1, 1, this.nonlinearity);
             rnncell.InputCache = new Stack<Tensor>();
             rnncell.HiddenCache = new Stack<Tensor>();
             rnncell.Activations = new Stack<Activation>();

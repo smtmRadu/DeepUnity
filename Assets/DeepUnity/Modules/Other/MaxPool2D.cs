@@ -44,8 +44,8 @@ namespace DeepUnity
             if (input.Rank < 3)
                 throw new ShapeException($"Input({input.Shape.ToCommaSeparatedString()}) must either be (B, C, H, W) or (C, H, W).");
 
-            int H_in = input.Size(-1);
-            int W_in = input.Size(-2);
+            int H_in = input.Size(-2);
+            int W_in = input.Size(-1);
             int H_out = (int)Math.Floor((H_in + 2 * padding - 1 * (kernel_size - 1) - 1) / (float)kernel_size + 1f);
             int W_out = (int)Math.Floor((W_in + 2 * padding - 1 * (kernel_size - 1) - 1) / (float)kernel_size + 1f);
            
@@ -159,44 +159,42 @@ namespace DeepUnity
 
             if(Batch == 1)
             {
-                for (int b = 0; b < Batch; b++)
+                for (int c = 0; c < Channels; c++)
                 {
-                    for (int c = 0; c < Channels; c++)
+                    for (int i = 0; i < W_out; i++)
                     {
-                        for (int i = 0; i < W_out; i++)
+                        for (int j = 0; j < H_out; j++)
                         {
-                            for (int j = 0; j < H_out; j++)
+                            int maxRowIndex = -1;
+                            int maxColIndex = -1;
+                            float maxValue = float.MinValue;
+
+                            for (int pi = 0; pi < kernel_size; pi++)
                             {
-                                int maxRowIndex = -1;
-                                int maxColIndex = -1;
-                                float maxValue = float.MinValue;
-
-                                for (int pi = 0; pi < kernel_size; pi++)
+                                for (int pj = 0; pj < kernel_size; pj++)
                                 {
-                                    for (int pj = 0; pj < kernel_size; pj++)
-                                    {
-                                        int rowIndex = j * kernel_size + pj;
-                                        int colIndex = i * kernel_size + pi;
-                                        float value = InputCache[b, c, rowIndex, colIndex];
+                                    int rowIndex = j * kernel_size + pj;
+                                    int colIndex = i * kernel_size + pi;
+                                    float value = InputCache[c, rowIndex, colIndex];
 
-                                        if (value > maxValue)
-                                        {
-                                            maxValue = value;
-                                            maxRowIndex = rowIndex;
-                                            maxColIndex = colIndex;
-                                        }
+                                    if (value > maxValue)
+                                    {
+                                        maxValue = value;
+                                        maxRowIndex = rowIndex;
+                                        maxColIndex = colIndex;
                                     }
                                 }
+                            }
 
-                                // Check if is inside the bounds, and not taken from padding
-                                if (maxRowIndex >= 0 && maxColIndex >= 0 && maxRowIndex < H_in && maxColIndex < W_in)
-                                {
-                                    gradInput[b, c, maxRowIndex, maxColIndex] += loss[b, c, j, i];
-                                }
+                            // Check if is inside the bounds, and not taken from padding
+                            if (maxRowIndex >= 0 && maxColIndex >= 0 && maxRowIndex < H_in && maxColIndex < W_in)
+                            {
+                                gradInput[c, maxRowIndex, maxColIndex] += loss[c, j, i];
                             }
                         }
                     }
                 }
+                
             }
             else
             {

@@ -48,7 +48,7 @@ namespace DeepUnityTutorials
             interact = false;
             grounded = true;
         }
-        public override void CollectObservations(StateBuffer stateBuffer)
+        public override void CollectObservations(StateVector stateBuffer)
         {
             //240 from sensors
 

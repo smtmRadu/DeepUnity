@@ -4,7 +4,7 @@ namespace DeepUnity
 {
     public static class Initializer
     {
-        public static Tensor InitializeParameter(int[] gammaShape, int fan_in, int fan_out, InitType initializer)
+        public static Tensor CreateParameter(int[] gammaShape, int fan_in, int fan_out, InitType initializer)
         {
             switch (initializer)
             {

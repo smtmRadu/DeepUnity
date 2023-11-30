@@ -5,7 +5,7 @@ namespace DeepUnityTutorials
 { 
     public class ChooseHighActions : Agent
     {
-        public override void CollectObservations(StateBuffer sensorBuffer)
+        public override void CollectObservations(StateVector sensorBuffer)
         {
             sensorBuffer.AddObservation(Utils.Random.Range(-1f, 1f));
             sensorBuffer.AddObservation(Utils.Random.Range(-1f, 1f));

@@ -14,7 +14,7 @@ namespace DeepUnity
         public int Width => width;
         public int Height => height;
 
-        [SerializeField] private Camera cam;
+        [SerializeField] public Camera cam;
         [SerializeField, Min(16)]private int width = 640;
         [SerializeField, Min(9)]private int height = 480;
         [SerializeField] private CaptureType type = CaptureType.RGB;
@@ -59,6 +59,7 @@ namespace DeepUnity
         public float[] GetCompressedObservationsVector()
         {
             CaptureType oldCaptureType = type;
+            type = CaptureType.Grayscale;
             float[] vec = GetObservationsVector();
             type = oldCaptureType;
             return vec;
@@ -74,18 +75,25 @@ namespace DeepUnity
                 Debug.LogError("<color=red>CamSensor Cam not set to an instance of an object.</color>");
                 return new Color[0];
             }
-            if (renderTexture == null)
+            if (renderTexture == null || renderTexture.width != width || renderTexture.height != height)
+            {
+                DestroyImmediate(renderTexture);
                 renderTexture = new RenderTexture(width, height, 0);
+                renderTexture.filterMode = FilterMode.Point;
+            }
+               
 
-            RenderTexture activeRT = RenderTexture.active; // this gets the previous rt, and while we render our part we assign it back
-            RenderTexture.active = cam.targetTexture;
-            Texture2D image = new Texture2D(cam.targetTexture.width, cam.targetTexture.height);
+            RenderTexture activeRT = RenderTexture.active;
+            cam.targetTexture = renderTexture;
+            Texture2D image = new Texture2D(width, height);
+            cam.Render();
+            RenderTexture.active = renderTexture;
             image.ReadPixels(new Rect(0, 0, cam.targetTexture.width, cam.targetTexture.height), 0, 0);
             image.Apply();
+            cam.targetTexture = null;
             RenderTexture.active = activeRT;
-
             Color[] pixels = image.GetPixels();
-            Destroy(image);
+            DestroyImmediate(image);
             return pixels;
         }
        
@@ -96,7 +104,7 @@ namespace DeepUnity
         /// Do not use anywhere without Destroying the Texture2D afterwards!
         /// </summary>
         /// <returns></returns>
-        private Texture2D GetObservationTexture()
+        private Texture2D GetCameraTexture()
         {
             if (cam == null)
             {
@@ -164,7 +172,7 @@ namespace DeepUnity
         }  
         private void ExecuteShotImageSave(string atPath)
         {
-            Texture2D image = GetObservationTexture();
+            Texture2D image = GetCameraTexture();
             switch (compression)
             {
                 case CompressionType.PNG:
@@ -197,21 +205,29 @@ namespace DeepUnity
             CameraSensor script = (CameraSensor)target;
             SerializedProperty cam = serializedObject.FindProperty("cam");
 
+
+            SerializedProperty type = serializedObject.FindProperty("type");
+            SerializedProperty w = serializedObject.FindProperty("width");
+            SerializedProperty h = serializedObject.FindProperty("height");
+
+
             // Display the rendered image
-            // if (script.renderTexture != null)
-            // {
-            //     EditorGUILayout.Space();
-            //     Rect previewRect = GUILayoutUtility.GetRect(100,100);
-            //     EditorGUI.DrawPreviewTexture(previewRect, script.renderTexture);
-            // 
-            //     GUIStyle centeredStyle = new GUIStyle(GUI.skin.label);
-            //     centeredStyle.alignment = TextAnchor.UpperCenter;
-            //     centeredStyle.normal.textColor = Color.white;
-            //     centeredStyle.fontSize = 15;
-            //     centeredStyle.fontStyle = FontStyle.Bold;
-            //     GUI.Label(previewRect, "Camera Preview", centeredStyle);
-            // 
-            // }
+            if (script.renderTexture != null)
+            {
+                script.GetObservationPixels();
+                EditorGUILayout.Space();
+                Rect previewRect = GUILayoutUtility.GetRect(100,100);
+                EditorGUI.DrawPreviewTexture(previewRect, script.renderTexture, null, ScaleMode.ScaleToFit);
+
+
+                GUIStyle centeredStyle = new GUIStyle(GUI.skin.label);
+                centeredStyle.alignment = TextAnchor.UpperCenter;
+                centeredStyle.normal.textColor = Color.white;
+                centeredStyle.fontSize = 15;
+                centeredStyle.fontStyle = FontStyle.Bold;
+                GUI.Label(previewRect, "Camera Preview", centeredStyle);
+            
+            }
 
 
             
@@ -222,9 +238,6 @@ namespace DeepUnity
 
             DrawPropertiesExcluding(serializedObject, dontInclude);
 
-            SerializedProperty type = serializedObject.FindProperty("type");
-            SerializedProperty w = serializedObject.FindProperty("width");
-            SerializedProperty h = serializedObject.FindProperty("height");
 
             int vecDim = type.enumValueIndex == (int)CaptureType.Grayscale ?
                             w.intValue * h.intValue :
@@ -232,6 +245,11 @@ namespace DeepUnity
 
             int compVecDim = w.intValue * h.intValue;
 
+            EditorGUILayout.Separator();
+            if (GUILayout.Button("Save image"))
+            {
+                script.SaveImage();
+            }
 
             if (cam.objectReferenceValue != null)
                 EditorGUILayout.HelpBox($"Observations Vector contains {vecDim} float values. Compressed Observations Vector contains {compVecDim} flaot values.", MessageType.Info);
@@ -240,11 +258,7 @@ namespace DeepUnity
 
             serializedObject.ApplyModifiedProperties();
 
-            EditorGUILayout.Separator();
-            if(GUILayout.Button("Save image"))
-            {
-                script.SaveImage();
-            }
+           
         }
     }
     #endregion

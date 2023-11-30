@@ -86,7 +86,7 @@ namespace DeepUnityTutorials
 
             currentStepReward = stepReward;
         }
-        public override void CollectObservations(StateBuffer stateBuffer)
+        public override void CollectObservations(StateVector stateBuffer)
         {
             // 12 Set direction to Target....
             Vector3 dirToTarget = target.position - bodyController.bodyPartsDict[head].rb.position;
