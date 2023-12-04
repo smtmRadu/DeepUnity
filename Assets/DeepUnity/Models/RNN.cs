@@ -162,7 +162,7 @@ namespace DeepUnity
 
             // input_sequence (B, H_in)
             // Join into output and h_n ----------------done
-            Tensor h_n = Tensor.Cat(null, h_0_per_layers);
+            Tensor h_n = Tensor.Concat(null, h_0_per_layers);
             Tensor output = null;
             if (batchFirst)
             {
@@ -170,12 +170,12 @@ namespace DeepUnity
                 {
                     input_sequence[i] = input_sequence[i].Unsqueeze(1);
                 }
-                output = Tensor.Cat(1, input_sequence);
+                output = Tensor.Concat(1, input_sequence);
 
             }
             else
             {
-                output = Tensor.Cat(null, input_sequence);
+                output = Tensor.Concat(null, input_sequence);
             }
 
             return (output, h_n);
@@ -249,7 +249,7 @@ namespace DeepUnity
                 }
             }
 
-            return (Tensor.Cat(null, loss_sequence), null);
+            return (Tensor.Concat(null, loss_sequence), null);
         }
 
         public override string Summary()

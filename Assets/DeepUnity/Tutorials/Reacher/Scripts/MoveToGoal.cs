@@ -12,6 +12,9 @@ public class MoveToGoal : Agent
     //      Horizon = 64
     //      LR Schedule == Off
     // Results: 
+
+
+
     public float speed = 10f;
     public Transform target;
     public float norm_scale = 8f;

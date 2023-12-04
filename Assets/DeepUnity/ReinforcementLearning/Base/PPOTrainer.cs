@@ -97,16 +97,16 @@ namespace DeepUnity
 
                 for (int b = 0; b < states_batches.Count; b++)
                 {
-                    Tensor states_batch = Tensor.Cat(null, states_batches[b]);
-                    Tensor advantages_batch = Tensor.Cat(null, advantages_batches[b]);
-                    Tensor value_targets_batch = Tensor.Cat(null, value_targets_batches[b]);
+                    Tensor states_batch = Tensor.Concat(null, states_batches[b]);
+                    Tensor advantages_batch = Tensor.Concat(null, advantages_batches[b]);
+                    Tensor value_targets_batch = Tensor.Concat(null, value_targets_batches[b]);
                    
                     UpdateValueNetwork(states_batch, value_targets_batch);
 
                     if (model.IsUsingContinuousActions)
                     {
-                        Tensor cont_act_batch = Tensor.Cat(null, cont_act_batches[b]);
-                        cont_probs_old = Tensor.Cat(null, cont_probs_batches[b]);
+                        Tensor cont_act_batch = Tensor.Concat(null, cont_act_batches[b]);
+                        cont_probs_old = Tensor.Concat(null, cont_probs_batches[b]);
                         UpdateContinuousNetwork(
                             states_batch,
                             advantages_batch,
@@ -116,8 +116,8 @@ namespace DeepUnity
                     }
                     if (model.IsUsingDiscreteActions)
                     {
-                        Tensor disc_act_batch = Tensor.Cat(null, disc_act_batches[b]);
-                        disc_probs_old = Tensor.Cat(null, disc_probs_batches[b]);
+                        Tensor disc_act_batch = Tensor.Concat(null, disc_act_batches[b]);
+                        disc_probs_old = Tensor.Concat(null, disc_probs_batches[b]);
                         UpdateDiscreteNetwork(
                             states_batch,
                             advantages_batch,
@@ -366,8 +366,7 @@ namespace DeepUnity
             model.discreteOptimizer.Step();
         }
         /// <summary>
-        /// DKL(θ, θold) = DKL(πθ(•|s), πθold(•|s)) <br></br>
-        /// DKL(p||q) = sum(p * ln(p/q))
+        /// DKL(P(μ1,σ1) || Q(μ2, σ2)) = log(σ2,/σ1) + (σ2^2 + (μ1 - μ2)^2) / (2σ2^2) - 1/2 for norm distributions
         /// <br></br>
         /// Computes the KL Divergence between and the old and the new policy.
         /// </summary>
@@ -397,7 +396,7 @@ namespace DeepUnity
             all_states_plus_lastNextState[T] = frames[T - 1].nextState;
 
             // Vw_s has length of T + 1
-            Tensor Vw_s = valueNetwork.Predict(Tensor.Cat(null, all_states_plus_lastNextState)).Reshape(T + 1);
+            Tensor Vw_s = valueNetwork.Predict(Tensor.Concat(null, all_states_plus_lastNextState)).Reshape(T + 1);
 
             // Generalized Advantage Estimation
             for (int timestep = 0; timestep < T; timestep++)
@@ -429,7 +428,7 @@ namespace DeepUnity
             }
         }    
         /// <summary>
-        /// This method normalizez the advantage of the ExperienceBuffer
+        /// This method normalizes the advantages in the <see cref="ExperienceBuffer"/>
         /// </summary>
         /// <param name="vec"></param>
         private static void NormalizeAdvantages(ExperienceBuffer vec)
@@ -441,9 +440,10 @@ namespace DeepUnity
             if (std <= 0) // It can be 0 either because there is only one frame when extracted, or all advantages were the same
                 return;
 
+
             for (int i = 0; i < vec.Count; i++)
                 vec.frames[i].advantage = (vec.frames[i].advantage - mean) / std;
-
+            
         }
     }
 

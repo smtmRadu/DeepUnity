@@ -50,13 +50,13 @@ namespace DeepUnity
                 if (hp.debug) Utils.DebugInFile(parallelAgents[0].Memory.ToString());
                 parallelAgents[0].Memory.Clear();
                 
-                states_batches = Utils.Split(train_data.States, hp.batchSize).Select(x => Tensor.Cat(null, x)).ToList();
+                states_batches = Utils.Split(train_data.States, hp.batchSize).Select(x => Tensor.Concat(null, x)).ToList();
                 
                 if(model.IsUsingContinuousActions) 
-                    cont_act_batches = Utils.Split(train_data.ContinuousActions, hp.batchSize).Select(x => Tensor.Cat(null, x)).ToList();
+                    cont_act_batches = Utils.Split(train_data.ContinuousActions, hp.batchSize).Select(x => Tensor.Concat(null, x)).ToList();
                 
                 if(model.IsUsingDiscreteActions)
-                    disc_act_batches = Utils.Split(train_data.DiscreteActions, hp.batchSize).Select(x => Tensor.Cat(null, x)).ToList();
+                    disc_act_batches = Utils.Split(train_data.DiscreteActions, hp.batchSize).Select(x => Tensor.Concat(null, x)).ToList();
                 
                 TrainFlag = true;
                 parallelAgents[0].behaviourType = BehaviourType.Off;
@@ -89,11 +89,11 @@ namespace DeepUnity
                 model.dContOptimizer.ZeroGrad();
                 
                 var prediction_real = model.discContNetwork.Forward(cont_act_batch_real);
-                var loss_real = Loss.BinaryCrossEntropy(prediction_real, DiscriminatorRealTarget(hp.batchSize));
+                var loss_real = Loss.BCE(prediction_real, DiscriminatorRealTarget(hp.batchSize));
                 model.discContNetwork.Backward(loss_real.Derivative);
 
                 var prediction_fake = model.discContNetwork.Forward(cont_act_batch_fake);
-                var loss_fake = Loss.BinaryCrossEntropy(prediction_fake, DiscriminatorFakeTarget(hp.batchSize));
+                var loss_fake = Loss.BCE(prediction_fake, DiscriminatorFakeTarget(hp.batchSize));
                 model.discContNetwork.Backward(loss_fake.Derivative);
 
                 model.dContOptimizer.ClipGradNorm(hp.gradClipNorm);
@@ -129,11 +129,11 @@ namespace DeepUnity
                 model.dDiscOptimizer.ZeroGrad();
 
                 var prediction_real = model.discDiscNetwork.Forward(disc_act_batch_real);
-                var loss_real = Loss.BinaryCrossEntropy(prediction_real, DiscriminatorRealTarget(hp.batchSize));
+                var loss_real = Loss.BCE(prediction_real, DiscriminatorRealTarget(hp.batchSize));
                 model.discDiscNetwork.Backward(loss_real.Derivative);
 
                 var prediction_fake = model.discDiscNetwork.Forward(disc_act_batch_fake);
-                var loss_fake = Loss.BinaryCrossEntropy(prediction_fake, DiscriminatorFakeTarget(hp.batchSize));
+                var loss_fake = Loss.BCE(prediction_fake, DiscriminatorFakeTarget(hp.batchSize));
                 model.discDiscNetwork.Backward(loss_fake.Derivative);
 
                 model.dDiscOptimizer.ClipGradNorm(hp.gradClipNorm);
@@ -147,7 +147,7 @@ namespace DeepUnity
                 Tensor Gz;
                 model.DiscreteForward(states_batch, out Gz);
                 Tensor DGz = model.discDiscNetwork.Forward(Gz);
-                Loss loss = Loss.BinaryCrossEntropy(DGz, DiscriminatorRealTarget(hp.batchSize));
+                Loss loss = Loss.BCE(DGz, DiscriminatorRealTarget(hp.batchSize));
                 var generatorLossDiff = model.discDiscNetwork.Backward(loss.Derivative);
                 model.discreteNetwork.Backward(generatorLossDiff);
 

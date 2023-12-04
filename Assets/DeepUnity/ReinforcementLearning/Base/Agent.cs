@@ -52,7 +52,6 @@ namespace DeepUnity
         // Draw agent's memory.
         private LinkedList<Vector3> lastKWorldPositions; // keeps track of the last K last positions in order to draw them
 
-        private const float observationsClip = 3f;
 
         public virtual void Awake()
         {
@@ -337,7 +336,7 @@ namespace DeepUnity
                 state = model.observationsNormalizer.Normalize(state);
             }
 
-            state = state.Clip(-observationsClip, observationsClip);
+            state = state.Clip(-model.observationsClip, model.observationsClip);
 
             return state;
         }

@@ -6,21 +6,45 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 
-
 namespace DeepUnity
 {
     /// <summary>
-    /// [Deprecated] A tensor used for custom objectives, that lives in VRAM and runs much faster high computational operations like MatMul.
+    /// A tensor that lives in VRAM. Note that are hard to use, and each new GPU Tensor must be disposed when is no longer used...
     /// </summary>
-    [Serializable]
-    public sealed class TensorGPU : IDisposable, ISerializationCallbackReceiver, IEquatable<Tensor>, IEquatable<TensorGPU>
-    { 
-        private ComputeBuffer data;
-        [SerializeField] private float[] serialized_data;
-        [SerializeField] private int[] shape;
-        private bool disposed = false;
+    [Serializable,  InitializeOnLoad]
+    public sealed class TensorGPU : ISerializationCallbackReceiver, IDisposable, ICloneable, IEquatable<Tensor>, IEquatable<TensorGPU>
+    {
+        static TensorGPU()
+        {
+            EditorApplication.playModeStateChanged += DeallocateTensors;
+        }
+        private readonly static Dictionary<TensorGPU, TensorGPU> AllocatedTensors = new Dictionary<TensorGPU, TensorGPU>();
+        private readonly static int MAX_ALLOC_TENSORS = 128;    
+        private static void DeallocateTensors(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.ExitingPlayMode)
+            {
+                if(AllocatedTensors.Count > 0)
+                {
+                    ConsoleMessage.Info($"{AllocatedTensors.Count} TensorGPUs deallocated. Please dispose TensorGPUs after use.");
 
-        // Fields that are used for fast value extraction on indexing. ..
+                    foreach (var item in AllocatedTensors)
+                    {
+                        item.Value.data.Release();
+                       
+                    }
+                    AllocatedTensors.Clear();
+                }
+              
+            }
+        }
+
+
+        private ComputeBuffer data;
+        [ReadOnly, SerializeField] private float[] serialized_data;
+        [ReadOnly, SerializeField] private int[] shape;
+
+        // These fields that are used for fast value extraction on indexing. ..
         private ComputeBuffer valueAtIndex;
         private float[] valueAtIndexRecv; 
         // .. From VRAM TO RAM
@@ -77,8 +101,6 @@ namespace DeepUnity
                     return shape[shape.Length - 4];
             }
         }
-
-        
         public float this[int w]
         {
             get
@@ -216,7 +238,7 @@ namespace DeepUnity
                 cs.SetInt("b1", n);
 
                 cs.Dispatch(0, 1, 1, 1);
-
+                
                 valueAtIndex.GetData(valueAtIndexRecv);
                 return valueAtIndexRecv[0];
             }
@@ -236,12 +258,18 @@ namespace DeepUnity
             }
         }
 
-        // Create
+
+      
+        /// Deallocates the Tensor from VRAM and destroys the object.
+        public void Dispose()
+        {       
+            AllocatedTensors.Remove(this);
+            data.Release();
+            GC.SuppressFinalize(this);
+        }
+        // Allocates the Tensor to VRAM.
         private TensorGPU(params int[] shape)
         {
-            Debug.LogError("TensorGPU class is deprecated. Please use Tensor class instead!");
-            EditorApplication.isPlaying = false;
-
             if (shape == null)
                 throw new ShapeException("Tensor cannot be instantiated with null shape");
             if (shape.Length == 0)
@@ -260,6 +288,8 @@ namespace DeepUnity
             if (size > 4_194_304) // hardcoded like this because 4096x4096 max allowed matrix, on 8192 it crashes
                 throw new NotSupportedException("Tensor dimensions is too large on initialization (cannot surpass 4,194,304 units).");
 
+          
+
 
             this.shape = shape.ToArray();
             this.data = new ComputeBuffer(size, 4);
@@ -270,25 +300,14 @@ namespace DeepUnity
             cs.SetBuffer(kernel, "result", this.data);
             cs.Dispatch(kernel, 1, 1, 1);
 
-            TensorGPUAutoDisposer.tensors.AddLast(this);
-            GC.Collect();
-        }
-        public static TensorGPU Reshape(TensorGPU tensor, params int[] newShape)
-        {
-            int count = 1;
-            foreach (var item in newShape)
+            AllocatedTensors.Add(this, this);
+
+            if (AllocatedTensors.Count > MAX_ALLOC_TENSORS)
             {
-                count *= item;
+                ConsoleMessage.Error($"Cannot allocate more than {MAX_ALLOC_TENSORS} TensorGPUs in the same time. Make sure there are no memory leaks and all unused TensorGPUs are Disposed!");
+                EditorApplication.isPlaying = false;
             }
 
-            if (count != tensor.Count())
-                throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
-
-            TensorGPU result = new TensorGPU(newShape);
-            float[] tensor_data = new float[tensor.Count()];
-            tensor.data.GetData(tensor_data);
-            result.data.SetData(tensor_data);
-            return result;
         }
         public static TensorGPU Identity(TensorGPU other)
         {
@@ -457,6 +476,10 @@ namespace DeepUnity
 
             cs.Dispatch(kernel, 1, 1, 1);
             return t;
+        }
+        public static TensorGPU RandomNormal(params int[] shape)
+        {
+            return RandomNormal((0, 1), shape);
         }
         public static TensorGPU RandomNormal((float, float) mu_sigma, params int[] shape)
         {
@@ -744,6 +767,23 @@ namespace DeepUnity
             else
                 return shape[shape.Length + axis];
         }
+        public static TensorGPU Reshape(TensorGPU tensor, params int[] newShape)
+        {
+            int count = 1;
+            foreach (var item in newShape)
+            {
+                count *= item;
+            }
+
+            if (count != tensor.Count())
+                throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
+
+            TensorGPU result = new TensorGPU(newShape);
+            float[] tensor_data = new float[tensor.Count()];
+            tensor.data.GetData(tensor_data);
+            result.data.SetData(tensor_data);
+            return result;
+        }
         public static TensorGPU Squeeze(TensorGPU tensor, int? axis = null)
         {
             if (axis == null)
@@ -838,7 +878,7 @@ namespace DeepUnity
         }
         public static TensorGPU Concat(int? axis, params TensorGPU[] tensors)
         {
-            Tensor result = Tensor.Cat(axis, tensors.Select(x => Tensor.Identity(x)).ToArray());
+            Tensor result = Tensor.Concat(axis, tensors.Select(x => Tensor.Identity(x)).ToArray());
             return TensorGPU.Identity(result);
         }
         public static TensorGPU Expand(TensorGPU tensor, int axis, int times)
@@ -975,7 +1015,12 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-                result.Squeeze(axis);
+            {
+                TensorGPU res = Squeeze(result, axis);
+                result.Dispose();
+                return res;
+            }
+                
             return result;
         }
         public static TensorGPU Sum(TensorGPU tensor, int axis, bool keepDim = false)
@@ -1010,7 +1055,11 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-                result.Squeeze(axis);
+            {
+                TensorGPU res = Squeeze(result, axis);
+                result.Dispose();
+                return res;
+            }
             return result;
         }
         public static TensorGPU Var(TensorGPU tensor, int axis, int correction = 1, bool keepDim = false)
@@ -1048,7 +1097,11 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-                result.Squeeze(axis);
+            {
+                TensorGPU res = Squeeze(result, axis);
+                result.Dispose();
+                return res;
+            }
             return result;
         }
         public static TensorGPU Std(TensorGPU tensor, int axis, int correction = 1, bool keepDim = false)
@@ -1085,7 +1138,11 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-                result.Squeeze(axis);
+            {
+                TensorGPU res = Squeeze(result, axis);
+                result.Dispose();
+                return res;
+            }
             return result;
         }
         public static TensorGPU Min(TensorGPU tensor, int axis, bool keepDim = false)
@@ -1121,7 +1178,11 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-                result.Squeeze(axis);
+            {
+                TensorGPU res = Squeeze(result, axis);
+                result.Dispose();
+                return res;
+            }
             return result;
         }
         public static TensorGPU Max(TensorGPU tensor, int axis, bool keepDim = false)
@@ -1156,7 +1217,11 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-                result.Squeeze(axis);
+            {
+                TensorGPU res = Squeeze(result, axis);
+                result.Dispose();
+                return res;
+            }
             return result;
         }
         public static TensorGPU Pow(TensorGPU tensor, float power)
@@ -1282,22 +1347,6 @@ namespace DeepUnity
         #endregion Static operations
 
 
-        #region Instance operations
-        public TensorGPU Reshape(params int[] newShape)
-        {
-            return Reshape(this, newShape);
-        }
-        public TensorGPU Squeeze(int? axis = null)
-        {
-            return Squeeze(this, axis);
-        }
-        public TensorGPU Unsqueeze(int axis)
-        {
-            return Unsqueeze(this, axis);
-        }
-
-        #endregion Instance operations
-
 
         // other
         public int Count(Func<float, bool> predicate = null)
@@ -1363,6 +1412,10 @@ namespace DeepUnity
 
             return true;
         }
+        public object Clone()
+        {
+            return Identity(this);
+        }
         public override string ToString()
         {
             int rank = Rank;
@@ -1422,7 +1475,7 @@ namespace DeepUnity
                                 sb.Append(", ");
 
                             int index = l * Channels * Height * Width + k * Height * Width + j * Width + i;
-                            sb.Append(arrdata[index].ToString("0.00000"));
+                            sb.Append(arrdata[index].ToString(StringFormat));
                         }
 
                         if (rank > 1)
@@ -1445,29 +1498,19 @@ namespace DeepUnity
         {
             return base.GetHashCode();
         }
-        /// <summary>
-        /// Deallocates the Tensor from VRAM.
-        /// </summary>
-        public void Dispose()
-        {
-            if (disposed)
-                return;
+     
 
-            data.Release();
-            disposed = true;
-            GC.SuppressFinalize(this);
-        }
         public void OnBeforeSerialize()
         {
             serialized_data = new float[data.count];
             data.GetData(serialized_data);
+            data.Dispose();
         }
         public void OnAfterDeserialize()
         {
             data = new ComputeBuffer(serialized_data.Length, 4);
-            disposed = false;
             data.SetData(serialized_data);
-            TensorGPUAutoDisposer.tensors.AddLast(this);
+            AllocatedTensors.Add(this, this);
         }
 
         // inside use      
@@ -1523,28 +1566,7 @@ namespace DeepUnity
             else
                 return new int[] { b, c, h, w };
         }
-    }
-
-
-    [InitializeOnLoad]
-    internal sealed class TensorGPUAutoDisposer
-    {
-        public readonly static LinkedList<TensorGPU> tensors = new LinkedList<TensorGPU>();
-        static TensorGPUAutoDisposer()
-        {
-            EditorApplication.playModeStateChanged += DisposeAllTensors;
-        }
-        private TensorGPUAutoDisposer() { }
-        private static void DisposeAllTensors(PlayModeStateChange state)
-        {
-            if (state == PlayModeStateChange.ExitingPlayMode)
-            {
-                foreach (var item in tensors)
-                {
-                    item?.Dispose();
-                }
-            }
-        }
+        public static string StringFormat { get; set; } = "0.00000";
     }
 }
 

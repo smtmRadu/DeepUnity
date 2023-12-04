@@ -1,0 +1,65 @@
+<svg width="2000" height="2500" xmlns="http://www.w3.org/2000/svg">
+<text x="10" y="20" font-family="Arial" font-size="26" fill="black"> [Pusher] Training Session</text>
+<text x="10" y="50" font-family="Arial" font-size="16" fill="black">[Statistics]</text>
+<text x="50" y="70" font-family="Arial" font-size="12" fill="black">Started at: 5:09:07 PM, Sunday, December 3, 2023</text>
+<text x="50" y="90" font-family="Arial" font-size="12" fill="black">Finished at: 5:10:00 PM, Sunday, December 3, 2023</text>
+<text x="50" y="110" font-family="Arial" font-size="12" fill="black">Training Session Time: 0 hrs : 0 min : 53 sec</text>
+<text x="50" y="130" font-family="Arial" font-size="12" fill="black">Inference Time: 0 hrs : 3 min : 11 sec       [Per agent: 0 hrs : 3 min : 11 sec]        [Device: CPU]</text>
+<text x="50" y="150" font-family="Arial" font-size="12" fill="black">Policy Update Time: 0 hrs : 0 min : 9 sec        [Per iteration: 0 hrs : 0 min : 8 sec]        [Device: GPU]</text>
+<text x="50" y="170" font-family="Arial" font-size="12" fill="black">Inference Time / Training Session Time: 3.328</text>
+<text x="50" y="190" font-family="Arial" font-size="12" fill="black">Policy Update Time / Training Session Time: 0.170</text>
+<text x="50" y="210" font-family="Arial" font-size="12" fill="black">Episode Count: 6</text>
+<text x="50" y="230" font-family="Arial" font-size="12" fill="black">Inference Steps: 4757    [Per agent: 4757]     [Per Episode (mean): 792]</text>
+<text x="50" y="250" font-family="Arial" font-size="12" fill="black">Iterations: 1</text>
+<text x="50" y="270" font-family="Arial" font-size="12" fill="black">Parallel Agents: 1</text>
+<text x="50" y="290" font-family="Arial" font-size="12" fill="black">Timescale: 6.094429</text>
+<text x="50" y="310" font-family="Arial" font-size="12" fill="black">Trainer: PPO</text>
+<text x="10" y="360" font-family="Arial" font-size="16" fill="black">[Hyperparameters]</text>
+<text x="50" y="380" font-family="Arial" font-size="12" fill="black">Buffer Size: 4096        [Batch Size: 256       (x16)]</text>
+<text x="50" y="400" font-family="Arial" font-size="12" fill="black">Num Epoch: 8</text>
+<text x="50" y="420" font-family="Arial" font-size="12" fill="black">Time Horizon: 64</text>
+<text x="50" y="440" font-family="Arial" font-size="12" fill="black">Gradient Cliping Normalization: 0.5</text>
+<text x="50" y="460" font-family="Arial" font-size="12" fill="black">Learning Rate Schedule: False    </text>
+<text x="10" y="510" font-family="Arial" font-size="16" fill="black">[Behaviour]</text>
+<text x="50" y="530" font-family="Arial" font-size="12" fill="black">Space Size: 72</text>
+<text x="50" y="550" font-family="Arial" font-size="12" fill="black">Continuous Actions: 3 [Standard Deviation: Trainable]     </text>
+<text x="50" y="570" font-family="Arial" font-size="12" fill="black">Discrete Actions: 0</text>
+<text x="50" y="590" font-family="Arial" font-size="12" fill="black">TargetFPS: 50 (physics update rate)</text>
+<text x="50" y="610" font-family="Arial" font-size="12" fill="black">Observations Normalization: True</text>
+<text x="10" y="660" font-family="Arial" font-size="16" fill="black">[Decision Requester]</text>
+<text x="50" y="680" font-family="Arial" font-size="12" fill="black">Max Step: 750</text>
+<text x="50" y="700" font-family="Arial" font-size="12" fill="black">Decision Period: 2      [Actions Between Decisions: True]</text>
+<text x="10" y="750" font-family="Arial" font-size="16" fill="black">[Graphs]</text>
+<text x="50" y="770" font-family="Arial" font-size="12" fill="black">Episode Reward (6)</text>
+<text x="50" y="785" font-family="Arial" font-size="10" fill="black">-3.732562</text>
+<text x="50" y="1000" font-family="Arial" font-size="10" fill="black">-3.752562</text>
+<path d="M50,990 L75,915.0001 L100,790.0001 L125,940 L150,940 L175,940 " stroke="blue" fill="none" />
+<text x="50" y="1040" font-family="Arial" font-size="12" fill="black">Episode Length (6)</text>
+<text x="50" y="1055" font-family="Arial" font-size="10" fill="black">750</text>
+<text x="50" y="1270" font-family="Arial" font-size="10" fill="black">750</text>
+<path d="M50,1260 L75,1260 L100,1260 L125,1260 L150,1260 L175,1260 " stroke="blue" fill="none" />
+<text x="50" y="1310" font-family="Arial" font-size="12" fill="black">Policy Loss</text>
+<text x="50" y="1325" font-family="Arial" font-size="10" fill="black">0.01406613</text>
+<text x="50" y="1540" font-family="Arial" font-size="10" fill="black">0.002208158</text>
+<path d="M50,1330 L75,1508.648 L100,1505.652 L125,1530 L150,1524.97 L175,1502.53 L200,1505.591 L225,1501.402 " stroke="blue" fill="none" />
+<text x="50" y="1580" font-family="Arial" font-size="12" fill="black">Value Loss</text>
+<text x="50" y="1595" font-family="Arial" font-size="10" fill="black">0.0003712672</text>
+<text x="50" y="1810" font-family="Arial" font-size="10" fill="black">0.0001586379</text>
+<path d="M50,1600.009 L75,1687.988 L100,1738.541 L125,1759.468 L150,1772.751 L175,1783.781 L200,1792.553 L225,1800 " stroke="blue" fill="none" />
+<text x="50" y="1850" font-family="Arial" font-size="12" fill="black">Learning Rate</text>
+<text x="50" y="1865" font-family="Arial" font-size="10" fill="black">0.0003</text>
+<text x="50" y="2080" font-family="Arial" font-size="10" fill="black">0.0003</text>
+<path d="M50,2070 L75,2070 L100,2070 L125,2070 L150,2070 L175,2070 L200,2070 L225,2070 " stroke="blue" fill="none" />
+<text x="50" y="2120" font-family="Arial" font-size="12" fill="black">Entropy</text>
+<text x="50" y="2135" font-family="Arial" font-size="10" fill="black">-0.2189385</text>
+<text x="50" y="2350" font-family="Arial" font-size="10" fill="black">-0.2206734</text>
+<path d="M50,2140.001 L75,2268.749 L100,2263.828 L125,2254.238 L150,2322.076 L175,2274.961 L200,2248.303 L225,2340 " stroke="blue" fill="none" />
+<text x="750" y="770" font-family="Arial" font-size="12" fill="black">Simplified</text>
+<text x="750" y="785" font-family="Arial" font-size="10" fill="black">-3.745479</text>
+<text x="750" y="1000" font-family="Arial" font-size="10" fill="black">-3.745479</text>
+<path d="M875,990 " stroke="blue" fill="none" />
+<text x="750" y="1040" font-family="Arial" font-size="12" fill="black">Simplified</text>
+<text x="750" y="1055" font-family="Arial" font-size="10" fill="black">750</text>
+<text x="750" y="1270" font-family="Arial" font-size="10" fill="black">750</text>
+<path d="M875,1260 " stroke="blue" fill="none" />
+</svg>

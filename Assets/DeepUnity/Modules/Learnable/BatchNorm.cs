@@ -173,12 +173,14 @@ namespace DeepUnity
 
         public object Clone()
         {
-            BatchNorm laynorm = new BatchNorm(this.num_features, this.momentum);
-            laynorm.gamma = (Tensor)this.gamma.Clone();
-            laynorm.beta = (Tensor)this.beta.Clone();
-            laynorm.runningMean = (Tensor)this.runningMean.Clone();
-            laynorm.runningVar = (Tensor)this.runningVar.Clone();
-            return laynorm;
+            BatchNorm bnclone = new BatchNorm(this.num_features, this.momentum);
+            bnclone.gamma = (Tensor)this.gamma.Clone();
+            bnclone.beta = (Tensor)this.beta.Clone();
+            bnclone.gammaGrad = (Tensor)this.gammaGrad.Clone();
+            bnclone.betaGrad = (Tensor)this.betaGrad.Clone();
+            bnclone.runningMean = (Tensor)this.runningMean.Clone();
+            bnclone.runningVar = (Tensor)this.runningVar.Clone();
+            return bnclone;
         }
 
         /// <summary>

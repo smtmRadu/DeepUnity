@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using System.Threading.Tasks;
 namespace DeepUnity
 {
     // https://www.youtube.com/watch?v=tMjdQLylyGI&t=602s
@@ -17,7 +18,7 @@ namespace DeepUnity
         [SerializeField] private Device device;
         [SerializeField] private Tensor weights;
         [SerializeField] private Tensor biases;
-        [NonSerialized] private Tensor weigthsGrad;
+        [NonSerialized] private Tensor weightsGrad;
         [NonSerialized] private Tensor biasesGrad;
 
         /// <summary>
@@ -38,9 +39,9 @@ namespace DeepUnity
                 throw new ArgumentException("Out_features cannot be less than 1.");
 
             this.device = device;
-            weights = Initializer.CreateParameter(new int[] {out_features, in_features}, in_features, out_features, gamma_init);
-            biases = Initializer.CreateParameter(new int[] { out_features}, in_features, out_features, gamma_init);
-            weigthsGrad = Tensor.Zeros(weights.Shape);
+            weights = Initializer.CreateParameter(new int[] { out_features, in_features }, in_features, out_features, gamma_init);
+            biases = Initializer.CreateParameter(new int[] { out_features }, in_features, out_features, beta_init);
+            weightsGrad = Tensor.Zeros(weights.Shape);
             biasesGrad = Tensor.Zeros(biases.Shape);
         }
         public Tensor Predict(Tensor input)
@@ -53,10 +54,7 @@ namespace DeepUnity
 
             if (device == Device.CPU)
             {
-                if (isBatched)
-                    return Tensor.MatMul(input, Tensor.Transpose(weights, 0, 1)) + Tensor.Expand(Tensor.Unsqueeze(biases, 0), 0, batch_size);
-                else
-                    return Tensor.MatMul(input, Tensor.Transpose(weights, 0, 1)) + biases;
+                return Linear(input, weights, biases, isBatched, batch_size); // faster inference x10 with this...
             }
             else
             {
@@ -67,13 +65,13 @@ namespace DeepUnity
                 inputBuffer.SetData(input.ToArray());
                 cs.SetBuffer(0, "input", inputBuffer);
 
-                ComputeBuffer tranposedGammaBuffer = new ComputeBuffer(weights.Count(), 4);
-                tranposedGammaBuffer.SetData(Tensor.Transpose(weights, 0, 1).ToArray());
-                cs.SetBuffer(0, "transposed_gamma", tranposedGammaBuffer);
+                ComputeBuffer weightsBuffer = new ComputeBuffer(weights.Count(), 4);
+                weightsBuffer.SetData(weights.ToArray());
+                cs.SetBuffer(0, "gamma", weightsBuffer);
 
-                ComputeBuffer betaBuffer = new ComputeBuffer(biases.Count(), 4);
-                betaBuffer.SetData(biases.ToArray());
-                cs.SetBuffer(0, "beta", betaBuffer);
+                ComputeBuffer biasesBuffer = new ComputeBuffer(biases.Count(), 4);
+                biasesBuffer.SetData(biases.ToArray());
+                cs.SetBuffer(0, "beta", biasesBuffer);
 
                 ComputeBuffer outputBuffer = new ComputeBuffer(batch_size * biases.Size(-1), 4);
                 // outputBuffer.SetData(zero_values); // we do not need this because the values are set (not added) to the rw structrured buffer.
@@ -82,7 +80,6 @@ namespace DeepUnity
                 cs.SetInt("batch_size", batch_size);
                 cs.SetInt("in_features", weights.Size(-1));
                 cs.SetInt("out_features", biases.Size(-1));
-                cs.SetInt("gamma_rank", weights.Rank);
                 cs.SetInt("input_rank", input.Rank);
 
                 cs.Dispatch(0,
@@ -93,8 +90,8 @@ namespace DeepUnity
                 Tensor result = Tensor.Constant(outputBuffer);
 
                 inputBuffer.Release();
-                tranposedGammaBuffer.Release();
-                betaBuffer.Release();
+                weightsBuffer.Release();
+                biasesBuffer.Release();
                 outputBuffer.Release();
 
                 if (isBatched)
@@ -119,70 +116,118 @@ namespace DeepUnity
             bool isBatched = loss.Rank == 2;
             int batch_size = isBatched ? loss.Size(-2) : 1;
 
-            if (!isBatched)
-            {
-                loss = loss.Unsqueeze(0);
-                InputCache = InputCache.Unsqueeze(0);
-            }
 
-            Tensor transposedLoss = Tensor.Transpose(loss, 0, 1);
             if (device == Device.CPU)
             {
-                // compute the gradients
-                Tensor.CopyTo(weigthsGrad + Tensor.MatMul(transposedLoss, InputCache) / batch_size, weigthsGrad);
+                Tensor transposedLoss;
+
+                if (isBatched)
+                    transposedLoss = Tensor.Transpose(loss, 0, 1);
+                else
+                {
+                    transposedLoss = Tensor.Transpose(loss.Unsqueeze(0), 0, 1);
+                    InputCache = InputCache.Unsqueeze(0);
+                }
+
+                Tensor.CopyTo(weightsGrad + Tensor.MatMul(transposedLoss, InputCache) / batch_size, weightsGrad);
                 Tensor.CopyTo(biasesGrad + Tensor.Mean(transposedLoss, axis: 1), biasesGrad);
             }
             else
             {
-                // dLoss w.r.t input
+                // dLoss w.r.t theta
                 ComputeShader cs = DeepUnityMeta.DenseCS;
 
-                ComputeBuffer transposedLossBuffer = new ComputeBuffer(transposedLoss.Count(), 4);
-                transposedLossBuffer.SetData(transposedLoss.ToArray());
-                cs.SetBuffer(1, "transposed_loss", transposedLossBuffer);
+                ComputeBuffer lossBuffer = new ComputeBuffer(loss.Count(), 4);
+                lossBuffer.SetData(loss.ToArray());
+                cs.SetBuffer(1, "loss", lossBuffer);
 
                 ComputeBuffer inputCacheBuffer = new ComputeBuffer(InputCache.Count(), 4);
                 inputCacheBuffer.SetData(InputCache.ToArray());
                 cs.SetBuffer(1, "input", inputCacheBuffer);
 
-                ComputeBuffer gammaGradBuffer = new ComputeBuffer(weigthsGrad.Count(), 4);
-                gammaGradBuffer.SetData(weigthsGrad.ToArray());
-                cs.SetBuffer(1, "gamma_grad", gammaGradBuffer);
+                ComputeBuffer weightsGradBuffer = new ComputeBuffer(weightsGrad.Count(), 4);
+                weightsGradBuffer.SetData(weightsGrad.ToArray());
+                cs.SetBuffer(1, "gamma_grad", weightsGradBuffer);
 
-                ComputeBuffer betaGradBuffer = new ComputeBuffer(biasesGrad.Count(), 4);
-                betaGradBuffer.SetData(biasesGrad.ToArray());
-                cs.SetBuffer(1, "beta_grad", betaGradBuffer);
+                ComputeBuffer biasesGradBuffer = new ComputeBuffer(biasesGrad.Count(), 4);
+                biasesGradBuffer.SetData(biasesGrad.ToArray());
+                cs.SetBuffer(1, "beta_grad", biasesGradBuffer);
 
                 cs.SetInt("batch_size", batch_size);
                 cs.SetInt("in_features", weights.Size(-1));
                 cs.SetInt("out_features", biases.Size(-1));
-                cs.SetInt("input_rank", InputCache.Rank);
 
                 cs.Dispatch(1,
-                    (weigthsGrad.Size(-1) + 31) / 32,
-                    (weigthsGrad.Size(-2) + 31) / 32,
+                    (weights.Size(-1) + 31) / 32,
+                    (weights.Size(-2) + 31) / 32,
                     1);
 
-                Tensor.CopyTo(weigthsGrad + Tensor.Constant(gammaGradBuffer).Reshape(weigthsGrad.Shape), weigthsGrad);
-                Tensor.CopyTo(biasesGrad + Tensor.Constant(betaGradBuffer).Reshape(biasesGrad.Shape), biasesGrad);
+                Tensor.CopyTo(Tensor.Constant(weightsGradBuffer).Reshape(weightsGrad.Shape), weightsGrad);
+                Tensor.CopyTo(Tensor.Constant(biasesGradBuffer), biasesGrad);
 
-                transposedLossBuffer.Release();
+                lossBuffer.Release();
                 inputCacheBuffer.Release();
-                gammaGradBuffer.Release();
-                betaGradBuffer.Release();
+                weightsGradBuffer.Release();
+                biasesGradBuffer.Release();
             }
 
 
             // Backpropagate the loss (batch_size, in)
-            if (isBatched)
-                return Tensor.MatMulGPU(loss, weights);
+            if (device == Device.CPU)
+                return Tensor.MatMul(loss, weights);
             else
-                return Tensor.MatMulGPU(loss, weights).Squeeze(0);
-
+                return Tensor.MatMulGPU(loss, weights);
         }
-        
-        
 
+        /// <summary>
+        /// Implemented only to make the inference even more efficient rather than using Matmul..
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="weights"></param>
+        /// <param name="biases"></param>
+        /// <returns></returns>
+        private Tensor Linear(Tensor x, Tensor weights, Tensor biases, bool isBatched, int B_size)
+        {
+            // x = (B, H_in) or (H_in)
+            // W = (H_out, H_in)
+            // B = (H_out)
+            int H_out = weights.Size(-2);
+            int H_in = weights.Size(-1);
+
+            Tensor y = isBatched ? Tensor.Zeros(B_size, H_out) : Tensor.Zeros(H_out);
+
+            //   (B, H_in) * (H_in, H_out)
+            //  (n, m) * (m, p) = (n, p)
+            if (isBatched)
+            {
+                Parallel.For(0, B_size, b =>
+                {
+                    for (int hout = 0; hout < H_out; hout++)
+                    {
+                        float sum = 0f;
+                        for (int hin = 0; hin < H_in; hin++)
+                        {
+                            sum += x[b, hin] * weights[hout, hin];
+                        }
+                        y[b, hout] = sum + biases[hout];
+                    }
+                });
+            }
+            else
+            {
+                Parallel.For(0, H_out, hout =>
+                {
+                    float sum = 0f;
+                    for (int hin = 0; hin < H_in; hin++)
+                    {
+                        sum += x[hin] * weights[hout, hin];
+                    }
+                    y[hout] = sum + biases[hout];
+                });
+            }
+
+            return y;
+        }
 
         public void SetDevice(Device device) { this.device = device; }
         public int ParametersCount()
@@ -191,30 +236,32 @@ namespace DeepUnity
         }
         public Parameter[] Parameters()
         {
-            if (weigthsGrad == null)
+            if (weightsGrad == null)
                 OnAfterDeserialize();
 
-            var w = new Parameter(weights, weigthsGrad);
+            var w = new Parameter(weights, weightsGrad);
             var b = new Parameter(biases, biasesGrad);
 
             return new Parameter[] { w, b };
         }
-        
+
         public object Clone()
         {
             var dense = new Dense(1, 1, device: this.device);
             dense.weights = (Tensor)this.weights.Clone();
             dense.biases = (Tensor)this.biases.Clone();
+            dense.weightsGrad = (Tensor)this.weightsGrad.Clone();
+            dense.biasesGrad = (Tensor)this.biasesGrad.Clone();
             return dense;
         }
 
 
-        public virtual void OnBeforeSerialize()
+        public void OnBeforeSerialize()
         {
 
         }
-        
-        public virtual void OnAfterDeserialize()
+
+        public void OnAfterDeserialize()
         {
             // This function is actually having 2 workers on serialization.
             // If shape int[] was not deserialized, we need to break this worker.
@@ -227,7 +274,7 @@ namespace DeepUnity
                 return;
 
             // do not check if gamma is != null...
-            this.weigthsGrad = Tensor.Zeros(weights.Shape);
+            this.weightsGrad = Tensor.Zeros(weights.Shape);
             this.biasesGrad = Tensor.Zeros(biases.Shape);
 
         }

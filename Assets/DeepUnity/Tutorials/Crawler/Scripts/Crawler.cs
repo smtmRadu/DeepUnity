@@ -46,7 +46,7 @@ namespace DeepUnityTutorials
             controller.AddBodyPart(foot3);
             controller.AddBodyPart(foot4);
 
-            controller.bodyPartsList.ForEach(x => x.TargetContact.rewardOnContact = 1f);
+            // controller.bodyPartsList.ForEach(x => x.TargetContact.rewardOnContact = 1f);
             // controller.bodyPartsList.ForEach(x => x.TargetContact.endEpisodeOnContact = true);
             controller.bodyPartsDict[this.transform].GroundContact.endEpisodeOnContact = true;
             controller.bodyPartsDict[this.transform].GroundContact.rewardOnContact = -1f;
@@ -157,7 +157,7 @@ namespace DeepUnityTutorials
 
             AddReward(0.001f * transform.localPosition.y); // Reward for head height
             AddReward(0.0001f * Vector3.Dot(dirToTarget.normalized,  Quaternion.Euler(0f, -90f, 0f) * transform.forward)); // Reward for looking at the target
-            AddReward(Mathf.Clamp(0.0001f / Vector3.Distance(transform.position, target.position), 0, 0.001f)); // Reward for getting close to the target
+            AddReward(Mathf.Clamp(0.001f / Vector3.Distance(transform.position, target.position), 0, 0.001f)); // Reward for getting close to the target
 
             // Point the arrow towards the target
             directionArrow.rotation = Quaternion.LookRotation(target.position - transform.position) * Quaternion.Euler(0, 90f, 0);
@@ -188,7 +188,10 @@ namespace DeepUnityTutorials
         private void OnTriggerEnter(Collider other)
         {
             if (other.CompareTag("Target"))
+            {
+                AddReward(+1);
                 OnEpisodeBegin();
+            }
         }
     }
 

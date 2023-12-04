@@ -121,7 +121,7 @@ namespace DeepUnity
                 sdp[i] = scaled_dot_product;
             }
             
-            return input + Tensor.Cat(null, sdp);
+            return input + Tensor.Concat(null, sdp);
         }
         /// <summary>
         /// Input: <b>(B, T, H)</b> or <b>(T, H)</b> for unbatched input. <br></br>
@@ -165,7 +165,7 @@ namespace DeepUnity
                 sdp[i] = scaled_dot_product;
             }
 
-            return input + Tensor.Cat(null, sdp);
+            return input + Tensor.Concat(null, sdp);
         }
         public Tensor Backward(Tensor dfx_dx)
         {
@@ -282,6 +282,10 @@ namespace DeepUnity
             att.W_K = (Tensor)this.W_K.Clone();
             att.W_V = (Tensor)this.W_V.Clone();
             att.W_O = (Tensor)this.W_O.Clone();
+            att.W_Q_grad = (Tensor)this.W_Q_grad.Clone();
+            att.W_K_grad = (Tensor)this.W_K_grad.Clone();
+            att.W_V_grad = (Tensor)this.W_V_grad.Clone();
+            att.W_O_grad = (Tensor)this.W_O_grad.Clone();
             att.softmax = (Softmax)this.softmax.Clone();
             return att;
 

@@ -41,28 +41,28 @@ namespace DeepUnity
         /// Targets: (B, *) or (*) for unbatched input <br></br>
         /// where * = input Shape
         /// </summary>
-        public static Loss CrossEntropy(Tensor predicts, Tensor targets) => new Loss(LossType.CE, predicts, targets);
+        public static Loss CE(Tensor predicts, Tensor targets) => new Loss(LossType.CE, predicts, targets);
         /// <summary>
         /// Hinge Hmbedded loss. <br></br>
         /// Predicts: (B, *) or (*) for unbatched input <br></br>
         /// Targets: (B, *) or (*) for unbatched input <br></br>
         /// where * = input Shape
         /// </summary>
-        public static Loss HingeEmbedded(Tensor predicts, Tensor targets) => new Loss(LossType.HE, predicts, targets);
+        public static Loss HE(Tensor predicts, Tensor targets) => new Loss(LossType.HE, predicts, targets);
         /// <summary>
         /// Binary Cross Entropy loss. <br></br>
         /// Predicts: (B, *) or (*) for unbatched input <br></br>
         /// Targets: (B, *) or (*) for unbatched input <br></br>
         /// where * = input Shape
         /// </summary>
-        public static Loss BinaryCrossEntropy(Tensor predicts, Tensor targets) => new Loss(LossType.BCE, predicts, targets);
+        public static Loss BCE(Tensor predicts, Tensor targets) => new Loss(LossType.BCE, predicts, targets);
         /// <summary>
         /// Hullback-Liebler Divergence loss. <br></br>
         /// Predicts: (B, *) or (*) for unbatched input <br></br>
         /// Targets: (B, *) or (*) for unbatched input <br></br>
         /// where * = input Shape
         /// </summary>
-        public static Loss KLDivergence(Tensor predicts, Tensor targets) => new Loss(LossType.KL, predicts, targets);
+        public static Loss KLD(Tensor predicts, Tensor targets) => new Loss(LossType.KLD, predicts, targets);
 
         /// <summary>
         /// Returns the mean loss value (positive number).
@@ -96,7 +96,7 @@ namespace DeepUnity
 
                     case LossType.HE:
                         return predicts.Zip(targets, (p, t) => MathF.Max(0f, 1f - p * t));
-                    case LossType.KL:
+                    case LossType.KLD:
                         return targets * Tensor.Log(targets / (predicts + Utils.EPSILON));
                     default:
                         throw new NotImplementedException("Unhandled loss type.");
@@ -104,7 +104,7 @@ namespace DeepUnity
             }
         }
         /// <summary>
-        /// Returns the computed loss function derivative [Used for backpropagation]
+        /// Returns the loss partial derivative with respect to the predicts (y).
         /// </summary>
         public Tensor Derivative { get
             {
@@ -122,7 +122,7 @@ namespace DeepUnity
 
                     case LossType.HE:
                         return predicts.Zip(targets, (p, t) => 1f - p * t > 0f ? -t : 0f);
-                    case LossType.KL:
+                    case LossType.KLD:
                         return -targets / (predicts + Utils.EPSILON);
                     default:
                         throw new NotImplementedException("Unhandled loss type.");
@@ -136,7 +136,7 @@ namespace DeepUnity
             CE,
             BCE,
             HE,            
-            KL
+            KLD
         }
     }
 }

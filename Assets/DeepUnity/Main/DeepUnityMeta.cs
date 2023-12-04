@@ -52,26 +52,26 @@ namespace DeepUnity
         public static TimeSpan Stop()
         {
             clock.Stop();
-            UnityEngine.Debug.Log("[Timer] : " +  clock.Elapsed);
+            ConsoleMessage.Info("[Timer] : " + clock.Elapsed);
             return clock.Elapsed;
         }
     }
    
     public enum InitType
     {
-        [Tooltip("N(0, s) where s = sqrt(2 / fan_in). Works well with ReLU / LeakyReLU activation function.")]
+        [Tooltip("[Kaiming He] N(0, s) where s = sqrt(2 / fan_in). Works well with ReLU / LeakyReLU activation function.")]
         HE_Normal,
-        [Tooltip("U(-k, k) where k = sqrt(6 / fan_in). Works well with ReLU / LeakyReLU  activation function.")]
+        [Tooltip("[Kaiming He] U(-k, k) where k = sqrt(6 / fan_in). Works well with ReLU / LeakyReLU  activation function.")]
         HE_Uniform, 
         
-        [Tooltip("N(0, s) where s = sqrt(2 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation function.")]
+        [Tooltip("[Xavier Glorot] N(0, s) where s = sqrt(2 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation function.")]
         Glorot_Normal,
-        [Tooltip("U(-k, k) where k = sqrt(6 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation function.")]
+        [Tooltip("[Xavier Gloro] U(-k, k) where k = sqrt(6 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation function.")]
         Glorot_Uniform,
 
-        [Tooltip("N(0, s) where s = sqrt(1 / (fan_in + fan_out)). Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
+        [Tooltip("[Yann LeCun] N(0, s) where s = sqrt(1 / (fan_in + fan_out)). Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
         LeCun_Normal,
-        [Tooltip("U(-k, k) where k = sqrt(3 / (fan_in + fan_out)).  Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
+        [Tooltip("[Yann LeCun] U(-k, k) where k = sqrt(3 / (fan_in + fan_out)).  Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
         LeCun_Uniform,
 
         [Tooltip("N(0, 1).")]

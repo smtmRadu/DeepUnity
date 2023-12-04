@@ -581,7 +581,7 @@ MonoBehaviour:
     current: 0
     mean: 0
   learningRate: 0.001
-  hiddenSize: 32
+  hiddenSize: 128
   trainingSamples: 1024
   batch_size: 128
   validationSamples: 32
@@ -819,7 +819,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &752495706
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -833,7 +833,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   material: {fileID: 0}
-  TestDevice: 1
+  TestDevice: 0
   graph:
     graph:
       serializedVersion: 2
@@ -844,12 +844,12 @@ MonoBehaviour:
     steps: 0
     current: 0
     mean: 0
-  MatShape: {x: 64, y: 128}
+  MatShape: {x: 512, y: 32}
   batchSize: 64
   lr: 0.001
-  Runs: 878
+  Runs: 1000
   rnn_network: {fileID: 11400000, guid: 7fb1cc86ea6c8bd44980b4c2cc2966ca, type: 2}
-  net: {fileID: 11400000, guid: ab18d81ae37f6724ba329dc0bc8c9f49, type: 2}
+  net: {fileID: 0}
   image: {fileID: 1095767907}
   image2: {fileID: 0}
   index: 0

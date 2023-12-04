@@ -2,9 +2,6 @@ using UnityEngine;
 using DeepUnity;
 using System.Collections.Generic;
 using UnityEngine.UI;
-using System;
-using Unity.VisualScripting;
-using System.Linq;
 
 namespace kbRadu
 {
@@ -32,55 +29,51 @@ namespace kbRadu
         public AgentBehaviour beh;
         private void Start()
         {
-            Tensor input = Tensor.Random01(3, 64, 89);
+            net = new NeuralNetwork(
+                new Dense(100, 256),
+                new ReLU(),
+                new Dense(256, 128),
+                new Sigmoid()
+                );
 
-            var inputcln = input.Clone() as Tensor;
+            net.SetDevice(Device.CPU);
+            var output = net.Forward(Tensor.Fill(0.3f, batchSize, 100));
+            print(net.Backward(output));
+            net.SetDevice(Device.GPU);
+            print(net.Backward(output));
 
-            MaxPool2D maxpl = new MaxPool2D(2);
-            Flatten flt = new Flatten();
-            Sigmoid sig = new Sigmoid();
+        }
+
+        public void TestCPU()
+        {
+            Tensor tensor1 = Tensor.RandomNormal(MatShape.x, MatShape.y);
+
+            Tensor tensor2 = Tensor.RandomNormal(MatShape.x, MatShape.y);
 
 
-            print(inputcln);
-            inputcln = maxpl.Forward(inputcln);
-            print(inputcln);
-            inputcln = sig.Forward(inputcln);
-            print(inputcln);
-            inputcln = flt.Forward(inputcln);
-            print(inputcln);
+            TimeKeeper.Start();
+            for (int i = 0; i < Runs; i++)
+            {
+                Tensor.MatMul(tensor1, tensor2);
+            }
+            
+            TimeKeeper.Stop();
+        }
+
+        public void TestGPU()
+        {
+            TensorGPU tensor1 = TensorGPU.RandomNormal(MatShape.x, MatShape.y);
+
+            TensorGPU tensor2 = TensorGPU.RandomNormal(MatShape.x, MatShape.y);
 
 
-            // var nt = new NeuralNetwork(
-            //     new Conv2D((1, 32, 40), 2, 3), // 2, 30, 38
-            //     new MaxPool2D(2), //2 15 19
-            //     new Sigmoid(),
-            //     new Flatten(),
-            //     new Dense(570, 64, InitType.Glorot_Uniform, InitType.Zeros),
-            //     new Tanh(),
-            //     new Dense(64, 1, InitType.Glorot_Uniform, InitType.Zeros),
-            //     new Exp()
-            //     ).CreateAsset("policySigma");
-            // 
-            // nt = new NeuralNetwork(
-            //     new Conv2D((1, 32, 40), 2, 3), // 2, 30, 38
-            //     new MaxPool2D(2), //2 15 19
-            //     new Sigmoid(),
-            //     new Flatten(),
-            //     new Dense(570, 64, InitType.Glorot_Uniform, InitType.Zeros),
-            //     new Tanh(),
-            //     new Dense(64, 1, InitType.Glorot_Uniform, InitType.Zeros)
-            //     ).CreateAsset("policyMu");
-            // 
-            // nt = new NeuralNetwork(
-            //         new Conv2D((1, 32, 40), 2, 3), // 2, 30, 38
-            //         new MaxPool2D(2), //2 15 19
-            //         new Sigmoid(),
-            //         new Flatten(),
-            //         new Dense(570, 64, InitType.Glorot_Uniform, InitType.Zeros),
-            //         new Tanh(),
-            //         new Dense(64, 1, InitType.Glorot_Uniform, InitType.Zeros)
-            //         ).CreateAsset("value");
+            TimeKeeper.Start();
+            for (int i = 0; i < Runs; i++)
+            {
+                TensorGPU.MatMul(tensor1, tensor2);
+            }
 
+            TimeKeeper.Stop();
         }
         // private void Start()
         // {
@@ -146,7 +139,7 @@ namespace kbRadu
             for (int i = 0; i < inputBatched.Length; i++)
             {
                 var preds = net.Forward(inputBatched[i]);
-                var loss = Loss.CrossEntropy(preds, targetBatches[i]);
+                var loss = Loss.CE(preds, targetBatches[i]);
 
                 net.Backward(loss.Derivative);
                 optim.Step();

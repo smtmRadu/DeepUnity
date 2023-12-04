@@ -28,10 +28,10 @@ namespace DeepUnity
         [Min(0.001f)] public float gamma = 0.99f;
 
         [Tooltip("[Typical range: (Continuous - PPO) 512 - 5120, (Continuous - SAC) 128 - 1024, (Discrete - PPO) 32 - 512] Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer size.")]
-        [Min(32)] public int batchSize = 256; //512
+        [Min(32)] public int batchSize = 512; //512
 
         [Tooltip("[Typical range: (PPO) 2048 - 409600, (SAC) 50000 - 1000000] Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch size. Typically a larger buffer size corresponds to more stable training updates.")]
-        [Min(512)] public int bufferSize = 4096; //10240
+        [Min(512)] public int bufferSize = 10240; //10240
 
         [Tooltip("[Typical range: 0 - 1] Global Gradient Clipping max norm value. Set to 0 to turn off.")]
         [Min(0)] public float gradClipNorm = 0.5f;

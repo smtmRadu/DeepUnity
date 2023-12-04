@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using UnityEngine;
 
 namespace DeepUnity
@@ -41,10 +40,6 @@ namespace DeepUnity
             InputCache = new Stack<Tensor>();
             HiddenCache = new Stack<Tensor>();
             Activations = new Stack<Activation>();
-
-
-            float sqrtK = MathF.Sqrt(1f / hidden_size);
-            var range = (-sqrtK, sqrtK);
 
             weights = Initializer.CreateParameter(new int[] { hidden_size, input_size }, input_size, hidden_size, InitType.Glorot_Uniform);
             biases = Initializer.CreateParameter(new int[] { hidden_size }, input_size, hidden_size, InitType.Zeros);
@@ -208,6 +203,10 @@ namespace DeepUnity
             rnncell.biases = (Tensor)this.biases.Clone();
             rnncell.recurrentWeights = (Tensor)this.recurrentWeights.Clone();
             rnncell.recurrentBiases = (Tensor)this.recurrentBiases.Clone();
+            rnncell.weightsGrad = (Tensor)this.weightsGrad.Clone();
+            rnncell.biasesGrad = (Tensor)this.biasesGrad.Clone();
+            rnncell.recurrentWeightsGrad = (Tensor)this.recurrentWeightsGrad.Clone();
+            rnncell.recurrentBiasesGrad = (Tensor)this.recurrentBiasesGrad.Clone();
             return rnncell;
         }
     }

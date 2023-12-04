@@ -1330,7 +1330,7 @@ namespace DeepUnity
         /// Cat(axis: null, tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (4,2,3) <br></br>
         /// Cat(axis: null, tensors: {(2,3)} => output (1,2,3) <br></br>
         /// </summary>
-        public static Tensor Cat(int? axis, params Tensor[] tensors)
+        public static Tensor Concat(int? axis, params Tensor[] tensors)
         {
             if (tensors == null || tensors.Length == 0)
                 throw new ArgumentException("At least one tensor must be provided for concatenation");
@@ -1629,7 +1629,7 @@ namespace DeepUnity
             HandleAxis(tensor, ref axis);
             Tensor[] slices = Split(tensor, axis, 1);
             Utils.Shuffle(slices);
-            return Cat(axis, slices);
+            return Concat(axis, slices);
         }
         /// <summary>
         /// Computes the mean along the speficied axis.

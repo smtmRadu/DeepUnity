@@ -59,5 +59,6 @@ MonoBehaviour:
       - 0
       - 0
       shape: 0a000000
+  observationsClip: 2.5
   standardDeviation: 1
   standardDeviationValue: 1

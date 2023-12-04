@@ -39,5 +39,6 @@ MonoBehaviour:
     m2:
       data: []
       shape: 
+  observationsClip: 2.5
   standardDeviation: 1
   standardDeviationValue: 1

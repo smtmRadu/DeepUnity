@@ -49,9 +49,9 @@ namespace DeepUnity
                 TimestepTuple[] batch = Utils.Random.Sample(hp.batchSize, train_data.frames);
 
                 // Batchify
-                Tensor states = Tensor.Cat(null, batch.Select(x => x.state).ToArray());
-                Tensor actions = Tensor.Cat(null, batch.Select(x => x.action_continuous).ToArray());
-                Tensor y = Tensor.Cat(null, batch.Select(x => x.q_target).ToArray());
+                Tensor states = Tensor.Concat(null, batch.Select(x => x.state).ToArray());
+                Tensor actions = Tensor.Concat(null, batch.Select(x => x.action_continuous).ToArray());
+                Tensor y = Tensor.Concat(null, batch.Select(x => x.q_target).ToArray());
 
                 ComputeQTargets(batch, hp.gamma);
                 UpdateQFunctions(states, actions, y);
@@ -63,7 +63,7 @@ namespace DeepUnity
        
         private void ComputeQTargets(TimestepTuple[] batch, in float GAMMA)
         {
-            Tensor nextStates = Tensor.Cat(null, batch.Select(x => x.nextState).ToArray());
+            Tensor nextStates = Tensor.Concat(null, batch.Select(x => x.nextState).ToArray());
 
             Tensor new_actions;
             Tensor new_probs;

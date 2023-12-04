@@ -63,10 +63,13 @@ namespace DeepUnity
         public Device trainingDevice = Device.GPU;
 
         [SerializeField, Tooltip("Auto-normalize input observations and rewards for a stable training.")]
-        public bool normalize = false;
+        public bool normalize = true;
 
         [ReadOnly, SerializeField, Tooltip("Observations normalizer.")] 
         public RunningNormalizer observationsNormalizer;
+
+        [Range(1.5f, 3.5f), SerializeField, Tooltip("The observations are clipped [after normarlization] in range [-clip, clip]")]
+        public float observationsClip = 2.5f;
 
         [Header("Standard Deviation for Continuous Actions")]
         [SerializeField, Tooltip("The standard deviation for Continuous Actions")] 
@@ -99,7 +102,7 @@ namespace DeepUnity
         private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS)
         {
             static Activation HiddenActivation() => new Tanh();
-            const InitType INIT_W = InitType.Glorot_Uniform;
+            const InitType INIT_W = InitType.LeCun_Uniform;
             const InitType INIT_B = InitType.Zeros;
 
             //------------------ NETWORK INITIALIZATION ----------------//
@@ -116,20 +119,18 @@ namespace DeepUnity
             if (CONTINUOUS_ACTIONS_NUM > 0)
             {
                 muNetwork = new NeuralNetwork(
-                        new IModule[] 
+                        new IModule[]
                         { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                             Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                             Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Tanh() }).ToArray()
                     );
 
                 sigmaNetwork = new NeuralNetwork(
-                             new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, InitType.Glorot_Uniform, InitType.Zeros),
-                             new Tanh(),
-                             new Dense(HIDDEN_UNITS, HIDDEN_UNITS, InitType.Glorot_Uniform, InitType.Zeros), // Sigma network is a bit smaller for efficiency. This network is typically not important to be large
-                             new Tanh(),
-                             new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, InitType.Glorot_Uniform, InitType.Zeros),
-                             new Softplus(1.5f, 6f) // Softplus(1.2, 3.5f) - less explorative params  // Also Exp() can be used, though without propoper weight init it might return NaN.values.                          
-                             ); // Note that we use Glorot Init before Exp activation func.. for smaller weights
+                           new IModule[]
+                        { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
+                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Softplus(1.5f, 6f) }).ToArray()
+                    );
 
                 // Initialize q networks Q(st,at)
                 q1Network = new NeuralNetwork(

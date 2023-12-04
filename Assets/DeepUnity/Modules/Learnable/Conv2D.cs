@@ -561,6 +561,9 @@ namespace DeepUnity
             var conv = new Conv2D((inputShape[0], inputShape[1], inputShape[2]), outChannels, kernel_shape: (this.kernelHeight, this.kernelWidth), device: this.device);
             conv.kernels = (Tensor)this.kernels.Clone();
             conv.biases = (Tensor)this.biases.Clone();
+            conv.kernelsGrad = (Tensor)this.kernelsGrad.Clone();
+            conv.biasesGrad = (Tensor)this.biasesGrad.Clone();
+            
             return conv;
         }
 

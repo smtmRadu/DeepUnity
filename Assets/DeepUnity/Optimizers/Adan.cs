@@ -2,7 +2,7 @@
 namespace DeepUnity
 {
     // The implementation is took from the paper https://arxiv.org/pdf/2208.06677.pdf
-
+    // The restart condition for momentum is not introduced for simplicity, had to be checked for each parameter separaterly and it didn't worth the effort
     // lr = sqrt(batch_size / 256) * 6.25e-3 for lr scale depending on the batch sizes (check what Adan authors did for details in appendix)
     public class Adan : Optimizer
     {
@@ -15,7 +15,6 @@ namespace DeepUnity
         private readonly Tensor[] n;
 
         private readonly Tensor[] gOld;
-        private readonly bool momentumRestart;
 
         /// <summary>
         /// ADAptive Nesterov momentum optimizer.<br></br>
@@ -27,14 +26,12 @@ namespace DeepUnity
         /// <param name="beta2"></param>
         /// <param name="beta3"></param>
         /// <param name="weightDecay"></param>
-        /// <param name="momentumRestart">does restart condition is computed to restart the momentum? This may improve the convergence.</param>
-        public Adan(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.02f, float beta2 = 0.08f, float beta3 = 0.01f, float weightDecay = 0f, bool momentumRestart = false) 
+        public Adan(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.02f, float beta2 = 0.08f, float beta3 = 0.01f, float weightDecay = 0f) 
             : base(parameters, lr, weightDecay)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;
             this.beta3 = beta3;
-            this.momentumRestart = momentumRestart;
 
             m = new Tensor[parameters.Length];
             v = new Tensor[parameters.Length];
@@ -56,6 +53,7 @@ namespace DeepUnity
 
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
+               
                 if (t == 1) 
                 {
                     m[i] = parameters[i].g.Clone() as Tensor;
@@ -71,11 +69,12 @@ namespace DeepUnity
                 m[i] = (1 - beta1) * m[i] + beta1 * parameters[i].g;
                 v[i] = (1 - beta2) * v[i] + beta2 * (parameters[i].g - gOld[i]);
                 n[i] = (1 - beta3) * n[i] + beta3 * (parameters[i].g + (1f - beta2) * (parameters[i].g - gOld[i])).Pow(2);
-
                 Tensor eta = Tensor.Fill(gamma, n[i].Shape) / (n[i].Sqrt() + Utils.EPSILON);
 
+                // Update theta
                 Tensor.CopyTo((lambda * eta + 1f).Pow(-1f) * (parameters[i].theta - eta * (m[i] + (1f - beta2) * v[i])), parameters[i].theta);
 
+                
                 gOld[i] = parameters[i].g.Clone() as Tensor;
 
             });

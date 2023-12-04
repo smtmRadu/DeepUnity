@@ -1,4 +1,3 @@
-using DeepUnity;
 using UnityEngine;
 
 namespace DeepUnityTutorials
@@ -33,7 +32,10 @@ namespace DeepUnityTutorials
             {
                 rb.velocity = new Vector3(rb.velocity.x / 1.5f, rb.velocity.y);
             }
-
+            else if(collision.collider.CompareTag("Empty")) // i mean ceil here but i added no other tag
+            {
+                rb.velocity = new Vector3(rb.velocity.x, rb.velocity.y / 1.5f); // add some sort of lateral movement when touching the ceil
+            }
         }
     }
 

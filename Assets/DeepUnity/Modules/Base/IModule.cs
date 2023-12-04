@@ -11,6 +11,15 @@ namespace DeepUnity
         public object Clone();
     }
 
+  /*  public interface IModuleGPU
+    {
+        public TensorGPU Predict(TensorGPU input);
+        public TensorGPU Forward(TensorGPU input);
+        public TensorGPU Backward(TensorGPU loss);
+        public object Clone();
+    }*/
+
+
     [Serializable]
     public class IModuleWrapper
     {

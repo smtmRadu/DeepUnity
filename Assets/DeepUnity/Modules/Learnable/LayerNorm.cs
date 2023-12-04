@@ -117,8 +117,12 @@ namespace DeepUnity
             laynorm.step = this.step;
             laynorm.gamma = (Tensor)this.gamma.Clone();
             laynorm.beta = (Tensor)this.beta.Clone();
+            laynorm.gammaGrad = (Tensor)this.gammaGrad.Clone();
+            laynorm.betaGrad = (Tensor)this.betaGrad.Clone();
             laynorm.runningMean = (Tensor)this.runningMean.Clone(); 
             laynorm.runningVar = (Tensor)this.runningVar.Clone();
+
+           
             return laynorm;
         }
 

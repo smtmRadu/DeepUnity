@@ -75,7 +75,7 @@ namespace DeepUnity
             if (hp.timescaleAdjustment == TimescaleAdjustmentType.Dynamic)
             {
                 
-                const float timeScaleAdjustmentRate = 1e-4f;
+                const float timeScaleAdjustmentRate = 1e-3f; ///1e-4..
 
                 float currentFrameRate = 1f / avgDeltaTime;
                 float frameRateDifference = model.targetFPS * 0.125f - currentFrameRate;// i ve seen that on 12% is ok, almost the same with fixed static sigma value i will set

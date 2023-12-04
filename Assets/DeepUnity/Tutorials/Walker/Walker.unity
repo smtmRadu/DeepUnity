@@ -5465,7 +5465,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4440281626985725038, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: maxJointSpring
-      value: 2800
+      value: 3000
       objectReference: {fileID: 0}
     - target: {fileID: 4539884553361417987, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: m_RootOrder
@@ -5514,14 +5514,14 @@ PrefabInstance:
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: model
       value: 
-      objectReference: {fileID: 11400000, guid: f760e2c06cc9bff4b8b29ae6992df343, type: 2}
+      objectReference: {fileID: 11400000, guid: f03b90c8a2bd0c347a44bed43c29096d, type: 2}
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: target
       value: 
       objectReference: {fileID: 214787721}
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: hidUnits
-      value: 72
+      value: 400
       objectReference: {fileID: 0}
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: behaviourType
