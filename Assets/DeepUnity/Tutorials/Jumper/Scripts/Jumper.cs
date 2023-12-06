@@ -7,7 +7,7 @@ namespace DeepUnityTutorials
     {
         public float speed = 2.5f;
         public float rotationSpeed = 2.5f;
-        public float jumpPower = 4.15f;
+        public float jumpPower = 4.5f;
         Rigidbody rb;
 
         public Transform target;

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 namespace DeepUnity
@@ -130,4 +131,23 @@ namespace DeepUnity
         }
         public void AddBodyPart(GameObject bodyPart) => AddBodyPart(bodyPart.transform);
     }
+
+
+#if UNITY_EDITOR
+
+    [CustomEditor(typeof(BodyController), true), CanEditMultipleObjects]
+    sealed class BodyControllerEditor : Editor
+    {
+        public override void OnInspectorGUI()
+        {
+            string[] dontDrawMe = new string[] { "m_Script" };
+
+            serializedObject.Update();
+            DrawPropertiesExcluding(serializedObject, dontDrawMe);
+
+            serializedObject.ApplyModifiedProperties();
+        }
+    }
+
+#endif
 }

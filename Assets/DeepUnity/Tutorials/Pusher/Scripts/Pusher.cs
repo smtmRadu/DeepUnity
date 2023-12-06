@@ -37,12 +37,13 @@ namespace DeepUnityTutorials
         }
         public override void CollectObservations(StateVector sensorBuffer)
         {
-            // + 60
-            // + 12 
+            // + 250
+            // + 15 
             sensorBuffer.AddObservation(rb.velocity); 
             sensorBuffer.AddObservation(transform.position);
             sensorBuffer.AddObservation(transform.rotation);
             sensorBuffer.AddObservation(box.transform.position);
+            sensorBuffer.AddObservation(box.transform.rotation);
         }
         public override void OnActionReceived(ActionBuffer actionBuffer)
         {

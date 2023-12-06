@@ -69,7 +69,7 @@ namespace DeepUnity
         public RunningNormalizer observationsNormalizer;
 
         [Range(1.5f, 3.5f), SerializeField, Tooltip("The observations are clipped [after normarlization] in range [-clip, clip]")]
-        public float observationsClip = 2.5f;
+        public float observationsClip = 3f;
 
         [Header("Standard Deviation for Continuous Actions")]
         [SerializeField, Tooltip("The standard deviation for Continuous Actions")] 
@@ -128,8 +128,8 @@ namespace DeepUnity
                 sigmaNetwork = new NeuralNetwork(
                            new IModule[]
                         { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
-                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Softplus(1.5f, 6f) }).ToArray()
+                            Concat(CreateHiddenLayers(NUM_LAYERS - 1, HIDDEN_UNITS, INIT_W, INIT_B)).
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Softplus(1.2f, 3.5f) }).ToArray() // softplus (1.2, 3.5)
                     );
 
                 // Initialize q networks Q(st,at)

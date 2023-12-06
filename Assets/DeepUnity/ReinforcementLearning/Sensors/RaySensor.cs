@@ -261,9 +261,9 @@ namespace DeepUnity
         }   
     }
 
-    
-  
-   
+
+
+#if UNITY_EDITOR
 
     [CustomEditor(typeof(RaySensor)), CanEditMultipleObjects]
     class ScriptlessRaySensor : Editor
@@ -336,5 +336,5 @@ namespace DeepUnity
                    $"Detectable tags contains doubles!", MessageType.Warning);
         }
     }
-   
+#endif
 }

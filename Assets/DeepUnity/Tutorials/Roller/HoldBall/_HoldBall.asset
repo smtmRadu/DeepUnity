@@ -18,12 +18,12 @@ MonoBehaviour:
   stackedInputs: 1
   continuousDim: 2
   discreteDim: 0
-  config: {fileID: 0}
-  vNetwork: {fileID: 0}
+  config: {fileID: 11400000, guid: af0c6ea7f90ff6749b3a026e0d2000b3, type: 2}
+  vNetwork: {fileID: 11400000, guid: 0ee998113ccd9d248a00677960a7c8ae, type: 2}
   q1Network: {fileID: 0}
   q2Network: {fileID: 0}
-  muNetwork: {fileID: 0}
-  sigmaNetwork: {fileID: 0}
+  muNetwork: {fileID: 11400000, guid: bab34523ee7072f43aee3312bd2fc620, type: 2}
+  sigmaNetwork: {fileID: 11400000, guid: 4c9293fff3a92b647afd92cbb91ae1fc, type: 2}
   discreteNetwork: {fileID: 0}
   discContNetwork: {fileID: 0}
   discDiscNetwork: {fileID: 0}
@@ -32,33 +32,33 @@ MonoBehaviour:
   trainingDevice: 1
   normalize: 1
   observationsNormalizer:
-    step: 0
+    step: 528562
     mean:
       data:
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
+      - 0.007048876
+      - 0.66492826
+      - -0.018785978
+      - -0.6877358
+      - -0.24815892
+      - -0.43684494
+      - -0.32463804
+      - -0.37303492
+      - 1.1799601
+      - -0.044392817
       shape: 0a000000
     m2:
       data:
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
+      - 460.10745
+      - 20918.21
+      - 1587.5812
+      - 21578.658
+      - 70533.805
+      - 481448.53
+      - 199334.81
+      - 53709.645
+      - 27281.717
+      - 266053.5
       shape: 0a000000
   observationsClip: 2.5
-  standardDeviation: 1
-  standardDeviationValue: 1
+  standardDeviation: 0
+  standardDeviationValue: 1.5

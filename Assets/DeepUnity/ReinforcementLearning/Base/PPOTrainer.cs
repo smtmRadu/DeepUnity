@@ -77,7 +77,7 @@ namespace DeepUnity
             for (int epoch_index = 0; epoch_index < hp.numEpoch; epoch_index++)
             {
                 // shuffle the dataset
-                if (epoch_index > 0)
+                if (epoch_index > 0 && hp.batchSize != hp.bufferSize)
                     train_data.Shuffle();
 
                 // unpack & split train_data into minibatches
@@ -137,7 +137,7 @@ namespace DeepUnity
 
                     if (kldiv_cont > hp.targetKL || kldiv_disc > hp.targetKL)
                     {
-                        ConsoleMessage.Info($"Early Stopping Triggered (kl: {kldiv_cont} | {kldiv_disc})({hp.KLDivergence})");
+                        ConsoleMessage.Info($"<b>Early Stopping</b> triggered (KL_continuous: {kldiv_cont} | KL_discrete{kldiv_disc}) ({hp.KLDivergence})");
                         break;
                     }
                     // for rollback is the same but we need to cache the old state of the network....

@@ -2681,7 +2681,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b25bf2a4aba4f96418179814902bbb2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  time_per_round: 25
+  time_per_round: 30
   ball: {fileID: 2064626470}
   pink_striker: {fileID: 914492865}
   pink_goalie: {fileID: 1205608276}

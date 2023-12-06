@@ -5346,6 +5346,98 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 021387ae6badbd14da33d7364b01431c, type: 3}
   m_PrefabInstance: {fileID: 3622192}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &985738305 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7046486768281223026, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
+  m_PrefabInstance: {fileID: 5306829843364236638}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &985738310
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 985738305}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  startedAt: ' - '
+  finishedAt: ' - '
+  trainingSessionTime: ' - '
+  policyUpdateSecondsElapsed: 0
+  inferenceSecondsElapsed: 0
+  inferenceTime: ' - '
+  inferenceTimePerAgent: ' - '
+  policyUpdateTime: ' - '
+  policyUpdateTimePerIteration: ' - '
+  inferenceTimeRatio: '- / -'
+  policyUpdateTimeRatio: '- / -'
+  episodeCount: 0
+  stepCount: 0
+  iterations: 0
+  parallelAgents: 0
+  cumulativeReward:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  episodeLength:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  policyLoss:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  valueLoss:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  entropy:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  learningRate:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
 --- !u!1 &1037323657
 GameObject:
   m_ObjectHideFlags: 0
@@ -5457,7 +5549,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4182396410926976104, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: decisionPeriod
-      value: 2
+      value: 5
       objectReference: {fileID: 0}
     - target: {fileID: 4440281626985725038, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: maxJointForce
@@ -5514,7 +5606,7 @@ PrefabInstance:
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: model
       value: 
-      objectReference: {fileID: 11400000, guid: f03b90c8a2bd0c347a44bed43c29096d, type: 2}
+      objectReference: {fileID: 11400000, guid: 8ee125ae50f2fdf4c93ffcb3f4556b52, type: 2}
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: target
       value: 
@@ -5529,7 +5621,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: stackedInputs
-      value: 1
+      value: 5
       objectReference: {fileID: 0}
     - target: {fileID: 7046486768281223026, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: m_Name
@@ -5541,5 +5633,8 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 8506629623500518540, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       insertIndex: 0
       addedObject: {fileID: 866346061}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7046486768281223026, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 985738310}
   m_SourcePrefab: {fileID: 100100000, guid: b23d00a8f1415df44a5102248bed283a, type: 3}

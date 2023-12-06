@@ -17,8 +17,8 @@ MonoBehaviour:
   horizon: 512
   learningRate: 0.0003
   gamma: 0.995
-  batchSize: 400
-  bufferSize: 8000
+  batchSize: 800
+  bufferSize: 16000
   gradClipNorm: 0.5
   LRSchedule: 0
   numEpoch: 8
@@ -35,5 +35,5 @@ MonoBehaviour:
   tau: 0.005
   saveRecordBuffer: 0
   debug: 0
-  timescaleAdjustment: 1
-  timescale: 1.83
+  timescaleAdjustment: 0
+  timescale: 11.174169

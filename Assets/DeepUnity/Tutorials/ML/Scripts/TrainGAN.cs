@@ -12,8 +12,8 @@ namespace DeepUnityTutorials
     /// </summary>
     public class TrainGAN : MonoBehaviour
     {
-        
-        [SerializeField] private List<RawImage> displays;
+        [SerializeField] private GameObject canvas;
+        private List<RawImage> displays;
         [SerializeField] private NeuralNetwork discriminator;
         [SerializeField] private NeuralNetwork generator;
         
@@ -38,33 +38,33 @@ namespace DeepUnityTutorials
             {
                 discriminator = new NeuralNetwork(
                     new Flatten(),
-                    new Dense(784, 1024, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
-                    new ReLU(),
+                    new Dense(784, 1024, device: Device.GPU),
+                    new LeakyReLU(),
                     new Dropout(0.3f),
                 
-                    new Dense(1024, 512, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
-                    new ReLU(),
+                    new Dense(1024, 512, device: Device.GPU),
+                    new LeakyReLU(),
                     new Dropout(0.3f),
 
-                    new Dense(512, 256, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
-                    new ReLU(),
+                    new Dense(512, 256, device: Device.GPU),
+                    new LeakyReLU(),
                     new Dropout(0.3f),
 
-                    new Dense(256, 1, device: Device.CPU),
+                    new Dense(256, 1, device: Device.GPU),
                     new Sigmoid()
                     ).CreateAsset("discriminator");
             }
             if (generator == null)
             {
                 generator = new NeuralNetwork(
-                    new Dense(latent_dim, 256, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
-                    new ReLU(),
-                
-                    new Dense(256, 512, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
-                    new ReLU(),
+                    new Dense(latent_dim, 256, device: Device.GPU),
+                    new LeakyReLU(),
 
-                    new Dense(512, 1024, InitType.HE_Normal, InitType.HE_Normal, device: Device.GPU),
-                    new ReLU(),
+                    new Dense(256, 512, device: Device.GPU),
+                    new LeakyReLU(),
+
+                    new Dense(512, 1024,  device: Device.GPU),
+                    new LeakyReLU(), 
 
                     new Dense(1024, 784, device: Device.GPU),
                     new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 }),
@@ -87,6 +87,12 @@ namespace DeepUnityTutorials
 
             print($"Loaded {dataset.Length} training images.");
 
+          
+            displays = new();
+            for (int i = 0; i < canvas.transform.childCount; i++)
+            {
+                displays.Add(canvas.transform.GetChild(i).GetComponent<RawImage>());
+            }
             foreach (var item in displays)
             {
                 item.texture = new Texture2D(28, 28);

@@ -195,7 +195,7 @@ namespace DeepUnity
 
 
 
-    #region Editor
+#if UNITY_EDITOR
     [CustomEditor(typeof(CameraSensor)), CanEditMultipleObjects]
     class ScriptlessCameraSensor : Editor
     {
@@ -261,5 +261,5 @@ namespace DeepUnity
            
         }
     }
-    #endregion
+#endif
 }

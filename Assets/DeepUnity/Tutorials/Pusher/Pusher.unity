@@ -862,7 +862,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: b6fbebdd7b2fe0042bb75cc92fdd3190, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 24.6
+      value: 25.79
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: b6fbebdd7b2fe0042bb75cc92fdd3190, type: 3}
       propertyPath: m_LocalPosition.y
@@ -1104,9 +1104,9 @@ MonoBehaviour:
   - Target
   - Wall
   - Box
-  rays: 12
-  fieldOfView: 330
-  rotationOffset: 15
+  rays: 10
+  fieldOfView: 45
+  rotationOffset: 0
   distance: 80
   sphereCastRadius: 0.5
   xOffset: 0
@@ -1127,13 +1127,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b6495fa690344148979172a891a9dfe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  spaceSize: 72
+  spaceSize: 65
   stackedInputs: 1
   continuousActions: 3
   discreteActions: 0
   numLayers: 2
-  hidUnits: 64
-  model: {fileID: 11400000, guid: 6b2c9353a9b72144bbb43676d4c02752, type: 2}
+  hidUnits: 128
+  model: {fileID: 11400000, guid: 34205e38a9526f84d9af3e805b36c1aa, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 1
