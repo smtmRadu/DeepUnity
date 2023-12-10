@@ -3083,7 +3083,7 @@ MonoBehaviour:
   discreteActions: 0
   numLayers: 2
   hidUnits: 72
-  model: {fileID: 11400000, guid: 5eb0ee282826b644a92b88dc87e90d8b, type: 2}
+  model: {fileID: 11400000, guid: be94f35459e9d3942bbba30600ca01c4, type: 2}
   behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 1
@@ -3111,8 +3111,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d26371695edfbcd4580ca6f6048d885d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxStep: 2000
-  decisionPeriod: 5
+  maxStep: 6000
+  decisionPeriod: 2
   takeActionsBetweenDecisions: 1
 --- !u!1 &717069248
 GameObject:

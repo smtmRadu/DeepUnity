@@ -93,7 +93,7 @@ namespace DeepUnity
 
         // public ExperienceBuffer experience_buffer; .. to be loaded here
 
-        [HideInInspector]
+        // [HideInInspector]
         [Tooltip("Debug the train_data into a file.")]
         [Space(30)]
         public bool debug = false;

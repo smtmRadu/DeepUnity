@@ -41,30 +41,29 @@ namespace DeepUnityTutorials
         private int epoch = 0;
         private int i = 0;
 
+        public InitType init_w = InitType.LeCun_Normal;
+        public InitType init_b = InitType.LeCun_Normal;
         public void Start()
         {
             if (net == null)
             {
-                var init_w = InitType.LeCun_Normal;
-                var init_b = InitType.Zeros;
-
                 net = new NeuralNetwork(
                  new Dense(2, hiddenSize,init_w, init_b),
                  // new LayerNorm(),
-                 new Tanh(),
+                 new PReLU(),
                  new Dense(hiddenSize, hiddenSize, init_w, init_b),
                  // new BatchNorm(hiddenSize),
-                 new Tanh(),
+                 new PReLU(),
                  // new Dropout(0.3f),
                  new Dense(hiddenSize, hiddenSize, init_w, init_b),
-                 new Tanh(),
-                 new Dense(hiddenSize, 1)
+                 new PReLU(),
+                 new Dense(hiddenSize, 1, init_w, init_b)
                  );
             }
 
             net.SetDevice(device);
 
-            optimizer = new Adam(net.Parameters());
+            optimizer = new Adam(net.Parameters(), lr: learningRate);
             scheduler = new LRScheduler(optimizer, scheduler_step_size, scheduler_gamma);
 
 
@@ -95,7 +94,7 @@ namespace DeepUnityTutorials
             if (i == trainingSamples / batch_size)
             {
 
-                Debug.Log($"Epoch {++epoch} | LR {scheduler.CurrentLR}");
+                Debug.Log($"Epoch {++epoch}");
                 scheduler.Step();
                 i = 0;
                 // net.Save();

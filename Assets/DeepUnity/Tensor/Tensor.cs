@@ -108,8 +108,8 @@ namespace DeepUnity
                 size *= item;
             }       
 
-            if (size > 16_777_216) // hardcoded like this because 4096x4096 max allowed matrix, on 8192 it crashes
-                throw new NotSupportedException("Tensor dimensions is too large on initialization (cannot surpass 16,777,216 units).");
+            if (size > 67_108_864) // Old max:  16_777_216, new max: 67_108_864
+                throw new NotSupportedException("Tensor dimensions is too large on initialization (cannot surpass 67,108,864 units).");
 
             this.shape = shape.ToArray();
             data = new float[size];
@@ -298,22 +298,26 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
-        /// <b>Extracts the data from a ComputeBuffer into a 1 dimensional tensor.</b> <br></br>
+        /// <b>Extracts the data from a ComputeBuffer into a tensor.</b> <br></br>
         /// Output: (L) <br></br>
         /// where L = computeBuffer.count
         /// </summary>
         /// <param name="computeBuffer"></param>
         /// <returns></returns>
         /// <exception cref="ArgumentException"></exception>
-        public static Tensor Constant(ComputeBuffer computeBuffer)
+        public static Tensor Constant(ComputeBuffer computeBuffer, params int[] shape)
         {
             if (computeBuffer.stride != sizeof(float))
                 throw new ArgumentException("ComputeBuffer stride must be equal to sizeof(float).");
 
-            Tensor result = Zeros(computeBuffer.count);
+            if (shape == null)
+                throw new ArgumentException("Shape of the tensor was not defined. If unknown, use <b>computeBuffer.count</b>");
+            Tensor result = Zeros(shape);
             computeBuffer.GetData(result.data);
+                
             return result;
         }
+     
         public static Tensor Zeros(params int[] shape)
         {
             return new(shape);

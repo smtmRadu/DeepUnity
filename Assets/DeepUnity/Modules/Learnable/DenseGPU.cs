@@ -7,9 +7,9 @@ namespace DeepUnity
     /// A deep neural network living inside GPU that can be used as a layer in Models for high level computing.
     /// </summary>
     [Serializable]
-    public class DenseGPU : ISerializationCallbackReceiver, IModuleGPU, ILearnable
+    public class DenseGPU : ISerializationCallbackReceiver, IModule, ILearnable
     {
-        private TensorGPU InputCache { get; set; }
+        private Tensor InputCache { get; set; }
 
         [SerializeField] TensorGPU weights;
         [SerializeField] TensorGPU biases;
@@ -30,7 +30,7 @@ namespace DeepUnity
             weightsGrad = TensorGPU.Zeros(weights.Shape);
             biasesGrad = TensorGPU.Zeros(biases.Shape);
         }
-        public TensorGPU Predict(TensorGPU input)
+        public Tensor Predict(Tensor input)
         {
             if (input.Size(-1) != weights.Size(-1))
                 throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the DNNGPU Layer features_num ({weights.Size(-1)}).");
@@ -38,8 +38,7 @@ namespace DeepUnity
             bool isBatched = input.Rank == 2;
             int batch_size = isBatched ? input.Size(-2) : 1;
 
-            TensorGPU weightsT = TensorGPU.Transpose(weights, 0, 1);
-            TensorGPU matmul = TensorGPU.MatMul(input, weightsT);
+
             TensorGPU output;
             if (isBatched)
             {
@@ -63,12 +62,9 @@ namespace DeepUnity
 
         }
 
-        public TensorGPU Forward(TensorGPU input)
+        public Tensor Forward(Tensor input)
         {
-            if (InputCache != null)
-                InputCache.Dispose();
-
-            InputCache = TensorGPU.Identity(input);
+            InputCache = Tensor.Identity(input);
 
             return Predict(input);
         }
@@ -127,7 +123,4 @@ namespace DeepUnity
             this.biasesGrad = TensorGPU.Zeros(biases.Shape);
         }
     }
-}
-
-
-*/
+}*/

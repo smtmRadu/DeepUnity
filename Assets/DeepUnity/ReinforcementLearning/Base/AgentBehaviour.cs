@@ -102,7 +102,7 @@ namespace DeepUnity
         private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS)
         {
             static Activation HiddenActivation() => new Tanh();
-            const InitType INIT_W = InitType.LeCun_Uniform;
+            const InitType INIT_W = InitType.HE_Normal;
             const InitType INIT_B = InitType.Zeros;
 
             //------------------ NETWORK INITIALIZATION ----------------//
@@ -115,7 +115,7 @@ namespace DeepUnity
                Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
             );
 
-            // Initialize PI
+            // Initialize pi
             if (CONTINUOUS_ACTIONS_NUM > 0)
             {
                 muNetwork = new NeuralNetwork(
@@ -129,7 +129,7 @@ namespace DeepUnity
                            new IModule[]
                         { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                             Concat(CreateHiddenLayers(NUM_LAYERS - 1, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Softplus(1.2f, 3.5f) }).ToArray() // softplus (1.2, 3.5)
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Softplus(1.5f, 6f) }).ToArray() // softplus (1.2, 3.5)
                     );
 
                 // Initialize q networks Q(st,at)
@@ -188,42 +188,43 @@ namespace DeepUnity
 
         public void InitOptimisers(Hyperparameters hp, TrainerType trainer)
         {
+            const float lambda = 0f;
             if(trainer == TrainerType.SAC)
             {
-                vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate);
-                q1Optimizer = new Adam(q1Network.Parameters(), hp.learningRate);
-                q2Optimizer = new Adam(q2Network.Parameters(), hp.learningRate);
-                muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate);
-                sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate);
+                vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
+                q1Optimizer = new Adam(q1Network.Parameters(), hp.learningRate, weightDecay: lambda);
+                q2Optimizer = new Adam(q2Network.Parameters(), hp.learningRate, weightDecay: lambda);
+                muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
+                sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
             }
             else if(trainer == TrainerType.PPO)
             {
-                vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate);
+                vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
 
                 if (IsUsingContinuousActions)
                 {
-                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate);
-                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate);
+                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
+                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
                 }
                 
                 if(IsUsingDiscreteActions)
                 {
-                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate);
+                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
                 }
             }
             else if(trainer == TrainerType.GAIL)
             {
                 if (IsUsingContinuousActions)
                 {
-                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate) ;
-                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate);
-                    dContOptimizer = new Adam(discContNetwork.Parameters(), hp.learningRate);
+                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, weightDecay: lambda) ;
+                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
+                    dContOptimizer = new Adam(discContNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
                 }
 
                 if (IsUsingDiscreteActions)
                 {
-                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate);
-                    dDiscOptimizer = new Adam(discDiscNetwork.Parameters(), hp.learningRate);
+                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
+                    dDiscOptimizer = new Adam(discDiscNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
                 }
             }                    
         }
@@ -299,6 +300,8 @@ namespace DeepUnity
 
             action = mu.Zip(sigma, (x, y) => Utils.Random.Normal(x, y));
             probs = Tensor.Probability(action, mu, sigma);
+
+            
         }
         /// <summary>
         /// Input: <paramref name="stateBatch"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
@@ -361,7 +364,15 @@ namespace DeepUnity
             // φₜ - Normalzed Probabilities (through softmax) - parametrizes Multinomial probability distribution
             // δₜ - Multinomial Probability Distribution
             int[] discreteActionsIndexes = Tensor.Arange(0, discreteDim, 1f).ToArray().Select(x => (int)x).ToArray();
-            int sample = Utils.Random.Sample(collection: discreteActionsIndexes, probs: phi.ToArray());
+            int sample = -1;
+            try
+            {
+                sample = Utils.Random.Sample(collection: discreteActionsIndexes, probs: phi.ToArray());
+            }
+            catch
+            {
+                sample = Utils.Random.Range(0, discreteDim);
+            }
             action = Tensor.Zeros(phi.Shape);
             action[sample] = 1f;
         }

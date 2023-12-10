@@ -28,13 +28,21 @@ namespace DeepUnity
 
             Tensor variance = m2 / (step - 1);
 
+            // Var equal 0 it is replaced with 1.
+            variance = variance.Select(x =>
+            {
+                if(x == 0)
+                    return 1;
+                return x;
+            });
+
             if (tuple.Rank < 2)
-                return (tuple - mean) / (variance.Sqrt() + Utils.EPSILON);
+                return (tuple - mean) / variance.Sqrt();
             else if (tuple.Rank == 2)
             {
                 int batch_size = tuple.Size(0);
                 return (tuple - mean.Unsqueeze(0).Expand(0, batch_size)) /
-                                       (variance.Sqrt().Unsqueeze(0).Expand(0, batch_size) + Utils.EPSILON);
+                                       variance.Sqrt().Unsqueeze(0).Expand(0, batch_size);
             }
             else
                 throw new ArgumentException("Tuple must have either 0, 1 or 2 dimensions.");

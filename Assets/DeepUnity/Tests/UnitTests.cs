@@ -25,23 +25,13 @@ namespace kbRadu
         public int index = 0;
         public int whatIsIt = 0;
 
-        public NeuralNetwork V_net;
+        public NeuralNetwork network;
         public AgentBehaviour beh;
         private void Start()
         {
-            net = new NeuralNetwork(
-                new Dense(100, 256),
-                new ReLU(),
-                new Dense(256, 128),
-                new Sigmoid()
-                );
-
-            net.SetDevice(Device.CPU);
-            var output = net.Forward(Tensor.Fill(0.3f, batchSize, 100));
-            print(net.Backward(output));
-            net.SetDevice(Device.GPU);
-            print(net.Backward(output));
-
+            PReLU prelu = new PReLU(0.01f);
+            print(prelu.ParametersCount());
+            print(prelu.Parameters());
         }
 
         public void TestCPU()

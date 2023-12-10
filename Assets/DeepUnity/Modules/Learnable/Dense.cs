@@ -58,7 +58,7 @@ namespace DeepUnity
             }
             else
             {
-
+                int H_out = biases.Size(-1);
                 ComputeShader cs = DeepUnityMeta.DenseCS;
 
                 ComputeBuffer inputBuffer = new ComputeBuffer(input.Count(), 4);
@@ -83,21 +83,20 @@ namespace DeepUnity
                 cs.SetInt("input_rank", input.Rank);
 
                 cs.Dispatch(0,
-                    (biases.Size(-1) + 31) / 32,
+                    (H_out + 31) / 32,
                     (batch_size + 31) / 32,
                     1);
 
-                Tensor result = Tensor.Constant(outputBuffer);
+                Tensor result = isBatched ?
+                    Tensor.Constant(outputBuffer, batch_size, H_out) :
+                    Tensor.Constant(outputBuffer, H_out);
 
                 inputBuffer.Release();
                 weightsBuffer.Release();
                 biasesBuffer.Release();
                 outputBuffer.Release();
 
-                if (isBatched)
-                    return result.Reshape(batch_size, biases.Size(-1));
-                else
-                    return result.Reshape(biases.Size(-1));
+                return result;
             }
         }
         public Tensor Forward(Tensor input)
@@ -134,6 +133,9 @@ namespace DeepUnity
             }
             else
             {
+                int H_in = weights.Size(-1);
+                int H_out = biases.Size(-1);
+
                 // dLoss w.r.t theta
                 ComputeShader cs = DeepUnityMeta.DenseCS;
 
@@ -154,16 +156,16 @@ namespace DeepUnity
                 cs.SetBuffer(1, "beta_grad", biasesGradBuffer);
 
                 cs.SetInt("batch_size", batch_size);
-                cs.SetInt("in_features", weights.Size(-1));
-                cs.SetInt("out_features", biases.Size(-1));
+                cs.SetInt("in_features", H_in);
+                cs.SetInt("out_features", H_out);
 
                 cs.Dispatch(1,
-                    (weights.Size(-1) + 31) / 32,
-                    (weights.Size(-2) + 31) / 32,
+                    (H_in + 31) / 32,
+                    (H_out + 31) / 32,
                     1);
 
-                Tensor.CopyTo(Tensor.Constant(weightsGradBuffer).Reshape(weightsGrad.Shape), weightsGrad);
-                Tensor.CopyTo(Tensor.Constant(biasesGradBuffer), biasesGrad);
+                Tensor.CopyTo(Tensor.Constant(weightsGradBuffer, weightsGrad.Shape), weightsGrad);
+                Tensor.CopyTo(Tensor.Constant(biasesGradBuffer, biases.Shape), biasesGrad);
 
                 lossBuffer.Release();
                 inputCacheBuffer.Release();

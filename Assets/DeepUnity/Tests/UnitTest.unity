@@ -545,7 +545,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &621327370
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -583,7 +583,7 @@ MonoBehaviour:
   learningRate: 0.001
   hiddenSize: 128
   trainingSamples: 1024
-  batch_size: 128
+  batch_size: 64
   validationSamples: 32
   scheduler_step_size: 1000000
   scheduler_gamma: 0.99
@@ -591,6 +591,8 @@ MonoBehaviour:
   dataScale: 0.15
   timerStopEpoch: 100
   drawScale: 150
+  init_w: 1
+  init_b: 1
 --- !u!4 &621327371
 Transform:
   m_ObjectHideFlags: 0
@@ -854,7 +856,7 @@ MonoBehaviour:
   image2: {fileID: 0}
   index: 0
   whatIsIt: 0
-  V_net: {fileID: 11400000, guid: 5df475cf16d850149829a246c9cd39c7, type: 2}
+  network: {fileID: 11400000, guid: d9d4ab9565c10894980697d7b16c54be, type: 2}
   beh: {fileID: 11400000, guid: f760e2c06cc9bff4b8b29ae6992df343, type: 2}
 --- !u!4 &752495707
 Transform:

@@ -179,7 +179,7 @@ namespace DeepUnity
                     (H_out + 15) / 16,
                     (C_out + 3) / 4);
 
-                Tensor result = Tensor.Constant(outputBuffer).Reshape(batch_size, outChannels, H_out, W_out);
+                Tensor result = Tensor.Constant(outputBuffer, batch_size, outChannels, H_out, W_out);
 
                 inputBuffer.Release();
                 gammaBuffer.Release();
@@ -262,7 +262,7 @@ namespace DeepUnity
                         (kernels.Size(-2) + 4) / 5,
                         (C_out + 31) / 32);
 
-                Tensor.CopyTo(kernelsGrad + Tensor.Constant(gammaGradBuffer).Reshape(kernelsGrad.Shape), kernelsGrad);
+                Tensor.CopyTo(kernelsGrad + Tensor.Constant(gammaGradBuffer, kernelsGrad.Shape), kernelsGrad);
                 Tensor.CopyTo(biasesGrad + (isBatched ? Tensor.Mean(loss, -4) : loss), biasesGrad);// faster on CPU
 
                 inputBuffer.Release();
@@ -289,7 +289,7 @@ namespace DeepUnity
                     (H_in + 15) / 16,
                     (batch_size + 3) / 4);
 
-                Tensor inputGrad = Tensor.Constant(inputGradBuffer).Reshape(batch_size, C_in, H_in, W_in);
+                Tensor inputGrad = Tensor.Constant(inputGradBuffer, batch_size, C_in, H_in, W_in);
 
                 lossBuffer.Release();
                 gammaBuffer.Release();

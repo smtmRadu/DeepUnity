@@ -25,7 +25,7 @@ namespace DeepUnity
         [Tooltip("Number of hidden layers")]
         [SerializeField, Min(1), HideInInspector] private int numLayers = 2;
         [Tooltip("Number of units in a hidden layer in the model.")]
-        [SerializeField, Min(32), HideInInspector] private int hidUnits = 128;
+        [SerializeField, Min(32), HideInInspector] private int hidUnits = 64;
 
         [SerializeField, HideInInspector] public AgentBehaviour model;
         [SerializeField, HideInInspector] public BehaviourType behaviourType = BehaviourType.Learn;

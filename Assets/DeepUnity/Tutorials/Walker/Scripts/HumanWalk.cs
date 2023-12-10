@@ -30,11 +30,15 @@ namespace DeepUnityTutorials
         public Transform shinR;
         public Transform footR;
 
+        public float stepReward = 0.005f; // Starting reward reward per step alive
+        public float rewardIncrementPerStep = 0.0002f; // reward increment while keeping alive (reseted on episode begin
+        float currentStepReward;
+
+
         BodyController bodyController;
 
-        const float stepReward = 0.005f; // Starting reward reward per step alive
-        const float rewardIncrementPerStep = 0.0001f; // reward increment while keeping alive (reseted on episode begin
-        float currentStepReward;
+        
+       
 
 
         public override void Awake()

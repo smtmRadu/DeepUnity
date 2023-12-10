@@ -21,7 +21,9 @@ namespace DeepUnityTutorials
 
         [Button("SaveNetworks")]
         [SerializeField] private int batch_size = 64;
+        [SerializeField] private float lr = 2e-4f;
         [SerializeField] private WhatToDo perform = WhatToDo.Train;
+        [SerializeField] private bool writeLoss = true;
 
         public PerformanceGraph G_graph = new PerformanceGraph();
         public PerformanceGraph D_graph = new PerformanceGraph();
@@ -72,8 +74,8 @@ namespace DeepUnityTutorials
                     ).CreateAsset("generator");
             }
 
-            d_optim = new Adam(discriminator.Parameters(), 0.0002f);
-            g_optim = new Adam(generator.Parameters(), 0.0002f);
+            d_optim = new Adam(discriminator.Parameters(), lr);
+            g_optim = new Adam(generator.Parameters(), lr);
 
             List<(Tensor, Tensor)> data;
             Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out data, out _, DatasetSettings.LoadTrainOnly);
@@ -117,12 +119,12 @@ namespace DeepUnityTutorials
                 var real_data = Tensor.Concat(null, Utils.GetRange(dataset, batch_index, batch_size).ToArray());
                 var fake_data = generator.Predict(GeneratorInput(batch_size, latent_dim));
                 var d_error = TrainDiscriminator(real_data, fake_data);
-                D_graph.Append(d_error);
+                if(writeLoss) D_graph.Append(d_error);
 
 
                 // Train Generator
                 var g_error = TrainGenerator();
-                G_graph.Append(g_error);
+                if (writeLoss) G_graph.Append(g_error);
                 batch_index += batch_size;
 
             }

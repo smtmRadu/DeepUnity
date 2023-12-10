@@ -12,6 +12,9 @@ namespace DeepUnity
     /// [2] https://link.springer.com/article/10.1007/BF00992696
     /// [3] https://ieeexplore.ieee.org/document/9520424
     /// </summary>
+    /// What may cause NaN values:
+    /// 1. The value function network -> Vw_s -> NaN => nan advantages (solved because we filter it's output)
+    /// 2. The networks -> the discrete and mu networks may produce NaN.
     public sealed class PPOTrainer : DeepUnityTrainer
     {
         private float meanPolicyLoss = 0f;
@@ -253,8 +256,8 @@ namespace DeepUnity
             Tensor dmLClip_dPi = -1f * (dmindx * advantages + dmindy * advantages * dclipdx) / piOld;
 
             // Entropy bonus added if σ is trainable
-            // H(πθ(a|s)) = -1/2 * log(2πeσ^2) 
-            Tensor H = - 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2));
+            // H(πθ(a|s)) = - integral( πθ(a|s) log πθ(a|s) ) = 1/2 * log(2πeσ^2) // https://en.wikipedia.org/wiki/Differential_entropy
+            Tensor H = 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2)); 
             meanEntropy += H.Mean(0).Mean(0)[0];          
 
             if (dmLClip_dPi.Contains(float.NaN)) return;
@@ -313,6 +316,7 @@ namespace DeepUnity
             if (LClip.Contains(float.NaN))
             {
                 ConsoleMessage.Warning($"PPO LCLIP batch containing NaN values skipped");
+
                 return;
             }
             meanPolicyLoss += Mathf.Abs(LClip.Mean(0).Mean(0)[0]);
@@ -352,7 +356,7 @@ namespace DeepUnity
             // Entropy bonus for discrete actions
             // H = - φ * log(φ)
             Tensor H = - pi * pi.Log();
-            meanEntropy += H.Mean(0).Mean(0)[0];
+            meanEntropy += H.Mean(0).Sum(0)[0];
 
             // ∂-H / ∂φ = log(φ) + 1;
             Tensor dmH_dPhi = pi.Log() + 1;
@@ -397,6 +401,9 @@ namespace DeepUnity
 
             // Vw_s has length of T + 1
             Tensor Vw_s = valueNetwork.Predict(Tensor.Concat(null, all_states_plus_lastNextState)).Reshape(T + 1);
+            
+            // Vw_s = Tensor.FilterNaN(Vw_s, 0); it happpen in some cases to get NaN in the first timestep and then all are gonna be NaN
+           
 
             // Generalized Advantage Estimation
             for (int timestep = 0; timestep < T; timestep++)

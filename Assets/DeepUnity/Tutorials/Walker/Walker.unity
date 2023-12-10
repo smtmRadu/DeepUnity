@@ -5351,7 +5351,7 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 7046486768281223026, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
   m_PrefabInstance: {fileID: 5306829843364236638}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &985738310
+--- !u!114 &985738315
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -5549,7 +5549,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4182396410926976104, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: decisionPeriod
-      value: 5
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 4440281626985725038, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: maxJointForce
@@ -5606,14 +5606,18 @@ PrefabInstance:
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: model
       value: 
-      objectReference: {fileID: 11400000, guid: 8ee125ae50f2fdf4c93ffcb3f4556b52, type: 2}
+      objectReference: {fileID: 11400000, guid: 2b2128d68ed0fd14691dce978bcc09e9, type: 2}
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: target
       value: 
       objectReference: {fileID: 214787721}
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: hidUnits
-      value: 400
+      value: 128
+      objectReference: {fileID: 0}
+    - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
+      propertyPath: stepReward
+      value: 0.001
       objectReference: {fileID: 0}
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: behaviourType
@@ -5621,7 +5625,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: stackedInputs
-      value: 5
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6170651836298323715, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
+      propertyPath: rewardIncrementPerStep
+      value: 0.0001
       objectReference: {fileID: 0}
     - target: {fileID: 7046486768281223026, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       propertyPath: m_Name
@@ -5636,5 +5644,5 @@ PrefabInstance:
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 7046486768281223026, guid: b23d00a8f1415df44a5102248bed283a, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 985738310}
+      addedObject: {fileID: 985738315}
   m_SourcePrefab: {fileID: 100100000, guid: b23d00a8f1415df44a5102248bed283a, type: 3}

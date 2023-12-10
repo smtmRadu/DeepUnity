@@ -1,0 +1,184 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
+  m_Name: _Pusher
+  m_EditorClassIdentifier: 
+  behaviourName: Pusher
+  assetCreated: 1
+  observationSize: 70
+  stackedInputs: 1
+  continuousDim: 3
+  discreteDim: 0
+  config: {fileID: 11400000, guid: a00a1e5d8e4f2ef44be9e5b86eff86fb, type: 2}
+  vNetwork: {fileID: 11400000, guid: e6e3b92a76ce04d40b402276501effb0, type: 2}
+  q1Network: {fileID: 11400000, guid: 32e342626c2296945a24e3be4ddd6f8f, type: 2}
+  q2Network: {fileID: 11400000, guid: 887b380e4897c4c44b188feb35831f04, type: 2}
+  muNetwork: {fileID: 11400000, guid: 61fba2be7fdc14741878eabf30427012, type: 2}
+  sigmaNetwork: {fileID: 11400000, guid: 7329a653aa1bf03478e8b314dcb26bfc, type: 2}
+  discreteNetwork: {fileID: 0}
+  discContNetwork: {fileID: 11400000, guid: 3adb7c2007cacd34b997df21af373463, type: 2}
+  discDiscNetwork: {fileID: 0}
+  targetFPS: 50
+  inferenceDevice: 0
+  trainingDevice: 1
+  normalize: 0
+  observationsNormalizer:
+    step: 0
+    mean:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 46000000
+    m2:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 46000000
+  observationsClip: 3
+  standardDeviation: 1
+  standardDeviationValue: 1

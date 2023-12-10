@@ -133,7 +133,7 @@ namespace DeepUnityTutorials
             }
             else if(other.CompareTag("Target"))
             {
-                AddReward(+1f);
+                AddReward(+1.5f);
                 EndEpisode();
             }
         }

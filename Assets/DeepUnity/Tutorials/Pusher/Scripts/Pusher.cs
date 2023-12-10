@@ -37,20 +37,14 @@ namespace DeepUnityTutorials
         }
         public override void CollectObservations(StateVector sensorBuffer)
         {
-            // + 250
-            // + 15 
-            sensorBuffer.AddObservation(rb.velocity); 
-            sensorBuffer.AddObservation(transform.position);
-            sensorBuffer.AddObservation(transform.rotation);
-            sensorBuffer.AddObservation(box.transform.position);
-            sensorBuffer.AddObservation(box.transform.rotation);
+
         }
         public override void OnActionReceived(ActionBuffer actionBuffer)
         {
             rb.AddForce(new Vector3(actionBuffer.ContinuousActions[0], 0, actionBuffer.ContinuousActions[1]) * speed);
             rb.AddTorque(new Vector3(0, actionBuffer.ContinuousActions[2], 0) * rotationSpeed);
 
-            AddReward(-0.001f);
+            AddReward(-0.0025f);
         }
         public override void Heuristic(ActionBuffer actionBuffer)
         {
@@ -63,14 +57,6 @@ namespace DeepUnityTutorials
                 actionBuffer.ContinuousActions[2] = 1f;
             else
                 actionBuffer.ContinuousActions[2] = 0f;
-        }
-
-        private void OnCollisionEnter(Collision collision)
-        {
-            if (collision.collider.CompareTag("Box"))
-            {
-                AddReward(+0.0025f);
-            }
         }
     }
 

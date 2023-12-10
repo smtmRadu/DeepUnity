@@ -26,7 +26,7 @@ MonoBehaviour:
   sigmaNetwork: {fileID: 0}
   discreteNetwork: {fileID: 11400000, guid: 255191dcb247ce644b477f886fa9f215, type: 2}
   discContNetwork: {fileID: 0}
-  discDiscNetwork: {fileID: 0}
+  discDiscNetwork: {fileID: 11400000, guid: 156c007720cb90346830c8bdd4b16a4c, type: 2}
   targetFPS: 50
   inferenceDevice: 0
   trainingDevice: 1
