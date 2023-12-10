@@ -18,13 +18,13 @@ MonoBehaviour:
   stackedInputs: 0
   continuousDim: 0
   discreteDim: 9
-  config: {fileID: 0}
-  vNetwork: {fileID: 0}
+  config: {fileID: 11400000, guid: 8c0c6400427a1a841a961e66791a5053, type: 2}
+  vNetwork: {fileID: 11400000, guid: 348df00f3bbd9224fb4d69129cf0e846, type: 2}
   q1Network: {fileID: 0}
   q2Network: {fileID: 0}
   muNetwork: {fileID: 0}
   sigmaNetwork: {fileID: 0}
-  discreteNetwork: {fileID: 0}
+  discreteNetwork: {fileID: 11400000, guid: 22179ac5ddbfcfd4a9e4a9b242651051, type: 2}
   discContNetwork: {fileID: 0}
   discDiscNetwork: {fileID: 0}
   targetFPS: 50
