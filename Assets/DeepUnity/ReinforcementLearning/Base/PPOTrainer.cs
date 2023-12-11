@@ -24,7 +24,7 @@ namespace DeepUnity
         protected override void FixedUpdate()
         {
             // If agents cumulativelly collected enough data to fill up the buffer (it can surpass for multiple agents)
-            if (BufferCount >= hp.bufferSize)
+            if (MemoriesCount >= hp.bufferSize)
             {
                 foreach (var agent_memory in parallelAgents.Select(x => x.Memory))
                 {
@@ -66,7 +66,8 @@ namespace DeepUnity
         private void Train()
         {
             // 1. Normalize A
-            NormalizeAdvantages(train_data);
+            if(hp.normalizeAdvantages)
+                NormalizeAdvantages(train_data);
 
             // 2. Normalize VTargets. It seems like if we do this the convergence is very unstable.. Maybe it works better for large buffers, but i do not care
             // NormalizeVTargets(train_data);
@@ -355,7 +356,7 @@ namespace DeepUnity
             // Entropy bonus for discrete actions
             // H = - φ * log(φ)
             Tensor H = - pi * pi.Log();
-            meanEntropy += H.Mean(0).Sum(0)[0];
+            meanEntropy += H.Mean(0).Mean(0)[0];
 
             // ∂-H / ∂φ = log(φ) + 1;
             Tensor dmH_dPhi = pi.Log() + 1;

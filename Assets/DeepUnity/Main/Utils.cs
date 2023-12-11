@@ -632,7 +632,7 @@ namespace DeepUnity
 
                 if (!replacement && no_samples > collection.Count())
                 {
-                    throw new ArgumentException("Number of samples cannot exceed the size of the collection when replacement is not allowed.");
+                    throw new ArgumentException($"Number of samples {no_samples} cannot exceed the size of the collection {collection.Count()} when replacement is not allowed.");
                 }
 
                 List<T> samples = new List<T>();
@@ -653,6 +653,12 @@ namespace DeepUnity
                 return samples.ToArray();
             }
             public static bool Bernoulli(float p = 0.5f) => Value < p;
+            /// <summary>
+            /// Returns a sample from normal distribution.
+            /// </summary>
+            /// <param name="mean"></param>
+            /// <param name="stddev"></param>
+            /// <returns></returns>
             public static float Normal(float mean = 0f, float stddev = 1f)
             {
                 // x1 must be > 0 to avoid log(0)
@@ -664,9 +670,16 @@ namespace DeepUnity
                 var entropy = MathF.Sqrt(-2.0f * MathF.Log(x1)) * MathF.Cos(2.0f * MathF.PI * x2);
                 return entropy * stddev + mean;
             }
-            public static float ReparametrizedNormal(float mean = 0f, float stddev = 1f, float I = 1f)
+            /// <summary>
+            /// Returns a sample from normal distribution using the reparametrization trick from VAE.
+            /// </summary>
+            /// <param name="mean"></param>
+            /// <param name="stddev"></param>
+            /// <param name="ksi">N(0,1)</param>
+            /// <returns></returns>
+            public static float ReparametrizedNormal(float mean, float stddev, out float ksi)
             {
-                float ksi = Normal(0, I);
+                ksi = Normal(0, 1);
                 return mean + stddev * ksi;
             }
         }

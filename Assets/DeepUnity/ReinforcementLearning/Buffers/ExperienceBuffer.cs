@@ -9,6 +9,7 @@ namespace DeepUnity
     /// </summary>
     public class ExperienceBuffer
     {
+        public readonly List<TimestepTuple> frames;
         public int Count { get => frames.Count; }
         public Tensor[] States { get => frames.Select(x => x.state).ToArray(); }
         public Tensor[] NextStates { get => frames.Select(x => x.nextState).ToArray(); }
@@ -19,7 +20,7 @@ namespace DeepUnity
         public Tensor[] ValueTargets { get => frames.Select(x => x.value_target).ToArray(); }
         public Tensor[] Advantages { get => frames.Select(x => x.advantage).ToArray(); }
 
-        public readonly List<TimestepTuple> frames;
+        
 
         public ExperienceBuffer(int alloc_size)
         {
@@ -89,7 +90,7 @@ namespace DeepUnity
             return Count == buffer_size;
         }
         /// <summary>
-        /// Try to add agent's memory to the training data by the limit of the buffer_size.
+        /// Try to add agent's memory to the training data by the limit of the buffer_size. If is already full, the append fails.
         /// </summary>
         /// <param name="agentMemory"></param>
         /// <param name="buffer_size"></param>

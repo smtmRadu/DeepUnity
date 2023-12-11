@@ -440,7 +440,8 @@ namespace DeepUnity
             if (EditorApplication.isPlaying &&
                 script.behaviourType == BehaviourType.Learn
                 && script.enabled
-                && script.model)
+                && script.model
+                && DeepUnityTrainer.Instance)
             {
                 // Draw Step
                 int currentStep = script.EpisodeStepCount;
@@ -452,28 +453,60 @@ namespace DeepUnity
                 EditorGUILayout.HelpBox(cumReward, MessageType.None);
 
                 // Draw buffer 
-                int buff_count = PPOTrainer.BufferCount;
-                float bufferFillPercentage = buff_count / ((float)script.model.config.bufferSize) * 100f;
-                StringBuilder sb = new StringBuilder();
-                sb.Append("Buffer [");
-                sb.Append(buff_count);
-                sb.Append(" / ");
-                sb.Append(script.model.config.bufferSize);
-                sb.Append($"] \n[");
-                for (float i = 1.25f; i <= 100f; i += 1.25f)
+
+                
+
+                if(DeepUnityTrainer.Instance.GetType() == typeof(PPOTrainer))
                 {
-                    if (i == 47.5f)
-                        sb.Append($"{bufferFillPercentage.ToString("00.0")}%");
-                    else if (i > 47.5f && i <= 53.75f)
-                        continue;
-                    else if (i <= bufferFillPercentage)
-                        sb.Append("▮");
-                    else
-                        sb.Append("▯");
+                    int buff_count = DeepUnityTrainer.MemoriesCount;
+                    float bufferFillPercentage = buff_count / ((float)script.model.config.bufferSize) * 100f;
+                    StringBuilder sb = new StringBuilder();
+                    sb.Append("Buffer [");
+                    sb.Append(buff_count);
+                    sb.Append(" / ");
+                    sb.Append(script.model.config.bufferSize);
+                    sb.Append($"] \n[");
+                    for (float i = 1.25f; i <= 100f; i += 1.25f)
+                    {
+                        if (i == 47.5f)
+                            sb.Append($"{bufferFillPercentage.ToString("00.0")}%");
+                        else if (i > 47.5f && i <= 53.75f)
+                            continue;
+                        else if (i <= bufferFillPercentage)
+                            sb.Append("▮");
+                        else
+                            sb.Append("▯");
+                    }
+                    sb.Append("]");
+                    EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
+                    EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
                 }
-                sb.Append("]");
-                EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
-                EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+                else if(DeepUnityTrainer.Instance.GetType() == typeof(SACTrainer))
+                {
+                    int collected_data_count = DeepUnityTrainer.TrainingBufferCount;
+                    float bufferFillPercentage = collected_data_count / ((float)script.model.config.bufferSize) * 100f;
+                    StringBuilder sb = new StringBuilder();
+                    sb.Append("Buffer [");
+                    sb.Append(collected_data_count);
+                    sb.Append(" / ");
+                    sb.Append(script.model.config.bufferSize);
+                    sb.Append($"] \n[");
+                    for (float i = 1.25f; i <= 100f; i += 1.25f)
+                    {
+                        if (i == 47.5f)
+                            sb.Append($"{bufferFillPercentage.ToString("00.0")}%");
+                        else if (i > 47.5f && i <= 53.75f)
+                            continue;
+                        else if (i <= bufferFillPercentage)
+                            sb.Append("▮");
+                        else
+                            sb.Append("▯");
+                    }
+                    sb.Append("]");
+                    EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
+                    EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+                }
+                
 
                 // EditorGUILayout.HelpBox($"Reward [{script.EpsiodeCumulativeReward}]",
                 //                         MessageType.None);

@@ -56,6 +56,9 @@ namespace DeepUnity
         [Tooltip("[Typical range: 0.9 - 1] GAE factor.")]
         [Min(0.001f)] public float lambda = 0.95f;
 
+        [Tooltip("Normalize the advantages over the experience buffer. This might help with stabilization if it is used for large buffer sizes.")]
+        public bool normalizeAdvantages = true;
+
         [Tooltip("Use of KLE")]
         public KLType KLDivergence = KLType.Off;
 
@@ -69,17 +72,17 @@ namespace DeepUnity
         [Tooltip("[Typicall range: 1000 - 10000] Policy update updates after this number of steps.")]
         [Min(50)] public int updateEvery = 1000;
 
-        [Tooltip("[Typicall range: 1000 - 5000?] Number of experiences to collect into the buffer before starting to update the policy model.")]
-        [Min(50)] public int updateAfter = 1000;
+        // [Tooltip("[Typicall range: 1000 - 5000?] Number of experiences to collect into the buffer before starting to update the policy model.")]
+        // [Min(50)] public int updateAfter = 1000;
 
         [Tooltip("[Typical range: 1 - 8] Number of mini-batches sampled on policy model update.")]
-        [Min(1)] public int updatesNum = 1;
+        [Min(1)] public int updatesNum = 8;
 
-        [Tooltip("[Typicall range: (Continuous) 0.5 - 1.0 ~(Discrete) 0.05 - 0.5] Entropy tradeoff coefficient.")]
+        [Tooltip("[Typicall range: (Continuous) 0.5 - 1.0 ~(Discrete) 0.05 - 0.5] Entropy tradeoff coefficient. Lower alpha means low exploration.")]
         [Min(1e-8f)] public float alpha = 0.2f;
       
-        [Tooltip("Wheter to save and load the experience replay buffer.")]
-        public bool saveReplayBuffer = false;
+        // [Tooltip("Wheter to save and load the experience replay buffer.")]
+        // public bool saveReplayBuffer = false;
 
         // public ExperienceBuffer experience buffer;... to be loaded here
 
@@ -93,7 +96,12 @@ namespace DeepUnity
 
         // public ExperienceBuffer experience_buffer; .. to be loaded here
 
-        // [HideInInspector]
+
+
+
+
+
+        [HideInInspector]
         [Tooltip("Debug the train_data into a file.")]
         [Space(30)]
         public bool debug = false;
@@ -174,6 +182,7 @@ namespace DeepUnity
                 dontDrawMe.Add("beta");
                 dontDrawMe.Add("epsilon");
                 dontDrawMe.Add("lambda");
+                dontDrawMe.Add("normalizeAdvantages");
                 dontDrawMe.Add("KLDivergence");
                 dontDrawMe.Add("targetKL");
 
@@ -193,6 +202,7 @@ namespace DeepUnity
                 dontDrawMe.Add("beta");
                 dontDrawMe.Add("epsilon");
                 dontDrawMe.Add("lambda");
+                dontDrawMe.Add("normalizeAdvantages");
                 dontDrawMe.Add("KLDivergence");
                 dontDrawMe.Add("targetKL");
             }

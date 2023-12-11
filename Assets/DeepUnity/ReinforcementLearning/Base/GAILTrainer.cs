@@ -44,7 +44,7 @@ namespace DeepUnity
                 batch_index++;
             }
 
-            if(BufferCount == hp.bufferSize)
+            if(MemoriesCount == hp.bufferSize)
             {
                 train_data.TryAppend(parallelAgents[0].Memory, hp.bufferSize);
                 if (hp.debug) Utils.DebugInFile(parallelAgents[0].Memory.ToString());

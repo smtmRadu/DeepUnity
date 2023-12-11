@@ -114,6 +114,7 @@ namespace DeepUnityTutorials
                 // Backprop MSE  through decoder (z = mu + sigma * ksi)
                 Tensor dBCE_dz = decoder.Backward(dBCEdDecoded); // derivative of the loss with respect to z = mu * sigma * std;
 
+                // We sum the gradient from mu and sigma for encoder..
                 // Backprop MSE  through mu // dZ/dMu = 1
                 Tensor dBCE_dMu = dBCE_dz * 1;
                 Tensor dBCE_dEncoder = mu.Backward(dBCE_dMu);
@@ -128,7 +129,7 @@ namespace DeepUnityTutorials
 
 
 
-                const float kld_weight = 3f;
+                const float kld_weight = 1f;
                 Tensor kld = -0.5f * (1f + log_variance - mean.Pow(2f) - log_variance.Exp());
                 loss_value += kld.ToArray().Average() * kld_weight;
 
@@ -143,7 +144,7 @@ namespace DeepUnityTutorials
 
                 // Compute gradients for encoder
                 encoder.Backward(dZ_dEnc);
-
+                optim.ClipGradNorm(1f);
                 optim.Step();
 
                 // print($"Batch: {batch_index} | Loss: {loss_value}");
@@ -156,11 +157,8 @@ namespace DeepUnityTutorials
                 if (displays.Count == 0)
                     return;
 
-                for (int i = 0; i < displays.Count; i += 2)
+                for (int i = 0; i < displays.Count/2; i++)
                 {
-                    if (i + 1 >= displays.Count)
-                        break;
-
                     var sample = Utils.Random.Sample(train).Item1;
                     var tex1 = displays[i].texture as Texture2D;
                     tex1.SetPixels(Utils.TensorToColorArray(sample));
@@ -168,7 +166,7 @@ namespace DeepUnityTutorials
 
 
                     var recon_sample = Forward(sample, out _, out _, out _, out _);
-                    var tex2 = displays[i + 1].texture as Texture2D;
+                    var tex2 = displays[i + displays.Count / 2].texture as Texture2D;
                     tex2.SetPixels(Utils.TensorToColorArray(recon_sample));
                     tex2.Apply();
                 }

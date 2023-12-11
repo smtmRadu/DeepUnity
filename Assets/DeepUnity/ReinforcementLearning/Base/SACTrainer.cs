@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Linq;
-
+using UnityEditor;
+using UnityEngine;
 namespace DeepUnity
 {
     // https://medium.com/intro-to-artificial-intelligence/soft-actor-critic-reinforcement-learning-algorithm-1934a2c3087f 
@@ -17,14 +18,27 @@ namespace DeepUnity
         {
             Qtarg1 = model.q1Network.Clone() as NeuralNetwork;
             Qtarg2 = model.q2Network.Clone() as NeuralNetwork;
+
+            if(hp.batchSize > hp.updateEvery)
+            {
+                ConsoleMessage.Warning("Batch Size must be less or equal to Update Every");
+                EditorApplication.isPlaying = false;
+            }
         }
         protected override void FixedUpdate()
         {
-            
-            if (currentSteps > hp.updateAfter && // Start to update the policy after some experiences were collected, note to force the actions to be random in this part..
-                (currentSteps % hp.updateEvery == 0 || // Update every x steps
-                train_data.Count == hp.bufferSize)) // If the buffer is full, do not collect experiences anymore, just train... Well actually i would rather remove the old experiences instead...
+            int collected_steps = 0;
+            foreach (var ag in parallelAgents)
             {
+                collected_steps += ag.Memory.Count;
+            }
+
+            if (collected_steps > 0 && collected_steps % hp.updateEvery == 0) 
+            {
+                // if the buffer will be full after this collection, let's clear the old values
+                if(train_data.Count >= hp.bufferSize - collected_steps)             
+                    train_data.frames.RemoveRange(0, train_data.Count / 2);
+                
                 foreach (var agent_mem in parallelAgents.Select(x => x.Memory))
                 {
                     if (agent_mem.Count == 0)
@@ -37,6 +51,8 @@ namespace DeepUnity
                 Stopwatch clock = Stopwatch.StartNew();
                 Train();
                 clock.Stop();
+
+                currentSteps += collected_steps;
             }
 
             base.FixedUpdate(); 
@@ -44,24 +60,23 @@ namespace DeepUnity
         private void Train()
         {          
             for (int epoch_index = 0; epoch_index < hp.updatesNum; epoch_index++)
-            {
+            {            
                 // Sample a random batch of transitions from the replay buffer
                 TimestepTuple[] batch = Utils.Random.Sample(hp.batchSize, train_data.frames);
 
                 // Batchify
                 Tensor states = Tensor.Concat(null, batch.Select(x => x.state).ToArray());
                 Tensor actions = Tensor.Concat(null, batch.Select(x => x.action_continuous).ToArray());
-                Tensor y = Tensor.Concat(null, batch.Select(x => x.q_target).ToArray());
-
-                ComputeQTargets(batch, hp.gamma);
-                UpdateQFunctions(states, actions, y);
+                
+ 
+                UpdateQFunctions(states, actions, ComputeQTargets(batch, hp.gamma));
                 UpdatePolicy(states);
                 UpdateTargetNetworks();
             }
         }
 
        
-        private void ComputeQTargets(TimestepTuple[] batch, in float GAMMA)
+        private Tensor ComputeQTargets(TimestepTuple[] batch, in float GAMMA)
         {
             Tensor nextStates = Tensor.Concat(null, batch.Select(x => x.nextState).ToArray());
 
@@ -81,9 +96,11 @@ namespace DeepUnity
                 float r = batch[t].reward[0];
                 float d = batch[t].done[0];
 
-                Tensor y = r + GAMMA * (1 - d) * (Tensor.Minimum(Qtarg1[t], Qtarg2[t]) - hp.alpha * Tensor.Log(pi[t])); // a.k.a Qhat, shape: (CONT_ACT)
-                batch[t].q_target = y;
+                Tensor y = r + GAMMA * (1 - d) * (Tensor.Minimum(Qtarg1[t], Qtarg2[t]) - hp.alpha * Tensor.Log(pi[t])); // a.k.a Qhat, shape: (1, CONT_ACT) because (q_targs are not squeezed after split)
+                batch[t].q_target = y.Squeeze(0);
             }
+
+            return Tensor.Concat(null, batch.Select(x => x.q_target).ToArray());
         }
         private void UpdateQFunctions(Tensor states, Tensor actions, Tensor y)
         {
@@ -103,55 +120,47 @@ namespace DeepUnity
             model.q2Optimizer.ClipGradNorm(hp.gradClipNorm);
             model.q1Optimizer.Step();
             model.q2Optimizer.Step();
+
+            track.valueLoss.Append((q1Loss.Item + q2Loss.Item)/2);
         }
         private void UpdatePolicy(Tensor states)
         {
-            Tensor tilde_a_s, mu, sigma;
-            model.ContinuousReparametrizedForward(states, out tilde_a_s, out mu, out sigma);
-            Tensor logPi_tildeas_S = Tensor.LogProbability(tilde_a_s, mu, sigma);
+            Tensor tildea_s, mu, sigma, ksi;
+            model.ContinuousReparametrizedForward(states, out tildea_s, out mu, out sigma, out ksi);
+            Tensor logPi_tildeas_S = Tensor.LogProbability(tildea_s, mu, sigma);
 
+            // For Appendix C.
+            // πθ(a|s) = log μ(u|s) - log (1 - tanh^2(u))
             // ⊙·····························································⊙
             // ãθ(s) is a sample from πθ(•|s), which is differentiable wrt θ via the reparametrization trick.
             // ãθ(s,ξ) = tanh(μθ(s) + σθ(s) ⊙ ξ), where ξ ~ N(0, 1)
             Tanh tanh = new Tanh();
-            tilde_a_s = tanh.Forward(tilde_a_s);
+            tildea_s = tanh.Forward(tildea_s);
 
-            Tensor Q1_s_tildeas = model.Q1Forward(states, tilde_a_s);
-            Tensor Q2_s_tildeas = model.Q2Forward(states, tilde_a_s);
-            Tensor minQ1Q2 = Tensor.Minimum(Q1_s_tildeas, Q2_s_tildeas);
+            Tensor Q1_s_tildea_s = model.Q1Forward(states, tildea_s);
+            Tensor Q2_s_tildea_s = model.Q2Forward(states, tildea_s);
+            Tensor minQ1Q2 = Tensor.Minimum(Q1_s_tildea_s, Q2_s_tildea_s);
 
             // ∇θ = min[ Qφ1(s,ãθ(s)), Qφ2(s,ãθ(s))] - αlogπθ(ãθ(s)|s) ]
-            Tensor piLoss = Tensor.Minimum(Q1_s_tildeas, Q2_s_tildeas) - logPi_tildeas_S;
-            Tensor neg_piLoss = logPi_tildeas_S - Tensor.Minimum(Q1_s_tildeas, Q2_s_tildeas);
+            Tensor objectiveLoss = Tensor.Minimum(Q1_s_tildea_s, Q2_s_tildea_s) - hp.alpha * logPi_tildeas_S;
 
-            // Tensor dmL_dPi = logPi_tildeas_S.Pow(-1f);
+            // Let's see how we compute this bro...
+            Tensor dmL_dTildeA = null;
 
+            return;
 
+            // ∂ãθ(s) / ∂μ = ?
+            float dTildeA_dMu = 1;
+            // ∂ãθ(s) / ∂σ = ?
+            Tensor dTildeA_dSigma = ksi;
 
-            // Consider we do gradient *ascent*, so we do negative of the loss function
+           
 
-            // We cannot compute the derivative of the negative L with respect to the 
-            // heads outputs, so we need to expand the differential equation...
-            // ∂-Lθ / ∂μθ = ?
-            // ∂-Lθ / ∂σθ = ?
+            // ∂-L / ∂μ = (∂-L / ∂ãθ(s)) * (∂ãθ(s) / ∂μ)
+            Tensor dmL_dMu = dmL_dTildeA * dTildeA_dMu;
 
-            // ∂L / ∂πθ(a|s) = 1/πθ(a|s);
-            Tensor dmL_dPi = logPi_tildeas_S.Pow(-1f);
-
-            // [ ∂πθ(a|s) / ∂μ != πθ(a|s) * (x - μ) / σ^2 ] because the normal sampling is using reparametrization trick
-            // [ ∂πθ(a|s) / ∂σ != πθ(a|s) * ((x - μ)^2 - σ^2) / σ^3 ] because the normal sampling is using reparametrization trick
-
-            // ∂πθ(a|s) / ∂μ = ?
-            Tensor dPi_dMu = null;
-            // ∂πθ(a|s) / ∂σ = ?
-            Tensor dPi_dSigma = null;
-
-
-            // ∂-L / ∂μ = (∂-L / ∂πθ(a|s)) * (∂πθ(a|s) / ∂μ)
-            Tensor dmL_dMu = dmL_dPi * dPi_dMu;
-
-            // ∂-L / ∂σ = (∂-L / ∂πθ(a|s)) * (∂πθ(a|s) / ∂σ)
-            Tensor dmL_dSigma = dmL_dPi * dPi_dSigma;
+            // ∂-L / ∂σ = (∂-L / ∂ãθ(s)) * (∂ãθ(s) / ∂σ)
+            Tensor dmL_dSigma = dmL_dTildeA * dTildeA_dSigma;
           
 
             model.muOptimizer.ZeroGrad();
@@ -177,12 +186,13 @@ namespace DeepUnity
 
 
             // We update the target q functions softly...
-            // φtarg,i <- τ φtarg,i + (1 - τ)φi     for i = 1,2
+            // OpenAI algorithm uses polyak = 0.995, the same thing with using τ = 0.005, but we inverse the logic. 
+            // φtarg,i <- (1 - τ)φtarg,i + τφi     for i = 1,2
 
             for (int i = 0; i < phi1.Length; i++)
             {
-                Tensor.CopyTo(hp.tau * phi_targ1[i] + (1f - hp.tau) * phi1[i], phi_targ1[i]);
-                Tensor.CopyTo(hp.tau * phi_targ2[i] + (1f - hp.tau) * phi2[i], phi_targ2[i]);
+                Tensor.CopyTo((1f - hp.tau) * phi_targ1[i] + hp.tau * phi1[i], phi_targ1[i]);
+                Tensor.CopyTo((1f - hp.tau) * phi_targ2[i] + hp.tau * phi2[i], phi_targ2[i]);
             }        
         }
 
@@ -192,7 +202,7 @@ namespace DeepUnity
         {
             int batch_size = stateBatch.Size(0);
             int state_size = stateBatch.Size(1);
-            int action_size = stateBatch.Size(1);
+            int action_size = actionBatch.Size(1);
             Tensor input = Tensor.Zeros(batch_size, state_size + action_size);
             for (int i = 0; i < batch_size; i++)
             {
@@ -200,9 +210,9 @@ namespace DeepUnity
                 {
                     input[i, f] = stateBatch[i, f];
                 }
-                for (int f = state_size; f < state_size + action_size; f++)
+                for (int f = 0; f < action_size; f++)
                 {
-                    input[i, f] = actionBatch[i, f];
+                    input[i, state_size + f] = actionBatch[i, f];
                 }
             }
             return Qtarg1.Predict(input);
@@ -211,7 +221,7 @@ namespace DeepUnity
         {
             int batch_size = stateBatch.Size(0);
             int state_size = stateBatch.Size(1);
-            int action_size = stateBatch.Size(1);
+            int action_size = actionBatch.Size(1);
             Tensor input = Tensor.Zeros(batch_size, state_size + action_size);
             for (int i = 0; i < batch_size; i++)
             {
@@ -219,9 +229,9 @@ namespace DeepUnity
                 {
                     input[i, f] = stateBatch[i, f];
                 }
-                for (int f = state_size; f < state_size + action_size; f++)
+                for (int f = 0; f < action_size; f++)
                 {
-                    input[i, f] = actionBatch[i, f];
+                    input[i, state_size + f] = actionBatch[i, f];
                 }
             }
             return Qtarg2.Predict(input);

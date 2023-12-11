@@ -969,7 +969,7 @@ MonoBehaviour:
   numLayers: 2
   hidUnits: 64
   model: {fileID: 11400000, guid: 8998d3f5270b5a44c81af32350a31b30, type: 2}
-  behaviourType: 1
+  behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0
   speed: 10

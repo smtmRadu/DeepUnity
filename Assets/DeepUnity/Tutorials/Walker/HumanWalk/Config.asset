@@ -17,14 +17,15 @@ MonoBehaviour:
   horizon: 64
   learningRate: 0.0003
   gamma: 0.99
-  batchSize: 64
-  bufferSize: 1280
+  batchSize: 200
+  bufferSize: 4000
   gradClipNorm: 0.5
   LRSchedule: 0
   numEpoch: 8
   beta: 0.005
   epsilon: 0.2
   lambda: 0.95
+  normalizeAdvantages: 0
   KLDivergence: 0
   targetKL: 0.015
   updateEvery: 1000

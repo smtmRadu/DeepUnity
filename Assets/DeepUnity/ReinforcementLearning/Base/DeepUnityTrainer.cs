@@ -8,9 +8,15 @@ namespace DeepUnity
 {
     public abstract class DeepUnityTrainer : MonoBehaviour
     {
-        private static DeepUnityTrainer Instance;
+        public static DeepUnityTrainer Instance;
+        
 
-        public static int BufferCount { get => Instance ? Instance.parallelAgents.Sum(x => x.Memory.Count) : 0; }
+        /// <summary>
+        /// Current experiences collected by the agents.
+        /// </summary>
+        public static int MemoriesCount { get => Instance.parallelAgents.Sum(x => x.Memory.Count); }
+        public static int TrainingBufferCount { get => Instance.train_data.Count; }
+
         [ReadOnly, SerializeField] protected List<Agent> parallelAgents;
         [ReadOnly, SerializeField] protected Hyperparameters hp;
         [ReadOnly, SerializeField] protected TrainingStatistics track;

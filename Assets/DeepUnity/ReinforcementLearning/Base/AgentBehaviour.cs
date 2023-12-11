@@ -328,13 +328,14 @@ namespace DeepUnity
         /// Output: <paramref name="sigmaBatch"/> - <em>σ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
         /// Output: <paramref name="action"/> - <em>aₜ</em> |  Tensor (<em>Continuous Actions</em>) <br></br>
         /// </summary>
-        public void ContinuousReparametrizedForward(Tensor statesBatch, out Tensor actionsBatch, out Tensor muBatch, out Tensor sigmaBatch)
+        public void ContinuousReparametrizedForward(Tensor statesBatch, out Tensor actionsBatch, out Tensor muBatch, out Tensor sigmaBatch, out Tensor ksiBatch)
         {
             if (!IsUsingContinuousActions)
             {
                 actionsBatch = null;
                 muBatch = null;
                 sigmaBatch = null;
+                ksiBatch = null;
                 return;
             }
 
@@ -342,7 +343,10 @@ namespace DeepUnity
             sigmaBatch = standardDeviation == StandardDeviationType.Trainable ?
                            sigmaNetwork.Forward(statesBatch) :
                            Tensor.Fill(standardDeviationValue, muBatch.Shape);
-            actionsBatch = muBatch.Zip(sigmaBatch, (x, y) => Utils.Random.ReparametrizedNormal(x, y));
+
+            ksiBatch = Tensor.RandomNormal(sigmaBatch.Shape);
+
+            actionsBatch = muBatch + sigmaBatch * ksiBatch;
         }    
         /// <summary>
         /// Input: <paramref name="state"/> - <em>sₜ</em> | Tensor (<em>Observations</em>) <br></br>
@@ -395,7 +399,7 @@ namespace DeepUnity
         {
             int batch_size = stateBatch.Size(0);
             int state_size = stateBatch.Size(1);
-            int action_size = stateBatch.Size(1);
+            int action_size = actionBatch.Size(1);
             Tensor input = Tensor.Zeros(batch_size, state_size + action_size);
             for (int i = 0; i < batch_size; i++)
             {
@@ -403,9 +407,9 @@ namespace DeepUnity
                 {
                     input[i, f] = stateBatch[i, f];
                 }
-                for (int f = state_size; f < state_size + action_size; f++)
+                for (int f = 0; f < action_size; f++)
                 {
-                    input[i, f] = actionBatch[i, f];
+                    input[i, state_size + f] = actionBatch[i, f];
                 }
             }
             return q1Network.Forward(input);           
@@ -414,7 +418,7 @@ namespace DeepUnity
         {
             int batch_size = stateBatch.Size(0);
             int state_size = stateBatch.Size(1);
-            int action_size = stateBatch.Size(1);
+            int action_size = actionBatch.Size(1);
             Tensor input = Tensor.Zeros(batch_size, state_size + action_size);
             for (int i = 0; i < batch_size; i++)
             {
@@ -422,9 +426,9 @@ namespace DeepUnity
                 {
                     input[i, f] = stateBatch[i, f];
                 }
-                for (int f = state_size; f < state_size + action_size; f++)
+                for (int f = 0; f < action_size; f++)
                 {
-                    input[i, f] = actionBatch[i, f];
+                    input[i, state_size + f] = actionBatch[i, f];
                 }
             }
 
