@@ -29,9 +29,16 @@ namespace kbRadu
         public AgentBehaviour beh;
         private void Start()
         {
-            PReLU prelu = new PReLU(0.01f);
-            print(prelu.ParametersCount());
-            print(prelu.Parameters());
+            // 32 x 16
+            Tensor x = Tensor.Arange(0, 16, 1).Reshape(16);
+            Dense dense = new Dense(16, 24, InitType.Ones, InitType.Zeros);
+
+
+            var outp = dense.Forward(x);
+            dense.Backward(outp);
+
+            print(dense.Parameters()[0].g);
+            print(dense.Parameters()[1].g);
         }
 
         public void TestCPU()

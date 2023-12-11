@@ -13,8 +13,7 @@ namespace DeepUnity
     /// [3] https://ieeexplore.ieee.org/document/9520424
     /// </summary>
     /// What may cause NaN values:
-    /// 1. The value function network -> Vw_s -> NaN => nan advantages (solved because we filter it's output)
-    /// 2. The networks -> the discrete and mu networks may produce NaN.
+    /// 1. Softmax activation on discrete head may "explode"
     public sealed class PPOTrainer : DeepUnityTrainer
     {
         private float meanPolicyLoss = 0f;

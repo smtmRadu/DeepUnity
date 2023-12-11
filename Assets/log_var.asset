@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 77cd255994572814395a912f173ad620, type: 3}
+  m_Name: log_var
+  m_EditorClassIdentifier: 
+  version: 59
+  assetCreated: 1
+  serializedModules:
+  - name: Dense
+    dense:
+      device: 0
+      weights:
+        data:
+        - -3.118597
+        - -2.5532107
+        - -1.1766622
+        - -2.6730149
+        - -1.5405725
+        - -1.6439893
+        - -3.2659862
+        - -3.005212
+        - 2.6164875
+        - -2.556064
+        - -2.947064
+        - -2.638696
+        - -3.177011
+        - -2.5253942
+        - -3.2972045
+        - -2.4835403
+        - -3.0029297
+        - -3.0035028
+        - -3.0955625
+        - -2.6808422
+        - -0.5004042
+        - 1.9535735
+        - -3.5986915
+        - -2.7621775
+        - 2.7882862
+        - -2.8523252
+        - -1.2879999
+        - -2.9143102
+        - -1.3996344
+        - -1.6353582
+        - -2.8419065
+        - -3.1080282
+        - -2.7607658
+        - -2.5279243
+        - -2.743827
+        - -3.1542048
+        - -1.0161188
+        - 0.16009109
+        - -3.5861351
+        - -2.6520486
+        - 2.5127754
+        - -2.7313035
+        - -1.8068962
+        - -2.8057044
+        - -1.2074118
+        - -1.4655555
+        - -3.7685423
+        - -2.9348786
+        - -2.8309093
+        - -2.944484
+        - -3.1271703
+        - -2.754891
+        - -2.985569
+        - -2.4985766
+        - -3.4095314
+        - -2.5210328
+        - -3.0873315
+        - -3.0017684
+        - -2.734865
+        - -2.7269225
+        - -2.5474358
+        - -2.6403217
+        - -3.3149319
+        - -2.6082828
+        shape: 0800000008000000
+      biases:
+        data:
+        - -3.8720644
+        - -4.0791206
+        - -3.7672899
+        - -4.2545314
+        - -3.723258
+        - -4.282394
+        - -4.154107
+        - -4.4636245
+        shape: 08000000
+    batchnorm1d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    layernorm:
+      step: 0
+      runningMean:
+        data:
+        - 0
+        shape: 01000000
+      runningVar:
+        data:
+        - 1
+        shape: 01000000
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      beta:
+        data:
+        - 0
+        shape: 01000000
+    conv2d:
+      inputShape: 
+      outChannels: 0
+      kernelWidth: 0
+      kernelHeight: 0
+      device: 0
+      kernels:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+    dropout:
+      dropout: 0
+    flatten:
+      startAxis: -3
+      endAxis: -1
+    reshape:
+      inputShape: 
+      outputShape: 
+    avgPool2d:
+      kernel_size: 0
+      padding: 0
+      padding_mode: 0
+    maxPool2d:
+      kernel_size: 0
+      padding: 0
+      padding_mode: 0
+    leakyrelu:
+      alpha: 0
+    softplus:
+      beta: 0
+      psi: 0
+    elu:
+      alpha: 0
+    threshold:
+      threshold: 0
+      value: 0
+    hardtanh:
+      min_value: 0
+      max_value: 0

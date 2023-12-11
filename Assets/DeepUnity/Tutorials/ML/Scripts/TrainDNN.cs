@@ -55,8 +55,6 @@ namespace DeepUnityTutorials
                  // new BatchNorm(hiddenSize),
                  new PReLU(),
                  // new Dropout(0.3f),
-                 new Dense(hiddenSize, hiddenSize, init_w, init_b),
-                 new PReLU(),
                  new Dense(hiddenSize, 1, init_w, init_b)
                  );
             }

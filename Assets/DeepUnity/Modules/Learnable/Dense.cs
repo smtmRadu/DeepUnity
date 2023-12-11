@@ -118,18 +118,22 @@ namespace DeepUnity
 
             if (device == Device.CPU)
             {
-                Tensor transposedLoss;
-
-                if (isBatched)
-                    transposedLoss = Tensor.Transpose(loss, 0, 1);
-                else
-                {
-                    transposedLoss = Tensor.Transpose(loss.Unsqueeze(0), 0, 1);
-                    InputCache = InputCache.Unsqueeze(0);
-                }
-
-                Tensor.CopyTo(weightsGrad + Tensor.MatMul(transposedLoss, InputCache) / batch_size, weightsGrad);
-                Tensor.CopyTo(biasesGrad + Tensor.Mean(transposedLoss, axis: 1), biasesGrad);
+                // Benchmark : 0.93s avg (This method was replaced due to performance benchmark)
+                // Tensor transposedLoss = isBatched ?
+                //         Tensor.Transpose(loss, 0, 1) :
+                //         Tensor.Transpose(loss.Unsqueeze(0), 0, 1);
+                // 
+                // Tensor.CopyTo(weightsGrad + Tensor.MatMul(transposedLoss, InputCache) / batch_size, weightsGrad);
+                // Tensor.CopyTo(biasesGrad + Tensor.Mean(loss, axis: 0), biasesGrad);
+                
+                
+                // Benchmark : 0.72s avg
+                Tensor weights_grad;
+                Tensor biases_grad;
+                ComputeGradients(InputCache, loss, isBatched, batch_size, out weights_grad, out biases_grad);
+                
+                Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
+                Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
             }
             else
             {
@@ -230,7 +234,60 @@ namespace DeepUnity
 
             return y;
         }
+        private void ComputeGradients(Tensor x, Tensor loss, bool isBatched, int B_size, out Tensor weights_grad, out Tensor biases_grad)
+        {
+            int H_out = weights.Size(-2);
+            int H_in = weights.Size(-1);
 
+            Tensor wg = Tensor.Zeros(H_out, H_in);
+            Tensor bg = Tensor.Zeros(H_out);
+
+           
+            // lossT * input = (H_out, B) * (B, H_in)
+            if (isBatched)
+            {
+                Parallel.For(0, H_in, hin =>
+                {
+                    for (int hout = 0; hout < H_out; hout++) 
+                    {
+                        float mm = 0f;
+                        
+                        for (int b = 0; b < B_size; b++)
+                            mm += loss[b, hout] * x[b, hin];
+                                                 
+                        wg[hout, hin] = mm / B_size;    
+                    }
+
+                    if(hin == 0)
+                    {
+                        for (int hout = 0; hout < H_out; hout++)
+                        {
+                            float loss_mean = 0f;
+                            for (int b = 0; b < B_size; b++)
+                            {
+                                loss_mean += loss[b, hout];
+                            }
+                            bg[hout] = loss_mean / B_size;
+                        }
+                    }
+
+                });
+            }
+            else
+            {
+                Parallel.For(0, H_out, hout =>
+                {
+                    for (int hin = 0; hin < H_in; hin++)
+                    {
+                        wg[hout, hin] = x[hin] * loss[hout];
+                    }
+                    bg[hout] = loss[hout];
+                });
+            }
+
+            weights_grad = wg;
+            biases_grad = bg;
+        }
         public void SetDevice(Device device) { this.device = device; }
         public int ParametersCount()
         {

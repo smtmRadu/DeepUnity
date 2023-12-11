@@ -206,7 +206,7 @@ namespace DeepUnityTutorials
             ConsoleMessage.Info("Networks saved");
         }
 
-        private enum WhatToDo
+        public enum WhatToDo
         {
             SeeGeneratedImages,
             Train
