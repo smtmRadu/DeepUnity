@@ -12,7 +12,7 @@ namespace DeepUnity
         private readonly Tensor[] b;
 
         public SGD(Parameter[] parameters, float lr = 0.01f, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false) 
-            : base(parameters, lr, weightDecay)
+            : base(parameters, lr, 0, weightDecay)
         {
             this.mu = momentum;
             this.tau = dampening;

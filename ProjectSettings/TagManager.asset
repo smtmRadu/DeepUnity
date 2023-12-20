@@ -21,6 +21,7 @@ TagManager:
   - Spider
   - BlueGoal
   - PinkGoal
+  - Agent2
   layers:
   - Default
   - TransparentFX

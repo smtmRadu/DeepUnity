@@ -1,18 +1,63 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.Linq;
+using Unity.VisualScripting;
 using UnityEditor;
-using UnityEngine;
+
 namespace DeepUnity
 {
     // https://medium.com/intro-to-artificial-intelligence/soft-actor-critic-reinforcement-learning-algorithm-1934a2c3087f 
     // https://spinningup.openai.com/en/latest/algorithms/sac.html
-  
+
 
     // So SAC trains Q1 and Q2 without an aditional value function
     public class SACTrainer : DeepUnityTrainer
     {
+        // Q target networks
         private static NeuralNetwork Qtarg1;
         private static NeuralNetwork Qtarg2;
+        private Tensor QTarg1Predict(Tensor stateBatch, Tensor actionBatch)
+        {
+            int batch_size = stateBatch.Size(0);
+            int state_size = stateBatch.Size(1);
+            int action_size = actionBatch.Size(1);
+            Tensor input = Tensor.Zeros(batch_size, state_size + action_size);
+            for (int i = 0; i < batch_size; i++)
+            {
+                for (int f = 0; f < state_size; f++)
+                {
+                    input[i, f] = stateBatch[i, f];
+                }
+                for (int f = 0; f < action_size; f++)
+                {
+                    input[i, state_size + f] = actionBatch[i, f];
+                }
+            }
+            return Qtarg1.Predict(input);
+        }
+        private Tensor QTarg2Predict(Tensor stateBatch, Tensor actionBatch)
+        {
+            int batch_size = stateBatch.Size(0);
+            int state_size = stateBatch.Size(1);
+            int action_size = actionBatch.Size(1);
+            Tensor input = Tensor.Zeros(batch_size, state_size + action_size);
+            for (int i = 0; i < batch_size; i++)
+            {
+                for (int f = 0; f < state_size; f++)
+                {
+                    input[i, f] = stateBatch[i, f];
+                }
+                for (int f = 0; f < action_size; f++)
+                {
+                    input[i, state_size + f] = actionBatch[i, f];
+                }
+            }
+            return Qtarg2.Predict(input);
+        }
+
+
+
+
 
         protected override void Initialize()
         {
@@ -75,32 +120,38 @@ namespace DeepUnity
             }
         }
 
-       
+        
+        // Note ... consider that when computing Q targets, the newly sampled actions are sampled from that second distrbutions,
+        // and we also obtain the probabilities out from that...........
         private Tensor ComputeQTargets(TimestepTuple[] batch, in float GAMMA)
         {
-            Tensor nextStates = Tensor.Concat(null, batch.Select(x => x.nextState).ToArray());
+            
+            Tensor sPrime = Tensor.Concat(null, batch.Select(x => x.nextState).ToArray());
 
-            Tensor new_actions;
-            Tensor new_probs;
-            model.ContinuousPredict(nextStates, out new_actions, out new_probs);
+       
+            Tensor aTildePrime;     // ã => actions newly sampled from πθ(•|s)
+            Tensor piTildePrime;    // (B, CONTINUOUS_ACTIONS)
+            model.ContinuousPredict(sPrime, out aTildePrime, out piTildePrime);
 
-            Tensor[] Qtarg1 = QTarg1Predict(nextStates, new_actions).Split(0, 1); // [](CONT_ACT)
-            Tensor[] Qtarg2 = QTarg2Predict(nextStates, new_actions).Split(0, 1); // [](CONT_ACT)
+            Tensor[] Qtarg1_sPrime_aTildePrime = QTarg1Predict(sPrime, aTildePrime).Split(0, 1); // [](CONT_ACT)
+            Tensor[] Qtarg2_sPrime_aTildePrime = QTarg2Predict(sPrime, aTildePrime).Split(0, 1); // [](CONT_ACT)
 
-            Tensor[] pi = Tensor.Split(new_probs, 0, 1); // We split to get each element from the batch
+            // We need to actually take a look here, it is posible that the probability is mean over the action space,
+            // we need to check the Appendix C on how the probabilities are taken from the new distribution. 
+
+            Tensor[] pi = Tensor.Split(piTildePrime, 0, 1); // We split to get each element from the batch
+            float[] mean_pi = pi.Select(x => x.Mean(-1)[0]).ToArray();
             for (int t = 0; t < batch.Length; t++) // note that is random
             {
                 // y(r,s',d) = r + Ɣ(1 - d)[ min(Q1t(s',ã'), Q2t(s',ã')) - απθ(ã'|s') ]
 
-                // Extract values from any timestep i
                 float r = batch[t].reward[0];
                 float d = batch[t].done[0];
 
-                Tensor y = r + GAMMA * (1 - d) * (Tensor.Minimum(Qtarg1[t], Qtarg2[t]) - hp.alpha * Tensor.Log(pi[t])); // a.k.a Qhat, shape: (1, CONT_ACT) because (q_targs are not squeezed after split)
-                batch[t].q_target = y.Squeeze(0);
+                Tensor y = r + GAMMA * (1f - d) * (Tensor.Minimum(Qtarg1_sPrime_aTildePrime[t], Qtarg2_sPrime_aTildePrime[t]) - hp.alpha *  MathF.Log(mean_pi[t]));
+                batch[t].q_target = y;
             }
-
-            return Tensor.Concat(null, batch.Select(x => x.q_target).ToArray());
+            return Tensor.Concat(0, batch.Select(x => x.q_target).ToArray());
         }
         private void UpdateQFunctions(Tensor states, Tensor actions, Tensor y)
         {
@@ -111,6 +162,7 @@ namespace DeepUnity
 
             Loss q1Loss = Loss.MSE(Q1_s_a, y);
             Loss q2Loss = Loss.MSE(Q2_s_a, y);
+            track.valueLoss.Append((q1Loss.Item + q2Loss.Item) / 2);
 
             model.q1Optimizer.ZeroGrad();
             model.q2Optimizer.ZeroGrad();
@@ -121,60 +173,130 @@ namespace DeepUnity
             model.q1Optimizer.Step();
             model.q2Optimizer.Step();
 
-            track.valueLoss.Append((q1Loss.Item + q2Loss.Item)/2);
+            
         }
         private void UpdatePolicy(Tensor states)
         {
-            Tensor tildea_s, mu, sigma, ksi;
-            model.ContinuousReparametrizedForward(states, out tildea_s, out mu, out sigma, out ksi);
-            Tensor logPi_tildeas_S = Tensor.LogProbability(tildea_s, mu, sigma);
-
             // For Appendix C.
-            // πθ(a|s) = log μ(u|s) - log (1 - tanh^2(u))
+            // log πθ(a|s) = log μ(u|s) - log (1 - tanh^2(u))
             // ⊙·····························································⊙
             // ãθ(s) is a sample from πθ(•|s), which is differentiable wrt θ via the reparametrization trick.
             // ãθ(s,ξ) = tanh(μθ(s) + σθ(s) ⊙ ξ), where ξ ~ N(0, 1)
+
+            // ã' => actions newly sampled from πθ(•|s)
+            // ãθ(s,ξ) = tanh(μθ(s) + σθ(s) ⊙ ξ), where ξ ~ N(0, 1) => actions newly sampled from πθ(•|s) using the reparametrization trick, which is differentiable wrt θ via the reparametrization trick.
+
+            // u = mu + sigma * ksi
+
+            // Question 1: so prob is of shape (B, CONT_ACT), when we compute the objective loss do we sum or mean the probabilities over the action dimension?
+            // Question 2: for inference, can we sample with box muller to obtain ã ? (not ãθ(s))
+            // Answer : So conv diverges only because the bad initialization :D
+            // Question 3: What to do after GRU, LSTM, Attention?
+            // Question 4: what about regional entropy decay?
+
+
+            int batch_size = states.Size(0);
+            Tensor aTildeS, u, mu, sigma, ksi;
+            model.ContinuousForward(states, out mu, out sigma);
+            ksi = Tensor.RandomNormal(sigma.Shape);
+
+            // ãθ(s) = tanh(u)
             Tanh tanh = new Tanh();
-            tildea_s = tanh.Forward(tildea_s);
+            u = mu + sigma * ksi;
+            aTildeS = tanh.Forward(u);
+            int D = mu.Size(-1);
 
-            Tensor Q1_s_tildea_s = model.Q1Forward(states, tildea_s);
-            Tensor Q2_s_tildea_s = model.Q2Forward(states, tildea_s);
-            Tensor minQ1Q2 = Tensor.Minimum(Q1_s_tildea_s, Q2_s_tildea_s);
+            Tensor muDist = (MathF.Sqrt(MathF.Pow(2f * MathF.PI, D)) * sigma.Prod(-1, true)).Pow(-1)
+                            * Tensor.Exp( -0.5f * ksi.Pow(2).Sum(-1, true)); // mu_dist represents a scalar value, obtained by passing the u value through the dist check appendix C (B, 1)
 
-            // ∇θ = min[ Qφ1(s,ãθ(s)), Qφ2(s,ãθ(s))] - αlogπθ(ãθ(s)|s) ]
-            Tensor objectiveLoss = Tensor.Minimum(Q1_s_tildea_s, Q2_s_tildea_s) - hp.alpha * logPi_tildeas_S;
+            // Check appendinx C
+            // log πθ(ãθ(s) |s) = log μ(u|s) - E [log (1 - tanh^2(u))]
+            Tensor logPiaTildeS = Tensor.Log(muDist) - Tensor.Sum(Tensor.Log(- new Tanh().Predict(u).Pow(2f) + 1 + Utils.EPSILON), -1, true);
+                                 // returns NaN     
 
-            // Let's see how we compute this bro...
-            Tensor dmL_dTildeA = null;
+            Tensor Q1s_aTildeS = model.Q1Forward(states, aTildeS);
+            Tensor Q2s_aTildeS = model.Q2Forward(states, aTildeS);
 
-            return;
-
-            // ∂ãθ(s) / ∂μ = ?
-            float dTildeA_dMu = 1;
-            // ∂ãθ(s) / ∂σ = ?
-            Tensor dTildeA_dSigma = ksi;
-
-           
-
-            // ∂-L / ∂μ = (∂-L / ∂ãθ(s)) * (∂ãθ(s) / ∂μ)
-            Tensor dmL_dMu = dmL_dTildeA * dTildeA_dMu;
-
-            // ∂-L / ∂σ = (∂-L / ∂ãθ(s)) * (∂ãθ(s) / ∂σ)
-            Tensor dmL_dSigma = dmL_dTildeA * dTildeA_dSigma;
+            // ∇θ min[ Qφ1(s,ãθ(s)), Qφ2(s,ãθ(s))] - αlogπθ(ãθ(s)|s) ]
+            Tensor objectiveFunctionJ = Tensor.Minimum(Q1s_aTildeS, Q2s_aTildeS) - hp.alpha * logPiaTildeS.Sum(-1, true);
+            track.policyLoss.Append(objectiveFunctionJ.Mean(0).Mean(0)[0]);
+     
+            // Firstly, we compute the derivative of minQ1Q2 wrt ãθ(s)
           
+            Tensor dminQ1Q2_dQ1 = Tensor.Zeros(batch_size, 1);
+            Tensor dminQ1Q2_dQ2 = Tensor.Zeros(batch_size, 1);
+            for (int i = 0; i < batch_size; i++)
+            {
+                if (Q1s_aTildeS[i, 0] <= Q2s_aTildeS[i, 0])
+                {
+                    dminQ1Q2_dQ1[i, 0] = 1f;
+                    dminQ1Q2_dQ2[i, 0] = 0f;
+                }
+                else
+                {
+                    dminQ1Q2_dQ1[i, 0] = 0f;
+                    dminQ1Q2_dQ2[i, 0] = 1f;
+                }
+            }
+
+            Tensor dminQ1Q2_dQinput = model.q1Network.Backward(dminQ1Q2_dQ1) + model.q2Network.Backward(dminQ1Q2_dQ2); // Take the gradients from both networks
+            // By backwarding the min, we will receive a Tensor of shape (B, S + A), and because we compute the derivative wrt A,
+            // we need only A from this tensor, so we extract it separately
+            Tensor dminQ1Q2_daTildeS = ExtractActionFromStateAction(dminQ1Q2_dQinput, model.observationSize, model.continuousDim);
+
+            Tensor dminQ1Q2_du = tanh.Backward(dminQ1Q2_daTildeS);
+
+            Tensor dminQ1Q2_dMu = dminQ1Q2_du * 1f;
+            Tensor dminQ1Q2_dSigma = dminQ1Q2_du * ksi;
+
+            // Secondly, we compute the derivative of logπθ(ãθ(s)|s) wrt ãθ(s). Note that we are using another distribution, check Appendix C in SAC paper
+           
+            Tensor sech_u = u.Select(x => Utils.Hyperbolics.Sech(x));
+            Tensor tanh_u = u.Select(x => Utils.Hyperbolics.Tanh(x));
+
+            // So we know that 
+            // log πθ(a|s) = log μ(u|s) - log (1 - tanh^2(u))
+            // ∇ log πθ(a|s) = dlog μ(u|s)/du - dlog (1 - tanh^2(u))/du = (u - mu)/sigma^2 - (-2 * tanh(u) * sech^2(u) / (1 - tanh^2(u)))
+            Tensor dLogMuDist_du = (u - mu) / sigma.Pow(2f); // IT IS POSSIBLE WE MISSED SOMETHING HERE... we'll see. What? https://stackoverflow.com/questions/13299642/how-to-calculate-derivative-of-multivariate-normal-probability-density-function
+            Tensor dLog_1mTanh2u_du = -2f * tanh_u * sech_u.Pow(2f) / (- tanh_u.Pow(2f) + 1);
+
+            Tensor dAlphaLogPi_aTildeS_s_du = hp.alpha * (dLogMuDist_du - dLog_1mTanh2u_du);
+
+
+            Tensor dAlphaLogPiaTildeS_s_dMu = dAlphaLogPi_aTildeS_s_du * 1;
+            Tensor dAlphaLogPiaTildeS_s_dSigma = dAlphaLogPi_aTildeS_s_du * ksi;
+
+            Tensor dJ_dMu = dminQ1Q2_dMu - dAlphaLogPiaTildeS_s_dMu;
+
+
+            print("mu" + mu);
+            print("sigma" + sigma);
+            print("ksi" + ksi);
+            print("u" + u);
+            print("aTildeS" + aTildeS);
+            print("mu_distribution : " + muDist);
+            print("Log pi_aTildeS : " + logPiaTildeS); //some a bit large but oke...
+            print("dminQ1Q2_daTildeS" + dminQ1Q2_daTildeS); //ok
+            print("dminQ1Q2_du" + dminQ1Q2_du); //ok
+            print("dAlphaLogPi_aTildeS_s_du" + dAlphaLogPi_aTildeS_s_du);
+            print("dJ_dMu" + dJ_dMu); // This guy got some infinities over here
+
+
 
             model.muOptimizer.ZeroGrad();
-            model.muNetwork.Backward(dmL_dMu);
+            model.muNetwork.Backward(-dJ_dMu); // is negative because we do gradient ascent
             model.muOptimizer.ClipGradNorm(hp.gradClipNorm);
             model.muOptimizer.Step();
 
+            if(model.standardDeviation == StandardDeviationType.Trainable)
+            {
+                Tensor dJ_dSigma = dminQ1Q2_dSigma - dAlphaLogPiaTildeS_s_dSigma;
 
-            model.sigmaOptimizer.ZeroGrad();
-            model.sigmaNetwork.Backward(dmL_dSigma);
-            model.sigmaOptimizer.ClipGradNorm(hp.gradClipNorm);
-            model.sigmaOptimizer.Step();
-            
-           
+                model.sigmaOptimizer.ZeroGrad();
+                model.sigmaNetwork.Backward(-dJ_dSigma);
+                model.sigmaOptimizer.ClipGradNorm(hp.gradClipNorm);
+                model.sigmaOptimizer.Step();
+            }              
         }
         public void UpdateTargetNetworks()
         {
@@ -198,43 +320,25 @@ namespace DeepUnity
 
 
 
-        private Tensor QTarg1Predict(Tensor stateBatch, Tensor actionBatch)
+        /// <summary>
+        /// including the batch. Note that this must be changed, based on the shape of the input, depending either is using a convolutional layer or recurrent.
+        /// </summary>
+        /// <param name="stateActionBatch"></param>
+        /// <param name="state_size"></param>
+        /// <param name="action_size"></param>
+        /// <returns></returns>
+        private static Tensor ExtractActionFromStateAction(Tensor stateActionBatch, int state_size, int action_size)
         {
-            int batch_size = stateBatch.Size(0);
-            int state_size = stateBatch.Size(1);
-            int action_size = actionBatch.Size(1);
-            Tensor input = Tensor.Zeros(batch_size, state_size + action_size);
+            int batch_size = stateActionBatch.Size(0);
+            Tensor actions = Tensor.Zeros(batch_size, action_size);
             for (int i = 0; i < batch_size; i++)
             {
-                for (int f = 0; f < state_size; f++)
-                {
-                    input[i, f] = stateBatch[i, f];
-                }
                 for (int f = 0; f < action_size; f++)
                 {
-                    input[i, state_size + f] = actionBatch[i, f];
+                    actions[i, f] = stateActionBatch[i, state_size + f];
                 }
             }
-            return Qtarg1.Predict(input);
-        }
-        private Tensor QTarg2Predict(Tensor stateBatch, Tensor actionBatch)
-        {
-            int batch_size = stateBatch.Size(0);
-            int state_size = stateBatch.Size(1);
-            int action_size = actionBatch.Size(1);
-            Tensor input = Tensor.Zeros(batch_size, state_size + action_size);
-            for (int i = 0; i < batch_size; i++)
-            {
-                for (int f = 0; f < state_size; f++)
-                {
-                    input[i, f] = stateBatch[i, f];
-                }
-                for (int f = 0; f < action_size; f++)
-                {
-                    input[i, state_size + f] = actionBatch[i, f];
-                }
-            }
-            return Qtarg2.Predict(input);
+            return actions;
         }
 
     }

@@ -164,7 +164,7 @@ namespace DeepUnity
                 }
             }
         }
-        private static void Autosave2(PauseState state) => Instance.model.Save();
+        private static void Autosave2(PauseState state) => Instance?.model.Save();
         protected static void EndTrainingSession(string reason)
         {
             if (!Instance.ended)

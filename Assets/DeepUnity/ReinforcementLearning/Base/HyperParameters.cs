@@ -56,9 +56,6 @@ namespace DeepUnity
         [Tooltip("[Typical range: 0.9 - 1] GAE factor.")]
         [Min(0.001f)] public float lambda = 0.95f;
 
-        [Tooltip("Normalize the advantages over the experience buffer. This might help with stabilization if it is used for large buffer sizes.")]
-        public bool normalizeAdvantages = true;
-
         [Tooltip("Use of KLE")]
         public KLType KLDivergence = KLType.Off;
 

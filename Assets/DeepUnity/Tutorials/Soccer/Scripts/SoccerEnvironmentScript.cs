@@ -12,11 +12,13 @@ namespace DeepUnityTutorials
         [Space]
         [SerializeField] public Transform ball;
         [Space]
-        [SerializeField] private Agent pink_striker;
         [SerializeField] private Agent pink_goalie;
+        [SerializeField] private Agent pink_striker;
+        [SerializeField] private Agent pink_striker2;
         [Space]
-        [SerializeField] private Agent blue_striker;
         [SerializeField] private Agent blue_goalie;
+        [SerializeField] private Agent blue_striker;
+        [SerializeField] private Agent blue_striker2;
         [Space]
 
         [SerializeField] Text score_label;
@@ -47,24 +49,31 @@ namespace DeepUnityTutorials
 
         public void BlueTeamScored()
         {
+            float goal_reward = current_round_time_left / time_per_round;
             blue_score++;
-            blue_striker.AddReward(1f);
-            blue_goalie.AddReward(0.1f);
-            pink_goalie.AddReward(-1f);
-            pink_striker.AddReward(-0.1f);
 
+            blue_striker.AddReward(goal_reward);
+            blue_striker2.AddReward(goal_reward);
+            
+
+            pink_goalie.AddReward(-1f);
+            pink_striker.AddReward(-1f);
+            pink_striker2.AddReward(-1f);
 
             ChangeScoreLabel();
             StartNewRound();
         }
         public void PinkTeamScored()
         {
+            float goal_reward = current_round_time_left / time_per_round;
             pink_score++;
-            pink_striker.AddReward(1f);
-            pink_goalie.AddReward(0.1f);
-            blue_goalie.AddReward(-1f);
-            blue_striker.AddReward(-0.1f);
 
+            pink_striker.AddReward(goal_reward);
+            pink_striker2.AddReward(goal_reward);
+
+            blue_goalie.AddReward(-1f);
+            blue_striker.AddReward(-1f);
+            blue_striker2.AddReward(-1f);
 
             ChangeScoreLabel();
             StartNewRound();
@@ -92,10 +101,14 @@ namespace DeepUnityTutorials
             {
                 pink_striker.AddReward(-1);
                 blue_striker.AddReward(-1);
+                pink_striker2.AddReward(-1);
+                blue_striker2.AddReward(-1);
             }
-           
+
+            pink_striker2.EndEpisode();
             pink_striker.EndEpisode();
             pink_goalie.EndEpisode();
+            blue_striker2.EndEpisode();
             blue_striker.EndEpisode();
             blue_goalie.EndEpisode();
 

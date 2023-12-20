@@ -231,7 +231,7 @@ namespace kbRadu
 
         void TestRNNCell()
         {
-            var rnn = new RecurrentDense(10, 20);
+            var rnn = new RNNCell(10, 20);
             var input = Tensor.Split(Tensor.RandomNormal(6, 3, 10), 0, 1);
             var hx = Tensor.RandomNormal(3, 20);
             var output = new List<Tensor>();

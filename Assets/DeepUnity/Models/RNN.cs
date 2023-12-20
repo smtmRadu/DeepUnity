@@ -3,11 +3,9 @@ using UnityEngine;
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using UnityEngine.Windows;
 using Unity.VisualScripting;
-using System.Drawing.Printing;
 using System.Text;
-using System.CodeDom;
+using System.Collections;
 
 namespace DeepUnity
 {
@@ -17,44 +15,39 @@ namespace DeepUnity
     [Serializable]
     public class RNN : Model<RNN, (Tensor, Tensor)>, ISerializationCallbackReceiver
     {
-        [SerializeField] private bool batchFirst;
-        [NonSerialized] private IModule2[] modules;
-        [SerializeField] private IModule2Wrapper[] serializedModules;
-        
+        [NonSerialized] private RNNCell[] rnn_cells;
+        [SerializeField] private IModule2Wrapper[] serialized_rnn_cells;
+        [SerializeField, ReadOnly] private NonLinearity nonlinearity;
 
         /// <summary>
         /// 
         /// Inputs: (input, h_0). <br></br>
-        /// input:  <b>(L, H_in)</b> for unbatched input, <b>(L, B, H_in)</b> when batch_first = false or <b>(B, L, H_in)</b> when batch_first = true. <br></br>
-        /// h_0:    <b>(num_layers, H_in)</b> for unbatched input, or <b>(num_layers, B, H_in)</b>. <br></br>
+        /// input:  <b>(B, L, H_in)</b> or <b>(L, H_in)</b> for unbatched input.<br></br>
+        /// h_0:    <b>(num_layers, B, H_in)</b> or <b>(num_layers, H_in)</b> for unbatched input. <br></br>
         /// 
         /// <br></br>
         /// Outputs: (output, h_n). <br></br>
-        /// output: <b>(L, H_in)</b> for unbatched input, or <b>(L, B, H_out)</b> when batch_first = false or <b>(B, L, H_out)</b> when batch_first = true. <br></br>
-        /// h_n: <b>(num_layers, H_out)</b> for unbatched input or <b>(num_layers, B, H_out)</b>. <br></br>
+        /// output:  <b>(B, L, H_out)</b> or <b>(L, H_in)</b> for unbatched input. <br></br>
+        /// h_n: <b>(num_layers, B, H_out)</b> or <b>(num_layers, H_out)</b> for unbatched input. <br></br>
         /// 
         /// <br></br>
         /// where B = batch_size, L = sequence_length, H_in = input_size, H_out = hidden_size.
         /// </summary>
-        public RNN(int input_size, int hidden_size, int num_layers = 2, NonLinearity nonlinearity = NonLinearity.Tanh, bool batch_first = false, float dropout = 0f)
+        public RNN(int input_size, int hidden_size, int num_layers = 2, NonLinearity nonlinearity = NonLinearity.Tanh)
         {
-            this.batchFirst = batch_first;
+            this.nonlinearity = nonlinearity;
             if (num_layers < 1)
             {
                 throw new ArgumentException($"An RNN must have at least one layer, not {num_layers}.");
             }
 
-            List<IModule2> moduleList = new() { new RecurrentDense(input_size, hidden_size, nonlinearity) };
+            List<RNNCell> moduleList = new() { new RNNCell(input_size, hidden_size, nonlinearity) };
 
-            for (int i = 1; i < num_layers; i++)
-            {
-                if(dropout > 0 && i < num_layers - 1)
-                    moduleList.Add(new Dropout(dropout));
+            for (int i = 1; i < num_layers; i++)          
+                moduleList.Add(new RNNCell(hidden_size, hidden_size, nonlinearity));
+            
 
-                moduleList.Add(new RecurrentDense(hidden_size, hidden_size, nonlinearity));
-            }
-
-            modules = moduleList.ToArray();         
+            rnn_cells = moduleList.ToArray();         
         }
 
 
@@ -69,94 +62,42 @@ namespace DeepUnity
             if (input_clone.Rank != h_0_clone.Rank)
                 throw new Exception($"Input ({input_clone.Shape.ToCommaSeparatedString()}) or H_0({h_0_clone.Shape.ToCommaSeparatedString()}) must have the same rank.");
 
-            if (h_0_clone.Size(0) != modules.Count(x => x is RecurrentDense))
-                throw new Exception($"H_0 must have the first dimension equal to num_layers ({modules.Count(x => x is RecurrentDense)})");
+            if (h_0_clone.Size(0) != rnn_cells.Count(x => x is RNNCell))
+                throw new Exception($"H_0 must have the first dimension equal to num_layers ({rnn_cells.Count(x => x is RNNCell)})");
 
 
-            bool isBatched = input_clone.Rank == 3;
+            bool isBatched = input.Rank == 3;
 
             // Split input into sequence of length L and h_0 per layers           
-            Tensor[] input_sequence = null;
-            Tensor[] h_0_per_layers = null;
+            Tensor[] input_sequence = null; // (B, Hin)[]
+            Tensor[] h_0_per_layers = null; // (B, Hout)[]
             if (isBatched)
             {
-                if (batchFirst) // (B, L, H_in)
-                {
-                    input_sequence = Tensor.Split(input_clone, -2, 1);
-                    for (int i = 0; i < input_sequence.Length; i++)
-                    {
-                        input_sequence[i] = input_sequence[i].Squeeze(-2);
-                    }
-                }
-                else // (L, B, H_in)
-                {
-                    input_sequence = Tensor.Split(input_clone, -3, 1);
-                    for (int i = 0; i < input_sequence.Length; i++)
-                    {
-                        input_sequence[i] = input_sequence[i].Squeeze(-3);
-                    }
-
-                }
-
+                input_sequence = Tensor.Split(input_clone, -2, 1);
                 h_0_per_layers = Tensor.Split(h_0_clone, -3, 1);
-                for (int i = 0; i < h_0_per_layers.Length; i++)
-                {
-                    h_0_per_layers[i] = h_0_per_layers[i].Squeeze(-3);
-                }
             }
             else
             {
                 input_sequence = Tensor.Split(input_clone, -2, 1);
-                for (int i = 0; i < input_sequence.Length; i++)
-                {
-                    input_sequence[i] = input_sequence[i].Squeeze(-2);
-                }
                 h_0_per_layers = Tensor.Split(h_0_clone, -2, 1);
-                for (int i = 0; i < h_0_per_layers.Length; i++)
-                {
-                    h_0_per_layers[i] = h_0_per_layers[i].Squeeze(-2);
-                }
 
             }
-
 
             // Parse sequencially through each module ---------------- done
             // input_sequence[i] (B, H_in)  or (H_in)
 
             int rnncell_index = 0;
-            foreach (var module in modules)
+            foreach (var cell in rnn_cells)
             {
-                if (module is RecurrentDense r)
+                for (int t = 0; t < input_sequence.Length; t++)
                 {
-                    for (int t = 0; t < input_sequence.Length; t++)
-                    {
-                        h_0_per_layers[rnncell_index] = r.Forward(input_sequence[t], h_0_per_layers[rnncell_index]);
-                        input_sequence[t] = Tensor.Identity(h_0_per_layers[rnncell_index]);
+                    h_0_per_layers[rnncell_index] = cell.Forward(input_sequence[t], h_0_per_layers[rnncell_index]);
+                    input_sequence[t] = Tensor.Identity(h_0_per_layers[rnncell_index]);
 
-                    }
-                    rnncell_index++;
                 }
-                else if (module is Dropout d)
-                {
-                    for (int t = 0; t < input_sequence.Length; t++)
-                    {
-                        input_sequence[t] = d.Forward(input_sequence[t]);
-                    }
-                }
-                else if (module is LayerNorm l)
-                {
-                    for (int t = 0; t < input_sequence.Length; t++)
-                    {
-                        input_sequence[t] = l.Forward(input_sequence[t]);
-                    }
-                }
-
-
-                // they are expelled ok
-                // Debug.Log(h_0_per_layers[rnncell_index - 1]);
-
+                rnncell_index++;
             }
-
+            // Test if RNN cell is returning the shape of the outputs well...... 
 
 
 
@@ -164,19 +105,12 @@ namespace DeepUnity
             // Join into output and h_n ----------------done
             Tensor h_n = Tensor.Concat(null, h_0_per_layers);
             Tensor output = null;
-            if (batchFirst)
-            {
-                for (int i = 0; i < input_sequence.Length; i++)
-                {
-                    input_sequence[i] = input_sequence[i].Unsqueeze(1);
-                }
-                output = Tensor.Concat(1, input_sequence);
 
-            }
-            else
+            for (int i = 0; i < input_sequence.Length; i++)
             {
-                output = Tensor.Concat(null, input_sequence);
+                input_sequence[i] = input_sequence[i].Unsqueeze(1);
             }
+            output = Tensor.Concat(1, input_sequence);
 
             return (output, h_n);
         }
@@ -210,23 +144,12 @@ namespace DeepUnity
             // Split the loss into an array of sequences
             Tensor[] loss_sequence = null;
             if(isBatched) // (L, H_out)           
-            {
-                if (batchFirst) // (B, L, H_out)
+            {           
+                loss_sequence = Tensor.Split(loss_clone, -2, 1);
+                for (int i = 0; i < loss_sequence.Length; i++)
                 {
-                    loss_sequence = Tensor.Split(loss_clone, -2, 1);
-                    for (int i = 0; i < loss_sequence.Length; i++)
-                    {
-                        loss_sequence[i] = loss_sequence[i].Squeeze(-2);
-                    }
-                }
-                else // (L, B, H_out)
-                {
-                    loss_sequence = Tensor.Split(loss_clone, -3, 1);
-                    for (int i = 0; i < loss_sequence.Length; i++)
-                    {
-                        loss_sequence[i] = loss_sequence[i].Squeeze(-3);
-                    }
-                }
+                    loss_sequence[i] = loss_sequence[i].Squeeze(-2);
+                }           
             }
             else
             {
@@ -242,10 +165,10 @@ namespace DeepUnity
             // Backpropagate each sequence
             for (int t = loss_sequence.Length - 1; t >= 0; t--)
             {
-                for (int m = modules.Length - 1; m >= 0; m--)
+                for (int m = rnn_cells.Length - 1; m >= 0; m--)
                 {
                     //Debug.Log(loss_sequence[t]);
-                    loss_sequence[t] = modules[m].Backward(loss_sequence[t]);
+                    loss_sequence[t] = rnn_cells[m].Backward(loss_sequence[t]);
                 }
             }
 
@@ -257,13 +180,13 @@ namespace DeepUnity
             StringBuilder stringBuilder = new StringBuilder();
 
             stringBuilder.AppendLine($"Name: {name}");
-            stringBuilder.AppendLine("Type: Sequencial");
-            stringBuilder.AppendLine($"Layers : {modules.Length}");
-            foreach (var module in modules)
+            stringBuilder.AppendLine($"Type: {GetType()}");
+            stringBuilder.AppendLine($"Layers : {rnn_cells.Length}");
+            foreach (var module in rnn_cells)
             {
                 stringBuilder.AppendLine($"         {module.GetType().Name}");
             }
-            stringBuilder.AppendLine($"Parameters: {modules.Where(x => x is ILearnable).Select(x => (ILearnable)x).Sum(x => x.ParametersCount())}");
+            stringBuilder.AppendLine($"Parameters: {rnn_cells.Where(x => x is ILearnable).Select(x => (ILearnable)x).Sum(x => x.ParametersCount())}");
             return stringBuilder.ToString();
         }
 
@@ -276,7 +199,7 @@ namespace DeepUnity
         public override Parameter[] Parameters()
         {
             List<Parameter> param = new();
-            foreach (var item in modules.OfType<ILearnable>())
+            foreach (var item in rnn_cells.OfType<ILearnable>())
             {
                 param.AddRange(item.Parameters());
             }
@@ -285,32 +208,19 @@ namespace DeepUnity
 
         public void OnBeforeSerialize()
         {
-            serializedModules = modules.Select(x => IModule2Wrapper.Wrap(x)).ToArray();
+            serialized_rnn_cells = rnn_cells.Select(x => IModule2Wrapper.Wrap(x)).ToArray();
         }
         public void OnAfterDeserialize()
         {
-            modules = serializedModules.Select(x => IModule2Wrapper.Unwrap(x)).ToArray();
+            rnn_cells = serialized_rnn_cells.Select(x => (RNNCell) IModule2Wrapper.Unwrap(x)).ToArray();
         }
 
         public override object Clone()
         {
-            var rnn_clone = new RNN(2, 2,batch_first:this.batchFirst);
-            rnn_clone.modules = this.modules.Select(x => (IModule2) x.Clone()).ToArray();
+            var rnn_clone = new RNN(2, 2, 1, this.nonlinearity);
+            rnn_clone.rnn_cells = this.rnn_cells.Select(x => (RNNCell) x.Clone()).ToArray();
             return rnn_clone;
         }
     }
-
-    // [CustomEditor(typeof(Model<RNN>), true)]
-    // [CanEditMultipleObjects]
-    // class ScriptlessRNN : Editor
-    // {
-    //     public override void OnInspectorGUI()
-    //     {
-    //         List<string> dontDrawMe = new List<string>() { "m_Script" };
-    // 
-    //         DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
-    //         serializedObject.ApplyModifiedProperties();
-    //     }
-    // }
 }
 

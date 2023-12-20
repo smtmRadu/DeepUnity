@@ -5,25 +5,21 @@ namespace DeepUnityTutorials
 {
     public class SoccerPlayer : Agent
     {
-        [SerializeField] public float speed = 2.5f;
-        [SerializeField] public float rotationSpeed = 2.5f;
-        [SerializeField] private SoccerPlayer teammate;
+        [SerializeField] public float speed = 20f;
+        [SerializeField] public float rotationSpeed = 10f;
         [SerializeField] public PlayerType type;
         [SerializeField] public PlayerTeam team;
 
-
         private Rigidbody rb;
-        private SoccerEnvironmentScript environment;
 
         public override void Awake()
         {
             base.Awake();
-            environment = transform.parent.GetComponent<SoccerEnvironmentScript>();
             rb = transform.GetComponent<Rigidbody>();
         }
         public override void CollectObservations(StateVector sensorBuffer)
         {
-            // rayinfo: 140 + 2 = 142
+            // rayinfo: 192 + 2 = 194
             sensorBuffer.AddObservation((int)type);
             sensorBuffer.AddObservation((int)team);
         }
@@ -53,12 +49,9 @@ namespace DeepUnityTutorials
                     transform.Rotate(0, -rotationSpeed, 0); break;
 
             }
-            AddReward(-0.0015f);// Existential penalty 
-        }
-        private void OnCollisionEnter(Collision collision)
-        {
-            if (collision.collider.CompareTag("Ball"))
-                AddReward(0.05f);
+
+            if (type == PlayerType.Goalie)
+                AddReward(0.001f); // Existential bonus
         }
         public enum PlayerType
         {
@@ -70,16 +63,19 @@ namespace DeepUnityTutorials
             Pink,
             Blue
         }
-        private void OnTriggerStay(Collider collider)
-        {
-            if (type == PlayerType.Goalie)
-            {
-                if (team == PlayerTeam.Pink && collider.name == "PinkGoalArea")
-                    AddReward(+0.001f);
-                else if (team == PlayerTeam.Blue && collider.name == "BlueGoalArea")
-                    AddReward(+0.001f);
-            }
 
+        const float goalie_inZone_bonus = 1e-4f;
+        public void OnTriggerStay(Collider other)
+        {
+            if(this.type == PlayerType.Goalie)
+            {
+                if (this.team == PlayerTeam.Pink && other.name == "PinkGoalArea")
+                    AddReward(goalie_inZone_bonus);
+
+                if (this.team == PlayerTeam.Blue && other.name == "BlueGoalArea")
+                    AddReward(goalie_inZone_bonus);
+
+            }
         }
     }
 }

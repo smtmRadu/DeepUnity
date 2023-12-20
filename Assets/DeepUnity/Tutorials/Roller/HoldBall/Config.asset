@@ -22,18 +22,16 @@ MonoBehaviour:
   gradClipNorm: 0.5
   LRSchedule: 0
   numEpoch: 8
-  beta: 0.005
+  beta: 0
   epsilon: 0.2
   lambda: 0.95
   KLDivergence: 0
   targetKL: 0.015
   updateEvery: 1000
-  updateAfter: 1000
-  updatesNum: 1
+  updatesNum: 8
   alpha: 0.2
-  saveReplayBuffer: 0
   tau: 0.005
   saveRecordBuffer: 0
   debug: 0
   timescaleAdjustment: 0
-  timescale: 1
+  timescale: 19.300287

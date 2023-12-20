@@ -67,7 +67,7 @@ namespace DeepUnityTutorials
             CorrelateColliderAndTransform(rf_collider, rf_transform, true);
 
 
-            AddReward(-0.0025f);
+            AddReward(0.001f * Mathf.Clamp(actionBuffer.ContinuousActions[0], 0, 1));
         }
         public override void Heuristic(ActionBuffer actionOut)
         {
@@ -126,14 +126,14 @@ namespace DeepUnityTutorials
         {
             if(other.CompareTag("Goal"))
             {
-                AddReward(+1f);
+                AddReward(+0.5f);
 
                 checkPoints.Add(other.gameObject);
                 other.gameObject.SetActive(false);
             }
             else if(other.CompareTag("Target"))
             {
-                AddReward(+1.5f);
+                AddReward(+1f);
                 EndEpisode();
             }
         }

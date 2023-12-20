@@ -137,14 +137,14 @@ namespace DeepUnity
                    new IModule[]
                    { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                    Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                   Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B) }).ToArray()
+                   Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
                 );
 
                 q2Network = new NeuralNetwork(
                    new IModule[]
                    { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                    Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                   Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B) }).ToArray()
+                   Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
                 );
 
                 discContNetwork = new NeuralNetwork(
@@ -159,7 +159,7 @@ namespace DeepUnity
             {
                 discreteNetwork = new NeuralNetwork(
                         new IModule[] 
-                        { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B),new LeakyReLU() }.
+                        { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                             Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                             Concat(new IModule[] { new Dense(HIDDEN_UNITS, DISCRETE_ACTIONS_NUM, INIT_W, INIT_B), new Softmax() }).ToArray()
                     );
@@ -189,42 +189,43 @@ namespace DeepUnity
         public void InitOptimisers(Hyperparameters hp, TrainerType trainer)
         {
             const float lambda = 0f;
-            if(trainer == TrainerType.SAC)
+            const float epsilon = 1e-5F; // PPO openAI eps they use :D, but in Andrychowicz, et al. (2021) they use tf default 1e-7
+            if (trainer == TrainerType.SAC)
             {
-                vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
-                q1Optimizer = new Adam(q1Network.Parameters(), hp.learningRate, weightDecay: lambda);
-                q2Optimizer = new Adam(q2Network.Parameters(), hp.learningRate, weightDecay: lambda);
-                muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
-                sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
+                vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
+                q1Optimizer = new Adam(q1Network.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
+                q2Optimizer = new Adam(q2Network.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
+                muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
+                sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
             }
             else if(trainer == TrainerType.PPO)
             {
-                vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
+                vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
 
                 if (IsUsingContinuousActions)
                 {
-                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
-                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
+                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
+                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
                 }
                 
                 if(IsUsingDiscreteActions)
                 {
-                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
+                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
                 }
             }
             else if(trainer == TrainerType.GAIL)
             {
                 if (IsUsingContinuousActions)
                 {
-                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, weightDecay: lambda) ;
-                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
-                    dContOptimizer = new Adam(discContNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
+                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda) ;
+                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
+                    dContOptimizer = new Adam(discContNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
                 }
 
                 if (IsUsingDiscreteActions)
                 {
-                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
-                    dDiscOptimizer = new Adam(discDiscNetwork.Parameters(), hp.learningRate, weightDecay: lambda);
+                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
+                    dDiscOptimizer = new Adam(discDiscNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
                 }
             }                    
         }
@@ -326,13 +327,11 @@ namespace DeepUnity
         /// Input: <paramref name="stateBatch"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
         /// Output: <paramref name="muBatch"/> - <em>μ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
         /// Output: <paramref name="sigmaBatch"/> - <em>σ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
-        /// Output: <paramref name="action"/> - <em>aₜ</em> |  Tensor (<em>Continuous Actions</em>) <br></br>
         /// </summary>
-        public void ContinuousReparametrizedForward(Tensor statesBatch, out Tensor actionsBatch, out Tensor muBatch, out Tensor sigmaBatch, out Tensor ksiBatch)
+        public void ContinuousReparametrizedForward(Tensor statesBatch,  out Tensor muBatch, out Tensor sigmaBatch, out Tensor ksiBatch)
         {
             if (!IsUsingContinuousActions)
             {
-                actionsBatch = null;
                 muBatch = null;
                 sigmaBatch = null;
                 ksiBatch = null;
@@ -345,8 +344,6 @@ namespace DeepUnity
                            Tensor.Fill(standardDeviationValue, muBatch.Shape);
 
             ksiBatch = Tensor.RandomNormal(sigmaBatch.Shape);
-
-            actionsBatch = muBatch + sigmaBatch * ksiBatch;
         }    
         /// <summary>
         /// Input: <paramref name="state"/> - <em>sₜ</em> | Tensor (<em>Observations</em>) <br></br>

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77cd255994572814395a912f173ad620, type: 3}
   m_Name: Q2
   m_EditorClassIdentifier: 
-  version: 1014
+  version: 1059
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -10509,6 +10509,10 @@ MonoBehaviour:
       biases:
         data: []
         shape: 
+    prelu:
+      alpha:
+        data: []
+        shape: 
     dropout:
       dropout: 0
     flatten:
@@ -10590,6 +10594,10 @@ MonoBehaviour:
         data: []
         shape: 
       biases:
+        data: []
+        shape: 
+    prelu:
+      alpha:
         data: []
         shape: 
     dropout:
@@ -15931,6 +15939,10 @@ MonoBehaviour:
       biases:
         data: []
         shape: 
+    prelu:
+      alpha:
+        data: []
+        shape: 
     dropout:
       dropout: 0
     flatten:
@@ -16012,6 +16024,10 @@ MonoBehaviour:
         data: []
         shape: 
       biases:
+        data: []
+        shape: 
+    prelu:
+      alpha:
         data: []
         shape: 
     dropout:
@@ -16314,6 +16330,10 @@ MonoBehaviour:
         data: []
         shape: 
       biases:
+        data: []
+        shape: 
+    prelu:
+      alpha:
         data: []
         shape: 
     dropout:

@@ -5,7 +5,10 @@ using UnityEngine;
 namespace DeepUnity
 {
     /// <summary>
-    /// Online standardizer. Works well even if input data contains extremly large values.
+    /// All inputs are normalized using the following formula:
+    /// x = (x - mu) / variance.
+    /// 
+    /// We divide by variance to give us smaller values rather then dividing by the standard deviation.
     /// </summary>
     [Serializable]
     public class RunningNormalizer : INormalizer
@@ -37,12 +40,12 @@ namespace DeepUnity
             });
 
             if (tuple.Rank < 2)
-                return (tuple - mean) / variance.Sqrt();
+                return (tuple - mean) / variance;
             else if (tuple.Rank == 2)
             {
                 int batch_size = tuple.Size(0);
                 return (tuple - mean.Unsqueeze(0).Expand(0, batch_size)) /
-                                       variance.Sqrt().Unsqueeze(0).Expand(0, batch_size);
+                                       variance.Unsqueeze(0).Expand(0, batch_size);
             }
             else
                 throw new ArgumentException("Tuple must have either 0, 1 or 2 dimensions.");

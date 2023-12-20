@@ -219,24 +219,25 @@ namespace DeepUnity
             return Math.Clamp(value, min, max);
         }
 
+        // https://en.wikipedia.org/wiki/Hyperbolic_functions
         public static class Hyperbolics
         {
             public static float Sinh(float x)
             {
-                return (MathF.Exp(x) - MathF.Exp(-x)) / 2f;
+                return (1f - MathF.Exp(-2f * x)) / (2f * MathF.Exp(-x));
             }
             public static float Cosh(float x)
             {
-                return (MathF.Exp(x) + MathF.Exp(-x)) / 2f;
+                return (1f + MathF.Exp(-2f * x)) / (2f * MathF.Exp(-x));
             }
             
             public static float Csch(float x)
             {
-                return 2f / (MathF.Exp(x) - MathF.Exp(-x));
+                return 2f * MathF.Exp(x) / (MathF.Exp(2f * x) - 1);
             }
             public static float Sech(float x)
             {
-                return 2f / (MathF.Exp(x) + MathF.Exp(-x));
+                return 2f * MathF.Exp(x) / (MathF.Exp(2f * x) + 1);
             }
 
             public static float Tanh(float x)

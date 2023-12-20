@@ -11,7 +11,7 @@ namespace DeepUnity
         private readonly Tensor[] b;
         private readonly Tensor[] gAve;
             
-        public RMSProp(Parameter[] parameters, float lr = 0.01f, float alpha = 0.99f, float weightDecay = 0f, float momentum = 0f, bool centered = false) : base(parameters, lr, weightDecay)
+        public RMSProp(Parameter[] parameters, float lr = 0.01f, float alpha = 0.99f, float eps = 1e-7f, float weightDecay = 0f, float momentum = 0f, bool centered = false) : base(parameters, lr, eps, weightDecay)
         {
             this.alpha = alpha;
             this.mu = momentum;
@@ -50,11 +50,11 @@ namespace DeepUnity
 
                 if (mu > 0f)
                 {
-                    b[i] = mu * b[i] + parameters[i].g / (tilde_v.Sqrt() + Utils.EPSILON);
+                    b[i] = mu * b[i] + parameters[i].g / (tilde_v.Sqrt() + epsilon);
                     Tensor.CopyTo(parameters[i].theta - gamma * b[i], parameters[i].theta);
                 }
                 else
-                    Tensor.CopyTo(parameters[i].theta - gamma * parameters[i].g / (tilde_v.Sqrt() + Utils.EPSILON), parameters[i].theta);
+                    Tensor.CopyTo(parameters[i].theta - gamma * parameters[i].g / (tilde_v.Sqrt() + epsilon), parameters[i].theta);
 
             });
 

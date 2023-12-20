@@ -6,7 +6,7 @@ namespace DeepUnity
 
         private readonly Tensor[] v; // sqr avg
         private readonly Tensor[] u; // accumulate variables
-        public Adadelta(Parameter[] parameters, float lr = 1f, float rho = 0.9f, float weightDecay = 0f) : base(parameters, lr, weightDecay)
+        public Adadelta(Parameter[] parameters, float lr = 1f, float rho = 0.9f, float eps = 1e-7f, float weightDecay = 0f) : base(parameters, lr, eps, weightDecay)
         {
             this.rho = rho;
 
@@ -33,7 +33,7 @@ namespace DeepUnity
 
                 v[i] = v[i] * rho + parameters[i].g.Pow(2f) * (1f - rho);
 
-                var delta_x = Tensor.Sqrt(u[i] + Utils.EPSILON) / Tensor.Sqrt(v[i] + Utils.EPSILON) * parameters[i].g;
+                var delta_x = Tensor.Sqrt(u[i] + epsilon) / Tensor.Sqrt(v[i] + epsilon) * parameters[i].g;
 
                 u[i] = u[i] * rho + delta_x.Pow(2f) * (1f - rho);
 

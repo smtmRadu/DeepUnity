@@ -11,11 +11,12 @@ namespace DeepUnityTutorials
             env = transform.parent.GetComponent<SoccerEnvironmentScript>();
         }
 
-        private void OnTriggerEnter(Collider other)
+        private void OnCollisionEnter(Collision collision)
         {
-            if (other.name == "PinkGoal")
+            Collider other = collision.collider;
+            if (other.CompareTag("PinkGoal"))
                 env.BlueTeamScored();
-            else if (other.name == "BlueGoal")
+            else if (other.CompareTag("BlueGoal"))
                 env.PinkTeamScored();
             else if (other.name == "OutOfBounds")
                 env.StartNewRound(true);

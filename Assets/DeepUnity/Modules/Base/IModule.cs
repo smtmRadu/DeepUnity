@@ -32,6 +32,7 @@ namespace DeepUnity
         public BatchNorm batchnorm1d;         
         public LayerNorm layernorm;
         public Conv2D conv2d;
+        public PReLU prelu;
 
         // Other modules
         public Dropout dropout;
@@ -145,6 +146,10 @@ namespace DeepUnity
             {
                 gelu = geluModule;
             }
+            else if (module is PReLU preluModule)
+            {
+                prelu = preluModule;
+            }
             else
                 throw new Exception("Unhandled module type while wrapping.");
         }
@@ -240,6 +245,10 @@ namespace DeepUnity
             else if (typeof(GELU).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.gelu;
+            }
+            else if (typeof(PReLU).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.prelu;
             }
             else
                 throw new Exception("Unhandled module type while unwrapping.");

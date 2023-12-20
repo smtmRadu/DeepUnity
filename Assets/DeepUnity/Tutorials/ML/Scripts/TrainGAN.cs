@@ -41,15 +41,15 @@ namespace DeepUnityTutorials
                 discriminator = new NeuralNetwork(
                     new Flatten(),
                     new Dense(784, 1024, device: Device.GPU),
-                    new LeakyReLU(),
+                    new LeakyReLU(0.2f),
                     new Dropout(0.3f),
                 
                     new Dense(1024, 512, device: Device.GPU),
-                    new LeakyReLU(),
+                    new LeakyReLU(0.2f),
                     new Dropout(0.3f),
 
                     new Dense(512, 256, device: Device.GPU),
-                    new LeakyReLU(),
+                    new LeakyReLU(0.2f),
                     new Dropout(0.3f),
 
                     new Dense(256, 1, device: Device.GPU),
@@ -60,13 +60,13 @@ namespace DeepUnityTutorials
             {
                 generator = new NeuralNetwork(
                     new Dense(latent_dim, 256, device: Device.GPU),
-                    new LeakyReLU(),
+                    new LeakyReLU(0.2f),
 
                     new Dense(256, 512, device: Device.GPU),
-                    new LeakyReLU(),
+                    new LeakyReLU(0.2f),
 
                     new Dense(512, 1024,  device: Device.GPU),
-                    new LeakyReLU(), 
+                    new LeakyReLU(0.2f),
 
                     new Dense(1024, 784, device: Device.GPU),
                     new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 }),

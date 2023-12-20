@@ -65,14 +65,8 @@ namespace DeepUnity
         // PPO Algorithm
         private void Train()
         {
-            // 1. Normalize A
-            if(hp.normalizeAdvantages)
-                NormalizeAdvantages(train_data);
+            // https://openreview.net/forum?id=nIAxjsniDzg shows that the advantages must be normalized over the mini-batch
 
-            // 2. Normalize VTargets. It seems like if we do this the convergence is very unstable.. Maybe it works better for large buffers, but i do not care
-            // NormalizeVTargets(train_data);
-
-            // 2. Gradient descent over N epochs
             model.vNetwork.SetDevice(model.trainingDevice); // This is always on training device because it is used to compute the values of the entire train_data of states once..
             model.muNetwork?.SetDevice(model.trainingDevice);
             model.sigmaNetwork?.SetDevice(model.trainingDevice);
@@ -92,6 +86,7 @@ namespace DeepUnity
                 List<Tensor[]> disc_act_batches = Utils.Split(train_data.DiscreteActions, hp.batchSize);
                 List<Tensor[]> disc_probs_batches = Utils.Split(train_data.DiscreteProbabilities, hp.batchSize);
 
+
                 // θ new. New probabilities of the policy used for early stopping/rollback
                 Tensor cont_probs_new = null;
                 Tensor cont_probs_old = null;
@@ -103,6 +98,8 @@ namespace DeepUnity
                     Tensor states_batch = Tensor.Concat(null, states_batches[b]);
                     Tensor advantages_batch = Tensor.Concat(null, advantages_batches[b]);
                     Tensor value_targets_batch = Tensor.Concat(null, value_targets_batches[b]);
+
+                    advantages_batch = NormalizeAdvantages(advantages_batch);
                    
                     UpdateValueNetwork(states_batch, value_targets_batch);
 
@@ -170,7 +167,7 @@ namespace DeepUnity
             model.sigmaNetwork?.SetDevice(model.inferenceDevice);
             model.discreteNetwork?.SetDevice(model.inferenceDevice);
 
-            // 3. Clear the train buffer
+
             train_data.Clear();
         }
         /// <summary>
@@ -300,6 +297,9 @@ namespace DeepUnity
         /// </summary>
         private void UpdateDiscreteNetwork(Tensor states, Tensor advantages, Tensor actions, Tensor piOld, out Tensor pi)
         {
+            // so pi is the probability of the specific action, but in my code pi is the same with phi it doesn't matter until differentiation
+            // and phi is the vector of all actions probabilities
+            // action is the one hot vector with actions sampled from phi
             // Somehow pi is phi here (because the probabilities of the actions are directly given by the network), a little confusion but you get it :)
             int batch_size = states.Rank >= 2 ? states.Size(0) : 1;
             int discrete_actions_num = piOld.Size(-1);
@@ -349,8 +349,8 @@ namespace DeepUnity
             // ∂-LClip / ∂πθ(a|s)  (20) Bick.D
             Tensor dmLClip_dPi = -1f * (dmindx * advantages + dmindy * advantages * dclipdx) / piOld;
 
-            // ∂πθ(a|s) / ∂φ  (20) Bick.D
-            Tensor dPi_dPhi = actions;
+            // ∂πθ(a|s) / ∂φ  (20) Bick.D, it's basically 1 if the same action was sampled and 0 if not :D
+            Tensor dPi_dPhi = actions; 
 
 
             // Entropy bonus for discrete actions
@@ -435,22 +435,17 @@ namespace DeepUnity
             }
         }    
         /// <summary>
-        /// This method normalizes the advantages in the <see cref="ExperienceBuffer"/>
+        /// This method normalizes the advantages for a minibatch
         /// </summary>
-        /// <param name="vec"></param>
-        private static void NormalizeAdvantages(ExperienceBuffer vec)
+        private static Tensor NormalizeAdvantages(Tensor advantages)
         {
-            float mean = vec.frames.Average(x => x.advantage[0]);
-            float variance = vec.frames.Sum(x => (x.advantage[0] - mean) * (x.advantage[0] - mean)) / (vec.Count - 1); // with bessel correction
-            float std = MathF.Sqrt(variance);
+            float std = advantages.Std(0)[0];
 
-            if (std <= 0) // It can be 0 either because there is only one frame when extracted, or all advantages were the same
-                return;
+            if (std <= 0)
+                return advantages;
+            else
+                return (advantages - advantages.Mean(0)[0]) / advantages.Std(0)[0];
 
-
-            for (int i = 0; i < vec.Count; i++)
-                vec.frames[i].advantage = (vec.frames[i].advantage - mean) / std;
-            
         }
     }
 

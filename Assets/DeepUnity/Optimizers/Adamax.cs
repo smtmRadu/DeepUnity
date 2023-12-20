@@ -15,7 +15,7 @@ namespace DeepUnity
         private readonly Tensor[] m;
         private readonly Tensor[] u;
 
-        public Adamax(Parameter[] parameters, float lr = 0.002f, float beta1 = 0.9f, float beta2 = 0.999f, float weightDecay = 0f) : base(parameters, lr, weightDecay)
+        public Adamax(Parameter[] parameters, float lr = 0.002f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-7f, float weightDecay = 0f) : base(parameters, lr, eps, weightDecay)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;
@@ -49,7 +49,7 @@ namespace DeepUnity
                 m[i] = beta1 * m[i] + (1f - beta1) * parameters[i].g;
 
                 // Update the exponentially weighted infinity norm
-                u[i] = Tensor.Maximum(u[i] * beta2, parameters[i].g.Abs() + Utils.EPSILON);
+                u[i] = Tensor.Maximum(u[i] * beta2, parameters[i].g.Abs() + epsilon);
 
                 // Update parameters 
                 Tensor.CopyTo(parameters[i].theta - gamma * m[i] / (u[i] * (1 - beta1_t)), parameters[i].theta);

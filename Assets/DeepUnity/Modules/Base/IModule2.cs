@@ -5,6 +5,8 @@ namespace DeepUnity
     /// </summary>
     public interface IModule2
     {
+        public Tensor Predict(Tensor input, Tensor hidden);
+        public Tensor Forward(Tensor input, Tensor hidden);
         public Tensor Backward(Tensor loss);
         public object Clone();
     }
@@ -14,25 +16,16 @@ namespace DeepUnity
     {
         public string name;
 
-        public RecurrentDense rnncell;
-        public Dropout dropout;
-        public LayerNorm layernorm;
+        public RNNCell rnncell;
+
 
         private IModule2Wrapper(IModule2 module)
         {
             name = module.GetType().Name;
 
-            if (module is RecurrentDense rnncellModule)
+            if (module is RNNCell rnncellModule)
             {
                 rnncell = rnncellModule;
-            }
-            else if (module is Dropout dropoutModule)
-            {
-                dropout = dropoutModule;
-            }
-            else if (module is LayerNorm layerNormModule)
-            {
-                layernorm = layerNormModule;
             }
             else
                 throw new System.Exception("Unhandled rnn module type while wrapping.");
@@ -46,17 +39,9 @@ namespace DeepUnity
         {
             IModule2 module = null;
 
-            if (typeof(RecurrentDense).Name.Equals(moduleWrapper.name))
+            if (typeof(RNNCell).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.rnncell;
-            }
-            else if (typeof(LayerNorm).Name.Equals(moduleWrapper.name))
-            {
-                module = moduleWrapper.layernorm;
-            }
-            else if(typeof(Dropout).Name.Equals(moduleWrapper.name))
-            {
-                module = moduleWrapper.dropout;
             }
 
             return module;

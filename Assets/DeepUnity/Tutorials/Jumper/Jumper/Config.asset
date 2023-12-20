@@ -28,11 +28,10 @@ MonoBehaviour:
   KLDivergence: 0
   targetKL: 0.015
   updateEvery: 1000
-  updateAfter: 1000
   updatesNum: 1
   alpha: 0.2
-  saveReplayBuffer: 0
   tau: 0.005
   saveRecordBuffer: 0
-  timeScale: 2.82
   debug: 0
+  timescaleAdjustment: 1
+  timescale: 5

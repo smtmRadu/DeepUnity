@@ -14,7 +14,6 @@ namespace DeepUnityTutorials
         public float lr = 1e-3f;
         public int batchSize = 32;
         public PerformanceGraph graph = new PerformanceGraph();
-
         public GameObject canvas;
         private List<RawImage> displays;
 
@@ -29,6 +28,7 @@ namespace DeepUnityTutorials
         List<(Tensor, Tensor)[]> train_batches;
 
         int batch_index = 0;
+
 
         private void Start()
         {
@@ -127,16 +127,14 @@ namespace DeepUnityTutorials
                 encoder.Backward(dBCE_dEncoder);
 
 
-
-
                 const float kld_weight = 1f;
-                Tensor kld = -0.5f * (1f + log_variance - mean.Pow(2f) - log_variance.Exp());
+                Tensor kld = kld_weight * -0.5f * (1f + log_variance - mean.Pow(2f) - log_variance.Exp());
                 loss_value += kld.ToArray().Average() * kld_weight;
 
                 // Compute gradients for mu
-                Tensor dKLD_dMu = mean;
-                Tensor dMu_dEncoded = mu.Backward(dKLD_dMu * kld_weight);
-                // Compute gradients for sigma
+                Tensor dKLD_dMu = mean; // dKLD / dMu = mean
+                Tensor dMu_dEncoded = mu.Backward(kld_weight * dKLD_dMu);
+                // Compute gradients for sigma  dKLD / dSigma = 1/2 * (exp(log_var) - 1)
                 Tensor dKLD_dLogVar = 0.5f * (log_variance.Exp() - 1f);
                 Tensor dLogVar_dEncoded = logvar.Backward(dKLD_dLogVar * kld_weight);
 

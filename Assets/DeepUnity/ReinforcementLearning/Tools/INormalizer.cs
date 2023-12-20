@@ -17,8 +17,8 @@ namespace DeepUnity
         /// <summary>
         /// Updates the data population.
         /// </summary>
-        /// <param name="batchedInput">Tensor (batch_size) or (batch_size, dimension) for batched input.</param>
-        public void Update(Tensor batchedInput);
+        /// <param name="input">Tensor (batch_size) or (batch_size, dimension) for batched input.</param>
+        public void Update(Tensor input);
     }
 }
 

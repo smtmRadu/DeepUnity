@@ -9,19 +9,21 @@ namespace DeepUnity
 
         public float gamma;
         protected float lambda;
+        protected float epsilon;
         protected int t; // step counter
 
-        protected Optimizer(Parameter[] parameters, float lr, float weightDecay)
+        protected Optimizer(Parameter[] parameters, float lr, float eps, float weightDecay)
         {
             this.parameters = parameters;
             this.gamma = lr;
             this.lambda = weightDecay;
+            this.epsilon = eps;
             t = 0;       
         }
         public abstract void Step();
 
         /// <summary>
-        /// Resets all gradients of a <see cref="Learnable"/> layer to 0.
+        /// Resets all gradients of all <see cref="Parameter"/>s to 0.
         /// </summary>
         public void ZeroGrad()
         {
@@ -31,7 +33,7 @@ namespace DeepUnity
             }
         }
         /// <summary>
-        /// Clips the gradients of a <see cref="Learnable"/> layer in the range [-clip_value, clip_value]
+        /// Clips the gradients of all <see cref="Parameter"/>s in the range [-clip_value, clip_value]
         /// </summary>
         public void ClipGradValue(float clip_value)
         {
@@ -41,9 +43,9 @@ namespace DeepUnity
             }
         }
         /// <summary>
-        /// Computes the clip grad norm globally over all <see cref="Learnable"/> layers. If <paramref name="max_norm"/> = 0, no changes are made.
+        /// Gradient Clipping by norm for all <see cref="Parameter"/>s. If <paramref name="max_norm"/> = 0, no changes are made.
         /// </summary>
-        /// <param name="max_norm">If is 0, nothing is changed</param>
+        /// <param name="max_norm">If is 0, the clipping is aborted.</param>
         public void ClipGradNorm(float max_norm, NormType normType = NormType.EuclideanL2)
         {
             if (max_norm == 0)

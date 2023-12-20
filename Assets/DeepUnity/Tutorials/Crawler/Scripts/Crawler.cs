@@ -110,10 +110,8 @@ namespace DeepUnityTutorials
           
         }
 
-        public override void OnDrawGizmos()
+        public void OnDrawGizmos()
         {
-            base.OnDrawGizmos();
-
             Gizmos.color = Color.red; // You can change the color as desired
 
             // Calculate the rotation (90 degrees around Y-axis)

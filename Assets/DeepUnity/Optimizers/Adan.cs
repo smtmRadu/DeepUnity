@@ -26,8 +26,8 @@ namespace DeepUnity
         /// <param name="beta2"></param>
         /// <param name="beta3"></param>
         /// <param name="weightDecay"></param>
-        public Adan(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.02f, float beta2 = 0.08f, float beta3 = 0.01f, float weightDecay = 0f) 
-            : base(parameters, lr, weightDecay)
+        public Adan(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.02f, float beta2 = 0.08f, float beta3 = 0.01f, float eps = 1e-7f, float weightDecay = 0f) 
+            : base(parameters, lr, eps, weightDecay)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;
@@ -69,7 +69,7 @@ namespace DeepUnity
                 m[i] = (1 - beta1) * m[i] + beta1 * parameters[i].g;
                 v[i] = (1 - beta2) * v[i] + beta2 * (parameters[i].g - gOld[i]);
                 n[i] = (1 - beta3) * n[i] + beta3 * (parameters[i].g + (1f - beta2) * (parameters[i].g - gOld[i])).Pow(2);
-                Tensor eta = Tensor.Fill(gamma, n[i].Shape) / (n[i].Sqrt() + Utils.EPSILON);
+                Tensor eta = Tensor.Fill(gamma, n[i].Shape) / (n[i].Sqrt() + epsilon);
 
                 // Update theta
                 Tensor.CopyTo((lambda * eta + 1f).Pow(-1f) * (parameters[i].theta - eta * (m[i] + (1f - beta2) * v[i])), parameters[i].theta);

@@ -9,8 +9,8 @@ namespace DeepUnity
 
         private readonly Tensor[] state_sum;
 
-        public Adagrad(Parameter[] parameters, float lr = 0.01f, float lrDecay = 0f, float weightDecay = 0f)
-            :base(parameters, lr, weightDecay)
+        public Adagrad(Parameter[] parameters, float lr = 0.01f, float lrDecay = 0f, float eps = 1e-7f, float weightDecay = 0f)
+            : base(parameters, lr, eps, weightDecay)
         {
             this.eta = lrDecay;
 
@@ -36,7 +36,7 @@ namespace DeepUnity
 
                 state_sum[i] = state_sum[i] + parameters[i].g.Pow(2f);
 
-                Tensor.CopyTo(parameters[i].theta - tilde_gamma * parameters[i].g / (state_sum[i].Sqrt() + Utils.EPSILON), parameters[i].theta);
+                Tensor.CopyTo(parameters[i].theta - tilde_gamma * parameters[i].g / (state_sum[i].Sqrt() + epsilon), parameters[i].theta);
             });
         }
     }

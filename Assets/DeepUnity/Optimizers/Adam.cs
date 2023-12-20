@@ -23,7 +23,7 @@ namespace DeepUnity
 
 
 
-        public Adam(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float weightDecay = 0f, bool amsgrad = false, bool maximize = false) : base(parameters, lr, weightDecay)
+        public Adam(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-7f, float weightDecay = 0f, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weightDecay)
         {
             this.amsgrad = amsgrad;
             this.maximize = maximize;
@@ -55,24 +55,6 @@ namespace DeepUnity
 
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
-                //   // Paper algorithm 
-                //    // Update biased first momentum estimate
-                //    m[i] = beta1 * m[i] + (1f - beta1) * parameters[i].g;
-                //   
-                //    // Update biased second raw momentum estimate
-                //    v[i] = beta2 * v[i] + (1f - beta2) * parameters[i].g.Pow(2f);
-                //   
-                //    // Compute bias-corrected first momentum estimate
-                //    Tensor mHat = m[i] / (1f - beta1_t);
-                //   
-                //    // Compute bias-corrected second raw momentum estimate
-                //    Tensor vHat = v[i] / (1f - beta2_t);
-                //   
-                //    // Update parameters 
-                //    Tensor.CopyTo(parameters[i].theta - lr * mHat / (Tensor.Sqrt(vHat) + Utils.EPSILON), parameters[i].theta);
-
-                // Pytorch version
-
                 if (maximize)
                     Tensor.CopyTo(-parameters[i].g, parameters[i].g);
                 
@@ -87,12 +69,10 @@ namespace DeepUnity
                 if(amsgrad)
                 {
                     vMax[i] = Tensor.Maximum(vMax[i], vHat);
-                    Tensor.CopyTo(parameters[i].theta - gamma * mHat / (vMax[i].Sqrt() + Utils.EPSILON), parameters[i].theta);
+                    Tensor.CopyTo(parameters[i].theta - gamma * mHat / (vMax[i].Sqrt() + epsilon), parameters[i].theta);
                 }
                 else
-                    Tensor.CopyTo(parameters[i].theta - gamma * mHat / (vHat.Sqrt() + Utils.EPSILON), parameters[i].theta);
-                
-
+                    Tensor.CopyTo(parameters[i].theta - gamma * mHat / (vHat.Sqrt() + epsilon), parameters[i].theta);
             });
 
         }

@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using Unity.VisualScripting;
 
 namespace DeepUnity
 {
@@ -17,6 +19,9 @@ namespace DeepUnity
 
         private Loss(LossType type, Tensor predicts, Tensor targets)
         {
+            if(!predicts.Shape.SequenceEqual(targets.Shape))
+                throw new ArgumentException($"Predicts shape ({predicts.Shape.ToCommaSeparatedString()}) must be the same with Targets shape ({targets.Shape.ToCommaSeparatedString()})");
+            
             lossType = type;
             this.predicts = predicts;
             this.targets = targets;

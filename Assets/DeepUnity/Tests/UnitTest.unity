@@ -580,7 +580,7 @@ MonoBehaviour:
     steps: 0
     current: 0
     mean: 0
-  learningRate: 0.00001
+  learningRate: 0.001
   hiddenSize: 64
   trainingSamples: 1024
   batch_size: 64

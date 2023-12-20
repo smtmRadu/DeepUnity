@@ -50,10 +50,6 @@ namespace DeepUnity
         private int EpisodeFixedFramesCount { get; set; } = -1;
 
 
-        // Draw agent's memory.
-        private LinkedList<Vector3> lastKWorldPositions; // keeps track of the last K last positions in order to draw them
-
-
         public virtual void Awake()
         {
             if (!enabled)
@@ -114,9 +110,6 @@ namespace DeepUnity
                     }
                     break;
             }
-
-            // Other
-            lastKWorldPositions = new LinkedList<Vector3>();
         }
         public virtual void Start()
         {
@@ -151,24 +144,6 @@ namespace DeepUnity
                     if(behaviourType != BehaviourType.Off)
                         OnActionReceived(ActionsBuffer);
                     break;
-            }
-        }
-        public virtual void OnDrawGizmos()
-        {
-            if (lastKWorldPositions == null)
-                return;
-
-            const float radiusRelativeToScale = 0.2f;
-            float alpha = 1f / lastKWorldPositions.Count;
-
-            float index = 1f;
-            MeshRenderer meshRenderer = GetComponent<MeshRenderer>();
-            Color c = meshRenderer == null ? Color.white : meshRenderer.sharedMaterial.color;
-            foreach (var item in lastKWorldPositions)
-            {
-                Gizmos.color = new Color(c.r, c.g, c.b, alpha);
-                Gizmos.DrawSphere(item, transform.localScale.x * radiusRelativeToScale);
-                alpha = (index++) / lastKWorldPositions.Count;
             }
         }
        
@@ -259,8 +234,6 @@ namespace DeepUnity
                 EpisodeStepCount = 0;
                 EpsiodeCumulativeReward = 0f;
                 EpisodeFixedFramesCount = 0; // Used to make the agent take a decision in the first step of the new epiode
-
-                lastKWorldPositions.Clear();
                 PositionReseter?.Reset();
                 OnEpisodeBegin();
             }
@@ -280,10 +253,6 @@ namespace DeepUnity
                 Heuristic(ActionsBuffer);
                 return;
             }
-
-            lastKWorldPositions.AddLast(transform.position);
-            if (lastKWorldPositions.Count > model.stackedInputs)
-                lastKWorldPositions.RemoveFirst();
 
             // OBSERVATION PROCESS ------------------------------------------------------------------
             if (lastState == null)

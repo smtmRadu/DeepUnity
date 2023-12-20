@@ -1106,7 +1106,7 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
-        /// Computed the norm of the tensor.
+        /// Computes the norm of the tensor.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="norm"></param>
@@ -1636,7 +1636,7 @@ namespace DeepUnity
             return Concat(axis, slices);
         }
         /// <summary>
-        /// Computes the mean along the speficied axis.
+        /// Computes the sum along the speficied axis.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>
@@ -1743,6 +1743,105 @@ namespace DeepUnity
                             // {
                             //     result[l, k, j, i] = sum;
                             // }
+                        }
+                    }
+                }
+            }
+            if (!keepDim)
+                FastSqueeze(result, axis);
+            return result;
+        }
+        /// <summary>
+        /// Computes the product along the speficied axis.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <param name="keepDim">If false, squeezes the tensor on <paramref name="axis"/>.</param>
+        /// <returns></returns>
+        public static Tensor Prod(Tensor tensor, int axis, bool keepDim = false)
+        {
+            HandleAxis(tensor, ref axis);
+
+            int batch = tensor.Batch;
+            int channels = tensor.Channels;
+            int height = tensor.Height;
+            int width = tensor.Width;
+
+            Dim dimIndex = AxisToDim(tensor, axis);
+
+            int[] newShape = tensor.shape.ToArray();
+            newShape[axis] = 1; // keepDim = true? newShape[axis] : 1
+            Tensor result = new(newShape);
+
+            if (dimIndex == Dim.width)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int k = 0; k < channels; k++)
+                    {
+                        for (int j = 0; j < height; j++)
+                        {
+                            float prod = 1f;
+                            for (int i = 0; i < width; i++)
+                            {
+                                prod *= tensor[l, k, j, i];
+                            }
+                            result[l, k, j, 0] = prod;
+                        }
+                    }
+                }
+            }
+            else if (dimIndex == Dim.height)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int k = 0; k < channels; k++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            float prod = 1f;
+                            for (int j = 0; j < height; j++)
+                            {
+                                prod *= tensor[l, k, j, i];
+                            }
+                            result[l, k, 0, i] = prod;
+                        }
+                    }
+                }
+            }
+            else if (dimIndex == Dim.channel)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            float prod = 1f;
+
+                            for (int k = 0; k < channels; k++)
+                            {
+                                prod *= tensor[l, k, j, i];
+                            }
+                            result[l, 0, j, i] = prod;
+                        }
+                    }
+                }
+            }
+            else if (dimIndex == Dim.batch)
+            {
+                for (int k = 0; k < channels; k++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            float prod = 1f;
+                            for (int l = 0; l < batch; l++)
+                            {
+                                prod *= tensor[l, k, j, i];
+                            }
+                            result[0, k, j, i] = prod;
                         }
                     }
                 }
@@ -2236,7 +2335,7 @@ namespace DeepUnity
 
         }
         /// <summary>
-        /// Returns the indices of the maximul value of all elements in the input tensor along the specified axis.
+        /// Returns the indices of the maximum value of all elements in the input tensor along the specified axis.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>
@@ -2345,6 +2444,125 @@ namespace DeepUnity
                                 }
                             }
                             result[0, k, j, i] = maxIndex;
+                        }
+                    }
+                }
+            }
+
+            if (!keepDim)
+                FastSqueeze(result, axis);
+            return result;
+        }
+        /// <summary>
+        /// Returns the indices of the minimum value of all elements in the input tensor along the specified axis.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <param name="keepDim"></param>
+        /// <returns></returns>
+        public static Tensor ArgMin(Tensor tensor, int axis, bool keepDim = false)
+        {
+            HandleAxis(tensor, ref axis);
+
+            int batch = tensor.Batch;
+            int channels = tensor.Channels;
+            int height = tensor.Height;
+            int width = tensor.Width;
+
+            Dim dim = AxisToDim(tensor, axis);
+
+            int[] newShape = tensor.shape.ToArray();
+            newShape[axis] = 1;
+            Tensor result = Zeros(newShape); // Result tensor will store the indices as integers
+
+            if (dim == Dim.width)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int k = 0; k < channels; k++)
+                    {
+                        for (int j = 0; j < height; j++)
+                        {
+                            int minIndex = 0;
+                            float minValue = float.MaxValue;
+                            for (int i = 0; i < width; i++)
+                            {
+                                if (tensor[l, k, j, i] < minValue)
+                                {
+                                    minValue = tensor[l, k, j, i];
+                                    minIndex = i;
+                                }
+                            }
+                            result[l, k, j, 0] = minIndex;
+                        }
+                    }
+                }
+            }
+            else if (dim == Dim.height)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int k = 0; k < channels; k++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            int minIndex = 0;
+                            float minValue = float.MaxValue;
+                            for (int j = 0; j < height; j++)
+                            {
+                                if (tensor[l, k, j, i] < minValue)
+                                {
+                                    minValue = tensor[l, k, j, i];
+                                    minIndex = j;
+                                }
+                            }
+                            result[l, k, 0, i] = minIndex;
+                        }
+                    }
+                }
+            }
+            else if (dim == Dim.channel)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            int minIndex = 0;
+                            float minValue = float.MaxValue;
+                            for (int k = 0; k < channels; k++)
+                            {
+                                if (tensor[l, k, j, i] < minValue)
+                                {
+                                    minValue = tensor[l, k, j, i];
+                                    minIndex = k;
+                                }
+                            }
+                            result[l, 0, j, i] = minIndex;
+                        }
+                    }
+                }
+            }
+            else if (dim == Dim.batch)
+            {
+                for (int k = 0; k < channels; k++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            int minIndex = 0;
+                            float minValue = float.MaxValue;
+                            for (int l = 0; l < batch; l++)
+                            {
+                                if (tensor[l, k, j, i] < minValue)
+                                {
+                                    minValue = tensor[l, k, j, i];
+                                    minIndex = l;
+                                }
+                            }
+                            result[0, k, j, i] = minIndex;
                         }
                     }
                 }
@@ -2487,6 +2705,10 @@ namespace DeepUnity
         {
             return Sum(this, axis, keepDim);
         }
+        public Tensor Prod(int axis, bool keepDim = false)
+        {
+            return Prod(this, axis, keepDim);
+        }
         public Tensor Mean(int axis, bool keepDim = false)
         {
             return Mean(this, axis, keepDim);
@@ -2510,6 +2732,10 @@ namespace DeepUnity
         public Tensor ArgMax(int axis, bool keepDim = false)
         {
             return Tensor.ArgMax(this, axis, keepDim);
+        }
+        public Tensor ArgMin(int axis, bool keepDim = false)
+        {
+            return ArgMin(this, axis, keepDim);
         }
         public Tensor Pow(float power)
         {
