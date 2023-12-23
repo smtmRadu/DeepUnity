@@ -191,8 +191,7 @@ namespace DeepUnityTutorials
 
             const float disc = 0.001f;
             float reward = head.position.y * disc;
-            float reward2 = -head.position.z * disc;
-            AddReward(reward + reward2);
+            AddReward(reward);
         }
     }
 

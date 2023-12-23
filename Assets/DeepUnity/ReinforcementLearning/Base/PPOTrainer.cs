@@ -410,8 +410,7 @@ namespace DeepUnity
             {
                 float discount = 1f;
                 Tensor Ahat_t = Tensor.Constant(0);
-
-                for (int t = timestep; t < T; t++) // In GAE for last step advantage is 0.. kind of lose of information but it works :)
+                for (int t = timestep; t < T; t++)
                 {
                     Tensor r_t = frames[t].reward;
                     float V_st = Vw_s[t];
@@ -428,10 +427,14 @@ namespace DeepUnity
                         break;
                 }
 
+                // Vtarg[t] = GAE(gamma, lambda, t) + V[t]
                 Tensor Vtarget_t = Ahat_t + Vw_s[timestep];
 
                 frames[timestep].value_target = Vtarget_t;
                 frames[timestep].advantage = Ahat_t;
+
+
+
             }
         }    
         /// <summary>
