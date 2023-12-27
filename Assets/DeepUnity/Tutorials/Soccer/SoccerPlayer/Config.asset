@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   trainer: 0
   maxSteps: 2000000000
-  horizon: 256
+  horizon: 128
   learningRate: 0.0003
   gamma: 0.995
   batchSize: 2000
@@ -24,7 +24,7 @@ MonoBehaviour:
   numEpoch: 8
   beta: 0.001
   epsilon: 0.2
-  lambda: 0.97
+  lambda: 0.95
   KLDivergence: 0
   targetKL: 0.015
   updateEvery: 1000
@@ -34,4 +34,4 @@ MonoBehaviour:
   saveRecordBuffer: 0
   debug: 0
   timescaleAdjustment: 1
-  timescale: 12
+  timescale: 10.02

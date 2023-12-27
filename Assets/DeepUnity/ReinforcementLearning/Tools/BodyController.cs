@@ -7,7 +7,11 @@ namespace DeepUnity
     public class BodyPart
     {
         /// <summary>
-        /// The Rigidbody attached to this GameObject (if is any).
+        /// The GameObject that is the bodypart.
+        /// </summary>
+        public GameObject gameObject;
+        /// <summary>
+        /// The Rigidbody attached to this BodyPart GameObject (if is any).
         /// </summary>
         public Rigidbody rb { get; set; }
         /// <summary>
@@ -94,9 +98,9 @@ namespace DeepUnity
 
     public class BodyController : MonoBehaviour
     {
-        public float maxJointSpring = 10_000f;
-        public float jointDamper = 500f;
-        public float maxJointForce = 25_000f;
+        public float maxJointSpring = 3000f; // 10_000f;
+        public float jointDamper = 100f; // 500f;
+        public float maxJointForce = 6000f; // 25_000f;
     
         [HideInInspector] public Dictionary<Transform, BodyPart> bodyPartsDict = new Dictionary<Transform, BodyPart>();
         [HideInInspector] public List<BodyPart> bodyPartsList = new List<BodyPart>();
@@ -105,6 +109,7 @@ namespace DeepUnity
         {
             BodyPart bp = new BodyPart
             {
+                gameObject = bodyPart.gameObject,
                 rb = bodyPart.GetComponent<Rigidbody>(),
                 Joint = bodyPart.GetComponent<ConfigurableJoint>(),
             };

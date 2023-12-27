@@ -63,7 +63,7 @@ namespace DeepUnity
         public Device trainingDevice = Device.GPU;
 
         [SerializeField, Tooltip("Auto-normalize input observations and rewards for a stable training.")]
-        public bool normalize = true;
+        public bool normalize = false;
 
         [ReadOnly, SerializeField, Tooltip("Observations normalizer.")] 
         public RunningNormalizer observationsNormalizer;
@@ -73,10 +73,14 @@ namespace DeepUnity
 
         [Header("Standard Deviation for Continuous Actions")]
         [SerializeField, Tooltip("The standard deviation for Continuous Actions")] 
-        public StandardDeviationType standardDeviation = StandardDeviationType.Trainable;
+        public StandardDeviationType standardDeviation = StandardDeviationType.Fixed;
         [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
-        [SerializeField, Range(0.001f, 3f)] 
+        [SerializeField, Range(0.001f, 5f)] 
         public float standardDeviationValue = 1f;
+
+        [Tooltip("Modify this value to change the exploration/exploitation ratio. The standard deviation obtained by softplus(std_dev) * standardDeviationScale.")]
+        [SerializeField, Range(0.001f, 3f)]
+        public float standardDeviationScale = 1f;
 
         public Optimizer vOptimizer { get; private set; }
         public Optimizer q1Optimizer { get; private set; }
@@ -122,14 +126,14 @@ namespace DeepUnity
                         new IModule[]
                         { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                             Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Tanh() }).ToArray()
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B)}).ToArray()
                     );
 
                 sigmaNetwork = new NeuralNetwork(
                            new IModule[]
                         { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                             Concat(CreateHiddenLayers(NUM_LAYERS - 1, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B), new Softplus(1.5f, 6f) }).ToArray()
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, InitType.Glorot_Uniform, InitType.Zeros), new Softplus() }).ToArray()
                     );
 
                 // Initialize q networks Q(st,at)
@@ -296,7 +300,7 @@ namespace DeepUnity
 
             Tensor mu = muNetwork.Predict(state);
             Tensor sigma = standardDeviation == StandardDeviationType.Trainable ?
-                            sigmaNetwork.Predict(state) :
+                            sigmaNetwork.Predict(state) * standardDeviationScale :
                             Tensor.Fill(standardDeviationValue, mu.Shape);
 
             action = mu.Zip(sigma, (x, y) => Utils.Random.Normal(x, y));
@@ -320,31 +324,9 @@ namespace DeepUnity
 
             muBatch = muNetwork.Forward(stateBatch);
             sigmaBatch = standardDeviation == StandardDeviationType.Trainable ?
-                           sigmaNetwork.Forward(stateBatch):
+                           sigmaNetwork.Forward(stateBatch) * standardDeviationScale:
                            Tensor.Fill(standardDeviationValue, muBatch.Shape);
         }
-        /// <summary>
-        /// Input: <paramref name="stateBatch"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
-        /// Output: <paramref name="muBatch"/> - <em>μ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
-        /// Output: <paramref name="sigmaBatch"/> - <em>σ</em> | Tensor (<em>Batch Size, Continuous Actions</em>) <br></br>
-        /// </summary>
-        public void ContinuousReparametrizedForward(Tensor statesBatch,  out Tensor muBatch, out Tensor sigmaBatch, out Tensor ksiBatch)
-        {
-            if (!IsUsingContinuousActions)
-            {
-                muBatch = null;
-                sigmaBatch = null;
-                ksiBatch = null;
-                return;
-            }
-
-            muBatch = muNetwork.Forward(statesBatch);
-            sigmaBatch = standardDeviation == StandardDeviationType.Trainable ?
-                           sigmaNetwork.Forward(statesBatch) :
-                           Tensor.Fill(standardDeviationValue, muBatch.Shape);
-
-            ksiBatch = Tensor.RandomNormal(sigmaBatch.Shape);
-        }    
         /// <summary>
         /// Input: <paramref name="state"/> - <em>sₜ</em> | Tensor (<em>Observations</em>) <br></br>
         /// Output: <paramref name="action"/> - <em>aₜ</em> |  Tensor (<em>Discrete Actions</em>) (one hot embedding)<br></br>
@@ -598,12 +580,17 @@ namespace DeepUnity
             {
                 dontDrawMe.Add("standardDeviation");
                 dontDrawMe.Add("standardDeviationValue");
+                dontDrawMe.Add("standardDeviationValue");
             }
             else
             {
                 if (script.standardDeviation == StandardDeviationType.Trainable)
                 {
                     dontDrawMe.Add("standardDeviationValue");
+                }
+                else
+                {
+                    dontDrawMe.Add("standardDeviationScale");
                 }
             }
 
@@ -614,6 +601,10 @@ namespace DeepUnity
                 script.standardDeviationValue = 1f;
             }
 
+            if(script.standardDeviationScale <= 0)
+            {
+                script.standardDeviationScale = 1f;
+            }
             if(!script.normalize)
             {
                 dontDrawMe.Add("observationsNormalizer");

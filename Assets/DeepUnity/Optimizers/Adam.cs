@@ -1,7 +1,6 @@
 namespace DeepUnity
 {
     // https://arxiv.org/pdf/1412.6980.pdf also adamax algorithm is there
-    // 
     public sealed class Adam : Optimizer
     {
         private readonly float beta1;

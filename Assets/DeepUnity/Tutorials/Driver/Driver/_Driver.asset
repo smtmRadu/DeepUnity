@@ -14,18 +14,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   behaviourName: Driver
   assetCreated: 1
-  observationSize: 141
+  observationSize: 72
   stackedInputs: 1
   continuousDim: 3
   discreteDim: 0
-  config: {fileID: 11400000, guid: cdd5f5dc575b7c140b9eb8515bda7fa3, type: 2}
-  vNetwork: {fileID: 11400000, guid: 7d3e26c407bef5249bd1afc0eb887da5, type: 2}
-  q1Network: {fileID: 11400000, guid: f8354231856c3c64a98f4c6bc228b6d2, type: 2}
-  q2Network: {fileID: 11400000, guid: e98ad606a3d3cd84fa539e27711f538c, type: 2}
-  muNetwork: {fileID: 11400000, guid: 088d75eedc12cab4f84034f6013b1e03, type: 2}
-  sigmaNetwork: {fileID: 11400000, guid: aa91ad80a65f7f44a856cee1fabb25a4, type: 2}
+  config: {fileID: 11400000, guid: d2305cecfaf30e44aa60b497eb926510, type: 2}
+  vNetwork: {fileID: 11400000, guid: a7a41a03363f8a940b0eb3a4cf34c338, type: 2}
+  q1Network: {fileID: 11400000, guid: 7d5b97798f480104ca9fff7b628a3da8, type: 2}
+  q2Network: {fileID: 11400000, guid: e290c59cb240b2b4da0feeed77bb6896, type: 2}
+  muNetwork: {fileID: 11400000, guid: 5a5e5053ef0ab804b98340535d3bfbfb, type: 2}
+  sigmaNetwork: {fileID: 11400000, guid: a13a4acebae9d0d42a70cea5c4f2f714, type: 2}
   discreteNetwork: {fileID: 0}
-  discContNetwork: {fileID: 11400000, guid: ad62c4431d940c34689eef100b8b4ff8, type: 2}
+  discContNetwork: {fileID: 11400000, guid: 8ae1f66e73b49224e909ea247002696d, type: 2}
   discDiscNetwork: {fileID: 0}
   targetFPS: 50
   inferenceDevice: 0
@@ -107,76 +107,7 @@ MonoBehaviour:
       - 0
       - 0
       - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      shape: 8d000000
+      shape: 48000000
     m2:
       data:
       - 0
@@ -251,76 +182,8 @@ MonoBehaviour:
       - 0
       - 0
       - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      - 0
-      shape: 8d000000
+      shape: 48000000
   observationsClip: 3
-  standardDeviation: 1
-  standardDeviationValue: 1.82
+  standardDeviation: 0
+  standardDeviationValue: 0.5
+  standardDeviationScale: 1

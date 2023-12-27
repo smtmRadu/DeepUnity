@@ -3077,13 +3077,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: acb01c1f399afe1418070c3ff4de54c5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  spaceSize: 141
+  spaceSize: 72
   stackedInputs: 1
   continuousActions: 3
   discreteActions: 0
   numLayers: 2
-  hidUnits: 72
-  model: {fileID: 11400000, guid: be94f35459e9d3942bbba30600ca01c4, type: 2}
+  hidUnits: 48
+  model: {fileID: 11400000, guid: 9d6a1d4ce3430ee4dbc1b1672749e072, type: 2}
   behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 1
@@ -3097,7 +3097,7 @@ MonoBehaviour:
   lb_transform: {fileID: 2058833488}
   center_of_mass: {fileID: 1572540619}
   maxMotorTorque: 1000
-  maxSteerAngle: 40
+  maxSteerAngle: 35
   breakPower: 100000
 --- !u!114 &713581567
 MonoBehaviour:
@@ -3112,7 +3112,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 6000
-  decisionPeriod: 2
+  decisionPeriod: 5
   takeActionsBetweenDecisions: 1
 --- !u!1 &717069248
 GameObject:
@@ -10492,8 +10492,8 @@ MonoBehaviour:
   detectableTags:
   - Wall
   - Car
-  rays: 20
-  fieldOfView: 90
+  rays: 13
+  fieldOfView: 180
   rotationOffset: 0
   distance: 30
   sphereCastRadius: 0.5
@@ -10522,10 +10522,10 @@ MonoBehaviour:
   detectableTags:
   - Wall
   - Car
-  rays: 15
-  fieldOfView: 230
+  rays: 5
+  fieldOfView: 90
   rotationOffset: 180
-  distance: 100
+  distance: 20
   sphereCastRadius: 0.5
   xOffset: 0
   yOffset: 0

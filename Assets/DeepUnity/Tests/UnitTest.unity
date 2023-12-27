@@ -545,7 +545,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &621327370
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -558,7 +558,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b84b8b2bedacc4a45b998f855a119d27, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  device: 0
+  device: 1
   net: {fileID: 11400000, guid: 8097ac88e1a99c84c8b6784ef12a53c9, type: 2}
   TrainLossGraph:
     graph:
@@ -580,7 +580,7 @@ MonoBehaviour:
     steps: 0
     current: 0
     mean: 0
-  learningRate: 0.001
+  learningRate: 0.002
   hiddenSize: 64
   trainingSamples: 1024
   batch_size: 64
@@ -835,7 +835,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   material: {fileID: 0}
-  TestDevice: 0
+  TestDevice: 1
   graph:
     graph:
       serializedVersion: 2
@@ -1863,7 +1863,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!81 &1427153575
 AudioListener:
   m_ObjectHideFlags: 0

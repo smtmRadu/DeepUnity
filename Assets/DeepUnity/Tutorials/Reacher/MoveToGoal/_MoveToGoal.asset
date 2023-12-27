@@ -18,13 +18,13 @@ MonoBehaviour:
   stackedInputs: 1
   continuousDim: 0
   discreteDim: 5
-  config: {fileID: 11400000, guid: e2deff53085baf346bccc78b902085e0, type: 2}
-  vNetwork: {fileID: 11400000, guid: 54b331c78dac17d4ba8cc9a9432dc6c5, type: 2}
+  config: {fileID: 0}
+  vNetwork: {fileID: 0}
   q1Network: {fileID: 0}
   q2Network: {fileID: 0}
   muNetwork: {fileID: 0}
   sigmaNetwork: {fileID: 0}
-  discreteNetwork: {fileID: 11400000, guid: 5f1e0aa84838d1049aeeaaaa9aeaddeb, type: 2}
+  discreteNetwork: {fileID: 0}
   discContNetwork: {fileID: 0}
   discDiscNetwork: {fileID: 0}
   targetFPS: 50
@@ -32,21 +32,21 @@ MonoBehaviour:
   trainingDevice: 1
   normalize: 1
   observationsNormalizer:
-    step: 218380
+    step: 0
     mean:
       data:
-      - -0.16389455
-      - -0.12541431
-      - 0.046901923
-      - 0.15223318
+      - 0
+      - 0
+      - 0
+      - 0
       shape: 04000000
     m2:
       data:
-      - 43668.062
-      - 52277.63
-      - 80353.78
-      - 71501.37
+      - 0
+      - 0
+      - 0
+      - 0
       shape: 04000000
   observationsClip: 3
-  standardDeviation: 1
+  standardDeviation: 0
   standardDeviationValue: 1

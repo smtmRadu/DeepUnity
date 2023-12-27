@@ -11,7 +11,6 @@ public class MoveToGoal : Agent
     //      Batch Size = 256
     //      Horizon = 64
     //      LR Schedule == Off
-    // Results: 
 
 
 

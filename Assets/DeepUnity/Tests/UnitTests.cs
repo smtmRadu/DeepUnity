@@ -2,6 +2,7 @@ using UnityEngine;
 using DeepUnity;
 using System.Collections.Generic;
 using UnityEngine.UI;
+using System;
 
 namespace kbRadu
 {
@@ -29,16 +30,10 @@ namespace kbRadu
         public AgentBehaviour beh;
         private void Start()
         {
-            // 32 x 16
-            Tensor x = Tensor.Arange(0, 16, 1).Reshape(16);
-            Dense dense = new Dense(16, 24, InitType.Ones, InitType.Zeros);
-
-
-            var outp = dense.Forward(x);
-            dense.Backward(outp);
-
-            print(dense.Parameters()[0].g);
-            print(dense.Parameters()[1].g);
+            float x = 0.9f;
+            print(MathF.Pow(x, 800f));
+            print(MathF.Pow(x, 1000f));
+            print(MathF.Pow(x, 2000f));
         }
 
         public void TestCPU()

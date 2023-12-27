@@ -1137,7 +1137,7 @@ MonoBehaviour:
   discreteActions: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 350ce4f4fa1d4404e8d1eaa4c51466d5, type: 2}
+  model: {fileID: 11400000, guid: 31fa75070cb05544f83b800d36d3c116, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 1
@@ -1157,7 +1157,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 1000
-  decisionPeriod: 2
+  decisionPeriod: 5
   takeActionsBetweenDecisions: 1
 --- !u!114 &1900760543
 MonoBehaviour:
@@ -1177,7 +1177,6 @@ MonoBehaviour:
   policyUpdateSecondsElapsed: 0
   inferenceSecondsElapsed: 0
   inferenceTime: ' - '
-  inferenceTimePerAgent: ' - '
   policyUpdateTime: ' - '
   policyUpdateTimePerIteration: ' - '
   inferenceTimeRatio: '- / -'

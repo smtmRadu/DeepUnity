@@ -16,10 +16,9 @@ namespace DeepUnity
     /// 1. Softmax activation on discrete head may "explode"
     public sealed class PPOTrainer : DeepUnityTrainer
     {
-        private float meanPolicyLoss = 0f;
-        private float meanValueLoss = 0f;
-        private float meanEntropy = 0f;
-
+        private List<float> iterationPolicyLoss = new List<float>();
+        private List<float> iterationValueLoss = new List<float>();
+        private List<float> iterationEntropy = new List<float>();
 
         protected override void FixedUpdate()
         {
@@ -154,15 +153,20 @@ namespace DeepUnity
                 }
                 
 
-                // Save statistics info
-                track?.learningRate.Append(model.vScheduler.CurrentLR);
-                track?.policyLoss.Append(meanPolicyLoss / hp.batchSize);
-                track?.valueLoss.Append(meanValueLoss / hp.batchSize);
-                track?.entropy.Append(meanEntropy / (model.IsUsingContinuousActions && model.IsUsingDiscreteActions ? hp.batchSize * 2 : hp.batchSize));
-                meanPolicyLoss = 0f;
-                meanValueLoss = 0f;
-                meanEntropy = 0f;
+               
             }
+
+            // Save statistics info (we show what do we receive on the first mini-batch)
+            track?.learningRate.Append(model.vScheduler.CurrentLR);
+            track?.policyLoss.Append(iterationPolicyLoss[0]);
+            track?.valueLoss.Append(iterationValueLoss[0]);
+            track?.entropy.Append(iterationEntropy.Average() / (model.IsUsingContinuousActions && model.IsUsingDiscreteActions ? 2 : 1));
+
+            iterationPolicyLoss.Clear();
+            iterationValueLoss.Clear();
+            iterationEntropy.Clear();
+
+
             model.muNetwork?.SetDevice(model.inferenceDevice);
             model.sigmaNetwork?.SetDevice(model.inferenceDevice);
             model.discreteNetwork?.SetDevice(model.inferenceDevice);
@@ -183,7 +187,7 @@ namespace DeepUnity
             if (float.IsNaN(lossItem))
                 return;
             else
-                meanValueLoss += criticLoss.Item;
+                iterationValueLoss.Add(criticLoss.Item);
 
             model.vOptimizer.ZeroGrad();
             model.vNetwork.Backward(criticLoss.Derivative * 0.5f);
@@ -214,14 +218,14 @@ namespace DeepUnity
             advantages = advantages.Expand(1, continuous_actions_num);
             Tensor LClip = Tensor.Minimum(
                                 ratio * advantages, 
-                                Tensor.Clip(ratio, 1 - hp.epsilon, 1 + hp.epsilon) * advantages);
+                                Tensor.Clip(ratio, 1f - hp.epsilon, 1f + hp.epsilon) * advantages);
 
             if(LClip.Contains(float.NaN))
             {
                 ConsoleMessage.Warning($"PPO LCLIP batch containing NaN values skipped");
                 return;   
             }
-            meanPolicyLoss += Mathf.Abs(LClip.Mean(0).Mean(0)[0]);
+            iterationPolicyLoss.Add(Mathf.Abs(LClip.Mean(0).Mean(0)[0]));
 
             // Computing ∂-LClip / ∂πθ(a|s)
             Tensor dmindx = Tensor.Zeros(batch_size, continuous_actions_num);
@@ -255,7 +259,7 @@ namespace DeepUnity
             // Entropy bonus added if σ is trainable
             // H(πθ(a|s)) = - integral( πθ(a|s) log πθ(a|s) ) = 1/2 * log(2πeσ^2) // https://en.wikipedia.org/wiki/Differential_entropy
             Tensor H = 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2)); 
-            meanEntropy += H.Mean(0).Mean(0)[0];          
+            iterationEntropy.Add(H.Mean(0).Mean(0)[0]);          
 
             if (dmLClip_dPi.Contains(float.NaN)) return;
 
@@ -319,7 +323,7 @@ namespace DeepUnity
 
                 return;
             }
-            meanPolicyLoss += Mathf.Abs(LClip.Mean(0).Mean(0)[0]);
+            iterationPolicyLoss.Add(Mathf.Abs(LClip.Mean(0).Mean(0)[0]));
 
             // Computing ∂-LClip / ∂πθ(a|s)
             Tensor dmindx = Tensor.Zeros(batch_size, discrete_actions_num);
@@ -356,7 +360,7 @@ namespace DeepUnity
             // Entropy bonus for discrete actions
             // H = - φ * log(φ)
             Tensor H = - pi * pi.Log();
-            meanEntropy += H.Mean(0).Mean(0)[0];
+            iterationEntropy.Add(H.Mean(0).Mean(0)[0]);
 
             // ∂-H / ∂φ = log(φ) + 1;
             Tensor dmH_dPhi = pi.Log() + 1;
@@ -400,7 +404,7 @@ namespace DeepUnity
             all_states_plus_lastNextState[T] = frames[T - 1].nextState;
 
             // Vw_s has length of T + 1
-            Tensor Vw_s = valueNetwork.Predict(Tensor.Concat(null, all_states_plus_lastNextState)).Reshape(T + 1);
+            float[] Vw_s = valueNetwork.Predict(Tensor.Concat(null, all_states_plus_lastNextState)).ToArray();
             
             // Vw_s = Tensor.FilterNaN(Vw_s, 0); it happpen in some cases to get NaN in the first timestep and then all are gonna be NaN
            
@@ -409,32 +413,26 @@ namespace DeepUnity
             for (int timestep = 0; timestep < T; timestep++)
             {
                 float discount = 1f;
-                Tensor Ahat_t = Tensor.Constant(0);
-                for (int t = timestep; t < T; t++)
+                float Ahat_t = 0f;
+                for (int t = timestep; t < MathF.Min(t + HORIZON, T); t++)
                 {
-                    Tensor r_t = frames[t].reward;
+                    float r_t = frames[t].reward[0];
                     float V_st = Vw_s[t];
                     float V_next_st = frames[t].done[0] == 1 ? 0 : Vw_s[t + 1];  // if the state is terminal, next value is set to 0.
 
-                    Tensor delta_t = r_t + GAMMA * V_next_st - V_st;
+                    float delta_t = r_t + GAMMA * V_next_st - V_st;
                     Ahat_t += discount * delta_t;
                     discount *= GAMMA * LAMBDA;
 
                     if (frames[t].done[0] == 1)
                         break;
-
-                    if (t - timestep == HORIZON)
-                        break;
                 }
 
                 // Vtarg[t] = GAE(gamma, lambda, t) + V[t]
-                Tensor Vtarget_t = Ahat_t + Vw_s[timestep];
+                float Vtarget_t = Ahat_t + Vw_s[timestep];
 
-                frames[timestep].value_target = Vtarget_t;
-                frames[timestep].advantage = Ahat_t;
-
-
-
+                frames[timestep].value_target = Tensor.Constant(Vtarget_t);
+                frames[timestep].advantage = Tensor.Constant(Ahat_t);
             }
         }    
         /// <summary>
@@ -443,11 +441,8 @@ namespace DeepUnity
         private static Tensor NormalizeAdvantages(Tensor advantages)
         {
             float std = advantages.Std(0)[0];
-
-            if (std <= 0)
-                return advantages;
-            else
-                return (advantages - advantages.Mean(0)[0]) / advantages.Std(0)[0];
+            float mean = advantages.Mean(0)[0];
+            return (advantages - mean) / (std + Utils.EPSILON);
 
         }
     }

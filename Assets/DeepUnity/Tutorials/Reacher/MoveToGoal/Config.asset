@@ -17,23 +17,21 @@ MonoBehaviour:
   horizon: 64
   learningRate: 0.0003
   gamma: 0.99
-  batchSize: 512
-  bufferSize: 10240
+  batchSize: 256
+  bufferSize: 4096
   gradClipNorm: 0.5
   LRSchedule: 0
   numEpoch: 8
   beta: 0.005
   epsilon: 0.2
   lambda: 0.95
-  KLDivergence: 1
+  KLDivergence: 0
   targetKL: 0.015
   updateEvery: 1000
-  updateAfter: 1000
-  updatesNum: 1
+  updatesNum: 8
   alpha: 0.2
-  saveReplayBuffer: 0
   tau: 0.005
   saveRecordBuffer: 0
   debug: 0
-  timescaleAdjustment: 0
-  timescale: 16.535969
+  timescaleAdjustment: 1
+  timescale: 30

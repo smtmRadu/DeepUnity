@@ -32,9 +32,6 @@ namespace DeepUnityTutorials
 
         BodyController bodyController;
 
-        
-       
-
 
         public override void Awake()
         {
@@ -71,7 +68,7 @@ namespace DeepUnityTutorials
                     x.GroundContact.endEpisodeOnContact = true;
             });
 
-            bodyController.bodyPartsList.ForEach(x => x.TargetContact.rewardOnContact = 10f);
+
         }
 
         // 138 observations
@@ -190,8 +187,9 @@ namespace DeepUnityTutorials
             jdDict[footR].SetJointStrength(actions_vector[43]);
 
             const float disc = 0.001f;
-            float reward = head.position.y * disc;
-            AddReward(reward);
+            AddReward(head.position.y * disc);
+
+            AddReward(Mathf.Clamp(head.position.z * disc, -0.01f, 0.01f)); // add reward to move forward.
         }
     }
 

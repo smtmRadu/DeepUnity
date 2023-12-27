@@ -238,6 +238,7 @@ namespace DeepUnity
                 OnEpisodeBegin();
             }
 
+            EpsiodeCumulativeReward += Timestep.reward[0];
             // Reset timestep
             Timestep = new TimestepTuple(++EpisodeStepCount);
 
@@ -379,8 +380,7 @@ namespace DeepUnity
         /// <param name="reward">positive or negative</param>
         public void AddReward(float reward)
         {
-            Timestep.reward += reward;
-            EpsiodeCumulativeReward += reward;
+            Timestep.reward[0] += reward;
         }
         /// <summary>
         /// Called only inside <b>OnActionReceived()</b>, and <b>OnTriggerXXX()</b> or <b>OnCollisionXXX()</b>. <br></br>
@@ -390,7 +390,6 @@ namespace DeepUnity
         public void SetReward(float reward)
         {
             Timestep.reward[0] = reward;
-            EpsiodeCumulativeReward += reward;
         }
     }
 

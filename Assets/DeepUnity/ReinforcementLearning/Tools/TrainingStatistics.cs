@@ -24,8 +24,6 @@ namespace DeepUnity
 
         [ReadOnly, Tooltip("Total time spent on inference in total.")]
         public string inferenceTime = " - ";
-        [ReadOnly, Tooltip("Total time spent on inference per agent.")]
-        public string inferenceTimePerAgent = " - ";
 
         [ReadOnly, Tooltip("Total time spent on policy update.")]
         public string policyUpdateTime = " - ";
@@ -127,7 +125,7 @@ namespace DeepUnity
             y += 20;                          
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Training Session Time: " + trainingSessionTime + @"</text>");
             y += 20;                          
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Time: {inferenceTime}       [Per agent: {inferenceTimePerAgent}]        [Device: {ab.inferenceDevice}]</text>");       
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Time: {inferenceTime}        [Device: {ab.inferenceDevice}]</text>");       
             y += 20;                                   
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Policy Update Time: {policyUpdateTime}        [Per iteration: {policyUpdateTimePerIteration}]        [Device: {ab.trainingDevice}]</text>");   
             y += 20;                                  

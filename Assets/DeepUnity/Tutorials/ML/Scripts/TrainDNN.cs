@@ -50,10 +50,10 @@ namespace DeepUnityTutorials
                 net = new NeuralNetwork(
                  new Dense(2, hiddenSize,init_w, init_b),
                  // new LayerNorm(),
-                 new PReLU(),
+                 new Tanh(),
                  new Dense(hiddenSize, hiddenSize, init_w, init_b),
                  // new BatchNorm(hiddenSize),
-                 new PReLU(),
+                 new Tanh(),
                  // new Dropout(0.3f),
                  new Dense(hiddenSize, 1, init_w, init_b)
                  );
@@ -61,7 +61,7 @@ namespace DeepUnityTutorials
 
             net.SetDevice(device);
 
-            optimizer = new Adam(net.Parameters(), lr: learningRate);
+            optimizer = new NAdam(net.Parameters(), lr: learningRate);
             scheduler = new LRScheduler(optimizer, scheduler_step_size, scheduler_gamma);
 
 

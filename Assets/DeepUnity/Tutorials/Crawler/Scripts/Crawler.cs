@@ -46,8 +46,6 @@ namespace DeepUnityTutorials
             controller.AddBodyPart(foot3);
             controller.AddBodyPart(foot4);
 
-            // controller.bodyPartsList.ForEach(x => x.TargetContact.rewardOnContact = 1f);
-            // controller.bodyPartsList.ForEach(x => x.TargetContact.endEpisodeOnContact = true);
             controller.bodyPartsDict[this.transform].GroundContact.endEpisodeOnContact = true;
             controller.bodyPartsDict[this.transform].GroundContact.rewardOnContact = -1f;
             controller.bodyPartsDict[thigh1].GroundContact.endEpisodeOnContact = true;
@@ -86,8 +84,8 @@ namespace DeepUnityTutorials
             {
                 if (bp.rb.transform == transform)
                 {
-                    stateBuffer.AddObservation(bp.rb.velocity);
-                    stateBuffer.AddObservation(bp.rb.angularVelocity);
+                    stateBuffer.AddObservation(bp.rb.velocity / 30f);
+                    stateBuffer.AddObservation(bp.rb.angularVelocity / 30f);
                     continue;
                 }
                 if (bp.rb.transform == foot1 || bp.rb.transform == foot2 || bp.rb.transform == foot3 || bp.rb.transform == foot4)
@@ -97,8 +95,8 @@ namespace DeepUnityTutorials
                 }
 
                 // 9 info
-                stateBuffer.AddObservation(bp.rb.velocity);
-                stateBuffer.AddObservation(bp.rb.angularVelocity);
+                stateBuffer.AddObservation(bp.rb.velocity / 30f);
+                stateBuffer.AddObservation(bp.rb.angularVelocity / 30f);
                 Vector3 localPosRelToHead = transform.InverseTransformPoint(bp.rb.position);
                 stateBuffer.AddObservation(localPosRelToHead);
 
@@ -153,34 +151,15 @@ namespace DeepUnityTutorials
             controller.bodyPartsDict[shin3].SetJointStrength(act_vec[18]);
             controller.bodyPartsDict[shin4].SetJointStrength(act_vec[19]);
 
-            AddReward(0.001f * transform.localPosition.y); // Reward for head height
-            AddReward(0.0001f * Vector3.Dot(dirToTarget.normalized,  Quaternion.Euler(0f, -90f, 0f) * transform.forward)); // Reward for looking at the target
+            AddReward(0.005f);
+            AddReward(0.001f * Vector3.Dot(dirToTarget.normalized,  Quaternion.Euler(0f, -90f, 0f) * transform.forward)); // Reward for looking at the target
             AddReward(Mathf.Clamp(0.001f / Vector3.Distance(transform.position, target.position), 0, 0.001f)); // Reward for getting close to the target
 
             // Point the arrow towards the target
             directionArrow.rotation = Quaternion.LookRotation(target.position - transform.position) * Quaternion.Euler(0, 90f, 0);
 
-            if (transform.position.x > 10 || transform.position.x < -10 || transform.position.z > 10 || transform.position.z < -10)
+            if (transform.position.y < -1)
                 EndEpisode();
-
-            if (transform.position.y < -10)
-                EndEpisode();
-        }
-
-        public override void Heuristic(ActionBuffer actionBuffer)
-        {
-            float hor = Input.GetAxis("Horizontal");
-            float vert = Input.GetAxis("Vertical");
-
-            for (int i = 0; i < 8; i += 2)
-            {
-                actionBuffer.ContinuousActions[i] = vert;
-            }
-            for (int i = 8; i < 12; i++)
-            {
-                actionBuffer.ContinuousActions[i] = hor;
-            }
-
         }
 
         private void OnTriggerEnter(Collider other)

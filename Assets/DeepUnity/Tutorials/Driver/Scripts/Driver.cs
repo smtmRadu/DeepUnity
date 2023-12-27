@@ -8,7 +8,7 @@ namespace DeepUnityTutorials
     public class Driver : Agent
     {
 
-        [Header("Attributes")]
+        [Header("Attributes - No additional observations")]
         public WheelCollider rf_collider;
         public WheelCollider rb_collider;
         public WheelCollider lf_collider;
@@ -26,7 +26,7 @@ namespace DeepUnityTutorials
 
         public float maxMotorTorque = 1000f;
         public float maxSteerAngle = 35f;
-        public float breakPower = 1000f;
+        public float breakPower = 1000000f;
 
         private Rigidbody rb;
         public override void Awake()
@@ -47,12 +47,6 @@ namespace DeepUnityTutorials
             rb_collider.motorTorque = 0f;
             lf_collider.motorTorque = 0f;
             lb_collider.motorTorque = 0f;
-        }
-        public override void CollectObservations(StateVector sensorBuffer)
-        {
-            // +140 RaySensor
-            // +1
-            sensorBuffer.AddObservation((rf_collider.steerAngle + lf_collider.steerAngle) / (2 * maxSteerAngle));
         }
 
         public override void OnActionReceived(ActionBuffer actionBuffer)

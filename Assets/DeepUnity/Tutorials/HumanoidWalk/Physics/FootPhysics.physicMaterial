@@ -9,6 +9,6 @@ PhysicMaterial:
   m_Name: FootPhysics
   dynamicFriction: 0.9
   staticFriction: 0.95
-  bounciness: 0
+  bounciness: 0.01
   frictionCombine: 0
   bounceCombine: 0
