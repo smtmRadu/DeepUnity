@@ -42,7 +42,7 @@ namespace DeepUnity
                 part.CurrentStrength = 0f;
                 part.CurrentNormalizedStrength = 0f;
                 part.CurrentEulerRotation = Vector3.zero;
-                part.CurrentNormalizedRotation = Vector3.zero;
+                part.CurrentNormalizedEulerRotation = Vector3.zero;
             });
         }
 

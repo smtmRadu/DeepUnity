@@ -48,7 +48,7 @@ namespace DeepUnity
         public static void DebugInFile(string text, bool append = true)
         {
             string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            string filePath = Path.Combine(desktopPath, "UnityDebug.txt");
+            string filePath = Path.Combine(desktopPath, "DeepUnity-Debug.txt");
 
             using (StreamWriter sw = new StreamWriter(filePath, append))
             {

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77cd255994572814395a912f173ad620, type: 3}
   m_Name: Sigma
   m_EditorClassIdentifier: 
-  version: 50
+  version: 115
   assetCreated: 1
   serializedModules:
   - name: Dense

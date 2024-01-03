@@ -17,6 +17,8 @@ namespace DeepUnity
         public static int MemoriesCount { get => Instance.parallelAgents.Sum(x => x.Memory.Count); }
         public static int TrainingBufferCount { get => Instance.train_data.Count; }
 
+        public event EventHandler OnTrainingSessionEnd;
+
         [ReadOnly, SerializeField] protected List<Agent> parallelAgents;
         [ReadOnly, SerializeField] protected Hyperparameters hp;
         [ReadOnly, SerializeField] protected TrainingStatistics track;
@@ -43,7 +45,6 @@ namespace DeepUnity
                 Instance = this;
             }
         }
-
         /// <summary>
         /// Autosave(), EndTrainingTrigger(), TimeScaleAdj()
         /// </summary>
@@ -51,8 +52,10 @@ namespace DeepUnity
         {
             // Check if max steps reached
             if (currentSteps >= hp.maxSteps)
+            {
+                OnTrainingSessionEnd?.Invoke(this, EventArgs.Empty);
                 EndTrainingSession($"Max Steps reached ({hp.maxSteps})");
-
+            }
             // Autosaves the ac
             if (autosaveSecondsElapsed >= autosave * 60f)
             {

@@ -1564,7 +1564,8 @@ namespace DeepUnity
         /// Splits the tensor into multiple tensors along the specified axis. The resulting tensors are having the same rank as the main tensor. <br></br>
         /// Examples: <br></br>
         /// tensor = (4, 8, 8), axis = 0, split_size = 1 => [(1, 8, 8), (1, 8, 8), (1, 8, 8), (1, 8, 8)] <br></br>
-        /// tensor = (16, 5, 8), axus = 1, split_size = 3 => [(16, 3, 8), (16, 2, 8)] <br></br>
+        /// tensor = (6, 2, 10), axis = 1, split_size = 1 => [(6, 1, 10), (6, 1, 10)] (no squeezed involved)<br></br>
+        /// tensor = (16, 5, 8), axis = 1, split_size = 3 => [(16, 3, 8), (16, 2, 8)] (last can remain partial)<br></br>
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>

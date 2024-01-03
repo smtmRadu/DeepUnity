@@ -409,7 +409,7 @@ MonoBehaviour:
   discreteActions: 0
   numLayers: 2
   hidUnits: 32
-  model: {fileID: 11400000, guid: 23ac4976b30d10440bceba5df07f666f, type: 2}
+  model: {fileID: 11400000, guid: 2e8742a3275893c419fc50405444a362, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0
@@ -456,7 +456,19 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
---- !u!114 &742690642
+--- !u!114 &742690640
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 742690632}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00b3853865c7db941948a69a3ee99c6a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &742690643
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -620,7 +632,10 @@ PrefabInstance:
       addedObject: {fileID: 742690637}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 21d76b183ef818740a5fcb147a81dcab, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 742690642}
+      addedObject: {fileID: 742690640}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 21d76b183ef818740a5fcb147a81dcab, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 742690643}
   m_SourcePrefab: {fileID: 100100000, guid: 21d76b183ef818740a5fcb147a81dcab, type: 3}
 --- !u!1 &1198115734 stripped
 GameObject:

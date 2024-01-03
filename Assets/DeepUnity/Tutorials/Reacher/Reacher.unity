@@ -939,6 +939,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 21d76b183ef818740a5fcb147a81dcab, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2031687200}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 21d76b183ef818740a5fcb147a81dcab, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2031687201}
   m_SourcePrefab: {fileID: 100100000, guid: 21d76b183ef818740a5fcb147a81dcab, type: 3}
 --- !u!1 &2031687192 stripped
 GameObject:
@@ -968,7 +971,7 @@ MonoBehaviour:
   discreteActions: 5
   numLayers: 2
   hidUnits: 32
-  model: {fileID: 11400000, guid: b840f33781cd8bf43a33dfa11d39f88f, type: 2}
+  model: {fileID: 11400000, guid: 6096280f765f3b24798fbfbefc1d63e8, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0
@@ -987,7 +990,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d26371695edfbcd4580ca6f6048d885d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxStep: 1000
+  maxStep: 2000
   decisionPeriod: 1
   takeActionsBetweenDecisions: 1
 --- !u!65 &2031687196
@@ -1124,6 +1127,18 @@ MonoBehaviour:
     steps: 0
     current: 0
     mean: 0
+--- !u!114 &2031687201
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2031687192}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00b3853865c7db941948a69a3ee99c6a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &2075315045
 GameObject:
   m_ObjectHideFlags: 0

@@ -3,6 +3,10 @@ using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// Whenever a new Serializable imodule is created,
+    /// write the codde for the Wrapper (declare var, complete wrap and unwrap methods)
+    /// </summary>
     public interface IModule
     {
         public Tensor Predict(Tensor input);
@@ -10,22 +14,10 @@ namespace DeepUnity
         public Tensor Backward(Tensor loss);
         public object Clone();
     }
-
-  /*  public interface IModuleGPU
-    {
-        public TensorGPU Predict(TensorGPU input);
-        public TensorGPU Forward(TensorGPU input);
-        public TensorGPU Backward(TensorGPU loss);
-        public object Clone();
-    }*/
-
-
     [Serializable]
     public class IModuleWrapper
     {
         public string name;
-
-        [Header("These modules have save-able properties.")]
 
         // Learnable modules
         public Dense dense;                  
@@ -33,6 +25,7 @@ namespace DeepUnity
         public LayerNorm layernorm;
         public Conv2D conv2d;
         public PReLU prelu;
+        public RecurrentDense recurrentdense;
 
         // Other modules
         public Dropout dropout;
@@ -150,6 +143,10 @@ namespace DeepUnity
             {
                 prelu = preluModule;
             }
+            else if (module is RecurrentDense rdenseModule)
+            {
+                recurrentdense = rdenseModule;
+            }
             else
                 throw new Exception("Unhandled module type while wrapping.");
         }
@@ -249,6 +246,10 @@ namespace DeepUnity
             else if (typeof(PReLU).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.prelu;
+            }
+            else if (typeof(RecurrentDense).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.recurrentdense;
             }
             else
                 throw new Exception("Unhandled module type while unwrapping.");

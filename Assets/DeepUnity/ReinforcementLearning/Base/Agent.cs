@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Unity.Mathematics;
 using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
@@ -11,6 +12,7 @@ using UnityEngine;
 /// </summary> 
 namespace DeepUnity
 {
+
     [DisallowMultipleComponent, RequireComponent(typeof(DecisionRequester))]
     public abstract class Agent : MonoBehaviour
     {
@@ -36,6 +38,8 @@ namespace DeepUnity
         [SerializeField, HideInInspector, Tooltip("Collect automatically the [Compressed] Observation Vector of attached sensors (if any) to this GameObject, and any child GameObject of any degree. Consider the number of Observation Vector's float values when defining the Space Size.")]
         private UseSensorsType useSensors = UseSensorsType.ObservationsVector;
 
+        
+        public event EventHandler OnEpisodeEnd;
         public TrainingStatistics PerformanceTrack { get; set; }
         public MemoryBuffer Memory { get; set; }
         public DecisionRequester DecisionRequester { get; private set; }
@@ -205,12 +209,16 @@ namespace DeepUnity
             if (!DecisionRequester.IsFrameBeforeDecisionFrame(EpisodeFixedFramesCount))
                 return;
 
+            EpsiodeCumulativeReward += Timestep.reward[0];
+
             if (behaviourType == BehaviourType.Learn)
             {
                 // Observe s'
                 lastState = GetState();
                 Timestep.nextState = lastState.Clone() as Tensor;
-              
+
+                // Scale and clip reward - rewards scaling the same with advantages should not be normalized for maximum performance.
+                // Timestep.reward[0] = model.rewardsNormalizer.ScaleReward(Timestep.reward[0]);
                 Memory.Add(Timestep);
 
                 // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state (maxStep == 0 means unlimited steps per episode)
@@ -221,6 +229,7 @@ namespace DeepUnity
             // These checkup applies also for Manual and Inference..
             if (Timestep?.done[0] == 1)
             {
+                OnEpisodeEnd?.Invoke(this, EventArgs.Empty);
                 if (PerformanceTrack) // These are mainly for Learning
                 {
                     PerformanceTrack.episodeCount++;
@@ -237,8 +246,7 @@ namespace DeepUnity
                 PositionReseter?.Reset();
                 OnEpisodeBegin();
             }
-
-            EpsiodeCumulativeReward += Timestep.reward[0];
+         
             // Reset timestep
             Timestep = new TimestepTuple(++EpisodeStepCount);
 
@@ -420,9 +428,7 @@ namespace DeepUnity
                 string cumReward = $"Cumulative Reward [{script.EpsiodeCumulativeReward}]";
                 EditorGUILayout.HelpBox(cumReward, MessageType.None);
 
-                // Draw buffer 
-
-                
+                // Draw buffer           
 
                 if(DeepUnityTrainer.Instance.GetType() == typeof(PPOTrainer))
                 {

@@ -56,33 +56,22 @@ namespace DeepUnity
         }
 
 
-
-
+        private int step_per_agent = 0;
 
         protected override void Initialize()
         {
             Qtarg1 = model.q1Network.Clone() as NeuralNetwork;
             Qtarg2 = model.q2Network.Clone() as NeuralNetwork;
-
-            if(hp.batchSize > hp.updateEvery)
-            {
-                ConsoleMessage.Warning("Batch Size must be less or equal to Update Every");
-                EditorApplication.isPlaying = false;
-            }
         }
         protected override void FixedUpdate()
         {
-            int collected_steps = 0;
-            foreach (var ag in parallelAgents)
-            {
-                collected_steps += ag.Memory.Count;
-            }
-
-            if (collected_steps > 0 && collected_steps % hp.updateEvery == 0) 
+            int decision_freq = parallelAgents[0].DecisionRequester.decisionPeriod;
+            step_per_agent++;
+            if (step_per_agent % (hp.updateEvery * decision_freq) == 0) 
             {
                 // if the buffer will be full after this collection, let's clear the old values
-                if(train_data.Count >= hp.bufferSize - collected_steps)             
-                    train_data.frames.RemoveRange(0, train_data.Count / 2);
+                if(train_data.Count >= hp.bufferSize)             
+                    train_data.frames.RemoveRange(0, train_data.Count / 2); // If buffer is full, remove old half
                 
                 foreach (var agent_mem in parallelAgents.Select(x => x.Memory))
                 {
@@ -93,11 +82,13 @@ namespace DeepUnity
                     if (hp.debug) Utils.DebugInFile(agent_mem.ToString());
                     agent_mem.Clear();
                 }
-                Stopwatch clock = Stopwatch.StartNew();
-                Train();
-                clock.Stop();
 
-                currentSteps += collected_steps;
+                if (train_data.Count >= 2 * hp.batchSize)
+                {
+                    Stopwatch clock = Stopwatch.StartNew();
+                    Train();
+                    clock.Stop();
+                }
             }
 
             base.FixedUpdate(); 
@@ -143,12 +134,12 @@ namespace DeepUnity
             float[] mean_pi = pi.Select(x => x.Mean(-1)[0]).ToArray();
             for (int t = 0; t < batch.Length; t++) // note that is random
             {
-                // y(r,s',d) = r + Ɣ(1 - d)[ min(Q1t(s',ã'), Q2t(s',ã')) - απθ(ã'|s') ]
+                // y(r,s',d) = r + Ɣ(1 - d)[min(Q1t(s',ã'), Q2t(s',ã')) - απθ(ã'|s')]
 
                 float r = batch[t].reward[0];
                 float d = batch[t].done[0];
 
-                Tensor y = r + GAMMA * (1f - d) * (Tensor.Minimum(Qtarg1_sPrime_aTildePrime[t], Qtarg2_sPrime_aTildePrime[t]) - hp.alpha *  MathF.Log(mean_pi[t]));
+                Tensor y = r + GAMMA * (1f - d) * (Tensor.Minimum(Qtarg1_sPrime_aTildePrime[t], Qtarg2_sPrime_aTildePrime[t]) - hp.alpha * MathF.Log(mean_pi[t]));
                 batch[t].q_target = y;
             }
             return Tensor.Concat(0, batch.Select(x => x.q_target).ToArray());
@@ -188,13 +179,6 @@ namespace DeepUnity
 
             // u = mu + sigma * ksi
 
-            // Question 1: so prob is of shape (B, CONT_ACT), when we compute the objective loss do we sum or mean the probabilities over the action dimension?
-            // Question 2: for inference, can we sample with box muller to obtain ã ? (not ãθ(s))
-            // Answer : So conv diverges only because the bad initialization :D
-            // Question 3: What to do after GRU, LSTM, Attention?
-            // Question 4: what about regional entropy decay?
-
-
             int batch_size = states.Size(0);
             Tensor aTildeS, u, mu, sigma, ksi;
             model.ContinuousForward(states, out mu, out sigma);
@@ -219,7 +203,7 @@ namespace DeepUnity
 
             // ∇θ min[ Qφ1(s,ãθ(s)), Qφ2(s,ãθ(s))] - αlogπθ(ãθ(s)|s) ]
             Tensor objectiveFunctionJ = Tensor.Minimum(Q1s_aTildeS, Q2s_aTildeS) - hp.alpha * logPiaTildeS.Sum(-1, true);
-            track.policyLoss.Append(objectiveFunctionJ.Mean(0).Mean(0)[0]);
+            track.policyLoss.Append(objectiveFunctionJ.ToArray().Average());
      
             // Firstly, we compute the derivative of minQ1Q2 wrt ãθ(s)
           
@@ -249,42 +233,31 @@ namespace DeepUnity
             Tensor dminQ1Q2_dMu = dminQ1Q2_du * 1f;
             Tensor dminQ1Q2_dSigma = dminQ1Q2_du * ksi;
 
-            // Secondly, we compute the derivative of logπθ(ãθ(s)|s) wrt ãθ(s). Note that we are using another distribution, check Appendix C in SAC paper
+            // Secondly, we compute the derivative of logπθ(ãθ(s)|s) wrt ãθ(s). Note that we are using Gaussian Distribution squashed, check Appendix C in SAC paper
            
             Tensor sech_u = u.Select(x => Utils.Hyperbolics.Sech(x));
             Tensor tanh_u = u.Select(x => Utils.Hyperbolics.Tanh(x));
 
             // So we know that 
+            // MuDist = Multivariate Normal Distribution(u, mu, sigma)
+            // dLogMu/dx = CovMat^(-1)(x - mu)
+
             // log πθ(a|s) = log μ(u|s) - log (1 - tanh^2(u))
             // ∇ log πθ(a|s) = dlog μ(u|s)/du - dlog (1 - tanh^2(u))/du = (u - mu)/sigma^2 - (-2 * tanh(u) * sech^2(u) / (1 - tanh^2(u)))
-            Tensor dLogMuDist_du = (u - mu) / sigma.Pow(2f); // IT IS POSSIBLE WE MISSED SOMETHING HERE... we'll see. What? https://stackoverflow.com/questions/13299642/how-to-calculate-derivative-of-multivariate-normal-probability-density-function
-            Tensor dLog_1mTanh2u_du = -2f * tanh_u * sech_u.Pow(2f) / (- tanh_u.Pow(2f) + 1);
+
+            Tensor dLogMuDist_du = (u - mu) / sigma.Pow(2f); // https://observablehq.com/@herbps10/distributions-and-their-gradients
+            Tensor dLog_1mTanh2u_du = -2f * tanh_u * sech_u.Pow(2f) / (- tanh_u.Pow(2f) + 1f); // Wolfram Alpha?:D
 
             Tensor dAlphaLogPi_aTildeS_s_du = hp.alpha * (dLogMuDist_du - dLog_1mTanh2u_du);
 
 
-            Tensor dAlphaLogPiaTildeS_s_dMu = dAlphaLogPi_aTildeS_s_du * 1;
+            Tensor dAlphaLogPiaTildeS_s_dMu = dAlphaLogPi_aTildeS_s_du * 1f;
             Tensor dAlphaLogPiaTildeS_s_dSigma = dAlphaLogPi_aTildeS_s_du * ksi;
 
             Tensor dJ_dMu = dminQ1Q2_dMu - dAlphaLogPiaTildeS_s_dMu;
-
-
-            print("mu" + mu);
-            print("sigma" + sigma);
-            print("ksi" + ksi);
-            print("u" + u);
-            print("aTildeS" + aTildeS);
-            print("mu_distribution : " + muDist);
-            print("Log pi_aTildeS : " + logPiaTildeS); //some a bit large but oke...
-            print("dminQ1Q2_daTildeS" + dminQ1Q2_daTildeS); //ok
-            print("dminQ1Q2_du" + dminQ1Q2_du); //ok
-            print("dAlphaLogPi_aTildeS_s_du" + dAlphaLogPi_aTildeS_s_du);
-            print("dJ_dMu" + dJ_dMu); // This guy got some infinities over here
-
-
-
+      
             model.muOptimizer.ZeroGrad();
-            model.muNetwork.Backward(-dJ_dMu); // is negative because we do gradient ascent
+            model.muNetwork.Backward(-dJ_dMu);
             model.muOptimizer.ClipGradNorm(hp.gradClipNorm);
             model.muOptimizer.Step();
 
@@ -308,7 +281,7 @@ namespace DeepUnity
 
 
             // We update the target q functions softly...
-            // OpenAI algorithm uses polyak = 0.995, the same thing with using τ = 0.005, but we inverse the logic. 
+            // OpenAI algorithm uses polyak = 0.995, the same thing with using τ = 0.005, inverse the logic duhh. 
             // φtarg,i <- (1 - τ)φtarg,i + τφi     for i = 1,2
 
             for (int i = 0; i < phi1.Length; i++)

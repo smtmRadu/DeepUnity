@@ -3084,7 +3084,7 @@ MonoBehaviour:
   numLayers: 2
   hidUnits: 48
   model: {fileID: 11400000, guid: 9d6a1d4ce3430ee4dbc1b1672749e072, type: 2}
-  behaviourType: 2
+  behaviourType: 1
   onEpisodeEnd: 1
   useSensors: 1
   rf_collider: {fileID: 1579101542}

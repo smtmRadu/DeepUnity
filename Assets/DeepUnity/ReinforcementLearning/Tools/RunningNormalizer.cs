@@ -11,7 +11,7 @@ namespace DeepUnity
     /// We divide by variance to give us smaller values rather then dividing by the standard deviation.
     /// </summary>
     [Serializable]
-    public class RunningNormalizer : INormalizer
+    public class RunningNormalizer
     {
         [SerializeField] private int step;
         [SerializeField] private Tensor mean; 

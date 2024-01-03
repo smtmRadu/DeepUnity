@@ -371,7 +371,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1ce1f756688e66a40b8a98fa736039d3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  rnn: {fileID: 0}
 --- !u!4 &173192359
 Transform:
   m_ObjectHideFlags: 0
@@ -545,7 +544,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &621327370
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -835,7 +834,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   material: {fileID: 0}
-  TestDevice: 1
+  TestDevice: 0
   graph:
     graph:
       serializedVersion: 2
@@ -849,8 +848,7 @@ MonoBehaviour:
   MatShape: {x: 512, y: 32}
   batchSize: 64
   lr: 0.001
-  Runs: 1000
-  rnn_network: {fileID: 11400000, guid: 7fb1cc86ea6c8bd44980b4c2cc2966ca, type: 2}
+  Runs: 100
   net: {fileID: 0}
   image: {fileID: 1095767907}
   image2: {fileID: 0}

@@ -16,7 +16,6 @@ namespace kbRadu
         public float lr = 0.001f;
         public int Runs = 100;
         public Optimizer optim;
-        public RNN rnn_network;
         public NeuralNetwork net;
         public RawImage image;
         public RawImage image2;
@@ -29,11 +28,23 @@ namespace kbRadu
         public NeuralNetwork network;
         public AgentBehaviour beh;
         private void Start()
-        {
-            float x = 0.9f;
-            print(MathF.Pow(x, 800f));
-            print(MathF.Pow(x, 1000f));
-            print(MathF.Pow(x, 2000f));
+        { 
+            Tensor inp = Tensor.Random01(64, 6, 30);
+            Tensor targ = Tensor.Random01(64, 25);
+            
+            NeuralNetwork net = new NeuralNetwork(
+                new RecurrentDense(30, 25));
+
+            Adam adam = new Adam(net.Parameters());
+            for (int i = 0; i < Runs; i++)
+            {
+                var output = net.Forward(inp);
+                Loss mse = Loss.MSE(output, targ);
+                net.Backward(mse.Derivative);
+                adam.Step();
+                print(mse.Item);
+            }
+           
         }
 
         public void TestCPU()
@@ -224,26 +235,6 @@ namespace kbRadu
             
         }
 
-        void TestRNNCell()
-        {
-            var rnn = new RNNCell(10, 20);
-            var input = Tensor.Split(Tensor.RandomNormal(6, 3, 10), 0, 1);
-            var hx = Tensor.RandomNormal(3, 20);
-            var output = new List<Tensor>();
-            for (int i = 0; i < 6; i++)
-            {
-                hx = rnn.Forward(input[i].Squeeze(0), hx);
-                output.Add(hx);
-            }
-
-            for (int i = 5; i >= 0; i--)
-            {
-                rnn.Backward(output[i]);
-            }
-            
-
-            // print(output.ToLineSeparatedString());
-        }
 
 
 

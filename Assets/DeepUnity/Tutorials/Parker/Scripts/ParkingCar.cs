@@ -13,6 +13,7 @@ namespace DeepUnityTutorials
         public float breakPower = 1000f;
 
         public Transform centerOfMass;
+        public Transform target;
         [Header("Wheels")]
         public Transform lf_transform;
         public Transform rf_transform;
@@ -37,16 +38,22 @@ namespace DeepUnityTutorials
 
         public override void OnEpisodeBegin()
         {
-            // Transform randInit = Utils.Random.Sample(initialStates);
-            // transform.position = randInit.position;
-            // transform.rotation = randInit.rotation;
-            // this.rb.velocity = Vector3.zero;
-            // this.rb.angularVelocity = Vector3.zero;
+            Transform randInit = Utils.Random.Sample(initialStates);
+            transform.position = randInit.position;
+            transform.rotation = randInit.rotation;
+            this.rb.velocity = Vector3.zero;
+            this.rb.angularVelocity = Vector3.zero;
         }
 
         public override void CollectObservations(StateVector sensorBuffer)
         {
-            sensorBuffer.AddObservation(rb.velocity);
+            // + 10
+            sensorBuffer.AddObservation(rb.velocity / 30f);
+            sensorBuffer.AddObservation(transform.rotation.x % 360 / 360f);
+            sensorBuffer.AddObservation(transform.rotation.y % 360 / 360f);
+            sensorBuffer.AddObservation(transform.rotation.z % 360 / 360f);
+            sensorBuffer.AddObservation(transform.rotation.w % 360 / 360f);
+            sensorBuffer.AddObservation((transform.position - target.position).normalized);
         }
 
         public override void OnActionReceived(ActionBuffer actionBuffer)
@@ -59,14 +66,13 @@ namespace DeepUnityTutorials
             Accelerate(actionBuffer.ContinuousActions[0]);
             Steer(actionBuffer.ContinuousActions[1]);
             Break(actionBuffer.ContinuousActions[2] > 0f);
-
         }
 
         public override void Heuristic(ActionBuffer actionOut)
         {
-            Accelerate(Input.GetAxis("Vertical"));
-            Steer(Input.GetAxis("Horizontal"));
-            Break(Input.GetKey(KeyCode.Space));
+            actionOut.ContinuousActions[0] = Input.GetAxis("Vertical");
+            actionOut.ContinuousActions[1] = Input.GetAxis("Horizontal");
+            actionOut.ContinuousActions[2] = Input.GetKey(KeyCode.Space) ? 1 : 0;
         }
 
         /// <summary>
@@ -91,8 +97,6 @@ namespace DeepUnityTutorials
         {
             if (doBreak)
             {
-                // rf_collider.brakeTorque = breakPower;
-                // lf_collider.brakeTorque = breakPower;
                 rb_collider.brakeTorque = breakPower;
                 lb_collider.brakeTorque = breakPower;
 
@@ -119,6 +123,21 @@ namespace DeepUnityTutorials
             wheel_collider.GetWorldPose(out pos, out rot);
             wheel_transform.position = pos;
             wheel_transform.rotation = rot * Quaternion.Euler(0f, yaxis180rot ? 180f : 0f, 0f);
+        }
+
+
+        private void OnCollisionEnter(Collision collision)
+        {
+            if(collision.collider.CompareTag("Wall"))
+            {
+                AddReward(-0.1f * (transform.position - target.position).sqrMagnitude);
+                EndEpisode();
+            }
+            else if(collision.collider.CompareTag("Target"))
+            {
+                AddReward(1f);
+                EndEpisode();
+            }
         }
 
     }

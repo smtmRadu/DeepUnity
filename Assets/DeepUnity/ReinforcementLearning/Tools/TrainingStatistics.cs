@@ -206,11 +206,13 @@ namespace DeepUnity
             y -= 50 * 6;
             cumulativeReward.Smooth(0.05f);
             episodeLength.Smooth(0.05f);
+
             y += 20;
             DrawGraph(svgBuilder, cumulativeReward.Keys, ref y, 750, 200, 500, "Simplified");
             y += 20;
             DrawGraph(svgBuilder, episodeLength.Keys, ref y, 750, 200, 500, "Simplified");
 
+           
 
             svgBuilder.AppendLine(@"</svg>");
 
@@ -259,6 +261,11 @@ namespace DeepUnity
 
             yOffset += height + 30;
         }
+
+
+
+
+
     }
 
 #if UNITY_EDITOR

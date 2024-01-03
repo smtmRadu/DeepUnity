@@ -1,6 +1,6 @@
 # DeepUnity
 ###### In development - does not currently accept Pull Requests, though feel free to Fork and expand upon it
-![version](https://img.shields.io/badge/version-v0.9.6.9-blue)
+![version](https://img.shields.io/badge/version-v0.9.6.10-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO) and Soft Actor-Critic (SAC).
 

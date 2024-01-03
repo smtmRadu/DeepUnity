@@ -59,8 +59,8 @@ namespace DeepUnity
                 // Squash the lengths on X
                 next_squash *= 2;
                 time_step_size = 1f / next_squash;
-
-
+            
+            
                 Keyframe[] keys = graph.keys;
                 for (int i = 0; i < keys.Length; i++)
                 {

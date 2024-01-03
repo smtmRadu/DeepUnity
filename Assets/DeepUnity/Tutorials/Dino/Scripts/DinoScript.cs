@@ -36,11 +36,13 @@ namespace DeepUnityTutorials
         public Transform l_thigh;
         public Transform l_shin;
         public Transform l_foot;
+        bool lfoot_gr;
 
         public Transform r_leg;
         public Transform r_thigh;
         public Transform r_shin;
         public Transform r_foot;
+        bool rfoot_gr;
 
         BodyController bodyController;
         public override void Awake()
@@ -49,45 +51,51 @@ namespace DeepUnityTutorials
 
             bodyController = GetComponent<BodyController>();
 
-            bodyController.AddBodyPart(head);
-            bodyController.AddBodyPart(neck1);
-            bodyController.AddBodyPart(neck2);
-            bodyController.AddBodyPart(neck3);
-            bodyController.AddBodyPart(neck4);
-            bodyController.AddBodyPart(neck5);
-            bodyController.AddBodyPart(neck6);
-            bodyController.AddBodyPart(neck7);
-            bodyController.AddBodyPart(torso);
-            bodyController.AddBodyPart(tail1);
-            bodyController.AddBodyPart(tail2);
-            bodyController.AddBodyPart(tail3);
-            bodyController.AddBodyPart(tail4);
-            bodyController.AddBodyPart(tail5);
-            bodyController.AddBodyPart(tail6);
-            bodyController.AddBodyPart(tail7);
-            bodyController.AddBodyPart(tail8);
-            bodyController.AddBodyPart(tail9);
-            bodyController.AddBodyPart(tail10);
-            bodyController.AddBodyPart(tail11);
+            bodyController.AddBodyPart(head.gameObject);
+            bodyController.AddBodyPart(neck1.gameObject);
+            bodyController.AddBodyPart(neck2.gameObject);
+            bodyController.AddBodyPart(neck3.gameObject);
+            bodyController.AddBodyPart(neck4.gameObject);
+            bodyController.AddBodyPart(neck5.gameObject);
+            bodyController.AddBodyPart(neck6.gameObject);
+            bodyController.AddBodyPart(neck7.gameObject);
+            bodyController.AddBodyPart(torso.gameObject);
+            bodyController.AddBodyPart(tail1.gameObject);
+            bodyController.AddBodyPart(tail2.gameObject);
+            bodyController.AddBodyPart(tail3.gameObject);
+            bodyController.AddBodyPart(tail4.gameObject);
+            bodyController.AddBodyPart(tail5.gameObject);
+            bodyController.AddBodyPart(tail6.gameObject);
+            bodyController.AddBodyPart(tail7.gameObject);
+            bodyController.AddBodyPart(tail8.gameObject);
+            bodyController.AddBodyPart(tail9.gameObject);
+            bodyController.AddBodyPart(tail10.gameObject);
+            bodyController.AddBodyPart(tail11.gameObject);
 
-            bodyController.AddBodyPart(l_leg);
-            bodyController.AddBodyPart(l_thigh);
-            bodyController.AddBodyPart(l_shin);
-            bodyController.AddBodyPart(l_foot);
+            bodyController.AddBodyPart(l_leg.gameObject);
+            bodyController.AddBodyPart(l_thigh.gameObject);
+            bodyController.AddBodyPart(l_shin.gameObject);
+            bodyController.AddBodyPart(l_foot.gameObject);
 
 
-            bodyController.AddBodyPart(r_leg);
-            bodyController.AddBodyPart(r_thigh);
-            bodyController.AddBodyPart(r_shin);
-            bodyController.AddBodyPart(r_foot);
+            bodyController.AddBodyPart(r_leg.gameObject);
+            bodyController.AddBodyPart(r_thigh.gameObject);
+            bodyController.AddBodyPart(r_shin.gameObject);
+            bodyController.AddBodyPart(r_foot.gameObject);
 
 
             bodyController.bodyPartsList.ForEach(x =>
             {
-                if (x.rb.transform != l_foot && x.rb.transform != r_foot &&
-                    x.rb.transform != l_shin && x.rb.transform != r_shin)
-                    x.GroundContact.endEpisodeOnContact = true;
+                if (x.rigidbody.transform != l_foot && x.rigidbody.transform != r_foot &&
+                    x.rigidbody.transform != l_shin && x.rigidbody.transform != r_shin)
+                    x.ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground"))  EndEpisode(); };
             });
+
+            bodyController.bodyPartsDict[l_foot.gameObject].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) lfoot_gr = true; };
+            bodyController.bodyPartsDict[r_foot.gameObject].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) rfoot_gr = true; };
+
+            bodyController.bodyPartsDict[l_foot.gameObject].ColliderContact.OnExit = (col) => { if (col.collider.CompareTag("Ground")) lfoot_gr = false; };
+            bodyController.bodyPartsDict[r_foot.gameObject].ColliderContact.OnExit = (col) => { if (col.collider.CompareTag("Ground")) rfoot_gr = false; };
 
         }
 
@@ -99,15 +107,15 @@ namespace DeepUnityTutorials
             // 28 x 10 inputs
             foreach (var bp in bodyController.bodyPartsList)
             {
-                stateVector.AddObservation(bp.rb.velocity / 20f);
-                stateVector.AddObservation(bp.rb.angularVelocity / 20f);
-                stateVector.AddObservation(bp.CurrentNormalizedRotation);
+                stateVector.AddObservation(bp.rigidbody.velocity / 30f);
+                stateVector.AddObservation(bp.rigidbody.angularVelocity / 30f);
+                stateVector.AddObservation(bp.CurrentNormalizedEulerRotation);
                 stateVector.AddObservation(bp.CurrentNormalizedStrength);
             }
             // + 2 more
 
-            stateVector.AddObservation(jdDict[l_foot].GroundContact.IsGrounded);
-            stateVector.AddObservation(jdDict[r_foot].GroundContact.IsGrounded);        
+            stateVector.AddObservation(lfoot_gr);
+            stateVector.AddObservation(rfoot_gr);        
         }
 
         public override void OnActionReceived(ActionBuffer actionBuffer)
@@ -124,7 +132,7 @@ namespace DeepUnityTutorials
                 bp.SetJointStrength(actions_vector[index++]);
             }
 
-            AddReward(head.position.y * 0.001f);
+            AddReward(head.position.x * 0.001f);
         }
     }
 

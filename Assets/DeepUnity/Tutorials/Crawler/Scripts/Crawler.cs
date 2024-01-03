@@ -1,5 +1,6 @@
 using UnityEngine;
 using DeepUnity;
+using System.Net.Sockets;
 
 namespace DeepUnityTutorials
 {
@@ -9,20 +10,25 @@ namespace DeepUnityTutorials
         [SerializeField] Transform directionArrow;
 
         [Header("Body Parts")]
-        [SerializeField] Transform thigh1;
-        [SerializeField] Transform thigh2;
-        [SerializeField] Transform thigh3;
-        [SerializeField] Transform thigh4;
+        [SerializeField] GameObject thigh1;
+        [SerializeField] GameObject thigh2;
+        [SerializeField] GameObject thigh3;
+        [SerializeField] GameObject thigh4;
+                     
+        [SerializeField] GameObject shin1;
+        [SerializeField] GameObject shin2;
+        [SerializeField] GameObject shin3;
+        [SerializeField] GameObject shin4;
+                       
+        [SerializeField] GameObject foot1;
+        [SerializeField] GameObject foot2;
+        [SerializeField] GameObject foot3;
+        [SerializeField] GameObject foot4;
 
-        [SerializeField] Transform shin1;
-        [SerializeField] Transform shin2;
-        [SerializeField] Transform shin3;
-        [SerializeField] Transform shin4;
-
-        [SerializeField] Transform foot1;
-        [SerializeField] Transform foot2;
-        [SerializeField] Transform foot3;
-        [SerializeField] Transform foot4;
+        bool foot1_grounded = false;
+        bool foot2_grounded = false;
+        bool foot3_grounded = false;
+        bool foot4_grounded = false;
 
         BodyController controller;
         Vector3 dirToTarget;
@@ -32,7 +38,7 @@ namespace DeepUnityTutorials
 
             controller = GetComponent<BodyController>();
 
-            controller.AddBodyPart(this.transform);
+            controller.AddBodyPart(this.gameObject);
             controller.AddBodyPart(thigh1);
             controller.AddBodyPart(thigh2);
             controller.AddBodyPart(thigh3);
@@ -46,12 +52,27 @@ namespace DeepUnityTutorials
             controller.AddBodyPart(foot3);
             controller.AddBodyPart(foot4);
 
-            controller.bodyPartsDict[this.transform].GroundContact.endEpisodeOnContact = true;
-            controller.bodyPartsDict[this.transform].GroundContact.rewardOnContact = -1f;
-            controller.bodyPartsDict[thigh1].GroundContact.endEpisodeOnContact = true;
-            controller.bodyPartsDict[thigh2].GroundContact.endEpisodeOnContact = true;
-            controller.bodyPartsDict[thigh3].GroundContact.endEpisodeOnContact = true;
-            controller.bodyPartsDict[thigh4].GroundContact.endEpisodeOnContact = true;
+            controller.bodyPartsDict[this.gameObject].ColliderContact.OnEnter = (col) =>
+            {
+                EndEpisode();
+                AddReward(-1f);
+            };
+
+            controller.bodyPartsDict[thigh1].ColliderContact.OnEnter = (col) => EndEpisode();
+            controller.bodyPartsDict[thigh2].ColliderContact.OnEnter = (col) => EndEpisode();
+            controller.bodyPartsDict[thigh3].ColliderContact.OnEnter = (col) => EndEpisode();
+            controller.bodyPartsDict[thigh4].ColliderContact.OnEnter = (col) => EndEpisode();
+
+
+            controller.bodyPartsDict[foot1].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) foot1_grounded = true;};
+            controller.bodyPartsDict[foot2].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) foot2_grounded = true;};
+            controller.bodyPartsDict[foot3].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) foot3_grounded = true;};
+            controller.bodyPartsDict[foot4].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) foot4_grounded = true;};
+                                                                                                                                              
+            controller.bodyPartsDict[foot1].ColliderContact.OnExit = (col) => { if (col.collider.CompareTag("Ground")) foot1_grounded = false;};
+            controller.bodyPartsDict[foot2].ColliderContact.OnExit = (col) => { if (col.collider.CompareTag("Ground")) foot2_grounded = false;};
+            controller.bodyPartsDict[foot3].ColliderContact.OnExit = (col) => { if (col.collider.CompareTag("Ground")) foot3_grounded = false;};
+            controller.bodyPartsDict[foot4].ColliderContact.OnExit = (col) => { if (col.collider.CompareTag("Ground")) foot4_grounded = false;};
         }
         public override void OnEpisodeBegin()
         {
@@ -72,9 +93,9 @@ namespace DeepUnityTutorials
             // Total 126
 
             // + 12
-            dirToTarget = target.position - controller.bodyPartsDict[transform].rb.position;
+            dirToTarget = target.position - controller.bodyPartsDict[this.gameObject].rigidbody.position;
             stateBuffer.AddObservation(dirToTarget.normalized); //3
-            stateBuffer.AddObservation(controller.bodyPartsDict[transform].rb.position); //3
+            stateBuffer.AddObservation(controller.bodyPartsDict[this.gameObject].rigidbody.position); //3
             stateBuffer.AddObservation(transform.forward); //3
             stateBuffer.AddObservation(transform.up); //3
 
@@ -82,30 +103,31 @@ namespace DeepUnityTutorials
             // + 13 x 8 + 4 + 6
             foreach (var bp in controller.bodyPartsList)
             {
-                if (bp.rb.transform == transform)
+                if (bp.rigidbody.transform == transform)
                 {
-                    stateBuffer.AddObservation(bp.rb.velocity / 30f);
-                    stateBuffer.AddObservation(bp.rb.angularVelocity / 30f);
-                    continue;
-                }
-                if (bp.rb.transform == foot1 || bp.rb.transform == foot2 || bp.rb.transform == foot3 || bp.rb.transform == foot4)
-                {
-                    stateBuffer.AddObservation(bp.GroundContact.IsGrounded);
+                    stateBuffer.AddObservation(bp.rigidbody.velocity / 30f);
+                    stateBuffer.AddObservation(bp.rigidbody.angularVelocity / 30f);
                     continue;
                 }
 
                 // 9 info
-                stateBuffer.AddObservation(bp.rb.velocity / 30f);
-                stateBuffer.AddObservation(bp.rb.angularVelocity / 30f);
-                Vector3 localPosRelToHead = transform.InverseTransformPoint(bp.rb.position);
+                stateBuffer.AddObservation(bp.rigidbody.velocity / 30f);
+                stateBuffer.AddObservation(bp.rigidbody.angularVelocity / 30f);
+                Vector3 localPosRelToHead = transform.InverseTransformPoint(bp.rigidbody.position);
                 stateBuffer.AddObservation(localPosRelToHead);
 
                 // 4 info
-                stateBuffer.AddObservation(bp.CurrentNormalizedRotation);
+                stateBuffer.AddObservation(bp.CurrentNormalizedEulerRotation);
                 stateBuffer.AddObservation(bp.CurrentNormalizedStrength);
             }
 
-          
+
+            stateBuffer.AddObservation(foot1_grounded);
+            stateBuffer.AddObservation(foot2_grounded);
+            stateBuffer.AddObservation(foot3_grounded);
+            stateBuffer.AddObservation(foot4_grounded);
+
+
         }
 
         public void OnDrawGizmos()

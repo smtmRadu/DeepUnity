@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 
@@ -18,6 +19,8 @@ namespace DeepUnity
         internal readonly static ComputeShader Conv2DCS;
         internal readonly static ComputeShader LinearCS;
         internal readonly static int THREADS_NUM = 256;
+        internal readonly static ParallelOptions MULTITHREADS_8 = new ParallelOptions() { MaxDegreeOfParallelism = 8 };
+        internal readonly static ParallelOptions MULTITHREADS_4 = new ParallelOptions() { MaxDegreeOfParallelism = 4 };
 
         static DeepUnityMeta()
         {
@@ -116,14 +119,6 @@ namespace DeepUnity
         Full,
         Same
     }
-    /// <summary>
-    /// Nonlinearity used for RNNCells.
-    /// </summary>
-    public enum NonLinearity
-    {
-        Tanh,
-        ReLU
-    }
 
     public enum DatasetSettings
     {
@@ -209,6 +204,5 @@ namespace DeepUnity
         [Tooltip("Manual adjustment of timescale during training.")]
         Static
     }
-
 }
 

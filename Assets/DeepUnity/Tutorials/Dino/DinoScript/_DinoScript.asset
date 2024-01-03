@@ -603,6 +603,7 @@ MonoBehaviour:
       - 1935.4841
       - 1992.1796
       shape: 1a010000
-  observationsClip: 3
+  observationsClip: 2.5
   standardDeviation: 0
-  standardDeviationValue: 0.7
+  standardDeviationValue: 1.51
+  standardDeviationScale: 1

@@ -1,0 +1,169 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
+  m_Name: _ParkingCar
+  m_EditorClassIdentifier: 
+  behaviourName: ParkingCar
+  assetCreated: 1
+  observationSize: 62
+  stackedInputs: 1
+  continuousDim: 3
+  discreteDim: 0
+  config: {fileID: 11400000, guid: c0aa97b2dab38764ea5a0a5da3142629, type: 2}
+  vNetwork: {fileID: 11400000, guid: dbb7849aaf8533c4eac99b2d3c666a61, type: 2}
+  q1Network: {fileID: 11400000, guid: 254e905e149fbb84ba468e4d278c38c2, type: 2}
+  q2Network: {fileID: 11400000, guid: 4cdda6dc138225c458f5882275db3b87, type: 2}
+  muNetwork: {fileID: 11400000, guid: a77f1fff7d92ab24f90b6dbc66338783, type: 2}
+  sigmaNetwork: {fileID: 11400000, guid: 98763ba2004139743890f64ef74c6e06, type: 2}
+  discreteNetwork: {fileID: 0}
+  discContNetwork: {fileID: 11400000, guid: cdf5c0b5e2992f343a80551bb1f8e27f, type: 2}
+  discDiscNetwork: {fileID: 0}
+  targetFPS: 50
+  inferenceDevice: 0
+  trainingDevice: 1
+  normalize: 0
+  observationsNormalizer:
+    step: 0
+    mean:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 3e000000
+    m2:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 3e000000
+  observationsClip: 3
+  standardDeviation: 0
+  standardDeviationValue: 1.38
+  standardDeviationScale: 1

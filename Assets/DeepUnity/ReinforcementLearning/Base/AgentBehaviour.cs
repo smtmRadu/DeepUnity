@@ -71,6 +71,9 @@ namespace DeepUnity
         [Range(1.5f, 3.5f), SerializeField, Tooltip("The observations are clipped [after normarlization] in range [-clip, clip]")]
         public float observationsClip = 3f;
 
+        [HideInInspector, SerializeField, ToolboxItem("Rewards normalizer")]
+        public RewardsNormalizer rewardsNormalizer;
+
         [Header("Standard Deviation for Continuous Actions")]
         [SerializeField, Tooltip("The standard deviation for Continuous Actions")] 
         public StandardDeviationType standardDeviation = StandardDeviationType.Fixed;
@@ -80,7 +83,7 @@ namespace DeepUnity
 
         [Tooltip("Modify this value to change the exploration/exploitation ratio. The standard deviation obtained by softplus(std_dev) * standardDeviationScale.")]
         [SerializeField, Range(0.001f, 3f)]
-        public float standardDeviationScale = 1f;
+        public float standardDeviationScale = 1.5f;
 
         public Optimizer vOptimizer { get; private set; }
         public Optimizer q1Optimizer { get; private set; }
@@ -438,6 +441,7 @@ namespace DeepUnity
             newAgBeh.continuousDim = continuousActions;
             newAgBeh.discreteDim = discreteActions;
             newAgBeh.observationsNormalizer = new RunningNormalizer(stateSize * stackedInputs);
+            newAgBeh.rewardsNormalizer = new RewardsNormalizer();
             newAgBeh.assetCreated = true;
 
 
@@ -580,7 +584,7 @@ namespace DeepUnity
             {
                 dontDrawMe.Add("standardDeviation");
                 dontDrawMe.Add("standardDeviationValue");
-                dontDrawMe.Add("standardDeviationValue");
+                dontDrawMe.Add("standardDeviationScale");
             }
             else
             {

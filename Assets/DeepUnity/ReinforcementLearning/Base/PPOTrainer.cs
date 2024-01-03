@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEngine;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace DeepUnity
 {
@@ -16,9 +17,9 @@ namespace DeepUnity
     /// 1. Softmax activation on discrete head may "explode"
     public sealed class PPOTrainer : DeepUnityTrainer
     {
-        private List<float> iterationPolicyLoss = new List<float>();
-        private List<float> iterationValueLoss = new List<float>();
-        private List<float> iterationEntropy = new List<float>();
+        private float iterationPolicyLoss;
+        private float iterationValueLoss;
+        private float iterationEntropy;
 
         protected override void FixedUpdate()
         {
@@ -46,7 +47,7 @@ namespace DeepUnity
                     track.iterations++;
                     track.policyUpdateSecondsElapsed += (float)clock.Elapsed.TotalSeconds;
                     track.policyUpdateTime = $"{(int)(Math.Ceiling(track.policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(track.policyUpdateSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(track.policyUpdateSecondsElapsed) % 60)} sec";
-                    track.policyUpdateTimePerIteration = $"{(int)clock.Elapsed.TotalHours} hrs : {(int)(clock.Elapsed.TotalMinutes) % 60} min : {(int)(clock.Elapsed.TotalSeconds) % 60} sec";
+                    track.policyUpdateTimePerIteration = $"{(int)clock.Elapsed.TotalHours} hrs : {(int)(clock.Elapsed.TotalMinutes) % 60} min : {(int)(clock.Elapsed.TotalSeconds) % 60}.{clock.ElapsedMilliseconds%1000} sec";
 
                     float totalTimeElapsed = (float)(DateTime.Now - timeWhenTheTrainingStarted).TotalSeconds;
                     track.inferenceTimeRatio = (track.inferenceSecondsElapsed * parallelAgents.Count / totalTimeElapsed).ToString("0.000");
@@ -58,9 +59,6 @@ namespace DeepUnity
             base.FixedUpdate();
         }
         
-
-
-
         // PPO Algorithm
         private void Train()
         {
@@ -73,7 +71,7 @@ namespace DeepUnity
             for (int epoch_index = 0; epoch_index < hp.numEpoch; epoch_index++)
             {
                 // shuffle the dataset
-                if (epoch_index > 0 && hp.batchSize != hp.bufferSize)
+                if (hp.batchSize != hp.bufferSize) // epoch_index > 0 && => because we do advantages normalization
                     train_data.Shuffle();
 
                 // unpack & split train_data into minibatches
@@ -98,7 +96,7 @@ namespace DeepUnity
                     Tensor advantages_batch = Tensor.Concat(null, advantages_batches[b]);
                     Tensor value_targets_batch = Tensor.Concat(null, value_targets_batches[b]);
 
-                    advantages_batch = NormalizeAdvantages(advantages_batch);
+                    advantages_batch = NormalizeAdvantages(advantages_batch); // Advantage normalization is shit when applied on small batches
                    
                     UpdateValueNetwork(states_batch, value_targets_batch);
 
@@ -158,14 +156,13 @@ namespace DeepUnity
 
             // Save statistics info (we show what do we receive on the first mini-batch)
             track?.learningRate.Append(model.vScheduler.CurrentLR);
-            track?.policyLoss.Append(iterationPolicyLoss[0]);
-            track?.valueLoss.Append(iterationValueLoss[0]);
-            track?.entropy.Append(iterationEntropy.Average() / (model.IsUsingContinuousActions && model.IsUsingDiscreteActions ? 2 : 1));
+            track?.policyLoss.Append(iterationPolicyLoss / (hp.batchSize * hp.numEpoch));
+            track?.valueLoss.Append(iterationValueLoss / (hp.batchSize * hp.numEpoch));
+            track?.entropy.Append(iterationEntropy / ((hp.batchSize * hp.numEpoch) * (model.IsUsingContinuousActions && model.IsUsingDiscreteActions ? 2 : 1)));
 
-            iterationPolicyLoss.Clear();
-            iterationValueLoss.Clear();
-            iterationEntropy.Clear();
-
+            iterationPolicyLoss = 0f;
+            iterationValueLoss = 0f;
+            iterationEntropy = 0f;
 
             model.muNetwork?.SetDevice(model.inferenceDevice);
             model.sigmaNetwork?.SetDevice(model.inferenceDevice);
@@ -187,7 +184,7 @@ namespace DeepUnity
             if (float.IsNaN(lossItem))
                 return;
             else
-                iterationValueLoss.Add(criticLoss.Item);
+                iterationValueLoss += criticLoss.Item;
 
             model.vOptimizer.ZeroGrad();
             model.vNetwork.Backward(criticLoss.Derivative * 0.5f);
@@ -225,7 +222,7 @@ namespace DeepUnity
                 ConsoleMessage.Warning($"PPO LCLIP batch containing NaN values skipped");
                 return;   
             }
-            iterationPolicyLoss.Add(Mathf.Abs(LClip.Mean(0).Mean(0)[0]));
+            iterationPolicyLoss += LClip.Abs().ToArray().Average();
 
             // Computing ∂-LClip / ∂πθ(a|s)
             Tensor dmindx = Tensor.Zeros(batch_size, continuous_actions_num);
@@ -259,7 +256,7 @@ namespace DeepUnity
             // Entropy bonus added if σ is trainable
             // H(πθ(a|s)) = - integral( πθ(a|s) log πθ(a|s) ) = 1/2 * log(2πeσ^2) // https://en.wikipedia.org/wiki/Differential_entropy
             Tensor H = 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2)); 
-            iterationEntropy.Add(H.Mean(0).Mean(0)[0]);          
+            iterationEntropy += H.ToArray().Average();          
 
             if (dmLClip_dPi.Contains(float.NaN)) return;
 
@@ -323,7 +320,7 @@ namespace DeepUnity
 
                 return;
             }
-            iterationPolicyLoss.Add(Mathf.Abs(LClip.Mean(0).Mean(0)[0]));
+            iterationPolicyLoss += LClip.Abs().ToArray().Average();
 
             // Computing ∂-LClip / ∂πθ(a|s)
             Tensor dmindx = Tensor.Zeros(batch_size, discrete_actions_num);
@@ -360,7 +357,7 @@ namespace DeepUnity
             // Entropy bonus for discrete actions
             // H = - φ * log(φ)
             Tensor H = - pi * pi.Log();
-            iterationEntropy.Add(H.Mean(0).Mean(0)[0]);
+            iterationEntropy += H.ToArray().Average();
 
             // ∂-H / ∂φ = log(φ) + 1;
             Tensor dmH_dPhi = pi.Log() + 1;
@@ -394,8 +391,13 @@ namespace DeepUnity
         /// <param name="LAMBDA"></param>
         /// <param name="HORIZON"></param>
         /// <param name="valueNetwork"></param>
-        private static void ComputeGAE_andVtargets(in MemoryBuffer memory, in float GAMMA, in float LAMBDA, in int HORIZON, NeuralNetwork valueNetwork)
+        private static void ComputeGAE_andVtargets(in MemoryBuffer memory, float GAMMA, float LAMBDA, int HORIZON, NeuralNetwork valueNetwork)
         {
+            // Well i think we can compute this separately for each agent in a multihreaded way.. but i m afraid predict will not work well so it's fine
+            //4.43 max threads
+            // 4.49 8 threads
+            // 4.83 4 threads
+            // 4.70 no parallel
             var frames = memory.frames;
             int T = memory.Count;
             Tensor[] all_states_plus_lastNextState = new Tensor[T + 1];
@@ -405,12 +407,12 @@ namespace DeepUnity
 
             // Vw_s has length of T + 1
             float[] Vw_s = valueNetwork.Predict(Tensor.Concat(null, all_states_plus_lastNextState)).ToArray();
-            
+
             // Vw_s = Tensor.FilterNaN(Vw_s, 0); it happpen in some cases to get NaN in the first timestep and then all are gonna be NaN
-           
+
 
             // Generalized Advantage Estimation
-            for (int timestep = 0; timestep < T; timestep++)
+            Parallel.For(0, T, DeepUnityMeta.MULTITHREADS_8, timestep =>
             {
                 float discount = 1f;
                 float Ahat_t = 0f;
@@ -433,7 +435,7 @@ namespace DeepUnity
 
                 frames[timestep].value_target = Tensor.Constant(Vtarget_t);
                 frames[timestep].advantage = Tensor.Constant(Ahat_t);
-            }
+            });
         }    
         /// <summary>
         /// This method normalizes the advantages for a minibatch

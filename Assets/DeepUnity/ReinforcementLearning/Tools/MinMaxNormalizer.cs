@@ -8,7 +8,7 @@ namespace DeepUnity
     /// MinMax online normalizer. Works well if the input data does not have extreme large values along.
     /// </summary>
     [Serializable]
-    public class MinMaxNormalizer : INormalizer
+    public class MinMaxNormalizer
     {
         [SerializeField] private float MIN_RANGE;
         [SerializeField] private float MAX_RANGE;
