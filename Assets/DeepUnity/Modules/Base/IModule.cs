@@ -25,7 +25,9 @@ namespace DeepUnity
         public LayerNorm layernorm;
         public Conv2D conv2d;
         public PReLU prelu;
-        public RecurrentDense recurrentdense;
+        public RNNCell rnncell;
+        public LSTMCell lstmcell;
+        public Attention sdpa;
 
         // Other modules
         public Dropout dropout;
@@ -143,9 +145,17 @@ namespace DeepUnity
             {
                 prelu = preluModule;
             }
-            else if (module is RecurrentDense rdenseModule)
+            else if (module is RNNCell rnncellModule)
             {
-                recurrentdense = rdenseModule;
+                rnncell = rnncellModule;
+            }
+            else if (module is LSTMCell lstmcellModule)
+            {
+                lstmcell = lstmcellModule;
+            }
+            else if (module is Attention sdpaModule)
+            {
+                sdpa = sdpaModule;
             }
             else
                 throw new Exception("Unhandled module type while wrapping.");
@@ -247,9 +257,17 @@ namespace DeepUnity
             {
                 module = moduleWrapper.prelu;
             }
-            else if (typeof(RecurrentDense).Name.Equals(moduleWrapper.name))
+            else if (typeof(RNNCell).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.recurrentdense;
+                module = moduleWrapper.rnncell;
+            }
+            else if (typeof(LSTMCell).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.lstmcell;
+            }
+            else if (typeof(Attention).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.sdpa;
             }
             else
                 throw new Exception("Unhandled module type while unwrapping.");

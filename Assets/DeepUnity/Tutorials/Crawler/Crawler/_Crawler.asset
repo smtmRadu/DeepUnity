@@ -291,7 +291,12 @@ MonoBehaviour:
       - 0
       - 0
       shape: 7e000000
-  observationsClip: 2.51
+  observationsClip: 2.47
+  rewardsNormalizer:
+    step: 0
+    R: 0
+    mean: 0
+    m2: 0
   standardDeviation: 0
-  standardDeviationValue: 1.16
+  standardDeviationValue: 3
   standardDeviationScale: 1

@@ -70,15 +70,12 @@ namespace DeepUnity
         public static Loss KLD(Tensor predicts, Tensor targets) => new Loss(LossType.KLD, predicts, targets);
 
         /// <summary>
-        /// Returns the mean loss value (positive number).
+        /// Returns the mean loss magnitude value.
         /// </summary>
         public float Item { get
             {
                 Tensor lossItem = Value;
-                if (lossItem.Rank == 2)// case is batched
-                    return lossItem.Mean(0).Mean(0).Abs()[0];
-                else
-                    return lossItem.Mean(0).Abs()[0];
+                return lossItem.ToArray().Average();
 
             }
         }
@@ -97,21 +94,21 @@ namespace DeepUnity
                     case LossType.CE:
                         return -targets * Tensor.Log(predicts);
                     case LossType.BCE:
-                        return - (targets * Tensor.Log(predicts + Utils.EPSILON) + (-targets + 1f) * Tensor.Log(-predicts + 1f + Utils.EPSILON));
+                        return - (targets * Tensor.Log(predicts) + (-targets + 1f) * Tensor.Log(-predicts + 1f));
 
                     case LossType.HE:
                         return predicts.Zip(targets, (p, t) => MathF.Max(0f, 1f - p * t));
                     case LossType.KLD:
-                        return targets * Tensor.Log(targets / (predicts + Utils.EPSILON));
+                        return targets * Tensor.Log(targets / predicts);
                     default:
                         throw new NotImplementedException("Unhandled loss type.");
                 }
             }
         }
         /// <summary>
-        /// Returns the loss partial derivative with respect to the predicts (y).
+        /// Returns the loss(y, t) partial derivative with respect to the predicts (y).
         /// </summary>
-        public Tensor Derivative { get
+        public Tensor Gradient { get
             {
                 switch (lossType)
                 {
@@ -123,12 +120,12 @@ namespace DeepUnity
                     case LossType.CE:
                         return -targets / predicts;
                     case LossType.BCE:
-                        return (predicts - targets) / (predicts * (-predicts + 1f) + Utils.EPSILON);
+                        return (predicts - targets) / (predicts * (-predicts + 1f));
 
                     case LossType.HE:
                         return predicts.Zip(targets, (p, t) => 1f - p * t > 0f ? -t : 0f);
                     case LossType.KLD:
-                        return -targets / (predicts + Utils.EPSILON);
+                        return -targets / predicts;
                     default:
                         throw new NotImplementedException("Unhandled loss type.");
                 }

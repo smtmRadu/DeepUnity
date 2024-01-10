@@ -19,7 +19,7 @@ namespace DeepUnity
         public NeuralNetwork(params IModule[] modules) => this.modules = modules;
 
         /// <summary>
-        /// Forward used only for network utility.
+        /// Same as Forward but used only for network inference.
         /// </summary>
         /// <param name="input"></param>
         /// <returns></returns>
@@ -33,7 +33,7 @@ namespace DeepUnity
             return output;
         }
         /// <summary>
-        /// Forwards the input and caches each module input. Used in pair with Backward().
+        /// Forwards the input and caches each module's input. Used in pair with Backward().
         /// </summary>
         /// <param name="input"></param>
         /// <returns></returns>
@@ -45,15 +45,15 @@ namespace DeepUnity
                 output = modules[i].Forward(output);
             }
             return output;
-        }     
+        }
         /// <summary>
         /// Backpropagates the loss derivative wrt. output and computes the gradients of learnable parameters.
         /// </summary>
-        /// <param name="lossDerivative"></param>
-        /// <returns></returns>
-        public override Tensor Backward(Tensor lossDerivative)
+        /// <param name="lossDerivativeWrtPrediction">Derivative of the loss function w.r.t output (dLdY).</param>
+        /// <returns><returns>The backpropagated loss derivative (dLdX).</returns>
+        public override Tensor Backward(Tensor lossDerivativeWrtPrediction)
         {
-            Tensor loss = modules[modules.Length - 1].Backward(lossDerivative);
+            Tensor loss = modules[modules.Length - 1].Backward(lossDerivativeWrtPrediction);
             for (int i = modules.Length - 2; i >= 0; i--)
             {
                 loss = modules[i].Backward(loss);
@@ -62,7 +62,7 @@ namespace DeepUnity
         }
 
         /// <summary>
-        /// Get all <see cref="ILearnable"/> modules of this model.
+        /// Get all <see cref="Parameter"/>s of this model, consisting of Theta and ThetaGrad.
         /// </summary>
         /// <returns></returns>
         public override Parameter[] Parameters()
@@ -74,6 +74,10 @@ namespace DeepUnity
             }
             return param.ToArray();
         }
+        /// <summary>
+        /// Changes the device of all <see cref="ILearnable"/> modules.
+        /// </summary>
+        /// <param name="device"></param>
         public void SetDevice(Device device)
         {
             foreach (var item in modules.OfType<ILearnable>())
@@ -81,6 +85,10 @@ namespace DeepUnity
                 item.SetDevice(device);
             }
         }
+        /// <summary>
+        /// Gives a brief summary of the model.
+        /// </summary>
+        /// <returns></returns>
         public override string Summary()
         {
             StringBuilder stringBuilder = new StringBuilder();

@@ -27,7 +27,7 @@ namespace DeepUnity
         /// H_out = Floor[(H_in + 2 * <paramref name="padding"/> - <paramref name="kernel_size"/>) / <paramref name="kernel_size"/> + 1],<br />
         /// W_out = Floor[(W_in + 2 * <paramref name="padding"/> - <paramref name="kernel_size"/>) / <paramref name="kernel_size"/> + 1].<br />
         /// </summary>
-        public MaxPool2D(int kernel_size, int padding = 0, PaddingType padding_mode = PaddingType.Mirror)
+        public MaxPool2D(int kernel_size, int padding = 0, PaddingType padding_mode = PaddingType.Zeros)
         {
             if (padding < 0)
                 throw new ArgumentException("Padding cannot be less than 0");

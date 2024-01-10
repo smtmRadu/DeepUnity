@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+/*using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 
@@ -23,19 +23,17 @@ namespace DeepUnity
         private float epoch_generator_loss = 0f;
         private float epoch_discriminator_loss = 0f;
 
-        protected override void FixedUpdate()
+        protected override void Initialize() { }
+        protected override void OnBeforeFixedUpdate()
         {
             if(TrainFlag)
             {
                 if (batch_index == states_batches.Count - 1)
                 {
-                    track?.policyLoss.Append(epoch_generator_loss / batch_index);
-                    track?.valueLoss.Append(epoch_discriminator_loss / batch_index);
                     epoch_generator_loss = 0f;
                     epoch_discriminator_loss = 0f;
 
                     batch_index = 0;
-                    track.iterations++;
                     train_data.Shuffle();
                 }
 
@@ -90,11 +88,11 @@ namespace DeepUnity
                 
                 var prediction_real = model.discContNetwork.Forward(cont_act_batch_real);
                 var loss_real = Loss.BCE(prediction_real, DiscriminatorRealTarget(hp.batchSize));
-                model.discContNetwork.Backward(loss_real.Derivative);
+                model.discContNetwork.Backward(loss_real.Gradient);
 
                 var prediction_fake = model.discContNetwork.Forward(cont_act_batch_fake);
                 var loss_fake = Loss.BCE(prediction_fake, DiscriminatorFakeTarget(hp.batchSize));
-                model.discContNetwork.Backward(loss_fake.Derivative);
+                model.discContNetwork.Backward(loss_fake.Gradient);
 
                 model.dContOptimizer.ClipGradNorm(hp.gradClipNorm);
                 model.dContOptimizer.Step();
@@ -109,7 +107,7 @@ namespace DeepUnity
                 model.ContinuousForward(states_batch, out Gz, out _);
                 Tensor DGz = model.discContNetwork.Forward(states_batch);
                 Loss loss = Loss.MSE(DGz, DiscriminatorRealTarget(hp.batchSize));
-                var generatorLossDiff = model.discContNetwork.Backward(loss.Derivative);
+                var generatorLossDiff = model.discContNetwork.Backward(loss.Gradient);
                 model.muNetwork.Backward(generatorLossDiff);
 
                 model.muOptimizer.ClipGradNorm(hp.gradClipNorm);
@@ -130,11 +128,11 @@ namespace DeepUnity
 
                 var prediction_real = model.discDiscNetwork.Forward(disc_act_batch_real);
                 var loss_real = Loss.BCE(prediction_real, DiscriminatorRealTarget(hp.batchSize));
-                model.discDiscNetwork.Backward(loss_real.Derivative);
+                model.discDiscNetwork.Backward(loss_real.Gradient);
 
                 var prediction_fake = model.discDiscNetwork.Forward(disc_act_batch_fake);
                 var loss_fake = Loss.BCE(prediction_fake, DiscriminatorFakeTarget(hp.batchSize));
-                model.discDiscNetwork.Backward(loss_fake.Derivative);
+                model.discDiscNetwork.Backward(loss_fake.Gradient);
 
                 model.dDiscOptimizer.ClipGradNorm(hp.gradClipNorm);
                 model.dDiscOptimizer.Step();
@@ -148,7 +146,7 @@ namespace DeepUnity
                 model.DiscreteForward(states_batch, out Gz);
                 Tensor DGz = model.discDiscNetwork.Forward(Gz);
                 Loss loss = Loss.BCE(DGz, DiscriminatorRealTarget(hp.batchSize));
-                var generatorLossDiff = model.discDiscNetwork.Backward(loss.Derivative);
+                var generatorLossDiff = model.discDiscNetwork.Backward(loss.Gradient);
                 model.discreteNetwork.Backward(generatorLossDiff);
 
                 model.discreteOptimizer.ClipGradNorm(hp.gradClipNorm);
@@ -178,3 +176,4 @@ namespace DeepUnity
 
 }
 
+*/

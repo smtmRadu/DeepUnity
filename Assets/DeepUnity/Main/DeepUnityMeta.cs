@@ -67,25 +67,41 @@ namespace DeepUnity
         [Tooltip("[Kaiming He] U(-k, k) where k = sqrt(6 / fan_in). Works well with ReLU / LeakyReLU  activation function.")]
         HE_Uniform, 
         
-        [Tooltip("[Xavier Glorot] N(0, s) where s = sqrt(2 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation function.")]
+        [Tooltip("[Xavier Glorot] N(0, s) where s = sqrt(2 / (fan_in + fan_out)).")]
         Glorot_Normal,
-        [Tooltip("[Xavier Gloro] U(-k, k) where k = sqrt(6 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation function.")]
+        [Tooltip("[Xavier Gloro] U(-k, k) where k = sqrt(6 / (fan_in + fan_out)).")]
         Glorot_Uniform,
 
-        [Tooltip("[Yann LeCun] N(0, s) where s = sqrt(1 / (fan_in + fan_out)). Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
+        [Tooltip("[Yann LeCun] N(0, s) where s = sqrt(1 / fan_in). Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
         LeCun_Normal,
-        [Tooltip("[Yann LeCun] U(-k, k) where k = sqrt(3 / (fan_in + fan_out)).  Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
+        [Tooltip("[Yann LeCun] U(-k, k) where k = sqrt(3 / fan_in).  Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
         LeCun_Uniform,
 
         [Tooltip("N(0, 1).")]
-        Random_Normal,
+        Normal,
+        [Tooltip("N(0, 0.1).")]
+        Normal0_1,
+        [Tooltip("N(0, 0.01).")]
+        Normal0_01,
+        [Tooltip("N(0, 0.001).")]
+        Normal0_001,
+
         [Tooltip("U(-1, 1).")]
-        Random_Uniform,
+        Uniform,
+        [Tooltip("U(-0.1, 0.1).")]
+        Uniform0_1,
+        [Tooltip("U(-0.01, 0.01).")]
+        Uniform0_01,
+        [Tooltip("U(-0.001, 0.001).")]
+        Uniform0_001,
+
 
         [Tooltip("0")]
         Zeros,
         [Tooltip("1")]
-        Ones
+        Ones,
+
+      
     }
     public enum Device
     {
@@ -193,8 +209,6 @@ namespace DeepUnity
         PPO,
         [Tooltip("Soft Actor-Critic")]
         SAC,
-        [Tooltip("Generative Adversial Imitation Learning")]
-        GAIL
     }
 
     public enum TimescaleAdjustmentType
@@ -203,6 +217,18 @@ namespace DeepUnity
         Dynamic,
         [Tooltip("Manual adjustment of timescale during training.")]
         Static
+    }
+    public enum NonLinearity
+    {
+        Tanh,
+        ReLU
+    }
+    public enum HiddenStates
+    {
+        [Tooltip("Returns all hidden states in the sequence h(1), h(2), ... h(L)")]
+        ReturnAll,
+        [Tooltip("Returns only the last hidden state in the sequence h(L)")]
+        ReturnLast
     }
 }
 

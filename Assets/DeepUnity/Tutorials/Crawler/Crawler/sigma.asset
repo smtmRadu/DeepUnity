@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77cd255994572814395a912f173ad620, type: 3}
   m_Name: Sigma
   m_EditorClassIdentifier: 
-  version: 48
+  version: 97
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -8201,6 +8201,81 @@ MonoBehaviour:
       alpha:
         data: []
         shape: 
+    rnncell:
+      nonlinearity: 0
+      onReturn: 0
+      weights:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+      r_weights:
+        data: []
+        shape: 
+      r_biases:
+        data: []
+        shape: 
+    lstmcell:
+      weights_ii:
+        data: []
+        shape: 
+      biases_ii:
+        data: []
+        shape: 
+      weights_hi:
+        data: []
+        shape: 
+      biases_hi:
+        data: []
+        shape: 
+      weights_if:
+        data: []
+        shape: 
+      biases_if:
+        data: []
+        shape: 
+      weights_hf:
+        data: []
+        shape: 
+      biases_hf:
+        data: []
+        shape: 
+      weights_ig:
+        data: []
+        shape: 
+      biases_ig:
+        data: []
+        shape: 
+      weights_hg:
+        data: []
+        shape: 
+      biases_hg:
+        data: []
+        shape: 
+      weights_io:
+        data: []
+        shape: 
+      biases_io:
+        data: []
+        shape: 
+      weights_ho:
+        data: []
+        shape: 
+      biases_ho:
+        data: []
+        shape: 
+    sdpa:
+      W_Q:
+        data: []
+        shape: 
+      W_K:
+        data: []
+        shape: 
+      W_V:
+        data: []
+        shape: 
+      d: 0
     dropout:
       dropout: 0
     flatten:
@@ -8288,6 +8363,81 @@ MonoBehaviour:
       alpha:
         data: []
         shape: 
+    rnncell:
+      nonlinearity: 0
+      onReturn: 0
+      weights:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+      r_weights:
+        data: []
+        shape: 
+      r_biases:
+        data: []
+        shape: 
+    lstmcell:
+      weights_ii:
+        data: []
+        shape: 
+      biases_ii:
+        data: []
+        shape: 
+      weights_hi:
+        data: []
+        shape: 
+      biases_hi:
+        data: []
+        shape: 
+      weights_if:
+        data: []
+        shape: 
+      biases_if:
+        data: []
+        shape: 
+      weights_hf:
+        data: []
+        shape: 
+      biases_hf:
+        data: []
+        shape: 
+      weights_ig:
+        data: []
+        shape: 
+      biases_ig:
+        data: []
+        shape: 
+      weights_hg:
+        data: []
+        shape: 
+      biases_hg:
+        data: []
+        shape: 
+      weights_io:
+        data: []
+        shape: 
+      biases_io:
+        data: []
+        shape: 
+      weights_ho:
+        data: []
+        shape: 
+      biases_ho:
+        data: []
+        shape: 
+    sdpa:
+      W_Q:
+        data: []
+        shape: 
+      W_K:
+        data: []
+        shape: 
+      W_V:
+        data: []
+        shape: 
+      d: 0
     dropout:
       dropout: 0
     flatten:
@@ -9675,6 +9825,81 @@ MonoBehaviour:
       alpha:
         data: []
         shape: 
+    rnncell:
+      nonlinearity: 0
+      onReturn: 0
+      weights:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+      r_weights:
+        data: []
+        shape: 
+      r_biases:
+        data: []
+        shape: 
+    lstmcell:
+      weights_ii:
+        data: []
+        shape: 
+      biases_ii:
+        data: []
+        shape: 
+      weights_hi:
+        data: []
+        shape: 
+      biases_hi:
+        data: []
+        shape: 
+      weights_if:
+        data: []
+        shape: 
+      biases_if:
+        data: []
+        shape: 
+      weights_hf:
+        data: []
+        shape: 
+      biases_hf:
+        data: []
+        shape: 
+      weights_ig:
+        data: []
+        shape: 
+      biases_ig:
+        data: []
+        shape: 
+      weights_hg:
+        data: []
+        shape: 
+      biases_hg:
+        data: []
+        shape: 
+      weights_io:
+        data: []
+        shape: 
+      biases_io:
+        data: []
+        shape: 
+      weights_ho:
+        data: []
+        shape: 
+      biases_ho:
+        data: []
+        shape: 
+    sdpa:
+      W_Q:
+        data: []
+        shape: 
+      W_K:
+        data: []
+        shape: 
+      W_V:
+        data: []
+        shape: 
+      d: 0
     dropout:
       dropout: 0
     flatten:
@@ -9762,6 +9987,81 @@ MonoBehaviour:
       alpha:
         data: []
         shape: 
+    rnncell:
+      nonlinearity: 0
+      onReturn: 0
+      weights:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+      r_weights:
+        data: []
+        shape: 
+      r_biases:
+        data: []
+        shape: 
+    lstmcell:
+      weights_ii:
+        data: []
+        shape: 
+      biases_ii:
+        data: []
+        shape: 
+      weights_hi:
+        data: []
+        shape: 
+      biases_hi:
+        data: []
+        shape: 
+      weights_if:
+        data: []
+        shape: 
+      biases_if:
+        data: []
+        shape: 
+      weights_hf:
+        data: []
+        shape: 
+      biases_hf:
+        data: []
+        shape: 
+      weights_ig:
+        data: []
+        shape: 
+      biases_ig:
+        data: []
+        shape: 
+      weights_hg:
+        data: []
+        shape: 
+      biases_hg:
+        data: []
+        shape: 
+      weights_io:
+        data: []
+        shape: 
+      biases_io:
+        data: []
+        shape: 
+      weights_ho:
+        data: []
+        shape: 
+      biases_ho:
+        data: []
+        shape: 
+    sdpa:
+      W_Q:
+        data: []
+        shape: 
+      W_K:
+        data: []
+        shape: 
+      W_V:
+        data: []
+        shape: 
+      d: 0
     dropout:
       dropout: 0
     flatten:

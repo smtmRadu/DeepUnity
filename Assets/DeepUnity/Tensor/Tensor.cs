@@ -1149,7 +1149,7 @@ namespace DeepUnity
             return -elem1 - elem2 - elem3;
         }
         /// <summary>
-        /// Computes the element-wise probability density/mass function w.r.t the received distribution
+        /// Computes the element-wise probability density/mass function on the received distribution
         /// N(<paramref name="mu"/>, <paramref name="sigma"/>) at <paramref name="value"/>.  <br></br>
         /// </summary>
         /// <param name="value"></param>
@@ -2650,6 +2650,24 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Returns the signs of each value in the tensor. <br></br>
+        /// Example: t = [-1.2, 3.2, 0, 1]
+        /// sign(t) = [-1, 1, 0, 1]
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        public static Tensor Sign(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Sign(tensor.data[i]);
+            }
+
+            return result;
+        }
         public static Tensor Clip(Tensor tensor, float min, float max)
         {
             Tensor result = new(tensor.shape);
@@ -2765,6 +2783,10 @@ namespace DeepUnity
         public Tensor Cos()
         {
             return Cos(this);
+        }
+        public Tensor Sign()
+        {
+            return Sign(this);
         }
         public Tensor Clip(float min, float max)
         {

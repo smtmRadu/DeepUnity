@@ -7,7 +7,7 @@ namespace DeepUnity
     /// <summary>
     /// A tool used to reset all Transform, RigidBody[2D] and BodyController components of a GameObject, including all it's children GameObjects of any degree.<br />
     /// </summary>
-    public class StateResetter
+    public class PoseReseter
     {
         private static GameObject Instance;
         private Transform parent;
@@ -16,7 +16,7 @@ namespace DeepUnity
         private List<Rigidbody2D> rigidBodies2D;
         private BodyController bodyController;
 
-        public StateResetter(Transform parent)
+        public PoseReseter(Transform parent)
         {
             if(Instance == null)
             {

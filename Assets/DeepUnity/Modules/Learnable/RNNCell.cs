@@ -10,10 +10,23 @@ namespace DeepUnity
     // The implementation is adapted for this framework so it works for our models
     // https://pytorch.org/docs/stable/generated/torch.nn.RNNCell.html#torch.nn.RNNCell
     // Most of the cases we do not care about the rest of the hidden states, only the last one is important.
+
+
+    /// <summary>
+    /// <b>Usually needs a Reshape layer behind.</b> <br></br>
+    /// <br></br>
+    /// Input:  <b>(B, L, H_in)</b> or <b>(L, H_in)</b> for unbatched input.<br></br>
+    /// Output:  <b>(B, H_out)</b> or <b>(H_out)</b> for unbatched input when <paramref name="on_forward"/> == <see cref="HiddenStates.ReturnLast"/> or  <br></br>
+    ///  <b>(B, L, H_out)</b> or <b>(L, H_out)</b> for unbatched input when <paramref name="on_forward"/> == <see cref="HiddenStates.ReturnAll"/> <br></br>
+    ///  <br></br>
+    /// where B = batch_size, L = sequence_length, H_in = input_size, H_out = hidden_size.
+    /// </summary>
+    /// https://mmuratarat.github.io/2019-02-07/bptt-of-rnn
     [Serializable]
-    public class RecurrentDense : ILearnable, IModule
+    public class RNNCell : ILearnable, IModule
     {
-        [SerializeField] private Device device;
+        [SerializeField] private NonLinearity nonlinearity;
+        [SerializeField] private HiddenStates onReturn;
         [SerializeField] private Tensor weights;
         [SerializeField] private Tensor biases;
         [SerializeField] private Tensor r_weights;
@@ -26,40 +39,41 @@ namespace DeepUnity
 
         [NonSerialized] private Stack<Tensor> InputCache;
         [NonSerialized] private Stack<Tensor> HiddenCache;
-        [NonSerialized] private Stack<Tanh> Activations;
+        [NonSerialized] private Stack<Activation> ActivationCache;
 
 
         /// <summary>
         /// <b>Usually needs a Reshape layer behind.</b> <br></br>
-        /// <b>Outputs the last hidden state, so do not put 2 Recurrent Dense in a row.</b> <br></br>
-        /// <b>It uses Tanh non-linearity.</b> <br></br>
         /// <br></br>
         /// Input:  <b>(B, L, H_in)</b> or <b>(L, H_in)</b> for unbatched input.<br></br>
-        /// Output:  <b>(B, H_out)</b> or <b>(H_out)</b> for unbatched input. <br></br>
-        /// <br></br>
-        /// where B = batch_size, L = sequence_length, H_in = in_features, H_out = out_features.
+        /// Output:  <b>(B, H_out)</b> or <b>(H_out)</b> for unbatched input when <paramref name="on_forward"/> == <see cref="HiddenStates.ReturnLast"/> or  <br></br>
+        ///  <b>(B, L, H_out)</b> or <b>(L, H_out)</b> for unbatched input when <paramref name="on_forward"/> == <see cref="HiddenStates.ReturnAll"/> <br></br>
+        ///  <br></br>
+        /// where B = batch_size, L = sequence_length, H_in = input_size, H_out = hidden_size.
         /// </summary>
-        /// <param name="in_features"></param>
-        /// <param name="out_features"></param>
-        /// <param name="device"></param>
-        public RecurrentDense(int in_features, int out_features, Device device = Device.CPU)
+        /// <param name="input_size"></param>
+        /// <param name="hidden_size"></param>
+        /// <param name="on_forward">Either return the last or all hidden states.</param>
+        /// <param name="activation">Non-linear activation used in the layer.</param>
+        public RNNCell(int input_size, int hidden_size, HiddenStates on_forward = HiddenStates.ReturnLast, NonLinearity activation = NonLinearity.Tanh)
         {
-            this.device = device;
-            InputCache = new Stack<Tensor>();
-            HiddenCache = new Stack<Tensor>();
-            Activations = new Stack<Tanh>();
+            InputCache = new();
+            HiddenCache = new();
+            ActivationCache = new();
 
-            float range = MathF.Sqrt(1f / out_features);
-            weights = Tensor.RandomRange((-range, range), out_features, in_features);
-            biases = Tensor.RandomRange((-range, range), out_features);
-            r_weights = Tensor.RandomRange((-range, range), out_features, out_features);
-            r_biases = Tensor.RandomRange((-range, range), out_features);
+            float range = MathF.Sqrt(1f / hidden_size);
+            weights = Tensor.RandomRange((-range, range), hidden_size, input_size);
+            biases = Tensor.RandomRange((-range, range), hidden_size);
+            r_weights = Tensor.RandomRange((-range, range), hidden_size, hidden_size);
+            r_biases = Tensor.RandomRange((-range, range), hidden_size);
             weightsGrad = Tensor.Zeros(weights.Shape);
             biasesGrad = Tensor.Zeros(biases.Shape);
             r_weightsGrad = Tensor.Zeros(r_weights.Shape);
             r_biasesGrad = Tensor.Zeros(r_biases.Shape);
+            this.nonlinearity = activation;
+            this.onReturn = on_forward;
         }
-        private RecurrentDense() { }
+        private RNNCell() { }
 
 
         public Tensor Predict(Tensor input)
@@ -78,29 +92,30 @@ namespace DeepUnity
             bool isBatched = input.Rank == 3;
             int batch_size = isBatched ? input.Size(0) : 1;
 
-            Tensor expandedBiases = batch_size == 1 ? biases : Tensor.Expand(Tensor.Unsqueeze(biases, 0), 0, batch_size);
-            Tensor expandedRecurrentBiases = batch_size == 1 ? r_biases : Tensor.Expand(Tensor.Unsqueeze(r_biases, 0), 0, batch_size);
-
+           
             Tensor[] sequences = isBatched ? input.Split(1, 1) : input.Split(0, 1);
             Tensor h = isBatched ? Tensor.Zeros(batch_size, biases.Size(-1)) : Tensor.Zeros(biases.Size(-1));
 
-            Tanh tanh = new Tanh();
-            foreach (var elem in sequences)
+
+            Activation activation = nonlinearity == NonLinearity.Tanh ? new Tanh() : new ReLU();
+            Tensor[] hiddenStates = new Tensor[sequences.Length];
+            for (int i = 0; i < sequences.Length; i++)
             {
                 // x has Shape (B, 1, H) or (1, H) => need to be (B, H) or (H)
-                Tensor x = isBatched ? elem.Squeeze(1) : elem.Squeeze(0);
-              
-                Tensor linear;
-                if(device == Device.CPU)
-                    linear = Linear(x, weights, biases, isBatched, batch_size) + Linear(h, r_weights, r_biases, isBatched, batch_size);
-                else
-                    linear = Tensor.MatMulGPU(x, Tensor.Transpose(weights, 0, 1)) + expandedBiases +
-                        Tensor.MatMulGPU(h, Tensor.Transpose(r_weights, 0, 1)) + expandedRecurrentBiases;
+                Tensor x = sequences[i].Squeeze(isBatched ? 1 : 0);
 
-                h = tanh.Predict(linear);
+                Tensor l = Linear(x, weights, biases, isBatched, batch_size) + Linear(h, r_weights, r_biases, isBatched, batch_size);
+
+                h = activation.Predict(l);
+                if(onReturn == HiddenStates.ReturnAll)
+                    hiddenStates[i] = h.Unsqueeze(1); // (B, 1, H)
             }
 
-            return h;
+            if (onReturn == HiddenStates.ReturnLast)
+                return h;
+            else
+                return Tensor.Concat(1, hiddenStates);
+                     
         }
         public Tensor Forward(Tensor input)
         {
@@ -118,95 +133,85 @@ namespace DeepUnity
             bool isBatched = input.Rank == 3;
             int batch_size = isBatched ? input.Size(0) : 1;
 
-            Tensor expandedBiases = batch_size == 1 ? biases : Tensor.Expand(Tensor.Unsqueeze(biases, 0), 0, batch_size);
-            Tensor expandedRecurrentBiases = batch_size == 1 ? r_biases : Tensor.Expand(Tensor.Unsqueeze(r_biases, 0), 0, batch_size);
-
+           
             Tensor[] sequences = isBatched ? input.Split(1, 1) : input.Split(0, 1);
             Tensor h = isBatched ? Tensor.Zeros(batch_size, biases.Size(-1)) : Tensor.Zeros(biases.Size(-1));
-
-           
-            foreach (var elem in sequences)
+            HiddenCache.Push(h); // add h_0
+            Tensor[] hiddenStates = new Tensor[sequences.Length];
+            for (int i = 0; i < sequences.Length; i++)
             {
-                Activations.Push(new Tanh());
-
                 // x has Shape (B, 1, H) or (1, H) => need to be (B, H) or (H)
-                Tensor x = isBatched ? elem.Squeeze(1) : elem.Squeeze(0);
+                Tensor x = sequences[i].Squeeze(isBatched ? 1 : 0);
+                InputCache.Push(x);
+
+                Tensor l = Linear(x, weights, biases, isBatched, batch_size) + Linear(h, r_weights, r_biases, isBatched, batch_size);
                 
-                Tensor linear;
-                if (device == Device.CPU)
-                    linear = Linear(x, weights, biases, isBatched, batch_size) + Linear(h, r_weights, r_biases, isBatched, batch_size);
-                else
-                    linear = Tensor.MatMulGPU(x, Tensor.Transpose(weights, 0, 1)) + expandedBiases +
-                        Tensor.MatMulGPU(h, Tensor.Transpose(r_weights, 0, 1)) + expandedRecurrentBiases;
-
-                h = Activations.Peek().Forward(linear);
-                InputCache.Push(x.Clone() as Tensor);
+                ActivationCache.Push(nonlinearity == NonLinearity.Tanh ? new Tanh() : new ReLU());
+                h = ActivationCache.Peek().Forward(l);
                 HiddenCache.Push(h.Clone() as Tensor);
-            }
 
-            return h;
-         
+                if (onReturn == HiddenStates.ReturnAll)
+                    hiddenStates[i] = h.Unsqueeze(1); // (B, 1, H)
+            }
+            if (onReturn == HiddenStates.ReturnLast)
+                return h;
+            else
+                return Tensor.Concat(1, hiddenStates);
+
         }
-        public Tensor Backward(Tensor dLdH)
+        public Tensor Backward(Tensor dLdY)
         {
-            bool isBatched = dLdH.Rank == 2;
-            int batch_size = isBatched ? dLdH.Size(-2) : 1;
-     
-            // We go in reverse for each element
-            while(InputCache.Count > 0)
+            bool isBatched = dLdY.Rank == 3;
+            int batch_size = isBatched ? dLdY.Size(0) : 1;
+            int sequence_length = InputCache.Count;
+            int hin = weights.Size(-1);
+            int hout = biases.Size(-1);
+
+            Tensor[] dLdH;
+            if (onReturn == HiddenStates.ReturnLast) // place dLdY at the last position in the array
             {
-                Tensor dLdLinear = Activations.Peek().Backward(dLdH);
-
-                if (device == Device.CPU)
+                dLdH =  new Tensor[sequence_length];
+                for (int i = 0; i < sequence_length - 1; i++)
                 {
-                    Tensor weights_grad;
-                    Tensor biases_grad;
-                    Tensor r_weights_grad;
-                    Tensor r_biases_grad;
-                    int hin = weights.Size(-1);
-                    int hout = biases.Size(-1);
-                    ComputeGradients(InputCache.Peek(), dLdLinear, isBatched, batch_size, hin, hout, out weights_grad, out biases_grad);
-                    ComputeGradients(HiddenCache.Peek(), dLdLinear, isBatched, batch_size, hout, hout, out r_weights_grad, out r_biases_grad);
-
-                    Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
-                    Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
-                    Tensor.CopyTo(r_weightsGrad + r_weights_grad, r_weightsGrad);
-                    Tensor.CopyTo(r_biasesGrad + r_biases_grad, r_biasesGrad);
-
-                    InputCache.Pop();
-                    HiddenCache.Pop();
-                    Activations.Pop();
-
-                    if (InputCache.Count == 0) //dLdx
-                        return Tensor.MatMul(dLdLinear, weights);
-                    else
-                        dLdH = Tensor.MatMul(dLdLinear, r_weights);
+                    dLdH[i] = Tensor.Zeros(dLdY.Shape);
                 }
-                else
+                dLdH[sequence_length - 1] = dLdY;
+            } 
+            else
+            {
+                dLdH = dLdY.Split(1, 1);
+                for (int i = 0; i < sequence_length; i++)
                 {
-                    Tensor transposed_dLdLinear = isBatched ?
-                                                Tensor.Transpose(dLdLinear, 0, 1) :
-                                                Tensor.Transpose(dLdLinear.Unsqueeze(0), 0, 1);
-
-                    Tensor.CopyTo(weightsGrad + Tensor.MatMulGPU(transposed_dLdLinear, InputCache.Peek()) / batch_size, weightsGrad);
-                    Tensor.CopyTo(biasesGrad + Tensor.Mean(dLdLinear, axis: 0), biasesGrad);
-                    Tensor.CopyTo(r_weightsGrad + Tensor.MatMulGPU(transposed_dLdLinear, HiddenCache.Peek()) / batch_size, r_weightsGrad);
-                    Tensor.CopyTo(r_biasesGrad + Tensor.Mean(dLdLinear, axis: 0), r_biasesGrad);
-
-                    InputCache.Pop();
-                    HiddenCache.Pop();
-                    Activations.Pop();
-
-                    if (InputCache.Count == 0)//dLdx
-                        return Tensor.MatMulGPU(dLdLinear, weights);
-                    else
-                        dLdH = Tensor.MatMulGPU(dLdLinear, r_weights);
-                }      
+                    dLdH[i] = dLdH[i].Squeeze(1);
+                }
             }
-            throw new Exception("There is no way it will reach this point");
+                
+
+            Tensor[] inputGrad = new Tensor[sequence_length];
+
+            HiddenCache.Pop(); // pop h_n because we don t need it (it contained 0 -> n)
+
+            while (InputCache.Count > 0)
+            {
+                Tensor dLdLinear = ActivationCache.Pop().Backward(dLdH[InputCache.Count - 1]);
+
+                Tensor weights_grad;
+                Tensor biases_grad;
+                Tensor r_weights_grad;
+                Tensor r_biases_grad;      
+                ComputeGradients(InputCache.Pop(), dLdLinear, isBatched, batch_size, hin, hout, out weights_grad, out biases_grad);
+                ComputeGradients(HiddenCache.Pop(), dLdLinear, isBatched, batch_size, hout, hout, out r_weights_grad, out r_biases_grad);
+
+                Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
+                Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
+                Tensor.CopyTo(r_weightsGrad + r_weights_grad, r_weightsGrad);
+                Tensor.CopyTo(r_biasesGrad + r_biases_grad, r_biasesGrad);
+
+                inputGrad[InputCache.Count] = Tensor.MatMul(dLdLinear, weights).Unsqueeze(1);
+                dLdH[InputCache.Count] += Tensor.MatMul(dLdLinear, r_weights);
+            }
+            return Tensor.Concat(1, inputGrad);
         }
-
-
 
         private Tensor Linear(Tensor x, Tensor weights, Tensor biases, bool isBatched, int B_size)
         {
@@ -250,7 +255,6 @@ namespace DeepUnity
 
             return y;
         }
-
         private void ComputeGradients(Tensor x, Tensor loss, bool isBatched, int B_size, int H_in, int H_out, out Tensor weights_grad, out Tensor biases_grad)
         {
             Tensor wg = Tensor.Zeros(H_out, H_in);
@@ -322,13 +326,13 @@ namespace DeepUnity
             return new Parameter[] { w, b, rw, rb };
         }
 
-        public void SetDevice(Device device) { this.device = device; }
+        public void SetDevice(Device device) { return; }
 
-        public virtual void OnBeforeSerialize()
+        public void OnBeforeSerialize()
         {
 
         }
-        public virtual void OnAfterDeserialize()
+        public void OnAfterDeserialize()
         {
             // This function is actually having 2 workers on serialization.
             // If shape int[] was not deserialized, we need to break this worker.
@@ -340,9 +344,9 @@ namespace DeepUnity
             if (weights.Shape.Length == 0)
                 return;
 
-            InputCache = new Stack<Tensor>();
-            HiddenCache = new Stack<Tensor>();
-            Activations = new Stack<Tanh>();
+            InputCache = new();
+            HiddenCache = new();
+            ActivationCache = new();
 
             this.weightsGrad = Tensor.Zeros(weights.Shape);
             this.biasesGrad = Tensor.Zeros(biases.Shape);
@@ -355,10 +359,10 @@ namespace DeepUnity
 
         public object Clone()
         {
-            var rnncell = new RecurrentDense();
-            rnncell.InputCache = new Stack<Tensor>();
-            rnncell.HiddenCache = new Stack<Tensor>();
-            rnncell.Activations = new Stack<Tanh>();
+            var rnncell = new RNNCell();
+            rnncell.InputCache = new();
+            rnncell.HiddenCache = new();
+            rnncell.ActivationCache = new();
             rnncell.weights = (Tensor)this.weights.Clone();
             rnncell.biases = (Tensor)this.biases.Clone();
             rnncell.r_weights = (Tensor)this.r_weights.Clone();

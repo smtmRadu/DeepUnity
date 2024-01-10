@@ -3,6 +3,7 @@ using UnityEngine;
 using System.IO;
 using System.Linq;
 using UnityEditor;
+using System;
 
 namespace DeepUnity
 {
@@ -12,6 +13,8 @@ namespace DeepUnity
     [DisallowMultipleComponent, AddComponentMenu("DeepUnity/Training Statistics")]
     public class TrainingStatistics : MonoBehaviour
     {
+        private TrainingStatistics Instance;
+
         [ReadOnly, Tooltip("When the simulation started.")]
         public string startedAt = " - ";
         [ReadOnly, Tooltip("When the simulation ended.")]
@@ -21,6 +24,7 @@ namespace DeepUnity
 
         [HideInInspector] public float policyUpdateSecondsElapsed = 0f;
         [HideInInspector] public float inferenceSecondsElapsed = 0f; // Updated via deltaTime
+        [HideInInspector] public bool collectAgentStuff = false;
 
         [ReadOnly, Tooltip("Total time spent on inference in total.")]
         public string inferenceTime = " - ";
@@ -30,13 +34,6 @@ namespace DeepUnity
         [ReadOnly, Tooltip("How much time takes a policy update iteration.")]
         public string policyUpdateTimePerIteration = " - ";
         
-        
-
-        [Space(20)] 
-        [ReadOnly, Tooltip("inference time / training session time")]
-        public string inferenceTimeRatio = "- / -";
-        [ReadOnly, Tooltip("policy update time / training session time")]
-        public string policyUpdateTimeRatio = "- / -";
 
         [Space(20)]
         [ReadOnly, Tooltip("Total number of episodes runned by all parallel agents.")]
@@ -60,16 +57,84 @@ namespace DeepUnity
 
         [Header("Losses")]
         [Tooltip("Mean loss of policy function on each epoch")] 
-        public PerformanceGraph policyLoss = new PerformanceGraph();
-        [Tooltip("Mean MSE of value function on each epoch. Also used for the discriminator loss in Heuristic Training.")]
-        public PerformanceGraph valueLoss = new PerformanceGraph();
+        public PerformanceGraph actorLoss = new PerformanceGraph();
+        [Tooltip("Mean MSE of Value (for PPO) or Q (for SAC) function on each epoch. Also used for the discriminator loss in Heuristic Training.")]
+        public PerformanceGraph criticLoss = new PerformanceGraph();
 
         [Header("Policy")]
-        [Tooltip("The entropy H of the policy")]
+        [Tooltip("The mean standard deviation of the policy for continuous actions, or -probs * log probs for discrete actions.")]
         public PerformanceGraph entropy = new PerformanceGraph();
         [Tooltip("Learning rate decay on each epoch.")]
         public PerformanceGraph learningRate = new PerformanceGraph();
-        
+
+
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(this);
+            }
+            else
+            {
+                Instance = this;
+                EditorApplication.playModeStateChanged += ExportOnEnd;
+            }
+        }
+
+        private void FixedUpdate()
+        {
+            if(!collectAgentStuff)
+            {
+                try
+                {
+                    var ags = DeepUnityTrainer.Instance.parallelAgents;
+                    foreach (var item in ags)
+                    {
+                        item.OnEpisodeEnd += UpdateAgentStuff;
+                    }
+                    collectAgentStuff = true;
+                }
+                catch { }
+            }
+
+
+            stepCount = DeepUnityTrainer.Instance.currentSteps;
+            parallelAgents = DeepUnityTrainer.Instance.parallelAgents.Count;
+            inferenceSecondsElapsed += Time.fixedDeltaTime;
+            inferenceTime = $"{(int)(Math.Ceiling(inferenceSecondsElapsed * DeepUnityTrainer.Instance.parallelAgents.Count) / 3600)} hrs : {(int)(Math.Ceiling(inferenceSecondsElapsed * DeepUnityTrainer.Instance.parallelAgents.Count) % 3600 / 60)} min : {(int)(Math.Ceiling(inferenceSecondsElapsed * DeepUnityTrainer.Instance.parallelAgents.Count) % 60)} sec";
+
+
+            if (DeepUnityTrainer.Instance.updateIterations > iterations)
+                UpdateTrainerStuff();
+        }
+        private void UpdateAgentStuff(object sender, EventArgs e)
+        {
+            Agent ag = (Agent)sender;
+            episodeCount++;
+            episodeLength.Append(ag.EpisodeStepCount);
+            cumulativeReward.Append(ag.EpsiodeCumulativeReward);
+        }
+        private void UpdateTrainerStuff()
+        {
+            iterations++;
+
+            TimeSpan timeElapsed = DateTime.Now - DeepUnityTrainer.Instance.timeWhenTheTrainingStarted;
+            trainingSessionTime = $"{(int)timeElapsed.TotalHours} hrs : {(int)timeElapsed.TotalMinutes % 60} min : {(int)timeElapsed.TotalSeconds % 60} sec";
+            policyUpdateSecondsElapsed += (float)DeepUnityTrainer.Instance.updateClock.Elapsed.TotalSeconds;
+            policyUpdateTime = $"{(int)(Math.Ceiling(policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(policyUpdateSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(policyUpdateSecondsElapsed) % 60)} sec";
+            policyUpdateTimePerIteration = $"{(int)DeepUnityTrainer.Instance.updateClock.Elapsed.TotalHours} hrs : {(int)(DeepUnityTrainer.Instance.updateClock.Elapsed.TotalMinutes) % 60} min : {(int)(DeepUnityTrainer.Instance.updateClock.Elapsed.TotalSeconds) % 60}.{DeepUnityTrainer.Instance.updateClock.ElapsedMilliseconds % 1000} sec";
+
+            actorLoss.Append(DeepUnityTrainer.Instance.actorLoss);
+            criticLoss.Append(DeepUnityTrainer.Instance.criticLoss);
+            entropy.Append(DeepUnityTrainer.Instance.entropy);
+            learningRate.Append(DeepUnityTrainer.Instance.learningRate);                    
+        }
+
+
+
+
+
 
         /// <summary>
         /// Returns the path of the file.
@@ -127,15 +192,11 @@ namespace DeepUnity
             y += 20;                          
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Time: {inferenceTime}        [Device: {ab.inferenceDevice}]</text>");       
             y += 20;                                   
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Policy Update Time: {policyUpdateTime}        [Per iteration: {policyUpdateTimePerIteration}]        [Device: {ab.trainingDevice}]</text>");   
-            y += 20;                                  
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Time / Training Session Time: " + inferenceTimeRatio + @"</text>");
-            y += 20;                                 
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Policy Update Time / Training Session Time: " + policyUpdateTimeRatio + @"</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Update Time: {policyUpdateTime}        [Per iteration: {policyUpdateTimePerIteration}]        [Device: {ab.trainingDevice}]</text>");   
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Episode Count: {episodeCount}</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Steps: {stepCount}    [Per agent: {stepCount / parallelAgents}]     [Per Episode (mean): {stepCount / episodeCount}]</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Steps: {stepCount}</text>");
             y += 20;                                
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Iterations: " + iterations + @"</text>");
             y += 20;                                  
@@ -154,11 +215,7 @@ namespace DeepUnity
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Time Horizon: {hp.horizon}</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Gradient Cliping Normalization: {hp.gradClipNorm}</text>");
-/*            y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Advantages Normalization: {hp.normalizeAdvantages}</text>");
-            y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Training Data Shuffle: {hp.shuffleTrainingData}</text>");*/
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Gradient Cliping by Norm: {hp.gradClipNorm}</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Learning Rate Schedule: {hp.LRSchedule}    {""}</text>");
 
@@ -192,9 +249,9 @@ namespace DeepUnity
             y += 20;
             DrawGraph(svgBuilder, episodeLength.Keys, ref y, 50, 200, 500, $"Episode Length ({episodeCount})");
             y += 20;
-            DrawGraph(svgBuilder, policyLoss.Keys, ref y, 50, 200, 500, "Policy Loss");
+            DrawGraph(svgBuilder, actorLoss.Keys, ref y, 50, 200, 500, "Policy Loss");
             y += 20;
-            DrawGraph(svgBuilder, valueLoss.Keys, ref y, 50, 200, 500, "Value Loss");
+            DrawGraph(svgBuilder, criticLoss.Keys, ref y, 50, 200, 500, "Value Loss");
             y += 20;
             DrawGraph(svgBuilder, learningRate.Keys, ref y, 50, 200, 500, "Learning Rate");
             y += 20;
@@ -261,11 +318,22 @@ namespace DeepUnity
 
             yOffset += height + 30;
         }
+        private void ExportOnEnd(PlayModeStateChange state)
+        {
+            if(state == PlayModeStateChange.ExitingPlayMode)
+            {
+                startedAt = DeepUnityTrainer.Instance.timeWhenTheTrainingStarted.ToLongTimeString() + ", " + DeepUnityTrainer.Instance.timeWhenTheTrainingStarted.ToLongDateString();
+                finishedAt = DateTime.Now.ToLongTimeString() + ", " + DateTime.Now.ToLongDateString();
 
-
-
-
-
+                if (iterations > 0)
+                {
+                    string pth = ExportAsSVG(DeepUnityTrainer.Instance.model.behaviourName, DeepUnityTrainer.Instance.hp, DeepUnityTrainer.Instance.model, DeepUnityTrainer.Instance.parallelAgents[0].DecisionRequester);
+                    Debug.Log($"<color=#57f542>Training Session log saved at <b><i>{pth}</i></b>.</color>");
+                    AssetDatabase.Refresh();
+                }
+            }
+            
+        }
     }
 
 #if UNITY_EDITOR

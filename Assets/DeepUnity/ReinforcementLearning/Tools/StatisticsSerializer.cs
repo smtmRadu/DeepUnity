@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using UnityEngine;
 
@@ -10,37 +8,29 @@ namespace DeepUnity
     [DisallowMultipleComponent, RequireComponent(typeof(Agent))]
     public class StatisticsSerializer : MonoBehaviour
     {
-        private Agent ag;
-        public LinkedList<(float, float)> cumulativeReward = new();
-        public LinkedList<(float, float)> episodeLength = new();
+        private StatisticsSerializer Instance;
 
-        bool subscribed = false;
-
-        private void FixedUpdate()
+        public void Awake()
         {
-            if (!subscribed && DeepUnityTrainer.Instance)
+            if (Instance != null && Instance != this)
             {
-                ag = GetComponent<Agent>();
-                ag.OnEpisodeEnd += Collect;
-
-
+                Destroy(this);
+            }
+            else
+            {
+                Instance = this;
                 DeepUnityTrainer.Instance.OnTrainingSessionEnd += GetRewardCoordintes;
                 DeepUnityTrainer.Instance.OnTrainingSessionEnd += GetEpisodeCoordintes;
-                subscribed = true;
             }
         }
-        public void Collect(object Sender, EventArgs e)
-        {
-            cumulativeReward.AddLast((ag.PerformanceTrack.stepCount, ag.EpsiodeCumulativeReward));
-            episodeLength.AddLast((ag.PerformanceTrack.stepCount, ag.EpisodeStepCount));
-        }
+
         public void GetRewardCoordintes(object Sender, EventArgs e)
         {
             StringBuilder sb = new StringBuilder();
 
-            foreach (var item in cumulativeReward)
+            foreach (var item in GetComponent<TrainingStatistics>().cumulativeReward.Keys)
             {
-                sb.Append($"({item.Item1}, {item.Item2})\n");
+                sb.Append($"({item.time}, {item.value})\n");
             }
 
             string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
@@ -56,9 +46,9 @@ namespace DeepUnity
         {
             StringBuilder sb = new StringBuilder();
 
-            foreach (var item in episodeLength)
+            foreach (var item in GetComponent<TrainingStatistics>().episodeLength.Keys)
             {
-                sb.Append($"({item.Item1}, {item.Item2})\n");
+                sb.Append($"({item.time}, {item.value})\n");
             }
 
 

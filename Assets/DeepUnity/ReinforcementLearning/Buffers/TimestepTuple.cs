@@ -6,16 +6,28 @@ namespace DeepUnity
     {
         public int index;
 
+        /// <summary>
+        /// (normalized) state
+        /// </summary>
         public Tensor state;
+        /// <summary>
+        /// (normalized) next state
+        /// </summary>
         public Tensor nextState;
 
+        /// <summary>
+        /// raw continuous actions, unsquashed by Tanh
+        /// </summary>
         public Tensor action_continuous;
-        public Tensor prob_continuous;      
+        public Tensor prob_continuous;    
+        /// <summary>
+        /// one hot embedded of discrete action
+        /// </summary>
         public Tensor action_discrete;
         public Tensor prob_discrete;
 
         public Tensor reward;
-        public Tensor done;
+        public Tensor done { get; set; }
 
         public Tensor advantage;
         public Tensor value_target;

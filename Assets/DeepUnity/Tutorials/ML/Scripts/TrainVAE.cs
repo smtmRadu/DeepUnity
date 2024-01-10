@@ -109,7 +109,7 @@ namespace DeepUnityTutorials
                 Loss mse = Loss.BCE(decoded, input);
                 loss_value += mse.Item;
 
-                Tensor dBCEdDecoded = mse.Derivative;
+                Tensor dBCEdDecoded = mse.Gradient;
 
                 // Backprop MSE  through decoder (z = mu + sigma * ksi)
                 Tensor dBCE_dz = decoder.Backward(dBCEdDecoded); // derivative of the loss with respect to z = mu * sigma * std;

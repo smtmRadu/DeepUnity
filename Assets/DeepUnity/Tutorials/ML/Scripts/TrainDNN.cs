@@ -105,7 +105,7 @@ namespace DeepUnityTutorials
             Loss loss = Loss.MSE(trainPrediction, trainYbatches[i]);
             TrainLossGraph.Append(loss.Item);
             optimizer.ZeroGrad();
-            net.Backward(loss.Derivative);
+            net.Backward(loss.Gradient);
             optimizer.ClipGradNorm(0.5f);
             optimizer.Step();
 

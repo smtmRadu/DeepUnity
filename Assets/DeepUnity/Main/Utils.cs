@@ -170,7 +170,6 @@ namespace DeepUnity
 
             return slices;
         }
-
         /// <summary>
         /// Input: Tensor <b>(C, H, W)</b> <br></br>
         /// Output: <b>Color[]</b> pixels used to load on Texture2D's.
@@ -670,18 +669,6 @@ namespace DeepUnity
 
                 var entropy = MathF.Sqrt(-2.0f * MathF.Log(x1)) * MathF.Cos(2.0f * MathF.PI * x2);
                 return entropy * stddev + mean;
-            }
-            /// <summary>
-            /// Returns a sample from normal distribution using the reparametrization trick from VAE.
-            /// </summary>
-            /// <param name="mean"></param>
-            /// <param name="stddev"></param>
-            /// <param name="ksi">N(0,1)</param>
-            /// <returns></returns>
-            public static float ReparametrizedNormal(float mean, float stddev, out float ksi)
-            {
-                ksi = Normal(0, 1);
-                return mean + stddev * ksi;
             }
         }
     }

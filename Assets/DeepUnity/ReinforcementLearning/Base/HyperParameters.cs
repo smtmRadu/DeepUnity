@@ -18,9 +18,7 @@ namespace DeepUnity
 
         [Tooltip("[Typical range: 1e5 - 1e7] The maximum length in steps of this training session.")]
         [Min(10_000f)] public long maxSteps = 2_000_000_000;
-       
-        [Tooltip("[Typical range: 32 - 2048] How many steps of experience to collect per-agent before adding it to the experience buffer.")]
-        [Min(32)] public int horizon = 64; // Note that Time Horizon for non-Gae estimation must be way higher
+
 
         [Tooltip("[Typical range: (PPO) 5e-6 - 3e-3, (SAC) 1e-5 - 1e-3] Initial learning rate for Adam optimizer (both all networks).")]
         [Min(5e-6f)] public float learningRate = 3e-4f;
@@ -34,8 +32,7 @@ namespace DeepUnity
         [Tooltip("[Typical range: (PPO) 2048 - 409600, (SAC) 50000 - 1000000] Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch size. Typically a larger buffer size corresponds to more stable training updates.")]
         [Min(512)] public int bufferSize = 10240; // Do not exagerate with this, keep it at a max of 1M.
 
-        [Tooltip("[Typical range: 0 - 1] Global Gradient Clipping max norm value. Set to 0 to turn off.")]
-        [Min(0)] public float gradClipNorm = 0.5f;
+      
 
         [Tooltip("Applies logarithmic decay on learning rate with respect to the maxSteps. When maxSteps is reached, lr will be 0.")]
         [SerializeField] public bool LRSchedule = false;
@@ -44,11 +41,14 @@ namespace DeepUnity
 
         [Header("PPO specific Configuration")] // https://github.com/yosider/ml-agents-1/blob/master/docs/Training-PPO.md
 
+        [Tooltip("[Typical range: 32 - 2048] How many steps of experience to collect per-agent before adding it to the experience buffer.")]
+        [Min(32)] public int horizon = 64; // Note that Time Horizon for non-Gae estimation must be way higher
+
         [Tooltip("[Typical range: 3 - 10] Number of epochs per buffer.")]
         [Min(3)] public int numEpoch = 8;
 
-        [Tooltip("[Typical range: 1e-4 - 1e-2] Entropy regularization for trainable standard deviation. Also used for Shannon entropy in discrete action space, but multiplied by 10.")]
-        [Min(0f)] public float beta = 5e-3f;
+        [Tooltip("[Typical range: 1e-4 - 1e-2] Entropy regularization for trainable standard deviation. Also used for Shannon entropy in discrete action space.")]
+        [Min(0f)] public float beta = 1e-4f;
 
         [Tooltip("[Typical range: 0.1 - 0.3] Clip factor.")]
         [Min(0.1f)] public float epsilon = 0.2f;
@@ -56,17 +56,26 @@ namespace DeepUnity
         [Tooltip("[Typical range: 0.9 - 1] GAE factor.")]
         [Min(0.001f)] public float lambda = 0.95f;
 
+        [Tooltip("[Typical range: 0 - 1] Global Gradient Clipping max norm value. Set to 0 to turn off.")]
+        [Min(0)] public float gradClipNorm = 0.5f;
+
         [Tooltip("Use of KLE")]
         public KLType KLDivergence = KLType.Off;
 
         [Tooltip("Kullback-Leibler divergence target value")]
         [Min(0.015f)] public float targetKL = 0.015f;
 
+        [Tooltip("Normalize the advantages at minibatch level. Might improve convergence for relative large minibatches, but might cause harm when minibatches are small.")]
+        public bool normalizeAdvantages = true;
+
         // ========================================================================================================================================================================
 
         [Header("SAC specific Configuration")] // https://github.com/yosider/ml-agents-1/blob/master/docs/Training-SAC.md
-        [Tooltip("[Typicall range: 1 - 5] Number of steps taken before updating the policy. Doesn't count for parallel agents, this considers only 1 decision.")]
-        [Min(1)] public int updateEvery = 5;
+        [Tooltip("[Typicall range: 1 - 128] Number of steps taken before updating the policy. Doesn't count for parallel agents, this considers only 1 decision.")]
+        [Min(1)] public int updateEvery = 64;
+
+        [Tooltip("[Typicall range > Batch Size] Number of steps collected before updating the policy.")]
+        [Min(64)] public int updateAfter = 1024;
 
         [Tooltip("[Typical range: 1 - 8] Number of mini-batches sampled on policy model update. This can be increased while also increasing updateEvery.")]
         [Min(1)] public int updatesNum = 1;
@@ -160,6 +169,7 @@ namespace DeepUnity
             }
             else if (script.trainer == TrainerType.SAC)
             {
+                dontDrawMe.Add("horizon");
                 dontDrawMe.Add("numEpoch");
                 dontDrawMe.Add("beta");
                 dontDrawMe.Add("epsilon");
@@ -167,33 +177,39 @@ namespace DeepUnity
                 dontDrawMe.Add("normalizeAdvantages");
                 dontDrawMe.Add("KLDivergence");
                 dontDrawMe.Add("targetKL");
+                dontDrawMe.Add("gradClipNorm");
+                dontDrawMe.Add("normalizeAdvantages");
 
                 dontDrawMe.Add("saveRecordBuffer");
 
                 EditorGUILayout.HelpBox("SAC is not released yet!", MessageType.Warning);
+                EditorGUILayout.HelpBox("SAC defaults: lr - 1e-3, batch_size - 128, buffer_size - 1M", MessageType.Info);
             }
-            else if (script.trainer == TrainerType.GAIL)
-            {
-                dontDrawMe.Add("updateEvery");
-                dontDrawMe.Add("updateAfter");
-                dontDrawMe.Add("updatesNum");
-                dontDrawMe.Add("alpha");
-                dontDrawMe.Add("saveReplayBuffer");
-                dontDrawMe.Add("tau");
-
-
-                dontDrawMe.Add("numEpoch");
-                dontDrawMe.Add("beta");
-                dontDrawMe.Add("epsilon");
-                dontDrawMe.Add("lambda");
-                dontDrawMe.Add("normalizeAdvantages");
-                dontDrawMe.Add("KLDivergence");
-                dontDrawMe.Add("targetKL");
-
-                EditorGUILayout.HelpBox("GAIL is not released yet!", MessageType.Warning);
-            }
+            // else if (script.trainer == TrainerType.GAIL)
+            // {
+            //     dontDrawMe.Add("updateEvery");
+            //     dontDrawMe.Add("updateAfter");
+            //     dontDrawMe.Add("updatesNum");
+            //     dontDrawMe.Add("alpha");
+            //     dontDrawMe.Add("saveReplayBuffer");
+            //     dontDrawMe.Add("tau");
+            // 
+            //     dontDrawMe.Add("horizon");
+            //     dontDrawMe.Add("numEpoch");
+            //     dontDrawMe.Add("beta");
+            //     dontDrawMe.Add("epsilon");
+            //     dontDrawMe.Add("lambda");
+            //     dontDrawMe.Add("normalizeAdvantages");
+            //     dontDrawMe.Add("KLDivergence");
+            //     dontDrawMe.Add("targetKL");
+            //     dontDrawMe.Add("gradClipNorm");
+            // 
+            //     EditorGUILayout.HelpBox("GAIL is not released yet!", MessageType.Warning);
+            // }
 
             dontDrawMe.Add("timescale");
+
+         
 
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
 

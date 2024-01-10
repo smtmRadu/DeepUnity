@@ -59,7 +59,7 @@ namespace DeepUnityTutorials
                 Loss loss = Loss.MSE(prediction, target_batches[i]);
 
                 optim.ZeroGrad();
-                network.Backward(loss.Derivative);
+                network.Backward(loss.Gradient);
                 optim.ClipGradNorm(0.5f);
                 optim.Step();
 

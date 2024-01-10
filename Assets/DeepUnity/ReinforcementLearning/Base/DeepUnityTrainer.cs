@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -15,22 +16,26 @@ namespace DeepUnity
         /// Current experiences collected by the agents.
         /// </summary>
         public static int MemoriesCount { get => Instance.parallelAgents.Sum(x => x.Memory.Count); }
-        public static int TrainingBufferCount { get => Instance.train_data.Count; }
 
         public event EventHandler OnTrainingSessionEnd;
+        public event EventHandler OnPerformUpdate;
 
-        [ReadOnly, SerializeField] protected List<Agent> parallelAgents;
-        [ReadOnly, SerializeField] protected Hyperparameters hp;
-        [ReadOnly, SerializeField] protected TrainingStatistics track;
-        [ReadOnly, SerializeField] protected AgentBehaviour model;
-        [ReadOnly, SerializeField] protected ExperienceBuffer train_data;
+        [ReadOnly] public List<Agent> parallelAgents;
+        [ReadOnly] public Hyperparameters hp;
+        [ReadOnly] public AgentBehaviour model;
+        [ReadOnly] public ExperienceBuffer train_data;
+        [ReadOnly] public Stopwatch updateClock;
+        [ReadOnly] public int currentSteps = 0;
+        [ReadOnly] public int updateIterations;
+        [ReadOnly] public float actorLoss;
+        [ReadOnly] public float criticLoss;
+        [ReadOnly] public float entropy;
+        [ReadOnly] public float learningRate;
 
 
-        [SerializeField, Min(1)]   protected int autosave = 15; protected float autosaveSecondsElapsed = 0f;
-        [SerializeField, ReadOnly] protected int currentSteps = 0;
-                                   protected bool ended = false;
-
-        protected readonly DateTime timeWhenTheTrainingStarted = DateTime.Now;
+        public readonly DateTime timeWhenTheTrainingStarted = DateTime.Now;
+        [Min(1)]   public int autosave = 15; protected float autosaveSecondsElapsed = 0f;
+        [ReadOnly] public bool ended = false;
 
         [SerializeField] private float avgDeltaTime = 0.02f;
         const float avgDeltaTimeMomentum = 0.96f;
@@ -48,8 +53,10 @@ namespace DeepUnity
         /// <summary>
         /// Autosave(), EndTrainingTrigger(), TimeScaleAdj()
         /// </summary>
-        protected virtual void FixedUpdate()
+        protected void FixedUpdate()
         {
+            OnBeforeFixedUpdate();
+
             // Check if max steps reached
             if (currentSteps >= hp.maxSteps)
             {
@@ -63,23 +70,6 @@ namespace DeepUnity
                 model.Save();
             }
             autosaveSecondsElapsed += Time.fixedDeltaTime;
-
-            // Updating the training statistics
-            if (track != null)
-            {
-                TimeSpan timeElapsed = DateTime.Now - timeWhenTheTrainingStarted;
-                track.trainingSessionTime =
-                    $"{(int)timeElapsed.TotalHours} hrs : {(int)timeElapsed.TotalMinutes % 60} min : {(int)timeElapsed.TotalSeconds % 60} sec";
-
-
-                track.inferenceSecondsElapsed += Time.fixedDeltaTime;
-                track.inferenceTime =
-                    $"{(int)(Math.Ceiling(track.inferenceSecondsElapsed * parallelAgents.Count) / 3600)} hrs : {(int)(Math.Ceiling(track.inferenceSecondsElapsed * parallelAgents.Count) % 3600 / 60)} min : {(int)(Math.Ceiling(track.inferenceSecondsElapsed * parallelAgents.Count) % 60)} sec";
-                // track.inferenceTimePerAgent =
-                //     $"{(int)(Math.Ceiling(track.inferenceSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(track.inferenceSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(track.inferenceSecondsElapsed) % 60)} sec";
-            }
-
-
            
             if (hp.timescaleAdjustment == TimescaleAdjustmentType.Dynamic)
             {
@@ -94,19 +84,20 @@ namespace DeepUnity
 
             Time.timeScale = hp.timescale;
         }
-
         private void Update()
         {
             avgDeltaTime = avgDeltaTime * avgDeltaTimeMomentum + Time.deltaTime * (1f - avgDeltaTimeMomentum);
         }
 
-        protected virtual void Initialize() { }
+
+        protected abstract void Initialize();
+        protected abstract void OnBeforeFixedUpdate();
+        
         public static void Subscribe(Agent agent, TrainerType trainer)
         {
             if(Instance == null)
             {
-                EditorApplication.playModeStateChanged += Autosave1;
-                EditorApplication.pauseStateChanged += Autosave2;
+                EditorApplication.playModeStateChanged += Autosave;
                 GameObject go = new GameObject($"[DeepUnity] Trainer - {trainer}");        
                 
                 switch(trainer)
@@ -117,9 +108,9 @@ namespace DeepUnity
                     case TrainerType.SAC:
                         Instance = go.AddComponent<SACTrainer>();
                         break;
-                    case TrainerType.GAIL:
-                        Instance = go.AddComponent<GAILTrainer>();
-                        break;
+                     // case TrainerType.GAIL:
+                     //     Instance = go.AddComponent<GAILTrainer>();
+                     //   break;
                     default: throw new ArgumentException("Unhandled trainer type");
                 }
 
@@ -136,38 +127,14 @@ namespace DeepUnity
             // Assign common attributes to all agents (based on the last agent that subscribes - this one is actually the first in the Hierarchy)
             Instance.parallelAgents.ForEach(x =>
             {
-                x.PerformanceTrack = agent.PerformanceTrack;
                 x.DecisionRequester.decisionPeriod = agent.DecisionRequester.decisionPeriod;
                 x.DecisionRequester.maxStep = agent.DecisionRequester.maxStep;
                 x.DecisionRequester.takeActionsBetweenDecisions = agent.DecisionRequester.takeActionsBetweenDecisions;
             });
 
-            if (agent.PerformanceTrack != null)
-            {
-                Instance.track = agent.PerformanceTrack;
-            }
-
             Instance.parallelAgents.Add(agent);
         }
-        private static void Autosave1(PlayModeStateChange state)
-        {
-            Instance.model.Save();
-            if (state == PlayModeStateChange.ExitingPlayMode && Instance.track != null)
-            {
-                Instance.track.startedAt = Instance.timeWhenTheTrainingStarted.ToLongTimeString() + ", " + Instance.timeWhenTheTrainingStarted.ToLongDateString();
-                Instance.track.finishedAt = DateTime.Now.ToLongTimeString() + ", " + DateTime.Now.ToLongDateString();
-
-                
-
-                if (Instance.track.iterations > 0)
-                {
-                    string pth = Instance.track.ExportAsSVG(Instance.model.behaviourName, Instance.hp, Instance.model, Instance.parallelAgents[0].DecisionRequester);
-                    UnityEngine.Debug.Log($"<color=#57f542>Training Session log saved at <b><i>{pth}</i></b>.</color>");
-                    AssetDatabase.Refresh();
-                }
-            }
-        }
-        private static void Autosave2(PauseState state) => Instance?.model.Save();
+        private static void Autosave(PlayModeStateChange state) => Instance.model.Save();
         protected static void EndTrainingSession(string reason)
         {
             if (!Instance.ended)

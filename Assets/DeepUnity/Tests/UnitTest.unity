@@ -820,7 +820,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &752495706
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -848,7 +848,7 @@ MonoBehaviour:
   MatShape: {x: 512, y: 32}
   batchSize: 64
   lr: 0.001
-  Runs: 100
+  Runs: 1000
   net: {fileID: 0}
   image: {fileID: 1095767907}
   image2: {fileID: 0}

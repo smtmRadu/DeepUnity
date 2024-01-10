@@ -68,23 +68,12 @@ namespace DeepUnityTutorials
                     {
                         if (col.collider.CompareTag("Ground"))
                         {
-                            SetReward(-1);
                             EndEpisode();
                         }
                     };
                 }
             });
         }
-
-        public override void OnEpisodeBegin()
-        {
-            // for (int i = 0; i < goals.transform.childCount; i++)
-            // {
-            //     goals.transform.GetChild(i).gameObject.SetActive(true);
-            // }
-        }
-
-        // 138 observations
         public override void CollectObservations(StateVector stateBuffer)
         {
             var jdDict = bodyController.bodyPartsDict;
@@ -200,8 +189,8 @@ namespace DeepUnityTutorials
             jdDict[shinR].SetJointStrength(actions_vector[42]);
             jdDict[footR].SetJointStrength(actions_vector[43]);
 
-            AddReward(head.transform.position.y * 0.001f);
-            AddReward(stomach.transform.position.z * 0.005f);
+            AddReward(stomach.transform.position.z * 0.001f);
+            AddReward(head.transform.position.z * 0.001f);
         }
     }
 

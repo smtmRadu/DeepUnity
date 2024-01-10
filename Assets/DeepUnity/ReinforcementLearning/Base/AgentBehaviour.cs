@@ -41,11 +41,11 @@ namespace DeepUnity
         [SerializeField] public NeuralNetwork discreteNetwork;
         [Space]
 
-        [Header("Discriminator")]
-        [Tooltip("Neural Network used for Behavioral Cloning")]
-        [SerializeField] public NeuralNetwork discContNetwork;
-        [Tooltip("Neural Network used for Behavioral Cloning")]
-        [SerializeField] public NeuralNetwork discDiscNetwork;
+        // [Header("Discriminator")]
+        // [Tooltip("Neural Network used for Behavioral Cloning")]
+        // [SerializeField] public NeuralNetwork discContNetwork;
+        // [Tooltip("Neural Network used for Behavioral Cloning")]
+        // [SerializeField] public NeuralNetwork discDiscNetwork;
         
 
 
@@ -76,13 +76,13 @@ namespace DeepUnity
 
         [Header("Standard Deviation for Continuous Actions")]
         [SerializeField, Tooltip("The standard deviation for Continuous Actions")] 
-        public StandardDeviationType standardDeviation = StandardDeviationType.Fixed;
+        public StandardDeviationType standardDeviation = StandardDeviationType.Trainable;
         [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
-        [SerializeField, Range(0.001f, 5f)] 
+        [SerializeField, Min(0.001f)] 
         public float standardDeviationValue = 1f;
 
-        [Tooltip("Modify this value to change the exploration/exploitation ratio. The standard deviation obtained by softplus(std_dev) * standardDeviationScale.")]
-        [SerializeField, Range(0.001f, 3f)]
+        [Tooltip("Modify this value to change the exploration/exploitation ratio. The standard deviation obtained by softplus(std_dev) * standardDeviationScale. 1.5scale  ~ 1fixed, 3scale  ~ 1.5fixed, 4.5scale ~ 2fixed")]
+        [SerializeField, Min(0.1f)]
         public float standardDeviationScale = 1.5f;
 
         public Optimizer vOptimizer { get; private set; }
@@ -109,7 +109,9 @@ namespace DeepUnity
         private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS)
         {
             static Activation HiddenActivation() => new Tanh();
+
             const InitType INIT_W = InitType.HE_Normal;
+            const InitType INIT_PolicyOut = InitType.LeCun_Normal;
             const InitType INIT_B = InitType.Zeros;
 
             //------------------ NETWORK INITIALIZATION ----------------//
@@ -129,14 +131,14 @@ namespace DeepUnity
                         new IModule[]
                         { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                             Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_W, INIT_B)}).ToArray()
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_PolicyOut, INIT_B)}).ToArray()
                     );
 
                 sigmaNetwork = new NeuralNetwork(
                            new IModule[]
                         { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                             Concat(CreateHiddenLayers(NUM_LAYERS - 1, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, InitType.Glorot_Uniform, InitType.Zeros), new Softplus() }).ToArray()
+                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_PolicyOut, INIT_B), new Softplus() }).ToArray()
                     );
 
                 // Initialize q networks Q(st,at)
@@ -154,12 +156,12 @@ namespace DeepUnity
                    Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
                 );
 
-                discContNetwork = new NeuralNetwork(
+/*                discContNetwork = new NeuralNetwork(
                         new IModule[] 
                         { new Dense(CONTINUOUS_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B),HiddenActivation() }.
                             Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                             Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B), new Sigmoid() }).ToArray()
-                    );
+                    );*/
             }
 
             if (DISCRETE_ACTIONS_NUM > 0)
@@ -170,12 +172,12 @@ namespace DeepUnity
                             Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                             Concat(new IModule[] { new Dense(HIDDEN_UNITS, DISCRETE_ACTIONS_NUM, INIT_W, INIT_B), new Softmax() }).ToArray()
                     );
-                discDiscNetwork = new NeuralNetwork(
+               /* discDiscNetwork = new NeuralNetwork(
                         new IModule[] 
                         { new Dense(DISCRETE_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
                             Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
                             Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B), new Sigmoid() }).ToArray()
-                    );
+                    );*/
             }         
 
             static IModule[] CreateHiddenLayers(int numLayers, int hidUnits, InitType INIT_W, InitType INIT_B)
@@ -220,21 +222,21 @@ namespace DeepUnity
                     discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
                 }
             }
-            else if(trainer == TrainerType.GAIL)
-            {
-                if (IsUsingContinuousActions)
-                {
-                    muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda) ;
-                    sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
-                    dContOptimizer = new Adam(discContNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
-                }
-
-                if (IsUsingDiscreteActions)
-                {
-                    discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
-                    dDiscOptimizer = new Adam(discDiscNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
-                }
-            }                    
+            // else if(trainer == TrainerType.GAIL)
+            // {
+            //     if (IsUsingContinuousActions)
+            //     {
+            //         muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda) ;
+            //         sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
+            //         // dContOptimizer = new Adam(discContNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
+            //     }
+            // 
+            //     if (IsUsingDiscreteActions)
+            //     {
+            //         discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
+            //         // dDiscOptimizer = new Adam(discDiscNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
+            //     }
+            // }                    
         }
         public void InitSchedulers(Hyperparameters hp, TrainerType trainer)
         {
@@ -268,21 +270,21 @@ namespace DeepUnity
                     discreteScheduler = new LRScheduler(discreteOptimizer, step_size, gamma);
                 }
             }
-            else if (trainer == TrainerType.GAIL)
-            {
-                if (IsUsingContinuousActions)
-                { 
-                    muScheduler = new LRScheduler(muOptimizer, step_size, gamma);
-                    sigmaScheduler = new LRScheduler(sigmaOptimizer, step_size, gamma);
-                    dContScheduler = new LRScheduler(dContOptimizer, step_size, gamma);
-                }
-
-                if (IsUsingDiscreteActions)
-                {
-                    discreteScheduler = new LRScheduler(discreteOptimizer, step_size, gamma);
-                    discreteScheduler = new LRScheduler(dDiscOptimizer, step_size, gamma);   
-                }
-            }
+            // else if (trainer == TrainerType.GAIL)
+            // {
+            //     if (IsUsingContinuousActions)
+            //     { 
+            //         muScheduler = new LRScheduler(muOptimizer, step_size, gamma);
+            //         sigmaScheduler = new LRScheduler(sigmaOptimizer, step_size, gamma);
+            //         dContScheduler = new LRScheduler(dContOptimizer, step_size, gamma);
+            //     }
+            // 
+            //     if (IsUsingDiscreteActions)
+            //     {
+            //         discreteScheduler = new LRScheduler(discreteOptimizer, step_size, gamma);
+            //         discreteScheduler = new LRScheduler(dDiscOptimizer, step_size, gamma);   
+            //     }
+            // }
 
         }
 
@@ -377,45 +379,6 @@ namespace DeepUnity
             phi = discreteNetwork.Forward(stateBatch);        
         }
 
-        public Tensor Q1Forward(Tensor stateBatch, Tensor actionBatch)
-        {
-            int batch_size = stateBatch.Size(0);
-            int state_size = stateBatch.Size(1);
-            int action_size = actionBatch.Size(1);
-            Tensor input = Tensor.Zeros(batch_size, state_size + action_size);
-            for (int i = 0; i < batch_size; i++)
-            {
-                for (int f = 0; f < state_size; f++)
-                {
-                    input[i, f] = stateBatch[i, f];
-                }
-                for (int f = 0; f < action_size; f++)
-                {
-                    input[i, state_size + f] = actionBatch[i, f];
-                }
-            }
-            return q1Network.Forward(input);           
-        }
-        public Tensor Q2Forward(Tensor stateBatch, Tensor actionBatch)
-        {
-            int batch_size = stateBatch.Size(0);
-            int state_size = stateBatch.Size(1);
-            int action_size = actionBatch.Size(1);
-            Tensor input = Tensor.Zeros(batch_size, state_size + action_size);
-            for (int i = 0; i < batch_size; i++)
-            {
-                for (int f = 0; f < state_size; f++)
-                {
-                    input[i, f] = stateBatch[i, f];
-                }
-                for (int f = 0; f < action_size; f++)
-                {
-                    input[i, state_size + f] = actionBatch[i, f];
-                }
-            }
-
-            return q2Network.Forward(input);
-        }
 
 
 
@@ -456,11 +419,11 @@ namespace DeepUnity
             newAgBeh.vNetwork?.CreateAsset($"{name}/V");
             newAgBeh.muNetwork?.CreateAsset($"{name}/Mu");
             newAgBeh.sigmaNetwork?.CreateAsset($"{name}/Sigma");
-            newAgBeh.discContNetwork?.CreateAsset($"{name}/Disc_Cont");
+            // newAgBeh.discContNetwork?.CreateAsset($"{name}/Disc_Cont");
             newAgBeh.q1Network?.CreateAsset($"{name}/Q1");
             newAgBeh.q2Network?.CreateAsset($"{name}/Q2");
             newAgBeh.discreteNetwork?.CreateAsset($"{name}/Discrete");
-            newAgBeh.discDiscNetwork?.CreateAsset($"{name}/Disc_Disc");
+            // newAgBeh.discDiscNetwork?.CreateAsset($"{name}/Disc_Disc");
             
 
             return newAgBeh;
@@ -483,8 +446,8 @@ namespace DeepUnity
             muNetwork?.Save();
             sigmaNetwork?.Save();
             discreteNetwork?.Save();
-            discContNetwork?.Save();
-            discDiscNetwork?.Save();
+            // discContNetwork?.Save();
+            // discDiscNetwork?.Save();
         }
         /// <summary>
         /// Before using, checks if config file or neural networks are not attached to this scriptable object.
@@ -541,29 +504,29 @@ namespace DeepUnity
                         whatIsMissing.Add("Sigma Network");
                 }
             }
-            else if (trainer == TrainerType.GAIL)
-            {
-                if (IsUsingContinuousActions)
-                {
-                    if (!muNetwork)
-                        whatIsMissing.Add("Mu Network");
-
-                    if (!sigmaNetwork)
-                        whatIsMissing.Add("Sigma Network");
-
-                    if (!discContNetwork)
-                        whatIsMissing.Add("Discriminator Continuous Network");
-                }
-
-                if (IsUsingDiscreteActions)
-                {
-                    if (!discreteNetwork)
-                        whatIsMissing.Add("Discrete Network");
-
-                    if (!discDiscNetwork)
-                        whatIsMissing.Add("Discriminator Discrete Network");
-                }
-            }
+            // else if (trainer == TrainerType.GAIL)
+            // {
+            //     if (IsUsingContinuousActions)
+            //     {
+            //         if (!muNetwork)
+            //             whatIsMissing.Add("Mu Network");
+            // 
+            //         if (!sigmaNetwork)
+            //             whatIsMissing.Add("Sigma Network");
+            // 
+            //         // if (!discContNetwork)
+            //         //     whatIsMissing.Add("Discriminator Continuous Network");
+            //     }
+            // 
+            //     if (IsUsingDiscreteActions)
+            //     {
+            //         if (!discreteNetwork)
+            //             whatIsMissing.Add("Discrete Network");
+            // 
+            //         // if (!discDiscNetwork)
+            //         //     whatIsMissing.Add("Discriminator Discrete Network");
+            //     }
+            // }
 
             return whatIsMissing;
         }

@@ -138,11 +138,11 @@ namespace DeepUnityTutorials
             d_optim.ZeroGrad();
             var prediction_real = discriminator.Forward(real_data);
             var loss_real = Loss.BCE(prediction_real, RealTarget(batch_size));
-            discriminator.Backward(loss_real.Derivative);
+            discriminator.Backward(loss_real.Gradient);
 
             var prediction_fake = discriminator.Forward(generated_data);
             var loss_fake = Loss.BCE(prediction_fake, FakeTarget(batch_size));
-            discriminator.Backward(loss_fake.Derivative);
+            discriminator.Backward(loss_fake.Gradient);
 
             d_optim.Step();
             return loss_fake.Item + loss_real.Item;
@@ -155,7 +155,7 @@ namespace DeepUnityTutorials
             var Gz = generator.Forward(GeneratorInput(batch_size, latent_dim));
             var DGz = discriminator.Forward(Gz);
             var loss = Loss.BCE(DGz, RealTarget(batch_size)); // (batch_size, 1)
-            var generatorLossDerivative = discriminator.Backward(loss.Derivative);
+            var generatorLossDerivative = discriminator.Backward(loss.Gradient);
             generator.Backward(generatorLossDerivative);
             g_optim.Step();
 

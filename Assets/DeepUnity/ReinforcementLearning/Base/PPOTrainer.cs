@@ -17,11 +17,8 @@ namespace DeepUnity
     /// 1. Softmax activation on discrete head may "explode"
     public sealed class PPOTrainer : DeepUnityTrainer
     {
-        private float iterationPolicyLoss;
-        private float iterationValueLoss;
-        private float iterationEntropy;
-
-        protected override void FixedUpdate()
+        protected override void Initialize() { }
+        protected override void OnBeforeFixedUpdate()
         {
             // If agents cumulativelly collected enough data to fill up the buffer (it can surpass for multiple agents)
             if (MemoriesCount >= hp.bufferSize)
@@ -37,28 +34,20 @@ namespace DeepUnity
                     agent_memory.Clear();
                 }
 
-                Stopwatch clock = Stopwatch.StartNew();
+                updateClock = Stopwatch.StartNew();
+                updateIterations++;
                 Train();
-                clock.Stop();
+                updateClock.Stop();
 
-                if (track != null)
-                {
-                    track.parallelAgents = parallelAgents.Count;
-                    track.iterations++;
-                    track.policyUpdateSecondsElapsed += (float)clock.Elapsed.TotalSeconds;
-                    track.policyUpdateTime = $"{(int)(Math.Ceiling(track.policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(track.policyUpdateSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(track.policyUpdateSecondsElapsed) % 60)} sec";
-                    track.policyUpdateTimePerIteration = $"{(int)clock.Elapsed.TotalHours} hrs : {(int)(clock.Elapsed.TotalMinutes) % 60} min : {(int)(clock.Elapsed.TotalSeconds) % 60}.{clock.ElapsedMilliseconds%1000} sec";
-
-                    float totalTimeElapsed = (float)(DateTime.Now - timeWhenTheTrainingStarted).TotalSeconds;
-                    track.inferenceTimeRatio = (track.inferenceSecondsElapsed * parallelAgents.Count / totalTimeElapsed).ToString("0.000");
-                    track.policyUpdateTimeRatio = (track.policyUpdateSecondsElapsed / totalTimeElapsed).ToString("0.000");
-                }
+                actorLoss = actorLoss / (hp.bufferSize / hp.batchSize * hp.numEpoch);
+                criticLoss = criticLoss / (hp.bufferSize / hp.batchSize * hp.numEpoch);
+                entropy = entropy / (hp.bufferSize / hp.batchSize * hp.numEpoch);
+                learningRate = model.vScheduler.CurrentLR;
                 currentSteps += hp.bufferSize;
             }
-
-            base.FixedUpdate();
         }
         
+
         // PPO Algorithm
         private void Train()
         {
@@ -96,7 +85,8 @@ namespace DeepUnity
                     Tensor advantages_batch = Tensor.Concat(null, advantages_batches[b]);
                     Tensor value_targets_batch = Tensor.Concat(null, value_targets_batches[b]);
 
-                    advantages_batch = NormalizeAdvantages(advantages_batch); // Advantage normalization is shit when applied on small batches
+                    if(hp.normalizeAdvantages)
+                        advantages_batch = NormalizeAdvantages(advantages_batch); // Advantage normalization is shit when applied on small batches
                    
                     UpdateValueNetwork(states_batch, value_targets_batch);
 
@@ -134,10 +124,10 @@ namespace DeepUnity
 
                     if (kldiv_cont > hp.targetKL || kldiv_disc > hp.targetKL)
                     {
-                        ConsoleMessage.Info($"<b>Early Stopping</b> triggered (KL_continuous: {kldiv_cont} | KL_discrete{kldiv_disc}) ({hp.KLDivergence})");
+                        // ConsoleMessage.Info($"<b>Early Stopping</b> triggered (KL_continuous: {kldiv_cont} | KL_discrete{kldiv_disc}) ({hp.KLDivergence})");
                         break;
                     }
-                    // for rollback is the same but we need to cache the old state of the network....
+                    // for rollback is the same but we need to cache the old state of the network and it is costly....
                 }
 
 
@@ -148,21 +138,8 @@ namespace DeepUnity
                     model.muScheduler?.Step();
                     model.sigmaScheduler?.Step();
                     model.discreteScheduler?.Step();
-                }
-                
-
-               
+                }         
             }
-
-            // Save statistics info (we show what do we receive on the first mini-batch)
-            track?.learningRate.Append(model.vScheduler.CurrentLR);
-            track?.policyLoss.Append(iterationPolicyLoss / (hp.batchSize * hp.numEpoch));
-            track?.valueLoss.Append(iterationValueLoss / (hp.batchSize * hp.numEpoch));
-            track?.entropy.Append(iterationEntropy / ((hp.batchSize * hp.numEpoch) * (model.IsUsingContinuousActions && model.IsUsingDiscreteActions ? 2 : 1)));
-
-            iterationPolicyLoss = 0f;
-            iterationValueLoss = 0f;
-            iterationEntropy = 0f;
 
             model.muNetwork?.SetDevice(model.inferenceDevice);
             model.sigmaNetwork?.SetDevice(model.inferenceDevice);
@@ -178,16 +155,16 @@ namespace DeepUnity
         private void UpdateValueNetwork(Tensor states, Tensor value_targets)
         {
             Tensor values = model.vNetwork.Forward(states);
-            Loss criticLoss = Loss.MSE(values, value_targets);
-            float lossItem = criticLoss.Item;
+            Loss mse = Loss.MSE(values, value_targets);
+            float lossItem = mse.Item;
 
             if (float.IsNaN(lossItem))
                 return;
             else
-                iterationValueLoss += criticLoss.Item;
+                criticLoss += lossItem;
 
             model.vOptimizer.ZeroGrad();
-            model.vNetwork.Backward(criticLoss.Derivative * 0.5f);
+            model.vNetwork.Backward(mse.Gradient * 0.5f);
             model.vOptimizer.ClipGradNorm(hp.gradClipNorm);
             model.vOptimizer.Step();
 
@@ -208,6 +185,7 @@ namespace DeepUnity
             Tensor mu, sigma;
             model.ContinuousForward(states, out mu, out sigma);
             pi = Tensor.Probability(actions, mu, sigma);
+            Tensor sigmaSquared = sigma.Pow(2f);
 
             Tensor ratio = pi / piOld; // a.k.a pₜ(θ) = πθ(a|s) / πθold(a|s)
 
@@ -217,20 +195,21 @@ namespace DeepUnity
                                 ratio * advantages, 
                                 Tensor.Clip(ratio, 1f - hp.epsilon, 1f + hp.epsilon) * advantages);
 
-            if(LClip.Contains(float.NaN))
+            float surrogateItem = LClip.Abs().ToArray().Average();
+            if (float.IsNaN(surrogateItem))
             {
-                ConsoleMessage.Warning($"PPO LCLIP batch containing NaN values skipped");
-                return;   
+                ConsoleMessage.Warning($"PPO surrogate LCLIP batch containing NaN values skipped");
+                return;
             }
-            iterationPolicyLoss += LClip.Abs().ToArray().Average();
+            actorLoss += surrogateItem;
+          
 
             // Computing ∂-LClip / ∂πθ(a|s)
             Tensor dmindx = Tensor.Zeros(batch_size, continuous_actions_num);
             Tensor dmindy = Tensor.Zeros(batch_size, continuous_actions_num);
             Tensor dclipdx = Tensor.Zeros(batch_size, continuous_actions_num);
 
-
-            for (int b = 0; b < batch_size; b++)
+            Parallel.For(0, batch_size, b =>
             {
                 for (int a = 0; a < continuous_actions_num; a++)
                 {
@@ -248,21 +227,23 @@ namespace DeepUnity
                     // ∂Clip(x,a,b)/∂x
                     dclipdx[b, a] = (1f - e <= pt && pt <= 1f + e) ? 1f : 0f;
                 }
-            }
+
+            });
+
 
             // ∂-LClip / ∂πθ(a|s)  (20) Bick.D
             Tensor dmLClip_dPi = -1f * (dmindx * advantages + dmindy * advantages * dclipdx) / piOld;
 
             // Entropy bonus added if σ is trainable
             // H(πθ(a|s)) = - integral( πθ(a|s) log πθ(a|s) ) = 1/2 * log(2πeσ^2) // https://en.wikipedia.org/wiki/Differential_entropy
-            Tensor H = 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2)); 
-            iterationEntropy += H.ToArray().Average();          
+            // Tensor H = 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2)); 
+            entropy += sigma.ToArray().Average(); // H.ToArray().Average(); // i modified it because is simply to understand since it is sigma         
 
-            if (dmLClip_dPi.Contains(float.NaN)) return;
+            // if (dmLClip_dPi.Contains(float.NaN)) return;
 
 
             // ∂πθ(a|s) / ∂μ = πθ(a|s) * (x - μ) / σ^2   (26) Bick.D
-            Tensor dPi_dMu = pi * (actions - mu) / sigma.Pow(2);
+            Tensor dPi_dMu = pi * (actions - mu) / sigmaSquared;
 
 
             // ∂-LClip / ∂μ = (∂-LClip / ∂πθ(a|s)) * (∂πθ(a|s) / ∂μ)
@@ -275,7 +256,7 @@ namespace DeepUnity
             if(model.standardDeviation == StandardDeviationType.Trainable)
             {
                 // ∂πθ(a|s) / ∂σ = πθ(a|s) * ((x - μ)^2 - σ^2) / σ^3    (Simple statistical gradient-following for connectionst Reinforcement Learning (pag 14))
-                Tensor dPi_dSigma = pi * ((actions - mu).Pow(2) - sigma.Pow(2)) / sigma.Pow(3);
+                Tensor dPi_dSigma = pi * ((actions - mu).Pow(2) - sigmaSquared) / (sigmaSquared * sigma);
 
                 // ∂-H / ∂σ = -1/σ
                 Tensor dmH_dSigma = sigma.Select(x => -1f / x);
@@ -314,20 +295,22 @@ namespace DeepUnity
                                 ratio * advantages,
                                 Tensor.Clip(ratio, 1 - hp.epsilon, 1 + hp.epsilon) * advantages);
 
-            if (LClip.Contains(float.NaN))
+           
+            float surrogateItem = LClip.Abs().ToArray().Average();         
+            if (float.IsNaN(surrogateItem))
             {
-                ConsoleMessage.Warning($"PPO LCLIP batch containing NaN values skipped");
-
+                ConsoleMessage.Warning($"PPO surrogate LCLIP batch containing NaN values skipped");
                 return;
             }
-            iterationPolicyLoss += LClip.Abs().ToArray().Average();
+            actorLoss += surrogateItem;
+
 
             // Computing ∂-LClip / ∂πθ(a|s)
             Tensor dmindx = Tensor.Zeros(batch_size, discrete_actions_num);
             Tensor dmindy = Tensor.Zeros(batch_size, discrete_actions_num);
             Tensor dclipdx = Tensor.Zeros(batch_size, discrete_actions_num);
 
-            for (int b = 0; b < batch_size; b++)
+            Parallel.For(0, batch_size, b =>
             {
                 for (int a = 0; a < discrete_actions_num; a++)
                 {
@@ -345,7 +328,7 @@ namespace DeepUnity
                     // ∂Clip(x,a,b)/∂x
                     dclipdx[b, a] = (1f - e <= pt && pt <= 1f + e) ? 1f : 0f;
                 }
-            }
+            });
 
             // ∂-LClip / ∂πθ(a|s)  (20) Bick.D
             Tensor dmLClip_dPi = -1f * (dmindx * advantages + dmindy * advantages * dclipdx) / piOld;
@@ -357,13 +340,13 @@ namespace DeepUnity
             // Entropy bonus for discrete actions
             // H = - φ * log(φ)
             Tensor H = - pi * pi.Log();
-            iterationEntropy += H.ToArray().Average();
+            entropy += H.ToArray().Average();
 
             // ∂-H / ∂φ = log(φ) + 1;
             Tensor dmH_dPhi = pi.Log() + 1;
 
             // ∂-L / ∂φ = (∂-L / ∂-πθ(a|s)) * (∂-πθ(a|s) / ∂φ) + β * (∂-H / ∂φ) 
-            Tensor dmLClip_dPhi = dmLClip_dPi * dPi_dPhi + hp.beta * 10f * dmH_dPhi;
+            Tensor dmLClip_dPhi = dmLClip_dPi * dPi_dPhi + hp.beta * dmH_dPhi;
 
             model.discreteOptimizer.ZeroGrad();
             model.discreteNetwork.Backward(dmLClip_dPhi);
@@ -412,7 +395,7 @@ namespace DeepUnity
 
 
             // Generalized Advantage Estimation
-            Parallel.For(0, T, DeepUnityMeta.MULTITHREADS_8, timestep =>
+            Parallel.For(0, T, timestep =>
             {
                 float discount = 1f;
                 float Ahat_t = 0f;

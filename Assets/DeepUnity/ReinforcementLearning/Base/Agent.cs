@@ -38,14 +38,13 @@ namespace DeepUnity
         [SerializeField, HideInInspector, Tooltip("Collect automatically the [Compressed] Observation Vector of attached sensors (if any) to this GameObject, and any child GameObject of any degree. Consider the number of Observation Vector's float values when defining the Space Size.")]
         private UseSensorsType useSensors = UseSensorsType.ObservationsVector;
 
-        
+
         public event EventHandler OnEpisodeEnd;
-        public TrainingStatistics PerformanceTrack { get; set; }
         public MemoryBuffer Memory { get; set; }
         public DecisionRequester DecisionRequester { get; private set; }
         private TimestepTuple Timestep { get; set; }    
         private List<ISensor> Sensors { get; set; }
-        private StateResetter PositionReseter { get; set; }
+        private PoseReseter PositionReseter { get; set; }
         private StateVector StatesBuffer { get; set; }
         private ActionBuffer ActionsBuffer { get; set; }       
         private Tensor lastState { get; set; }
@@ -100,12 +99,12 @@ namespace DeepUnity
                     PositionReseter = null;
                     break;
                 case OnEpisodeEndType.ResetAgent:
-                    PositionReseter = new StateResetter(transform);
+                    PositionReseter = new PoseReseter(transform);
                     break;
                 case OnEpisodeEndType.ResetEnvironment:
                     try
                     {
-                        PositionReseter = new StateResetter(transform.parent);
+                        PositionReseter = new PoseReseter(transform.parent);
                     }
                     catch
                     {
@@ -124,7 +123,6 @@ namespace DeepUnity
             {
                 TrainingStatistics pf;
                 TryGetComponent(out pf);
-                PerformanceTrack = pf;
                 OnEpisodeBegin();
                 DeepUnityTrainer.Subscribe(this, model.config.trainer);                
             }
@@ -230,13 +228,6 @@ namespace DeepUnity
             if (Timestep?.done[0] == 1)
             {
                 OnEpisodeEnd?.Invoke(this, EventArgs.Empty);
-                if (PerformanceTrack) // These are mainly for Learning
-                {
-                    PerformanceTrack.episodeCount++;
-                    PerformanceTrack.episodeLength.Append(EpisodeStepCount);
-                    PerformanceTrack.cumulativeReward.Append(EpsiodeCumulativeReward);
-                }
-
                 StatesBuffer.ResetToZero(); // For Stacked inputs reset to 0 all sequence
                 lastState = null;// On Next episode there was no last state
 
@@ -249,8 +240,6 @@ namespace DeepUnity
          
             // Reset timestep
             Timestep = new TimestepTuple(++EpisodeStepCount);
-
-            if (PerformanceTrack) PerformanceTrack.stepCount++;
         }
         private void PerformDecision()
         {
@@ -279,7 +268,7 @@ namespace DeepUnity
             model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.prob_discrete);
 
             // Run agent's actions and clip them
-            ActionsBuffer.ContinuousActions = model.IsUsingContinuousActions ? new Tanh().Forward(Timestep.action_continuous).ToArray() : null; // values also can be clipped in [-1,1] directly
+            ActionsBuffer.ContinuousActions = model.IsUsingContinuousActions ? new Tanh().Predict(Timestep.action_continuous).ToArray() : null; 
             ActionsBuffer.DiscreteAction = model.IsUsingDiscreteActions ? (int)Timestep.action_discrete.ArgMax(-1)[0] : -1;
             // ACTION PROCESS -----------------------------------------------------------------------
         }
@@ -378,8 +367,7 @@ namespace DeepUnity
         /// </summary>
         public void EndEpisode()
         {
-            Timestep.done = Tensor.Constant(1);
-
+            Timestep.done[0] = 1f;
         }
         /// <summary>
         /// Called only inside <b>OnActionReceived()</b>, and <b>OnTriggerXXX()</b> or <b>OnCollisionXXX()</b>. <br></br>
@@ -457,7 +445,7 @@ namespace DeepUnity
                 }
                 else if(DeepUnityTrainer.Instance.GetType() == typeof(SACTrainer))
                 {
-                    int collected_data_count = DeepUnityTrainer.TrainingBufferCount;
+                    int collected_data_count = DeepUnityTrainer.Instance.train_data.Count;
                     float bufferFillPercentage = collected_data_count / ((float)script.model.config.bufferSize) * 100f;
                     StringBuilder sb = new StringBuilder();
                     sb.Append("Buffer [");
