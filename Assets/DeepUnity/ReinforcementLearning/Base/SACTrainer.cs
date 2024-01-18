@@ -21,11 +21,11 @@ namespace DeepUnity
         {
             Qtarg1 = model.q1Network.Clone() as NeuralNetwork;
             Qtarg2 = model.q2Network.Clone() as NeuralNetwork;
-            // if(model.standardDeviation == StandardDeviationType.Fixed)
-            // {
-            //     ConsoleMessage.Info("Behaviour's standard deviation is Trainable");
-            //     model.standardDeviation = StandardDeviationType.Trainable;
-            // }
+            if(model.standardDeviation == StandardDeviationType.Fixed)
+            {
+                ConsoleMessage.Info("Behaviour's standard deviation is Trainable");
+                model.standardDeviation = StandardDeviationType.Trainable;
+            }
             if(hp.updateAfter <= hp.batchSize)
             {
                 ConsoleMessage.Info("'Update After' was set higher than the 'batch size'.");
@@ -49,7 +49,6 @@ namespace DeepUnity
                         continue;
 
                     train_data.TryAppend(agent_mem, hp.bufferSize);
-                    if (hp.debug) Utils.DebugInFile(agent_mem.ToString());
                     agent_mem.Clear();
                 }
 
@@ -61,7 +60,7 @@ namespace DeepUnity
                     updateClock.Stop();
 
                     learningRate = model.muScheduler.CurrentLR;
-                    currentSteps += new_experiences_collected;
+                    currentSteps += new_experiences_collected / decision_freq; 
                     new_experiences_collected = 0;
                 }             
             }
@@ -79,7 +78,7 @@ namespace DeepUnity
                 Tensor normalized_states = Tensor.Concat(null, batch.Select(x => x.state).ToArray());
                 Tensor raw_continuous_actions = Tensor.Concat(null, batch.Select(x => x.action_continuous).ToArray());
 
-                ComputeQTargets(batch, in hp.gamma);
+                ComputeQTargets(batch);
 
                 Tensor y = Tensor.Concat(0, batch.Select(x => x.q_target).ToArray());
 
@@ -88,7 +87,7 @@ namespace DeepUnity
                 UpdateTargetNetworks();
             }
         }
-        private void ComputeQTargets(TimestepTuple[] batch, in float GAMMA)
+        private void ComputeQTargets(TimestepTuple[] batch)
         {           
             Tensor sPrime = Tensor.Concat(null, batch.Select(x => x.nextState).ToArray());
    
@@ -97,18 +96,18 @@ namespace DeepUnity
             model.ContinuousPredict(sPrime, out aTildePrime, out piTildePrime);
 
             Tensor pair_sPrime_aTildePrime = StateActionPair(sPrime, aTildePrime);
-            Tensor[] Qtarg1_sPrime_aTildePrime = Qtarg1.Predict(pair_sPrime_aTildePrime).Split(0, 1); // [](CONT_ACT)
-            Tensor[] Qtarg2_sPrime_aTildePrime = Qtarg2.Predict(pair_sPrime_aTildePrime).Split(0, 1); // [](CONT_ACT)
+            Tensor[] Qtarg1_sPrime_aTildePrime = Qtarg1.Predict(pair_sPrime_aTildePrime).Split(0, 1); // [](1)
+            Tensor[] Qtarg2_sPrime_aTildePrime = Qtarg2.Predict(pair_sPrime_aTildePrime).Split(0, 1); // [](1)
 
-            Tensor pi = piTildePrime.Prod(-1); // (B)
-            for (int t = 0; t < batch.Length; t++) // note that is random
+            Tensor logPi = piTildePrime.Sum(-1).Log(); // (B) -- the log prob scalar is the sum over the probs vec
+            for (int t = 0; t < batch.Length; t++)
             {
-                // y(r,s',d) = r + Ɣ(1 - d)[min(Q1t(s',ã'), Q2t(s',ã')) - απθ(ã'|s')]
+                // y(r,s',d) = r + Ɣ(1 - d)[min(Q1t(s',ã'), Q2t(s',ã')) - αlogπθ(ã'|s')]
 
                 float r = batch[t].reward[0];
                 float d = batch[t].done[0];
 
-                Tensor y = r + GAMMA * (1f - d) * (Tensor.Minimum(Qtarg1_sPrime_aTildePrime[t], Qtarg2_sPrime_aTildePrime[t]) - hp.alpha * MathF.Log(pi[t]));
+                Tensor y = r + hp.gamma * (1f - d) * (Tensor.Minimum(Qtarg1_sPrime_aTildePrime[t], Qtarg2_sPrime_aTildePrime[t]) - hp.alpha * logPi[t]);
                 batch[t].q_target = y;
             }
         }
@@ -179,17 +178,17 @@ namespace DeepUnity
             // this part is incorrect
             Tensor dminQ1Q2_dQ1 = Tensor.Zeros(batch_size, 1);
             Tensor dminQ1Q2_dQ2 = Tensor.Zeros(batch_size, 1);
-            for (int i = 0; i < batch_size; i++)
+            for (int b = 0; b < batch_size; b++)
             {
-                if (Q1s_aTildeS[i, 0] <= Q2s_aTildeS[i, 0])
+                if (Q1s_aTildeS[b, 0] <= Q2s_aTildeS[b, 0])
                 {
-                    dminQ1Q2_dQ1[i, 0] = 1f;
-                    dminQ1Q2_dQ2[i, 0] = 0f;
+                    dminQ1Q2_dQ1[b, 0] = 1f;
+                    dminQ1Q2_dQ2[b, 0] = 0f;
                 }
                 else
                 {
-                    dminQ1Q2_dQ1[i, 0] = 0f;
-                    dminQ1Q2_dQ2[i, 0] = 1f;
+                    dminQ1Q2_dQ1[b, 0] = 0f;
+                    dminQ1Q2_dQ2[b, 0] = 1f;
                 }
             }
             
@@ -201,7 +200,6 @@ namespace DeepUnity
             Tensor dminQ1Q2_daTildeS = ExtractActionFromStateAction(dminQ1Q2_ds_aTildeS, states.Size(-1), aTildeS.Size(-1));
 
             Tensor dminQ1Q2_du = tanh.Backward(dminQ1Q2_daTildeS);
-
             Tensor dminQ1Q2_dMu = dminQ1Q2_du * 1f;
             Tensor dminQ1Q2_dSigma = dminQ1Q2_du * ksi;
 
@@ -221,25 +219,21 @@ namespace DeepUnity
             Tensor dLog_1mTanh2u_du = -2f * tanh_u * sech_u.Pow(2f) / (- tanh_u.Pow(2f) + 1f); // Wolfram Alpha?:D
 
             Tensor dAlphaLogPi_aTildeS_s_du = hp.alpha * (dLogMuDist_du - dLog_1mTanh2u_du);
-
-
             Tensor dAlphaLogPiaTildeS_s_dMu = dAlphaLogPi_aTildeS_s_du * 1f;
             Tensor dAlphaLogPiaTildeS_s_dSigma = dAlphaLogPi_aTildeS_s_du * ksi;
 
-            Tensor dJ_dMu = dminQ1Q2_dMu - dAlphaLogPiaTildeS_s_dMu;
-      
+            Tensor dJ_dMu = dminQ1Q2_dMu - dAlphaLogPiaTildeS_s_dMu;    
             model.muOptimizer.ZeroGrad();
             model.muNetwork.Backward(-dJ_dMu);
             model.muOptimizer.Step();
 
-            if(model.standardDeviation == StandardDeviationType.Trainable)
-            {
-                Tensor dJ_dSigma = dminQ1Q2_dSigma - dAlphaLogPiaTildeS_s_dSigma;
 
-                model.sigmaOptimizer.ZeroGrad();
-                model.sigmaNetwork.Backward(-dJ_dSigma);
-                model.sigmaOptimizer.Step();
-            }              
+
+            Tensor dJ_dSigma = dminQ1Q2_dSigma - dAlphaLogPiaTildeS_s_dSigma;
+            model.sigmaOptimizer.ZeroGrad();
+            model.sigmaNetwork.Backward(-dJ_dSigma);
+            model.sigmaOptimizer.Step();
+                          
         }
         public void UpdateTargetNetworks()
         {

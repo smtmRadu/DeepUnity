@@ -30,8 +30,8 @@ namespace DeepUnity
         {
             R = discount * R + r_t;
 
-            Update(R);
-            float std = MathF.Sqrt(m2 / (step - 1) + Utils.EPSILON);
+            Update(R); // In paper might be a mistake since it updates with R
+            float std = MathF.Sqrt(m2 / (step - 1) + 1e-10f);
 
             return Math.Clamp(r_t / std, -clip, clip);
         }

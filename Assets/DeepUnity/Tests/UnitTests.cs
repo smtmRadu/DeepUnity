@@ -27,27 +27,35 @@ namespace kbRadu
         public AgentBehaviour beh;
         private void Start()
         {
-            // so from the test it works with GradClip on return all, but it doesn t work for return last 
-            NeuralNetwork n = new NeuralNetwork(
-                new RNNCell(10, 20));
-            Adam optim = new Adam(n.Parameters(), lr: lr);
-
-            Tensor input = Tensor.RandomNormal(64, 16, 10);
-            Tensor targ = Tensor.RandomNormal(64, 20);
-
-            for (int i = 0; i < Runs; i++)
-            {
-                Tensor output = n.Forward(input);
-                Loss mse = Loss.MSE(output, targ);
-                n.Backward(mse.Gradient);
-                optim.ClipGradNorm(0.5f);
-                optim.Step();
-                print(mse.Item);
-                graph.Append(mse.Item);
-            }
-
+            Tensor stackObs = Tensor.RandomNormal(8);
+            print(stackObs);
+            print(stackObs.Reshape(2, 4));
+            Tensor obs = Tensor.RandomNormal(6, 10);
+            print(obs);
         }
 
+        void TestRNN()
+        {
+            net = new NeuralNetwork(
+               new RNNCell(10, 64, HiddenStates.ReturnAll),
+               new RNNCell(64, 64, HiddenStates.ReturnAll),
+               new RNNCell(64, 10, HiddenStates.ReturnLast));
+            optim = new Adam(net.Parameters());
+            Tensor input = Tensor.Random01(batchSize, 6, 10);
+            Tensor target = Tensor.Ones(batchSize, 10);
+            net.SetDevice(TestDevice);
+            TimeKeeper.Start();
+            for (int i = 0; i < Runs; i++)
+            {
+                var predict = net.Forward(input);
+                Loss mse = Loss.MSE(predict, target);
+                optim.ZeroGrad();
+                net.Backward(mse.Gradient);
+                optim.Step();
+                graph.Append(mse.Item);
+            }
+            TimeKeeper.Stop();
+        }
         public void TestCPU()
         {
             Tensor tensor1 = Tensor.RandomNormal(MatShape.x, MatShape.y);

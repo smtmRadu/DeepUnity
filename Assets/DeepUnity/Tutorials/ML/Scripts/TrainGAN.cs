@@ -17,7 +17,7 @@ namespace DeepUnityTutorials
         [SerializeField] private NeuralNetwork discriminator;
         [SerializeField] private NeuralNetwork generator;
         
-        const int latent_dim = 128;
+        const int latent_dim = 100;
 
         [Button("SaveNetworks")]
         [SerializeField] private int batch_size = 64;
@@ -36,20 +36,21 @@ namespace DeepUnityTutorials
         private int batch_index = 0;
         private void Start()
         {
+            const float relu_leak = 0.01f;
             if (discriminator == null)
             {
                 discriminator = new NeuralNetwork(
                     new Flatten(),
                     new Dense(784, 1024, device: Device.GPU),
-                    new LeakyReLU(0.2f),
+                    new LeakyReLU(relu_leak),
                     new Dropout(0.3f),
                 
                     new Dense(1024, 512, device: Device.GPU),
-                    new LeakyReLU(0.2f),
+                    new LeakyReLU(relu_leak),
                     new Dropout(0.3f),
 
                     new Dense(512, 256, device: Device.GPU),
-                    new LeakyReLU(0.2f),
+                    new LeakyReLU(relu_leak),
                     new Dropout(0.3f),
 
                     new Dense(256, 1, device: Device.GPU),
@@ -60,22 +61,22 @@ namespace DeepUnityTutorials
             {
                 generator = new NeuralNetwork(
                     new Dense(latent_dim, 256, device: Device.GPU),
-                    new LeakyReLU(0.2f),
+                    new LeakyReLU(relu_leak),
 
                     new Dense(256, 512, device: Device.GPU),
-                    new LeakyReLU(0.2f),
+                    new LeakyReLU(relu_leak),
 
                     new Dense(512, 1024,  device: Device.GPU),
-                    new LeakyReLU(0.2f),
+                    new LeakyReLU(relu_leak),
 
                     new Dense(1024, 784, device: Device.GPU),
-                    new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 }),
-                    new Tanh()
+                    new Tanh(),
+                    new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 })
                     ).CreateAsset("generator");
             }
 
-            d_optim = new Adam(discriminator.Parameters(), lr);
-            g_optim = new Adam(generator.Parameters(), lr);
+            d_optim = new Adam(discriminator.Parameters(), lr, eps: 1e-8f);
+            g_optim = new Adam(generator.Parameters(), lr, eps: 1e-8f);
 
             List<(Tensor, Tensor)> data;
             Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out data, out _, DatasetSettings.LoadTrainOnly);
@@ -143,7 +144,6 @@ namespace DeepUnityTutorials
             var prediction_fake = discriminator.Forward(generated_data);
             var loss_fake = Loss.BCE(prediction_fake, FakeTarget(batch_size));
             discriminator.Backward(loss_fake.Gradient);
-
             d_optim.Step();
             return loss_fake.Item + loss_real.Item;
         }

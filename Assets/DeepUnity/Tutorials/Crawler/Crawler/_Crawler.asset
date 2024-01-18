@@ -18,15 +18,13 @@ MonoBehaviour:
   stackedInputs: 1
   continuousDim: 20
   discreteDim: 0
-  config: {fileID: 11400000, guid: 08503d87fc307c147abb10c930e8baf3, type: 2}
-  vNetwork: {fileID: 11400000, guid: 017a51b2f7deec74ea77ee4c22e8d24f, type: 2}
-  q1Network: {fileID: 11400000, guid: 3435a53f23787fa4eace0bf32ca2986f, type: 2}
-  q2Network: {fileID: 11400000, guid: 503d0d53fd69cd34dbcc4e6aac3436e3, type: 2}
-  muNetwork: {fileID: 11400000, guid: e443bcc90742ca94eb2e3db7e8ea9172, type: 2}
-  sigmaNetwork: {fileID: 11400000, guid: b88b99277db64fd419db31c3afa70a1b, type: 2}
+  config: {fileID: 11400000, guid: b77d4dcee841e524b83be7664d8ca54e, type: 2}
+  vNetwork: {fileID: 11400000, guid: bbad182c9d6a30049a82c0ab540574e7, type: 2}
+  q1Network: {fileID: 11400000, guid: 23521786a4b675d478a3867d4b7a06c9, type: 2}
+  q2Network: {fileID: 11400000, guid: dd0af919eb1f6ec4a8a7e7e193aa4ffd, type: 2}
+  muNetwork: {fileID: 11400000, guid: c7cae95e54ba8ad4eaefd3564dbd73c1, type: 2}
+  sigmaNetwork: {fileID: 11400000, guid: 395781bb0d30be142b7deb69184bd380, type: 2}
   discreteNetwork: {fileID: 0}
-  discContNetwork: {fileID: 11400000, guid: 67e375968bd951f479dcf119d68f0d60, type: 2}
-  discDiscNetwork: {fileID: 0}
   targetFPS: 100
   inferenceDevice: 0
   trainingDevice: 1
@@ -291,12 +289,12 @@ MonoBehaviour:
       - 0
       - 0
       shape: 7e000000
-  observationsClip: 2.47
+  observationsClip: 2.51
   rewardsNormalizer:
     step: 0
     R: 0
     mean: 0
     m2: 0
   standardDeviation: 0
-  standardDeviationValue: 3
-  standardDeviationScale: 1
+  standardDeviationValue: 2.49
+  standardDeviationScale: 1.5

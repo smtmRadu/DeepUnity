@@ -7,6 +7,7 @@ namespace DeepUnityTutorials
     {
         // Spring: 3000 | Damper: 100 | MaxForce: 6000
         public GameObject goals;
+        public float reward_scale = 10f;
 
         [Header("Body Parts 16")]
         public GameObject head;
@@ -189,8 +190,11 @@ namespace DeepUnityTutorials
             jdDict[shinR].SetJointStrength(actions_vector[42]);
             jdDict[footR].SetJointStrength(actions_vector[43]);
 
-            AddReward(stomach.transform.position.z * 0.001f);
-            AddReward(head.transform.position.z * 0.001f);
+            float orientation_reward = Vector3.Angle(transform.forward, head.transform.forward) % 360f / 360f;
+            float step_reward = stomach.transform.position.z * head.transform.position.z * head.transform.position.y * orientation_reward;
+            step_reward /= reward_scale;
+            step_reward = Mathf.Clamp(step_reward, -0.02f, 0.02f);
+            AddReward(step_reward);
         }
     }
 

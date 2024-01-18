@@ -7,8 +7,17 @@ namespace DeepUnity
     {
         protected Parameter[] parameters;
 
+        /// <summary>
+        /// learning rate
+        /// </summary>
         public float gamma;
+        /// <summary>
+        /// regularization strength
+        /// </summary>
         protected float lambda;
+        /// <summary>
+        /// numerical stability value
+        /// </summary>
         protected float epsilon;
         protected int t; // step counter
 

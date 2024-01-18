@@ -21,20 +21,13 @@ namespace DeepUnity
         public string finishedAt = " - ";
         [ReadOnly, Tooltip("How much time passed in real time since the start of the training simulation.")] 
         public string trainingSessionTime = " - ";
-
-        [HideInInspector] public float policyUpdateSecondsElapsed = 0f;
-        [HideInInspector] public float inferenceSecondsElapsed = 0f; // Updated via deltaTime
-        [HideInInspector] public bool collectAgentStuff = false;
-
         [ReadOnly, Tooltip("Total time spent on inference in total.")]
         public string inferenceTime = " - ";
-
         [ReadOnly, Tooltip("Total time spent on policy update.")]
         public string policyUpdateTime = " - ";
         [ReadOnly, Tooltip("How much time takes a policy update iteration.")]
         public string policyUpdateTimePerIteration = " - ";
         
-
         [Space(20)]
         [ReadOnly, Tooltip("Total number of episodes runned by all parallel agents.")]
         public int episodeCount = 0;
@@ -45,14 +38,11 @@ namespace DeepUnity
         [ReadOnly, Tooltip("Parallel agents learning. If this is not equal to your environments, some of them are not having the behaviour to learn.")] 
         public int parallelAgents = 0;
 
-        
-
-
         [Space(20)]
         [Header("Environment")]
         [Tooltip("Cumulated reward on each episode.")] 
         public PerformanceGraph cumulativeReward = new PerformanceGraph();
-        [Tooltip("Steps required in each episode.")] 
+        [Tooltip("Steps taken in each episode.")] 
         public PerformanceGraph episodeLength = new PerformanceGraph();
 
         [Header("Losses")]
@@ -68,14 +58,16 @@ namespace DeepUnity
         public PerformanceGraph learningRate = new PerformanceGraph();
 
 
-
+        private float policyUpdateSecondsElapsed = 0f;
+        private float inferenceSecondsElapsed = 0f; // Updated via deltaTime
+        private bool collectAgentStuff = false;
         private void Awake()
         {
             if (Instance != null && Instance != this)
             {
                 Destroy(this);
             }
-            else
+            else if(GetComponent<Agent>().behaviourType == BehaviourType.Learn)
             {
                 Instance = this;
                 EditorApplication.playModeStateChanged += ExportOnEnd;
@@ -84,6 +76,9 @@ namespace DeepUnity
 
         private void FixedUpdate()
         {
+            if (DeepUnityTrainer.Instance == null)
+                return;
+
             if(!collectAgentStuff)
             {
                 try

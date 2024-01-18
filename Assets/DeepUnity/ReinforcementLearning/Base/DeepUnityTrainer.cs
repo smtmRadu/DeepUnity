@@ -18,7 +18,6 @@ namespace DeepUnity
         public static int MemoriesCount { get => Instance.parallelAgents.Sum(x => x.Memory.Count); }
 
         public event EventHandler OnTrainingSessionEnd;
-        public event EventHandler OnPerformUpdate;
 
         [ReadOnly] public List<Agent> parallelAgents;
         [ReadOnly] public Hyperparameters hp;

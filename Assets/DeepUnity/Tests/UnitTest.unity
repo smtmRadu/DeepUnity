@@ -820,7 +820,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &752495706
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -834,7 +834,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   material: {fileID: 0}
-  TestDevice: 0
+  TestDevice: 1
   graph:
     graph:
       serializedVersion: 2
@@ -846,9 +846,9 @@ MonoBehaviour:
     current: 0
     mean: 0
   MatShape: {x: 512, y: 32}
-  batchSize: 64
+  batchSize: 100
   lr: 0.001
-  Runs: 1000
+  Runs: 30
   net: {fileID: 0}
   image: {fileID: 1095767907}
   image2: {fileID: 0}

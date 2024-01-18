@@ -106,93 +106,102 @@ namespace DeepUnity
         public bool IsUsingContinuousActions { get => continuousDim > 0; }
         public bool IsUsingDiscreteActions { get => discreteDim > 0; }
 
-        private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS)
+
+        private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS, in ArchitectureType ARCHITECTURE)
         {
+            
+            const InitType INIT_W = InitType.HE_Normal;
+            const InitType INIT_PolicyOut = InitType.LeCun_Uniform;
+            const InitType INIT_B = InitType.Zeros;
             static Activation HiddenActivation() => new Tanh();
 
-            const InitType INIT_W = InitType.HE_Normal;
-            const InitType INIT_PolicyOut = InitType.LeCun_Normal;
-            const InitType INIT_B = InitType.Zeros;
-
+            static IModule[] CreateMLP(int inputs, int stack, int outputs, int layers, int hidUnits)
+            {
+                if(layers == 1)
+                {
+                    return new IModule[] {
+                        new Dense(inputs * stack, hidUnits, INIT_W, INIT_B),
+                        HiddenActivation(),
+                        new Dense(hidUnits, outputs, INIT_W, INIT_B)};
+                }
+                if(layers == 2)
+                {
+                    return new IModule[] {
+                        new Dense(inputs * stack, hidUnits, INIT_W, INIT_B),
+                        HiddenActivation(),
+                        new Dense(hidUnits, hidUnits, INIT_W, INIT_B),
+                        HiddenActivation(),
+                        new Dense(hidUnits, outputs, INIT_W, INIT_B)};
+                }
+                if(layers == 3)
+                {
+                    return new IModule[] {
+                        new Dense(inputs * stack, hidUnits, INIT_W, INIT_B),
+                        HiddenActivation(),
+                        new Dense(hidUnits, hidUnits, INIT_W, INIT_B),
+                        HiddenActivation(),
+                        new Dense(hidUnits, hidUnits, INIT_W, INIT_B),
+                        HiddenActivation(),
+                        new Dense(hidUnits, outputs, INIT_W, INIT_B)};
+                }
+                throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
+            }
+            static IModule[] CreateRNN(int inputs, int stack, int outputs, int layers, int hidUnits)
+            {
+                if (layers == 1)
+                {
+                    return new IModule[] {
+                        new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
+                        new RNNCell(inputs, hidUnits, HiddenStates.ReturnAll),
+                        new RNNCell(hidUnits, outputs, HiddenStates.ReturnLast)};
+                }
+                if (layers == 2)
+                {
+                    return new IModule[] {
+                        new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
+                        new RNNCell(inputs, hidUnits, HiddenStates.ReturnAll),
+                        new RNNCell(hidUnits, hidUnits, HiddenStates.ReturnAll),
+                        new RNNCell(hidUnits, outputs, HiddenStates.ReturnLast)};
+                }
+                if (layers == 3)
+                {
+                    return new IModule[] {
+                        new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
+                        new RNNCell(inputs, hidUnits, HiddenStates.ReturnAll),
+                        new RNNCell(hidUnits, hidUnits, HiddenStates.ReturnAll),
+                        new RNNCell(hidUnits, hidUnits, HiddenStates.ReturnAll),
+                        new RNNCell(hidUnits, outputs, HiddenStates.ReturnLast)};
+                }
+                throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
+            }
             //------------------ NETWORK INITIALIZATION ----------------//
 
-            // Initialize value network V(st)
-            vNetwork = new NeuralNetwork(
-               new IModule[] 
-               { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
-               Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-               Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
-            );
 
-            // Initialize pi
-            if (CONTINUOUS_ACTIONS_NUM > 0)
+            if(ARCHITECTURE == ArchitectureType.MLP)
             {
-                muNetwork = new NeuralNetwork(
-                        new IModule[]
-                        { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
-                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_PolicyOut, INIT_B)}).ToArray()
-                    );
+                vNetwork = new NeuralNetwork(CreateMLP(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                if (CONTINUOUS_ACTIONS_NUM > 0)
+                {
+                    muNetwork = new NeuralNetwork(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                    sigmaNetwork = new NeuralNetwork(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
+                    q1Network = new NeuralNetwork(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                    q2Network = new NeuralNetwork(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                }
 
-                sigmaNetwork = new NeuralNetwork(
-                           new IModule[]
-                        { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
-                            Concat(CreateHiddenLayers(NUM_LAYERS - 1, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, CONTINUOUS_ACTIONS_NUM, INIT_PolicyOut, INIT_B), new Softplus() }).ToArray()
-                    );
-
-                // Initialize q networks Q(st,at)
-                q1Network = new NeuralNetwork(
-                   new IModule[]
-                   { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
-                   Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                   Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
-                );
-
-                q2Network = new NeuralNetwork(
-                   new IModule[]
-                   { new Dense((STATE_SIZE + CONTINUOUS_ACTIONS_NUM) * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
-                   Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                   Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B) }).ToArray()
-                );
-
-/*                discContNetwork = new NeuralNetwork(
-                        new IModule[] 
-                        { new Dense(CONTINUOUS_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B),HiddenActivation() }.
-                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B), new Sigmoid() }).ToArray()
-                    );*/
+                if (DISCRETE_ACTIONS_NUM > 0)
+                    discreteNetwork = new NeuralNetwork(CreateMLP(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
             }
-
-            if (DISCRETE_ACTIONS_NUM > 0)
+            else if(ARCHITECTURE == ArchitectureType.RNN)
             {
-                discreteNetwork = new NeuralNetwork(
-                        new IModule[] 
-                        { new Dense(STATE_SIZE * STACKED_INPUTS, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
-                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, DISCRETE_ACTIONS_NUM, INIT_W, INIT_B), new Softmax() }).ToArray()
-                    );
-               /* discDiscNetwork = new NeuralNetwork(
-                        new IModule[] 
-                        { new Dense(DISCRETE_ACTIONS_NUM, HIDDEN_UNITS, INIT_W, INIT_B), HiddenActivation() }.
-                            Concat(CreateHiddenLayers(NUM_LAYERS, HIDDEN_UNITS, INIT_W, INIT_B)).
-                            Concat(new IModule[] { new Dense(HIDDEN_UNITS, 1, INIT_W, INIT_B), new Sigmoid() }).ToArray()
-                    );*/
-            }         
-
-            static IModule[] CreateHiddenLayers(int numLayers, int hidUnits, InitType INIT_W, InitType INIT_B)
-            {
-                if (numLayers == 1)
-                    return new IModule[] { };
-                else if (numLayers == 2)
-                    return new IModule[] { new Dense(hidUnits, hidUnits, INIT_W, INIT_B), HiddenActivation() };
-                else if (numLayers == 3)
-                    return new IModule[] { new Dense(hidUnits, hidUnits, INIT_W, INIT_B), HiddenActivation(), 
-                                           new Dense(hidUnits, hidUnits, INIT_W, INIT_B), HiddenActivation() };
-                else
-                    throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
-
+                vNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                muNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                sigmaNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
+                q1Network = new NeuralNetwork(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                q2Network = new NeuralNetwork(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
             }
+                     
+
+           
         }
 
         public void InitOptimisers(Hyperparameters hp, TrainerType trainer)
@@ -386,7 +395,7 @@ namespace DeepUnity
         /// Creates a new Agent behaviour folder containing all auxiliar neural networks, or loads it if already exists one for this behaviour.
         /// </summary>
         /// <returns></returns>
-        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int continuousActions, int discreteActions, int numLayers, int hidUnits)
+        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int continuousActions, int discreteActions, int numLayers, int hidUnits, ArchitectureType aType)
         {          
             var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
 
@@ -397,7 +406,7 @@ namespace DeepUnity
             }
 
 
-            AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, stackedInputs, continuousActions, discreteActions, numLayers, hidUnits);
+            AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, stackedInputs, continuousActions, discreteActions, numLayers, hidUnits, aType);
             newAgBeh.behaviourName = name;
             newAgBeh.observationSize = stateSize;
             newAgBeh.stackedInputs = stackedInputs;
@@ -416,14 +425,12 @@ namespace DeepUnity
 
             // Create aux assets
             newAgBeh.config = Hyperparameters.CreateOrLoadAsset(name);
-            newAgBeh.vNetwork?.CreateAsset($"{name}/V");
-            newAgBeh.muNetwork?.CreateAsset($"{name}/Mu");
-            newAgBeh.sigmaNetwork?.CreateAsset($"{name}/Sigma");
-            // newAgBeh.discContNetwork?.CreateAsset($"{name}/Disc_Cont");
-            newAgBeh.q1Network?.CreateAsset($"{name}/Q1");
-            newAgBeh.q2Network?.CreateAsset($"{name}/Q2");
-            newAgBeh.discreteNetwork?.CreateAsset($"{name}/Discrete");
-            // newAgBeh.discDiscNetwork?.CreateAsset($"{name}/Disc_Disc");
+            newAgBeh.vNetwork?.CreateAsset($"{name}/V_[{hidUnits}x{numLayers}]");
+            newAgBeh.muNetwork?.CreateAsset($"{name}/Mu_[{hidUnits}x{numLayers}]");
+            newAgBeh.sigmaNetwork?.CreateAsset($"{name}/Sigma_[{hidUnits}x{numLayers}]");
+            newAgBeh.q1Network?.CreateAsset($"{name}/Q1_[{hidUnits}x{numLayers}]");
+            newAgBeh.q2Network?.CreateAsset($"{name}/Q2_[{hidUnits}x{numLayers}]");
+            newAgBeh.discreteNetwork?.CreateAsset($"{name}/Discrete_[{hidUnits}x{numLayers}]");
             
 
             return newAgBeh;

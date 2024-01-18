@@ -1,6 +1,6 @@
 # DeepUnity
 ###### In development - does not currently accept Pull Requests, though feel free to Fork and expand upon it
-![version](https://img.shields.io/badge/version-v0.9.6.11-blue)
+![version](https://img.shields.io/badge/version-v0.9.6.12-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO) and Soft Actor-Critic (SAC).
 
@@ -89,7 +89,7 @@ namespace DeepUnityTutorials
 ###### _Digits reconstructed by a Variational Auto-Encoder (VAE) trained on MNIST dataset. (original - first line, reconstructed - second line)_
 ![digits](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/vae.gif?raw=true)
 
-## Reinforcement Learning with PPO
+## Reinforcement Learning
 In order to work with Reinforcement Learning tools, you must create a 2D or 3D agent using Unity provided GameObjects and Components. The setup flow works similary to ML Agents, so you must create a new behaviour script (e.g. _ReachGoal_) that must inherit the **Agent** class. Attach the new behaviour script to the agent GameObject (automatically **DecisionRequester** script is attached too) [Optionally, a **TrainingStatistics** script can be attached]. Choose the space size and number of continuous/discrete actions, then override the following methods in the behavior script:
 - _CollectObservations()_
 - _OnActionReceived()_
@@ -180,7 +180,7 @@ public class MoveToGoal : Agent
 ```
 _This example considers an agent (with 4 space size and 2 continuous actions) positioned in the middle of an arena that moves forward, backward, left or right (Decision Period is 1), and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the apple, and penalized by 1 point if he is hitting a wall (or falls of the floor), and on every collision the episode ends._
 
-![agent](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/agent.gif?raw=true)
+![reacher](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/reacher.gif?raw=true)
 
 
 
@@ -195,11 +195,14 @@ TIPS:
 
 - The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. If neccesary, in order to override them, call the their **base** each time, respecting the logic of the diagram below.
 
-![rl](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/RL_schema.jpg?raw=true)
-
-
+###### _Base Agent class_
+![agentclass](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/agentclass.jpg?raw=true)
 
 All tutorials scripts are included inside _Assets/DeepUnity/Tutorials_ folder, containing all features provided by the framework and RL environments inspired from ML-Agents examples (note that not all of them have trained models attached).
+
+###### _Sorter agent whose task is to visit the tiles in ascending order_
+![sorter](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/sorter.gif?raw=true)
+
 
 _A paper describing how to implement deep neural nets, PPO and SAC from scratch will be released this spring..._
 

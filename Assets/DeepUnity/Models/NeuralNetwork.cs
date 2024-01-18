@@ -8,8 +8,9 @@ using UnityEngine;
 namespace DeepUnity
 {
     /// <summary>
-    /// Sequencial model.
+    /// Sequencial model. Models can be serialized using <b>JsonUtility.ToJson</b>...
     /// </summary>
+
     [Serializable]
     public class NeuralNetwork : Model<NeuralNetwork, Tensor>, ISerializationCallbackReceiver
     {
@@ -49,11 +50,11 @@ namespace DeepUnity
         /// <summary>
         /// Backpropagates the loss derivative wrt. output and computes the gradients of learnable parameters.
         /// </summary>
-        /// <param name="lossDerivativeWrtPrediction">Derivative of the loss function w.r.t output (dLdY).</param>
+        /// <param name="lossGradient">Derivative of the loss function w.r.t output (dLdY).</param>
         /// <returns><returns>The backpropagated loss derivative (dLdX).</returns>
-        public override Tensor Backward(Tensor lossDerivativeWrtPrediction)
+        public override Tensor Backward(Tensor lossGradient)
         {
-            Tensor loss = modules[modules.Length - 1].Backward(lossDerivativeWrtPrediction);
+            Tensor loss = modules[modules.Length - 1].Backward(lossGradient);
             for (int i = modules.Length - 2; i >= 0; i--)
             {
                 loss = modules[i].Backward(loss);

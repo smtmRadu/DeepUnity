@@ -115,7 +115,6 @@ namespace DeepUnity
             bool isBatched = loss.Rank == 2;
             int batch_size = isBatched ? loss.Size(-2) : 1;
 
-
             if (device == Device.CPU)
             {
                 // Benchmark : 0.93s avg (This method was replaced due to performance benchmark)
@@ -134,6 +133,8 @@ namespace DeepUnity
                 
                 Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
                 Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
+
+                return Tensor.MatMul(loss, weights);
             }
             else
             {
@@ -175,14 +176,9 @@ namespace DeepUnity
                 inputCacheBuffer.Release();
                 weightsGradBuffer.Release();
                 biasesGradBuffer.Release();
-            }
 
-
-            // Backpropagate the loss (batch_size, in)
-            if (device == Device.CPU)
-                return Tensor.MatMul(loss, weights);
-            else
                 return Tensor.MatMulGPU(loss, weights);
+            }   
         }
 
         /// <summary>

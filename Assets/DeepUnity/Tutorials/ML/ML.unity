@@ -1844,7 +1844,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1823018699
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2171,10 +2171,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   canvas: {fileID: 1823018698}
-  discriminator: {fileID: 11400000, guid: 7de615e1ae922e2479ac4572ee3fb021, type: 2}
-  generator: {fileID: 11400000, guid: 9ddca0a5e230f5d4baebe5f13b01cadc, type: 2}
+  discriminator: {fileID: 11400000, guid: a3dc6624c7666b74092f017a4005f915, type: 2}
+  generator: {fileID: 11400000, guid: 85e8eff0488d2ec4eb81e38685582b3b, type: 2}
   batch_size: 64
-  lr: 0.001
+  lr: 0.0002
   perform: 1
   writeLoss: 1
   G_graph:

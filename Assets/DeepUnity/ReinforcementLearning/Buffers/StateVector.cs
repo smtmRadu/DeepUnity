@@ -150,7 +150,7 @@ namespace DeepUnity
         public void AddOneHotObservation(int index, int typesNumber)
         {
             if(index >= typesNumber || index < 0)
-                throw new System.IndexOutOfRangeException($"Index ({index}) is out of range. Must be greater than 0 and less than typesNumber ({typesNumber})!");
+                throw new System.IndexOutOfRangeException($"Index ({index}) is out of range. Must be greater than 0 and less than typesNumber {typesNumber}!");
 
             if (typesNumber < 2)
                 throw new System.ArgumentException($"Types number ({typesNumber}) cannot be less than 2!");

@@ -5,6 +5,7 @@ using System.Text;
 using Unity.Mathematics;
 using Unity.VisualScripting;
 using UnityEditor;
+using UnityEditor.Build.Content;
 using UnityEngine;
 
 /// <summary>
@@ -24,6 +25,8 @@ namespace DeepUnity
         [SerializeField, Min(0), HideInInspector] private int continuousActions = 0;
         [Tooltip("Number of discrete actions in discrete action space. Actions indexes [0, 1, .. n - 1]. Consider to include a 'NO_ACTION' index also (especially when working heuristically).")]
         [SerializeField, Min(0), HideInInspector] private int discreteActions = 0;
+        [Tooltip("Architecture type")]
+        [SerializeField, HideInInspector] private ArchitectureType archType = ArchitectureType.MLP;
         [Tooltip("Number of hidden layers")]
         [SerializeField, Min(1), HideInInspector] private int numLayers = 2;
         [Tooltip("Number of units in a hidden layer in the model.")]
@@ -37,10 +40,8 @@ namespace DeepUnity
         private OnEpisodeEndType onEpisodeEnd = OnEpisodeEndType.ResetEnvironment;
         [SerializeField, HideInInspector, Tooltip("Collect automatically the [Compressed] Observation Vector of attached sensors (if any) to this GameObject, and any child GameObject of any degree. Consider the number of Observation Vector's float values when defining the Space Size.")]
         private UseSensorsType useSensors = UseSensorsType.ObservationsVector;
-
-
-        public event EventHandler OnEpisodeEnd;
-        public MemoryBuffer Memory { get; set; }
+       
+        public MemoryBuffer Memory { get; private set; }
         public DecisionRequester DecisionRequester { get; private set; }
         private TimestepTuple Timestep { get; set; }    
         private List<ISensor> Sensors { get; set; }
@@ -48,10 +49,15 @@ namespace DeepUnity
         private StateVector StatesBuffer { get; set; }
         private ActionBuffer ActionsBuffer { get; set; }       
         private Tensor lastState { get; set; }
+        /// <summary>
+        /// The number of decisions taken in the current episode.
+        /// </summary>
         public int EpisodeStepCount { get; private set; } = 0;
+        /// <summary>
+        /// The cumulated reward in the current episode.
+        /// </summary>
         public float EpsiodeCumulativeReward { get; private set; } = 0f;
         private int EpisodeFixedFramesCount { get; set; } = -1;
-
 
         public virtual void Awake()
         {
@@ -162,7 +168,7 @@ namespace DeepUnity
                 return;
             }
 
-            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, stackedInputs, continuousActions, discreteActions, numLayers, hidUnits);
+            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, stackedInputs, continuousActions, discreteActions, numLayers, hidUnits, archType);
 
             continuousActions = model.continuousDim;
             discreteActions = model.discreteDim;
@@ -193,7 +199,6 @@ namespace DeepUnity
             }
         }
 
-
         // Loop
         private void PostTimestep()
         {
@@ -215,7 +220,7 @@ namespace DeepUnity
                 lastState = GetState();
                 Timestep.nextState = lastState.Clone() as Tensor;
 
-                // Scale and clip reward - rewards scaling the same with advantages should not be normalized for maximum performance.
+                // Scale and clip reward - there was a problem with the rewards normalizer (idk why), but anyways they should not be normalized online because we can use off-policy alogorithms. Just use a constant (0,1) bro to scale it
                 // Timestep.reward[0] = model.rewardsNormalizer.ScaleReward(Timestep.reward[0]);
                 Memory.Add(Timestep);
 
@@ -309,13 +314,14 @@ namespace DeepUnity
             return state;
         }
 
-
         // User call
         /// <summary>
-        /// Reinitializes the current environment stochastically. <br></br>
+        /// An event that is invoked when the agent enters in a terminal state.
+        /// </summary>
+        public event EventHandler OnEpisodeEnd;
+        /// <summary>
+        /// Reinitialize the current environment (stochastically). <br></br>
         /// <br></br>
-        /// <em>The paper recommends all environments to be reinitialized when one agent reaches terminal state, if necesarry you can have a reference 
-        /// to the trainer to access all agents and end their episodes too.</em>
         /// </summary>
         public virtual void OnEpisodeBegin() { }
         /// <summary>
@@ -324,8 +330,8 @@ namespace DeepUnity
         /// <br></br>
         /// <br></br>
         /// <em>Example: <br></br>
-        /// <paramref name="stateVector"/>.AddObservation(transform.position.normalized) <br></br>
-        /// <paramref name="stateVector"/>.AddObservation(transform.rotation.x / 360f) <br></br>
+        /// <paramref name="stateVector"/>.AddObservation(transform.position) <br></br>
+        /// <paramref name="stateVector"/>.AddObservation(transform.rotation.x % 360 / 360f) <br></br>
         /// <paramref name="stateVector"/>.AddObservation(rb.angularVelocity.normalized) <br></br>
         /// </em>
         /// 
@@ -333,7 +339,7 @@ namespace DeepUnity
         /// <param name="stateVector"></param>
         public virtual void CollectObservations(StateVector stateVector) { }
         /// <summary>
-        /// Set a custom shaped state by setting up the state <see cref="Tensor"/>. Note that cannot be used in parallel with the StateVector arg method.
+        /// Set a custom shaped state by setting up the state <see cref="Tensor"/>. Note that cannot be used in parallel with the StateVector arg method, and it works for PPO only.
         /// </summary>
         /// <param name="stateTensor">The <see cref="Tensor"/> observation input.</param>
         public virtual void CollectObservations(out Tensor stateTensor) { stateTensor = null; }
@@ -482,8 +488,19 @@ namespace DeepUnity
 
 
                 EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button("Bake model"))
+                if (GUILayout.Button("Bake model", GUILayout.Width(EditorGUIUtility.labelWidth * 2.32f)))
+                {
                     script.BakeModel();
+                }
+
+                // Create a Rect for the second field with a specific width
+                Rect propertyFieldRect = GUILayoutUtility.GetRect(0, EditorGUIUtility.singleLineHeight);
+                propertyFieldRect.width = 50; // Adjust the width as needed
+
+                SerializedProperty typeProperty = serializedObject.FindProperty("archType");
+                EditorGUI.BeginDisabledGroup(true);
+                EditorGUI.PropertyField(propertyFieldRect, typeProperty, GUIContent.none);
+                EditorGUI.EndDisabledGroup();
                 EditorGUILayout.EndHorizontal();
 
                 EditorGUILayout.Space();

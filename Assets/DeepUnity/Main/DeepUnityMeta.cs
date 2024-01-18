@@ -62,14 +62,14 @@ namespace DeepUnity
    
     public enum InitType
     {
-        [Tooltip("[Kaiming He] N(0, s) where s = sqrt(2 / fan_in). Works well with ReLU / LeakyReLU activation function.")]
+        [Tooltip("[Kaiming He] N(0, s) where s = sqrt(2 / fan_in). Works well with ReLU / LeakyReLU activation functions.")]
         HE_Normal,
-        [Tooltip("[Kaiming He] U(-k, k) where k = sqrt(6 / fan_in). Works well with ReLU / LeakyReLU  activation function.")]
+        [Tooltip("[Kaiming He] U(-k, k) where k = sqrt(6 / fan_in). Works well with ReLU / LeakyReLU  activation functions.")]
         HE_Uniform, 
         
-        [Tooltip("[Xavier Glorot] N(0, s) where s = sqrt(2 / (fan_in + fan_out)).")]
+        [Tooltip("[Xavier Glorot] N(0, s) where s = sqrt(2 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation functions.")]
         Glorot_Normal,
-        [Tooltip("[Xavier Gloro] U(-k, k) where k = sqrt(6 / (fan_in + fan_out)).")]
+        [Tooltip("[Xavier Gloro] U(-k, k) where k = sqrt(6 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation functions.")]
         Glorot_Uniform,
 
         [Tooltip("[Yann LeCun] N(0, s) where s = sqrt(1 / fan_in). Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
@@ -101,6 +101,8 @@ namespace DeepUnity
         [Tooltip("1")]
         Ones,
 
+        [Tooltip("Orthogonal Initialization using Gram-Schmidt Decomposition (used only for 2 dimensional matrices - Dense). Shows very good results in finding a good local minimum.")]
+        Orthogonal,
       
     }
     public enum Device
@@ -229,6 +231,12 @@ namespace DeepUnity
         ReturnAll,
         [Tooltip("Returns only the last hidden state in the sequence h(L)")]
         ReturnLast
+    }
+
+    public enum ArchitectureType
+    {
+        MLP,
+        RNN
     }
 }
 

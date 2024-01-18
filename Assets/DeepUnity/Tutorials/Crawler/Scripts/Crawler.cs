@@ -175,7 +175,7 @@ namespace DeepUnityTutorials
 
             AddReward(0.005f);
             AddReward(0.001f * Vector3.Dot(dirToTarget.normalized,  Quaternion.Euler(0f, -90f, 0f) * transform.forward)); // Reward for looking at the target
-            AddReward(Mathf.Clamp(0.001f / Vector3.Distance(transform.position, target.position), 0, 0.001f)); // Reward for getting close to the target
+            AddReward(0.001f * -Vector3.Distance(transform.position, target.position)); // Reward for getting close to the target
 
             // Point the arrow towards the target
             directionArrow.rotation = Quaternion.LookRotation(target.position - transform.position) * Quaternion.Euler(0, 90f, 0);

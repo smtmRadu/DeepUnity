@@ -51,6 +51,26 @@ namespace DeepUnity
                     return Tensor.Ones(shape);              
                 case InitType.Zeros:
                     return Tensor.Zeros(shape);
+                case InitType.Orthogonal:
+                    if (shape.Length != 2) throw new ArgumentException("Orthogonal initialization can be used only for 2 dimensional parameter tensors.");
+                    /// A = QR
+                    Tensor A = Tensor.RandomNormal(shape);
+                    Tensor Q = Tensor.Zeros(A.Shape);
+                    Tensor R = Tensor.Zeros(A.Size(-1), A.Size(-1));
+                    Tensor[] a_s = Tensor.Split(A, 1, 1);
+                    Tensor[] q_s = Tensor.Split(Q, 1, 1);
+                    for (int j = 0; j < A.Size(-1); j++)
+                    {
+                        Tensor v = a_s[j].Clone() as Tensor;
+                        for (int i = 0; i < j; i++)
+                        {
+                            R[i, j] = (q_s[i] * a_s[j]).Sum(-2)[0];  
+                            v -= R[i, j] * q_s[i];
+                        }
+                        R[j, j] = Tensor.Norm(v)[0];
+                        q_s[j] = v / R[j, j];
+                    }
+                    return Q;
             
                 default:
                     throw new NotImplementedException("Unhandled initialization type!");

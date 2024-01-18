@@ -2,14 +2,12 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using Unity.VisualScripting;
-using UnityEditor.Search;
-using System.Linq;
 using System.Threading.Tasks;
+
 namespace DeepUnity
 {
     // The implementation is adapted for this framework so it works for our models
     // https://pytorch.org/docs/stable/generated/torch.nn.RNNCell.html#torch.nn.RNNCell
-    // Most of the cases we do not care about the rest of the hidden states, only the last one is important.
 
 
     /// <summary>
@@ -21,10 +19,10 @@ namespace DeepUnity
     ///  <br></br>
     /// where B = batch_size, L = sequence_length, H_in = input_size, H_out = hidden_size.
     /// </summary>
-    /// https://mmuratarat.github.io/2019-02-07/bptt-of-rnn
     [Serializable]
     public class RNNCell : ILearnable, IModule
     {
+        [SerializeField] private Device device;
         [SerializeField] private NonLinearity nonlinearity;
         [SerializeField] private HiddenStates onReturn;
         [SerializeField] private Tensor weights;
@@ -54,8 +52,8 @@ namespace DeepUnity
         /// <param name="input_size"></param>
         /// <param name="hidden_size"></param>
         /// <param name="on_forward">Either return the last or all hidden states.</param>
-        /// <param name="activation">Non-linear activation used in the layer.</param>
-        public RNNCell(int input_size, int hidden_size, HiddenStates on_forward = HiddenStates.ReturnLast, NonLinearity activation = NonLinearity.Tanh)
+        /// <param name="nonlinearity">Non-linear activation used in the layer.</param>
+        public RNNCell(int input_size, int hidden_size, HiddenStates on_forward = HiddenStates.ReturnLast, NonLinearity nonlinearity = NonLinearity.Tanh, Device device = default)
         {
             InputCache = new();
             HiddenCache = new();
@@ -70,8 +68,9 @@ namespace DeepUnity
             biasesGrad = Tensor.Zeros(biases.Shape);
             r_weightsGrad = Tensor.Zeros(r_weights.Shape);
             r_biasesGrad = Tensor.Zeros(r_biases.Shape);
-            this.nonlinearity = activation;
+            this.nonlinearity = nonlinearity;
             this.onReturn = on_forward;
+            this.device = device;
         }
         private RNNCell() { }
 
@@ -92,8 +91,8 @@ namespace DeepUnity
             bool isBatched = input.Rank == 3;
             int batch_size = isBatched ? input.Size(0) : 1;
 
-           
-            Tensor[] sequences = isBatched ? input.Split(1, 1) : input.Split(0, 1);
+
+            Tensor[] sequences = input.Split(isBatched ? 1 : 0, 1);
             Tensor h = isBatched ? Tensor.Zeros(batch_size, biases.Size(-1)) : Tensor.Zeros(biases.Size(-1));
 
 
@@ -104,17 +103,21 @@ namespace DeepUnity
                 // x has Shape (B, 1, H) or (1, H) => need to be (B, H) or (H)
                 Tensor x = sequences[i].Squeeze(isBatched ? 1 : 0);
 
-                Tensor l = Linear(x, weights, biases, isBatched, batch_size) + Linear(h, r_weights, r_biases, isBatched, batch_size);
+                Tensor l;
+                if (device == Device.CPU)
+                    l = Linear(x, weights, biases, isBatched, batch_size) + Linear(h, r_weights, r_biases, isBatched, batch_size);
+                else
+                    l = LinearGPU(x, weights, biases, isBatched, batch_size) + LinearGPU(h, r_weights, r_biases, isBatched, batch_size);
 
                 h = activation.Predict(l);
                 if(onReturn == HiddenStates.ReturnAll)
-                    hiddenStates[i] = h.Unsqueeze(1); // (B, 1, H)
+                    hiddenStates[i] = h.Unsqueeze(isBatched ? 1 : 0); // (B, 1, H) or (1, H)
             }
 
             if (onReturn == HiddenStates.ReturnLast)
                 return h;
             else
-                return Tensor.Concat(1, hiddenStates);
+                return Tensor.Concat(isBatched ? 1 : 0, hiddenStates);
                      
         }
         public Tensor Forward(Tensor input)
@@ -133,8 +136,8 @@ namespace DeepUnity
             bool isBatched = input.Rank == 3;
             int batch_size = isBatched ? input.Size(0) : 1;
 
-           
-            Tensor[] sequences = isBatched ? input.Split(1, 1) : input.Split(0, 1);
+
+            Tensor[] sequences = input.Split(isBatched ? 1 : 0, 1);
             Tensor h = isBatched ? Tensor.Zeros(batch_size, biases.Size(-1)) : Tensor.Zeros(biases.Size(-1));
             HiddenCache.Push(h); // add h_0
             Tensor[] hiddenStates = new Tensor[sequences.Length];
@@ -144,45 +147,57 @@ namespace DeepUnity
                 Tensor x = sequences[i].Squeeze(isBatched ? 1 : 0);
                 InputCache.Push(x);
 
-                Tensor l = Linear(x, weights, biases, isBatched, batch_size) + Linear(h, r_weights, r_biases, isBatched, batch_size);
-                
+                Tensor l;
+                if (device == Device.CPU)
+                    l = Linear(x, weights, biases, isBatched, batch_size) + Linear(h, r_weights, r_biases, isBatched, batch_size);
+                else
+                    l = LinearGPU(x, weights, biases, isBatched, batch_size) + LinearGPU(h, r_weights, r_biases, isBatched, batch_size);
+
                 ActivationCache.Push(nonlinearity == NonLinearity.Tanh ? new Tanh() : new ReLU());
                 h = ActivationCache.Peek().Forward(l);
                 HiddenCache.Push(h.Clone() as Tensor);
 
                 if (onReturn == HiddenStates.ReturnAll)
-                    hiddenStates[i] = h.Unsqueeze(1); // (B, 1, H)
+                    hiddenStates[i] = h.Unsqueeze(isBatched? 1 : 0); // (B, 1, H) or (1, H)
             }
+
             if (onReturn == HiddenStates.ReturnLast)
                 return h;
             else
-                return Tensor.Concat(1, hiddenStates);
+                return Tensor.Concat(isBatched ? 1 : 0, hiddenStates);
 
         }
         public Tensor Backward(Tensor dLdY)
         {
-            bool isBatched = dLdY.Rank == 3;
+            bool isBatched;
+            if (onReturn == HiddenStates.ReturnLast)
+                isBatched = dLdY.Rank == 2;
+            else
+                isBatched = dLdY.Rank == 3;
+
             int batch_size = isBatched ? dLdY.Size(0) : 1;
             int sequence_length = InputCache.Count;
             int hin = weights.Size(-1);
             int hout = biases.Size(-1);
 
-            Tensor[] dLdH;
+        
+
+            Tensor[] dLdH; // [] (B, H) // split along the sequence dimension
             if (onReturn == HiddenStates.ReturnLast) // place dLdY at the last position in the array
             {
-                dLdH =  new Tensor[sequence_length];
+                dLdH = new Tensor[sequence_length];
                 for (int i = 0; i < sequence_length - 1; i++)
                 {
                     dLdH[i] = Tensor.Zeros(dLdY.Shape);
                 }
-                dLdH[sequence_length - 1] = dLdY;
+                dLdH[sequence_length - 1] = dLdY; // The gradient comes only for the last hidden state
             } 
-            else
+            else // dY = (B, L, H), dH = (B, H)
             {
-                dLdH = dLdY.Split(1, 1);
+                dLdH = dLdY.Split(isBatched ? 1 : 0, 1); // The gradient comes for all hidden states
                 for (int i = 0; i < sequence_length; i++)
                 {
-                    dLdH[i] = dLdH[i].Squeeze(1);
+                    dLdH[i] = dLdH[i].Squeeze(isBatched ? 1 : 0);
                 }
             }
                 
@@ -193,24 +208,48 @@ namespace DeepUnity
 
             while (InputCache.Count > 0)
             {
+                // Debug.Log(dLdH[InputCache.Count - 1] + $"{this.onReturn}");
                 Tensor dLdLinear = ActivationCache.Pop().Backward(dLdH[InputCache.Count - 1]);
 
                 Tensor weights_grad;
                 Tensor biases_grad;
                 Tensor r_weights_grad;
-                Tensor r_biases_grad;      
-                ComputeGradients(InputCache.Pop(), dLdLinear, isBatched, batch_size, hin, hout, out weights_grad, out biases_grad);
-                ComputeGradients(HiddenCache.Pop(), dLdLinear, isBatched, batch_size, hout, hout, out r_weights_grad, out r_biases_grad);
+                Tensor r_biases_grad;  
+                if(device == Device.CPU)
+                {
+                    ComputeGradients(InputCache.Pop(), dLdLinear, isBatched, batch_size, hin, hout, out weights_grad, out biases_grad);
+                    ComputeGradients(HiddenCache.Pop(), dLdLinear, isBatched, batch_size, hout, hout, out r_weights_grad, out r_biases_grad);
 
-                Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
-                Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
-                Tensor.CopyTo(r_weightsGrad + r_weights_grad, r_weightsGrad);
-                Tensor.CopyTo(r_biasesGrad + r_biases_grad, r_biasesGrad);
+                    Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
+                    Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
+                    Tensor.CopyTo(r_weightsGrad + r_weights_grad, r_weightsGrad);
+                    Tensor.CopyTo(r_biasesGrad + r_biases_grad, r_biasesGrad);
+                }
+                else
+                {
+                    ComputeGradientsGPU(InputCache.Pop(), dLdLinear, weightsGrad, biasesGrad, batch_size, hin, hout, out weights_grad, out biases_grad);
+                    ComputeGradientsGPU(HiddenCache.Pop(), dLdLinear, r_weightsGrad, r_biasesGrad, batch_size, hout, hout, out r_weights_grad, out r_biases_grad);
 
-                inputGrad[InputCache.Count] = Tensor.MatMul(dLdLinear, weights).Unsqueeze(1);
-                dLdH[InputCache.Count] += Tensor.MatMul(dLdLinear, r_weights);
+                    Tensor.CopyTo(weights_grad, weightsGrad); // they are automatically added in gpu
+                    Tensor.CopyTo(biases_grad, biasesGrad);
+                    Tensor.CopyTo(r_weights_grad, r_weightsGrad);
+                    Tensor.CopyTo(r_biases_grad, r_biasesGrad);
+                }
+               
+
+                if(device == Device.CPU)
+                {
+                    inputGrad[InputCache.Count] = Tensor.MatMul(dLdLinear, weights).Unsqueeze(isBatched ? 1 : 0);
+                    dLdH[InputCache.Count] += Tensor.MatMul(dLdLinear, r_weights);
+                }
+                else
+                {
+                    inputGrad[InputCache.Count] = Tensor.MatMulGPU(dLdLinear, weights).Unsqueeze(isBatched ? 1 : 0);
+                    dLdH[InputCache.Count] += Tensor.MatMulGPU(dLdLinear, r_weights);
+                }
+         
             }
-            return Tensor.Concat(1, inputGrad);
+            return Tensor.Concat(isBatched ? 1 : 0, inputGrad);
         }
 
         private Tensor Linear(Tensor x, Tensor weights, Tensor biases, bool isBatched, int B_size)
@@ -255,7 +294,49 @@ namespace DeepUnity
 
             return y;
         }
-        private void ComputeGradients(Tensor x, Tensor loss, bool isBatched, int B_size, int H_in, int H_out, out Tensor weights_grad, out Tensor biases_grad)
+        private Tensor LinearGPU(Tensor x, Tensor weights, Tensor biases, bool isBatched, int batch_size)
+        {
+            int H_out = biases.Size(-1);
+            ComputeShader cs = DeepUnityMeta.DenseCS;
+
+            ComputeBuffer inputBuffer = new ComputeBuffer(x.Count(), 4);
+            inputBuffer.SetData(x.ToArray());
+            cs.SetBuffer(0, "input", inputBuffer);
+
+            ComputeBuffer weightsBuffer = new ComputeBuffer(weights.Count(), 4);
+            weightsBuffer.SetData(weights.ToArray());
+            cs.SetBuffer(0, "gamma", weightsBuffer);
+
+            ComputeBuffer biasesBuffer = new ComputeBuffer(biases.Count(), 4);
+            biasesBuffer.SetData(biases.ToArray());
+            cs.SetBuffer(0, "beta", biasesBuffer);
+
+            ComputeBuffer outputBuffer = new ComputeBuffer(batch_size * biases.Size(-1), 4);
+            // outputBuffer.SetData(zero_values); // we do not need this because the values are set (not added) to the rw structrured buffer.
+            cs.SetBuffer(0, "output", outputBuffer);
+
+            cs.SetInt("batch_size", batch_size);
+            cs.SetInt("in_features", weights.Size(-1));
+            cs.SetInt("out_features", biases.Size(-1));
+            cs.SetInt("input_rank", x.Rank);
+
+            cs.Dispatch(0,
+                (H_out + 31) / 32,
+                (batch_size + 31) / 32,
+                1);
+
+            Tensor result = isBatched ?
+                Tensor.Constant(outputBuffer, batch_size, H_out) :
+                Tensor.Constant(outputBuffer, H_out);
+
+            inputBuffer.Release();
+            weightsBuffer.Release();
+            biasesBuffer.Release();
+            outputBuffer.Release();
+
+            return result;
+        }
+        private static void ComputeGradients(Tensor x, Tensor loss, bool isBatched, int B_size, int H_in, int H_out, out Tensor weights_grad, out Tensor biases_grad)
         {
             Tensor wg = Tensor.Zeros(H_out, H_in);
             Tensor bg = Tensor.Zeros(H_out);
@@ -304,8 +385,44 @@ namespace DeepUnity
             weights_grad = wg;
             biases_grad = bg;
         }
+        private static void ComputeGradientsGPU(Tensor x, Tensor loss, Tensor oldWGrad, Tensor oldBGrad, int batch_size, int H_in, int H_out, out Tensor weights_grad, out Tensor biases_grad)
+        {
+            // dLoss w.r.t theta
+            ComputeShader cs = DeepUnityMeta.DenseCS;
 
+            ComputeBuffer lossBuffer = new ComputeBuffer(loss.Count(), 4);
+            lossBuffer.SetData(loss.ToArray());
+            cs.SetBuffer(1, "loss", lossBuffer);
 
+            ComputeBuffer inputCacheBuffer = new ComputeBuffer(x.Count(), 4);
+            inputCacheBuffer.SetData(x.ToArray());
+            cs.SetBuffer(1, "input", inputCacheBuffer);
+
+            ComputeBuffer weightsGradBuffer = new ComputeBuffer(oldWGrad.Count(), 4);
+            weightsGradBuffer.SetData(oldWGrad.ToArray());
+            cs.SetBuffer(1, "gamma_grad", weightsGradBuffer);
+
+            ComputeBuffer biasesGradBuffer = new ComputeBuffer(oldBGrad.Count(), 4);
+            biasesGradBuffer.SetData(oldBGrad.ToArray());
+            cs.SetBuffer(1, "beta_grad", biasesGradBuffer);
+
+            cs.SetInt("batch_size", batch_size);
+            cs.SetInt("in_features", H_in);
+            cs.SetInt("out_features", H_out);
+
+            cs.Dispatch(1,
+                (H_in + 31) / 32,
+                (H_out + 31) / 32,
+                1);
+
+            weights_grad = Tensor.Constant(weightsGradBuffer, oldWGrad.Shape);
+            biases_grad = Tensor.Constant(biasesGradBuffer, oldBGrad.Shape);
+
+            lossBuffer.Release();
+            inputCacheBuffer.Release();
+            weightsGradBuffer.Release();
+            biasesGradBuffer.Release();
+        }
 
 
 
@@ -326,7 +443,7 @@ namespace DeepUnity
             return new Parameter[] { w, b, rw, rb };
         }
 
-        public void SetDevice(Device device) { return; }
+        public void SetDevice(Device device) { this.device = device; }
 
         public void OnBeforeSerialize()
         {

@@ -695,10 +695,10 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 422593907}
+  - {fileID: 47025463}
   - {fileID: 1532522096080609280}
   - {fileID: 1900760537}
   - {fileID: 30804915}
-  - {fileID: 47025463}
   m_Father: {fileID: 0}
   m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
@@ -1136,8 +1136,8 @@ MonoBehaviour:
   continuousActions: 3
   discreteActions: 0
   numLayers: 2
-  hidUnits: 64
-  model: {fileID: 11400000, guid: 31fa75070cb05544f83b800d36d3c116, type: 2}
+  hidUnits: 76
+  model: {fileID: 11400000, guid: f1ba43fef18f63c48831bfd68e0bf210, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 1
@@ -1176,11 +1176,10 @@ MonoBehaviour:
   trainingSessionTime: ' - '
   policyUpdateSecondsElapsed: 0
   inferenceSecondsElapsed: 0
+  collectAgentStuff: 0
   inferenceTime: ' - '
   policyUpdateTime: ' - '
   policyUpdateTimePerIteration: ' - '
-  inferenceTimeRatio: '- / -'
-  policyUpdateTimeRatio: '- / -'
   episodeCount: 0
   stepCount: 0
   iterations: 0
@@ -1205,7 +1204,7 @@ MonoBehaviour:
     steps: 0
     current: 0
     mean: 0
-  policyLoss:
+  actorLoss:
     graph:
       serializedVersion: 2
       m_Curve: []
@@ -1215,7 +1214,7 @@ MonoBehaviour:
     steps: 0
     current: 0
     mean: 0
-  valueLoss:
+  criticLoss:
     graph:
       serializedVersion: 2
       m_Curve: []

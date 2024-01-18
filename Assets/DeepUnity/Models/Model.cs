@@ -5,6 +5,7 @@ using UnityEngine;
 namespace DeepUnity
 {
     /// <typeparam name="NeuralNetworkType">Type of the network class that inherits. It is used as a box to serialize models as Scriptable Objects.</typeparam>
+   
     [Serializable]
     public abstract class Model<NeuralNetworkType, IOType> : ScriptableObject, ICloneable where NeuralNetworkType : Model<NeuralNetworkType, IOType>
     {
@@ -27,11 +28,11 @@ namespace DeepUnity
         /// <returns></returns>
         public abstract IOType Forward(IOType input);
         /// <summary>
-        /// Backpropagates the <paramref name="lossDerivativeWrtPrediction"/> and computes the gradients.
+        /// Backpropagates the <paramref name="lossGradient"/> and computes the gradients.
         /// </summary>
-        /// <param name="lossDerivativeWrtPrediction">Derivative of the loss function w.r.t output (dLdY).</param>
+        /// <param name="lossGradient">Derivative of the loss function w.r.t output (dLdY).</param>
         /// <returns>The backpropagated loss derivative (dLdX).</returns>
-        public abstract IOType Backward(IOType lossDerivativeWrtPrediction);
+        public abstract IOType Backward(IOType lossGradient);
 
 
 

@@ -48,7 +48,7 @@ namespace DeepUnity
         [Min(3)] public int numEpoch = 8;
 
         [Tooltip("[Typical range: 1e-4 - 1e-2] Entropy regularization for trainable standard deviation. Also used for Shannon entropy in discrete action space.")]
-        [Min(0f)] public float beta = 1e-4f;
+        [Min(0f)] public float beta = 5e-3f;
 
         [Tooltip("[Typical range: 0.1 - 0.3] Clip factor.")]
         [Min(0.1f)] public float epsilon = 0.2f;
