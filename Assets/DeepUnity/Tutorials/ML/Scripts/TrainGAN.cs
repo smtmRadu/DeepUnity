@@ -36,21 +36,21 @@ namespace DeepUnityTutorials
         private int batch_index = 0;
         private void Start()
         {
-            const float relu_leak = 0.01f;
             if (discriminator == null)
             {
                 discriminator = new NeuralNetwork(
                     new Flatten(),
+
                     new Dense(784, 1024, device: Device.GPU),
-                    new LeakyReLU(relu_leak),
+                    new Tanh(),
                     new Dropout(0.3f),
                 
                     new Dense(1024, 512, device: Device.GPU),
-                    new LeakyReLU(relu_leak),
+                    new Tanh(),
                     new Dropout(0.3f),
 
                     new Dense(512, 256, device: Device.GPU),
-                    new LeakyReLU(relu_leak),
+                    new Tanh(),
                     new Dropout(0.3f),
 
                     new Dense(256, 1, device: Device.GPU),
@@ -61,22 +61,23 @@ namespace DeepUnityTutorials
             {
                 generator = new NeuralNetwork(
                     new Dense(latent_dim, 256, device: Device.GPU),
-                    new LeakyReLU(relu_leak),
+                    new Tanh(),
 
                     new Dense(256, 512, device: Device.GPU),
-                    new LeakyReLU(relu_leak),
+                    new Tanh(),
 
                     new Dense(512, 1024,  device: Device.GPU),
-                    new LeakyReLU(relu_leak),
+                    new Tanh(),
 
                     new Dense(1024, 784, device: Device.GPU),
-                    new Tanh(),
+                    new Sigmoid(),
+
                     new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 })
                     ).CreateAsset("generator");
             }
 
-            d_optim = new Adam(discriminator.Parameters(), lr, eps: 1e-8f);
-            g_optim = new Adam(generator.Parameters(), lr, eps: 1e-8f);
+            d_optim = new Adam(discriminator.Parameters(), lr);
+            g_optim = new Adam(generator.Parameters(), lr);
 
             List<(Tensor, Tensor)> data;
             Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out data, out _, DatasetSettings.LoadTrainOnly);
@@ -149,14 +150,12 @@ namespace DeepUnityTutorials
         }
         private float TrainGenerator()
         {
-            // If discrimnator says the fake data is real, the loss of generator will be small, and viceversa
             g_optim.ZeroGrad();
 
             var Gz = generator.Forward(GeneratorInput(batch_size, latent_dim));
             var DGz = discriminator.Forward(Gz);
             var loss = Loss.BCE(DGz, RealTarget(batch_size)); // (batch_size, 1)
-            var generatorLossDerivative = discriminator.Backward(loss.Gradient);
-            generator.Backward(generatorLossDerivative);
+            generator.Backward(discriminator.Backward(loss.Gradient));
             g_optim.Step();
 
             return loss.Item;

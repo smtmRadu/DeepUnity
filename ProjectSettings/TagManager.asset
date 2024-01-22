@@ -32,6 +32,8 @@ TagManager:
   - 7
   - 8
   - 9
+  - Ladder
+  - Bullet
   layers:
   - Default
   - TransparentFX
@@ -39,8 +41,8 @@ TagManager:
   - Agent
   - Water
   - UI
-  - Zone
   - Transparent
+  - 
   - 
   - 
   - 

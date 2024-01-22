@@ -664,9 +664,10 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 0
   discreteActions: 9
+  archType: 0
   numLayers: 2
   hidUnits: 128
-  model: {fileID: 11400000, guid: e56d911733846cd4596686a2f959d7fe, type: 2}
+  model: {fileID: 11400000, guid: 82b4472f85ee60e46bdabeb9e4700c33, type: 2}
   behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 1
@@ -711,7 +712,8 @@ MonoBehaviour:
   xOffset: 0
   yOffset: 0
   zOffset: 0
-  missColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  alpha: 0.298
+  missColor: {r: 0.5, g: 0.5, b: 0.5, a: 0.105882354}
   missingMaterialColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &187310338
 GameObject:
@@ -835,9 +837,10 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 0
   discreteActions: 9
+  archType: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: e56d911733846cd4596686a2f959d7fe, type: 2}
+  model: {fileID: 11400000, guid: 82b4472f85ee60e46bdabeb9e4700c33, type: 2}
   behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 1
@@ -917,7 +920,8 @@ MonoBehaviour:
   xOffset: 0
   yOffset: 0
   zOffset: 0
-  missColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  alpha: 0.298
+  missColor: {r: 0.5, g: 0.5, b: 0.5, a: 0.105882354}
   missingMaterialColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!114 &208340291
 MonoBehaviour:
@@ -8292,9 +8296,10 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 0
   discreteActions: 9
+  archType: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: e56d911733846cd4596686a2f959d7fe, type: 2}
+  model: {fileID: 11400000, guid: 82b4472f85ee60e46bdabeb9e4700c33, type: 2}
   behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 1
@@ -8354,7 +8359,8 @@ MonoBehaviour:
   xOffset: 0
   yOffset: 0
   zOffset: 0
-  missColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  alpha: 0.298
+  missColor: {r: 0.5, g: 0.5, b: 0.5, a: 0.105882354}
   missingMaterialColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!114 &1743306849
 MonoBehaviour:

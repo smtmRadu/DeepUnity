@@ -1102,7 +1102,6 @@ GameObject:
   - component: {fileID: 5746898773931610624}
   - component: {fileID: 5746898773931610623}
   - component: {fileID: 5746898773931610622}
-  - component: {fileID: 5746898773931610627}
   m_Layer: 0
   m_Name: Agent
   m_TagString: Agent
@@ -1494,10 +1493,11 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 0
   discreteActions: 7
+  archType: 0
   numLayers: 3
   hidUnits: 150
   model: {fileID: 11400000, guid: 5c0ac6f3a95d2544385a22505263e256, type: 2}
-  behaviourType: 2
+  behaviourType: 1
   onEpisodeEnd: 1
   useSensors: 1
   tiles:
@@ -1615,88 +1615,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 2.1559284, y: 1.9999999, z: 2.1559284}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &5746898773931610627
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 622944315244702423}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  startedAt: ' - '
-  finishedAt: ' - '
-  trainingSessionTime: ' - '
-  inferenceTime: ' - '
-  policyUpdateTime: ' - '
-  policyUpdateTimePerIteration: ' - '
-  episodeCount: 0
-  stepCount: 0
-  iterations: 0
-  parallelAgents: 0
-  cumulativeReward:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  episodeLength:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  actorLoss:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  criticLoss:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  entropy:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  learningRate:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
 --- !u!1001 &5945418411581886794
 PrefabInstance:
   m_ObjectHideFlags: 0

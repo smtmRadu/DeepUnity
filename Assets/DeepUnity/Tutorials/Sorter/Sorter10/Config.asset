@@ -16,12 +16,12 @@ MonoBehaviour:
   maxSteps: 2000000000
   learningRate: 0.0001
   gamma: 0.99
-  batchSize: 5000
-  bufferSize: 100000
+  batchSize: 800
+  bufferSize: 16000
   LRSchedule: 0
-  horizon: 512
+  horizon: 256
   numEpoch: 8
-  beta: 0.05
+  beta: 0.005
   epsilon: 0.2
   lambda: 0.96
   gradClipNorm: 0.5
@@ -36,4 +36,4 @@ MonoBehaviour:
   saveRecordBuffer: 0
   debug: 0
   timescaleAdjustment: 1
-  timescale: 25.77
+  timescale: 22.07

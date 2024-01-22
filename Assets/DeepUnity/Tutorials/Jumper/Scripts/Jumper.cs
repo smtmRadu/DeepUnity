@@ -14,6 +14,12 @@ namespace DeepUnityTutorials
         public Transform box;
         public GameObject bonus;
 
+        public Vector2 agent_spawn_x;
+        public Vector2 agent_spawn_z;
+        public Vector2 box_spawn_x;
+        public Vector2 box_spawn_z;
+        public Vector2 target_spawn_x;
+        public Vector2 target_spawn_z;
         bool isGrounded = false;
 
         public override void Awake()
@@ -29,15 +35,12 @@ namespace DeepUnityTutorials
 
         public override void OnEpisodeBegin()
         {
-            float randz_1 = Utils.Random.Range(-1.75f, 1.75f);
-            float randz_2 = Utils.Random.Range(-1.75f, 1.75f);
-            float randz_3 = Utils.Random.Range(-1.75f, 1.75f);
 
-            transform.position = new Vector3(transform.position.x, transform.position.y, randz_1);
-            target.position = new Vector3(target.position.x, target.position.y, randz_2);
-            box.position = new Vector3(box.position.x, box.position.y, randz_3);
+            transform.position = new Vector3(Utils.Random.Range(agent_spawn_x.x, agent_spawn_x.y), transform.position.y, Utils.Random.Range(agent_spawn_z.x, agent_spawn_z.y));
+            target.position = new Vector3(Utils.Random.Range(target_spawn_x.x, target_spawn_x.y), target.position.y, Utils.Random.Range(target_spawn_z.x, target_spawn_z.y));
+            box.position = new Vector3(Utils.Random.Range(box_spawn_x.x, box_spawn_x.y), box.position.y, Utils.Random.Range(box_spawn_x.x, box_spawn_x.y));
 
-            bonus.SetActive(true);
+            bonus?.SetActive(true);
         }
         public override void OnActionReceived(ActionBuffer actionBuffer)
         {

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Linq;
 using UnityEditor;
 using System.Threading.Tasks;
+
 namespace DeepUnity
 {
     // https://medium.com/intro-to-artificial-intelligence/soft-actor-critic-reinforcement-learning-algorithm-1934a2c3087f 
@@ -60,6 +61,7 @@ namespace DeepUnity
                     updateClock.Stop();
 
                     learningRate = model.muScheduler.CurrentLR;
+                    entropy = hp.alpha;
                     currentSteps += new_experiences_collected / decision_freq; 
                     new_experiences_collected = 0;
                 }             
@@ -75,15 +77,15 @@ namespace DeepUnity
                 TimestepTuple[] batch = Utils.Random.Sample(hp.batchSize, train_data.frames);
 
                 // Batchify
-                Tensor normalized_states = Tensor.Concat(null, batch.Select(x => x.state).ToArray());
+                Tensor states = Tensor.Concat(null, batch.Select(x => x.state).ToArray());
                 Tensor raw_continuous_actions = Tensor.Concat(null, batch.Select(x => x.action_continuous).ToArray());
 
                 ComputeQTargets(batch);
 
                 Tensor y = Tensor.Concat(0, batch.Select(x => x.q_target).ToArray());
 
-                UpdateQFunctions(normalized_states, raw_continuous_actions, y);
-                UpdatePolicy(normalized_states);
+                UpdateQFunctions(states, raw_continuous_actions, y);
+                UpdatePolicy(states);
                 UpdateTargetNetworks();
             }
         }
@@ -99,7 +101,7 @@ namespace DeepUnity
             Tensor[] Qtarg1_sPrime_aTildePrime = Qtarg1.Predict(pair_sPrime_aTildePrime).Split(0, 1); // [](1)
             Tensor[] Qtarg2_sPrime_aTildePrime = Qtarg2.Predict(pair_sPrime_aTildePrime).Split(0, 1); // [](1)
 
-            Tensor logPi = piTildePrime.Sum(-1).Log(); // (B) -- the log prob scalar is the sum over the probs vec
+            Tensor logPi = piTildePrime.Prod(-1).Log(); // (B) -- the log prob scalar is the product over the probs vec
             for (int t = 0; t < batch.Length; t++)
             {
                 // y(r,s',d) = r + Ɣ(1 - d)[min(Q1t(s',ã'), Q2t(s',ã')) - αlogπθ(ã'|s')]
@@ -107,8 +109,7 @@ namespace DeepUnity
                 float r = batch[t].reward[0];
                 float d = batch[t].done[0];
 
-                Tensor y = r + hp.gamma * (1f - d) * (Tensor.Minimum(Qtarg1_sPrime_aTildePrime[t], Qtarg2_sPrime_aTildePrime[t]) - hp.alpha * logPi[t]);
-                batch[t].q_target = y;
+                batch[t].q_target = r + hp.gamma * (1f - d) * (Tensor.Minimum(Qtarg1_sPrime_aTildePrime[t], Qtarg2_sPrime_aTildePrime[t]) - hp.alpha * logPi[t]);
             }
         }
         private void UpdateQFunctions(Tensor states, Tensor continuous_actions, Tensor Q_targets)
@@ -175,21 +176,14 @@ namespace DeepUnity
             actorLoss = objectiveFunctionJ.ToArray().Average();
 
             // Firstly, we compute the derivative of minQ1Q2 wrt ãθ(s)
-            // this part is incorrect
             Tensor dminQ1Q2_dQ1 = Tensor.Zeros(batch_size, 1);
             Tensor dminQ1Q2_dQ2 = Tensor.Zeros(batch_size, 1);
             for (int b = 0; b < batch_size; b++)
             {
                 if (Q1s_aTildeS[b, 0] <= Q2s_aTildeS[b, 0])
-                {
                     dminQ1Q2_dQ1[b, 0] = 1f;
-                    dminQ1Q2_dQ2[b, 0] = 0f;
-                }
                 else
-                {
-                    dminQ1Q2_dQ1[b, 0] = 0f;
                     dminQ1Q2_dQ2[b, 0] = 1f;
-                }
             }
             
             Tensor dminQ1Q2_ds_aTildeS = model.q1Network.Backward(dminQ1Q2_dQ1) + model.q2Network.Backward(dminQ1Q2_dQ2); // Take the gradients from both networks
@@ -263,11 +257,11 @@ namespace DeepUnity
         {
             int batch_size = stateActionBatch.Size(0);
             Tensor actions = Tensor.Zeros(batch_size, action_size);
-            for (int i = 0; i < batch_size; i++)
+            for (int b = 0; b < batch_size; b++)
             {
                 for (int f = 0; f < action_size; f++)
                 {
-                    actions[i, f] = stateActionBatch[i, state_size + f];
+                    actions[b, f] = stateActionBatch[b, state_size + f];
                 }
             }
             return actions;

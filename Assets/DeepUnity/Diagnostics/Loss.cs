@@ -92,14 +92,14 @@ namespace DeepUnity
                         return Tensor.Abs(predicts - targets);
 
                     case LossType.CE:
-                        return -targets * Tensor.Log(predicts);
+                        return -targets * Tensor.Log(predicts + Utils.EPSILON);
                     case LossType.BCE:
-                        return - (targets * Tensor.Log(predicts) + (-targets + 1f) * Tensor.Log(-predicts + 1f));
+                        return - (targets * Tensor.Log(predicts + Utils.EPSILON) + (-targets + 1f) * Tensor.Log(-predicts + 1f + Utils.EPSILON));
 
                     case LossType.HE:
                         return predicts.Zip(targets, (p, t) => MathF.Max(0f, 1f - p * t));
                     case LossType.KLD:
-                        return targets * Tensor.Log(targets / predicts);
+                        return targets * Tensor.Log(targets / (predicts + Utils.EPSILON));
                     default:
                         throw new NotImplementedException("Unhandled loss type.");
                 }
@@ -118,14 +118,14 @@ namespace DeepUnity
                         return predicts.Zip(targets, (p, t) => p - t > 0 ? 1f : -1f);
 
                     case LossType.CE:
-                        return -targets / predicts;
+                        return -targets / (predicts + Utils.EPSILON);
                     case LossType.BCE:
-                        return (predicts - targets) / (predicts * (-predicts + 1f));
+                        return (predicts - targets) / (predicts * (-predicts + 1f) + Utils.EPSILON);
 
                     case LossType.HE:
                         return predicts.Zip(targets, (p, t) => 1f - p * t > 0f ? -t : 0f);
                     case LossType.KLD:
-                        return -targets / predicts;
+                        return -targets / (predicts + Utils.EPSILON);
                     default:
                         throw new NotImplementedException("Unhandled loss type.");
                 }

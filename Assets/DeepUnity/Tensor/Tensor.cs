@@ -108,7 +108,7 @@ namespace DeepUnity
                 size *= item;
             }       
 
-            if (size > 67_108_864) // Old max:  16_777_216, new max: 67_108_864
+            if (size > 67_108_864)
                 throw new NotSupportedException("Tensor dimensions is too large on initialization (cannot surpass 67,108,864 units).");
 
             this.shape = shape.ToArray();

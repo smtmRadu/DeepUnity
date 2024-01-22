@@ -1,6 +1,6 @@
 # DeepUnity
 ###### In development - does not currently accept Pull Requests, though feel free to Fork and expand upon it
-![version](https://img.shields.io/badge/version-v0.9.6.12-blue)
+![version](https://img.shields.io/badge/version-v0.9.6.13-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO) and Soft Actor-Critic (SAC).
 
@@ -41,7 +41,7 @@ namespace DeepUnityTutorials
             int data_size = 1024;
             Tensor x = Tensor.RandomNormal(data_size, 1);
             Tensor y = Tensor.RandomNormal(data_size, 1);
-            train_inputs = Tensor.Cat(1, x, y);
+            train_inputs = Tensor.Concat(1, x, y);
             train_targets = x * x + y * y;
 
             // Generate validation set
@@ -195,8 +195,8 @@ TIPS:
 
 - The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. If neccesary, in order to override them, call the their **base** each time, respecting the logic of the diagram below.
 
-###### _Base Agent class_
-![agentclass](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/agentclass.jpg?raw=true)
+###### _Base Agent class - order of execution for event functions_
+![agentclass](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/agentclass.png?raw=true)
 
 All tutorials scripts are included inside _Assets/DeepUnity/Tutorials_ folder, containing all features provided by the framework and RL environments inspired from ML-Agents examples (note that not all of them have trained models attached).
 

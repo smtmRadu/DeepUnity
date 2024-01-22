@@ -610,7 +610,7 @@ namespace DeepUnity
                 throw new Exception($"Probs must always sum 1. (received {probs.Sum()})");
             }
             /// <summary>
-            /// Samples multiple elements in the collection given.
+            /// Samples multiple elements in the given collection.
             /// </summary>
             /// <typeparam name="T"></typeparam>
             /// <param name="no_samples"></param>

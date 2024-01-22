@@ -230,7 +230,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 215521136}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -28, y: -1.84, z: 0}
+  m_LocalPosition: {x: -28, y: -2.3, z: 0}
   m_LocalScale: {x: 8, y: 1, z: 16.872}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -416,6 +416,7 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 2
   discreteActions: 0
+  archType: 0
   numLayers: 2
   hidUnits: 64
   model: {fileID: 11400000, guid: 7f4b1d6dd762c694890ca436ed7ae473, type: 2}
@@ -681,6 +682,7 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 2
   discreteActions: 0
+  archType: 0
   numLayers: 2
   hidUnits: 64
   model: {fileID: 11400000, guid: 7f4b1d6dd762c694890ca436ed7ae473, type: 2}
@@ -931,6 +933,7 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 2
   discreteActions: 0
+  archType: 0
   numLayers: 2
   hidUnits: 64
   model: {fileID: 11400000, guid: 7f4b1d6dd762c694890ca436ed7ae473, type: 2}
@@ -1185,6 +1188,7 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 3
   discreteActions: 0
+  archType: 0
   numLayers: 2
   hidUnits: 64
   model: {fileID: 11400000, guid: 7f4b1d6dd762c694890ca436ed7ae473, type: 2}
@@ -1305,7 +1309,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1256562349}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 28, y: -1.84, z: 0}
+  m_LocalPosition: {x: 28, y: -2.3, z: 0}
   m_LocalScale: {x: 8, y: 1, z: 16.872}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1703,6 +1707,7 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 0
   discreteActions: 7
+  archType: 0
   numLayers: 2
   hidUnits: 64
   model: {fileID: 11400000, guid: 7f4b1d6dd762c694890ca436ed7ae473, type: 2}
@@ -2449,6 +2454,7 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 2
   discreteActions: 0
+  archType: 0
   numLayers: 2
   hidUnits: 64
   model: {fileID: 11400000, guid: 7f4b1d6dd762c694890ca436ed7ae473, type: 2}

@@ -31,7 +31,7 @@ namespace DeepUnity
             return x.Select(x =>
             {
                 float sigmoid = 1f / (1f + MathF.Exp(-x));
-                return  sigmoid * (1f - sigmoid);
+                return sigmoid * (1f - sigmoid);
             });
         }
 

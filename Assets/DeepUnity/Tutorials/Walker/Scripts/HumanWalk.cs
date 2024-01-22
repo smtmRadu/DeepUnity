@@ -7,7 +7,6 @@ namespace DeepUnityTutorials
     {
         // Spring: 3000 | Damper: 100 | MaxForce: 6000
         public GameObject goals;
-        public float reward_scale = 10f;
 
         [Header("Body Parts 16")]
         public GameObject head;
@@ -30,6 +29,8 @@ namespace DeepUnityTutorials
         public GameObject legR;
         public GameObject shinR;
         public GameObject footR;
+
+        [ReadOnly] public float stepReward;
 
 
         BodyController bodyController;
@@ -114,8 +115,6 @@ namespace DeepUnityTutorials
                 stateBuffer.AddObservation(_cst.rigidbody.angularVelocity / velocity_norm);
             }
 
-
-
             // 10 X 9 
             foreach (var bp in bodyController.bodyPartsList)
             {
@@ -136,8 +135,6 @@ namespace DeepUnityTutorials
                 stateBuffer.AddObservation(bp.CurrentNormalizedEulerRotation);
                 stateBuffer.AddObservation(bp.CurrentNormalizedStrength);
             }
-
-
 
             // + 2           
             stateBuffer.AddObservation(bodyController.bodyPartsDict[footL].ColliderContact.IsGrounded);
@@ -190,11 +187,15 @@ namespace DeepUnityTutorials
             jdDict[shinR].SetJointStrength(actions_vector[42]);
             jdDict[footR].SetJointStrength(actions_vector[43]);
 
-            float orientation_reward = Vector3.Angle(transform.forward, head.transform.forward) % 360f / 360f;
-            float step_reward = stomach.transform.position.z * head.transform.position.z * head.transform.position.y * orientation_reward;
-            step_reward /= reward_scale;
-            step_reward = Mathf.Clamp(step_reward, -0.02f, 0.02f);
-            AddReward(step_reward);
+            /// Geometric reward
+            float head_stomach_alignment = 1f - Mathf.Abs(stomach.transform.position.z - head.transform.position.z);
+            float orientation_reward = 1f - Vector3.Angle(-Vector3.forward, -head.transform.forward) % 360f / 360f;
+            float position_reward = -stomach.transform.position.z;
+            float head_reward = 1;
+            stepReward = head_stomach_alignment * orientation_reward * position_reward * head_reward;
+            stepReward /= 75f;
+            stepReward = Mathf.Clamp(stepReward, -0.1f, 0.1f);
+            AddReward(stepReward);
         }
     }
 

@@ -2171,9 +2171,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   canvas: {fileID: 1823018698}
-  discriminator: {fileID: 11400000, guid: a3dc6624c7666b74092f017a4005f915, type: 2}
-  generator: {fileID: 11400000, guid: 85e8eff0488d2ec4eb81e38685582b3b, type: 2}
-  batch_size: 64
+  discriminator: {fileID: 11400000, guid: bc550329dab25934bbb33f5e69db4a35, type: 2}
+  generator: {fileID: 11400000, guid: 800a1912ccb74bf428369eb9b4267eea, type: 2}
+  batch_size: 100
   lr: 0.0002
   perform: 1
   writeLoss: 1

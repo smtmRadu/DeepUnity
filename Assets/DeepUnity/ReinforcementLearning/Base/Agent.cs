@@ -1,11 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using Unity.Mathematics;
-using Unity.VisualScripting;
 using UnityEditor;
-using UnityEditor.Build.Content;
 using UnityEngine;
 
 /// <summary>
@@ -128,10 +124,11 @@ namespace DeepUnity
             if (behaviourType == BehaviourType.Learn)
             {
                 TrainingStatistics pf;
-                TryGetComponent(out pf);
-                OnEpisodeBegin();
+                TryGetComponent(out pf);        
                 DeepUnityTrainer.Subscribe(this, model.config.trainer);                
             }
+
+            OnEpisodeBegin();
         }
         public virtual void FixedUpdate()
         {
@@ -154,7 +151,18 @@ namespace DeepUnity
                     break;
             }
         }
-       
+        public void OnGUI()
+        {
+            if (behaviourType != BehaviourType.Learn)
+                return;
+
+            GUIStyle style = new GUIStyle();
+            style.fontSize = 50;
+            style.fontStyle = FontStyle.Bold;
+            style.wordWrap = true;
+            GUI.Label(new Rect(5, Screen.height - 60, 400, 60), "Learning...", style);
+        }
+
         // Init
         public void BakeModel()
         {
@@ -320,7 +328,7 @@ namespace DeepUnity
         /// </summary>
         public event EventHandler OnEpisodeEnd;
         /// <summary>
-        /// Reinitialize the current environment (stochastically). <br></br>
+        /// Reinitialize the current environment (stochastically). It is automatically called in Start() method and at the beginning of a new episode.<br></br>
         /// <br></br>
         /// </summary>
         public virtual void OnEpisodeBegin() { }
