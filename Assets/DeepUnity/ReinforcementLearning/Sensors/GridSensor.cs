@@ -83,7 +83,7 @@ namespace DeepUnity
                             if (d > 0)
                                 return;
 
-                            Collider2D hit = Physics2D.OverlapBox(position, Vector2.one * scale * castScale, transform.rotation.z);
+                            Collider2D hit = Physics2D.OverlapBox(position, Vector2.one * scale * castScale, transform.rotation.z, layerMask);
                             bool gotHit = hit != null;
                             
                             if (gotHit)

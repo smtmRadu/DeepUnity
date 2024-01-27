@@ -5,7 +5,6 @@ namespace DeepUnityTutorials
 {
     public class RoboticArm : Agent
     {
-        public RaySensor mainEye;
         public GameObject arm1;
         public GameObject arm2;
         public GameObject arm3;

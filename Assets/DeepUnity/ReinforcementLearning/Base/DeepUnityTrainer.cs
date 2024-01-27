@@ -87,7 +87,7 @@ namespace DeepUnity
         {
             avgDeltaTime = avgDeltaTime * avgDeltaTimeMomentum + Time.deltaTime * (1f - avgDeltaTimeMomentum);
         }
-
+       
 
         protected abstract void Initialize();
         protected abstract void OnBeforeFixedUpdate();

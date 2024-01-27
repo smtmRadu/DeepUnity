@@ -20,7 +20,7 @@ namespace DeepUnity
         [SerializeField, ReadOnly] public string behaviourName;
         [SerializeField, HideInInspector] private bool assetCreated = false;
         [SerializeField, ReadOnly] public int observationSize;
-        [SerializeField, ReadOnly, Min(1)] public int stackedInputs;
+        [SerializeField, ReadOnly, Min(1)] public int stackedInputs;      
         [SerializeField, ReadOnly] public int continuousDim;
         [SerializeField, ReadOnly] public int discreteDim;
 
@@ -107,7 +107,8 @@ namespace DeepUnity
         public bool IsUsingDiscreteActions { get => discreteDim > 0; }
 
 
-        private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS, in ArchitectureType ARCHITECTURE)
+        private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int VISUAL_INPUT_WIDTH, in int VISUAL_INPUT_HEIGHT, in int VISUAL_INPUT_CHANNELS, 
+            in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS, in ArchitectureType ARCHITECTURE)
         {
             
             const InitType INIT_W = InitType.HE_Normal;
@@ -174,6 +175,54 @@ namespace DeepUnity
                 }
                 throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
             }
+            static IModule[] CreateCNN(int width, int height, int channels, int outputs, int layers, int hidUnits)
+            {
+
+                int conv_hout = height - 3 + 1;
+                int conv_wout = width - 3 + 1;
+                int pool_hout = (int)MathF.Floor((conv_hout - 2f) / 2f + 1);
+                int pool_wout = (int)MathF.Floor((conv_wout - 2f) / 2f + 1);
+                if (layers == 1)
+                {
+                    return new IModule[]
+                    {
+                        new Conv2D((channels, height, width), 1, 3),
+                        new MaxPool2D(2),
+                        new Flatten(),
+                        HiddenActivation(),
+                        new Dense(pool_hout * pool_wout, outputs)
+                    };
+                }
+                if(layers == 2)
+                {
+                    return new IModule[]
+                   {
+                        new Conv2D((channels, height, width), 1, 3),
+                        new MaxPool2D(2),
+                        new Flatten(),
+                        HiddenActivation(),
+                        new Dense(pool_hout * pool_wout, hidUnits),
+                        HiddenActivation(),
+                        new Dense(hidUnits, outputs),
+                   };
+                }
+                if(layers == 3)
+                {
+                    return new IModule[]
+                    {
+                        new Conv2D((channels, height, width), 1, 3),
+                        new MaxPool2D(2),
+                        new Flatten(),
+                        HiddenActivation(),
+                        new Dense(pool_hout * pool_wout, hidUnits),
+                        HiddenActivation(),
+                        new Dense(hidUnits, hidUnits),
+                        HiddenActivation(),
+                        new Dense(hidUnits, outputs),
+                    };
+                }
+                throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
+            }
             //------------------ NETWORK INITIALIZATION ----------------//
 
 
@@ -194,10 +243,30 @@ namespace DeepUnity
             else if(ARCHITECTURE == ArchitectureType.RNN)
             {
                 vNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
-                muNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
-                sigmaNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
-                q1Network = new NeuralNetwork(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
-                q2Network = new NeuralNetwork(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+
+                if(CONTINUOUS_ACTIONS_NUM > 0)
+                {
+                    muNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                    sigmaNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
+                    q1Network = new NeuralNetwork(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                    q2Network = new NeuralNetwork(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                }
+
+                if(DISCRETE_ACTIONS_NUM > 0)
+                    discreteNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
+            }
+            else if(ARCHITECTURE == ArchitectureType.CNN)
+            {
+                vNetwork = new NeuralNetwork(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, 1, NUM_LAYERS, HIDDEN_UNITS));
+
+                if(CONTINUOUS_ACTIONS_NUM > 0)
+                {
+                    muNetwork = new NeuralNetwork(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                    sigmaNetwork = new NeuralNetwork(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
+                }
+
+                if(DISCRETE_ACTIONS_NUM > 0)
+                    discreteNetwork = new NeuralNetwork(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
             }
                      
 
@@ -230,22 +299,7 @@ namespace DeepUnity
                 {
                     discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
                 }
-            }
-            // else if(trainer == TrainerType.GAIL)
-            // {
-            //     if (IsUsingContinuousActions)
-            //     {
-            //         muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda) ;
-            //         sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
-            //         // dContOptimizer = new Adam(discContNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
-            //     }
-            // 
-            //     if (IsUsingDiscreteActions)
-            //     {
-            //         discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
-            //         // dDiscOptimizer = new Adam(discDiscNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
-            //     }
-            // }                    
+            }                   
         }
         public void InitSchedulers(Hyperparameters hp, TrainerType trainer)
         {
@@ -395,7 +449,7 @@ namespace DeepUnity
         /// Creates a new Agent behaviour folder containing all auxiliar neural networks, or loads it if already exists one for this behaviour.
         /// </summary>
         /// <returns></returns>
-        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int continuousActions, int discreteActions, int numLayers, int hidUnits, ArchitectureType aType)
+        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int widthSize, int heightSize, int channelSize, int continuousActions, int discreteActions, int numLayers, int hidUnits, ArchitectureType aType)
         {          
             var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
 
@@ -406,7 +460,7 @@ namespace DeepUnity
             }
 
 
-            AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, stackedInputs, continuousActions, discreteActions, numLayers, hidUnits, aType);
+            AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, stackedInputs, widthSize, heightSize, channelSize, continuousActions, discreteActions, numLayers, hidUnits, aType);
             newAgBeh.behaviourName = name;
             newAgBeh.observationSize = stateSize;
             newAgBeh.stackedInputs = stackedInputs;
@@ -425,12 +479,12 @@ namespace DeepUnity
 
             // Create aux assets
             newAgBeh.config = Hyperparameters.CreateOrLoadAsset(name);
-            newAgBeh.vNetwork?.CreateAsset($"{name}/V_[{hidUnits}x{numLayers}]");
-            newAgBeh.muNetwork?.CreateAsset($"{name}/Mu_[{hidUnits}x{numLayers}]");
-            newAgBeh.sigmaNetwork?.CreateAsset($"{name}/Sigma_[{hidUnits}x{numLayers}]");
-            newAgBeh.q1Network?.CreateAsset($"{name}/Q1_[{hidUnits}x{numLayers}]");
-            newAgBeh.q2Network?.CreateAsset($"{name}/Q2_[{hidUnits}x{numLayers}]");
-            newAgBeh.discreteNetwork?.CreateAsset($"{name}/Discrete_[{hidUnits}x{numLayers}]");
+            newAgBeh.vNetwork?.CreateAsset($"{name}/V");
+            newAgBeh.muNetwork?.CreateAsset($"{name}/Mu");
+            newAgBeh.sigmaNetwork?.CreateAsset($"{name}/Sigma");
+            newAgBeh.q1Network?.CreateAsset($"{name}/Q1");
+            newAgBeh.q2Network?.CreateAsset($"{name}/Q2");
+            newAgBeh.discreteNetwork?.CreateAsset($"{name}/Discrete");
             
 
             return newAgBeh;

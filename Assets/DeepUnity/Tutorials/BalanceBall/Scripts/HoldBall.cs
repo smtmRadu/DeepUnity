@@ -10,6 +10,7 @@ namespace DeepUnityTutorials
     {
         [SerializeField] Rigidbody ball;
         [SerializeField] const float rotationSpeed = 1f;
+        [SerializeField] CameraSensor cameraSens;
 
         public override void Awake()
         {
@@ -22,6 +23,11 @@ namespace DeepUnityTutorials
             sensorBuffer.AddObservation(ball.velocity);
             sensorBuffer.AddObservation(ball.gameObject.transform.position - transform.position);
         }
+        // public override void CollectObservations(out Tensor stateTensor)
+        // {
+        //     var pixels = cameraSens.GetObservationPixels();
+        //     stateTensor = Tensor.Constant(pixels, (3, 20, 20));
+        // }
         public override void OnActionReceived(ActionBuffer actionBuffer)
         {
             // 2 continuous actions

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using UnityEditor;
@@ -15,6 +16,13 @@ namespace DeepUnity
     {
         [Tooltip("The number of observations received at a specific timestep.")]
         [SerializeField, Min(1), HideInInspector] private int spaceSize = 0;
+        [Tooltip("Height of the visual observation")]
+        [SerializeField, Min(9), HideInInspector] private int spaceHeight = 144;
+        [Tooltip("Width of the visual observation")]
+        [SerializeField, Min(16), HideInInspector] private int spaceWidth = 256;
+        [Tooltip("Channels of the visual observation")]
+        [SerializeField, Min(1), HideInInspector] private int spaceChannels = 3;
+
         [Tooltip("The inputs are enqueued in a queue buffer. t1 = [0, 0, x1] -> t2 = [0, x1, x2] -> t3 = [x1, x2, x3] -> t4 = [x2, x3, x4] -> .... For now they are disabled.")]
         [SerializeField, Range(1, 64), HideInInspector] private int stackedInputs = 1;
         [Tooltip("Number of Continuous Actions in continuous actions space. Values in range [-1, 1].")]
@@ -63,7 +71,7 @@ namespace DeepUnity
             // Check if model is ok
             if(model == null)
             {
-                ConsoleMessage.Error($"Please bake/load an agent model before using the <i>{GetType().Name}</i> behaviour");
+                ConsoleMessage.Error($"<b>Bake/Load</b> model before using the <i>{GetType().Name}</i> behaviour");
                 EditorApplication.isPlaying = false;
                 return;
             }
@@ -71,7 +79,7 @@ namespace DeepUnity
             List<string> missingComponents = model.CheckForMissingAssets();
             if(missingComponents.Count > 0)
             {
-                ConsoleMessage.Error($"Agent behaviour is missing the following assets {string.Join(", ", missingComponents)}");
+                ConsoleMessage.Error($"<i>{GetType().Name}</i> behaviour is missing the {string.Join(", ", missingComponents)} assets");
                 EditorApplication.isPlaying = false;
                 return;
             }
@@ -121,17 +129,32 @@ namespace DeepUnity
             if (!enabled)
                 return;
 
+            if (model == null)
+                return;
+
             if (behaviourType == BehaviourType.Learn)
             {
                 TrainingStatistics pf;
                 TryGetComponent(out pf);        
-                DeepUnityTrainer.Subscribe(this, model.config.trainer);                
+                DeepUnityTrainer.Subscribe(this, model.config.trainer);
+
+                // Display "Learning..." head up on screen
+                _learningText = "Learning";
+                _learningTextStyle = new GUIStyle();
+                _learningTextStyle.fontSize = 50;
+                _learningTextStyle.fontStyle = FontStyle.Bold;
+                _learningTextStyle.wordWrap = true;
+                _learningTextStyle.normal.textColor = Color.white;
+                StartCoroutine("DrawDotsToLearningText");
             }
 
             OnEpisodeBegin();
         }
         public virtual void FixedUpdate()
         {
+            if (model == null)
+                return;
+
             EpisodeFixedFramesCount++;
 
             PostTimestep();
@@ -151,24 +174,39 @@ namespace DeepUnity
                     break;
             }
         }
+
+
+        // Display "Learning..."
+        string _learningText;
+        GUIStyle _learningTextStyle;
+        IEnumerator DrawDotsToLearningText()
+        {
+            while(true)
+            {
+                yield return new WaitForSecondsRealtime(0.5f);
+                _learningText += "."; 
+                if (_learningText.Length > 11) 
+                    _learningText = "Learning"; 
+            }
+        }
         public void OnGUI()
         {
+            if (model == null)
+                return;
+
             if (behaviourType != BehaviourType.Learn)
                 return;
 
-            GUIStyle style = new GUIStyle();
-            style.fontSize = 50;
-            style.fontStyle = FontStyle.Bold;
-            style.wordWrap = true;
-            GUI.Label(new Rect(5, Screen.height - 60, 400, 60), "Learning...", style);
+            GUI.Label(new Rect(10, Screen.height - 65, 400, 60), _learningText, _learningTextStyle);
         }
+
 
         // Init
         public void BakeModel()
         {
             if(spaceSize == 0)
             {
-                ConsoleMessage.Info("SensorBuffer vector size was set to 0. ObservationsTensor must be modified directly.");
+                ConsoleMessage.Info("StateBuffer vector size is 0. Make sure to use CollectObservations(Tensor state) method to set your state.");
             }
             if(continuousActions == 0 && discreteActions == 0)
             {
@@ -176,7 +214,7 @@ namespace DeepUnity
                 return;
             }
 
-            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, stackedInputs, continuousActions, discreteActions, numLayers, hidUnits, archType);
+            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, stackedInputs, spaceWidth, spaceHeight, spaceChannels, continuousActions, discreteActions, numLayers, hidUnits, archType);
 
             continuousActions = model.continuousDim;
             discreteActions = model.discreteDim;
@@ -506,13 +544,12 @@ namespace DeepUnity
                 propertyFieldRect.width = 50; // Adjust the width as needed
 
                 SerializedProperty typeProperty = serializedObject.FindProperty("archType");
-                EditorGUI.BeginDisabledGroup(true);
+                EditorGUI.BeginDisabledGroup(true); // they prove very slow in computation.. better with mlp (also visual observations are not enough sometimes)
                 EditorGUI.PropertyField(propertyFieldRect, typeProperty, GUIContent.none);
                 EditorGUI.EndDisabledGroup();
                 EditorGUILayout.EndHorizontal();
 
                 EditorGUILayout.Space();
-
 
                 EditorGUILayout.BeginHorizontal();
                 GUILayout.Label("Num Layers", GUILayout.Width(EditorGUIUtility.labelWidth / 1.08f));
@@ -524,20 +561,65 @@ namespace DeepUnity
 
                 EditorGUILayout.Space();
 
-                EditorGUILayout.LabelField("Observations");
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.Space(20);
-                EditorGUILayout.PrefixLabel("Space Size");
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("spaceSize"), GUIContent.none);
-                EditorGUILayout.EndHorizontal();
+               
+               
+                int arTp = serializedObject.FindProperty("archType").enumValueIndex;
+                if (arTp == (int)ArchitectureType.MLP)
+                {
+                    EditorGUILayout.LabelField("Observations");
 
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.Space(20);
-                EditorGUILayout.PrefixLabel("Stacked Inputs");
-                //EditorGUI.BeginDisabledGroup(true);
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("stackedInputs"), GUIContent.none);
-                //EditorGUI.EndDisabledGroup();
-                EditorGUILayout.EndHorizontal();
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.Space(20);
+                    EditorGUILayout.PrefixLabel("Space Size");
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("spaceSize"), GUIContent.none);
+                    EditorGUILayout.EndHorizontal();
+
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.Space(20);
+                    EditorGUILayout.PrefixLabel("Stacked Inputs");
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("stackedInputs"), GUIContent.none);
+                    EditorGUILayout.EndHorizontal();
+
+                }
+                else if(arTp == (int)ArchitectureType.CNN)
+                {
+                    EditorGUILayout.LabelField("Visual Observations");
+
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.Space(20);
+                    EditorGUILayout.PrefixLabel("Width");
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("spaceWidth"), GUIContent.none);
+                    EditorGUILayout.EndHorizontal();
+
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.Space(20);
+                    EditorGUILayout.PrefixLabel("Height");
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("spaceHeight"), GUIContent.none);
+                    EditorGUILayout.EndHorizontal();
+
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.Space(20);
+                    EditorGUILayout.PrefixLabel("Channels");
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("spaceChannels"), GUIContent.none);
+                    EditorGUILayout.EndHorizontal();
+                }
+                else if(arTp == (int)ArchitectureType.RNN)
+                {
+                    EditorGUILayout.LabelField("Observations");
+
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.Space(20);
+                    EditorGUILayout.PrefixLabel("Space Size");
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("spaceSize"), GUIContent.none);
+                    EditorGUILayout.EndHorizontal();
+
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.Space(20);
+                    EditorGUILayout.PrefixLabel("Memory Size");
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("stackedInputs"), GUIContent.none);
+                    EditorGUILayout.EndHorizontal();
+                }
+               
 
                 EditorGUILayout.Space(5);
 

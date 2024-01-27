@@ -46,7 +46,8 @@ namespace DeepUnity
                 currentSteps += hp.bufferSize;
             }
         }
-        
+
+       
 
         // PPO Algorithm
         private void Train()
@@ -427,7 +428,7 @@ namespace DeepUnity
         {
             float std = advantages.Std(0)[0];
             float mean = advantages.Mean(0)[0];
-            return (advantages - mean) / (std + 1e-10f);
+            return (advantages - mean) / (std + Utils.EPSILON);
 
         }
     }

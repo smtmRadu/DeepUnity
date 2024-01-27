@@ -91,7 +91,7 @@ namespace DeepUnityTutorials
         {
             if(collision.collider.CompareTag("Enemy"))
             {
-                ZombieEscapeManager.NewEpisode();
+                ZombieSurvivalManager.NewEpisode();
             }
         }
     }

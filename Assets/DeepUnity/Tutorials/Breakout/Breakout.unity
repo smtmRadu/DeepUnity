@@ -2545,43 +2545,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1280952565}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!84 &1468085540
-RenderTexture:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: 
-  m_ImageContentsHash:
-    serializedVersion: 2
-    Hash: 00000000000000000000000000000000
-  m_ForcedFallbackFormat: 4
-  m_DownscaleFallback: 0
-  m_IsAlphaChannelOptional: 0
-  serializedVersion: 5
-  m_Width: 40
-  m_Height: 32
-  m_AntiAliasing: 1
-  m_MipCount: -1
-  m_DepthStencilFormat: 0
-  m_ColorFormat: 8
-  m_MipMap: 0
-  m_GenerateMips: 1
-  m_SRGB: 0
-  m_UseDynamicScale: 0
-  m_BindMS: 0
-  m_EnableCompatibleFormat: 1
-  m_TextureSettings:
-    serializedVersion: 2
-    m_FilterMode: 0
-    m_Aniso: 1
-    m_MipBias: 0
-    m_WrapU: 1
-    m_WrapV: 1
-    m_WrapW: 1
-  m_Dimension: 2
-  m_VolumeDepth: 1
-  m_ShadowSamplingMode: 2
 --- !u!1 &1482332803
 GameObject:
   m_ObjectHideFlags: 0
@@ -3098,6 +3061,7 @@ GameObject:
   - component: {fileID: 1726159568}
   - component: {fileID: 1726159566}
   - component: {fileID: 1726159567}
+  - component: {fileID: 1726159573}
   m_Layer: 0
   m_Name: Paddle
   m_TagString: Untagged
@@ -3117,13 +3081,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d176073cd33758e4c87dc6a7f9dadc85, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  spaceSize: 1280
+  spaceSize: 1
+  spaceHeight: 32
+  spaceWidth: 40
+  spaceChannels: 1
   stackedInputs: 1
   continuousActions: 1
   discreteActions: 0
-  numLayers: 2
+  archType: 1
+  numLayers: 1
   hidUnits: 64
-  model: {fileID: 11400000, guid: b915171b9bc74e64295f764211fa3048, type: 2}
+  model: {fileID: 11400000, guid: 75824b94ac9c12a46b4eb46c39e7e87f, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0
@@ -3149,7 +3117,7 @@ MonoBehaviour:
   height: 32
   type: 0
   compression: 0
-  renderTexture: {fileID: 1468085540}
+  renderTexture: {fileID: 0}
 --- !u!114 &1726159568
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3251,6 +3219,88 @@ Transform:
   m_Father: {fileID: 205264474}
   m_RootOrder: -1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1726159573
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1726159565}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  startedAt: ' - '
+  finishedAt: ' - '
+  trainingSessionTime: ' - '
+  inferenceTime: ' - '
+  policyUpdateTime: ' - '
+  policyUpdateTimePerIteration: ' - '
+  episodeCount: 0
+  stepCount: 0
+  iterations: 0
+  parallelAgents: 0
+  cumulativeReward:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  episodeLength:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  actorLoss:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  criticLoss:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  entropy:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  learningRate:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
 --- !u!1 &1757973288
 GameObject:
   m_ObjectHideFlags: 0

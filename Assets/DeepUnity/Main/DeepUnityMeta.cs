@@ -236,6 +236,7 @@ namespace DeepUnity
     public enum ArchitectureType
     {
         MLP,
+        CNN,
         RNN
     }
 }

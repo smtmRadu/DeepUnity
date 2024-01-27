@@ -327,17 +327,6 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 36.293, y: 52.953, z: 16.086}
---- !u!114 &1393662916 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 2385219214974533683, guid: af7d7ba2579e1954e89989436bc95658, type: 3}
-  m_PrefabInstance: {fileID: 1427424313666944593}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1 &1470915701
 GameObject:
   m_ObjectHideFlags: 0
@@ -768,6 +757,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: MainEye
       objectReference: {fileID: 0}
+    - target: {fileID: 4604450335419652452, guid: af7d7ba2579e1954e89989436bc95658, type: 3}
+      propertyPath: m_CollisionDetection
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 5199697852384369197, guid: af7d7ba2579e1954e89989436bc95658, type: 3}
       propertyPath: m_Layer
       value: 7
@@ -775,6 +768,18 @@ PrefabInstance:
     - target: {fileID: 6210388233473748934, guid: af7d7ba2579e1954e89989436bc95658, type: 3}
       propertyPath: m_Name
       value: Robot
+      objectReference: {fileID: 0}
+    - target: {fileID: 6520061977810977453, guid: af7d7ba2579e1954e89989436bc95658, type: 3}
+      propertyPath: m_CollisionDetection
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6920685141770227786, guid: af7d7ba2579e1954e89989436bc95658, type: 3}
+      propertyPath: m_CollisionDetection
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7044229254213448668, guid: af7d7ba2579e1954e89989436bc95658, type: 3}
+      propertyPath: m_CollisionDetection
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7233956223919576883, guid: af7d7ba2579e1954e89989436bc95658, type: 3}
       propertyPath: m_LowAngularXLimit.limit
@@ -895,7 +900,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6478107580573396342}
   m_Layer: 0
-  m_Name: roboticarm
+  m_Name: Environment
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -924,16 +929,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   spaceSize: 56
+  spaceHeight: 144
+  spaceWidth: 256
+  spaceChannels: 3
   stackedInputs: 1
   continuousActions: 9
   discreteActions: 0
+  archType: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 0066e5a3be4349940aa2062c6ed57989, type: 2}
+  model: {fileID: 11400000, guid: e157f4cb5ec4481489787b6191c563b5, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 1
-  mainEye: {fileID: 1393662916}
   arm1: {fileID: 8387622687907085577}
   arm2: {fileID: 4499333015178137602}
   arm3: {fileID: 3407306217839295747}
@@ -1077,7 +1085,7 @@ Rigidbody:
   m_IsKinematic: 0
   m_Interpolate: 0
   m_Constraints: 0
-  m_CollisionDetection: 0
+  m_CollisionDetection: 1
 --- !u!114 &8306584724960914829
 MonoBehaviour:
   m_ObjectHideFlags: 0

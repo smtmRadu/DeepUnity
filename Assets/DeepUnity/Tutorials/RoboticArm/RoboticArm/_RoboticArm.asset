@@ -18,14 +18,14 @@ MonoBehaviour:
   stackedInputs: 1
   continuousDim: 9
   discreteDim: 0
-  config: {fileID: 11400000, guid: d9893d7113cee7548b9e0dec1992124e, type: 2}
-  vNetwork: {fileID: 11400000, guid: df24bc6eebd0b0442ae1970f6d8b15b6, type: 2}
-  q1Network: {fileID: 11400000, guid: 9c2eb54277c7c8e4e81e3fe36bfcecc5, type: 2}
-  q2Network: {fileID: 11400000, guid: 0367a97eb10d1704d87c9e72caa4c76a, type: 2}
-  muNetwork: {fileID: 11400000, guid: 51a64b2fdd5429d4fa3c655d5bdea025, type: 2}
-  sigmaNetwork: {fileID: 11400000, guid: c4f672eef1df8f5428e7e90262c2772c, type: 2}
+  config: {fileID: 0}
+  vNetwork: {fileID: 0}
+  q1Network: {fileID: 0}
+  q2Network: {fileID: 0}
+  muNetwork: {fileID: 0}
+  sigmaNetwork: {fileID: 0}
   discreteNetwork: {fileID: 0}
-  targetFPS: 100
+  targetFPS: 50
   inferenceDevice: 0
   trainingDevice: 1
   normalize: 0
@@ -155,6 +155,6 @@ MonoBehaviour:
     R: 0
     mean: 0
     m2: 0
-  standardDeviation: 0
-  standardDeviationValue: 4
+  standardDeviation: 1
+  standardDeviationValue: 1
   standardDeviationScale: 1.5

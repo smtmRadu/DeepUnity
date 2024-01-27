@@ -61,7 +61,7 @@ namespace DeepUnityTutorials
 
             net.SetDevice(device);
 
-            optimizer = new NAdam(net.Parameters(), lr: learningRate);
+            optimizer = new Adan(net.Parameters(), lr: learningRate);
             scheduler = new LRScheduler(optimizer, scheduler_step_size, scheduler_gamma);
 
 

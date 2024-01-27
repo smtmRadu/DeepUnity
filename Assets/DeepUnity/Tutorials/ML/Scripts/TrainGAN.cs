@@ -17,7 +17,7 @@ namespace DeepUnityTutorials
         [SerializeField] private NeuralNetwork discriminator;
         [SerializeField] private NeuralNetwork generator;
         
-        const int latent_dim = 100;
+        
 
         [Button("SaveNetworks")]
         [SerializeField] private int batch_size = 64;
@@ -34,42 +34,46 @@ namespace DeepUnityTutorials
         Tensor[] dataset;
 
         private int batch_index = 0;
+
+        const int latent_dim = 16;
+        const int size = 256; // 1024 original
+        const float dropout = 0.1f; // 0.3f original
         private void Start()
-        {
+        {          
             if (discriminator == null)
             {
                 discriminator = new NeuralNetwork(
                     new Flatten(),
 
-                    new Dense(784, 1024, device: Device.GPU),
-                    new Tanh(),
-                    new Dropout(0.3f),
+                    new Dense(784, size, device: Device.GPU),
+                    new LeakyReLU(),
+                    new Dropout(dropout),
                 
-                    new Dense(1024, 512, device: Device.GPU),
-                    new Tanh(),
-                    new Dropout(0.3f),
+                    new Dense(size, size/2, device: Device.GPU),
+                    new LeakyReLU(),
+                    new Dropout(dropout),
 
-                    new Dense(512, 256, device: Device.GPU),
-                    new Tanh(),
-                    new Dropout(0.3f),
+                    new Dense(size / 2, size / 4, device: Device.GPU),
+                    new LeakyReLU(),
+                    new Dropout(dropout),
 
-                    new Dense(256, 1, device: Device.GPU),
+                    new Dense(size / 4, 1, device: Device.GPU),
                     new Sigmoid()
                     ).CreateAsset("discriminator");
             }
             if (generator == null)
             {
                 generator = new NeuralNetwork(
-                    new Dense(latent_dim, 256, device: Device.GPU),
-                    new Tanh(),
+                    new Dense(latent_dim, size / 4, device: Device.GPU),
+                    new LeakyReLU(),
 
-                    new Dense(256, 512, device: Device.GPU),
-                    new Tanh(),
+                    new Dense(size / 4, size / 2, device: Device.GPU),
+                    new LeakyReLU(),
 
-                    new Dense(512, 1024,  device: Device.GPU),
-                    new Tanh(),
+                    new Dense(size / 2, size,  device: Device.GPU),
+                    new LeakyReLU(),
 
-                    new Dense(1024, 784, device: Device.GPU),
+                    new Dense(size, 784, device: Device.GPU),
                     new Sigmoid(),
 
                     new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 })
