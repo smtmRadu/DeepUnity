@@ -9,7 +9,7 @@ namespace DeepUnity
     /// where * = any shape.
     /// </summary>
     [Serializable]
-    public class ReLU : Activation
+    public class ReLU : IModule, IActivation
     {
         /// <summary>
         /// <b>Applies the Rectified Linear Unit activation function. </b><br></br>
@@ -19,9 +19,24 @@ namespace DeepUnity
         /// </summary>
         public ReLU() { }
 
-        protected override Tensor Activate(Tensor x) => x.Select(k => Math.Max(0f, k));
-        protected override Tensor Derivative(Tensor x) => x.Select(k => k > 0f ? 1f : 0f);
 
-        public override object Clone() => new ReLU();
+        protected Tensor InputCache { get; set; }
+        public Tensor Predict(Tensor x)
+        {
+            return x.Select(k => Math.Max(0f, k));
+        }
+
+        public Tensor Forward(Tensor x)
+        {
+            InputCache = x.Clone() as Tensor;
+            return Predict(x);
+        }
+
+        public Tensor Backward(Tensor dLdY)
+        {
+            return dLdY * InputCache.Select(k => k > 0f ? 1f : 0f);
+        }
+
+        public object Clone() => new ReLU();
     }
 }

@@ -106,10 +106,10 @@ namespace DeepUnityTutorials
                 Tensor decoded = Forward(input, out encoded, out mean, out log_variance, out ksi);
 
                 // Backpropagate the MSE loss -> binary_cross_entropy(reconstructured_image, image)
-                Loss mse = Loss.BCE(decoded, input);
-                loss_value += mse.Item;
+                Loss bce = Loss.BCE(decoded, input);
+                loss_value += bce.Item;
 
-                Tensor dBCEdDecoded = mse.Gradient;
+                Tensor dBCEdDecoded = bce.Gradient;
 
                 // Backprop MSE  through decoder (z = mu + sigma * ksi)
                 Tensor dBCE_dz = decoder.Backward(dBCEdDecoded); // derivative of the loss with respect to z = mu * sigma * std;

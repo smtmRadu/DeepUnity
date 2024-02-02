@@ -1,15 +1,14 @@
 using System;
-using UnityEditor;
 using UnityEngine;
 
 namespace DeepUnity
 {
-    /// <typeparam name="NeuralNetworkType">Type of the network class that inherits. It is used as a box to serialize models as Scriptable Objects.</typeparam>
+    /// <typeparam name="ModelType">Type of the model class that inherits. It is used as a box to serialize models as Scriptable Objects.</typeparam>
    
     [Serializable]
-    public abstract class Model<NeuralNetworkType, IOType> : ScriptableObject, ICloneable where NeuralNetworkType : Model<NeuralNetworkType, IOType>
+    public abstract class Model<ModelType, IOType> : ScriptableObject, ICloneable where ModelType : Model<ModelType, IOType>
     {
-        [SerializeField, ReadOnly] private int version = 1;
+        [SerializeField, ViewOnly] private int version = 1;
         [SerializeField, HideInInspector] private bool assetCreated = false;
 
 
@@ -35,54 +34,24 @@ namespace DeepUnity
         public abstract IOType Backward(IOType lossGradient);
 
 
-
-
         /// <summary>
         /// Get all <typeparamref name="Parameter"/>s.
         /// </summary>
         /// <returns></returns>
-        public abstract Parameter[] Parameters();
+        public abstract Parameter[] Parameters();  
         /// <summary>
-        /// Displays information about this neural network.
+        /// Clones all of this network's characteristics. All modules with all the data are cloned as new.
         /// </summary>
         /// <returns></returns>
-        public abstract string Summary();
-
-
-     
-
-
+        public abstract object Clone();
         /// <summary>
-        /// Creates a Unity asset instance of this network in <em>Assets</em> folder with the specified <paramref name="name"/>. <br></br>
-        /// <br></br>
-        /// <em>If already exists, this method creates a new instance called '[behaviour_name]_v[x]'</em>
+        /// Set the device of all model <see cref="IModule"/>s that are <see cref="ILearnable"/>.
         /// </summary>
-        /// <param name="name"></param>
-        /// <returns>Returns this network model.</returns>        
-        public NeuralNetworkType CreateAsset(string name)
-        {
-            var instance = AssetDatabase.LoadAssetAtPath<NeuralNetworkType>("Assets/" + name + ".asset");
-            if (instance != null)
-            {
-                if (name.EndsWith($"v{version}"))
-                {
-                    // Replace the last version with the new version
-                    name = name.Substring(0, name.Length - ("_v" + version).Length);                 
-                }
+        /// <param name="device"></param>
+        public abstract void SetDevice(Device device);
 
-                version++;
-                name += $"_v{version}";
-                return CreateAsset(name);
-            }
 
-            this.name = name;
-            this.assetCreated = true;
-            AssetDatabase.CreateAsset(this, $"Assets/{name}.asset");
-            EditorUtility.SetDirty(this);
-            AssetDatabase.SaveAssetIfDirty(this);
-            ConsoleMessage.Info($"<b>{name}</b> <i>{GetType().Name}</i> asset created");
-            return (NeuralNetworkType)this;
-        }
+
         /// <summary>
         /// Saves the Unity asset with the new state of the network parameters. <br></br>
         /// Notes: <br></br>
@@ -98,15 +67,45 @@ namespace DeepUnity
                 return;
             }
             version++;
-            EditorUtility.SetDirty(this);
-            AssetDatabase.SaveAssetIfDirty(this);
+#if UNITY_EDITOR
+            UnityEditor.EditorUtility.SetDirty(this);
+            UnityEditor.AssetDatabase.SaveAssetIfDirty(this);
+#endif
         }
         /// <summary>
-        /// Clones all of this network's characteristics. All modules with all the data are cloned as new.
+        /// Creates a Unity asset instance of this network in <em>Assets</em> folder with the specified <paramref name="name"/>. <br></br>
+        /// <br></br>
+        /// <em>If already exists, this method creates a new instance called '[behaviour_name]_v[x]'</em>
         /// </summary>
-        /// <returns></returns>
-        public abstract object Clone();
+        /// <param name="name"></param>
+        /// <returns>Returns this network model.</returns>        
+        public ModelType CreateAsset(string name)
+        {
+#if UNITY_EDITOR
+            var instance = UnityEditor.AssetDatabase.LoadAssetAtPath<ModelType>("Assets/" + name + ".asset");
+            if (instance != null)
+            {
+                if (name.EndsWith($"v{version}"))
+                {
+                    // Replace the last version with the new version
+                    name = name.Substring(0, name.Length - ("_v" + version).Length);                 
+                }
 
+                version++;
+                name += $"_v{version}";
+                return CreateAsset(name);
+            }
+
+            this.name = name;
+            this.assetCreated = true;
+            UnityEditor.AssetDatabase.CreateAsset(this, $"Assets/{name}.asset");
+            UnityEditor.EditorUtility.SetDirty(this);
+            UnityEditor.AssetDatabase.SaveAssetIfDirty(this);
+#endif
+            ConsoleMessage.Info($"<b>{name}</b> <i>{GetType().Name}</i> asset created");
+            return (ModelType)this;
+
+        }
     }
 
 }

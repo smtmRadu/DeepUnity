@@ -9,7 +9,7 @@ namespace DeepUnity
     /// where * = any shape.
     /// </summary>
     [Serializable]
-    public class Tanh : Activation
+    public class Tanh : IModule, IActivation
     {
         /// <summary>
         /// <b>Applies the Hyperbolic Tangent activation function. </b><br></br>
@@ -18,7 +18,9 @@ namespace DeepUnity
         /// where * = any shape.
         /// </summary>
         public Tanh() { }
-        protected override Tensor Activate(Tensor x)
+
+        protected Tensor OutputCache { get; set; }
+        public Tensor Predict(Tensor x)
         {
             return x.Select(x =>
             {
@@ -27,16 +29,20 @@ namespace DeepUnity
                 return tanh;
             });
         }
-        protected override Tensor Derivative(Tensor x)
+
+        public Tensor Forward(Tensor x)
         {
-            return x.Select(x =>
-            {
-                float e2x = MathF.Exp(2f * x);
-                float tanh = (e2x - 1f) / (e2x + 1f);
-                return  1f - tanh * tanh;
-            });
+            Tensor y = Predict(x);
+            OutputCache = y.Clone() as Tensor;
+            return y;
         }
-        public override object Clone() => new Tanh();
+
+        public Tensor Backward(Tensor dLdY)
+        {
+            return dLdY * (-OutputCache.Pow(2f) + 1);
+        }
+
+        public  object Clone() => new Tanh();
     }
 
 }

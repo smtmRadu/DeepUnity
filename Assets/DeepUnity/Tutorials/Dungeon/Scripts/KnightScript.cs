@@ -8,7 +8,7 @@ namespace DeepUnityTutorials
     public class KnightScript : Agent
     {
         [SerializeField] public float initialHealth = 100f;
-        [ReadOnly] public float health = 100f;
+        [ViewOnly] public float health = 100f;
         [SerializeField] private float speed = 10f;
         [SerializeField] private float jump_speed = 10f;
         [SerializeField] private float rot_speed = 5f;

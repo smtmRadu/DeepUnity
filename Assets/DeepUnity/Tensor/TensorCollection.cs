@@ -15,9 +15,11 @@ namespace DeepUnity
     public class TensorCollection
     {
         [SerializeField] private List<Tensor> tensors = new List<Tensor>();
+        public int Count { get { return tensors.Count; } }
 
         public TensorCollection() { }
         public TensorCollection(IEnumerable<Tensor> tensors) => this.tensors = tensors.ToList();
+
 
         public void Add(Tensor tensor) => tensors.Add(tensor);
         public void InsertAt(int index, Tensor tensor) => tensors.Insert(index, tensor);

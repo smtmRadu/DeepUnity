@@ -4,37 +4,47 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class HardTanh : Activation
+    public class HardTanh : IModule, IActivation
     {
         [SerializeField] private float min_value = -1f;
         [SerializeField] private float max_value =  1f;
-        protected override Tensor Activate(Tensor x) => x.Select(k =>
+
+        protected Tensor InputCache { get; set; }
+        public Tensor Predict(Tensor x)
         {
-            if (k > max_value)
-                return max_value;
+            return x.Select(k =>
+            {
+                if (k > max_value)
+                    return max_value;
 
-            if(k < min_value)
-                return min_value;
+                if (k < min_value)
+                    return min_value;
 
-            return k;
-        });
-        protected override Tensor Derivative(Tensor x) => x.Select(k =>
-        {
-            if (k > max_value)
-                return 0f;
-
-            if (k < min_value)
-                return 0f;
-
-            return 1f;
-        });
-        public HardTanh(float min_val = -1f, float max_val = 1f)
-        {
-            this.min_value = min_val;
-            this.max_value = max_val;
+                return k;
+            });
         }
 
-        public override object Clone() => new HardTanh();
+        public Tensor Forward(Tensor x)
+        {
+            InputCache = x.Clone() as Tensor;
+            return Predict(x);
+        }
+
+        public Tensor Backward(Tensor dLdY)
+        {
+            return dLdY * InputCache.Select(k =>
+            {
+                if (k > max_value)
+                    return 0f;
+
+                if (k < min_value)
+                    return 0f;
+
+                return 1f;
+            });
+        }
+
+        public object Clone() => new HardTanh();
     }
 }
 

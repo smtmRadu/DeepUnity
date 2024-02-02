@@ -1,5 +1,3 @@
-#if UNITY_EDITOR
-using UnityEditor;
 using UnityEngine;
 
 namespace DeepUnity
@@ -21,11 +19,11 @@ namespace DeepUnity
             methodToInvoke = methodName;
         }
     }
-
-    [CustomPropertyDrawer(typeof(ButtonAttribute))]
-    public class ButtonAttributeDrawer : PropertyDrawer
+#if UNITY_EDITOR
+    [UnityEditor.CustomPropertyDrawer(typeof(ButtonAttribute))]
+    public class ButtonAttributeDrawer : UnityEditor.PropertyDrawer
     {
-        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+        public override void OnGUI(Rect position, UnityEditor.SerializedProperty property, GUIContent label)
         {
 
             ButtonAttribute buttonAttribute = attribute as ButtonAttribute;
@@ -47,9 +45,8 @@ namespace DeepUnity
                     }
                 }
             }
-            EditorGUILayout.PropertyField(property);
+            UnityEditor.EditorGUILayout.PropertyField(property);
         }
     }
-
-}
 #endif
+}

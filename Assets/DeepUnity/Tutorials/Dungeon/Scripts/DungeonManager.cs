@@ -7,7 +7,7 @@ namespace DeepUnityTutorials
     public class DungeonManager : MonoBehaviour
     {
         public float maxSecondsPerEpsiode = 60f;
-        [ReadOnly] public float timeLeftFromEpisode;
+        [ViewOnly] public float timeLeftFromEpisode;
         public GameObject key;
         public Transform keySpawnPoint;
         public DragonScript dragon;

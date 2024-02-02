@@ -432,7 +432,7 @@ namespace DeepUnity
 
         }
     }
-
+#if UNITY_EDITOR
     [CustomEditor(typeof(PPOTrainer), true), CanEditMultipleObjects]
     sealed class CustomTrainerEditor : Editor
     {
@@ -443,5 +443,6 @@ namespace DeepUnity
             serializedObject.ApplyModifiedProperties();
         }
     }
+#endif
 }
 

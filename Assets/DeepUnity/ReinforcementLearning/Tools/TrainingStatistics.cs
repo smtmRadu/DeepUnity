@@ -15,27 +15,27 @@ namespace DeepUnity
     {
         private TrainingStatistics Instance;
 
-        [ReadOnly, Tooltip("When the simulation started.")]
+        [ViewOnly, Tooltip("When the simulation started.")]
         public string startedAt = " - ";
-        [ReadOnly, Tooltip("When the simulation ended.")]
+        [ViewOnly, Tooltip("When the simulation ended.")]
         public string finishedAt = " - ";
-        [ReadOnly, Tooltip("How much time passed in real time since the start of the training simulation.")] 
+        [ViewOnly, Tooltip("How much time passed in real time since the start of the training simulation.")] 
         public string trainingSessionTime = " - ";
-        [ReadOnly, Tooltip("Total time spent on inference in total.")]
+        [ViewOnly, Tooltip("Total time spent on inference in total.")]
         public string inferenceTime = " - ";
-        [ReadOnly, Tooltip("Total time spent on policy update.")]
+        [ViewOnly, Tooltip("Total time spent on policy update.")]
         public string policyUpdateTime = " - ";
-        [ReadOnly, Tooltip("How much time takes a policy update iteration.")]
+        [ViewOnly, Tooltip("How much time takes a policy update iteration.")]
         public string policyUpdateTimePerIteration = " - ";
         
         [Space(20)]
-        [ReadOnly, Tooltip("Total number of episodes runned by all parallel agents.")]
+        [ViewOnly, Tooltip("Total number of episodes runned by all parallel agents.")]
         public int episodeCount = 0;
-        [ReadOnly, Tooltip("Total numbers of steps runned by all parallel agents.")] 
+        [ViewOnly, Tooltip("Total numbers of steps runned by all parallel agents.")] 
         public int stepCount = 0;
-        [ReadOnly, Tooltip("How many policy updates were made.")] 
+        [ViewOnly, Tooltip("How many policy updates were made.")] 
         public int iterations = 0;
-        [ReadOnly, Tooltip("Parallel agents learning. If this is not equal to your environments, some of them are not having the behaviour to learn.")] 
+        [ViewOnly, Tooltip("Parallel agents learning. If this is not equal to your environments, some of them are not having the behaviour to learn.")] 
         public int parallelAgents = 0;
 
         [Space(20)]
@@ -313,6 +313,7 @@ namespace DeepUnity
 
             yOffset += height + 30;
         }
+#if UNITY_EDITOR
         private void ExportOnEnd(PlayModeStateChange state)
         {
             if(state == PlayModeStateChange.ExitingPlayMode)
@@ -329,6 +330,7 @@ namespace DeepUnity
             }
             
         }
+#endif
     }
 
 #if UNITY_EDITOR

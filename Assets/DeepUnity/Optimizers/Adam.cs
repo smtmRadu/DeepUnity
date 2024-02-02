@@ -1,6 +1,6 @@
 namespace DeepUnity
 {
-    // https://arxiv.org/pdf/1412.6980.pdf also adamax algorithm is there
+    // https://arxiv.org/pdf/1412.6980.pdf also adamax algorithm is there, though i extended it with pytorch doc.
     public sealed class Adam : Optimizer
     {
         private readonly float beta1;

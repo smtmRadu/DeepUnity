@@ -17,22 +17,22 @@ namespace DeepUnity
     public class GridSensor : MonoBehaviour, ISensor
     {
         private GridCellInfo[,,] Observations;
-        [SerializeField, Tooltip("@scene type")] World world = World.World3d;
-        [SerializeField, Tooltip("@LayerMask used when casting the rays")] LayerMask layerMask = ~0;
+        [SerializeField, Tooltip("Scene type")] World world = World.World3d;
+        [SerializeField, Tooltip("LayerMask used when casting the rays")] LayerMask layerMask = ~0;
         [SerializeField] string[] detectableTags;
         [SerializeField, Range(0.001f, 100f)] float scale = 1f;
-        [SerializeField, Range(0.001f, 1f), Tooltip("@cast overlap raio")] float castScale = 0.95f;
+        [SerializeField, Range(0.001f, 1f), Tooltip("@Cast overlap ratio")] float castScale = 0.95f;
         [SerializeField, Range(1, 20f)] int width = 8;
         [SerializeField, Range(1, 20f)] int height = 8;
         [SerializeField, Range(1, 20f)] int depth = 8;
 
         [Space(10)]
-        [SerializeField, Range(-4.5f, 4.5f), Tooltip("@grid X axis offset")] float xOffset = 0;
-        [SerializeField, Range(-4.5f, 4.5f), Tooltip("@grid Y axis offset")] float yOffset = 0;
-        [SerializeField, Range(-4.5f, 4.5f), Tooltip("@grid Z axis offset\n@not used in 2D world")] float zOffset = 0;
+        [SerializeField, Range(-4.5f, 4.5f), Tooltip("Grid X axis offset")] float xOffset = 0;
+        [SerializeField, Range(-4.5f, 4.5f), Tooltip("Grid Y axis offset")] float yOffset = 0;
+        [SerializeField, Range(-4.5f, 4.5f), Tooltip("Grid Z axis offset\n@not used in 2D world")] float zOffset = 0;
 
         [Space(10)]
-        [SerializeField, Range(0f, 0.5f)] private float alpha = 0.2f;
+        [SerializeField, Range(0f, 0.5f), Tooltip("The grid Gizmos transparency")] private float alpha = 0.2f;
         [SerializeField] Color missColor = new Color(0.5f, 0.5f, 0.5f, 0.1f); //gray
         [SerializeField] Color missingMaterialColor = new Color(1f, 0f, 0.95f, 0.5f);//pink
 

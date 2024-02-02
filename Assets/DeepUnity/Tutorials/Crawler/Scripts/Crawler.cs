@@ -1,15 +1,12 @@
 using UnityEngine;
 using DeepUnity;
-using System.Net.Sockets;
+using System;
 
 namespace DeepUnityTutorials
 {
     public class Crawler : Agent
     {
-        [SerializeField] Transform target;
-        [SerializeField] Transform directionArrow;
-
-        [Header("Body Parts")]
+        [Header("Requires Normalization")]
         [SerializeField] GameObject thigh1;
         [SerializeField] GameObject thigh2;
         [SerializeField] GameObject thigh3;
@@ -25,13 +22,13 @@ namespace DeepUnityTutorials
         [SerializeField] GameObject foot3;
         [SerializeField] GameObject foot4;
 
-        bool foot1_grounded = false;
-        bool foot2_grounded = false;
-        bool foot3_grounded = false;
-        bool foot4_grounded = false;
+        [ViewOnly] public bool foot1_grounded = false;
+        [ViewOnly] public bool foot2_grounded = false;
+        [ViewOnly] public bool foot3_grounded = false;
+        [ViewOnly] public bool foot4_grounded = false;
 
         BodyController controller;
-        Vector3 dirToTarget;
+
         public override void Awake()
         {
             base.Awake();
@@ -52,82 +49,64 @@ namespace DeepUnityTutorials
             controller.AddBodyPart(foot3);
             controller.AddBodyPart(foot4);
 
-            controller.bodyPartsDict[this.gameObject].ColliderContact.OnEnter = (col) =>
+
+            Action<Collision> end = (col) =>
             {
-                EndEpisode();
-                AddReward(-1f);
+                if (col.collider.CompareTag("Ground"))
+                {
+                    EndEpisode();
+                }
             };
 
-            controller.bodyPartsDict[thigh1].ColliderContact.OnEnter = (col) => EndEpisode();
-            controller.bodyPartsDict[thigh2].ColliderContact.OnEnter = (col) => EndEpisode();
-            controller.bodyPartsDict[thigh3].ColliderContact.OnEnter = (col) => EndEpisode();
-            controller.bodyPartsDict[thigh4].ColliderContact.OnEnter = (col) => EndEpisode();
+            controller.bodyPartsDict[this.gameObject].ColliderContact.OnEnter = end;
+            controller.bodyPartsDict[thigh1].ColliderContact.OnEnter = end;
+            controller.bodyPartsDict[thigh2].ColliderContact.OnEnter = end;
+            controller.bodyPartsDict[thigh3].ColliderContact.OnEnter = end;
+            controller.bodyPartsDict[thigh4].ColliderContact.OnEnter = end;
 
 
-            controller.bodyPartsDict[foot1].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) foot1_grounded = true;};
-            controller.bodyPartsDict[foot2].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) foot2_grounded = true;};
-            controller.bodyPartsDict[foot3].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) foot3_grounded = true;};
-            controller.bodyPartsDict[foot4].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) foot4_grounded = true;};
+            controller.bodyPartsDict[foot1].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) foot1_grounded = true; };
+            controller.bodyPartsDict[foot2].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) foot2_grounded = true; };
+            controller.bodyPartsDict[foot3].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) foot3_grounded = true; };
+            controller.bodyPartsDict[foot4].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) foot4_grounded = true; };
                                                                                                                                               
-            controller.bodyPartsDict[foot1].ColliderContact.OnExit = (col) => { if (col.collider.CompareTag("Ground")) foot1_grounded = false;};
-            controller.bodyPartsDict[foot2].ColliderContact.OnExit = (col) => { if (col.collider.CompareTag("Ground")) foot2_grounded = false;};
-            controller.bodyPartsDict[foot3].ColliderContact.OnExit = (col) => { if (col.collider.CompareTag("Ground")) foot3_grounded = false;};
-            controller.bodyPartsDict[foot4].ColliderContact.OnExit = (col) => { if (col.collider.CompareTag("Ground")) foot4_grounded = false;};
+            controller.bodyPartsDict[foot1].ColliderContact.OnExit = (col) => { if (col.collider.CompareTag("Ground")) foot1_grounded = false; };
+            controller.bodyPartsDict[foot2].ColliderContact.OnExit = (col) => { if (col.collider.CompareTag("Ground")) foot2_grounded = false; };
+            controller.bodyPartsDict[foot3].ColliderContact.OnExit = (col) => { if (col.collider.CompareTag("Ground")) foot3_grounded = false; };
+            controller.bodyPartsDict[foot4].ColliderContact.OnExit = (col) => { if (col.collider.CompareTag("Ground")) foot4_grounded = false; };
         }
-        public override void OnEpisodeBegin()
-        {
-            float random_angle = Utils.Random.Range(0f, 360f);
-            const float distance = 3f;
-
-            float random_rad = Mathf.Rad2Deg * random_angle;
-            float x = distance * Mathf.Cos(random_rad);
-            float z = distance * Mathf.Sin(random_rad);
-
-            target.localPosition = new Vector3(x, target.localPosition.y, z);
-        }
-
 
         public override void CollectObservations(StateVector stateBuffer)
         {
+            // Total 94
 
-            // Total 126
+            // + 10
+            stateBuffer.AddObservation(transform.rotation); 
+            stateBuffer.AddObservation(controller.bodyPartsDict[this.gameObject].rigidbody.velocity);
+            stateBuffer.AddObservation(controller.bodyPartsDict[this.gameObject].rigidbody.angularVelocity);
 
-            // + 12
-            dirToTarget = target.position - controller.bodyPartsDict[this.gameObject].rigidbody.position;
-            stateBuffer.AddObservation(dirToTarget.normalized); //3
-            stateBuffer.AddObservation(controller.bodyPartsDict[this.gameObject].rigidbody.position); //3
-            stateBuffer.AddObservation(transform.forward); //3
-            stateBuffer.AddObservation(transform.up); //3
-
-
-            // + 13 x 8 + 4 + 6
+            // + 10 x 8
             foreach (var bp in controller.bodyPartsList)
             {
-                if (bp.rigidbody.transform == transform)
-                {
-                    stateBuffer.AddObservation(bp.rigidbody.velocity / 30f);
-                    stateBuffer.AddObservation(bp.rigidbody.angularVelocity / 30f);
+                if (bp.gameObject == foot1 || bp.gameObject == foot2 || bp.gameObject == foot3 || bp.gameObject == foot4)
                     continue;
-                }
 
-                // 9 info
-                stateBuffer.AddObservation(bp.rigidbody.velocity / 30f);
-                stateBuffer.AddObservation(bp.rigidbody.angularVelocity / 30f);
-                Vector3 localPosRelToHead = transform.InverseTransformPoint(bp.rigidbody.position);
-                stateBuffer.AddObservation(localPosRelToHead);
+                if (bp.rigidbody.transform == transform)
+                    continue;
+              
 
-                // 4 info
+                // 10 info
+                stateBuffer.AddObservation(bp.rigidbody.velocity);
+                stateBuffer.AddObservation(bp.rigidbody.angularVelocity);
                 stateBuffer.AddObservation(bp.CurrentNormalizedEulerRotation);
                 stateBuffer.AddObservation(bp.CurrentNormalizedStrength);
             }
 
-
+            // 4
             stateBuffer.AddObservation(foot1_grounded);
             stateBuffer.AddObservation(foot2_grounded);
             stateBuffer.AddObservation(foot3_grounded);
             stateBuffer.AddObservation(foot4_grounded);
-
-
         }
 
         public void OnDrawGizmos()
@@ -173,24 +152,16 @@ namespace DeepUnityTutorials
             controller.bodyPartsDict[shin3].SetJointStrength(act_vec[18]);
             controller.bodyPartsDict[shin4].SetJointStrength(act_vec[19]);
 
-            AddReward(0.005f);
-            AddReward(0.001f * Vector3.Dot(dirToTarget.normalized,  Quaternion.Euler(0f, -90f, 0f) * transform.forward)); // Reward for looking at the target
-            AddReward(0.001f * -Vector3.Distance(transform.position, target.position)); // Reward for getting close to the target
-
             // Point the arrow towards the target
-            directionArrow.rotation = Quaternion.LookRotation(target.position - transform.position) * Quaternion.Euler(0, 90f, 0);
+            // directionArrow.rotation = Quaternion.LookRotation(target.position - transform.position) * Quaternion.Euler(0, 90f, 0);
+
+            float orientation_reward = (1f - Vector3.Angle(-Vector3.forward, Quaternion.Euler(0, 90f, 0f) * -transform.forward) % 360f / 360f);
+            float position_reward = -transform.position.z;
+            float reward = 0.005f * position_reward + 0.001f * orientation_reward;
+            AddReward(Mathf.Clamp(reward, -0.05f, 0.05f));
 
             if (transform.position.y < -1)
                 EndEpisode();
-        }
-
-        private void OnTriggerEnter(Collider other)
-        {
-            if (other.CompareTag("Target"))
-            {
-                AddReward(+1);
-                OnEpisodeBegin();
-            }
         }
     }
 

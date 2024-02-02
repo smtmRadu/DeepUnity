@@ -21,7 +21,7 @@ namespace DeepUnity
     /// </em>
     /// </summary>
     [Serializable]
-    public class BatchNorm : ILearnable, IModule, ISerializationCallbackReceiver
+    public class BatchNorm : ILearnable, IModule
     {
         // https://arxiv.org/pdf/1502.03167.pdf
 
@@ -186,7 +186,7 @@ namespace DeepUnity
         /// <summary>
         /// Returns the number of all learnable parameters of this <see cref="Learnable"/> module.
         /// </summary>
-        public virtual int ParametersCount() => gamma.Count() + beta.Count();
+        public int ParametersCount() => gamma.Count() + beta.Count();
 
 
         public void SetDevice(Device device) { return; }
@@ -201,11 +201,11 @@ namespace DeepUnity
             return new Parameter[] { g, b };
         }
   
-        public virtual void OnBeforeSerialize()
+        public void OnBeforeSerialize()
         {
 
         }
-        public virtual void OnAfterDeserialize()
+        public void OnAfterDeserialize()
         {
             // This function is actually having 2 workers on serialization.
             // If shape int[] was not deserialized, we need to break this worker.

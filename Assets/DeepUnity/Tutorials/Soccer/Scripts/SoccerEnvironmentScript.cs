@@ -25,8 +25,8 @@ namespace DeepUnityTutorials
         [SerializeField] Text time_label;
 
         [Space]
-        [ReadOnly, SerializeField] private int pink_score = 0;
-        [ReadOnly, SerializeField] private int blue_score = 0;
+        [ViewOnly, SerializeField] private int pink_score = 0;
+        [ViewOnly, SerializeField] private int blue_score = 0;
 
         private Vector3 ball_initial_pos;
         private Rigidbody ball_rb;

@@ -37,7 +37,7 @@ namespace DeepUnity
 
         [NonSerialized] private Stack<Tensor> InputCache;
         [NonSerialized] private Stack<Tensor> HiddenCache;
-        [NonSerialized] private Stack<Activation> ActivationCache;
+        [NonSerialized] private Stack<IActivation> ActivationCache;
 
 
         /// <summary>
@@ -96,7 +96,7 @@ namespace DeepUnity
             Tensor h = isBatched ? Tensor.Zeros(batch_size, biases.Size(-1)) : Tensor.Zeros(biases.Size(-1));
 
 
-            Activation activation = nonlinearity == NonLinearity.Tanh ? new Tanh() : new ReLU();
+            IActivation activation = nonlinearity == NonLinearity.Tanh ? new Tanh() : new ReLU();
             Tensor[] hiddenStates = new Tensor[sequences.Length];
             for (int i = 0; i < sequences.Length; i++)
             {

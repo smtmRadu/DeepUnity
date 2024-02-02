@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using UnityEditor;
 using UnityEngine;
 
 namespace DeepUnity
@@ -79,7 +78,7 @@ namespace DeepUnity
         /// Changes the device of all <see cref="ILearnable"/> modules.
         /// </summary>
         /// <param name="device"></param>
-        public void SetDevice(Device device)
+        public override void SetDevice(Device device)
         {
             foreach (var item in modules.OfType<ILearnable>())
             {
@@ -90,7 +89,7 @@ namespace DeepUnity
         /// Gives a brief summary of the model.
         /// </summary>
         /// <returns></returns>
-        public override string Summary()
+        public string Summary()
         {
             StringBuilder stringBuilder = new StringBuilder();
 

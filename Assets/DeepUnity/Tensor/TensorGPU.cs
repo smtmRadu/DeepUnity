@@ -3,7 +3,6 @@ using System.Linq;
 using System.Text;
 using Unity.VisualScripting;
 using UnityEngine;
-using UnityEditor;
 using System.Collections.Generic;
 
 namespace DeepUnity
@@ -11,18 +10,20 @@ namespace DeepUnity
     /// <summary>
     /// A tensor that lives in VRAM. Note that are hard to use, and each new GPU Tensor must be disposed when is no longer used...
     /// </summary>
-    [Serializable,  InitializeOnLoad]
+    [Serializable] // Initialize on Load but was removed
     public sealed class TensorGPU : ISerializationCallbackReceiver, IDisposable, ICloneable, IEquatable<Tensor>, IEquatable<TensorGPU>
     {
+#if UNITY_EDITOR
         static TensorGPU()
         {
-            EditorApplication.playModeStateChanged += DeallocateTensors;
+            UnityEditor.EditorApplication.playModeStateChanged += DeallocateTensors;
         }
         private readonly static Dictionary<TensorGPU, TensorGPU> AllocatedTensors = new Dictionary<TensorGPU, TensorGPU>();
-        private readonly static int MAX_ALLOC_TENSORS = 128;    
-        private static void DeallocateTensors(PlayModeStateChange state)
+        private readonly static int MAX_ALLOC_TENSORS = 128;
+
+        private static void DeallocateTensors(UnityEditor.PlayModeStateChange state)
         {
-            if (state == PlayModeStateChange.ExitingPlayMode)
+            if (state == UnityEditor.PlayModeStateChange.ExitingPlayMode)
             {
                 if(AllocatedTensors.Count > 0)
                 {
@@ -38,11 +39,11 @@ namespace DeepUnity
               
             }
         }
-
+#endif
 
         private ComputeBuffer data;
-        [ReadOnly, SerializeField] private float[] serialized_data;
-        [ReadOnly, SerializeField] private int[] shape;
+        [ViewOnly, SerializeField] private float[] serialized_data;
+        [ViewOnly, SerializeField] private int[] shape;
 
         // These fields that are used for fast value extraction on indexing. ..
         private ComputeBuffer valueAtIndex;
@@ -305,7 +306,7 @@ namespace DeepUnity
             if (AllocatedTensors.Count > MAX_ALLOC_TENSORS)
             {
                 ConsoleMessage.Error($"Cannot allocate more than {MAX_ALLOC_TENSORS} TensorGPUs in the same time. Make sure there are no memory leaks and all unused TensorGPUs are Disposed!");
-                EditorApplication.isPlaying = false;
+                UnityEditor.EditorApplication.isPlaying = false;
             }
 
         }

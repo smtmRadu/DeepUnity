@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
-using UnityEditor;
 using UnityEngine;
 
 namespace DeepUnity
@@ -26,17 +25,19 @@ namespace DeepUnity
         {
             try
             {
-                var csguid = AssetDatabase.FindAssets("TensorCS")[0];
-                var cspath = AssetDatabase.GUIDToAssetPath(csguid);
-                TensorCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+                // I have no clue how can i make them loadable using Resouces.Load without moving them into a folder called Resources
 
-                csguid = AssetDatabase.FindAssets("DenseCS")[0];
-                cspath = AssetDatabase.GUIDToAssetPath(csguid);
-                DenseCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+                var csguid = UnityEditor.AssetDatabase.FindAssets("TensorCS")[0];
+                var cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
+                TensorCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
 
-                csguid = AssetDatabase.FindAssets("Conv2DCS")[0];
-                cspath = AssetDatabase.GUIDToAssetPath(csguid);
-                Conv2DCS = AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+                csguid = UnityEditor.AssetDatabase.FindAssets("DenseCS")[0];
+                cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
+                DenseCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+  
+                csguid = UnityEditor.AssetDatabase.FindAssets("Conv2DCS")[0]; 
+                cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
+                Conv2DCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
             }
             catch 
             {
@@ -45,7 +46,7 @@ namespace DeepUnity
         }
  	   
     }
-    public static class TimeKeeper
+    public static class BenchmarkClock
     {
         static Stopwatch clock;
         public static void Start()

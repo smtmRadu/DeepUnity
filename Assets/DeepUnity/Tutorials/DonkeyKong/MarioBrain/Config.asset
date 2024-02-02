@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5970f7530cba1f0499a4a3dbe7d27f96, type: 3}
+  m_Name: Config
+  m_EditorClassIdentifier: 
+  trainer: 0
+  maxSteps: 2000000000
+  learningRate: 0.0003
+  gamma: 0.995
+  batchSize: 1000
+  bufferSize: 20000
+  LRSchedule: 0
+  horizon: 4096
+  numEpoch: 5
+  beta: 0.01
+  epsilon: 0.2
+  lambda: 0.95
+  gradClipNorm: 0.5
+  KLDivergence: 0
+  targetKL: 0.015
+  normalizeAdvantages: 0
+  updateEvery: 64
+  updateAfter: 1024
+  updatesNum: 1
+  alpha: 0.2
+  tau: 0.005
+  saveRecordBuffer: 0
+  debug: 0
+  timescaleAdjustment: 1
+  timescale: 15

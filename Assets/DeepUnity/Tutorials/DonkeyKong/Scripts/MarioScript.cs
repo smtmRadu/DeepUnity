@@ -16,8 +16,8 @@ namespace DeepUnityTutorials
         public float climbSpeed = 1f;
         public float gameGravity = -9.81f;
       
-        [ReadOnly] public MarioState state;
-        [ReadOnly] public float stepReward;       
+        [ViewOnly] public MarioState state;
+        [ViewOnly] public float stepReward;       
         private Rigidbody2D rb;
         private Animator animator;
         private Collider2D coll;
@@ -141,7 +141,6 @@ namespace DeepUnityTutorials
         {
             if (collision.collider.CompareTag("Box"))
             {
-                AddReward(-1f);
                 EndEpisode();
             }
         }

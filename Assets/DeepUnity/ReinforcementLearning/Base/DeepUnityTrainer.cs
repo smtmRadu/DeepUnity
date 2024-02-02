@@ -1,8 +1,8 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using UnityEditor;
 using UnityEngine;
 
 namespace DeepUnity
@@ -19,25 +19,28 @@ namespace DeepUnity
 
         public event EventHandler OnTrainingSessionEnd;
 
-        [ReadOnly] public List<Agent> parallelAgents;
-        [ReadOnly] public Hyperparameters hp;
-        [ReadOnly] public AgentBehaviour model;
-        [ReadOnly] public ExperienceBuffer train_data;
-        [ReadOnly] public Stopwatch updateClock;
-        [ReadOnly] public int currentSteps = 0;
-        [ReadOnly] public int updateIterations;
-        [ReadOnly] public float actorLoss;
-        [ReadOnly] public float criticLoss;
-        [ReadOnly] public float entropy;
-        [ReadOnly] public float learningRate;
+        [ViewOnly] public List<Agent> parallelAgents;
+        [ViewOnly] public Hyperparameters hp;
+        [ViewOnly] public AgentBehaviour model;
+        [ViewOnly] public ExperienceBuffer train_data;
+        [ViewOnly] public Stopwatch updateClock;
+        [ViewOnly] public int currentSteps = 0;
+        [ViewOnly] public int updateIterations;
+        [ViewOnly] public float actorLoss;
+        [ViewOnly] public float criticLoss;
+        [ViewOnly] public float entropy;
+        [ViewOnly] public float learningRate;
 
 
         public readonly DateTime timeWhenTheTrainingStarted = DateTime.Now;
         [Min(1)]   public int autosave = 15; protected float autosaveSecondsElapsed = 0f;
-        [ReadOnly] public bool ended = false;
+        [ViewOnly] public bool ended = false;
 
         [SerializeField] private float avgDeltaTime = 0.02f;
         const float avgDeltaTimeMomentum = 0.96f;
+        string _learningText = "Learning";
+        GUIStyle _learningTextStyle;
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -47,6 +50,14 @@ namespace DeepUnity
             else
             {
                 Instance = this;
+
+                // Display "Learning..." head up on screen
+                _learningTextStyle = new GUIStyle();
+                _learningTextStyle.fontSize = 50;
+                _learningTextStyle.fontStyle = FontStyle.Bold;
+                _learningTextStyle.wordWrap = true;
+                _learningTextStyle.normal.textColor = Color.white;
+                StartCoroutine("DrawDotsToLearningText");
             }
         }
         /// <summary>
@@ -86,17 +97,29 @@ namespace DeepUnity
         private void Update()
         {
             avgDeltaTime = avgDeltaTime * avgDeltaTimeMomentum + Time.deltaTime * (1f - avgDeltaTimeMomentum);
+        }  
+        public void OnGUI()
+        {
+            GUI.Label(new Rect(10, Screen.height - 65, 400, 60), _learningText, _learningTextStyle);
         }
-       
 
         protected abstract void Initialize();
         protected abstract void OnBeforeFixedUpdate();
-        
+        IEnumerator DrawDotsToLearningText()
+        {
+            while (true)
+            {
+                yield return new WaitForSecondsRealtime(0.5f);
+                _learningText += ".";
+                if (_learningText.Length > 11)
+                    _learningText = "Learning";
+            }
+        }
         public static void Subscribe(Agent agent, TrainerType trainer)
         {
             if(Instance == null)
             {
-                EditorApplication.playModeStateChanged += Autosave;
+                UnityEditor.EditorApplication.playModeStateChanged += Autosave;
                 GameObject go = new GameObject($"[DeepUnity] Trainer - {trainer}");        
                 
                 switch(trainer)
@@ -133,14 +156,16 @@ namespace DeepUnity
 
             Instance.parallelAgents.Add(agent);
         }
-        private static void Autosave(PlayModeStateChange state) => Instance.model.Save();
+#if UNITY_EDITOR
+        private static void Autosave(UnityEditor.PlayModeStateChange state) => Instance.model.Save();
+#endif
         protected static void EndTrainingSession(string reason)
         {
             if (!Instance.ended)
             {
                 ConsoleMessage.Info("Training Session Ended! " + reason);
                 Instance.model.Save();
-                EditorApplication.isPlaying = false;
+                UnityEditor.EditorApplication.isPlaying = false;
             }
 
             Instance.ended = true;

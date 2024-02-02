@@ -11,7 +11,7 @@ namespace DeepUnityTutorials
         [SerializeField] private float speed = 1;
         [SerializeField] public int initialHealth;
         [SerializeField] public Vector2 fireRateRange = new Vector2(6f, 8f);
-        [ReadOnly] public int health = 10;
+        [ViewOnly] public int health = 10;
         private Rigidbody rb;
         private float timeSinceLastFireBurst;
 

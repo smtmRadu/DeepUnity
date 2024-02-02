@@ -9,20 +9,16 @@ using UnityEngine;
 
 namespace DeepUnity
 {
-    /// <summary>
-    /// AgentBehaviour asset, along with the entire folder of networks is recommended to be kept inside main Assets folder,
-    /// until the agent is completely finished.
-    /// </summary>
     [Serializable]
     public sealed class AgentBehaviour : ScriptableObject
     {
         [Header("Behaviour Properties")]
-        [SerializeField, ReadOnly] public string behaviourName;
+        [SerializeField, ViewOnly] public string behaviourName;
         [SerializeField, HideInInspector] private bool assetCreated = false;
-        [SerializeField, ReadOnly] public int observationSize;
-        [SerializeField, ReadOnly, Min(1)] public int stackedInputs;      
-        [SerializeField, ReadOnly] public int continuousDim;
-        [SerializeField, ReadOnly] public int discreteDim;
+        [SerializeField, ViewOnly] public int observationSize;
+        [SerializeField, ViewOnly, Min(1)] public int stackedInputs;      
+        [SerializeField, ViewOnly] public int continuousDim;
+        [SerializeField, ViewOnly] public int discreteDim;
 
         [Header("Hyperparameters")]
         [Tooltip("The scriptable object file containing the training hyperparameters.")]    
@@ -65,7 +61,7 @@ namespace DeepUnity
         [SerializeField, Tooltip("Auto-normalize input observations and rewards for a stable training.")]
         public bool normalize = false;
 
-        [ReadOnly, SerializeField, Tooltip("Observations normalizer.")] 
+        [ViewOnly, SerializeField, Tooltip("Observations normalizer.")] 
         public RunningNormalizer observationsNormalizer;
 
         [Range(1.5f, 3.5f), SerializeField, Tooltip("The observations are clipped [after normarlization] in range [-clip, clip]")]
@@ -112,9 +108,8 @@ namespace DeepUnity
         {
             
             const InitType INIT_W = InitType.HE_Normal;
-            const InitType INIT_PolicyOut = InitType.LeCun_Uniform;
             const InitType INIT_B = InitType.Zeros;
-            static Activation HiddenActivation() => new Tanh();
+            static IActivation HiddenActivation() => new Tanh();
 
             static IModule[] CreateMLP(int inputs, int stack, int outputs, int layers, int hidUnits)
             {
@@ -233,8 +228,8 @@ namespace DeepUnity
                 {
                     muNetwork = new NeuralNetwork(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
                     sigmaNetwork = new NeuralNetwork(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
-                    q1Network = new NeuralNetwork(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
-                    q2Network = new NeuralNetwork(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                    q1Network = new NeuralNetwork(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                    q2Network = new NeuralNetwork(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
                 }
 
                 if (DISCRETE_ACTIONS_NUM > 0)
@@ -248,8 +243,8 @@ namespace DeepUnity
                 {
                     muNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
                     sigmaNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
-                    q1Network = new NeuralNetwork(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
-                    q2Network = new NeuralNetwork(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                    q1Network = new NeuralNetwork(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                    q2Network = new NeuralNetwork(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
                 }
 
                 if(DISCRETE_ACTIONS_NUM > 0)
@@ -451,7 +446,7 @@ namespace DeepUnity
         /// <returns></returns>
         public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int widthSize, int heightSize, int channelSize, int continuousActions, int discreteActions, int numLayers, int hidUnits, ArchitectureType aType)
         {          
-            var instance = AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
+            var instance = UnityEditor.AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
 
             if (instance != null)
             {
@@ -475,7 +470,7 @@ namespace DeepUnity
             // Create the asset
             if (!Directory.Exists($"Assets/{name}"))
                 Directory.CreateDirectory($"Assets/{name}");
-            AssetDatabase.CreateAsset(newAgBeh, $"Assets/{name}/_{name}.asset");
+            UnityEditor.AssetDatabase.CreateAsset(newAgBeh, $"Assets/{name}/_{name}.asset");
 
             // Create aux assets
             newAgBeh.config = Hyperparameters.CreateOrLoadAsset(name);
@@ -516,6 +511,8 @@ namespace DeepUnity
         /// <returns></returns>
         public List<string> CheckForMissingAssets()
         {
+            TryReassignReference();
+
             if (config == null)
             {
                 return new List<string>() { "Config" };
@@ -565,36 +562,36 @@ namespace DeepUnity
                         whatIsMissing.Add("Sigma Network");
                 }
             }
-            // else if (trainer == TrainerType.GAIL)
-            // {
-            //     if (IsUsingContinuousActions)
-            //     {
-            //         if (!muNetwork)
-            //             whatIsMissing.Add("Mu Network");
-            // 
-            //         if (!sigmaNetwork)
-            //             whatIsMissing.Add("Sigma Network");
-            // 
-            //         // if (!discContNetwork)
-            //         //     whatIsMissing.Add("Discriminator Continuous Network");
-            //     }
-            // 
-            //     if (IsUsingDiscreteActions)
-            //     {
-            //         if (!discreteNetwork)
-            //             whatIsMissing.Add("Discrete Network");
-            // 
-            //         // if (!discDiscNetwork)
-            //         //     whatIsMissing.Add("Discriminator Discrete Network");
-            //     }
-            // }
-
             return whatIsMissing;
         }
-    }
+        private void TryReassignReference()
+        {
+            return;// it seems like it cannot find the object anyways idk why
 
-    [CustomEditor(typeof(AgentBehaviour), true), CanEditMultipleObjects]
-    sealed class CustomAgentBehaviourEditor : Editor
+
+            // if(config == null)
+            // {
+            //     string path = AssetDatabase.GetAssetPath(GetInstanceID());
+            //     path = Path.GetDirectoryName(path);
+            //     config = AssetDatabase.LoadAllAssetsAtPath(path).OfType<Hyperparameters>().FirstOrDefault();
+            // 
+            //     if (vNetwork == null)
+            //     {
+            //         var networks = AssetDatabase.LoadAllAssetsAtPath(path).OfType<NeuralNetwork>();
+            // 
+            //         vNetwork = networks.FirstOrDefault(x => x.name == "V");
+            //         muNetwork = networks.FirstOrDefault(x => x.name == "Mu");
+            //         sigmaNetwork = networks.FirstOrDefault(x => x.name == "Sigma");
+            //         discreteNetwork = networks.FirstOrDefault(x => x.name == "Discrete");
+            //         q1Network = networks.FirstOrDefault(x => x.name == "Q1");
+            //         q2Network = networks.FirstOrDefault(x => x.name == "Q2");
+            //     }
+            // }
+        }
+    }
+#if UNITY_EDITOR
+    [UnityEditor.CustomEditor(typeof(AgentBehaviour), true), UnityEditor.CanEditMultipleObjects]
+    sealed class CustomAgentBehaviourEditor : UnityEditor.Editor
     {
         public override void OnInspectorGUI()
         {
@@ -642,5 +639,6 @@ namespace DeepUnity
             serializedObject.ApplyModifiedProperties();
         }
     }
+#endif
 }
 

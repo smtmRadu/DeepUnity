@@ -161,7 +161,6 @@ namespace DeepUnity
             // do not check if gamma is != null...
             this.gammaGrad = Tensor.Zeros(gamma.Shape);
             this.betaGrad = Tensor.Zeros(beta.Shape);
-
         }
     }
 }

@@ -1,5 +1,8 @@
 namespace DeepUnity
 {
+    /// <summary>
+    /// https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.StepLR.html
+    /// </summary>
     public class LRScheduler
     {
         private readonly Optimizer optimizer;

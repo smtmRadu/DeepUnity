@@ -12,7 +12,10 @@ namespace DeepUnity
     /// https://www.youtube.com/watch?v=aw3H-wPuRcw
     /// https://machinelearningmastery.com/the-attention-mechanism-from-scratch/
     /// A. Liang Transformer March 21, 2023 Transformer Attention Derivative - https://say-hello2y.github.io/2022-09-07/attention-gradient
-
+    /// 
+    /// Previous are for multihead, better the simple one here:)
+    /// https://iq.opengenus.org/scaled-dot-product-attention/
+  
     /// <summary>
     /// <b>Applies a Scaled Dot-Product Attention over the input.</b> <br></br>
     /// Input: <b>(B, L, H)</b> or <b>(L, H)</b> for unbatched input. <br></br>
@@ -23,6 +26,8 @@ namespace DeepUnity
     [Serializable]
     public class Attention : ILearnable, IModule
     {
+        [SerializeField] private int d;
+
         [SerializeField] private Tensor W_Q;
         [SerializeField] private Tensor W_K;
         [SerializeField] private Tensor W_V;
@@ -31,10 +36,16 @@ namespace DeepUnity
         [NonSerialized] private Tensor W_K_grad;
         [NonSerialized] private Tensor W_V_grad;
 
-        [SerializeField] private int d;
 
+
+
+
+        private Stack<Tensor> Q {  get; set; } 
+        private Stack<Tensor> K { get; set; }
+        private Stack<Tensor> V { get; set; }
         private Stack<Softmax> SoftmaxCache { get; set; }
-        private Tensor InputCache { get; set; }
+        private Stack<Tensor> PostSoftmaxCache { get; set; }    
+        private Stack<Tensor> InputCache { get; set; }
 
         /// <summary>
         /// <b>Applies a Scaled Dot-Product Attention over the input.</b> <br></br>
@@ -43,22 +54,27 @@ namespace DeepUnity
         /// where B = batch_size, L = sequence_length, H = num_features and D = embed_dim.<br></br>
         /// <b>Placed after the non-linear activation function.</b> <br></br>
         /// </summary>
-        /// <param name="input_shape">(T, H)</param>
-        /// <param name="embed_dim">Total dimension of the model.</param>
-        /// <param name="scale">Apply scale in self dot-product attention.</param>
-        public Attention(int in_features, int embed_dim)
+        /// <param name="input_size">The number of features in the input (H).</param>
+        /// <param name="embed_dim">The capacity of the model.</param>
+        public Attention(int input_size, int embed_dim)
         {
             this.d = embed_dim;
-            
-            // For the sake of simplicity d_q, d_k and d_v are the same. 
-            // This will produce the same output shape as the input.
-            int H = in_features;
-            float range = MathF.Sqrt(1f / embed_dim);
+            int H = input_size;
+            float range = MathF.Sqrt(1f / input_size);
+
             W_Q = Tensor.RandomRange((-range, range), H, d);
             W_K = Tensor.RandomRange((-range, range), H, d);
             W_V = Tensor.RandomRange((-range, range), H, d);
+            W_Q_grad = Tensor.Zeros(W_Q.Shape);
+            W_K_grad = Tensor.Zeros(W_K.Shape);
+            W_V_grad = Tensor.Zeros(W_V.Shape);
 
+            Q = new();
+            K = new();
+            V = new();
             SoftmaxCache = new();
+            PostSoftmaxCache = new();
+            InputCache = new();
         }
         private Attention() { }
 
@@ -85,13 +101,13 @@ namespace DeepUnity
             for (int i = 0; i < batch_size; i++)
             {
                 Tensor x = isBatched ? batch_elem[i].Squeeze(1) : batch_elem[i];
-                Tensor Q = Tensor.MatMul(x, W_Q); // (L, H) * (H, D) = (L, D)
-                Tensor K = Tensor.MatMul(x, W_K); // (L, D)
-                Tensor V = Tensor.MatMul(x, W_V); // (L, D)
-                Tensor sdpa = Tensor.MatMul(Q, K.Transpose(0, 1)); //(L, D) * (D, L) = (L, L)
+                Tensor _Q = Tensor.MatMul(x, W_Q); // (L, H) * (H, D) = (L, D)
+                Tensor _K = Tensor.MatMul(x, W_K); // (L, D)
+                Tensor _V = Tensor.MatMul(x, W_V); // (L, D)
+                Tensor sdpa = Tensor.MatMul(_Q, _K.Transpose(0, 1)); //(L, D) * (D, L) = (L, L)
                 sdpa /= MathF.Sqrt(d);
                 sdpa = new Softmax().Forward(sdpa);
-                SDPA[i] = Tensor.MatMul(sdpa, V); // (L, D)
+                SDPA[i] = Tensor.MatMul(sdpa, _V); // (L, D)
             }
         
             return Tensor.Concat(null, SDPA); // (B, L, D)
@@ -108,8 +124,6 @@ namespace DeepUnity
                 throw new ShapeException($"Input must be of shape (B, L, H) or (L, H) for unabatches input, and input received has shape ({input.Shape.ToCommaSeparatedString()}).");
             }
 
-            InputCache = Tensor.Identity(input);
-
             bool isBatched = input.Rank == 3;
             int batch_size = isBatched ? input.Size(0) : 1;
 
@@ -117,28 +131,56 @@ namespace DeepUnity
             Tensor[] SDPA = new Tensor[batch_size];
 
             for (int i = 0; i < batch_size; i++)
-            {
-                Tensor x = isBatched ? batch_elem[i].Squeeze(1) : batch_elem[i];
-                Tensor Q = Tensor.MatMul(x, W_Q); // (L, H) * (H, D) = (L, D)
-                Tensor K = Tensor.MatMul(x, W_K); // (L, D)
-                Tensor V = Tensor.MatMul(x, W_V); // (L, D)
-                Tensor sdpa = Tensor.MatMul(Q, K.Transpose(0, 1)); //(L, D) * (D, L) = (L, L)
+            {              
+                Tensor x = isBatched ? batch_elem[i].Squeeze(0) : batch_elem[i];
+                InputCache.Push(x);
+                Q.Push(Tensor.MatMul(x, W_Q)); // (L, H) * (H, D) = (L, D)
+                K.Push(Tensor.MatMul(x, W_K)); // (L, D)
+                V.Push(Tensor.MatMul(x, W_V)); // (L, D)
+                Tensor sdpa = Tensor.MatMul(Q.Peek(), K.Peek().Transpose(0, 1)); //(L, D) * (D, L) = (L, L)
                 sdpa /= MathF.Sqrt(d);
                 SoftmaxCache.Push(new Softmax());
-                sdpa = SoftmaxCache.Peek().Forward(sdpa);
-                SDPA[i] = Tensor.MatMul(sdpa, V); // (L, D)
+                sdpa = SoftmaxCache.Peek().Forward(sdpa); // (L, L)
+                PostSoftmaxCache.Push(sdpa.Clone() as Tensor);
+                SDPA[i] = Tensor.MatMul(sdpa, V.Peek()); // (L, D)
             }
 
             return Tensor.Concat(null, SDPA);
         }
-        public Tensor Backward(Tensor dfx_dx)
+        public Tensor Backward(Tensor dLdY)
         {
-            throw new NotImplementedException();
+            bool isBatched = dLdY.Rank == 3;
+            int batch_size = isBatched ? dLdY.Size(0) : 1;
+
+            Tensor[] batch_elem = isBatched ? dLdY.Split(0, 1) : new Tensor[] { dLdY };
+            Tensor[] input_grad = new Tensor[batch_size];
+            for (int i = batch_size - 1; i >= 0; i--)
+            {
+                Tensor lossGrad = isBatched ? batch_elem[i].Squeeze(0) : batch_elem[i];
+                Tensor vGrad = Tensor.MatMul(PostSoftmaxCache.Pop(), lossGrad);    // V = (L, D), dLDY = (L, D), PSM = (L, L)
+                Tensor QK_T_grad = SoftmaxCache.Pop().Backward(Tensor.MatMul(V.Pop(), lossGrad.Transpose(0, 1))) / MathF.Sqrt(d); // (L, L)
+                Tensor qGrad = Tensor.MatMul(QK_T_grad, K.Pop()); // QKT = (L, L), k = (L, D), Q = (L, D)
+                Tensor kGrad = Tensor.MatMul(QK_T_grad, Q.Pop());
+
+                Tensor x = InputCache.Pop(); // x = (L, H), vGrad = (L, D)
+                Tensor xT = x.Transpose(0, 1);
+                W_V_grad += Tensor.MatMul(xT, vGrad) / batch_size;
+                W_Q_grad += Tensor.MatMul(xT, qGrad) / batch_size;
+                W_K_grad += Tensor.MatMul(xT, kGrad) / batch_size;
+
+                input_grad[i] = Tensor.Zeros(x.Size(-2), x.Size(-1));
+                input_grad[i] += Tensor.MatMul(vGrad, W_V.Transpose(0, 1)); // (L, D) * (H, D)
+                input_grad[i] += Tensor.MatMul(kGrad, W_K.Transpose(0, 1));
+                input_grad[i] += Tensor.MatMul(qGrad, W_Q.Transpose(0, 1));
+            }
+
+            return Tensor.Concat(null, input_grad);
         }
 
         public object Clone()
         {
             var att = new Attention();
+
             att.d = this.d; 
             att.W_Q = (Tensor)this.W_Q.Clone();
             att.W_K = (Tensor)this.W_K.Clone();
@@ -146,7 +188,13 @@ namespace DeepUnity
             att.W_Q_grad = (Tensor)this.W_Q_grad.Clone();
             att.W_K_grad = (Tensor)this.W_K_grad.Clone();
             att.W_V_grad = (Tensor)this.W_V_grad.Clone();
+            att.Q = new Stack<Tensor>(this.Q.Select(x => x.Clone() as Tensor));
+            att.K = new Stack<Tensor>(this.K.Select(x => x.Clone() as Tensor));
+            att.V = new Stack<Tensor>(this.V.Select(x => x.Clone() as Tensor));
             att.SoftmaxCache = new Stack<Softmax>(this.SoftmaxCache.Select(x => x.Clone() as Softmax));
+            att.InputCache = new Stack<Tensor>(this.InputCache.Select(x => x.Clone() as Tensor));
+            att.PostSoftmaxCache = new Stack<Tensor>(this.PostSoftmaxCache.Select(x => x.Clone() as Tensor));
+          
             return att;
         }
 
@@ -191,6 +239,14 @@ namespace DeepUnity
             this.W_Q_grad = Tensor.Zeros(W_Q.Shape);
             this.W_K_grad = Tensor.Zeros(W_K.Shape);
             this.W_V_grad = Tensor.Zeros(W_V.Shape);
+
+
+            Q = new();
+            K = new();
+            V = new();
+            SoftmaxCache = new();
+            PostSoftmaxCache = new();
+            InputCache = new();
         }
     }
 

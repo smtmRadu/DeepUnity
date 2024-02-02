@@ -13,10 +13,10 @@ namespace DeepUnity
     [Serializable] // must be serializable...
     public class PerformanceGraph
     {
-        [ReadOnly, SerializeField] AnimationCurve graph;
-        [ReadOnly, SerializeField, Tooltip("The total number of appends.")] int steps;
-        [ReadOnly, SerializeField, Tooltip("The value of the last item appended.")] float current;
-        [ReadOnly, SerializeField, Tooltip("The mean of all values.")] float mean;
+        [ViewOnly, SerializeField] AnimationCurve graph;
+        [ViewOnly, SerializeField, Tooltip("The total number of appends.")] int steps;
+        [ViewOnly, SerializeField, Tooltip("The value of the last item appended.")] float current;
+        [ViewOnly, SerializeField, Tooltip("The mean of all values.")] float mean;
 
         private float time_step_size = 0.1f;
         private int next_squash = 10;        
@@ -125,7 +125,7 @@ namespace DeepUnity
 
 
 
-
+#if UNITY_EDITOR
     [CustomPropertyDrawer(typeof(PerformanceGraph))]
     public class PerformanceGraphDrawer : PropertyDrawer
     {
@@ -172,6 +172,6 @@ namespace DeepUnity
             EditorGUI.EndProperty();
         }
     }
-
+#endif
 }
 

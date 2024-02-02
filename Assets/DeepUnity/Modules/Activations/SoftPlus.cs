@@ -4,7 +4,7 @@ using UnityEngine;
 namespace DeepUnity
 {
     [Serializable]
-    public class Softplus : Activation
+    public class Softplus : IModule, IActivation
     {
         [SerializeField] private float beta = 1f;
         [SerializeField] private float psi = 1f;
@@ -20,23 +20,33 @@ namespace DeepUnity
             this.beta = beta;
             this.psi = psi;
         }
-        protected override Tensor Activate(Tensor x)
+
+        protected Tensor InputCache { get; set; }
+
+        public Tensor Predict(Tensor x)
         {
             return x.Select(x =>
             {
                 float log = MathF.Log(1f + MathF.Exp(beta * x));
-                return  psi * log / beta;
+                return psi * log / beta;
             });
         }
-        protected override Tensor Derivative(Tensor x)
+
+        public Tensor Forward(Tensor x)
         {
-            return x.Select(x =>
+            InputCache = x.Clone() as Tensor;
+            return Predict(x);
+        }
+
+        public Tensor Backward(Tensor dLdY)
+        {
+            return dLdY * InputCache.Select(x =>
             {
                 float exp_bx = MathF.Exp(beta * x);
                 return psi * exp_bx / (1 + exp_bx);
             });
         }
-        public override object Clone() => new Softplus(beta);
+        public object Clone() => new Softplus(beta);
     }
 
 }

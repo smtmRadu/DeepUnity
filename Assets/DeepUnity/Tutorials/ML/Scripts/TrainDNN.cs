@@ -49,19 +49,16 @@ namespace DeepUnityTutorials
             {
                 net = new NeuralNetwork(
                  new Dense(2, hiddenSize,init_w, init_b),
-                 // new LayerNorm(),
                  new Tanh(),
                  new Dense(hiddenSize, hiddenSize, init_w, init_b),
-                 // new BatchNorm(hiddenSize),
                  new Tanh(),
-                 // new Dropout(0.3f),
                  new Dense(hiddenSize, 1, init_w, init_b)
                  );
             }
 
             net.SetDevice(device);
 
-            optimizer = new Adan(net.Parameters(), lr: learningRate);
+            optimizer = new Adam(net.Parameters(), lr: learningRate);
             scheduler = new LRScheduler(optimizer, scheduler_step_size, scheduler_gamma);
 
 
@@ -84,7 +81,7 @@ namespace DeepUnityTutorials
             validationInputs = Tensor.Concat(1, x1, x2);
             validationTargets = y;
 
-            TimeKeeper.Start();
+            BenchmarkClock.Start();
         }
 
         public void Update()
@@ -97,7 +94,7 @@ namespace DeepUnityTutorials
                 i = 0;
                 // net.Save();
                 if (epoch == timerStopEpoch)
-                    TimeKeeper.Stop();
+                    BenchmarkClock.Stop();
 
                 return;
             }

@@ -12,7 +12,7 @@ namespace DeepUnityTutorials
         private Animator animator;
         [Header("Recommended: 1.5f - 3.5f (to make the game _hard_)")]
         public Vector2 throwOnSecondsRange = new Vector2(2.5f, 3.5f);
-        public float timeElapsedUntilNextThrow;
+        [ViewOnly] public float timeElapsedUntilNextThrow;
         public static LinkedList<GameObject> barrels = new();
 
 
@@ -47,7 +47,6 @@ namespace DeepUnityTutorials
 
             animator.SetBool("isThrowingBarrel", false);
             timeElapsedUntilNextThrow = Utils.Random.Range(throwOnSecondsRange.x, throwOnSecondsRange.y);
-
         }
 
     }

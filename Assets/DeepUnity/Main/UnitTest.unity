@@ -269,6 +269,98 @@ MonoBehaviour:
     y: 0
     width: 1
     height: 1
+--- !u!1 &113944478
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 113944481}
+  - component: {fileID: 113944480}
+  - component: {fileID: 113944479}
+  m_Layer: 0
+  m_Name: Camera
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!81 &113944479
+AudioListener:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 113944478}
+  m_Enabled: 1
+--- !u!20 &113944480
+Camera:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 113944478}
+  m_Enabled: 1
+  serializedVersion: 2
+  m_ClearFlags: 1
+  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_projectionMatrixMode: 1
+  m_GateFitMode: 2
+  m_FOVAxisMode: 0
+  m_Iso: 200
+  m_ShutterSpeed: 0.005
+  m_Aperture: 16
+  m_FocusDistance: 10
+  m_FocalLength: 50
+  m_BladeCount: 5
+  m_Curvature: {x: 2, y: 11}
+  m_BarrelClipping: 0.25
+  m_Anamorphism: 0
+  m_SensorSize: {x: 36, y: 24}
+  m_LensShift: {x: 0, y: 0}
+  m_NormalizedViewPortRect:
+    serializedVersion: 2
+    x: 0
+    y: 0
+    width: 1
+    height: 1
+  near clip plane: 0.3
+  far clip plane: 1000
+  field of view: 60
+  orthographic: 0
+  orthographic size: 5
+  m_Depth: 0
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RenderingPath: -1
+  m_TargetTexture: {fileID: 0}
+  m_TargetDisplay: 0
+  m_TargetEye: 3
+  m_HDR: 1
+  m_AllowMSAA: 1
+  m_AllowDynamicResolution: 0
+  m_ForceIntoRT: 0
+  m_OcclusionCulling: 1
+  m_StereoConvergence: 10
+  m_StereoSeparation: 0.022
+--- !u!4 &113944481
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 113944478}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 24.31812, y: 48.018673, z: -0.17274857}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 8
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &164227946
 GameObject:
   m_ObjectHideFlags: 0
@@ -353,12 +445,12 @@ GameObject:
   - component: {fileID: 173192359}
   - component: {fileID: 173192358}
   m_Layer: 0
-  m_Name: Tutorial4
+  m_Name: Unit Test
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &173192358
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -371,6 +463,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1ce1f756688e66a40b8a98fa736039d3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  net: {fileID: 11400000, guid: 65fbeaa7fac569049ae810b08e5de8bf, type: 2}
+  graph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
 --- !u!4 &173192359
 Transform:
   m_ObjectHideFlags: 0
@@ -869,12 +972,12 @@ GameObject:
   - component: {fileID: 621327370}
   - component: {fileID: 621327372}
   m_Layer: 0
-  m_Name: Tutorial 2
+  m_Name: Train MLP
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &621327370
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -909,7 +1012,7 @@ MonoBehaviour:
     steps: 0
     current: 0
     mean: 0
-  learningRate: 0.001
+  learningRate: 0.002
   hiddenSize: 64
   trainingSamples: 1024
   batch_size: 64
@@ -1251,7 +1354,6 @@ GameObject:
   - component: {fileID: 837761031}
   - component: {fileID: 837761030}
   - component: {fileID: 837761029}
-  - component: {fileID: 837761033}
   m_Layer: 0
   m_Name: HexSensorTest
   m_TagString: Untagged
@@ -1345,22 +1447,6 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 6
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &837761033
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 837761027}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6cb789661567de04eba5e3a192b9a4ed, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  scale: 1
-  size: 24
-  missColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-  missingMaterialColor: {r: 1, g: 0, b: 0.95, a: 1}
 --- !u!1 &902406891
 GameObject:
   m_ObjectHideFlags: 0
@@ -1445,7 +1531,7 @@ GameObject:
   - component: {fileID: 964543452}
   - component: {fileID: 964543451}
   m_Layer: 0
-  m_Name: Tutorial3
+  m_Name: Train CNN
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

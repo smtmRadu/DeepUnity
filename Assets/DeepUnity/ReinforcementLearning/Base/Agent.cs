@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using UnityEditor;
@@ -22,13 +21,14 @@ namespace DeepUnity
         [SerializeField, Min(16), HideInInspector] private int spaceWidth = 256;
         [Tooltip("Channels of the visual observation")]
         [SerializeField, Min(1), HideInInspector] private int spaceChannels = 3;
-
         [Tooltip("The inputs are enqueued in a queue buffer. t1 = [0, 0, x1] -> t2 = [0, x1, x2] -> t3 = [x1, x2, x3] -> t4 = [x2, x3, x4] -> .... For now they are disabled.")]
         [SerializeField, Range(1, 64), HideInInspector] private int stackedInputs = 1;
+        
         [Tooltip("Number of Continuous Actions in continuous actions space. Values in range [-1, 1].")]
         [SerializeField, Min(0), HideInInspector] private int continuousActions = 0;
         [Tooltip("Number of discrete actions in discrete action space. Actions indexes [0, 1, .. n - 1]. Consider to include a 'NO_ACTION' index also (especially when working heuristically).")]
         [SerializeField, Min(0), HideInInspector] private int discreteActions = 0;
+        
         [Tooltip("Architecture type")]
         [SerializeField, HideInInspector] private ArchitectureType archType = ArchitectureType.MLP;
         [Tooltip("Number of hidden layers")]
@@ -137,15 +137,6 @@ namespace DeepUnity
                 TrainingStatistics pf;
                 TryGetComponent(out pf);        
                 DeepUnityTrainer.Subscribe(this, model.config.trainer);
-
-                // Display "Learning..." head up on screen
-                _learningText = "Learning";
-                _learningTextStyle = new GUIStyle();
-                _learningTextStyle.fontSize = 50;
-                _learningTextStyle.fontStyle = FontStyle.Bold;
-                _learningTextStyle.wordWrap = true;
-                _learningTextStyle.normal.textColor = Color.white;
-                StartCoroutine("DrawDotsToLearningText");
             }
 
             OnEpisodeBegin();
@@ -176,29 +167,7 @@ namespace DeepUnity
         }
 
 
-        // Display "Learning..."
-        string _learningText;
-        GUIStyle _learningTextStyle;
-        IEnumerator DrawDotsToLearningText()
-        {
-            while(true)
-            {
-                yield return new WaitForSecondsRealtime(0.5f);
-                _learningText += "."; 
-                if (_learningText.Length > 11) 
-                    _learningText = "Learning"; 
-            }
-        }
-        public void OnGUI()
-        {
-            if (model == null)
-                return;
 
-            if (behaviourType != BehaviourType.Learn)
-                return;
-
-            GUI.Label(new Rect(10, Screen.height - 65, 400, 60), _learningText, _learningTextStyle);
-        }
 
 
         // Init
@@ -215,9 +184,6 @@ namespace DeepUnity
             }
 
             model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, stackedInputs, spaceWidth, spaceHeight, spaceChannels, continuousActions, discreteActions, numLayers, hidUnits, archType);
-
-            continuousActions = model.continuousDim;
-            discreteActions = model.discreteDim;
         }
         private void InitBuffers()
         {
@@ -346,9 +312,7 @@ namespace DeepUnity
                 }
                 state = StatesBuffer.State.Clone() as Tensor;
             }
-           
-
-                   
+                      
             if (model.normalize)
             {
                 model.observationsNormalizer.Update(state);
@@ -395,14 +359,14 @@ namespace DeepUnity
         /// <br></br>
         /// <em>Example: <br></br>
         /// // Access <paramref name="actionBuffer"/>.ContinuousActions and <paramref name="actionBuffer"/>.DiscreteAction <br></br>
-        /// transform.position = new Vector3(<paramref name="actionBuffer"/>.ContinuousActions[0], <paramref name="actionBuffer"/>.ContinuousActions[1], <paramref name="actionBuffer"/>.ContinuousActions[2]) <br></br>
+        /// transform.position += new Vector3(<paramref name="actionBuffer"/>.ContinuousActions[0], <paramref name="actionBuffer"/>.ContinuousActions[1], <paramref name="actionBuffer"/>.ContinuousActions[2]) <br></br>
         /// rb.AddForce(<paramref name="actionBuffer"/>.DiscreteAction == 0 ? -1f : 1f, 0, 0)
         /// </em>
         /// </summary>
         /// <param name="actionBuffer"></param>
         public virtual void OnActionReceived(ActionBuffer actionBuffer) { }
         /// <summary>
-        /// Manually introduce actions controlled using user inputs inside <b>ActionBuffer</b>'s <em>Continuous</em> or <em>Discrete</em> arrays.
+        /// Manually introduce actions controlled using user inputs inside <b>ActionBuffer</b>'s <em>Continuous</em> or <em>Discrete</em> arrays. Note that for Discrete Actions, a "do-nothing" action must be considered.
         /// <br></br>
         /// <br></br>
         /// <em>Example: <br></br>
@@ -415,7 +379,7 @@ namespace DeepUnity
         public virtual void Heuristic(ActionBuffer actionOut) { }
         /// <summary>
         /// Called only inside <b>OnActionReceived()</b>, and <b>OnTriggerXXX()</b> or <b>OnCollisionXXX()</b>. <br></br>
-        /// Ensures the episode will end this frame for the current agent.
+        /// Marks current state as terminal.
         /// </summary>
         public void EndEpisode()
         {

@@ -315,7 +315,6 @@ namespace DeepUnity
         {
 
         }
-
         public void OnAfterDeserialize()
         {
             // This function is actually having 2 workers on serialization.

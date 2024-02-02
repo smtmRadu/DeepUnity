@@ -9,28 +9,41 @@ namespace DeepUnity
 {
     
     [Serializable]
-    public class GELU : Activation
+    public class GELU : IModule, IActivation
     {
         private static float sqrt2OverPI = 0.79788456080286535587989211986876f;
-        protected override Tensor Activate(Tensor x)
+
+
+        protected Tensor InputCache { get; set; }
+        public Tensor Predict(Tensor x)
         {
             return x.Select(x =>
             {
-                float gelu = 0.5f * x * (1f + Utils.Hyperbolics.Tanh(sqrt2OverPI * (x + 0.044715f * x * x * x)));
+                float tanh_ = Utils.Hyperbolics.Tanh(sqrt2OverPI * (x + 0.044715f * x * x * x));
+                float gelu = 0.5f * x * (1f + tanh_);
                 return gelu;
             });
         }
-        protected override Tensor Derivative(Tensor x)
+
+        public Tensor Forward(Tensor x)
         {
-            return x.Select(X =>
+            InputCache = x.Clone() as Tensor;
+            return Predict(x);
+        }
+
+        public Tensor Backward(Tensor dLdY)
+        {
+            return dLdY * InputCache.Select(x =>
             {
-                float sech = Utils.Hyperbolics.Sech(sqrt2OverPI * (X + 0.044715f * X * X * X));
-                float dgelu = 0.5f * (1f + Utils.Hyperbolics.Tanh(sqrt2OverPI * (X + 0.044715f * X * X * X))) +
-                              0.5f * X * sech * sech;
+                float _elem = sqrt2OverPI * (x + 0.044715f * x * x * x);
+                float sech_ = Utils.Hyperbolics.Sech(_elem);
+                float tanh_ = Utils.Hyperbolics.Tanh(_elem);
+                float dgelu = 0.5f * (1f + tanh_) + 0.5f * x * sech_ * sech_;
                 return dgelu;
             });
         }
-        public override object Clone() => new GELU();
+
+        public object Clone() => new GELU();
     }
 }
 

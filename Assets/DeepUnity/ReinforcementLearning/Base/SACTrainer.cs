@@ -82,7 +82,7 @@ namespace DeepUnity
 
                 ComputeQTargets(batch);
 
-                Tensor y = Tensor.Concat(0, batch.Select(x => x.q_target).ToArray());
+                Tensor y = Tensor.Concat(null, batch.Select(x => x.q_target).ToArray());
 
                 UpdateQFunctions(states, raw_continuous_actions, y);
                 UpdatePolicy(states);
@@ -98,18 +98,20 @@ namespace DeepUnity
             model.ContinuousPredict(sPrime, out aTildePrime, out piTildePrime);
 
             Tensor pair_sPrime_aTildePrime = StateActionPair(sPrime, aTildePrime);
-            Tensor[] Qtarg1_sPrime_aTildePrime = Qtarg1.Predict(pair_sPrime_aTildePrime).Split(0, 1); // [](1)
-            Tensor[] Qtarg2_sPrime_aTildePrime = Qtarg2.Predict(pair_sPrime_aTildePrime).Split(0, 1); // [](1)
+            Tensor Qtarg1_sPrime_aTildePrime = Qtarg1.Predict(pair_sPrime_aTildePrime); // (B, 1)
+            Tensor Qtarg2_sPrime_aTildePrime = Qtarg2.Predict(pair_sPrime_aTildePrime); // (B, 1)
 
             Tensor logPi = piTildePrime.Prod(-1).Log(); // (B) -- the log prob scalar is the product over the probs vec
-            for (int t = 0; t < batch.Length; t++)
+            for (int b = 0; b < batch.Length; b++)
             {
                 // y(r,s',d) = r + Ɣ(1 - d)[min(Q1t(s',ã'), Q2t(s',ã')) - αlogπθ(ã'|s')]
 
-                float r = batch[t].reward[0];
-                float d = batch[t].done[0];
+                float r = batch[b].reward[0];
+                float d = batch[b].done[0];
+                
+                float y = r + hp.gamma * (1f - d) * (MathF.Min(Qtarg1_sPrime_aTildePrime[b, 0], Qtarg2_sPrime_aTildePrime[b, 0]) - hp.alpha * logPi[b]);
 
-                batch[t].q_target = r + hp.gamma * (1f - d) * (Tensor.Minimum(Qtarg1_sPrime_aTildePrime[t], Qtarg2_sPrime_aTildePrime[t]) - hp.alpha * logPi[t]);
+                batch[b].q_target = Tensor.Constant(y);
             }
         }
         private void UpdateQFunctions(Tensor states, Tensor continuous_actions, Tensor Q_targets)
@@ -150,9 +152,8 @@ namespace DeepUnity
             ksi = Tensor.RandomNormal(sigma.Shape);
 
             // ãθ(s) = tanh(u)
-            Tanh tanh = new Tanh();
             u = mu + sigma * ksi;
-            aTildeS = tanh.Forward(u);
+            aTildeS = new Tanh().Predict(u);
             int D = aTildeS.Size(-1);
 
             // https://en.wikipedia.org/wiki/Multivariate_normal_distribution
@@ -175,6 +176,13 @@ namespace DeepUnity
             Tensor objectiveFunctionJ = Tensor.Minimum(Q1s_aTildeS, Q2s_aTildeS) - hp.alpha * logPiaTildeS;
             actorLoss = objectiveFunctionJ.ToArray().Average();
 
+
+
+
+            // Start differentiating the objective loss
+            Tensor sech_u = u.Select(x => Utils.Hyperbolics.Sech(x));
+            Tensor tanh_u = aTildeS; // right?:D
+
             // Firstly, we compute the derivative of minQ1Q2 wrt ãθ(s)
             Tensor dminQ1Q2_dQ1 = Tensor.Zeros(batch_size, 1);
             Tensor dminQ1Q2_dQ2 = Tensor.Zeros(batch_size, 1);
@@ -188,40 +196,38 @@ namespace DeepUnity
             
             Tensor dminQ1Q2_ds_aTildeS = model.q1Network.Backward(dminQ1Q2_dQ1) + model.q2Network.Backward(dminQ1Q2_dQ2); // Take the gradients from both networks
 
-
             // By backwarding the min, we will receive a Tensor of shape (B, S + A), and because we compute the derivative wrt A,
             // we need only A from this tensor, so we extract it separately
             Tensor dminQ1Q2_daTildeS = ExtractActionFromStateAction(dminQ1Q2_ds_aTildeS, states.Size(-1), aTildeS.Size(-1));
 
-            Tensor dminQ1Q2_du = tanh.Backward(dminQ1Q2_daTildeS);
-            Tensor dminQ1Q2_dMu = dminQ1Q2_du * 1f;
+            Tensor dminQ1Q2_du = dminQ1Q2_daTildeS * (- tanh_u.Pow(2f) + 1);
+            Tensor dminQ1Q2_dMu = dminQ1Q2_du;// * 1f;
             Tensor dminQ1Q2_dSigma = dminQ1Q2_du * ksi;
+
+
+
+
 
             // Secondly, we compute the derivative of logπθ(ãθ(s)|s) wrt ãθ(s). Note that we are using Gaussian Distribution squashed, check Appendix C in SAC paper
            
-            Tensor sech_u = u.Select(x => Utils.Hyperbolics.Sech(x));
-            Tensor tanh_u = u.Select(x => Utils.Hyperbolics.Tanh(x));
-
             // So we know that 
             // MuDist = Multivariate Normal Distribution(u, mu, sigma)
-            // dLogMu/dx = CovMat^(-1)(x - mu)
+            // dLogMu/dx = CovarianceMatrix^(-1)(x - mu)
 
             // log πθ(a|s) = log μ(u|s) - log (1 - tanh^2(u))
             // ∇ log πθ(a|s) = dlog μ(u|s)/du - dlog (1 - tanh^2(u))/du = (u - mu)/sigma^2 - (-2 * tanh(u) * sech^2(u) / (1 - tanh^2(u)))
 
             Tensor dLogMuDist_du = (u - mu) / sigma.Pow(2f); // https://observablehq.com/@herbps10/distributions-and-their-gradients
-            Tensor dLog_1mTanh2u_du = -2f * tanh_u * sech_u.Pow(2f) / (- tanh_u.Pow(2f) + 1f); // Wolfram Alpha?:D
+            Tensor dLog_1mTanh2u_du = -2f * tanh_u * sech_u.Pow(2f) / (- tanh_u.Pow(2f) + 1f); // Wolfram Alpha? maybe..
 
             Tensor dAlphaLogPi_aTildeS_s_du = hp.alpha * (dLogMuDist_du - dLog_1mTanh2u_du);
-            Tensor dAlphaLogPiaTildeS_s_dMu = dAlphaLogPi_aTildeS_s_du * 1f;
+            Tensor dAlphaLogPiaTildeS_s_dMu = dAlphaLogPi_aTildeS_s_du; // * 1f;
             Tensor dAlphaLogPiaTildeS_s_dSigma = dAlphaLogPi_aTildeS_s_du * ksi;
 
             Tensor dJ_dMu = dminQ1Q2_dMu - dAlphaLogPiaTildeS_s_dMu;    
             model.muOptimizer.ZeroGrad();
             model.muNetwork.Backward(-dJ_dMu);
             model.muOptimizer.Step();
-
-
 
             Tensor dJ_dSigma = dminQ1Q2_dSigma - dAlphaLogPiaTildeS_s_dSigma;
             model.sigmaOptimizer.ZeroGrad();
@@ -251,7 +257,7 @@ namespace DeepUnity
 
 
         /// <summary>
-        /// including the batch. Note that this must be changed, based on the shape of the input, depending either is using a convolutional layer or recurrent.
+        /// including the batch. Note that this must be changed if i plan to allow different input shape than vectorized. (for cnn for example)
         /// </summary>
         private static Tensor ExtractActionFromStateAction(Tensor stateActionBatch, int state_size, int action_size)
         {
@@ -272,15 +278,15 @@ namespace DeepUnity
             int state_size = stateBatch.Size(1);
             int action_size = actionBatch.Size(1);
             Tensor pair = Tensor.Zeros(batch_size, state_size + action_size);
-            Parallel.For(0, batch_size, i =>
+            Parallel.For(0, batch_size, b =>
             {
                 for (int s = 0; s < state_size; s++)
                 {
-                    pair[i, s] = stateBatch[i, s];
+                    pair[b, s] = stateBatch[b, s];
                 }
                 for (int a = 0; a < action_size; a++)
                 {
-                    pair[i, state_size + a] = actionBatch[i, a];
+                    pair[b, state_size + a] = actionBatch[b, a];
                 }
             });
             return pair;

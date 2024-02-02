@@ -16,7 +16,7 @@ namespace DeepUnityTutorials
         private Collider2D col;
         [SerializeField] private BarrelState state = BarrelState.Horizontal;
 
-        [ReadOnly] public bool isOnLadder;
+        [ViewOnly] public bool isOnLadder;
         private void Awake()
         {
          

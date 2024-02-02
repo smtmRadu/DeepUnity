@@ -1,11 +1,11 @@
 using System;
-using UnityEngine;
 
 namespace DeepUnity
 {
     /// <summary>
     /// Whenever a new Serializable imodule is created,
     /// write the codde for the Wrapper (declare var, complete wrap and unwrap methods)
+    /// I made this because Unity JsonUtility doesn't support inheritance, and i don't wanna use Newtonsoft.Json to keep the framework as simple to integrate as possible
     /// </summary>
     public interface IModule
     {
@@ -20,38 +20,35 @@ namespace DeepUnity
         public string name;
 
         // Learnable modules
-        public Dense dense;                  
-        public BatchNorm batchnorm1d;         
-        public LayerNorm layernorm;
-        public Conv2D conv2d;
-        public PReLU prelu;
-        public RNNCell rnncell;
-        public LSTMCell lstmcell;
-        public Attention sdpa;
+        public Dense dense = null;
+        public BatchNorm batchnorm1d = null;
+        public LayerNorm layernorm = null;
+        public Conv2D conv2d = null;
+        public PReLU prelu = null;
+        public RNNCell rnncell = null;
+        public Attention attention = null;
 
         // Other modules
-        public Dropout dropout;
-        public Flatten flatten;
-        public Reshape reshape;
-        public AvgPool2D avgPool2d;
-        public MaxPool2D maxPool2d;
+        public Dropout dropout = null;
+        public Flatten flatten = null;
+        public Reshape reshape = null;
+        public AvgPool2D avgPool2d = null;
+        public MaxPool2D maxPool2d = null;
 
         // Activations modules
-        public ReLU relu;
-        public Tanh tanh;
-        public Softmax softmax;
-        public LeakyReLU leakyrelu;
-        public Sigmoid sigmoid;
-        public Softplus softplus;
-        public Mish mish;
-        public ELU elu;
-        public Threshold threshold;
-        public HardTanh hardtanh;
-        public Exp exp;
-        public GELU gelu;
-        
-        
-        
+        public ReLU relu = null;
+        public Tanh tanh = null;
+        public Softmax softmax = null;
+        public LeakyReLU leakyrelu = null;
+        public Sigmoid sigmoid = null;
+        public Softplus softplus = null;
+        public Mish mish = null;
+        public ELU elu = null;
+        public Threshold threshold = null;
+        public HardTanh hardtanh = null;
+        public Exponential exponential = null;
+        public GELU gelu = null;
+        public Sparsemax sparsemax = null;
 
         private IModuleWrapper(IModule module)
         {
@@ -133,9 +130,9 @@ namespace DeepUnity
             {
                 hardtanh = hardtanhModule;
             }
-            else if (module is Exp expModule)
+            else if (module is Exponential expModule)
             {
-                exp = expModule;
+                exponential = expModule;
             }
             else if (module is GELU geluModule)
             {
@@ -149,13 +146,13 @@ namespace DeepUnity
             {
                 rnncell = rnncellModule;
             }
-            else if (module is LSTMCell lstmcellModule)
+            else if (module is Attention attentionModule)
             {
-                lstmcell = lstmcellModule;
+                attention = attentionModule;
             }
-            else if (module is Attention sdpaModule)
+            else if(module is Sparsemax sparsemaxModule)
             {
-                sdpa = sdpaModule;
+                sparsemax = sparsemaxModule;
             }
             else
                 throw new Exception("Unhandled module type while wrapping.");
@@ -245,9 +242,9 @@ namespace DeepUnity
             {
                 module = moduleWrapper.hardtanh;
             }
-            else if (typeof(Exp).Name.Equals(moduleWrapper.name))
+            else if (typeof(Exponential).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.exp;
+                module = moduleWrapper.exponential;
             }
             else if (typeof(GELU).Name.Equals(moduleWrapper.name))
             {
@@ -261,13 +258,13 @@ namespace DeepUnity
             {
                 module = moduleWrapper.rnncell;
             }
-            else if (typeof(LSTMCell).Name.Equals(moduleWrapper.name))
-            {
-                module = moduleWrapper.lstmcell;
-            }
             else if (typeof(Attention).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.sdpa;
+                module = moduleWrapper.attention;
+            }
+            else if (typeof(Sparsemax).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.sparsemax;
             }
             else
                 throw new Exception("Unhandled module type while unwrapping.");

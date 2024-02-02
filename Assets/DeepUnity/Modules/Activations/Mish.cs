@@ -3,20 +3,29 @@ using System;
 namespace DeepUnity
 {
     [Serializable]
-    public class Mish : Activation
+    public class Mish : IModule, IActivation
     {
-        protected override Tensor Activate(Tensor x)
+
+        protected Tensor InputCache { get; set; }
+        public Tensor Predict(Tensor x)
         {
-            return x.Select(x => 
+            return x.Select(x =>
             {
                 float exp = MathF.Exp(x);
                 float mish = x * MathF.Tanh(MathF.Log(1f + exp));
                 return mish;
             });
         }
-        protected override Tensor Derivative(Tensor x)
+
+        public Tensor Forward(Tensor x)
         {
-            return x.Select(x =>
+            InputCache = x.Clone() as Tensor;
+            return Predict(x);
+        }
+
+        public Tensor Backward(Tensor dLdY)
+        {
+            return dLdY * InputCache.Select(x =>
             {
                 float exp = MathF.Exp(x);
                 float sech = 1f / MathF.Cosh(MathF.Log(1f + exp));
@@ -25,6 +34,7 @@ namespace DeepUnity
             });
         }
 
-        public override object Clone() => new Mish();
+
+        public object Clone() => new Mish();
     }
 }

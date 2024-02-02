@@ -11,8 +11,8 @@ namespace DeepUnity
     [Serializable]
     public class Tensor : IEquatable<Tensor>, IEquatable<TensorGPU>, ICloneable
     {
-        [ReadOnly, SerializeField] private float[] data;
-        [ReadOnly, SerializeField] private int[] shape;
+        [ViewOnly, SerializeField] private float[] data;
+        [ViewOnly, SerializeField] private int[] shape;
 
         public int Rank
         {
@@ -133,14 +133,15 @@ namespace DeepUnity
             return clone;
         }
         /// <summary>
-        /// Returns a one dimensional tensor of size <b>Ceil((end - start) / step)</b>.
+        /// Returns a one dimensional tensor of size <b>Ceil((end - start) / step)</b>, with the following elements:
+        /// </br>[start, start + step, start + 2*step, ... ]
         /// </summary>
         /// <param name="start"></param>
         /// <param name="end"></param>
         /// <param name="step"></param>
         /// <returns></returns>
         /// <exception cref="ArgumentException"></exception>
-        public static Tensor Arange(float start, float end, float step)
+        public static Tensor Arange(float start, float end, float step = 1)
         {
             if (step == 0)
                 throw new ArgumentException("On Arange, step must be non-zero.");
@@ -535,7 +536,85 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Element-wise greater than.
+        /// </summary>
+        /// <param name="obj1"></param>
+        /// <param name="obj2"></param>
+        /// <returns></returns>
+        public static Tensor operator >(Tensor left, Tensor right)
+        {
+            if (!left.shape.SequenceEqual(right.shape))
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and Right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise comparison (>).");
 
+            Tensor result = new(left.shape);
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = left.data[i] > right.data[i] ? 1 : 0;
+            }
+
+            return result;
+        }
+        /// <summary>
+        /// Element-wise less than.
+        /// </summary>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <returns></returns>
+        /// <exception cref="OperationCanceledException"></exception>
+        public static Tensor operator <(Tensor left, Tensor right)
+        {
+            if (!left.shape.SequenceEqual(right.shape))
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and Right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise comparison (<).");
+
+            Tensor result = new(left.shape);
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = left.data[i] < right.data[i] ? 1 : 0;
+            }
+
+            return result;
+        }
+        /// <summary>
+        /// Element-wise greater or equal than.
+        /// </summary>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <returns></returns>
+        /// <exception cref="OperationCanceledException"></exception>
+        public static Tensor operator >=(Tensor left, Tensor right)
+        {
+            if (!left.shape.SequenceEqual(right.shape))
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and Right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise comparison (>=).");
+
+            Tensor result = new(left.shape);
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = left.data[i] >= right.data[i] ? 1 : 0;
+            }
+
+            return result;
+        }
+        /// <summary>
+        /// Element-wise less or equal than.
+        /// </summary>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <returns></returns>
+        /// <exception cref="OperationCanceledException"></exception>
+        public static Tensor operator <=(Tensor left, Tensor right)
+        {
+            if (!left.shape.SequenceEqual(right.shape))
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and Right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise comparison (<=).");
+
+            Tensor result = new(left.shape);
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = left.data[i] <= right.data[i] ? 1 : 0;
+            }
+
+            return result;
+        }
         #endregion
 
 
@@ -550,7 +629,6 @@ namespace DeepUnity
             toTensor.data = fromTensor.data.ToArray();
             toTensor.shape = fromTensor.shape.ToArray();
         }
-
         /// <summary>
         /// Left: <b>(J, 1, N, M)</b> <br></br>
         /// Right: <b>(K, M, P)</b> <br></br>
@@ -1105,6 +1183,41 @@ namespace DeepUnity
 
             return result;
         }
+        public static Tensor Eq(Tensor left, Tensor right)
+        {
+            if (!left.shape.SequenceEqual(right.shape))
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and Right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape.");
+
+            Tensor result = Zeros(left.shape);
+
+            for (int i = 0; i < left.data.Length; i++)
+            {
+                if (left.data[i] == right.data[i])
+                    result.data[i] = 1;
+            }
+            return result;
+        }
+        /// <summary>
+        /// Computes the element-wise non-equality
+        /// </summary>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <returns></returns>
+        /// <exception cref="OperationCanceledException"></exception>
+        public static Tensor Ne(Tensor left, Tensor right)
+        {
+            if (!left.shape.SequenceEqual(right.shape))
+                throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and Right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape.");
+
+            Tensor result = Zeros(left.shape);
+
+            for (int i = 0; i < left.data.Length; i++)
+            {
+                if (left.data[i] != right.data[i])
+                    result.data[i] = 1;
+            }
+            return result;
+        }
         /// <summary>
         /// Computes the norm of the tensor.
         /// </summary>
@@ -1655,7 +1768,7 @@ namespace DeepUnity
             Dim dimIndex = AxisToDim(tensor, axis);
 
             int[] newShape = tensor.shape.ToArray();
-            newShape[axis] = 1; // keepDim = true? newShape[axis] : 1
+            newShape[axis] = 1;
             Tensor result = new(newShape);
 
             if (dimIndex == Dim.width)
@@ -1672,11 +1785,6 @@ namespace DeepUnity
                                 sum += tensor[l, k, j, i];
                             }
                             result[l, k, j, 0] = sum;
-
-                            // for (int i = 0; i < newShape[axis]; i++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
                         }
                     }
                 }
@@ -1695,10 +1803,6 @@ namespace DeepUnity
                                 sum += tensor[l, k, j, i];
                             }
                             result[l, k, 0, i] = sum;
-                            // for (int j = 0; j < newShape[axis]; j++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
                         }
                     }
                 }
@@ -1718,10 +1822,6 @@ namespace DeepUnity
                                 sum += tensor[l, k, j, i];
                             }
                             result[l, 0, j, i] = sum;
-                            // for (int k = 0; k < newShape[axis]; k++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
                         }
                     }
                 }
@@ -1740,10 +1840,6 @@ namespace DeepUnity
                                 sum += tensor[l, k, j, i];
                             }
                             result[0, k, j, i] = sum;
-                            // for (int l = 0; l < newShape[axis]; l++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
                         }
                     }
                 }
@@ -1889,11 +1985,6 @@ namespace DeepUnity
                             }
                             sum /= width;
                             result[l, k, j, 0] = sum;
-
-                            // for (int i = 0; i < newShape[axis]; i++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
                         }
                     }
                 }
@@ -1913,10 +2004,6 @@ namespace DeepUnity
                             }
                             sum /= height;
                             result[l, k, 0, i] = sum;
-                            // for (int j = 0; j < newShape[axis]; j++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
                         }
                     }
                 }
@@ -1937,10 +2024,6 @@ namespace DeepUnity
                             }
                             sum /= channels;
                             result[l, 0, j, i] = sum;
-                            // for (int k = 0; k < newShape[axis]; k++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
                         }
                     }
                 }
@@ -1960,10 +2043,6 @@ namespace DeepUnity
                             }
                             sum /= batch;
                             result[0, k, j, i] = sum;
-                            // for (int l = 0; l < newShape[axis]; l++)
-                            // {
-                            //     result[l, k, j, i] = sum;
-                            // }
                         }
                     }
                 }
@@ -2573,6 +2652,237 @@ namespace DeepUnity
                 FastSqueeze(result, axis);
             return result;
         }
+        /// <summary>
+        /// Sorts the tensors elements along the specified axis.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <returns></returns>
+        public static Tensor Sort(Tensor tensor, int axis, bool ascending = true)
+        {
+            HandleAxis(tensor, ref axis);
+
+            int batch = tensor.Batch;
+            int channels = tensor.Channels;
+            int height = tensor.Height;
+            int width = tensor.Width;
+
+            Dim dim = AxisToDim(tensor, axis);
+
+            Tensor result = Identity(tensor);
+
+            if (dim == Dim.width)
+            {
+                // Sorting along the width dimension
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int k = 0; k < channels; k++)
+                    {
+                        for (int j = 0; j < height; j++)
+                        {
+                            // Bubble sort along the width dimension
+                            for (int i = 0; i < width - 1; i++)
+                            {
+                                for (int m = 0; m < width - i - 1; m++)
+                                {
+                                    bool swapCondition = ascending ? (result[l, k, j, m] > result[l, k, j, m + 1]) : (result[l, k, j, m] < result[l, k, j, m + 1]);
+
+                                    if (swapCondition)
+                                    {
+                                        // Swap elements if they are out of order
+                                        float temp = result[l, k, j, m];
+                                        result[l, k, j, m] = result[l, k, j, m + 1];
+                                        result[l, k, j, m + 1] = temp;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else if (dim == Dim.height)
+            {
+                // Sorting along the height dimension
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int k = 0; k < channels; k++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            // Bubble sort along the height dimension
+                            for (int j = 0; j < height - 1; j++)
+                            {
+                                for (int m = 0; m < height - j - 1; m++)
+                                {
+                                    bool swapCondition = ascending ? (result[l, k, m, i] > result[l, k, m + 1, i]) : (result[l, k, m, i] < result[l, k, m + 1, i]);
+
+                                    if (swapCondition)
+                                    {
+                                        // Swap elements if they are out of order
+                                        float temp = result[l, k, m, i];
+                                        result[l, k, m, i] = result[l, k, m + 1, i];
+                                        result[l, k, m + 1, i] = temp;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else if (dim == Dim.channel)
+            {
+                // Sorting along the channel dimension
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            // Bubble sort along the channel dimension
+                            for (int k = 0; k < channels - 1; k++)
+                            {
+                                for (int m = 0; m < channels - k - 1; m++)
+                                {
+                                    bool swapCondition = ascending ? (result[l, m, j, i] > result[l, m + 1, j, i]) : (result[l, m, j, i] < result[l, m + 1, j, i]);
+
+                                    if (swapCondition)
+                                    {
+                                        // Swap elements if they are out of order
+                                        float temp = result[l, m, j, i];
+                                        result[l, m, j, i] = result[l, m + 1, j, i];
+                                        result[l, m + 1, j, i] = temp;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else if (dim == Dim.batch)
+            {
+                // Sorting along the batch dimension
+                for (int k = 0; k < channels; k++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            // Bubble sort along the batch dimension
+                            for (int l = 0; l < batch - 1; l++)
+                            {
+                                for (int m = 0; m < batch - l - 1; m++)
+                                {
+                                    bool swapCondition = ascending ? (result[m, k, j, i] > result[m + 1, k, j, i]) : (result[m, k, j, i] < result[m + 1, k, j, i]);
+
+                                    if (swapCondition)
+                                    {
+                                        // Swap elements if they are out of order
+                                        float temp = result[m, k, j, i];
+                                        result[m, k, j, i] = result[m + 1, k, j, i];
+                                        result[m + 1, k, j, i] = temp;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return result;
+        }
+        /// <summary>
+        /// Computes the cumulative sum along the specified axis for each element.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <returns></returns>
+        public static Tensor CumSum(Tensor tensor, int axis)
+        {
+            HandleAxis(tensor, ref axis);
+
+            int batch = tensor.Batch;
+            int channels = tensor.Channels;
+            int height = tensor.Height;
+            int width = tensor.Width;
+
+            Dim dimIndex = AxisToDim(tensor, axis);
+
+            Tensor result = Zeros(tensor.shape);
+
+            if (dimIndex == Dim.width)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int k = 0; k < channels; k++)
+                    {
+                        for (int j = 0; j < height; j++)
+                        {
+                            float sum = 0f;
+                            for (int i = 0; i < width; i++)
+                            {
+                                sum += tensor[l, k, j, i];
+                                result[l, k, j, i] = sum;
+                            }
+                        }
+                    }
+                }
+            }
+            else if (dimIndex == Dim.height)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int k = 0; k < channels; k++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            float sum = 0f;
+                            for (int j = 0; j < height; j++)
+                            {
+                                sum += tensor[l, k, j, i];
+                                result[l, k, j, i] = sum;
+                            }
+                        }
+                    }
+                }
+            }
+            else if (dimIndex == Dim.channel)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            float sum = 0f;
+                            for (int k = 0; k < channels; k++)
+                            {
+                                sum += tensor[l, k, j, i];
+                                result[l, k, j, i] = sum;
+                            }
+                        }
+                    }
+                }
+            }
+            else if (dimIndex == Dim.batch)
+            {
+                for (int k = 0; k < channels; k++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            float sum = 0f;
+                            for (int l = 0; l < batch; l++)
+                            {
+                                sum += tensor[l, k, j, i];
+                                result[l, k, j, i] = sum;
+                            }
+                        }
+                    }
+                }
+            }
+            return result;
+        }
         public static Tensor Pow(Tensor tensor, float power)
         {
             Tensor result = new(tensor.shape);
@@ -2755,6 +3065,14 @@ namespace DeepUnity
         public Tensor ArgMin(int axis, bool keepDim = false)
         {
             return ArgMin(this, axis, keepDim);
+        }
+        public Tensor Sort(int axis, bool ascending = true)
+        {
+            return Sort(this, axis, ascending);
+        }
+        public Tensor CumSum(int axis)
+        {
+            return CumSum(this, axis);
         }
         public Tensor Pow(float power)
         {
@@ -2949,9 +3267,9 @@ namespace DeepUnity
             return base.GetHashCode();
         }
         /// <summary>
-        /// The format in which the tensor elements are displayed. <em>Default: "0.00000".</em>
+        /// The format in which the tensor elements are displayed. <em>Default: "0.00000e0".</em>
         /// </summary>
-        public static string StringFormat { get; set; } = "0.00000";
+        private static string StringFormat { get; set; } = "0.00000";
 
         #endregion LINQ
 

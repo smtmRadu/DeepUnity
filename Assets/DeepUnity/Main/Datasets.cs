@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using UnityEditor.XR;
 using UnityEngine;
 
 namespace DeepUnity
@@ -59,9 +58,40 @@ namespace DeepUnity
                 }
             }            
         }
+        /// <summary>
+        /// Item1 = input: Tensor(10)<br />
+        /// Item2 = target: Tensor(2) -> onehot encoding<br /></summary>
+        /// <param name="train"></param>
+        public static void BinaryClassification(out List<(Tensor, Tensor)> train)
+        {
+            var csguid = UnityEditor.AssetDatabase.FindAssets("simple_classif_dataset")[0];
+            var cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
+            TextAsset file = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(TextAsset)) as TextAsset;
+
+            string text = file.text;
+
+            train = new();
+            using (var reader = new StringReader(text))
+            {
+                // Read and skip the header
+                string headerLine = reader.ReadLine();
+
+                while (reader.Peek() != -1)
+                {
+                    string line = reader.ReadLine();
+                    string[] fields = line.Split(',');
+
+                    // Assuming your data is in the order of features followed by target_0 and target_1
+                    float[] features = fields.Take(10).Select(float.Parse).ToArray();
+                    float[] target = { float.Parse(fields[10]), float.Parse(fields[11]) };
+
+                    train.Add((Tensor.Constant(features), Tensor.Constant(target)));
+                }
+            }
+        }
         private static void SerializeMNIST()
         {
-            TimeKeeper.Start();
+            BenchmarkClock.Start();
             string trainPath = "C:\\Users\\radup\\OneDrive\\Desktop\\TRAIN\\";
             string testPath = "C:\\Users\\radup\\OneDrive\\Desktop\\TEST\\";
 
@@ -79,7 +109,7 @@ namespace DeepUnity
 
                 foreach (var tp in trainPaths)
                 {
-                    Tensor image = Tensor.Constant(LoadTexturePixels(tp), (1,28,28));
+                    Tensor image = Tensor.Constant(GetTexturePixels(tp), (1,28,28));
 
                     Tensor label = Tensor.Zeros(10);
                     label[i] = 1;
@@ -90,7 +120,7 @@ namespace DeepUnity
                 }
                 foreach (var vp in testPaths)
                 {
-                    Tensor image = Tensor.Constant(LoadTexturePixels(vp), (1, 28, 28));
+                    Tensor image = Tensor.Constant(GetTexturePixels(vp), (1, 28, 28));
 
                     Tensor label = Tensor.Zeros(10);
                     label[i] = 1;
@@ -136,28 +166,73 @@ namespace DeepUnity
             test_l.Close();
 
             Debug.Log("MNIST Serialized.");
-            TimeKeeper.Stop();
+            BenchmarkClock.Stop();
         }
-        private static Color[] LoadTexturePixels(string filePath)
+        
+        private static Color[] GetTexturePixels(string filePath)
         {
-            throw new NotImplementedException("This method suffer from memory leaks, because the texture must be destroyed!");
-            /*byte[] fileData;
-
             if (File.Exists(filePath))
             {
-                fileData = File.ReadAllBytes(filePath);
+                var fileData = File.ReadAllBytes(filePath);
                 Texture2D tex = new Texture2D(28, 28);
                 tex.LoadImage(fileData);
                 Color[] pixels = tex.GetPixels();
+                MonoBehaviour.Destroy(tex);
                 return pixels;
+               
             }
             else
             {
                 throw new FileNotFoundException($"File at path {filePath} not found!");
-            }*/
+            }
         }
 
         
+        private static void SerializeFaces250()
+        {
+            BenchmarkClock.Start();
+            string trainPath = "C:\\Users\\radup\\OneDrive\\Desktop\\faces\\";
+
+
+            TensorCollection images = new();
+
+            Directory.GetFiles(trainPath);
+
+            string[] directories = Directory.GetDirectories(trainPath);
+
+            foreach (var dir in directories)
+            {
+                string[] files = Directory.GetFiles(dir);
+
+                foreach (var file in files)
+                {
+                    try
+                    {
+                        Tensor image = Tensor.Constant(GetTexturePixels(file), (3, 250, 250));
+                        images.Add(image);
+                    }
+                    catch{ }
+                }
+            }
+
+            string path_to_serialize = "C:\\Users\\radup\\OneDrive\\Desktop\\";
+
+
+            string train_img = JsonUtility.ToJson(images);
+
+            FileStream train = File.Open(path_to_serialize + "faces.txt", FileMode.OpenOrCreate);
+
+
+            StreamWriter train_sw = new StreamWriter(train);
+
+            train_sw.Write(train_img);
+            train_sw.Flush();
+            train.Close();
+
+            Debug.Log($"Faces 250x250 serialized {images.Count}.");
+            images.Clear();
+            BenchmarkClock.Stop();
+        }
     }
 
    

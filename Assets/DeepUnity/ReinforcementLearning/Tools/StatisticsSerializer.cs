@@ -18,10 +18,14 @@ namespace DeepUnity
             }
             else
             {
-                Instance = this;
-                DeepUnityTrainer.Instance.OnTrainingSessionEnd += GetRewardCoordintes;
-                DeepUnityTrainer.Instance.OnTrainingSessionEnd += GetEpisodeCoordintes;
+                Instance = this;          
             }
+        }
+
+        private void Start()
+        {
+            DeepUnityTrainer.Instance.OnTrainingSessionEnd += GetRewardCoordintes;
+            DeepUnityTrainer.Instance.OnTrainingSessionEnd += GetEpisodeCoordintes;
         }
 
         public void GetRewardCoordintes(object Sender, EventArgs e)

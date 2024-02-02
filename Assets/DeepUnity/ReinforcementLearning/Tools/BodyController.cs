@@ -26,7 +26,6 @@ namespace DeepUnity
         /// Allows events to happen when this bodypart enters in contact with a trigger. Automatically added to the BodyPart gameObject.
         /// </summary>
         public TriggerContact TriggerContact { get; set; }
-
         /// <summary>
         /// The BodyController that controls this BodyPart.
         /// </summary>
