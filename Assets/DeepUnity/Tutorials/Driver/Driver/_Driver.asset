@@ -20,13 +20,11 @@ MonoBehaviour:
   discreteDim: 0
   config: {fileID: 11400000, guid: d2305cecfaf30e44aa60b497eb926510, type: 2}
   vNetwork: {fileID: 11400000, guid: a7a41a03363f8a940b0eb3a4cf34c338, type: 2}
-  q1Network: {fileID: 11400000, guid: 7d5b97798f480104ca9fff7b628a3da8, type: 2}
-  q2Network: {fileID: 11400000, guid: e290c59cb240b2b4da0feeed77bb6896, type: 2}
+  q1Network: {fileID: 0}
+  q2Network: {fileID: 0}
   muNetwork: {fileID: 11400000, guid: 5a5e5053ef0ab804b98340535d3bfbfb, type: 2}
   sigmaNetwork: {fileID: 11400000, guid: a13a4acebae9d0d42a70cea5c4f2f714, type: 2}
   discreteNetwork: {fileID: 0}
-  discContNetwork: {fileID: 11400000, guid: 8ae1f66e73b49224e909ea247002696d, type: 2}
-  discDiscNetwork: {fileID: 0}
   targetFPS: 50
   inferenceDevice: 0
   trainingDevice: 1
@@ -183,7 +181,12 @@ MonoBehaviour:
       - 0
       - 0
       shape: 48000000
-  observationsClip: 3
+  observationsClip: 10
+  rewardsNormalizer:
+    step: 0
+    R: 0
+    mean: 0
+    m2: 0
   standardDeviation: 0
-  standardDeviationValue: 0.5
+  standardDeviationValue: 2.5
   standardDeviationScale: 1

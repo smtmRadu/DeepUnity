@@ -21,8 +21,10 @@ namespace DeepUnity
         {
             this.thetaGPU = paramGPU;
             this.gGPU = gradGPU;
-
         }
+
+        public bool IsOnCPU() => theta != null;
+
     }
 }
 

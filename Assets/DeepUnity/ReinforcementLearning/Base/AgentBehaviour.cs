@@ -25,16 +25,16 @@ namespace DeepUnity
         [SerializeField] public Hyperparameters config;
         
         [Header("Critic")]
-        [SerializeField] public NeuralNetwork vNetwork;
-        [SerializeField] public NeuralNetwork q1Network;
-        [SerializeField] public NeuralNetwork q2Network;
+        [SerializeField] public Sequential vNetwork;
+        [SerializeField] public Sequential q1Network;
+        [SerializeField] public Sequential q2Network;
         
         [Space]
 
         [Header("Policy")]
-        [SerializeField] public NeuralNetwork muNetwork;
-        [SerializeField] public NeuralNetwork sigmaNetwork;
-        [SerializeField] public NeuralNetwork discreteNetwork;
+        [SerializeField] public Sequential muNetwork;
+        [SerializeField] public Sequential sigmaNetwork;
+        [SerializeField] public Sequential discreteNetwork;
         [Space]
 
         // [Header("Discriminator")]
@@ -64,8 +64,8 @@ namespace DeepUnity
         [ViewOnly, SerializeField, Tooltip("Observations normalizer.")] 
         public RunningNormalizer observationsNormalizer;
 
-        [Range(1.5f, 3.5f), SerializeField, Tooltip("The observations are clipped [after normarlization] in range [-clip, clip]")]
-        public float observationsClip = 3f;
+        [Range(1f, 10f), SerializeField, Tooltip("The observations are clipped [after normarlization] in range [-clip, clip]")]
+        public float observationsClip = 5f; // old 1.5f - 3.5f
 
         [HideInInspector, SerializeField, ToolboxItem("Rewards normalizer")]
         public RewardsNormalizer rewardsNormalizer;
@@ -223,45 +223,45 @@ namespace DeepUnity
 
             if(ARCHITECTURE == ArchitectureType.MLP)
             {
-                vNetwork = new NeuralNetwork(CreateMLP(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                vNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
                 if (CONTINUOUS_ACTIONS_NUM > 0)
                 {
-                    muNetwork = new NeuralNetwork(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
-                    sigmaNetwork = new NeuralNetwork(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
-                    q1Network = new NeuralNetwork(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
-                    q2Network = new NeuralNetwork(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                    muNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                    sigmaNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
+                    q1Network = new Sequential(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                    q2Network = new Sequential(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
                 }
 
                 if (DISCRETE_ACTIONS_NUM > 0)
-                    discreteNetwork = new NeuralNetwork(CreateMLP(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
+                    discreteNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
             }
             else if(ARCHITECTURE == ArchitectureType.RNN)
             {
-                vNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                vNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
 
                 if(CONTINUOUS_ACTIONS_NUM > 0)
                 {
-                    muNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
-                    sigmaNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
-                    q1Network = new NeuralNetwork(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
-                    q2Network = new NeuralNetwork(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                    muNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                    sigmaNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
+                    q1Network = new Sequential(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                    q2Network = new Sequential(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
                 }
 
                 if(DISCRETE_ACTIONS_NUM > 0)
-                    discreteNetwork = new NeuralNetwork(CreateRNN(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
+                    discreteNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
             }
             else if(ARCHITECTURE == ArchitectureType.CNN)
             {
-                vNetwork = new NeuralNetwork(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                vNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, 1, NUM_LAYERS, HIDDEN_UNITS));
 
                 if(CONTINUOUS_ACTIONS_NUM > 0)
                 {
-                    muNetwork = new NeuralNetwork(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
-                    sigmaNetwork = new NeuralNetwork(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
+                    muNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                    sigmaNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
                 }
 
                 if(DISCRETE_ACTIONS_NUM > 0)
-                    discreteNetwork = new NeuralNetwork(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
+                    discreteNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
             }
                      
 

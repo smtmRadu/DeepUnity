@@ -41,7 +41,7 @@ namespace DeepUnity
         }
 #endif
 
-        private ComputeBuffer data;
+        public ComputeBuffer data;
         [ViewOnly, SerializeField] private float[] serialized_data;
         [ViewOnly, SerializeField] private int[] shape;
 

@@ -17,7 +17,7 @@ namespace DeepUnity
     /// https://iq.opengenus.org/scaled-dot-product-attention/
   
     /// <summary>
-    /// <b>Applies a Scaled Dot-Product Attention over the input.</b> <br></br>
+    /// <b>Applies a Scaled Dot-Product Attention between the elements of the input.</b> <br></br>
     /// Input: <b>(B, L, H)</b> or <b>(L, H)</b> for unbatched input. <br></br>
     /// Output: <b>(B, L, D)</b> or <b>(L, D)</b> for unbatched input. <br></br>
     /// where B = batch_size, L = sequence_length, H = num_features and D = embed_dim.<br></br>
@@ -36,10 +36,6 @@ namespace DeepUnity
         [NonSerialized] private Tensor W_K_grad;
         [NonSerialized] private Tensor W_V_grad;
 
-
-
-
-
         private Stack<Tensor> Q {  get; set; } 
         private Stack<Tensor> K { get; set; }
         private Stack<Tensor> V { get; set; }
@@ -48,19 +44,20 @@ namespace DeepUnity
         private Stack<Tensor> InputCache { get; set; }
 
         /// <summary>
-        /// <b>Applies a Scaled Dot-Product Attention over the input.</b> <br></br>
+        /// <b>Applies a Self Scaled Dot-Product Attention over the input.</b> <br></br>
         /// Input: <b>(B, L, H)</b> or <b>(L, H)</b> for unbatched input. <br></br>
         /// Output: <b>(B, L, D)</b> or <b>(L, D)</b> for unbatched input. <br></br>
-        /// where B = batch_size, L = sequence_length, H = num_features and D = embed_dim.<br></br>
+        /// where B = batch_size, L = sequence_length, H = input_size and D = embed_dim.<br></br>
         /// <b>Placed after the non-linear activation function.</b> <br></br>
         /// </summary>
-        /// <param name="input_size">The number of features in the input (H).</param>
-        /// <param name="embed_dim">The capacity of the model.</param>
+        /// <param name="input_size">Input features size</param>
+        /// <param name="embed_dim">Dimension of the attention mechanism.</param>
         public Attention(int input_size, int embed_dim)
         {
+            // H and d have the same dimension
             this.d = embed_dim;
             int H = input_size;
-            float range = MathF.Sqrt(1f / input_size);
+            float range = MathF.Sqrt(1f / H);
 
             W_Q = Tensor.RandomRange((-range, range), H, d);
             W_K = Tensor.RandomRange((-range, range), H, d);
@@ -121,7 +118,7 @@ namespace DeepUnity
             }
             if (input.Rank != 3 && input.Rank != 2)
             {
-                throw new ShapeException($"Input must be of shape (B, L, H) or (L, H) for unabatches input, and input received has shape ({input.Shape.ToCommaSeparatedString()}).");
+                throw new ShapeException($"Input must be of shape (B, L, H) or (L, H) for unbatched input, and input received has shape ({input.Shape.ToCommaSeparatedString()}).");
             }
 
             bool isBatched = input.Rank == 3;

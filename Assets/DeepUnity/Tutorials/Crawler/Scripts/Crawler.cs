@@ -7,6 +7,8 @@ namespace DeepUnityTutorials
     public class Crawler : Agent
     {
         [Header("Requires Normalization")]
+        [SerializeField] GameObject bonus;
+
         [SerializeField] GameObject thigh1;
         [SerializeField] GameObject thigh2;
         [SerializeField] GameObject thigh3;
@@ -28,6 +30,19 @@ namespace DeepUnityTutorials
         [ViewOnly] public bool foot4_grounded = false;
 
         BodyController controller;
+
+
+        public override void OnEpisodeBegin()
+        {
+            if (bonus == null)
+                return;
+
+            for (int i = 0; i < bonus.transform.childCount; i++)
+            {
+                Transform x = bonus.transform.GetChild(i);
+                x.gameObject.SetActive(true);
+            }
+        }
 
         public override void Awake()
         {
@@ -58,12 +73,22 @@ namespace DeepUnityTutorials
                 }
             };
 
+            Action<Collider> rewards = (col) =>
+            {
+                if (col.CompareTag("Target"))
+                {
+                    AddReward(+0.1f);
+                    col.gameObject.SetActive(false);
+                }
+            };
+
+
             controller.bodyPartsDict[this.gameObject].ColliderContact.OnEnter = end;
+            controller.bodyPartsDict[this.gameObject].TriggerContact.OnEnter = rewards;
             controller.bodyPartsDict[thigh1].ColliderContact.OnEnter = end;
             controller.bodyPartsDict[thigh2].ColliderContact.OnEnter = end;
             controller.bodyPartsDict[thigh3].ColliderContact.OnEnter = end;
             controller.bodyPartsDict[thigh4].ColliderContact.OnEnter = end;
-
 
             controller.bodyPartsDict[foot1].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) foot1_grounded = true; };
             controller.bodyPartsDict[foot2].ColliderContact.OnEnter = (col) => { if (col.collider.CompareTag("Ground")) foot2_grounded = true; };
@@ -155,13 +180,12 @@ namespace DeepUnityTutorials
             // Point the arrow towards the target
             // directionArrow.rotation = Quaternion.LookRotation(target.position - transform.position) * Quaternion.Euler(0, 90f, 0);
 
-            float orientation_reward = (1f - Vector3.Angle(-Vector3.forward, Quaternion.Euler(0, 90f, 0f) * -transform.forward) % 360f / 360f);
-            float position_reward = -transform.position.z;
-            float reward = 0.005f * position_reward + 0.001f * orientation_reward;
-            AddReward(Mathf.Clamp(reward, -0.05f, 0.05f));
+            // float orientation_reward = (1f - Vector3.Angle(-Vector3.forward, Quaternion.Euler(0, 90f, 0f) * -transform.forward) % 360f / 360f);
+            // float position_reward = -transform.position.z;
+            // float reward = 0.005f * position_reward + 0.001f * orientation_reward;
+            // AddReward(Mathf.Clamp(reward, -0.05f, 0.05f));
 
-            if (transform.position.y < -1)
-                EndEpisode();
+            AddReward(+0.00001f);
         }
     }
 

@@ -59,9 +59,6 @@ namespace DeepUnityTutorials
             CorrelateColliderAndTransform(lf_collider, lf_transform);
             CorrelateColliderAndTransform(rb_collider, rb_transform, true);
             CorrelateColliderAndTransform(rf_collider, rf_transform, true);
-
-
-            AddReward(0.001f * Mathf.Clamp(actionBuffer.ContinuousActions[0], 0, 1));
         }
         public override void Heuristic(ActionBuffer actionOut)
         {

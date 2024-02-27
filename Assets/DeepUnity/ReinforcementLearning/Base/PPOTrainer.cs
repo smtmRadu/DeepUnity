@@ -375,7 +375,7 @@ namespace DeepUnity
         /// <param name="LAMBDA"></param>
         /// <param name="HORIZON"></param>
         /// <param name="valueNetwork"></param>
-        private static void ComputeGAE_andVtargets(in MemoryBuffer memory, float GAMMA, float LAMBDA, int HORIZON, NeuralNetwork valueNetwork)
+        private static void ComputeGAE_andVtargets(in MemoryBuffer memory, float GAMMA, float LAMBDA, int HORIZON, Sequential valueNetwork)
         {
             // Well i think we can compute this separately for each agent in a multihreaded way.. but i m afraid predict will not work well so it's fine
             //4.43 max threads

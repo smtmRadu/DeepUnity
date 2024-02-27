@@ -16,18 +16,18 @@ MonoBehaviour:
   maxSteps: 2000000000
   learningRate: 0.0001
   gamma: 0.99
-  batchSize: 512
-  bufferSize: 8192
+  batchSize: 1000
+  bufferSize: 20000
   LRSchedule: 0
-  horizon: 128
-  numEpoch: 6
+  horizon: 256
+  numEpoch: 10
   beta: 0.005
   epsilon: 0.2
-  lambda: 0.95
+  lambda: 0.97
   gradClipNorm: 0.5
   KLDivergence: 0
   targetKL: 0.015
-  normalizeAdvantages: 0
+  normalizeAdvantages: 1
   updateEvery: 64
   updateAfter: 1024
   updatesNum: 1

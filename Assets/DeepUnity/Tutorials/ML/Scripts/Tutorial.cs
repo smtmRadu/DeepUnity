@@ -6,7 +6,7 @@ namespace DeepUnityTutorials
     public class Tutorial : MonoBehaviour
     {
         [Header("Learning z = x^2 + y^2.")]
-        [SerializeField] private NeuralNetwork network;
+        [SerializeField] private Sequential network;
         [SerializeField] private PerformanceGraph trainLossGraph = new PerformanceGraph();
         [SerializeField] private PerformanceGraph validLossGraph = new PerformanceGraph();
 
@@ -22,7 +22,7 @@ namespace DeepUnityTutorials
         {
             if (network == null)
             {
-                network = new NeuralNetwork(
+                network = new Sequential(
                     new Dense(2, 64),
                     new ReLU(),
                     new Dense(64, 64, device: Device.GPU),

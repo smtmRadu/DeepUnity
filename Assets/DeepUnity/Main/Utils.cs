@@ -252,7 +252,7 @@ namespace DeepUnity
         }
 
         /// <summary>
-        /// An easy way to augment your training data.
+        /// An easy way to augment your training data. You can input batch images as well.
         /// </summary>
         public static class ImageProcessing
         {

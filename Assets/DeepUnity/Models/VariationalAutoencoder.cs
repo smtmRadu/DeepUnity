@@ -12,20 +12,31 @@ namespace DeepUnity
         [NonSerialized] private Dense mu;
         [NonSerialized] private Dense log_var;
         [NonSerialized] private IModule[] decoder;
+        [SerializeField] private float kld_weight;
 
         [SerializeField] private IModuleWrapper[] serializedEncoder;
         [SerializeField] private IModuleWrapper serializedMu;
         [SerializeField] private IModuleWrapper serializedLogVar;
         [SerializeField] private IModuleWrapper[] serializedDecoder;
 
+      
         Tensor mu_v;
         Tensor logvar_v;
         Tensor ksi;
 
+        /// <summary>
+        /// A Variational AutoEncoder (VAE) with inner KLDivergence loss computation.
+        /// </summary>
+        /// <param name="encoder"></param>
+        /// <param name="latent_space">Note that the output of the encoder and the input of the decoder must match the latent_space.</param>
+        /// <param name="decoder"></param>
+        /// <param name="kld_weight">The inner KL divergence loss weighting factor.</param>
+        /// <exception cref="ArgumentException"></exception>
         public VariationalAutoencoder(
             IModule[] encoder, 
             int latent_space,
-            IModule[] decoder)
+            IModule[] decoder,
+            float kld_weight = 3f)
         {
             if (latent_space < 1)
                 throw new ArgumentException("Latent space must be > 0");
@@ -36,10 +47,14 @@ namespace DeepUnity
             if (decoder == null || decoder.Length == 0)
                 throw new ArgumentException("Decoder was not initialized");
 
+            if (kld_weight <= 0f)
+                throw new ArgumentException("KLD loss weight must be > 0");
+
             this.encoder = encoder;
             mu = new Dense(latent_space, latent_space);
             log_var = new Dense(latent_space, latent_space);
             this.decoder = decoder;
+            this.kld_weight = kld_weight;
         }
 
         public override Tensor Predict(Tensor input)
@@ -87,7 +102,7 @@ namespace DeepUnity
         public override Tensor Backward(Tensor lossGradient)
         {
             Tensor dLoss_dZ = decoder[decoder.Length - 1].Backward(lossGradient);
-            for (int i = decoder.Length - 2; i > 0; i--)
+            for (int i = decoder.Length - 2; i >= 0; i--)
             {
                 dLoss_dZ = decoder[i].Backward(dLoss_dZ);
             }
@@ -99,21 +114,21 @@ namespace DeepUnity
             dLoss_dEncoder += log_var.Backward(dLoss_dLogVar);
 
             Tensor dLoss_dInput = encoder[encoder.Length - 1].Backward(dLoss_dEncoder);
-            for (int i = encoder.Length - 2; i > 0; i--)
+            for (int i = encoder.Length - 2; i >= 0; i--)
             {
                 dLoss_dInput = encoder[i].Backward(dLoss_dInput);
             }
 
             // Compute inner kld
-            Tensor kld = -0.5f * (1f + logvar_v - mu_v.Pow(2f) - logvar_v.Exp());
+            // Tensor kld = -0.5f * (1f + logvar_v - mu_v.Pow(2f) - logvar_v.Exp());
 
             Tensor dKLD_dMu = mu_v;
-            Tensor dMu_dEncoded = mu.Backward(dKLD_dMu);
+            Tensor dMu_dEncoded = mu.Backward(dKLD_dMu * kld_weight);
             Tensor dKLD_dLogvar = 0.5f * (logvar_v.Exp() - 1f);
-            Tensor dLogvar_dEncoded = log_var.Backward(dKLD_dLogvar);
+            Tensor dLogvar_dEncoded = log_var.Backward(dKLD_dLogvar * kld_weight);
 
             Tensor dZ_dInput = encoder[encoder.Length - 1].Backward(dMu_dEncoded + dLogvar_dEncoded);
-            for (int i = encoder.Length - 2; i > 0; i--)
+            for (int i = encoder.Length - 2; i >= 0; i--)
             {
                 dZ_dInput = encoder[i].Backward(dZ_dInput);
             }

@@ -38,7 +38,10 @@ namespace DeepUnity
         {
             foreach (var param in parameters)
             {
-                Tensor.CopyTo(Tensor.Zeros(param.g.Shape), param.g);
+                if (param.IsOnCPU())
+                    Tensor.CopyTo(Tensor.Zeros(param.g.Shape), param.g);
+                else
+                    param.gGPU.data.SetData(new int[param.gGPU.data.count]);
             }
         }
         /// <summary>
@@ -48,7 +51,8 @@ namespace DeepUnity
         {
             foreach (var param in parameters)
             {
-                Tensor.CopyTo(param.g.Clip(-clip_value, clip_value), param.g);
+                if(param.IsOnCPU())
+                    Tensor.CopyTo(param.g.Clip(-clip_value, clip_value), param.g);
             }
         }
         /// <summary>

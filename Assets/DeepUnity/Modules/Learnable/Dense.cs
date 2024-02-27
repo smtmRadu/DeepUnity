@@ -217,6 +217,7 @@ namespace DeepUnity
             }
             else
             {
+                //Tests show that even only on 64 hid units it might perform better without multithread, so keep it like this indefinetely..
                 Parallel.For(0, H_out, hout =>
                 {
                     float sum = 0f;

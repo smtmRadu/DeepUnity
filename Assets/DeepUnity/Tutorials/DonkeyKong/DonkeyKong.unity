@@ -345,93 +345,6 @@ SpriteRenderer:
   m_WasSpriteAssigned: 0
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
---- !u!1 &96681603 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 9010594884529200326, guid: 32a18bdd229f4e442a0fab0042d140a4, type: 3}
-  m_PrefabInstance: {fileID: 558530433770247553}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &96681604
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 96681603}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f9dfcbcb3105e084c912b3bb54c6cb22, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  startedAt: ' - '
-  finishedAt: ' - '
-  trainingSessionTime: ' - '
-  inferenceTime: ' - '
-  policyUpdateTime: ' - '
-  policyUpdateTimePerIteration: ' - '
-  episodeCount: 0
-  stepCount: 0
-  iterations: 0
-  parallelAgents: 0
-  cumulativeReward:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  episodeLength:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  actorLoss:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  criticLoss:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  entropy:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  learningRate:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
 --- !u!1 &101793014
 GameObject:
   m_ObjectHideFlags: 0
@@ -6871,14 +6784,14 @@ PrefabInstance:
     - target: {fileID: 8099555170807998075, guid: 32a18bdd229f4e442a0fab0042d140a4, type: 3}
       propertyPath: model
       value: 
-      objectReference: {fileID: 11400000, guid: ca647ec44aacf0e4ba18fa649140829c, type: 2}
+      objectReference: {fileID: 11400000, guid: 7c785eeace7a0a74d85cdc5d47d8fed9, type: 2}
     - target: {fileID: 8099555170807998075, guid: 32a18bdd229f4e442a0fab0042d140a4, type: 3}
       propertyPath: Pauline
       value: 
       objectReference: {fileID: 357181185}
     - target: {fileID: 8099555170807998075, guid: 32a18bdd229f4e442a0fab0042d140a4, type: 3}
       propertyPath: hidUnits
-      value: 128
+      value: 80
       objectReference: {fileID: 0}
     - target: {fileID: 8099555170807998075, guid: 32a18bdd229f4e442a0fab0042d140a4, type: 3}
       propertyPath: coinsParent
@@ -6935,10 +6848,7 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 9010594884529200326, guid: 32a18bdd229f4e442a0fab0042d140a4, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 96681604}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 32a18bdd229f4e442a0fab0042d140a4, type: 3}
 --- !u!1001 &2232950305770001146
 PrefabInstance:

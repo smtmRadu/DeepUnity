@@ -9,10 +9,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 77cd255994572814395a912f173ad620, type: 3}
+  m_Script: {fileID: 11500000, guid: ffdd4f9587b2d8846a37ba5240ae14b2, type: 3}
   m_Name: Sigma
   m_EditorClassIdentifier: 
-  version: 524
+  version: 1032
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -3577,6 +3577,33 @@ MonoBehaviour:
       alpha:
         data: []
         shape: 
+    rnncell:
+      device: 0
+      nonlinearity: 0
+      onReturn: 0
+      weights:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+      r_weights:
+        data: []
+        shape: 
+      r_biases:
+        data: []
+        shape: 
+    attention:
+      d: 0
+      W_Q:
+        data: []
+        shape: 
+      W_K:
+        data: []
+        shape: 
+      W_V:
+        data: []
+        shape: 
     dropout:
       dropout: 0
     flatten:
@@ -3604,8 +3631,8 @@ MonoBehaviour:
       threshold: 0
       value: 0
     hardtanh:
-      min_value: 0
-      max_value: 0
+      min_value: -1
+      max_value: 1
   - name: Tanh
     dense:
       device: 0
@@ -3664,6 +3691,33 @@ MonoBehaviour:
       alpha:
         data: []
         shape: 
+    rnncell:
+      device: 0
+      nonlinearity: 0
+      onReturn: 0
+      weights:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+      r_weights:
+        data: []
+        shape: 
+      r_biases:
+        data: []
+        shape: 
+    attention:
+      d: 0
+      W_Q:
+        data: []
+        shape: 
+      W_K:
+        data: []
+        shape: 
+      W_V:
+        data: []
+        shape: 
     dropout:
       dropout: 0
     flatten:
@@ -3691,8 +3745,8 @@ MonoBehaviour:
       threshold: 0
       value: 0
     hardtanh:
-      min_value: 0
-      max_value: 0
+      min_value: -1
+      max_value: 1
   - name: Dense
     dense:
       device: 0
@@ -3898,6 +3952,33 @@ MonoBehaviour:
       alpha:
         data: []
         shape: 
+    rnncell:
+      device: 0
+      nonlinearity: 0
+      onReturn: 0
+      weights:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+      r_weights:
+        data: []
+        shape: 
+      r_biases:
+        data: []
+        shape: 
+    attention:
+      d: 0
+      W_Q:
+        data: []
+        shape: 
+      W_K:
+        data: []
+        shape: 
+      W_V:
+        data: []
+        shape: 
     dropout:
       dropout: 0
     flatten:
@@ -3925,8 +4006,8 @@ MonoBehaviour:
       threshold: 0
       value: 0
     hardtanh:
-      min_value: 0
-      max_value: 0
+      min_value: -1
+      max_value: 1
   - name: Softplus
     dense:
       device: 0
@@ -3985,6 +4066,33 @@ MonoBehaviour:
       alpha:
         data: []
         shape: 
+    rnncell:
+      device: 0
+      nonlinearity: 0
+      onReturn: 0
+      weights:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+      r_weights:
+        data: []
+        shape: 
+      r_biases:
+        data: []
+        shape: 
+    attention:
+      d: 0
+      W_Q:
+        data: []
+        shape: 
+      W_K:
+        data: []
+        shape: 
+      W_V:
+        data: []
+        shape: 
     dropout:
       dropout: 0
     flatten:
@@ -4012,5 +4120,5 @@ MonoBehaviour:
       threshold: 0
       value: 0
     hardtanh:
-      min_value: 0
-      max_value: 0
+      min_value: -1
+      max_value: 1

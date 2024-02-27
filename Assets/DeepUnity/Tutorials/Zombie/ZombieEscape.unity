@@ -1285,7 +1285,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 715283998}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 268fd134f71ea794db5d6d7175a891da, type: 3}
+  m_Script: {fileID: 11500000, guid: c834c269dd261f545822a8004f738702, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   survivor: {fileID: 7506657714819455668}
@@ -4017,6 +4017,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   spaceSize: 157
+  spaceHeight: 144
+  spaceWidth: 256
+  spaceChannels: 3
   stackedInputs: 1
   continuousActions: 0
   discreteActions: 9

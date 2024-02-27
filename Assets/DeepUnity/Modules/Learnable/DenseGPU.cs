@@ -1,4 +1,4 @@
-/*using System;
+using System;
 using UnityEngine;
 
 namespace DeepUnity
@@ -9,7 +9,7 @@ namespace DeepUnity
     [Serializable]
     public class DenseGPU : ISerializationCallbackReceiver, IModule, ILearnable
     {
-        private Tensor InputCache { get; set; }
+        private TensorGPU InputCache { get; set; }
 
         [SerializeField] TensorGPU weights;
         [SerializeField] TensorGPU biases;
@@ -25,6 +25,8 @@ namespace DeepUnity
             if (out_features < 1)
                 throw new ArgumentException("Out_features cannot be less than 1.");
 
+            throw new NotImplementedException();
+            // If i remember correctly the matmul is not correct 
             weights = Initializer.CreateParameterGPU(new int[] { out_features, in_features }, in_features, out_features, gamma_init);
             biases = Initializer.CreateParameterGPU(new int[] { out_features }, in_features, out_features, beta_init);
             weightsGrad = TensorGPU.Zeros(weights.Shape);
@@ -38,41 +40,59 @@ namespace DeepUnity
             bool isBatched = input.Rank == 2;
             int batch_size = isBatched ? input.Size(-2) : 1;
 
+            TensorGPU inputGPU = TensorGPU.Identity(input);
+            TensorGPU outputGPU = TensorGPU.Zeros(batch_size, biases.Size(-1));
+            ComputeShader cs = DeepUnityMeta.DenseCS;
+            cs.SetBuffer(0, "input", inputGPU.data);
+            cs.SetBuffer(0, "gamma", weights.data);
+            cs.SetBuffer(0, "beta", biases.data);
+            cs.SetBuffer(0, "output", outputGPU.data);
 
-            TensorGPU output;
-            if (isBatched)
-            {
-                var unsqueezedBiasesGPU = TensorGPU.Unsqueeze(biases, 0);
-                var expandedBiasesGPU = TensorGPU.Expand(unsqueezedBiasesGPU, 0, batch_size);
-
-                output = matmul + expandedBiasesGPU;
-
-                unsqueezedBiasesGPU.Dispose();
-                expandedBiasesGPU.Dispose();
-            }
-            else
-            {
-                output = matmul + biases;
-            }
-
-            weightsT.Dispose();
-            matmul.Dispose();
-
-            return output;
-
+            Tensor y = Tensor.Identity(outputGPU);
+            inputGPU.Dispose();
+            outputGPU.Dispose();
+            return y;
         }
 
         public Tensor Forward(Tensor input)
         {
-            InputCache = Tensor.Identity(input);
+            if (InputCache != null)
+                InputCache.Dispose();
+            InputCache = TensorGPU.Identity(input);
 
             return Predict(input);
         }
 
 
-        public TensorGPU Backward(TensorGPU loss)
+        public Tensor Backward(Tensor loss)
         {
-            throw new NotImplementedException();
+            bool isBatched = loss.Rank == 2;
+            int batch_size = isBatched ? loss.Size(-2) : 1;
+            int H_in = weights.Size(-1);
+            int H_out = biases.Size(-1);
+
+
+            ComputeShader cs = DeepUnityMeta.DenseCS;
+
+            TensorGPU lossGPU = TensorGPU.Identity(loss);
+            cs.SetBuffer(1, "loss", lossGPU.data);
+            cs.SetBuffer(1, "input", InputCache.data);
+            cs.SetBuffer(1, "gamma_grad", weightsGrad.data);
+            cs.SetBuffer(1, "beta_grad", biasesGrad.data);
+            cs.SetInt("batch_size", batch_size);
+            cs.SetInt("in_features", H_in);
+            cs.SetInt("out_features", H_out);
+
+            cs.Dispatch(1,
+                   (H_in + 31) / 32,
+                   (H_out + 31) / 32,
+                   1);
+
+            TensorGPU inputGradGPU = TensorGPU.MatMul(lossGPU, weights);
+            Tensor inputGrad = Tensor.Identity(inputGradGPU);
+            inputGradGPU.Dispose();
+            lossGPU.Dispose();
+            return inputGrad;
         }
 
         public object Clone()
@@ -123,4 +143,4 @@ namespace DeepUnity
             this.biasesGrad = TensorGPU.Zeros(biases.Shape);
         }
     }
-}*/
+}

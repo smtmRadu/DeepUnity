@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 public class GenerateMNIST : MonoBehaviour
 {
-	[SerializeField] NeuralNetwork generator;
+	[SerializeField] Sequential generator;
 	[SerializeField] Transform displaysHolder;
 
     private List<RawImage> displays = new List<RawImage>();

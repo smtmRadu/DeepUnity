@@ -7,7 +7,7 @@ namespace DeepUnityTutorials
 {
     public class TrainMNIST : MonoBehaviour
     {
-        [SerializeField] NeuralNetwork network;
+        [SerializeField] Sequential network;
         [SerializeField] new string name = "MNIST_MODEL";
         [SerializeField] private float lr = 0.0002f;
         [SerializeField] private float weightDecay = 0.001f;
@@ -31,7 +31,7 @@ namespace DeepUnityTutorials
 
             if (network == null)
             {
-                network = new NeuralNetwork(
+                network = new Sequential(
                      new Conv2D((1, 28, 28), 5, 3, device: Device.GPU),
                      new ReLU(),
                      new MaxPool2D(2),

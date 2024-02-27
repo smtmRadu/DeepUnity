@@ -3,6 +3,9 @@ using DeepUnity;
 
 namespace DeepUnityTutorials
 {
+    /// <summary>
+    /// This script was made for the tall mode. This is very hard to train due to it's nature cause balancing is the first problem.
+    /// </summary>
     public class Humanoid : Agent
     {
         // Spring: 3000 | Damper: 100 | MaxForce: 6000

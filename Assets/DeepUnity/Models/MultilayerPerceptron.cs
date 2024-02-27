@@ -148,7 +148,7 @@ namespace DeepUnity
         public override object Clone()
         {
             var cloned_modules = this.modules.Select(x => (IModule)x.Clone()).ToArray();
-            var net = new NeuralNetwork(cloned_modules);
+            var net = new Sequential(cloned_modules);
             return net;
         }
     }

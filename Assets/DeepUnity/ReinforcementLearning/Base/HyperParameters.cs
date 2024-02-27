@@ -32,8 +32,6 @@ namespace DeepUnity
         [Tooltip("[Typical range: (PPO) 2048 - 409600, (SAC) 50000 - 1000000] Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch size. Typically a larger buffer size corresponds to more stable training updates.")]
         [Min(512)] public int bufferSize = 10240; // Do not exagerate with this, keep it at a max of 1M.
 
-      
-
         [Tooltip("Applies logarithmic decay on learning rate with respect to the maxSteps. When maxSteps is reached, lr will be 0.")]
         [SerializeField] public bool LRSchedule = false;
 
@@ -41,8 +39,8 @@ namespace DeepUnity
 
         [Header("PPO specific Configuration")] // https://github.com/yosider/ml-agents-1/blob/master/docs/Training-PPO.md
 
-        [Tooltip("[Typical range: 32 - 2048] How many steps of experience to collect per-agent before adding it to the experience buffer.")]
-        [Min(32)] public int horizon = 64; // Note that Time Horizon for non-Gae estimation must be way higher
+        [Tooltip("[Typical range: 64 - 2048] How many steps of experience to collect per-agent before adding it to the experience buffer.")]
+        [Min(32)] public int horizon = 256; 
 
         [Tooltip("[Typical range: 3 - 10] Number of epochs per buffer.")]
         [Min(3)] public int numEpoch = 8;
@@ -53,8 +51,8 @@ namespace DeepUnity
         [Tooltip("[Typical range: 0.1 - 0.3] Clip factor.")]
         [Min(0.1f)] public float epsilon = 0.2f;
 
-        [Tooltip("[Typical range: 0.9 - 1] GAE factor.")]
-        [Min(0.001f)] public float lambda = 0.95f;
+        [Tooltip("[Typical range: 0.92 - 0.98] GAE factor.")]
+        [Min(0.001f)] public float lambda = 0.96f;
 
         [Tooltip("[Typical range: 0 - 1] Global Gradient Clipping max norm value. Set to 0 to turn off.")]
         [Min(0)] public float gradClipNorm = 0.5f;

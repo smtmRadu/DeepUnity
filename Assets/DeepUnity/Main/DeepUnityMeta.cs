@@ -16,7 +16,8 @@ namespace DeepUnity
         internal readonly static ComputeShader TensorCS;
         internal readonly static ComputeShader DenseCS;
         internal readonly static ComputeShader Conv2DCS;
-        internal readonly static ComputeShader LinearCS;
+        internal readonly static ComputeShader OptimizerCS;
+
         internal readonly static int THREADS_NUM = 256;
         internal readonly static ParallelOptions MULTITHREADS_8 = new ParallelOptions() { MaxDegreeOfParallelism = 8 };
         internal readonly static ParallelOptions MULTITHREADS_4 = new ParallelOptions() { MaxDegreeOfParallelism = 4 };
@@ -38,6 +39,11 @@ namespace DeepUnity
                 csguid = UnityEditor.AssetDatabase.FindAssets("Conv2DCS")[0]; 
                 cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
                 Conv2DCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+
+                csguid = UnityEditor.AssetDatabase.FindAssets("OptimizerCS")[0];
+                cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
+                OptimizerCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+
             }
             catch 
             {

@@ -273,7 +273,7 @@ namespace DeepUnity
             if (lastState == null)
                 Timestep.state = GetState();
             else
-                Timestep.state = lastState;
+                Timestep.state = lastState; // no need to clone because the timestep was already reset at this point
             // OBSERVATION PROCESS ------------------------------------------------------------------
 
 

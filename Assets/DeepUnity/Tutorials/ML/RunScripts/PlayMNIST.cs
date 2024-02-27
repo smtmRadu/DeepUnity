@@ -13,7 +13,7 @@ namespace DeepUnityTutorials
         [SerializeField] public Text softmaxOutputText;
 
 
-        [SerializeField] public NeuralNetwork network;
+        [SerializeField] public Sequential network;
         [SerializeField] public int brushRadius = 1;
         [SerializeField] public float brushStrength = 0.1f;
 

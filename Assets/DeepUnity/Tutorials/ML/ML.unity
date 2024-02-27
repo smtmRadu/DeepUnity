@@ -360,7 +360,7 @@ GameObject:
   - component: {fileID: 492610712}
   - component: {fileID: 492610711}
   m_Layer: 0
-  m_Name: VAE
+  m_Name: ImageReconstruct
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -852,6 +852,67 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1141634510}
   m_CullTransparentMesh: 1
+--- !u!1 &1255005307
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1255005309}
+  - component: {fileID: 1255005308}
+  m_Layer: 0
+  m_Name: ImageDenoise
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1255005308
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1255005307}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7b75f8facf912fa4bbd616d3ce226c43, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  perform: 1
+  lr: 0.001
+  batchSize: 64
+  graph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  canvas: {fileID: 1823018698}
+  vae: {fileID: 0}
+  noise_prob: 0.75
+  noise_size: 0.75
+--- !u!4 &1255005309
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1255005307}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 5.236078, y: 2.89922, z: 32.641445}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 5
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1329912847
 GameObject:
   m_ObjectHideFlags: 0
@@ -1844,7 +1905,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1823018699
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2152,7 +2213,7 @@ GameObject:
   - component: {fileID: 1946006906}
   - component: {fileID: 1946006905}
   m_Layer: 0
-  m_Name: GAN
+  m_Name: ImageGeneration
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

@@ -14,14 +14,14 @@ namespace DeepUnity
     public class SACTrainer : DeepUnityTrainer
     {
         // Q target networks
-        private static NeuralNetwork Qtarg1;
-        private static NeuralNetwork Qtarg2;
+        private static Sequential Qtarg1;
+        private static Sequential Qtarg2;
         private int new_experiences_collected = 0;
 
         protected override void Initialize()
         {
-            Qtarg1 = model.q1Network.Clone() as NeuralNetwork;
-            Qtarg2 = model.q2Network.Clone() as NeuralNetwork;
+            Qtarg1 = model.q1Network.Clone() as Sequential;
+            Qtarg2 = model.q2Network.Clone() as Sequential;
             if(model.standardDeviation == StandardDeviationType.Fixed)
             {
                 ConsoleMessage.Info("Behaviour's standard deviation is Trainable");

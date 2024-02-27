@@ -6,7 +6,7 @@ namespace DeepUnityTutorials
 {
     public class MarioScript : Agent
     {
-        [Header("Mario adds 6 more observations")]
+        [Header("Mario adds 6 more normalized observations")]
         public GameObject coinsParent;
         public Transform Pauline;
         public AudioClip jump_sound;
@@ -164,7 +164,7 @@ namespace DeepUnityTutorials
 
             if (collision.name == "OutOfBounds")
             {
-                AddReward(-3f);
+                AddReward(-1f);
                 EndEpisode();
             }
 
@@ -175,7 +175,7 @@ namespace DeepUnityTutorials
 
             if(collision.CompareTag("Coin"))
             {
-                AddReward(+1f);
+                AddReward(+0.5f);
                 collision.gameObject.SetActive(false);
             }
         }

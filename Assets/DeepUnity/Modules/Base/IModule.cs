@@ -1,4 +1,5 @@
 using System;
+using Unity.VisualScripting;
 
 namespace DeepUnity
 {
@@ -27,6 +28,7 @@ namespace DeepUnity
         public PReLU prelu = null;
         public RNNCell rnncell = null;
         public Attention attention = null;
+        public MultiheadAttention multiheadattention = null;
 
         // Other modules
         public Dropout dropout = null;
@@ -154,6 +156,10 @@ namespace DeepUnity
             {
                 sparsemax = sparsemaxModule;
             }
+            else if(module is MultiheadAttention multiheadattentionModule)
+            {
+                multiheadattention = multiheadattentionModule;
+            }
             else
                 throw new Exception("Unhandled module type while wrapping.");
         }
@@ -265,6 +271,10 @@ namespace DeepUnity
             else if (typeof(Sparsemax).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.sparsemax;
+            }
+            else if(typeof(MultiheadAttention).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.multiheadattention;
             }
             else
                 throw new Exception("Unhandled module type while unwrapping.");
