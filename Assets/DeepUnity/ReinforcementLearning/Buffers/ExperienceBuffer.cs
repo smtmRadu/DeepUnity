@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     /// <summary>
     /// The common buffer of the agents that holds all experiences across all parallel environments
@@ -20,7 +20,7 @@ namespace DeepUnity
         public Tensor[] ValueTargets { get => frames.Select(x => x.value_target).ToArray(); }
         public Tensor[] Advantages { get => frames.Select(x => x.advantage).ToArray(); }
 
-        
+
 
         public ExperienceBuffer(int alloc_size)
         {

@@ -1,7 +1,7 @@
 using System.Collections;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.Sensors
 {
     public interface ISensor
     {

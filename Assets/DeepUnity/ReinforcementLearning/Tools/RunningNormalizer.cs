@@ -1,8 +1,7 @@
 using System;
-using Unity.VisualScripting;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     /// <summary>
     /// All inputs are normalized using the following formula:
@@ -14,7 +13,7 @@ namespace DeepUnity
     public class RunningNormalizer
     {
         [SerializeField] private int step;
-        [SerializeField] private Tensor mean; 
+        [SerializeField] private Tensor mean;
         [SerializeField] private Tensor m2;
 
         public RunningNormalizer(int size)
@@ -26,7 +25,7 @@ namespace DeepUnity
 
         public Tensor Normalize(Tensor tuple)
         {
-            if(step <= 1)
+            if (step <= 1)
                 return Tensor.Identity(tuple);
 
             Tensor variance = m2 / (step - 1);
@@ -34,7 +33,7 @@ namespace DeepUnity
             // Var equal 0 it is replaced with 1.
             variance = variance.Select(x =>
             {
-                if(x == 0)
+                if (x == 0)
                     return 1;
                 return x;
             });
@@ -52,7 +51,7 @@ namespace DeepUnity
         }
         public void Update(Tensor tuple)
         {
-            if(tuple.Rank == 2)
+            if (tuple.Rank == 2)
             {
                 var tuples = tuple.Split(0, 1);
                 foreach (var item in tuples)

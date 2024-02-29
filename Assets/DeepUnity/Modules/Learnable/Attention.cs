@@ -3,8 +3,9 @@ using Unity.VisualScripting;
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using DeepUnity.Activations;
 
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     /// https://www.tensorflow.org/api_docs/python/tf/keras/layers/Attention
     /// https://arxiv.org/pdf/1706.03762.pdf
@@ -15,7 +16,7 @@ namespace DeepUnity
     /// 
     /// Previous are for multihead, better the simple one here:)
     /// https://iq.opengenus.org/scaled-dot-product-attention/
-  
+
     /// <summary>
     /// <b>Applies a Scaled Dot-Product Attention between the elements of the input.</b> <br></br>
     /// Input: <b>(B, L, H)</b> or <b>(L, H)</b> for unbatched input. <br></br>
@@ -36,11 +37,11 @@ namespace DeepUnity
         [NonSerialized] private Tensor W_K_grad;
         [NonSerialized] private Tensor W_V_grad;
 
-        private Stack<Tensor> Q {  get; set; } 
+        private Stack<Tensor> Q { get; set; }
         private Stack<Tensor> K { get; set; }
         private Stack<Tensor> V { get; set; }
         private Stack<Softmax> SoftmaxCache { get; set; }
-        private Stack<Tensor> PostSoftmaxCache { get; set; }    
+        private Stack<Tensor> PostSoftmaxCache { get; set; }
         private Stack<Tensor> InputCache { get; set; }
 
         /// <summary>
@@ -55,7 +56,7 @@ namespace DeepUnity
         public Attention(int input_size, int embed_dim)
         {
             // H and d have the same dimension
-            this.d = embed_dim;
+            d = embed_dim;
             int H = input_size;
             float range = MathF.Sqrt(1f / H);
 
@@ -92,7 +93,7 @@ namespace DeepUnity
             bool isBatched = input.Rank == 3;
             int batch_size = isBatched ? input.Size(0) : 1;
 
-            Tensor[] batch_elem = isBatched ? input.Split(0, 1) : new Tensor[] {input};
+            Tensor[] batch_elem = isBatched ? input.Split(0, 1) : new Tensor[] { input };
             Tensor[] SDPA = new Tensor[batch_size];
 
             for (int i = 0; i < batch_size; i++)
@@ -106,12 +107,12 @@ namespace DeepUnity
                 sdpa = new Softmax().Forward(sdpa);
                 SDPA[i] = Tensor.MatMul(sdpa, _V); // (L, D)
             }
-        
+
             return Tensor.Concat(null, SDPA); // (B, L, D)
         }
 
         public Tensor Forward(Tensor input)
-        {           
+        {
             if (input.Size(-1) != W_Q.Size(0))
             {
                 throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the Dense Layer features_num ({W_Q.Size(0)}).");
@@ -128,7 +129,7 @@ namespace DeepUnity
             Tensor[] SDPA = new Tensor[batch_size];
 
             for (int i = 0; i < batch_size; i++)
-            {              
+            {
                 Tensor x = isBatched ? batch_elem[i].Squeeze(0) : batch_elem[i];
                 InputCache.Push(x);
                 Q.Push(Tensor.MatMul(x, W_Q)); // (L, H) * (H, D) = (L, D)
@@ -178,20 +179,20 @@ namespace DeepUnity
         {
             var att = new Attention();
 
-            att.d = this.d; 
-            att.W_Q = (Tensor)this.W_Q.Clone();
-            att.W_K = (Tensor)this.W_K.Clone();
-            att.W_V = (Tensor)this.W_V.Clone();
-            att.W_Q_grad = (Tensor)this.W_Q_grad.Clone();
-            att.W_K_grad = (Tensor)this.W_K_grad.Clone();
-            att.W_V_grad = (Tensor)this.W_V_grad.Clone();
-            att.Q = new Stack<Tensor>(this.Q.Select(x => x.Clone() as Tensor));
-            att.K = new Stack<Tensor>(this.K.Select(x => x.Clone() as Tensor));
-            att.V = new Stack<Tensor>(this.V.Select(x => x.Clone() as Tensor));
-            att.SoftmaxCache = new Stack<Softmax>(this.SoftmaxCache.Select(x => x.Clone() as Softmax));
-            att.InputCache = new Stack<Tensor>(this.InputCache.Select(x => x.Clone() as Tensor));
-            att.PostSoftmaxCache = new Stack<Tensor>(this.PostSoftmaxCache.Select(x => x.Clone() as Tensor));
-          
+            att.d = d;
+            att.W_Q = (Tensor)W_Q.Clone();
+            att.W_K = (Tensor)W_K.Clone();
+            att.W_V = (Tensor)W_V.Clone();
+            att.W_Q_grad = (Tensor)W_Q_grad.Clone();
+            att.W_K_grad = (Tensor)W_K_grad.Clone();
+            att.W_V_grad = (Tensor)W_V_grad.Clone();
+            att.Q = new Stack<Tensor>(Q.Select(x => x.Clone() as Tensor));
+            att.K = new Stack<Tensor>(K.Select(x => x.Clone() as Tensor));
+            att.V = new Stack<Tensor>(V.Select(x => x.Clone() as Tensor));
+            att.SoftmaxCache = new Stack<Softmax>(SoftmaxCache.Select(x => x.Clone() as Softmax));
+            att.InputCache = new Stack<Tensor>(InputCache.Select(x => x.Clone() as Tensor));
+            att.PostSoftmaxCache = new Stack<Tensor>(PostSoftmaxCache.Select(x => x.Clone() as Tensor));
+
             return att;
         }
 
@@ -214,8 +215,8 @@ namespace DeepUnity
             var k = new Parameter(W_K, W_K_grad);
             var v = new Parameter(W_V, W_V_grad);
 
-            return new Parameter[] { q , k , v };
-        }                          
+            return new Parameter[] { q, k, v };
+        }
         public virtual void OnBeforeSerialize()
         {
 
@@ -233,9 +234,9 @@ namespace DeepUnity
                 return;
 
             // do not check if gamma is != null...
-            this.W_Q_grad = Tensor.Zeros(W_Q.Shape);
-            this.W_K_grad = Tensor.Zeros(W_K.Shape);
-            this.W_V_grad = Tensor.Zeros(W_V.Shape);
+            W_Q_grad = Tensor.Zeros(W_Q.Shape);
+            W_K_grad = Tensor.Zeros(W_K.Shape);
+            W_V_grad = Tensor.Zeros(W_V.Shape);
 
 
             Q = new();

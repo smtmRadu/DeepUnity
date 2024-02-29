@@ -1,8 +1,9 @@
+using DeepUnity.ReinforcementLearning;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     public class BodyPart
     {
@@ -60,7 +61,7 @@ namespace DeepUnity
                 Mathf.Lerp(-Joint.angularZLimit.limit, Joint.angularZLimit.limit, z));
 
             Joint.targetRotation = Quaternion.Euler(CurrentEulerRotation);
-  
+
             CurrentNormalizedEulerRotation = new Vector3(
                 Mathf.InverseLerp(Joint.lowAngularXLimit.limit, Joint.highAngularXLimit.limit, CurrentEulerRotation.x),
                 Mathf.InverseLerp(-Joint.angularYLimit.limit, Joint.angularYLimit.limit, CurrentEulerRotation.y),
@@ -74,21 +75,24 @@ namespace DeepUnity
         {
             if (float.IsNaN(strength))
                 strength = 0f;
-                var rawVal = (strength + 1f) * 0.5f * Controller.maxJointForce;
-                var jd = new JointDrive
-                {
-                    positionSpring = Controller.maxJointSpring,
-                    positionDamper = Controller.jointDamper,
-                    maximumForce = rawVal
-                };
+            var rawVal = (strength + 1f) * 0.5f * Controller.maxJointForce;
+            var jd = new JointDrive
+            {
+                positionSpring = Controller.maxJointSpring,
+                positionDamper = Controller.jointDamper,
+                maximumForce = rawVal
+            };
 
-                Joint.slerpDrive = jd;
+            Joint.slerpDrive = jd;
 
-                CurrentStrength = jd.maximumForce;
-                CurrentNormalizedStrength = CurrentStrength / Controller.maxJointForce;
+            CurrentStrength = jd.maximumForce;
+            CurrentNormalizedStrength = CurrentStrength / Controller.maxJointForce;
         }
     }
+}
 
+namespace DeepUnity
+{
     /// <summary>
     /// Setup:
     /// 1. Twitch settings.
@@ -96,7 +100,6 @@ namespace DeepUnity
     /// 3. To each body part is automatically added a groundContact and targetContact script. 
     ///    For custom contacts, either add them for each body part in the inspector and modify them, or through code control.
     /// </summary>
-
     public class BodyController : MonoBehaviour
     {
         public float maxJointSpring = 3000f; // 10_000f;
@@ -107,19 +110,19 @@ namespace DeepUnity
         /// </summary>
         /// <param name="bodyPart"></param>
         /// <returns></returns>
-        public BodyPart this[GameObject bodyPart] { get => bodyPartsDict[bodyPart]; }
-        [HideInInspector] public Dictionary<GameObject, BodyPart> bodyPartsDict = new Dictionary<GameObject, BodyPart>();
-        [HideInInspector] public List<BodyPart> bodyPartsList = new List<BodyPart>();
-        
+        public ReinforcementLearning.BodyPart this[GameObject bodyPart] { get => bodyPartsDict[bodyPart]; }
+        [HideInInspector] public Dictionary<GameObject, ReinforcementLearning.BodyPart> bodyPartsDict = new Dictionary<GameObject, ReinforcementLearning.BodyPart>();
+        [HideInInspector] public List<ReinforcementLearning.BodyPart> bodyPartsList = new List<ReinforcementLearning.BodyPart>();
+
         private void AddBodyPart(Transform bodyPart)
         {
-            BodyPart bp = new BodyPart
+            ReinforcementLearning.BodyPart bp = new ReinforcementLearning.BodyPart
             {
                 gameObject = bodyPart.gameObject,
                 rigidbody = bodyPart.GetComponent<Rigidbody>(),
                 Joint = bodyPart.GetComponent<ConfigurableJoint>(),
             };
-            if(bp.Joint)
+            if (bp.Joint)
                 bp.Joint.rotationDriveMode = RotationDriveMode.Slerp;
             bp.rigidbody.maxAngularVelocity = 100;
 

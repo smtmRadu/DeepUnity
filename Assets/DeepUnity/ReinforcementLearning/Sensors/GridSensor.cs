@@ -4,7 +4,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.Sensors
 {
     /// <summary>
     /// GridSensor returns the observations of all objects reached by their tags. <br></br>
@@ -85,7 +85,7 @@ namespace DeepUnity
 
                             Collider2D hit = Physics2D.OverlapBox(position, Vector2.one * scale * castScale, transform.rotation.z, layerMask);
                             bool gotHit = hit != null;
-                            
+
                             if (gotHit)
                             {
                                 SpriteRenderer sr;
@@ -101,7 +101,7 @@ namespace DeepUnity
                             Gizmos.DrawCube(Vector3.zero, Vector3.one * scale * castScale);
                             Gizmos.color = new Color(Gizmos.color.r, Gizmos.color.g, Gizmos.color.b, Gizmos.color.a * 1.1f);
                             Gizmos.DrawWireCube(Vector3.zero, Vector3.one * scale * castScale);
-                           
+
 
                             // Reset the Gizmos matrix to its original state
                             Gizmos.matrix = Matrix4x4.identity;

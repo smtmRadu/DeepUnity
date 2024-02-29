@@ -2,7 +2,7 @@ using System;
 using Unity.VisualScripting;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     /// <summary>
     /// <b>Placed before or after the non-linear activation function.</b>    <br />
@@ -75,7 +75,7 @@ namespace DeepUnity
             betaGrad = Tensor.Zeros(num_features);
 
             runningVar = Tensor.Ones(num_features);
-            runningMean = Tensor.Zeros(num_features);          
+            runningMean = Tensor.Zeros(num_features);
         }
 
         public Tensor Predict(Tensor input)
@@ -87,7 +87,7 @@ namespace DeepUnity
             if (input.Size(-1) != num_features)
                 throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) last dimension is not equal to num_features ({num_features})");
 
-            
+
             bool isBatched = input.Rank == 2;
 
             if (isBatched)
@@ -110,7 +110,7 @@ namespace DeepUnity
 
                 return output;
             }
-            
+
         }
         public Tensor Forward(Tensor input)
         {
@@ -126,7 +126,7 @@ namespace DeepUnity
             var mean = Tensor.Mean(input, 0, keepDim: true); // mini-batch means      [1, features_mean]
             var variance = Tensor.Var(input, 0, keepDim: true); // mini-batch variances  [1, features_mean]
 
- 
+
             // normalize and cache
             xCentered = input - Tensor.Expand(mean, 0, batch_size);
             std = Tensor.Sqrt(variance + Utils.EPSILON).Expand(0, batch_size);
@@ -153,7 +153,7 @@ namespace DeepUnity
             var dLdVarB = Tensor.Sum(
                          dLdxHat * xCentered * (-1f / 2f) * (std.Pow(2f) + Utils.EPSILON).Pow(-3f / 2f),
                          axis: 0,
-                         keepDim: true).Expand(0, m); 
+                         keepDim: true).Expand(0, m);
             var dLdMuB = Tensor.Sum(
                          dLdxHat * -1f / std + dLdVarB * -2f * xCentered / m,
                          axis: 0,
@@ -173,13 +173,13 @@ namespace DeepUnity
 
         public object Clone()
         {
-            BatchNorm bnclone = new BatchNorm(this.num_features, this.momentum);
-            bnclone.gamma = (Tensor)this.gamma.Clone();
-            bnclone.beta = (Tensor)this.beta.Clone();
-            bnclone.gammaGrad = (Tensor)this.gammaGrad.Clone();
-            bnclone.betaGrad = (Tensor)this.betaGrad.Clone();
-            bnclone.runningMean = (Tensor)this.runningMean.Clone();
-            bnclone.runningVar = (Tensor)this.runningVar.Clone();
+            BatchNorm bnclone = new BatchNorm(num_features, momentum);
+            bnclone.gamma = (Tensor)gamma.Clone();
+            bnclone.beta = (Tensor)beta.Clone();
+            bnclone.gammaGrad = (Tensor)gammaGrad.Clone();
+            bnclone.betaGrad = (Tensor)betaGrad.Clone();
+            bnclone.runningMean = (Tensor)runningMean.Clone();
+            bnclone.runningVar = (Tensor)runningVar.Clone();
             return bnclone;
         }
 
@@ -200,7 +200,7 @@ namespace DeepUnity
 
             return new Parameter[] { g, b };
         }
-  
+
         public void OnBeforeSerialize()
         {
 
@@ -218,8 +218,8 @@ namespace DeepUnity
                 return;
 
             // do not check if gamma is != null...
-            this.gammaGrad = Tensor.Zeros(gamma.Shape);
-            this.betaGrad = Tensor.Zeros(beta.Shape);
+            gammaGrad = Tensor.Zeros(gamma.Shape);
+            betaGrad = Tensor.Zeros(beta.Shape);
 
         }
 

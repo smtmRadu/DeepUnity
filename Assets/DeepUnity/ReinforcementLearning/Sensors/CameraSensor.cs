@@ -6,7 +6,7 @@ using System.Collections;
 using System.Text.RegularExpressions;
 using Unity.VisualScripting;
 
-namespace DeepUnity
+namespace DeepUnity.Sensors
 {
     [AddComponentMenu("DeepUnity/CameraSensor")]
     public class CameraSensor : MonoBehaviour, ISensor

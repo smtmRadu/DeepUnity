@@ -2,8 +2,7 @@ using System;
 using System.Linq;
 using Unity.VisualScripting;
 using UnityEngine;
-
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     /// <summary>
     /// Input: <b>(B, *)</b> or <b>(*)</b> for unbatched input. <br></br>
@@ -39,13 +38,13 @@ namespace DeepUnity
             int count2 = 1;
             foreach (var item2 in output_shape)
             {
-                count2*= item2;
+                count2 *= item2;
             }
             if (count != count2)
                 throw new ShapeException($"Input_shape({input_shape.ToCommaSeparatedString()}) and output_shape({output_shape.ToCommaSeparatedString()}) paramters are not valid for tensor reshaping.");
 
-            this.inputShape = input_shape.ToArray();
-            this.outputShape = output_shape.ToArray();
+            inputShape = input_shape.ToArray();
+            outputShape = output_shape.ToArray();
         }
 
         public Tensor Predict(Tensor input)
@@ -54,7 +53,7 @@ namespace DeepUnity
         }
         public Tensor Forward(Tensor input)
         {
-            bool isBatched = !input.Shape.SequenceEqual(this.inputShape);
+            bool isBatched = !input.Shape.SequenceEqual(inputShape);
 
             if (isBatched)
             {
@@ -68,7 +67,7 @@ namespace DeepUnity
         }
         public Tensor Backward(Tensor loss)
         {
-            bool isBatched = !loss.Shape.SequenceEqual(this.outputShape);
+            bool isBatched = !loss.Shape.SequenceEqual(outputShape);
 
             if (isBatched)
             {
@@ -81,7 +80,7 @@ namespace DeepUnity
             }
         }
 
-        public object Clone() => new Reshape(this.inputShape, this.outputShape);
+        public object Clone() => new Reshape(inputShape, outputShape);
 
     }
 }

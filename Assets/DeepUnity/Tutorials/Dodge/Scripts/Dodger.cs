@@ -1,6 +1,7 @@
 using UnityEngine;
 using DeepUnity;
 using System.Collections.Generic;
+using DeepUnity.ReinforcementLearning;
 
 namespace DeepUnityTutorials
 {

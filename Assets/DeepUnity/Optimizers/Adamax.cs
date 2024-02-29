@@ -1,6 +1,7 @@
 using UnityEngine;
+using DeepUnity.Layers;
 
-namespace DeepUnity
+namespace DeepUnity.Optimizers
 {
     /// <summary>
     /// Note that paper algorithm of Adamax is missing an epsilon, thus we wuse pytorch algorithm for this,
@@ -37,7 +38,7 @@ namespace DeepUnity
         {
             t++;
 
-            beta1_t *= beta1;   
+            beta1_t *= beta1;
 
 
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>

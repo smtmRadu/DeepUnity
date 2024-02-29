@@ -1,3 +1,5 @@
+using DeepUnity.Optimizers;
+
 namespace DeepUnity
 {
     /// <summary>

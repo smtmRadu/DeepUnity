@@ -1,5 +1,5 @@
-
-namespace DeepUnity
+using DeepUnity.Layers;
+namespace DeepUnity.Optimizers
 {
     // https://pytorch.org/docs/stable/generated/torch.optim.SGD.html
     public class SGD : Optimizer

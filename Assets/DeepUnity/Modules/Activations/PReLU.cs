@@ -1,8 +1,9 @@
 using UnityEngine;
 using System;
 using System.Linq;
+using DeepUnity.Layers;
 
-namespace DeepUnity
+namespace DeepUnity.Activations
 {
     [Serializable]
     public class PReLU : ILearnable, IModule, IActivation
@@ -41,7 +42,7 @@ namespace DeepUnity
             return loss * InputCache.Select(x => x >= 0f ? 1f : alpha[0]);
         }
 
-      
+
 
         public void SetDevice(Device device)
         {
@@ -57,7 +58,7 @@ namespace DeepUnity
             if (alphaGrad == null)
                 OnAfterDeserialize();
 
-            return new Parameter[] { new Parameter(alpha, alphaGrad)};
+            return new Parameter[] { new Parameter(alpha, alphaGrad) };
         }
 
         public void OnBeforeSAerialize()
@@ -72,7 +73,7 @@ namespace DeepUnity
             if (alpha.Shape.Length == 0)
                 return;
 
-            this.alphaGrad = Tensor.Zeros(alpha.Shape);
+            alphaGrad = Tensor.Zeros(alpha.Shape);
         }
         public object Clone() => new PReLU(alpha[0]);
     }

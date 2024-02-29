@@ -1,10 +1,8 @@
 using System;
-using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using Unity.VisualScripting;
 using UnityEngine;
+using DeepUnity.Layers;
 
-namespace DeepUnity
+namespace DeepUnity.Models
 {
     /// <typeparam name="ModelType">Type of the model class that inherits. It is used as a box to serialize models as Scriptable Objects.</typeparam>
    

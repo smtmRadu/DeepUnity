@@ -3,7 +3,7 @@ using Unity.VisualScripting;
 using UnityEngine;
 
 
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     /// <summary>
     /// <b>Placed before the non-linear activation function. </b>    <br />
@@ -13,12 +13,12 @@ namespace DeepUnity
     /// <b>Applies normalization over the last dimension (H) of the input.</b> 
     /// </summary>
     [Serializable]
-    public class LayerNorm: ILearnable, IModule
+    public class LayerNorm : ILearnable, IModule
     {
         // Epsilon should be 1e-5f as default, but i keep it on default 1e-8f
         // Just a good reference paper to learn from, i made this just by adapting batchnorm layer.
         /// https://proceedings.neurips.cc/paper_files/paper/2019/file/2f4fe03d77724a7217006e5d16728874-Paper.pdf
-        
+
         private Tensor xCentered { get; set; }
         private Tensor xHat { get; set; }
         private Tensor std { get; set; }
@@ -57,7 +57,7 @@ namespace DeepUnity
         {
             Tensor input_centered = (input - runningMean[0]) / MathF.Sqrt(runningVar[0] + Utils.EPSILON);
             Tensor output = gamma[0] * input_centered + beta[0];
-            return output;    
+            return output;
         }
 
         public Tensor Forward(Tensor input)
@@ -66,7 +66,7 @@ namespace DeepUnity
                 throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) received is invalid for LayerNorm. Make sure is of shape (B, H) or (H).");
 
             bool isBatched = input.Rank == 2;
-            int batch_size = isBatched? input.Size(0) : 1;
+            int batch_size = isBatched ? input.Size(0) : 1;
             int feature_size = input.Size(-1);
 
             Tensor mu = input.Mean(-1, keepDim: true).Expand(-1, feature_size);
@@ -114,15 +114,15 @@ namespace DeepUnity
         public object Clone()
         {
             LayerNorm laynorm = new LayerNorm();
-            laynorm.step = this.step;
-            laynorm.gamma = (Tensor)this.gamma.Clone();
-            laynorm.beta = (Tensor)this.beta.Clone();
-            laynorm.gammaGrad = (Tensor)this.gammaGrad.Clone();
-            laynorm.betaGrad = (Tensor)this.betaGrad.Clone();
-            laynorm.runningMean = (Tensor)this.runningMean.Clone(); 
-            laynorm.runningVar = (Tensor)this.runningVar.Clone();
+            laynorm.step = step;
+            laynorm.gamma = (Tensor)gamma.Clone();
+            laynorm.beta = (Tensor)beta.Clone();
+            laynorm.gammaGrad = (Tensor)gammaGrad.Clone();
+            laynorm.betaGrad = (Tensor)betaGrad.Clone();
+            laynorm.runningMean = (Tensor)runningMean.Clone();
+            laynorm.runningVar = (Tensor)runningVar.Clone();
 
-           
+
             return laynorm;
         }
 
@@ -159,8 +159,8 @@ namespace DeepUnity
                 return;
 
             // do not check if gamma is != null...
-            this.gammaGrad = Tensor.Zeros(gamma.Shape);
-            this.betaGrad = Tensor.Zeros(beta.Shape);
+            gammaGrad = Tensor.Zeros(gamma.Shape);
+            betaGrad = Tensor.Zeros(beta.Shape);
         }
     }
 }

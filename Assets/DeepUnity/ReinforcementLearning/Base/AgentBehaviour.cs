@@ -1,13 +1,17 @@
-﻿using System;
+﻿using DeepUnity.Optimizers;
+using DeepUnity.Activations;
+using DeepUnity.Layers;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using DeepUnity.Models;
 
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     [Serializable]
     public sealed class AgentBehaviour : ScriptableObject
@@ -300,7 +304,7 @@ namespace DeepUnity
         {
             // LR 0 = initialLR * (gamma^n) => gamma = nth-root(initial_lr);
 
-            int total_epochs = (int)hp.maxSteps / hp.bufferSize * hp.numEpoch;
+            int total_epochs = (int)hp.maxSteps / hp.bufferSize * hp.numEpoch; // THIS IS FOR PPO, but for now i will let it for SAC as well
             int step_size = 1;
             float gamma = Mathf.Pow(hp.learningRate, 1f / total_epochs);
 
@@ -328,22 +332,6 @@ namespace DeepUnity
                     discreteScheduler = new LRScheduler(discreteOptimizer, step_size, gamma);
                 }
             }
-            // else if (trainer == TrainerType.GAIL)
-            // {
-            //     if (IsUsingContinuousActions)
-            //     { 
-            //         muScheduler = new LRScheduler(muOptimizer, step_size, gamma);
-            //         sigmaScheduler = new LRScheduler(sigmaOptimizer, step_size, gamma);
-            //         dContScheduler = new LRScheduler(dContOptimizer, step_size, gamma);
-            //     }
-            // 
-            //     if (IsUsingDiscreteActions)
-            //     {
-            //         discreteScheduler = new LRScheduler(discreteOptimizer, step_size, gamma);
-            //         discreteScheduler = new LRScheduler(dDiscOptimizer, step_size, gamma);   
-            //     }
-            // }
-
         }
 
 

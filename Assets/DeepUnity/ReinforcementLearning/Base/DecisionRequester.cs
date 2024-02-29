@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     /// <summary>
     /// [Check DecisionRequester image in Documentation]

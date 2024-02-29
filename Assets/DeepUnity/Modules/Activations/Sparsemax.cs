@@ -1,6 +1,7 @@
 using System;
+using DeepUnity.Layers;
 
-namespace DeepUnity
+namespace DeepUnity.Activations
 {
     // https://arxiv.org/pdf/1602.02068.pdf
     // https://www.youtube.com/watch?v=09c7bkxpv9I
@@ -22,8 +23,9 @@ namespace DeepUnity
         /// Output: <b>(B, K)</b> or <b>(K)</b> for unbatched input <br></br>
         /// where * = any shape and K = features_num
         /// </summary>
-        public Sparsemax() {
-            
+        public Sparsemax()
+        {
+
         }
 
         public Tensor Predict(Tensor z)

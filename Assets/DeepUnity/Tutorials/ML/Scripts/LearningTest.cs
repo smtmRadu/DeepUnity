@@ -1,6 +1,10 @@
 
 using DeepUnity;
+using DeepUnity.Optimizers;
+using DeepUnity.Activations;
+using DeepUnity.Layers;
 using UnityEngine;
+using DeepUnity.Models;
 
 namespace DeepUnityTutorials
 {

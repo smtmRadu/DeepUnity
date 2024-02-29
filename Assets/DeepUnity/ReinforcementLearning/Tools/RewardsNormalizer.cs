@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     /// <summary>
     /// https://openreview.net/pdf?id=r1etN1rtPB check appendix A 2
@@ -21,7 +21,7 @@ namespace DeepUnity
             step = 0;
             mean = 0f;
             m2 = 0f;
-            this.discount = gamma;  
+            discount = gamma;
             this.clip = clip;
         }
 

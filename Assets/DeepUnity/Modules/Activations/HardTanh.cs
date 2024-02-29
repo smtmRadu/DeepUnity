@@ -1,13 +1,14 @@
 using System;
 using UnityEngine;
+using DeepUnity.Layers;
 
-namespace DeepUnity
+namespace DeepUnity.Activations
 {
     [Serializable]
     public class HardTanh : IModule, IActivation
     {
         [SerializeField] private float min_value = -1f;
-        [SerializeField] private float max_value =  1f;
+        [SerializeField] private float max_value = 1f;
 
         protected Tensor InputCache { get; set; }
         public Tensor Predict(Tensor x)

@@ -1,5 +1,10 @@
-using DeepUnity;
+﻿using DeepUnity;
+using DeepUnity.Optimizers;
+using System.Linq;
 using UnityEngine;
+using DeepUnity.Activations;
+using DeepUnity.Layers;
+using DeepUnity.Models;
 
 namespace DeepUnityTutorials
 {
@@ -13,15 +18,39 @@ namespace DeepUnityTutorials
         Tensor target = Tensor.Random01(64, 1);
 
         public VariationalAutoencoder vae;
+
+
+        private Sequential q1Network
+            ;
+        private Sequential Qtarg1;
         private void Start()
         {
-            MultiheadAttention mhatt = new MultiheadAttention(120, 6, device: Device.CPU);
+            q1Network = new Sequential(
+                new Dense(10, 100),
+                new Tanh(),
+                new Dense(100, 10));
+            q1Network = new Sequential(
+               new Dense(10, 100),
+               new Tanh(),
+               new Dense(100, 10));
+        }
 
-            Tensor input = Tensor.Random01(64, 30, 120);
-            BenchmarkClock.Start();
-            var output = mhatt.Forward(input);
-            mhatt.Backward(output);
-            BenchmarkClock.Stop();
+
+        private void Update()
+        {
+
+            Tensor[] phi1 = q1Network.Parameters().Select(x => x.theta).ToArray();
+
+            Tensor[] phi_targ1 = Qtarg1.Parameters().Select(x => x.theta).ToArray();
+
+            // We update the target q functions softly...
+            // OpenAI algorithm uses polyak = 0.995, the same thing with using τ = 0.005, inverse the logic duhh. 
+            // φtarg,i <- (1 - τ)φtarg,i + τφi     for i = 1,2
+
+            for (int i = 0; i < phi1.Length; i++)
+            {
+                Tensor.CopyTo((1f - 0.001f) * phi_targ1[i] + 0.001f * phi1[i], phi_targ1[i]);
+            }
         }
     }
 

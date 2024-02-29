@@ -1,4 +1,5 @@
 using DeepUnity;
+using DeepUnity.ReinforcementLearning;
 using UnityEngine;
 
 namespace DeepUnityTutorials

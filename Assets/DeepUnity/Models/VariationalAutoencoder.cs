@@ -1,10 +1,11 @@
+using DeepUnity.Layers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.Models
 {
     public class VariationalAutoencoder : Model<VariationalAutoencoder, Tensor>, ISerializationCallbackReceiver
     {
@@ -19,7 +20,7 @@ namespace DeepUnity
         [SerializeField] private IModuleWrapper serializedLogVar;
         [SerializeField] private IModuleWrapper[] serializedDecoder;
 
-      
+
         Tensor mu_v;
         Tensor logvar_v;
         Tensor ksi;
@@ -33,7 +34,7 @@ namespace DeepUnity
         /// <param name="kld_weight">The inner KL divergence loss weighting factor.</param>
         /// <exception cref="ArgumentException"></exception>
         public VariationalAutoencoder(
-            IModule[] encoder, 
+            IModule[] encoder,
             int latent_space,
             IModule[] decoder,
             float kld_weight = 3f)
@@ -189,7 +190,7 @@ namespace DeepUnity
             var cloned_encoder = encoder.Select(x => (IModule)x.Clone()).ToArray();
             var cloned_mu = mu.Clone() as Dense;
             var cloned_logvar = log_var.Clone() as Dense;
-            var cloned_decoder = decoder.Select(x => (IModule)(x.Clone())).ToArray();
+            var cloned_decoder = decoder.Select(x => (IModule)x.Clone()).ToArray();
 
             var vae = new VariationalAutoencoder(cloned_encoder, 1, cloned_decoder);
             vae.mu = cloned_mu;
@@ -208,7 +209,7 @@ namespace DeepUnity
         {
             encoder = serializedEncoder.Select(x => IModuleWrapper.Unwrap(x)).ToArray();
             decoder = serializedDecoder.Select(x => IModuleWrapper.Unwrap(x)).ToArray();
-            mu = (Dense) IModuleWrapper.Unwrap(serializedMu);
+            mu = (Dense)IModuleWrapper.Unwrap(serializedMu);
             log_var = (Dense)IModuleWrapper.Unwrap(serializedLogVar);
         }
     }

@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     [Serializable]
     public class Flatten : IModule
@@ -65,7 +65,7 @@ namespace DeepUnity
         }
 
 
-        public object Clone() => new Flatten(this.startAxis, this.endAxis);
+        public object Clone() => new Flatten(startAxis, endAxis);
     }
 
 }

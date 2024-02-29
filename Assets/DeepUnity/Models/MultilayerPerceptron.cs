@@ -3,8 +3,9 @@ using System.Linq;
 using System.Text;
 using System;
 using UnityEngine;
-
-namespace DeepUnity
+using DeepUnity.Activations;
+using DeepUnity.Layers;
+namespace DeepUnity.Models
 {
     public class MultilayerPerceptron : Model<MultilayerPerceptron, Tensor>, ISerializationCallbackReceiver
     {
@@ -46,7 +47,7 @@ namespace DeepUnity
             if (outputActivation != null)
                 mds.Add(outputActivation.Clone() as IModule);
 
-            this.modules = mds.ToArray();
+            modules = mds.ToArray();
         }
 
         /// <summary>
@@ -147,7 +148,7 @@ namespace DeepUnity
         }
         public override object Clone()
         {
-            var cloned_modules = this.modules.Select(x => (IModule)x.Clone()).ToArray();
+            var cloned_modules = modules.Select(x => (IModule)x.Clone()).ToArray();
             var net = new Sequential(cloned_modules);
             return net;
         }

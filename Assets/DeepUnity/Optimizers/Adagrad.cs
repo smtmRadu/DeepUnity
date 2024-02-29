@@ -1,5 +1,5 @@
-
-namespace DeepUnity
+using DeepUnity.Layers;
+namespace DeepUnity.Optimizers
 {
     // https://pytorch.org/docs/stable/generated/torch.optim.Adagrad.html
     public class Adagrad : Optimizer
@@ -12,13 +12,13 @@ namespace DeepUnity
         public Adagrad(Parameter[] parameters, float lr = 0.01f, float lrDecay = 0f, float eps = 1e-7f, float weightDecay = 0f)
             : base(parameters, lr, eps, weightDecay)
         {
-            this.eta = lrDecay;
+            eta = lrDecay;
 
             state_sum = new Tensor[parameters.Length];
 
             for (int i = 0; i < parameters.Length; i++)
                 state_sum[i] = Tensor.Zeros(parameters[i].g.Shape);
-            
+
         }
 
         public override void Step()

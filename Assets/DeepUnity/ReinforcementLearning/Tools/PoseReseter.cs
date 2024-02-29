@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     /// <summary>
     /// A tool used to reset all Transform, RigidBody[2D] and BodyController components of a GameObject, including all it's children GameObjects of any degree.<br />
@@ -17,16 +17,16 @@ namespace DeepUnity
 
         public PoseReseter(Transform parent)
         {
-            if(Instance == null)
+            if (Instance == null)
             {
                 Instance = new GameObject("[DeepUnity] Initial Transform References");
             }
 
             this.parent = parent;
-            this.initialTransformsCopies = new List<Transform>();
-            this.rigidBodies = new List<Rigidbody>();
-            this.rigidBodies2D = new List<Rigidbody2D>();
-            this.bodyController = parent.GetComponent<BodyController>();
+            initialTransformsCopies = new List<Transform>();
+            rigidBodies = new List<Rigidbody>();
+            rigidBodies2D = new List<Rigidbody2D>();
+            bodyController = parent.GetComponent<BodyController>();
             GetAllTransforms(parent);
             GetAllRigidBodies(parent);
             GetAllRigidBodies2D(parent);
@@ -37,7 +37,8 @@ namespace DeepUnity
             ResetAllTransforms(parent, ref transformsStart);
             ResetAllRigidBodies();
             ResetAllRigidBodies2D();
-            bodyController?.bodyPartsList.ForEach(part => {
+            bodyController?.bodyPartsList.ForEach(part =>
+            {
                 part.CurrentStrength = 0f;
                 part.CurrentNormalizedStrength = 0f;
                 part.CurrentEulerRotation = Vector3.zero;
@@ -61,7 +62,7 @@ namespace DeepUnity
 
 
             foreach (Transform child in parent)
-            {              
+            {
                 GetAllTransforms(child);
             }
         }
@@ -70,7 +71,7 @@ namespace DeepUnity
             Rigidbody[] rbs = parent.transform.GetComponents<Rigidbody>();
             rigidBodies.AddRange(rbs);
             foreach (Transform child in parent)
-            {                 
+            {
                 GetAllRigidBodies(child);
             }
         }
@@ -107,7 +108,7 @@ namespace DeepUnity
                 if (rb.isKinematic)
                     continue;
                 rb.velocity = Vector3.zero;
-                rb.angularVelocity = Vector3.zero;                    
+                rb.angularVelocity = Vector3.zero;
             }
         }
         private void ResetAllRigidBodies2D()

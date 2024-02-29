@@ -1,5 +1,6 @@
 using UnityEngine;
 using DeepUnity;
+using DeepUnity.ReinforcementLearning;
 
 public class MoveToGoal : Agent
 {

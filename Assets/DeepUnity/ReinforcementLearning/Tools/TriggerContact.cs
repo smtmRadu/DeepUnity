@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     /// <summary>
     /// Triggers only for trigger colliders with Target tag.
@@ -15,7 +15,7 @@ namespace DeepUnity
         public Action<Collider> OnEnter;
         public Action<Collider> OnStay;
         public Action<Collider> OnExit;
-    
+
 
         private void OnTriggerEnter(Collider other)
         {

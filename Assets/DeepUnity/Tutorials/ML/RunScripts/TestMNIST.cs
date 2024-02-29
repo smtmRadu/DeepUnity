@@ -1,7 +1,11 @@
 using DeepUnity;
+using DeepUnity.Optimizers;
+using DeepUnity.Activations;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using DeepUnity.Layers;
+using DeepUnity.Models;
 
 namespace DeepUnityTutorials
 {

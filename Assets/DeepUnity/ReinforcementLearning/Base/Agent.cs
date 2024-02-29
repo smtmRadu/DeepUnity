@@ -3,6 +3,11 @@ using System.Collections.Generic;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using DeepUnity.Activations;
+using DeepUnity.Sensors;
+using DeepUnity.ReinforcementLearning;
+
+// This class will remain in DeepUnity namespace for user ease of use.
 
 /// <summary>
 ///  https://github.com/Unity-Technologies/ml-agents/blob/develop/docs/Learning-Environment-Design-Agents.md
@@ -135,7 +140,7 @@ namespace DeepUnity
             if (behaviourType == BehaviourType.Learn)
             {
                 TrainingStatistics pf;
-                TryGetComponent(out pf);        
+                TryGetComponent(out pf);
                 DeepUnityTrainer.Subscribe(this, model.config.trainer);
             }
 
@@ -462,12 +467,12 @@ namespace DeepUnity
                 else if(DeepUnityTrainer.Instance.GetType() == typeof(SACTrainer))
                 {
                     int collected_data_count = DeepUnityTrainer.Instance.train_data.Count;
-                    float bufferFillPercentage = collected_data_count / ((float)script.model.config.bufferSize) * 100f;
+                    float bufferFillPercentage = collected_data_count / ((float)script.model.config.replayBufferSize) * 100f;
                     StringBuilder sb = new StringBuilder();
                     sb.Append("Buffer [");
                     sb.Append(collected_data_count);
                     sb.Append(" / ");
-                    sb.Append(script.model.config.bufferSize);
+                    sb.Append(script.model.config.replayBufferSize);
                     sb.Append($"] \n[");
                     for (float i = 1.25f; i <= 100f; i += 1.25f)
                     {

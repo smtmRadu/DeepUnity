@@ -5,12 +5,12 @@ using System.Diagnostics;
 using System.Linq;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     public abstract class DeepUnityTrainer : MonoBehaviour
     {
         public static DeepUnityTrainer Instance;
-        
+
 
         /// <summary>
         /// Current experiences collected by the agents.
@@ -33,7 +33,7 @@ namespace DeepUnity
 
 
         public readonly DateTime timeWhenTheTrainingStarted = DateTime.Now;
-        [Min(1)]   public int autosave = 15; protected float autosaveSecondsElapsed = 0f;
+        [Min(1)] public int autosave = 15; protected float autosaveSecondsElapsed = 0f;
         [ViewOnly] public bool ended = false;
 
         [SerializeField] private float avgDeltaTime = 0.02f;
@@ -58,6 +58,7 @@ namespace DeepUnity
                 _learningTextStyle.wordWrap = true;
                 _learningTextStyle.normal.textColor = Color.white;
                 StartCoroutine("DrawDotsToLearningText");
+                QualitySettings.SetQualityLevel(0, true);
             }
         }
         /// <summary>
@@ -80,10 +81,10 @@ namespace DeepUnity
                 model.Save();
             }
             autosaveSecondsElapsed += Time.fixedDeltaTime;
-           
+
             if (hp.timescaleAdjustment == TimescaleAdjustmentType.Dynamic)
             {
-                
+
                 const float timeScaleAdjustmentRate = 1e-3f; ///1e-4..
 
                 float currentFrameRate = 1f / avgDeltaTime;
@@ -97,7 +98,7 @@ namespace DeepUnity
         private void Update()
         {
             avgDeltaTime = avgDeltaTime * avgDeltaTimeMomentum + Time.deltaTime * (1f - avgDeltaTimeMomentum);
-        }  
+        }
         public void OnGUI()
         {
             GUI.Label(new Rect(10, Screen.height - 65, 400, 60), _learningText, _learningTextStyle);
@@ -117,12 +118,12 @@ namespace DeepUnity
         }
         public static void Subscribe(Agent agent, TrainerType trainer)
         {
-            if(Instance == null)
+            if (Instance == null)
             {
                 UnityEditor.EditorApplication.playModeStateChanged += Autosave;
-                GameObject go = new GameObject($"[DeepUnity] Trainer - {trainer}");        
-                
-                switch(trainer)
+                GameObject go = new GameObject($"[DeepUnity] Trainer - {trainer}");
+
+                switch (trainer)
                 {
                     case TrainerType.PPO:
                         Instance = go.AddComponent<PPOTrainer>();
@@ -130,14 +131,14 @@ namespace DeepUnity
                     case TrainerType.SAC:
                         Instance = go.AddComponent<SACTrainer>();
                         break;
-                     // case TrainerType.GAIL:
-                     //     Instance = go.AddComponent<GAILTrainer>();
-                     //   break;
+                    // case TrainerType.GAIL:
+                    //     Instance = go.AddComponent<GAILTrainer>();
+                    //   break;
                     default: throw new ArgumentException("Unhandled trainer type");
                 }
 
-                
-                Instance.parallelAgents = new();           
+
+                Instance.parallelAgents = new();
                 Instance.hp = agent.model.config;
                 Instance.train_data = new ExperienceBuffer(Instance.hp.bufferSize);
                 Instance.model = agent.model;

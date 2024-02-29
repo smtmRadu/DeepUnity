@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     [DisallowMultipleComponent]
     public class ColliderContact : MonoBehaviour

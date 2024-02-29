@@ -1,7 +1,8 @@
 using System;
 using UnityEngine;
+using DeepUnity.Layers;
 
-namespace DeepUnity
+namespace DeepUnity.Activations
 {
     [Serializable]
     public class LeakyReLU : IModule, IActivation
@@ -12,7 +13,7 @@ namespace DeepUnity
         protected Tensor InputCache { get; set; }
         public Tensor Predict(Tensor x)
         {
-            return x.Select(k => k >= 0f ? k : (alpha * k));
+            return x.Select(k => k >= 0f ? k : alpha * k);
         }
 
         public Tensor Forward(Tensor x)

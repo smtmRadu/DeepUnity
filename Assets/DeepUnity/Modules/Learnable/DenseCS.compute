@@ -1,6 +1,6 @@
 // For stupid future me: if you ever have errors with the compute shader, always check your fuckin' getter functions motherfucker
 // they can access even outside the allocated memory
-
+// btw, if some operations from gpu doesn't equal perfectly with the cpu operations, that's not my fault, idk how the gpu approximates the value, maybe some floating point arithmetic goes brr...
 RWStructuredBuffer<float> gamma; // weights
 RWStructuredBuffer<float> gamma_grad;
 

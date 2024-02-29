@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     /// <summary>
     /// Input: <b>(B, C, H_in, W_in)</b> or <b>(C, H_in, W_in)</b> <br></br>
@@ -62,7 +62,7 @@ namespace DeepUnity
 
             Tensor pooled_input = Tensor.Zeros(batch_size, channel_size, H_out, W_out);
 
-            if(batch_size == 1)
+            if (batch_size == 1)
             {
                 LinkedList<float> values_pool = new LinkedList<float>();
 
@@ -93,7 +93,7 @@ namespace DeepUnity
                         }
                     }
                 }
-                
+
             }
             else
             {
@@ -131,7 +131,7 @@ namespace DeepUnity
 
                 });
 
-                    
+
             }
 
             return pooled_input;
@@ -162,7 +162,7 @@ namespace DeepUnity
 
             Tensor gradInput = Tensor.Zeros(Batch, Channels, H_in, W_in);
 
-            if(Batch == 1)
+            if (Batch == 1)
             {
                 for (int b = 0; b < Batch; b++)
                 {
@@ -227,6 +227,6 @@ namespace DeepUnity
         }
 
 
-        public object Clone() => new AvgPool2D(this.kernel_size, this.padding, this.padding_mode);
+        public object Clone() => new AvgPool2D(kernel_size, padding, padding_mode);
     }
 }

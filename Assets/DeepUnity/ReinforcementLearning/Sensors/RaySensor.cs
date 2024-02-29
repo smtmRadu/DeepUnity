@@ -4,7 +4,7 @@ using UnityEditor;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace DeepUnity
+namespace DeepUnity.Sensors
 {
     /// <summary>
     /// ObservationVector.Length = <see cref="rays"/> * (2 +  <see cref="detectableTags"/>.Length)
@@ -64,7 +64,7 @@ namespace DeepUnity
 
                     RaycastHit hit;
                     bool isHit = Physics.SphereCast(castOrigin, sphereCastRadius, rayDirection, out hit, distance, layerMask);
-                    
+
                     if (isHit)
                     {
                         Gizmos.color = rayColor;
@@ -80,7 +80,7 @@ namespace DeepUnity
                 else //2d
                 {
                     rayDirection = Quaternion.AngleAxis(currentAngle, transform.forward) * startAngle;
-                    
+
                     RaycastHit2D hit2D = Physics2D.CircleCast(castOrigin, sphereCastRadius, rayDirection, distance, layerMask);
                     if (hit2D)
                     {
@@ -144,7 +144,7 @@ namespace DeepUnity
         {
             CastRays();
 
-            if(detectableTags != null && detectableTags.Length > 0)
+            if (detectableTags != null && detectableTags.Length > 0)
             {
                 float[] vector = new float[rays * 2];
                 int index = 0;
@@ -169,7 +169,7 @@ namespace DeepUnity
                 }
                 return vector;
             }
-            
+
         }
         /// <summary>
         /// Returns information of all rays.
@@ -180,8 +180,8 @@ namespace DeepUnity
             CastRays();
             return Observations.ToArray();
         }
-        
-       
+
+
 
         /// <summary>
         /// This methods casts the necessary rays.
@@ -212,7 +212,7 @@ namespace DeepUnity
 
             for (int r = 0; r < rays; r++)
             {
-                
+
                 if (world == World.World3d)
                 {
                     Vector3 rayDirection = Quaternion.AngleAxis(currentAngle, transform.up) * startAngle;
@@ -223,7 +223,7 @@ namespace DeepUnity
                     Vector3 rayDirection = Quaternion.AngleAxis(currentAngle, transform.forward) * startAngle;
                     CastRay2D(castOrigin, sphereCastRadius, rayDirection, distance, layerMask);
                 }
-              
+
                 currentAngle += oneAngle;
             }
 
@@ -241,7 +241,7 @@ namespace DeepUnity
         {
             RaycastHit hit;
             bool success = Physics.SphereCast(castOrigin, sphereCastRadius, rayDirection, out hit, distance, layerMask);
-            
+
             RayInfo rayInfo = new RayInfo();
             rayInfo.NormalizedDistance = success ? hit.distance / distance : -1f;
             rayInfo.HitTagIndex = success && detectableTags != null ? Array.IndexOf(detectableTags, hit.collider.tag) : -1;
@@ -258,7 +258,7 @@ namespace DeepUnity
             rayInfo.NormalizedDistance = hit ? hit.distance / distance : -1f;
             rayInfo.HitTagIndex = hit && detectableTags != null ? Array.IndexOf(detectableTags, hit.collider.tag) : -1;
             Observations.AddLast(rayInfo);
-        }   
+        }
     }
 
 
@@ -327,11 +327,11 @@ namespace DeepUnity
                     $"Detectable tags {wrongTagsList} are not defined!", MessageType.Warning);
 
             }
-                
+
 
             // Check for doubles
             var set = tagsToList.ToHashSet();
-            if(tagsToList.Count != set.Count)
+            if (tagsToList.Count != set.Count)
                 EditorGUILayout.HelpBox(
                    $"Detectable tags contains doubles!", MessageType.Warning);
         }

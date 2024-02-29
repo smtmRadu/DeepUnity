@@ -1,6 +1,7 @@
 using System;
+using DeepUnity.Layers;
 
-namespace DeepUnity
+namespace DeepUnity.Activations
 {
     [Serializable]
     public class Mish : IModule, IActivation

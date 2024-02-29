@@ -1,6 +1,7 @@
 using System;
+using DeepUnity.Layers;
 
-namespace DeepUnity
+namespace DeepUnity.Activations
 {
     /// <summary>
     /// <b>Applies the Logistic Sigmoid activation function. </b><br></br>

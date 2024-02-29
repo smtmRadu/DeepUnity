@@ -1,7 +1,8 @@
 using System;
 using UnityEngine;
+using DeepUnity.Layers;
 
-namespace DeepUnity
+namespace DeepUnity.Activations
 {
     [Serializable]
     public class Softplus : IModule, IActivation

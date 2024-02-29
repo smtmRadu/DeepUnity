@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     // https://www.youtube.com/watch?v=Lakz2MoHy6o
     // https://github.com/TheIndependentCode/Neural-Network/blob/master/convolutional.py
@@ -19,9 +19,9 @@ namespace DeepUnity
     /// W_out = W_in - kernel.width + 1
     /// </summary>
     [Serializable]
-    public class Conv2D : ILearnable, IModule 
+    public class Conv2D : ILearnable, IModule
     {
-        
+
         private Tensor InputCache { get; set; }
 
         [SerializeField] private int[] inputShape;
@@ -57,7 +57,7 @@ namespace DeepUnity
         /// <param name="kernel_size"></param>
         /// <param name="gamma_init">Initializer used for weights.</param>
         /// <param name="beta_init">Initializer used for biases.</param>
-        public Conv2D((int, int, int) input_shape, int out_channels, int kernel_size, InitType gamma_init = InitType.LeCun_Uniform, InitType beta_init = InitType.LeCun_Uniform, Device device = Device.CPU) 
+        public Conv2D((int, int, int) input_shape, int out_channels, int kernel_size, InitType gamma_init = InitType.LeCun_Uniform, InitType beta_init = InitType.LeCun_Uniform, Device device = Device.CPU)
         {
             if (input_shape.Item1 < 1)
                 throw new ArgumentException("Cannot have less than 1 input channels.");
@@ -65,14 +65,14 @@ namespace DeepUnity
             if (out_channels < 1)
                 throw new ArgumentException("Cannot have less than 1 output channel.");
 
-            if(kernel_size < 2)
+            if (kernel_size < 2)
                 throw new ArgumentException("Cannot have less than 2 kernel size.");
 
             this.device = device;
-            this.inputShape = new int[] { input_shape.Item1, input_shape.Item2, input_shape.Item3 };
-            this.outChannels = out_channels;
-            this.kernelWidth = kernel_size;
-            this.kernelHeight = kernel_size;
+            inputShape = new int[] { input_shape.Item1, input_shape.Item2, input_shape.Item3 };
+            outChannels = out_channels;
+            kernelWidth = kernel_size;
+            kernelHeight = kernel_size;
 
             int fan_in = input_shape.Item1 * input_shape.Item2 * input_shape.Item3;
             int fan_out = out_channels * (input_shape.Item2 - kernel_size + 1) * (input_shape.Item3 - kernel_size + 1);
@@ -106,10 +106,10 @@ namespace DeepUnity
             if (kernel_shape.Item1 < 2 || kernel_shape.Item2 < 2)
                 throw new ArgumentException("Kernel cannot have a dimension < 2.");
 
-            this.inputShape = new int[] { input_shape.Item1, input_shape.Item2, input_shape.Item3 };
-            this.outChannels = out_channels;
-            this.kernelWidth = kernel_shape.Item2;
-            this.kernelHeight = kernel_shape.Item1;
+            inputShape = new int[] { input_shape.Item1, input_shape.Item2, input_shape.Item3 };
+            outChannels = out_channels;
+            kernelWidth = kernel_shape.Item2;
+            kernelHeight = kernel_shape.Item1;
 
             int fan_in = input_shape.Item1 * input_shape.Item2 * input_shape.Item3;
             int fan_out = out_channels * (input_shape.Item2 - kernel_shape.Item1 + 1) * (input_shape.Item3 - kernel_shape.Item1 + 1);
@@ -129,12 +129,12 @@ namespace DeepUnity
             if (input.Rank < 3)
                 throw new ShapeException($"The input ({input.Shape.ToCommaSeparatedString()}) in Conv2D module must be (B, C, H, W) or (C, H, W) for unbatched input.");
 
-            if(input.Size(-3) != inputShape[0] || input.Size(-2) != inputShape[1] || input.Size(-1) != inputShape[2])
+            if (input.Size(-3) != inputShape[0] || input.Size(-2) != inputShape[1] || input.Size(-1) != inputShape[2])
                 throw new ShapeException($"Input shape ({input.Shape.ToCommaSeparatedString()}) received in Conv2D module must be ({inputShape.ToCommaSeparatedString()})");
 
             int batch_size = input.Rank == 4 ? input.Size(-4) : 1;
 
-            if(device == Device.CPU)
+            if (device == Device.CPU)
             {
                 if (input.Rank == 3)
                     return Correlate2DValid_input_kernels(input, kernels).Squeeze(-4) + biases; // if input (C, H, W), we keep the shape
@@ -168,8 +168,8 @@ namespace DeepUnity
                 cs.SetInt("in_channels", C_in);
                 cs.SetInt("in_height", H_in);
                 cs.SetInt("in_width", W_in);
-                cs.SetInt("out_channels", C_out);             
-                cs.SetInt("out_height", H_out);           
+                cs.SetInt("out_channels", C_out);
+                cs.SetInt("out_height", H_out);
                 cs.SetInt("out_width", W_out);
                 cs.SetInt("kernel_height", kernelHeight);
                 cs.SetInt("kernel_width", kernelWidth);
@@ -185,7 +185,7 @@ namespace DeepUnity
                 gammaBuffer.Release();
                 outputBuffer.Release();
 
-                if(input.Rank == 3)
+                if (input.Rank == 3)
                     return result.Squeeze(-4) + biases;
                 else
                     return result + Tensor.Expand(Tensor.Unsqueeze(biases, 0), 0, batch_size);
@@ -208,13 +208,13 @@ namespace DeepUnity
             bool isBatched = loss.Rank == 4;
             int batch_size = isBatched ? loss.Size(-4) : 1;
 
-            if(device == Device.CPU)
+            if (device == Device.CPU)
             {
                 Tensor.CopyTo(kernelsGrad + Correlate2DValid_input_loss(InputCache, loss) / batch_size, kernelsGrad);
                 Tensor.CopyTo(biasesGrad + (isBatched ? Tensor.Mean(loss, -4) : loss), biasesGrad);
                 return Convolve2DFull_loss_gamma(loss, kernels);
             }
-            else 
+            else
             {
                 ComputeShader cs = DeepUnityMeta.Conv2DCS;
 
@@ -224,7 +224,7 @@ namespace DeepUnity
                 int C_out = loss.Size(-3);
                 int H_out = loss.Size(-2);
                 int W_out = loss.Size(-1);
-              
+
                 cs.SetInt("batch_size", batch_size);
                 cs.SetInt("in_channels", C_in);
                 cs.SetInt("in_height", H_in);
@@ -242,16 +242,16 @@ namespace DeepUnity
                 ComputeBuffer lossBuffer = new ComputeBuffer(loss.Count(), 4);
                 lossBuffer.SetData(loss.ToArray());
                 cs.SetBuffer(KINDEX, "loss", lossBuffer);
-                
+
                 ComputeBuffer inputBuffer = new ComputeBuffer(InputCache.Count(), 4);
                 inputBuffer.SetData(InputCache.ToArray());
                 cs.SetBuffer(KINDEX, "input", inputBuffer);
-                
+
                 ComputeBuffer gammaGradBuffer = new ComputeBuffer(kernelsGrad.Count(), 4);
                 gammaGradBuffer.SetData(kernelsGrad.ToArray());
                 cs.SetBuffer(KINDEX, "gamma_grad", gammaGradBuffer);
-                
-                if(KINDEX == 1)
+
+                if (KINDEX == 1)
                     cs.Dispatch(1,
                         (kernels.Size(-1) + 2) / 3,
                         (kernels.Size(-2) + 2) / 3,
@@ -327,11 +327,11 @@ namespace DeepUnity
             int kernelWidth = kernels.Size(-1);
 
 
-             int outputHeight = inputHeight - kernelHeight + 1;
-             int outputWidth = inputWidth - kernelWidth + 1;
+            int outputHeight = inputHeight - kernelHeight + 1;
+            int outputWidth = inputWidth - kernelWidth + 1;
 
 
-             output = Tensor.Zeros(batchSize, outputChannels, outputHeight, outputWidth);
+            output = Tensor.Zeros(batchSize, outputChannels, outputHeight, outputWidth);
 
             if (batchSize > 1)
                 Parallel.For(0, batchSize, b =>
@@ -384,7 +384,7 @@ namespace DeepUnity
                         }
                     }
                 });
-            
+
 
 
             return output;
@@ -403,12 +403,12 @@ namespace DeepUnity
             int inChannels = inputShape[0];
             Tensor kernGrad = Tensor.Zeros(outChannels, inChannels, kernelHeight, kernelWidth);
 
-            
+
             int lossHeight = loss.Size(-2);
-            int lossWidth = loss.Size(-1);   
+            int lossWidth = loss.Size(-1);
 
             // correlation type = valid
-            if(batchSize > 1)
+            if (batchSize > 1)
                 Parallel.For(0, batchSize, b =>
                 {
                     for (int oc = 0; oc < outChannels; oc++)
@@ -434,7 +434,7 @@ namespace DeepUnity
                             }
                         }
                     }
-                }); 
+                });
             else
                 Parallel.For(0, outChannels, oc =>
                 {
@@ -558,12 +558,12 @@ namespace DeepUnity
 
         public object Clone()
         {
-            var conv = new Conv2D((inputShape[0], inputShape[1], inputShape[2]), outChannels, kernel_shape: (this.kernelHeight, this.kernelWidth), device: this.device);
-            conv.kernels = (Tensor)this.kernels.Clone();
-            conv.biases = (Tensor)this.biases.Clone();
-            conv.kernelsGrad = (Tensor)this.kernelsGrad.Clone();
-            conv.biasesGrad = (Tensor)this.biasesGrad.Clone();
-            
+            var conv = new Conv2D((inputShape[0], inputShape[1], inputShape[2]), outChannels, kernel_shape: (kernelHeight, kernelWidth), device: device);
+            conv.kernels = (Tensor)kernels.Clone();
+            conv.biases = (Tensor)biases.Clone();
+            conv.kernelsGrad = (Tensor)kernelsGrad.Clone();
+            conv.biasesGrad = (Tensor)biasesGrad.Clone();
+
             return conv;
         }
 
@@ -600,8 +600,8 @@ namespace DeepUnity
                 return;
 
             // do not check if gamma is != null...
-            this.kernelsGrad = Tensor.Zeros(kernels.Shape);
-            this.biasesGrad = Tensor.Zeros(biases.Shape);
+            kernelsGrad = Tensor.Zeros(kernels.Shape);
+            biasesGrad = Tensor.Zeros(biases.Shape);
 
         }
     }

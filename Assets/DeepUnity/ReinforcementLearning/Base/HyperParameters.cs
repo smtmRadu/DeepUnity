@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     /// <summary>
     /// Default settings are taken from https://unity-technologies.github.io/ml-agents/Training-Configuration-File/
@@ -19,18 +19,11 @@ namespace DeepUnity
         [Tooltip("[Typical range: 1e5 - 1e7] The maximum length in steps of this training session.")]
         [Min(10_000f)] public long maxSteps = 2_000_000_000;
 
-
         [Tooltip("[Typical range: (PPO) 5e-6 - 3e-3, (SAC) 1e-5 - 1e-3] Initial learning rate for Adam optimizer (both all networks).")]
         [Min(5e-6f)] public float learningRate = 3e-4f;
 
         [Tooltip("[Typical range: 0.8 - 0.9997] Discount factor.")]
         [Min(0.001f)] public float gamma = 0.99f;
-
-        [Tooltip("[Typical range: (Continuous - PPO) 512 - 5120, (Continuous - SAC) 128 - 1024, (Discrete - PPO) 32 - 512] Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer size.")]
-        [Min(32)] public int batchSize = 512;
-
-        [Tooltip("[Typical range: (PPO) 2048 - 409600, (SAC) 50000 - 1000000] Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch size. Typically a larger buffer size corresponds to more stable training updates.")]
-        [Min(512)] public int bufferSize = 10240; // Do not exagerate with this, keep it at a max of 1M.
 
         [Tooltip("Applies logarithmic decay on learning rate with respect to the maxSteps. When maxSteps is reached, lr will be 0.")]
         [SerializeField] public bool LRSchedule = false;
@@ -39,8 +32,14 @@ namespace DeepUnity
 
         [Header("PPO specific Configuration")] // https://github.com/yosider/ml-agents-1/blob/master/docs/Training-PPO.md
 
+        [Tooltip("[Typical range: (Continuous) 512 - 5120, (Discrete) 32 - 512] Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer size.")]
+        [Min(64)] public int batchSize = 512;
+
+        [Tooltip("[Typical range: 2048 - 409600] Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch size. Typically a larger buffer size corresponds to more stable training updates.")]
+        [Min(2048)] public int bufferSize = 10240; // Do not exagerate with this, keep it at a max of 1M.
+
         [Tooltip("[Typical range: 64 - 2048] How many steps of experience to collect per-agent before adding it to the experience buffer.")]
-        [Min(32)] public int horizon = 256; 
+        [Min(32)] public int horizon = 256;
 
         [Tooltip("[Typical range: 3 - 10] Number of epochs per buffer.")]
         [Min(3)] public int numEpoch = 8;
@@ -69,8 +68,14 @@ namespace DeepUnity
         // ========================================================================================================================================================================
 
         [Header("SAC specific Configuration")] // https://github.com/yosider/ml-agents-1/blob/master/docs/Training-SAC.md
+        [Tooltip("[Typical range: 50000 - 1000000] The maximum capacity to hold experices. When getting fullfilled, the old experiences are removed to enable new space.")]
+        [Min(50000)] public int replayBufferSize = 1_000_000;
+
+        [Tooltip("[Typical range: 64 - 1024] The number of samples in the minibatch when performing a policy or Q update.")]
+        [Min(64)] public int minibatchSize = 128;
+
         [Tooltip("[Typicall range: 1 - 128] Number of steps taken before updating the policy. Doesn't count for parallel agents, this considers only 1 decision.")]
-        [Min(1)] public int updateEvery = 64;
+        [Min(1)] public int updateInterval = 64;
 
         [Tooltip("[Typicall range > Batch Size] Number of steps collected before updating the policy.")]
         [Min(64)] public int updateAfter = 1024;
@@ -84,11 +89,6 @@ namespace DeepUnity
         [Tooltip("[Typicall range: 0.005 - 0.01] Inversed Polyak. How aggresively to update the target network used for boostraping value estimation.")]
         [Min(0.005f)] public float tau = 0.005f;
 
-        // ========================================================================================================================================================================
-
-        [Header("GAIL specific Configuration")]
-        [Tooltip("Whether or not to save the record buffer")]
-        public bool saveRecordBuffer = false;
 
         // ========================================================================================================================================================================
 
@@ -102,7 +102,7 @@ namespace DeepUnity
         public TimescaleAdjustmentType timescaleAdjustment = TimescaleAdjustmentType.Dynamic;
         [Tooltip("Timescale of the training session.")]
         [Min(0.01f)] public float timescale = 1f;
-        
+
 
         private void Awake()
         {
@@ -112,9 +112,9 @@ namespace DeepUnity
                 int lowbound = bufferSize / batchSize;
                 bufferSize = batchSize * lowbound;
                 ConsoleMessage.Info($"Buffer size must be multiple of batch size. Old value ({old_buff_size}) was changed to {bufferSize}.");
-                         
+
             }
-               
+
         }
         /// <summary>
         /// Creates a new Hyperparameters asset in the <em>behaviour</em> folder.
@@ -124,8 +124,8 @@ namespace DeepUnity
         public static Hyperparameters CreateOrLoadAsset(string behaviourName)
         {
             var instance = AssetDatabase.LoadAssetAtPath<Hyperparameters>($"Assets/{behaviourName}/Config.asset");
-            
-            if(instance != null)
+
+            if (instance != null)
                 return instance;
 
             Hyperparameters hp = new Hyperparameters();
@@ -155,18 +155,19 @@ namespace DeepUnity
                 if (script.KLDivergence == (int)KLType.Off)
                     dontDrawMe.Add("targetKL");
 
-                dontDrawMe.Add("updateEvery");
+                dontDrawMe.Add("replayBufferSize");
+                dontDrawMe.Add("minibatchSize");
+                dontDrawMe.Add("updateInterval");
                 dontDrawMe.Add("updateAfter");
                 dontDrawMe.Add("updatesNum");
                 dontDrawMe.Add("alpha");
                 dontDrawMe.Add("saveReplayBuffer");
                 dontDrawMe.Add("tau");
-
-
-                dontDrawMe.Add("saveRecordBuffer");
             }
             else if (script.trainer == TrainerType.SAC)
             {
+                dontDrawMe.Add("batchSize");
+                dontDrawMe.Add("bufferSize");
                 dontDrawMe.Add("horizon");
                 dontDrawMe.Add("numEpoch");
                 dontDrawMe.Add("beta");
@@ -178,36 +179,12 @@ namespace DeepUnity
                 dontDrawMe.Add("gradClipNorm");
                 dontDrawMe.Add("normalizeAdvantages");
 
-                dontDrawMe.Add("saveRecordBuffer");
-
                 EditorGUILayout.HelpBox("SAC is not released yet!", MessageType.Warning);
-                EditorGUILayout.HelpBox("SAC defaults: lr - 1e-3, batch_size - 128, buffer_size - 1M", MessageType.Info);
             }
-            // else if (script.trainer == TrainerType.GAIL)
-            // {
-            //     dontDrawMe.Add("updateEvery");
-            //     dontDrawMe.Add("updateAfter");
-            //     dontDrawMe.Add("updatesNum");
-            //     dontDrawMe.Add("alpha");
-            //     dontDrawMe.Add("saveReplayBuffer");
-            //     dontDrawMe.Add("tau");
-            // 
-            //     dontDrawMe.Add("horizon");
-            //     dontDrawMe.Add("numEpoch");
-            //     dontDrawMe.Add("beta");
-            //     dontDrawMe.Add("epsilon");
-            //     dontDrawMe.Add("lambda");
-            //     dontDrawMe.Add("normalizeAdvantages");
-            //     dontDrawMe.Add("KLDivergence");
-            //     dontDrawMe.Add("targetKL");
-            //     dontDrawMe.Add("gradClipNorm");
-            // 
-            //     EditorGUILayout.HelpBox("GAIL is not released yet!", MessageType.Warning);
-            // }
 
             dontDrawMe.Add("timescale");
 
-         
+
 
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
 

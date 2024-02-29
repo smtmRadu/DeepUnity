@@ -3,8 +3,10 @@ using System.Diagnostics;
 using System.Linq;
 using UnityEditor;
 using System.Threading.Tasks;
+using DeepUnity.Activations;
+using DeepUnity.Models;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     // https://medium.com/intro-to-artificial-intelligence/soft-actor-critic-reinforcement-learning-algorithm-1934a2c3087f 
     // https://spinningup.openai.com/en/latest/algorithms/sac.html
@@ -22,77 +24,75 @@ namespace DeepUnity
         {
             Qtarg1 = model.q1Network.Clone() as Sequential;
             Qtarg2 = model.q2Network.Clone() as Sequential;
-            if(model.standardDeviation == StandardDeviationType.Fixed)
+            if (model.standardDeviation == StandardDeviationType.Fixed)
             {
                 ConsoleMessage.Info("Behaviour's standard deviation is Trainable");
                 model.standardDeviation = StandardDeviationType.Trainable;
             }
-            if(hp.updateAfter <= hp.batchSize)
+            if (hp.updateAfter <= hp.minibatchSize)
             {
                 ConsoleMessage.Info("'Update After' was set higher than the 'batch size'.");
-                hp.updateAfter = hp.batchSize * 5;
+                hp.updateAfter = hp.minibatchSize * 5;
             }
-            
+
         }
         protected override void OnBeforeFixedUpdate()
         {
             int decision_freq = parallelAgents[0].DecisionRequester.decisionPeriod;
             new_experiences_collected += parallelAgents.Count;
-            if (new_experiences_collected > (hp.updateEvery * decision_freq)) 
+            if (new_experiences_collected > hp.updateInterval * decision_freq)
             {
                 // if the buffer will be full after this collection, let's clear the old values
-                if(train_data.Count >= hp.bufferSize)             
+                if (train_data.Count >= hp.replayBufferSize)
                     train_data.frames.RemoveRange(0, train_data.Count / 2); // If buffer is full, remove old half
-                
+
                 foreach (var agent_mem in parallelAgents.Select(x => x.Memory))
                 {
                     if (agent_mem.Count == 0)
                         continue;
 
-                    train_data.TryAppend(agent_mem, hp.bufferSize);
+                    train_data.TryAppend(agent_mem, hp.replayBufferSize);
                     agent_mem.Clear();
                 }
 
                 if (train_data.Count >= hp.updateAfter)
                 {
                     updateClock = Stopwatch.StartNew();
-                    updateIterations++;
                     Train();
                     updateClock.Stop();
 
+                    updateIterations++;
                     learningRate = model.muScheduler.CurrentLR;
                     entropy = hp.alpha;
-                    currentSteps += new_experiences_collected / decision_freq; 
+                    currentSteps += new_experiences_collected / decision_freq;
                     new_experiences_collected = 0;
-                }             
+                }
             }
         }
-       
-        
+
+
         private void Train()
-        {          
+        {
             for (int epoch_index = 0; epoch_index < hp.updatesNum; epoch_index++)
-            {            
+            {
                 // Sample a random batch of transitions from the replay buffer
-                TimestepTuple[] batch = Utils.Random.Sample(hp.batchSize, train_data.frames);
+                TimestepTuple[] batch = Utils.Random.Sample(hp.minibatchSize, train_data.frames);
 
                 // Batchify
                 Tensor states = Tensor.Concat(null, batch.Select(x => x.state).ToArray());
                 Tensor raw_continuous_actions = Tensor.Concat(null, batch.Select(x => x.action_continuous).ToArray());
+                Tensor q_targets;
 
-                ComputeQTargets(batch);
-
-                Tensor y = Tensor.Concat(null, batch.Select(x => x.q_target).ToArray());
-
-                UpdateQFunctions(states, raw_continuous_actions, y);
+                ComputeQTargets(batch, out q_targets);
+                UpdateQFunctions(states, raw_continuous_actions, q_targets);
                 UpdatePolicy(states);
                 UpdateTargetNetworks();
             }
         }
-        private void ComputeQTargets(TimestepTuple[] batch)
-        {           
+        private void ComputeQTargets(TimestepTuple[] batch, out Tensor y)
+        {
             Tensor sPrime = Tensor.Concat(null, batch.Select(x => x.nextState).ToArray());
-   
+
             Tensor aTildePrime;     // ã => actions newly sampled from πθ(•|s)
             Tensor piTildePrime;    // (B, CONTINUOUS_ACTIONS)
             model.ContinuousPredict(sPrime, out aTildePrime, out piTildePrime);
@@ -108,11 +108,13 @@ namespace DeepUnity
 
                 float r = batch[b].reward[0];
                 float d = batch[b].done[0];
-                
-                float y = r + hp.gamma * (1f - d) * (MathF.Min(Qtarg1_sPrime_aTildePrime[b, 0], Qtarg2_sPrime_aTildePrime[b, 0]) - hp.alpha * logPi[b]);
 
-                batch[b].q_target = Tensor.Constant(y);
+                float _y = r + hp.gamma * (1f - d) * (MathF.Min(Qtarg1_sPrime_aTildePrime[b, 0], Qtarg2_sPrime_aTildePrime[b, 0]) - hp.alpha * logPi[b]);
+
+                batch[b].q_target = Tensor.Constant(_y);
             }
+
+            y = Tensor.Concat(null, batch.Select(x => x.q_target).ToArray());
         }
         private void UpdateQFunctions(Tensor states, Tensor continuous_actions, Tensor Q_targets)
         {
@@ -131,7 +133,7 @@ namespace DeepUnity
             model.q1Network.Backward(q1Loss.Gradient * 0.5f);
             model.q2Network.Backward(q2Loss.Gradient * 0.5f);
             model.q1Optimizer.Step();
-            model.q2Optimizer.Step();          
+            model.q2Optimizer.Step();
         }
         private void UpdatePolicy(Tensor states)
         {
@@ -166,7 +168,7 @@ namespace DeepUnity
 
             // Check appendinx C
             // log πθ(ãθ(s) |s) = log μ(u|s) - E [log (1 - tanh^2(u))]
-            Tensor logPiaTildeS = Tensor.Log(muDist) - Tensor.Sum(Tensor.Log(- new Tanh().Predict(u).Pow(2f) + 1), -1, true); // (B, 1)
+            Tensor logPiaTildeS = Tensor.Log(muDist) - Tensor.Sum(Tensor.Log(-new Tanh().Predict(u).Pow(2f) + 1), -1, true); // (B, 1)
 
             Tensor pair_states_aTildeS = StateActionPair(states, aTildeS);
             Tensor Q1s_aTildeS = model.q1Network.Forward(pair_states_aTildeS);
@@ -193,14 +195,14 @@ namespace DeepUnity
                 else
                     dminQ1Q2_dQ2[b, 0] = 1f;
             }
-            
+
             Tensor dminQ1Q2_ds_aTildeS = model.q1Network.Backward(dminQ1Q2_dQ1) + model.q2Network.Backward(dminQ1Q2_dQ2); // Take the gradients from both networks
 
             // By backwarding the min, we will receive a Tensor of shape (B, S + A), and because we compute the derivative wrt A,
             // we need only A from this tensor, so we extract it separately
             Tensor dminQ1Q2_daTildeS = ExtractActionFromStateAction(dminQ1Q2_ds_aTildeS, states.Size(-1), aTildeS.Size(-1));
 
-            Tensor dminQ1Q2_du = dminQ1Q2_daTildeS * (- tanh_u.Pow(2f) + 1);
+            Tensor dminQ1Q2_du = dminQ1Q2_daTildeS * (-tanh_u.Pow(2f) + 1);
             Tensor dminQ1Q2_dMu = dminQ1Q2_du;// * 1f;
             Tensor dminQ1Q2_dSigma = dminQ1Q2_du * ksi;
 
@@ -209,7 +211,7 @@ namespace DeepUnity
 
 
             // Secondly, we compute the derivative of logπθ(ãθ(s)|s) wrt ãθ(s). Note that we are using Gaussian Distribution squashed, check Appendix C in SAC paper
-           
+
             // So we know that 
             // MuDist = Multivariate Normal Distribution(u, mu, sigma)
             // dLogMu/dx = CovarianceMatrix^(-1)(x - mu)
@@ -218,13 +220,13 @@ namespace DeepUnity
             // ∇ log πθ(a|s) = dlog μ(u|s)/du - dlog (1 - tanh^2(u))/du = (u - mu)/sigma^2 - (-2 * tanh(u) * sech^2(u) / (1 - tanh^2(u)))
 
             Tensor dLogMuDist_du = (u - mu) / sigma.Pow(2f); // https://observablehq.com/@herbps10/distributions-and-their-gradients
-            Tensor dLog_1mTanh2u_du = -2f * tanh_u * sech_u.Pow(2f) / (- tanh_u.Pow(2f) + 1f); // Wolfram Alpha? maybe..
+            Tensor dLog_1mTanh2u_du = -2f * tanh_u * sech_u.Pow(2f) / (-tanh_u.Pow(2f) + 1f); // Wolfram Alpha? maybe..
 
             Tensor dAlphaLogPi_aTildeS_s_du = hp.alpha * (dLogMuDist_du - dLog_1mTanh2u_du);
             Tensor dAlphaLogPiaTildeS_s_dMu = dAlphaLogPi_aTildeS_s_du; // * 1f;
             Tensor dAlphaLogPiaTildeS_s_dSigma = dAlphaLogPi_aTildeS_s_du * ksi;
 
-            Tensor dJ_dMu = dminQ1Q2_dMu - dAlphaLogPiaTildeS_s_dMu;    
+            Tensor dJ_dMu = dminQ1Q2_dMu - dAlphaLogPiaTildeS_s_dMu;
             model.muOptimizer.ZeroGrad();
             model.muNetwork.Backward(-dJ_dMu);
             model.muOptimizer.Step();
@@ -233,7 +235,7 @@ namespace DeepUnity
             model.sigmaOptimizer.ZeroGrad();
             model.sigmaNetwork.Backward(-dJ_dSigma);
             model.sigmaOptimizer.Step();
-                          
+
         }
         public void UpdateTargetNetworks()
         {
@@ -251,13 +253,13 @@ namespace DeepUnity
             {
                 Tensor.CopyTo((1f - hp.tau) * phi_targ1[i] + hp.tau * phi1[i], phi_targ1[i]);
                 Tensor.CopyTo((1f - hp.tau) * phi_targ2[i] + hp.tau * phi2[i], phi_targ2[i]);
-            }        
+            }
         }
 
 
 
         /// <summary>
-        /// including the batch. Note that this must be changed if i plan to allow different input shape than vectorized. (for cnn for example)
+        /// Note that this must be changed if i plan to allow different input shape than vectorized. (for cnn for example)
         /// </summary>
         private static Tensor ExtractActionFromStateAction(Tensor stateActionBatch, int state_size, int action_size)
         {

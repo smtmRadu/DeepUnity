@@ -1,8 +1,7 @@
-using DeepUnity;
 using System;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     /// <summary>
     /// MinMax online normalizer. Works well if the input data does not have extreme large values along.

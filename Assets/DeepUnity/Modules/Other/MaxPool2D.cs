@@ -2,7 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     /// <summary>
     /// Input: <b>(B, C, H_in, W_in)</b> or <b>(C, H_in, W_in)</b> <br></br>
@@ -48,9 +48,9 @@ namespace DeepUnity
             int W_in = input.Size(-1);
             int H_out = (int)Math.Floor((H_in + 2 * padding - 1 * (kernel_size - 1) - 1) / (float)kernel_size + 1f);
             int W_out = (int)Math.Floor((W_in + 2 * padding - 1 * (kernel_size - 1) - 1) / (float)kernel_size + 1f);
-           
+
             // Apply padding
-            if(padding > 0)
+            if (padding > 0)
                 input = Tensor.MatPad(input, padding, padding_mode);
 
             int batch_size = input.Rank == 4 ? input.Size(-4) : 1;
@@ -60,7 +60,7 @@ namespace DeepUnity
 
 
             if (batch_size == 1)
-            {               
+            {
                 // Foreach channel
                 for (int c = 0; c < channel_size; c++)
                 {
@@ -89,7 +89,7 @@ namespace DeepUnity
                         }
                     }
                 }
-                
+
             }
             else
             {
@@ -157,7 +157,7 @@ namespace DeepUnity
 
             Tensor gradInput = Tensor.Zeros(Batch, Channels, H_in, W_in);
 
-            if(Batch == 1)
+            if (Batch == 1)
             {
                 for (int c = 0; c < Channels; c++)
                 {
@@ -194,7 +194,7 @@ namespace DeepUnity
                         }
                     }
                 }
-                
+
             }
             else
             {
@@ -242,7 +242,7 @@ namespace DeepUnity
             return gradInput;
         }
 
-        public object Clone() => new MaxPool2D(this.kernel_size, this.padding, this.padding_mode);
+        public object Clone() => new MaxPool2D(kernel_size, padding, padding_mode);
 
     }
 }

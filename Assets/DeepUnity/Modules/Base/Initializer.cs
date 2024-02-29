@@ -1,6 +1,6 @@
 using System;
 
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     public static class Initializer
     {

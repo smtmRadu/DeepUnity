@@ -1,6 +1,7 @@
 using System;
+using DeepUnity.Layers;
 
-namespace DeepUnity
+namespace DeepUnity.Activations
 {
     // https://www.youtube.com/watch?v=09c7bkxpv9I
 
@@ -12,7 +13,7 @@ namespace DeepUnity
     /// </summary>
     [Serializable]
     public class Softmax : IModule, IActivation
-    {    
+    {
         /// <summary>
         /// <b>Applies the Softmax function over the last input's dimension H (axis: -1).</b> <br></br>
         /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input <br></br>

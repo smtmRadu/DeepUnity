@@ -1,7 +1,7 @@
+using DeepUnity.Activations;
 using System;
-using Unity.VisualScripting;
 
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     /// <summary>
     /// Whenever a new Serializable imodule is created,

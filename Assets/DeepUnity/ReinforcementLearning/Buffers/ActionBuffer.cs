@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using Unity.VisualScripting;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     public class ActionBuffer
     {
@@ -24,7 +24,7 @@ namespace DeepUnity
                 throw new ArgumentException("Cannot have a negative number of discrete actions");
 
             ContinuousActions = new float[continuousDim];
-            DiscreteAction = -1;          
+            DiscreteAction = -1;
         }
         public void Clear()
         {

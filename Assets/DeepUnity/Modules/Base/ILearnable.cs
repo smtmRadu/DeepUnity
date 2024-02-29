@@ -1,5 +1,5 @@
 
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     public interface ILearnable
     {

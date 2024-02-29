@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace DeepUnity
 {
-    public class SmoothCamera : MonoBehaviour
+    public class CameraFollowConstraint : MonoBehaviour
     {
         public Transform toFollow;
         public float smoothness = 0.3f;

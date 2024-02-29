@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
-namespace DeepUnity
+using DeepUnity.Layers;
+namespace DeepUnity.Optimizers
 {
     // https://arxiv.org/pdf/1412.6980.pdf also adamax algorithm is there, though i extended it with pytorch doc.
     public sealed class Adam : Optimizer
@@ -14,7 +15,7 @@ namespace DeepUnity
 
         // 1st momentum buffer
         private readonly Tensor[] m;
-        
+
         // 2nd momentum buffer 
         private readonly Tensor[] v;
 
@@ -33,7 +34,7 @@ namespace DeepUnity
             this.maximize = maximize;
             this.beta1 = beta1;
             this.beta2 = beta2;
-            
+
             m = new Tensor[parameters.Length];
             v = new Tensor[parameters.Length];
             // mGPU = new TensorGPU[parameters.Length];
@@ -42,8 +43,8 @@ namespace DeepUnity
 
             if (amsgrad)
                 vHatMax = new Tensor[parameters.Length];
-               
-            
+
+
 
             for (int i = 0; i < parameters.Length; i++)
             {
@@ -61,8 +62,8 @@ namespace DeepUnity
                 //     vGPU[i] = TensorGPU.Zeros(parameters[i].thetaGPU.Shape);
                 //     vHatMaxGPU[i] = TensorGPU.Zeros(parameters[i].thetaGPU.Shape);
                 // }
-             
-            }           
+
+            }
         }
 
         public override void Step()
@@ -95,7 +96,7 @@ namespace DeepUnity
                     else
                         Tensor.CopyTo(parameters[i].theta - gamma * mHat / (vHat.Sqrt() + epsilon), parameters[i].theta);
                 }
-                
+
             });
 
             // for (int i = 0; i < parameters.Length; i++)

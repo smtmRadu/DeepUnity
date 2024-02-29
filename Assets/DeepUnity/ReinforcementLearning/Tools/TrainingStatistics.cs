@@ -5,7 +5,7 @@ using System.Linq;
 using UnityEditor;
 using System;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     /// <summary>
     /// Note: TrainingStatistics Track ram usage increases over time. Planning long training sessions may require more RAM memory.
@@ -19,7 +19,7 @@ namespace DeepUnity
         public string startedAt = " - ";
         [ViewOnly, Tooltip("When the simulation ended.")]
         public string finishedAt = " - ";
-        [ViewOnly, Tooltip("How much time passed in real time since the start of the training simulation.")] 
+        [ViewOnly, Tooltip("How much time passed in real time since the start of the training simulation.")]
         public string trainingSessionTime = " - ";
         [ViewOnly, Tooltip("Total time spent on inference in total.")]
         public string inferenceTime = " - ";
@@ -27,26 +27,26 @@ namespace DeepUnity
         public string policyUpdateTime = " - ";
         [ViewOnly, Tooltip("How much time takes a policy update iteration.")]
         public string policyUpdateTimePerIteration = " - ";
-        
+
         [Space(20)]
         [ViewOnly, Tooltip("Total number of episodes runned by all parallel agents.")]
         public int episodeCount = 0;
-        [ViewOnly, Tooltip("Total numbers of steps runned by all parallel agents.")] 
+        [ViewOnly, Tooltip("Total numbers of steps runned by all parallel agents.")]
         public int stepCount = 0;
-        [ViewOnly, Tooltip("How many policy updates were made.")] 
+        [ViewOnly, Tooltip("How many policy updates were made.")]
         public int iterations = 0;
-        [ViewOnly, Tooltip("Parallel agents learning. If this is not equal to your environments, some of them are not having the behaviour to learn.")] 
+        [ViewOnly, Tooltip("Parallel agents learning. If this is not equal to your environments, some of them are not having the behaviour to learn.")]
         public int parallelAgents = 0;
 
         [Space(20)]
         [Header("Environment")]
-        [Tooltip("Cumulated reward on each episode.")] 
+        [Tooltip("Cumulated reward on each episode.")]
         public PerformanceGraph cumulativeReward = new PerformanceGraph();
-        [Tooltip("Steps taken in each episode.")] 
+        [Tooltip("Steps taken in each episode.")]
         public PerformanceGraph episodeLength = new PerformanceGraph();
 
         [Header("Losses")]
-        [Tooltip("Mean loss of policy function on each epoch")] 
+        [Tooltip("Mean loss of policy function on each epoch")]
         public PerformanceGraph actorLoss = new PerformanceGraph();
         [Tooltip("Mean MSE of Value (for PPO) or Q (for SAC) function on each epoch. Also used for the discriminator loss in Heuristic Training.")]
         public PerformanceGraph criticLoss = new PerformanceGraph();
@@ -67,7 +67,7 @@ namespace DeepUnity
             {
                 Destroy(this);
             }
-            else if(GetComponent<Agent>().behaviourType == BehaviourType.Learn)
+            else if (GetComponent<Agent>().behaviourType == BehaviourType.Learn)
             {
                 Instance = this;
                 EditorApplication.playModeStateChanged += ExportOnEnd;
@@ -79,7 +79,7 @@ namespace DeepUnity
             if (DeepUnityTrainer.Instance == null)
                 return;
 
-            if(!collectAgentStuff)
+            if (!collectAgentStuff)
             {
                 try
                 {
@@ -118,12 +118,12 @@ namespace DeepUnity
             trainingSessionTime = $"{(int)timeElapsed.TotalHours} hrs : {(int)timeElapsed.TotalMinutes % 60} min : {(int)timeElapsed.TotalSeconds % 60} sec";
             policyUpdateSecondsElapsed += (float)DeepUnityTrainer.Instance.updateClock.Elapsed.TotalSeconds;
             policyUpdateTime = $"{(int)(Math.Ceiling(policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(policyUpdateSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(policyUpdateSecondsElapsed) % 60)} sec";
-            policyUpdateTimePerIteration = $"{(int)DeepUnityTrainer.Instance.updateClock.Elapsed.TotalHours} hrs : {(int)(DeepUnityTrainer.Instance.updateClock.Elapsed.TotalMinutes) % 60} min : {(int)(DeepUnityTrainer.Instance.updateClock.Elapsed.TotalSeconds) % 60}.{DeepUnityTrainer.Instance.updateClock.ElapsedMilliseconds % 1000} sec";
+            policyUpdateTimePerIteration = $"{(int)DeepUnityTrainer.Instance.updateClock.Elapsed.TotalHours} hrs : {(int)DeepUnityTrainer.Instance.updateClock.Elapsed.TotalMinutes % 60} min : {(int)DeepUnityTrainer.Instance.updateClock.Elapsed.TotalSeconds % 60}.{DeepUnityTrainer.Instance.updateClock.ElapsedMilliseconds % 1000} sec";
 
             actorLoss.Append(DeepUnityTrainer.Instance.actorLoss);
             criticLoss.Append(DeepUnityTrainer.Instance.criticLoss);
             entropy.Append(DeepUnityTrainer.Instance.entropy);
-            learningRate.Append(DeepUnityTrainer.Instance.learningRate);                    
+            learningRate.Append(DeepUnityTrainer.Instance.learningRate);
         }
 
 
@@ -139,7 +139,7 @@ namespace DeepUnity
         public string ExportAsSVG(string behaviourName, Hyperparameters hp, AgentBehaviour behaviour, DecisionRequester decisionRequester)
         {
             string behaviourAssetPath = AssetDatabase.GetAssetPath(behaviour);
-            
+
             string extra = new string(startedAt.Select(x =>
             {
                 if (char.IsLetterOrDigit(x))
@@ -152,7 +152,7 @@ namespace DeepUnity
                     return '-';
             }).ToArray());
 
-           
+
             string directoryPath = Path.Combine(Path.GetDirectoryName(behaviourAssetPath), "Logs");
             string name = $"[{behaviourName}]_{extra}";
             string path = Path.Combine(directoryPath, $"{name}.svg");
@@ -174,27 +174,27 @@ namespace DeepUnity
 
             svgBuilder.AppendLine(@"<svg width=""2000"" height=""2500"" xmlns=""http://www.w3.org/2000/svg"">");
             int y = 20;
-           
+
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""26"" fill=""black""> [{behaviourName}] Training Session</text>");
             y += 30;
-            svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Statistics]</text>");     
-            y += 20;                           
+            svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Statistics]</text>");
+            y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Started at: " + startedAt + @"</text>");
-            y += 20;                          
+            y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Finished at: " + finishedAt + @"</text>");
-            y += 20;                          
+            y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Training Session Time: " + trainingSessionTime + @"</text>");
-            y += 20;                          
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Time: {inferenceTime}        [Device: {ab.inferenceDevice}]</text>");       
-            y += 20;                                   
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Update Time: {policyUpdateTime}        [Per iteration: {policyUpdateTimePerIteration}]        [Device: {ab.trainingDevice}]</text>");   
+            y += 20;
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Time: {inferenceTime}        [Device: {ab.inferenceDevice}]</text>");
+            y += 20;
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Update Time: {policyUpdateTime}        [Per iteration: {policyUpdateTimePerIteration}]        [Device: {ab.trainingDevice}]</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Episode Count: {episodeCount}</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Steps: {stepCount}</text>");
-            y += 20;                                
+            y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Iterations: " + iterations + @"</text>");
-            y += 20;                                  
+            y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Parallel Agents: " + parallelAgents + @"</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Timescale: " + Time.timeScale + @"</text>");
@@ -204,7 +204,10 @@ namespace DeepUnity
             y += 50;
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Hyperparameters]</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Buffer Size: {hp.bufferSize}        [Batch Size: {hp.batchSize}       (x{hp.bufferSize / hp.batchSize})]</text>");
+            if (hp.trainer == TrainerType.PPO)
+                svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Buffer Size: {hp.bufferSize}        [Batch Size: {hp.batchSize}       (x{hp.bufferSize / hp.batchSize})]</text>");
+            else if (hp.trainer == TrainerType.SAC)
+                svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Replay Buffer Size: {hp.replayBufferSize}        [Batch Size: {hp.minibatchSize}       (x{hp.replayBufferSize / hp.minibatchSize})]</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Num Epoch: {hp.numEpoch}</text>");
             y += 20;
@@ -219,7 +222,7 @@ namespace DeepUnity
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Space Size: {ab.observationSize}</text>");
             y += 20;
-            string std_value = ab.standardDeviation == StandardDeviationType.Fixed ?  $"[Value: {ab.standardDeviationValue}]" : "";
+            string std_value = ab.standardDeviation == StandardDeviationType.Fixed ? $"[Value: {ab.standardDeviationValue}]" : "";
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Continuous Actions: {ab.continuousDim} [Standard Deviation: {ab.standardDeviation}]     {std_value}</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Discrete Actions: {ab.discreteDim}</text>");
@@ -264,7 +267,7 @@ namespace DeepUnity
             y += 20;
             DrawGraph(svgBuilder, episodeLength.Keys, ref y, 750, 200, 500, "Simplified");
 
-           
+
 
             svgBuilder.AppendLine(@"</svg>");
 
@@ -278,7 +281,7 @@ namespace DeepUnity
                 return;
             }
 
-                   
+
             svgBuilder.AppendLine($@"<text x=""{xOffset}"" y=""{yOffset}"" font-family=""Arial"" font-size=""12"" fill=""black"">" + title + @"</text>");
             yOffset += 20;
 
@@ -297,7 +300,7 @@ namespace DeepUnity
                 float y = keyframe.value;
 
                 float svgX = x * width + xOffset;
-                float svgY = yOffset + height -  height * (y - minY) / (maxY - minY + Utils.EPSILON);
+                float svgY = yOffset + height - height * (y - minY) / (maxY - minY + Utils.EPSILON);
 
                 if (i == 0)
                 {
@@ -316,7 +319,7 @@ namespace DeepUnity
 #if UNITY_EDITOR
         private void ExportOnEnd(PlayModeStateChange state)
         {
-            if(state == PlayModeStateChange.ExitingPlayMode)
+            if (state == PlayModeStateChange.ExitingPlayMode)
             {
                 startedAt = DeepUnityTrainer.Instance.timeWhenTheTrainingStarted.ToLongTimeString() + ", " + DeepUnityTrainer.Instance.timeWhenTheTrainingStarted.ToLongDateString();
                 finishedAt = DateTime.Now.ToLongTimeString() + ", " + DateTime.Now.ToLongDateString();
@@ -328,7 +331,7 @@ namespace DeepUnity
                     AssetDatabase.Refresh();
                 }
             }
-            
+
         }
 #endif
     }

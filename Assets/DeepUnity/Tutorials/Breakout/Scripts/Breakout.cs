@@ -1,5 +1,7 @@
 using DeepUnity;
 using UnityEngine;
+using DeepUnity.Sensors;
+using DeepUnity.ReinforcementLearning;
 
 namespace DeepUnityTutorials
 {

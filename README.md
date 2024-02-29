@@ -1,6 +1,6 @@
 # DeepUnity
 ###### In development - does not currently accept Pull Requests, though feel free to Fork and expand upon it
-![version](https://img.shields.io/badge/version-v0.9.7.1-blue)
+![version](https://img.shields.io/badge/version-v0.9.7.2-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO) and Soft Actor-Critic (SAC).
 
@@ -8,78 +8,79 @@ DeepUnity is an add-on framework that provides tensor computation [with GPU acce
 ```csharp
 using UnityEngine;
 using DeepUnity;
+using DeepUnity.Optimizers;
+using DeepUnity.Activations;
+using DeepUnity.Layers;
+using DeepUnity.Models;
 
-namespace DeepUnityTutorials
+public class Tutorial : MonoBehaviour
 {
-    public class Tutorial : MonoBehaviour
+    [Header("Learning z = x^2 + y^2.")]
+    public Sequential network;
+    private Optimizer optim;
+    private LRScheduler scheduler;
+    
+    private Tensor train_inputs;
+    private Tensor train_targets;
+    private Tensor valid_inputs;
+    private Tensor valid_targets;
+    
+    public void Start()
     {
-        [Header("Learning z = x^2 + y^2.")]
-        public Sequential network;
-        private Optimizer optim;
-        private LRScheduler scheduler;
-
-        private Tensor train_inputs;
-        private Tensor train_targets;
-        private Tensor valid_inputs;
-        private Tensor valid_targets;
-
-        public void Start()
+        if (network == null)
         {
-            if (network == null)
-            {
-                network = new Sequential(
-                    new Dense(2, 64),
-                    new Tanh(),
-                    new Dense(64, 64, device: Device.GPU),
-                    new ReLU(),
-                    new Dense(64, 1)).CreateAsset("TutorialModel");
-            }
-            optim = new Adam(network.Parameters());
-            scheduler = new LRScheduler(optim, 30, 0.1f);
-
-            // Generate training dataset
-            int data_size = 1024;
-            Tensor x = Tensor.RandomNormal(data_size, 1);
-            Tensor y = Tensor.RandomNormal(data_size, 1);
-            train_inputs = Tensor.Concat(1, x, y);
-            train_targets = x * x + y * y;
-
-            // Generate validation set
-            int valid_size = 64;
-            x = Tensor.RandomNormal(valid_size, 1);
-            y = Tensor.RandomNormal(valid_size, 1);
-            valid_inputs = Tensor.Cat(1, x, y);
-            valid_targets = x * x + y * y;
+            network = new Sequential(
+                new Dense(2, 64),
+                new Tanh(),
+                new Dense(64, 64, device: Device.GPU),
+                new ReLU(),
+                new Dense(64, 1)).CreateAsset("TutorialModel");
         }
-
-        public void Update()
+        optim = new Adam(network.Parameters());
+        scheduler = new LRScheduler(optim, 30, 0.1f);
+    
+        // Generate training dataset
+        int data_size = 1024;
+        Tensor x = Tensor.RandomNormal(data_size, 1);
+        Tensor y = Tensor.RandomNormal(data_size, 1);
+        train_inputs = Tensor.Concat(1, x, y);
+        train_targets = x * x + y * y;
+    
+        // Generate validation set
+        int valid_size = 64;
+        x = Tensor.RandomNormal(valid_size, 1);
+        y = Tensor.RandomNormal(valid_size, 1);
+        valid_inputs = Tensor.Cat(1, x, y);
+        valid_targets = x * x + y * y;
+    }
+    
+    public void Update()
+    {
+        // Training. Split the dataset into batches of 32.
+        float train_loss = 0f;
+        Tensor[] input_batches = train_inputs.Split(0, 32);
+        Tensor[] target_batches = train_targets.Split(0, 32);
+        for (int i = 0; i < input_batches.Length; i++)
         {
-            // Training. Split the dataset into batches of 32.
-            float train_loss = 0f;
-            Tensor[] input_batches = train_inputs.Split(0, 32);
-            Tensor[] target_batches = train_targets.Split(0, 32);
-            for (int i = 0; i < input_batches.Length; i++)
-            {
-                Tensor prediction = network.Forward(input_batches[i]);
-                Loss loss = Loss.MSE(prediction, target_batches[i]);
-
-                optim.ZeroGrad();
-                network.Backward(loss.Gradient);
-                optim.ClipGradNorm(0.5f);
-                optim.Step();
-
-                train_loss += loss.Item;
-            }
-            train_loss /= input_batches.Length;
-            
-            // Validation
-            Tensor valid_prediction = network.Predict(valid_inputs);
-            float valid_loss = Metrics.MeanSquaredError(valid_prediction, valid_targets);
-            print($"Epoch: {Time.frameCount} - Train Loss: {train_loss} - Valid Loss: {valid_loss}");
-            
-            scheduler.Step();
-            network.Save();
+            Tensor prediction = network.Forward(input_batches[i]);
+            Loss loss = Loss.MSE(prediction, target_batches[i]);
+    
+            optim.ZeroGrad();
+            network.Backward(loss.Gradient);
+            optim.ClipGradNorm(0.5f);
+            optim.Step();
+    
+            train_loss += loss.Item;
         }
+        train_loss /= input_batches.Length;
+        
+        // Validation
+        Tensor valid_prediction = network.Predict(valid_inputs);
+        float valid_loss = Metrics.MeanSquaredError(valid_prediction, valid_targets);
+        print($"Epoch: {Time.frameCount} - Train Loss: {train_loss} - Valid Loss: {valid_loss}");
+        
+        scheduler.Step();
+        network.Save();
     }
 }
 ```
@@ -177,7 +178,7 @@ public class MoveToGoal : Agent
     }
 }
 ```
-_This example considers an agent (with 4 space size and 2 continuous actions) positioned in the middle of an arena that moves forward, backward, left or right (Decision Period is 1), and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the apple, and penalized by 1 point if he is hitting a wall (or falls of the floor), and on every collision the episode ends._
+###### _This example considers an agent (with 4 space size and 2 continuous actions) positioned in the middle of an arena that moves forward, backward, left or right (Decision Period is 1), and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the apple, and penalized by 1 point if he's falling of the floor, and in both situations the episode ends._
 
 ![reacher](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/reacher.gif?raw=true)
 

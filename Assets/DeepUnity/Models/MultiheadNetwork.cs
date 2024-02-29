@@ -1,11 +1,12 @@
+using DeepUnity.Layers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Unity.VisualScripting;
 using UnityEngine;
 
-namespace DeepUnity
+
+namespace DeepUnity.Models
 {
     public class MultiheadNetwork : Model<MultiheadNetwork, Tensor[]>, ISerializationCallbackReceiver
     {
@@ -23,7 +24,7 @@ namespace DeepUnity
         /// <param name="backbone"></param>
         public MultiheadNetwork(params IModule[] backbone)
         {
-            this.backboneModules = backbone;
+            backboneModules = backbone;
         }
         public void AddInputHead(params IModule[] inputHead)
         {
@@ -34,7 +35,7 @@ namespace DeepUnity
         }
         public void AddOutputHead(params IModule[] outputHead)
         {
-            if(outputHeadsModules == null)
+            if (outputHeadsModules == null)
                 outputHeadsModules = new List<IModule[]>();
 
             outputHeadsModules.Add(outputHead);
@@ -193,7 +194,7 @@ namespace DeepUnity
                 {
                     stringBuilder.AppendLine($"               {layer.GetType().Name}");
                 }
-                
+
             }
             stringBuilder.AppendLine($"Backbone : {backboneModules.Length}");
             foreach (var module in backboneModules)

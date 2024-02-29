@@ -1,5 +1,6 @@
 using System;
-namespace DeepUnity
+using DeepUnity.Layers;
+namespace DeepUnity.Activations
 {
 
     /// <summary>

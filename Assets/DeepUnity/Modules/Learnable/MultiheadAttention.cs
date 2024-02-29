@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     /// <summary>
     /// <b>Applied a Self Scaled Dot-Product Attention with multiple heads.</b> <br></br>
@@ -19,7 +19,7 @@ namespace DeepUnity
         [SerializeField] private Device device;
         [SerializeField] private Attention[] attention_heads;
         [SerializeField] private Dense W_O;
-        
+
         /// <summary>
         /// <b>Applied a Self Scaled Dot-Product Attention with multiple heads.</b> <br></br>
         /// Input: <b>(B, L, H)</b> or <b>(L, H)</b> for unbatched input. <br></br>
@@ -32,7 +32,7 @@ namespace DeepUnity
         public MultiheadAttention(int embed_dim, int heads_num, Device device = Device.CPU)
         {
             this.device = device;
-            if(embed_dim % heads_num != 0)
+            if (embed_dim % heads_num != 0)
             {
                 throw new ArgumentException("Embedding dimension must be divisible by heads number");
             }
@@ -80,7 +80,7 @@ namespace DeepUnity
 
             var input_grad = attention_heads[0].Backward(mhat_grad_splitted[0]);
             for (int i = 1; i < attention_heads.Length; i++)
-            { 
+            {
                 input_grad += attention_heads[i].Backward(mhat_grad_splitted[i]);
             }
             return input_grad;
@@ -140,7 +140,7 @@ namespace DeepUnity
             return matt;
         }
     }
-    
+
 
 
 }

@@ -3,7 +3,7 @@ using System.IO;
 using System.Text;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     [DisallowMultipleComponent, RequireComponent(typeof(Agent))]
     public class StatisticsSerializer : MonoBehaviour
@@ -18,7 +18,7 @@ namespace DeepUnity
             }
             else
             {
-                Instance = this;          
+                Instance = this;
             }
         }
 

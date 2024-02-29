@@ -1,13 +1,14 @@
 using System;
+using DeepUnity.Layers;
 /// <summary>
 /// GELU_Activation_Function_in_Deep_Learning_A_Compre.pdf
 /// Minhyeok Lee
 /// 1School of Electrical and Electronics Engineering, Chung-Ang University, Seoul 06974, Korea
 /// mlee @cau.ac.kr
 /// </summary>
-namespace DeepUnity
+namespace DeepUnity.Activations
 {
-    
+
     [Serializable]
     public class GELU : IModule, IActivation
     {

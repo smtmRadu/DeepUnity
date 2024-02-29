@@ -3,6 +3,7 @@ using DeepUnity;
 using System.Collections.Generic;
 using UnityEngine.UI;
 using System.Text;
+using DeepUnity.ReinforcementLearning;
 namespace DeepUnityTutorials
 {
     public class Sorter : Agent

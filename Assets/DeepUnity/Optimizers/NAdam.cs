@@ -1,5 +1,6 @@
 using System;
-namespace DeepUnity
+using DeepUnity.Layers;
+namespace DeepUnity.Optimizers
 {
     // https://openreview.net/forum?id=OM0jvwB8jIp57ZJjtNEZ
     // https://pytorch.org/docs/stable/generated/torch.optim.NAdam.html#torch.optim.NAdam
@@ -26,13 +27,13 @@ namespace DeepUnity
         {
             this.beta1 = beta1;
             this.beta2 = beta2;
-            this.psi = momentum_decay;
+            psi = momentum_decay;
             this.decoupled_weight_decay = decoupled_weight_decay;
 
             m = new Tensor[parameters.Length];
             v = new Tensor[parameters.Length];
 
-  
+
             for (int i = 0; i < parameters.Length; i++)
             {
                 m[i] = Tensor.Zeros(parameters[i].theta.Shape);
@@ -52,7 +53,7 @@ namespace DeepUnity
             {
                 if (lambda != 0)
                 {
-                    if(decoupled_weight_decay)
+                    if (decoupled_weight_decay)
                         Tensor.CopyTo(parameters[i].theta - gamma * lambda * parameters[i].theta, parameters[i].theta);
                     else
                         Tensor.CopyTo(parameters[i].g + lambda * parameters[i].theta, parameters[i].g);
@@ -61,7 +62,7 @@ namespace DeepUnity
                 m[i] = beta1 * m[i] + (1f - beta1) * parameters[i].g;
                 v[i] = beta2 * v[i] + (1f - beta2) * parameters[i].g.Pow(2f);
 
-                Tensor mHat = mu_next_t * m[i] / (1f - mu_prod_t * mu_next_t) 
+                Tensor mHat = mu_next_t * m[i] / (1f - mu_prod_t * mu_next_t)
                               + (1f - mu_t) * parameters[i].g / (1f - mu_prod_t);
                 Tensor vHat = v[i] / (1f - MathF.Pow(beta2, t));
 

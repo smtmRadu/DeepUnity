@@ -1,6 +1,6 @@
 using System;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     public class TimestepTuple : ICloneable
     {
@@ -19,7 +19,7 @@ namespace DeepUnity
         /// raw continuous actions, unsquashed by Tanh
         /// </summary>
         public Tensor action_continuous;
-        public Tensor prob_continuous;    
+        public Tensor prob_continuous;
         /// <summary>
         /// one hot embedded of discrete action
         /// </summary>
@@ -32,8 +32,8 @@ namespace DeepUnity
         public Tensor advantage;
         public Tensor value_target;
         public Tensor q_target;
-       
-      
+
+
         public TimestepTuple(int index)
         {
             this.index = index;

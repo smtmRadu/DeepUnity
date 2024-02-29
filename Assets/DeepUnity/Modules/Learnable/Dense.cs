@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 using System.Threading.Tasks;
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     // https://www.youtube.com/watch?v=tMjdQLylyGI&t=602s
     // https://proceedings.mlr.press/v9/glorot10a/glorot10a.pdf (251 - 253)
@@ -124,13 +124,13 @@ namespace DeepUnity
                 // 
                 // Tensor.CopyTo(weightsGrad + Tensor.MatMul(transposedLoss, InputCache) / batch_size, weightsGrad);
                 // Tensor.CopyTo(biasesGrad + Tensor.Mean(loss, axis: 0), biasesGrad);
-                
-                
+
+
                 // Benchmark : 0.72s avg
                 Tensor weights_grad;
                 Tensor biases_grad;
                 ComputeGradients(InputCache, loss, isBatched, batch_size, out weights_grad, out biases_grad);
-                
+
                 Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
                 Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
 
@@ -178,7 +178,7 @@ namespace DeepUnity
                 biasesGradBuffer.Release();
 
                 return Tensor.MatMulGPU(loss, weights);
-            }   
+            }
         }
 
         /// <summary>
@@ -239,23 +239,23 @@ namespace DeepUnity
             Tensor wg = Tensor.Zeros(H_out, H_in);
             Tensor bg = Tensor.Zeros(H_out);
 
-           
+
             // lossT * input = (H_out, B) * (B, H_in)
             if (isBatched)
             {
                 Parallel.For(0, H_in, hin =>
                 {
-                    for (int hout = 0; hout < H_out; hout++) 
+                    for (int hout = 0; hout < H_out; hout++)
                     {
                         float mm = 0f;
-                        
+
                         for (int b = 0; b < B_size; b++)
                             mm += loss[b, hout] * x[b, hin];
-                                                 
-                        wg[hout, hin] = mm / B_size;    
+
+                        wg[hout, hin] = mm / B_size;
                     }
 
-                    if(hin == 0)
+                    if (hin == 0)
                     {
                         for (int hout = 0; hout < H_out; hout++)
                         {
@@ -303,11 +303,11 @@ namespace DeepUnity
 
         public object Clone()
         {
-            var dense = new Dense(1, 1, device: this.device);
-            dense.weights = (Tensor)this.weights.Clone();
-            dense.biases = (Tensor)this.biases.Clone();
-            dense.weightsGrad = (Tensor)this.weightsGrad.Clone();
-            dense.biasesGrad = (Tensor)this.biasesGrad.Clone();
+            var dense = new Dense(1, 1, device: device);
+            dense.weights = (Tensor)weights.Clone();
+            dense.biases = (Tensor)biases.Clone();
+            dense.weightsGrad = (Tensor)weightsGrad.Clone();
+            dense.biasesGrad = (Tensor)biasesGrad.Clone();
             return dense;
         }
 
@@ -329,8 +329,8 @@ namespace DeepUnity
                 return;
 
             // do not check if gamma is != null...
-            this.weightsGrad = Tensor.Zeros(weights.Shape);
-            this.biasesGrad = Tensor.Zeros(biases.Shape);
+            weightsGrad = Tensor.Zeros(weights.Shape);
+            biasesGrad = Tensor.Zeros(biases.Shape);
 
         }
     }

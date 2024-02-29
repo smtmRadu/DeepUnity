@@ -3,8 +3,9 @@ using System;
 using System.Collections.Generic;
 using Unity.VisualScripting;
 using System.Threading.Tasks;
+using DeepUnity.Activations;
 
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     // The implementation is adapted for this framework so it works for our models
     // https://pytorch.org/docs/stable/generated/torch.nn.RNNCell.html#torch.nn.RNNCell
@@ -69,7 +70,7 @@ namespace DeepUnity
             r_weightsGrad = Tensor.Zeros(r_weights.Shape);
             r_biasesGrad = Tensor.Zeros(r_biases.Shape);
             this.nonlinearity = nonlinearity;
-            this.onReturn = on_forward;
+            onReturn = on_forward;
             this.device = device;
         }
         private RNNCell() { }
@@ -79,7 +80,7 @@ namespace DeepUnity
         {
             // input is (B, L, H)
             // or (L, H)
-            if(input.Size(-1) != weights.Size(-1))
+            if (input.Size(-1) != weights.Size(-1))
             {
                 throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the Dense Layer features_num ({weights.Size(-1)}).");
 
@@ -110,7 +111,7 @@ namespace DeepUnity
                     l = LinearGPU(x, weights, biases, isBatched, batch_size) + LinearGPU(h, r_weights, r_biases, isBatched, batch_size);
 
                 h = activation.Predict(l);
-                if(onReturn == HiddenStates.ReturnAll)
+                if (onReturn == HiddenStates.ReturnAll)
                     hiddenStates[i] = h.Unsqueeze(isBatched ? 1 : 0); // (B, 1, H) or (1, H)
             }
 
@@ -118,7 +119,7 @@ namespace DeepUnity
                 return h;
             else
                 return Tensor.Concat(isBatched ? 1 : 0, hiddenStates);
-                     
+
         }
         public Tensor Forward(Tensor input)
         {
@@ -158,7 +159,7 @@ namespace DeepUnity
                 HiddenCache.Push(h.Clone() as Tensor);
 
                 if (onReturn == HiddenStates.ReturnAll)
-                    hiddenStates[i] = h.Unsqueeze(isBatched? 1 : 0); // (B, 1, H) or (1, H)
+                    hiddenStates[i] = h.Unsqueeze(isBatched ? 1 : 0); // (B, 1, H) or (1, H)
             }
 
             if (onReturn == HiddenStates.ReturnLast)
@@ -180,7 +181,7 @@ namespace DeepUnity
             int hin = weights.Size(-1);
             int hout = biases.Size(-1);
 
-        
+
 
             Tensor[] dLdH; // [] (B, H) // split along the sequence dimension
             if (onReturn == HiddenStates.ReturnLast) // place dLdY at the last position in the array
@@ -191,7 +192,7 @@ namespace DeepUnity
                     dLdH[i] = Tensor.Zeros(dLdY.Shape);
                 }
                 dLdH[sequence_length - 1] = dLdY; // The gradient comes only for the last hidden state
-            } 
+            }
             else // dY = (B, L, H), dH = (B, H)
             {
                 dLdH = dLdY.Split(isBatched ? 1 : 0, 1); // The gradient comes for all hidden states
@@ -200,7 +201,7 @@ namespace DeepUnity
                     dLdH[i] = dLdH[i].Squeeze(isBatched ? 1 : 0);
                 }
             }
-                
+
 
             Tensor[] inputGrad = new Tensor[sequence_length];
 
@@ -214,8 +215,8 @@ namespace DeepUnity
                 Tensor weights_grad;
                 Tensor biases_grad;
                 Tensor r_weights_grad;
-                Tensor r_biases_grad;  
-                if(device == Device.CPU)
+                Tensor r_biases_grad;
+                if (device == Device.CPU)
                 {
                     ComputeGradients(InputCache.Pop(), dLdLinear, isBatched, batch_size, hin, hout, out weights_grad, out biases_grad);
                     ComputeGradients(HiddenCache.Pop(), dLdLinear, isBatched, batch_size, hout, hout, out r_weights_grad, out r_biases_grad);
@@ -235,9 +236,9 @@ namespace DeepUnity
                     Tensor.CopyTo(r_weights_grad, r_weightsGrad);
                     Tensor.CopyTo(r_biases_grad, r_biasesGrad);
                 }
-               
 
-                if(device == Device.CPU)
+
+                if (device == Device.CPU)
                 {
                     inputGrad[InputCache.Count] = Tensor.MatMul(dLdLinear, weights).Unsqueeze(isBatched ? 1 : 0);
                     dLdH[InputCache.Count] += Tensor.MatMul(dLdLinear, r_weights);
@@ -247,7 +248,7 @@ namespace DeepUnity
                     inputGrad[InputCache.Count] = Tensor.MatMulGPU(dLdLinear, weights).Unsqueeze(isBatched ? 1 : 0);
                     dLdH[InputCache.Count] += Tensor.MatMulGPU(dLdLinear, r_weights);
                 }
-         
+
             }
             return Tensor.Concat(isBatched ? 1 : 0, inputGrad);
         }
@@ -465,11 +466,11 @@ namespace DeepUnity
             HiddenCache = new();
             ActivationCache = new();
 
-            this.weightsGrad = Tensor.Zeros(weights.Shape);
-            this.biasesGrad = Tensor.Zeros(biases.Shape);
+            weightsGrad = Tensor.Zeros(weights.Shape);
+            biasesGrad = Tensor.Zeros(biases.Shape);
 
-            r_weightsGrad = Tensor.Zeros(r_weights.Shape);  
-            r_biasesGrad = Tensor.Zeros(r_biases.Shape);    
+            r_weightsGrad = Tensor.Zeros(r_weights.Shape);
+            r_biasesGrad = Tensor.Zeros(r_biases.Shape);
 
         }
 
@@ -480,14 +481,14 @@ namespace DeepUnity
             rnncell.InputCache = new();
             rnncell.HiddenCache = new();
             rnncell.ActivationCache = new();
-            rnncell.weights = (Tensor)this.weights.Clone();
-            rnncell.biases = (Tensor)this.biases.Clone();
-            rnncell.r_weights = (Tensor)this.r_weights.Clone();
-            rnncell.r_biases = (Tensor)this.r_biases.Clone();
-            rnncell.weightsGrad = (Tensor)this.weightsGrad.Clone();
-            rnncell.biasesGrad = (Tensor)this.biasesGrad.Clone();
-            rnncell.r_weightsGrad = (Tensor)this.r_weightsGrad.Clone();
-            rnncell.r_biasesGrad = (Tensor)this.r_biasesGrad.Clone();
+            rnncell.weights = (Tensor)weights.Clone();
+            rnncell.biases = (Tensor)biases.Clone();
+            rnncell.r_weights = (Tensor)r_weights.Clone();
+            rnncell.r_biases = (Tensor)r_biases.Clone();
+            rnncell.weightsGrad = (Tensor)weightsGrad.Clone();
+            rnncell.biasesGrad = (Tensor)biasesGrad.Clone();
+            rnncell.r_weightsGrad = (Tensor)r_weightsGrad.Clone();
+            rnncell.r_biasesGrad = (Tensor)r_biasesGrad.Clone();
             return rnncell;
         }
     }

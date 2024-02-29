@@ -1,6 +1,7 @@
 using System;
+using DeepUnity.Layers;
 
-namespace DeepUnity
+namespace DeepUnity.Activations
 {
     /// <summary>
     /// <b>Applies the Hyperbolic Tangent activation function. </b><br></br>
@@ -42,7 +43,7 @@ namespace DeepUnity
             return dLdY * (-OutputCache.Pow(2f) + 1);
         }
 
-        public  object Clone() => new Tanh();
+        public object Clone() => new Tanh();
     }
 
 }

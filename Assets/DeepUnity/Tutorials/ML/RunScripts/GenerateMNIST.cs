@@ -1,4 +1,5 @@
 using DeepUnity;
+using DeepUnity.Models;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;

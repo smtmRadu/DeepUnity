@@ -1,6 +1,6 @@
 using DeepUnity;
+using DeepUnity.ReinforcementLearning;
 using UnityEngine;
-
 
 namespace DeepUnityTutorials
 {
@@ -33,7 +33,7 @@ namespace DeepUnityTutorials
 
         BodyController bodyController;
         public override void Awake()
-        {
+        {   
             base.Awake();
 
             bodyController = GetComponent<BodyController>();

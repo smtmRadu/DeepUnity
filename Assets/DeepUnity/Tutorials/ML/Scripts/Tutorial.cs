@@ -1,6 +1,9 @@
 using UnityEngine;
 using DeepUnity;
-
+using DeepUnity.Optimizers;
+using DeepUnity.Activations;
+using DeepUnity.Layers;
+using DeepUnity.Models;
 namespace DeepUnityTutorials
 {
     public class Tutorial : MonoBehaviour

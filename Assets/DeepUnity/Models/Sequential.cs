@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
-
-namespace DeepUnity
+using DeepUnity.Layers;
+namespace DeepUnity.Models
 {
     /// <summary>
     /// Sequential model. Models can be serialized using <b>JsonUtility.ToJson</b>...
@@ -116,7 +116,7 @@ namespace DeepUnity
         }
         public override object Clone()
         {
-            var cloned_modules = this.modules.Select(x => (IModule)x.Clone()).ToArray();
+            var cloned_modules = modules.Select(x => (IModule)x.Clone()).ToArray();
             var net = new Sequential(cloned_modules);
             return net;
         }

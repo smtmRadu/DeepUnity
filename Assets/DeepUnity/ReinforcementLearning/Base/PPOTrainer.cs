@@ -5,8 +5,9 @@ using UnityEngine;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using DeepUnity.Models;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     /// <summary>
     /// [1] https://fse.studenttheses.ub.rug.nl/25709/1/mAI_2021_BickD.pdf
@@ -47,7 +48,7 @@ namespace DeepUnity
             }
         }
 
-       
+
 
         // PPO Algorithm
         private void Train()
@@ -86,9 +87,9 @@ namespace DeepUnity
                     Tensor advantages_batch = Tensor.Concat(null, advantages_batches[b]);
                     Tensor value_targets_batch = Tensor.Concat(null, value_targets_batches[b]);
 
-                    if(hp.normalizeAdvantages)
+                    if (hp.normalizeAdvantages)
                         advantages_batch = NormalizeAdvantages(advantages_batch); // Advantage normalization is shit when applied on small batches
-                   
+
                     UpdateValueNetwork(states_batch, value_targets_batch);
 
                     if (model.IsUsingContinuousActions)
@@ -111,7 +112,7 @@ namespace DeepUnity
                             advantages_batch,
                             disc_act_batch,
                             disc_probs_old,
-                            out disc_probs_new);                
+                            out disc_probs_new);
                     }
 
                 }
@@ -133,13 +134,13 @@ namespace DeepUnity
 
 
                 // Step LR schedulers after each epoch (this allows selection at runtime)
-                if(hp.LRSchedule)
+                if (hp.LRSchedule)
                 {
                     model.vScheduler.Step();
                     model.muScheduler?.Step();
                     model.sigmaScheduler?.Step();
                     model.discreteScheduler?.Step();
-                }         
+                }
             }
 
             model.muNetwork?.SetDevice(model.inferenceDevice);
@@ -169,7 +170,7 @@ namespace DeepUnity
             model.vOptimizer.ClipGradNorm(hp.gradClipNorm);
             model.vOptimizer.Step();
 
-            
+
         }
         /// <summary>
         /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>)  where * = <em>Observations Shape (default: Space Size)</em><br></br>
@@ -193,7 +194,7 @@ namespace DeepUnity
             // Compute L CLIP
             advantages = advantages.Expand(1, continuous_actions_num);
             Tensor LClip = Tensor.Minimum(
-                                ratio * advantages, 
+                                ratio * advantages,
                                 Tensor.Clip(ratio, 1f - hp.epsilon, 1f + hp.epsilon) * advantages);
 
             float surrogateItem = LClip.Abs().ToArray().Average();
@@ -203,7 +204,7 @@ namespace DeepUnity
                 return;
             }
             actorLoss += surrogateItem;
-          
+
 
             // Computing ∂-LClip / ∂πθ(a|s)
             Tensor dmindx = Tensor.Zeros(batch_size, continuous_actions_num);
@@ -220,13 +221,13 @@ namespace DeepUnity
                     float clip_pt = Math.Clamp(pt, 1f - e, 1f + e);
 
                     // ∂Min(x,y)/∂x
-                    dmindx[b, a] = (pt * At <= clip_pt * At) ? 1f : 0f;
+                    dmindx[b, a] = pt * At <= clip_pt * At ? 1f : 0f;
 
                     // ∂Min(x,y)/∂y
-                    dmindy[b, a] = (clip_pt * At < pt * At) ? 1f : 0f;
+                    dmindy[b, a] = clip_pt * At < pt * At ? 1f : 0f;
 
                     // ∂Clip(x,a,b)/∂x
-                    dclipdx[b, a] = (1f - e <= pt && pt <= 1f + e) ? 1f : 0f;
+                    dclipdx[b, a] = 1f - e <= pt && pt <= 1f + e ? 1f : 0f;
                 }
 
             });
@@ -254,7 +255,7 @@ namespace DeepUnity
             model.muOptimizer.ClipGradNorm(hp.gradClipNorm);
             model.muOptimizer.Step();
 
-            if(model.standardDeviation == StandardDeviationType.Trainable)
+            if (model.standardDeviation == StandardDeviationType.Trainable)
             {
                 // ∂πθ(a|s) / ∂σ = πθ(a|s) * ((x - μ)^2 - σ^2) / σ^3    (Simple statistical gradient-following for connectionst Reinforcement Learning (pag 14))
                 Tensor dPi_dSigma = pi * ((actions - mu).Pow(2) - sigmaSquared) / (sigmaSquared * sigma);
@@ -270,7 +271,7 @@ namespace DeepUnity
                 model.sigmaOptimizer.ClipGradNorm(hp.gradClipNorm);
                 model.sigmaOptimizer.Step();
             }
-           
+
         }
         /// <summary>
         /// <paramref name="states"/> - <em>s</em> | Tensor (<em>Batch Size, *</em>)  where * = <em>Observations Shape</em><br></br>
@@ -296,8 +297,8 @@ namespace DeepUnity
                                 ratio * advantages,
                                 Tensor.Clip(ratio, 1 - hp.epsilon, 1 + hp.epsilon) * advantages);
 
-           
-            float surrogateItem = LClip.Abs().ToArray().Average();         
+
+            float surrogateItem = LClip.Abs().ToArray().Average();
             if (float.IsNaN(surrogateItem))
             {
                 ConsoleMessage.Warning($"PPO surrogate LCLIP batch containing NaN values skipped");
@@ -321,13 +322,13 @@ namespace DeepUnity
                     float clip_pt = Math.Clamp(pt, 1f - e, 1f + e);
 
                     // ∂Min(x,y)/∂x
-                    dmindx[b, a] = (pt * At <= clip_pt * At) ? 1f : 0f;
+                    dmindx[b, a] = pt * At <= clip_pt * At ? 1f : 0f;
 
                     // ∂Min(x,y)/∂y
-                    dmindy[b, a] = (clip_pt * At < pt * At) ? 1f : 0f;
+                    dmindy[b, a] = clip_pt * At < pt * At ? 1f : 0f;
 
                     // ∂Clip(x,a,b)/∂x
-                    dclipdx[b, a] = (1f - e <= pt && pt <= 1f + e) ? 1f : 0f;
+                    dclipdx[b, a] = 1f - e <= pt && pt <= 1f + e ? 1f : 0f;
                 }
             });
 
@@ -335,12 +336,12 @@ namespace DeepUnity
             Tensor dmLClip_dPi = -1f * (dmindx * advantages + dmindy * advantages * dclipdx) / piOld;
 
             // ∂πθ(a|s) / ∂φ  (20) Bick.D, it's basically 1 if the same action was sampled and 0 if not :D
-            Tensor dPi_dPhi = actions; 
+            Tensor dPi_dPhi = actions;
 
 
             // Entropy bonus for discrete actions
             // H = - φ * log(φ)
-            Tensor H = - pi * pi.Log();
+            Tensor H = -pi * pi.Log();
             entropy += H.ToArray().Average();
 
             // ∂-H / ∂φ = log(φ) + 1;
@@ -420,7 +421,7 @@ namespace DeepUnity
                 frames[timestep].value_target = Tensor.Constant(Vtarget_t);
                 frames[timestep].advantage = Tensor.Constant(Ahat_t);
             });
-        }    
+        }
         /// <summary>
         /// This method normalizes the advantages for a minibatch
         /// </summary>
@@ -438,7 +439,7 @@ namespace DeepUnity
     {
         static string[] dontDrawMe = new string[] { "m_Script" };
         public override void OnInspectorGUI()
-        {          
+        {
             DrawPropertiesExcluding(serializedObject, dontDrawMe);
             serializedObject.ApplyModifiedProperties();
         }

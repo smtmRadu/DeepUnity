@@ -1,6 +1,7 @@
 using System.Linq;
+using DeepUnity.Layers;
 
-namespace DeepUnity
+namespace DeepUnity.Optimizers
 {
     // Note that parameters and gradients value should not be reassigned elsewhere, only the values of the tensors inside
     public abstract class Optimizer
@@ -24,10 +25,10 @@ namespace DeepUnity
         protected Optimizer(Parameter[] parameters, float lr, float eps, float weightDecay)
         {
             this.parameters = parameters;
-            this.gamma = lr;
-            this.lambda = weightDecay;
-            this.epsilon = eps;
-            t = 0;       
+            gamma = lr;
+            lambda = weightDecay;
+            epsilon = eps;
+            t = 0;
         }
         public abstract void Step();
 
@@ -51,7 +52,7 @@ namespace DeepUnity
         {
             foreach (var param in parameters)
             {
-                if(param.IsOnCPU())
+                if (param.IsOnCPU())
                     Tensor.CopyTo(param.g.Clip(-clip_value, clip_value), param.g);
             }
         }
@@ -88,8 +89,8 @@ namespace DeepUnity
             foreach (var param in parameters)
             {
                 Tensor.CopyTo(param.g * scale, param.g);
-            }     
+            }
         }
-        
+
     }
 }

@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.Layers
 {
     /// <summary>
     /// A deep neural network living inside GPU that can be used as a layer in Models for high level computing.
@@ -98,10 +98,10 @@ namespace DeepUnity
         public object Clone()
         {
             var dense = new DenseGPU(1, 1);
-            dense.weights = (TensorGPU)this.weights.Clone();
-            dense.biases = (TensorGPU)this.biases.Clone();
-            dense.weightsGrad = (TensorGPU)this.weightsGrad.Clone();
-            dense.biasesGrad = (TensorGPU)this.biasesGrad.Clone();
+            dense.weights = (TensorGPU)weights.Clone();
+            dense.biases = (TensorGPU)biases.Clone();
+            dense.weightsGrad = (TensorGPU)weightsGrad.Clone();
+            dense.biasesGrad = (TensorGPU)biasesGrad.Clone();
             return dense;
         }
 
@@ -132,15 +132,15 @@ namespace DeepUnity
         }
         public virtual void OnAfterDeserialize()
         {
-            if(weights.Shape == null)
+            if (weights.Shape == null)
                 return;
-            
+
 
             if (weights.Shape.Length == 0)
                 return;
 
-            this.weightsGrad = TensorGPU.Zeros(weights.Shape);
-            this.biasesGrad = TensorGPU.Zeros(biases.Shape);
+            weightsGrad = TensorGPU.Zeros(weights.Shape);
+            biasesGrad = TensorGPU.Zeros(biases.Shape);
         }
     }
 }

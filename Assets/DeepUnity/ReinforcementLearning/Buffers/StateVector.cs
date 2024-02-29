@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -6,7 +5,7 @@ using System.Linq;
 using Unity.VisualScripting;
 using UnityEngine;
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     public class StateVector
     {
@@ -29,12 +28,12 @@ namespace DeepUnity
                 return state;
             }
         }
-       
- 	    public StateVector(int state_size, int stacked_states)
+
+        public StateVector(int state_size, int stacked_states)
         {
-            this.Capacity = state_size * stacked_states;
-            this.StateSize = state_size;
-            this.StackedInputs = stacked_states;
+            Capacity = state_size * stacked_states;
+            StateSize = state_size;
+            StackedInputs = stacked_states;
             ResetToZero();
         }
         public void ResetToZero()
@@ -60,7 +59,7 @@ namespace DeepUnity
             return $"[Observations [{State.ToArray().ToCommaSeparatedString()}]]";
 
         }
-       
+
 
 
         // Overloads
@@ -80,7 +79,7 @@ namespace DeepUnity
             }
             StateSequenceVector.RemoveFirst();
             StateSequenceVector.AddLast(observation);
-           
+
         }
         /// <summary>
         /// Adds a one dimensional observation. The bool value is converted to float, 0 for false and 1 for true respectively.
@@ -132,7 +131,7 @@ namespace DeepUnity
         /// Adds an observation vector of length <b>N</b>.
         /// </summary>
         /// <param name="observationsN"></param>
-        /// <exception cref="System.InsufficientMemoryException"></exception>
+        /// <exception cref="InsufficientMemoryException"></exception>
         public void AddObservationRange(IEnumerable observationsN)
         {
             IEnumerable<float> castedObservationCollection = observationsN.Cast<float>();
@@ -149,12 +148,12 @@ namespace DeepUnity
         /// <param name="typesNumber">Must be in range [2, n]</param>
         public void AddOneHotObservation(int index, int typesNumber)
         {
-            if(index >= typesNumber || index < 0)
-                throw new System.IndexOutOfRangeException($"Index ({index}) is out of range. Must be greater than 0 and less than typesNumber {typesNumber}!");
+            if (index >= typesNumber || index < 0)
+                throw new IndexOutOfRangeException($"Index ({index}) is out of range. Must be greater than 0 and less than typesNumber {typesNumber}!");
 
             if (typesNumber < 2)
-                throw new System.ArgumentException($"Types number ({typesNumber}) cannot be less than 2!");
-            
+                throw new ArgumentException($"Types number ({typesNumber}) cannot be less than 2!");
+
             for (int i = 0; i < typesNumber; i++)
             {
                 if (i == index)
@@ -162,7 +161,7 @@ namespace DeepUnity
                 else
                     AddObservation(0f);
             }
-        }    
+        }
     }
 }
 

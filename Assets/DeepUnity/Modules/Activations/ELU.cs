@@ -1,7 +1,8 @@
 using System;
 using UnityEngine;
+using DeepUnity.Layers;
 
-namespace DeepUnity
+namespace DeepUnity.Activations
 {
     [Serializable]
     public class ELU : IModule, IActivation
@@ -28,7 +29,7 @@ namespace DeepUnity
         }
 
         public object Clone() => new ELU(alpha);
-    
+
     }
 }
 

@@ -1,5 +1,5 @@
-
-namespace DeepUnity
+using DeepUnity.Layers;
+namespace DeepUnity.Optimizers
 {
     // The implementation is took from the paper https://arxiv.org/pdf/2208.06677.pdf
     // The restart condition for momentum is not introduced for simplicity, had to be checked for each parameter separaterly and it didn't worth the effort
@@ -26,7 +26,7 @@ namespace DeepUnity
         /// <param name="beta2"></param>
         /// <param name="beta3"></param>
         /// <param name="weightDecay"></param>
-        public Adan(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.02f, float beta2 = 0.08f, float beta3 = 0.01f, float eps = 1e-7f, float weightDecay = 0f) 
+        public Adan(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.02f, float beta2 = 0.08f, float beta3 = 0.01f, float eps = 1e-7f, float weightDecay = 0f)
             : base(parameters, lr, eps, weightDecay)
         {
             this.beta1 = beta1;
@@ -53,19 +53,19 @@ namespace DeepUnity
 
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
-               
-                if (t == 1) 
+
+                if (t == 1)
                 {
                     m[i] = parameters[i].g.Clone() as Tensor;
                     n[i] = parameters[i].g.Pow(2f);
                     // v[i] = 0 by default from init
                 }
 
-                if(t == 2)
+                if (t == 2)
                 {
                     v[i] = parameters[i].g - gOld[i];
                 }
-               
+
                 m[i] = (1 - beta1) * m[i] + beta1 * parameters[i].g;
                 v[i] = (1 - beta2) * v[i] + beta2 * (parameters[i].g - gOld[i]);
                 n[i] = (1 - beta3) * n[i] + beta3 * (parameters[i].g + (1f - beta2) * (parameters[i].g - gOld[i])).Pow(2);
@@ -74,7 +74,7 @@ namespace DeepUnity
                 // Update theta
                 Tensor.CopyTo((lambda * eta + 1f).Pow(-1f) * (parameters[i].theta - eta * (m[i] + (1f - beta2) * v[i])), parameters[i].theta);
 
-                
+
                 gOld[i] = parameters[i].g.Clone() as Tensor;
 
             });
