@@ -34,7 +34,7 @@ namespace DeepUnity
         {
             get
             {
-                return shape.Last();
+                return shape[shape.Length - 1];
             }
         }
         private int Height
@@ -108,8 +108,8 @@ namespace DeepUnity
                 size *= item;
             }       
 
-            if (size > 67_108_864)
-                throw new NotSupportedException("Tensor dimensions is too large on initialization (cannot surpass 67,108,864 units).");
+            if (size > 67_108_864) // old 67_108_864
+                throw new NotSupportedException($"Tensor dimensions is too large on initialization (cannot surpass 67,108,864 units, size attentded = {size}).");
 
             this.shape = shape.ToArray();
             data = new float[size];
@@ -133,7 +133,7 @@ namespace DeepUnity
             return clone;
         }
         /// <summary>
-        /// Returns a one dimensional tensor of size <b>Ceil((end - start) / step)</b>, with the following elements:
+        /// Returns a one-dimensional tensor of size <b>Ceil((end - start) / step)</b>, with the following elements:
         /// </br>[start, start + step, start + 2*step, ... ]
         /// </summary>
         /// <param name="start"></param>
@@ -164,12 +164,37 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Creates a one-dimensional vector of shape (steps) whose values are evenly spaced from start to end, inclusive.
+        /// </summary>
+        /// <returns></returns>
+        public static Tensor LinSpace(float start, float end, int steps)
+        {
+            if (steps <= 0)
+                throw new ArgumentException("Steps must be more than 0");
+
+            Tensor linspace = new(steps);
+            float step_size = (end - start) / (steps -1);
+
+            for (int i = 0; i < steps; i++)
+            {
+                linspace[i] = start + i * step_size;
+            }
+
+            return linspace;
+        }
+        /// <summary>
+        /// Creates a predefined zero-dimensional tensor.
+        /// </summary>
         public static Tensor Constant(float scalar)
         {
             Tensor t = new(1);
             t.data[0] = scalar;
             return t;
         }
+        /// <summary>
+        /// Creates a predefined one-dimensional tensor.
+        /// </summary>
         public static Tensor Constant(float[] vector)
         {
             int width = vector.GetLength(0);
@@ -183,6 +208,9 @@ namespace DeepUnity
             return t;
 
         }
+        /// <summary>
+        /// Creates a predefined two-dimensional tensor.
+        /// </summary>
         public static Tensor Constant(float[,] matrix)
         {
             int height = matrix.GetLength(0);
@@ -201,6 +229,9 @@ namespace DeepUnity
 
             return t;
         }
+        /// <summary>
+        /// Creates a predefined cube-dimensional tensor.
+        /// </summary>
         public static Tensor Constant(float[,,] cube)
         {
             int width = cube.GetLength(2);
@@ -221,6 +252,9 @@ namespace DeepUnity
 
             return t;
         }
+        /// <summary>
+        /// Creates a predefined four-dimensional tensor.
+        /// </summary>
         public static Tensor Constant(float[,,,] tesseract)
         {
             int width = tesseract.GetLength(3);
@@ -377,7 +411,20 @@ namespace DeepUnity
             }
             return t;
         }
-       
+        /// <summary>
+        /// Creates a 2-D tensor with ones on the diagonal and zeros elsewhere.
+        /// </summary>
+        /// <param name="n"></param>
+        /// <returns></returns>
+        public static Tensor Eye(int n)
+        {
+            Tensor t = new(n, n);
+            for (int i = 0; i < n; i++)
+            {
+                t[i, i] = 1;
+            }
+            return t;
+        }
 
         #endregion
 
@@ -632,120 +679,141 @@ namespace DeepUnity
         /// <summary>
         /// Left: <b>(J, 1, N, M)</b> <br></br>
         /// Right: <b>(K, M, P)</b> <br></br>
+        /// <br></br>
+        /// <em>If device == GPU, the tensors are loaded on VRAM of the GPU, operations are done there, and the result is retrieved back to RAM.</em>
         /// </summary>
         /// <returns>Output: <b>(J, K, N, P)</b></returns>
-        public static Tensor MatMul(Tensor left, Tensor right)
+        public static Tensor MatMul(Tensor left, Tensor right, Device device = Device.CPU)
         {
-            int left_rank = left.Rank;
-            int right_rank = right.Rank;
-
-            if (left_rank == 1 && right_rank == 1)
-                throw new ArgumentException($"At least one of the tensors must have a shape > 1 for matrix multiplication");
-
-            if (left_rank == 1 && left.Width != right.Height)
-                throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
-
-            if(right_rank == 1 && left.Width != right.Width)
-                throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
-
-            if (left_rank > 1 && right_rank > 1 && left.Width != right.Height)
-                throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
-
-
-            int N = left.Height;
-            int M = left.Width;
-            int P = right.Width;
-            int K = right.Channels;
-            int J = left.Batch;
-
-            Tensor result;
-            if (left_rank == 1)
-                result = new(CreateShape(left.Rank, J, K, 1, P));
-            else if (right_rank == 1)
-                result = new(CreateShape(left.Rank, J, K, 1, N));
-            else
-                result = new(CreateShape(left.Rank, J, K, N, P));
-
- 
-            if(right_rank == 1)
+            if(device == Device.CPU)
             {
-                Parallel.For(0, N, n =>
+                int left_rank = left.Rank;
+                int right_rank = right.Rank;
+
+                if (left_rank == 1 && right_rank == 1)
+                    throw new ArgumentException($"At least one of the tensors must have a shape > 1 for matrix multiplication");
+
+                if (left_rank == 1 && left.Width != right.Height)
+                    throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
+
+                if (right_rank == 1 && left.Width != right.Width)
+                    throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
+
+                if (left_rank > 1 && right_rank > 1 && left.Width != right.Height)
+                    throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
+
+
+                int N = left.Height;
+                int M = left.Width;
+                int P = right.Width;
+                int K = right.Channels;
+                int J = left.Batch;
+
+                Tensor result;
+                if (left_rank == 1)
+                    result = new(CreateShape(left.Rank, J, K, 1, P));
+                else if (right_rank == 1)
+                    result = new(CreateShape(left.Rank, J, K, 1, N));
+                else
+                    result = new(CreateShape(left.Rank, J, K, N, P));
+
+
+                if (right_rank == 1)
                 {
-                    for (int j = 0; j < J; j++)
+                    Parallel.For(0, N, n =>
                     {
-                        for (int k = 0; k < K; k++)
+                        for (int j = 0; j < J; j++)
                         {
-                            float sum = 0f;
-                            for (int m = 0; m < M; m++)
-                            {
-                                float l = left[j, 0, n, m];
-                                float r = right[k, 0, m];
-                                sum += l * r;
-                            }
-                            result[j, k, 0, n] = sum;
-                        }
-                    }
-                });
-                    
-            }
-            else if(left_rank == 1)
-            {
-                Parallel.For(0, P, p =>
-                {
-                    for (int j = 0; j < J; j++)
-                    {
-                        for (int k = 0; k < K; k++)
-                        {
-                            float sum = 0f;
-                            for (int m = 0; m < M; m++)
-                            {
-                                float l = left[j, 0, 0, m];
-                                float r = right[k, m, p];
-                                sum += l * r;
-                            }
-                            result[j, k, 0, p] = sum;
-                        }
-                    }
-                });
-            }
-            else
-            {
-                // note: starting with 64x64 matmul, GPU based multiplication becomes better
-                // case non-batched and non-channeled matmul
-                if (J == 1 && K == 1)
-                {
-                    if(N > P)
-                        Parallel.For(0, N, n =>
-                        {
-                            for (int p = 0; p < P; p++)
+                            for (int k = 0; k < K; k++)
                             {
                                 float sum = 0f;
                                 for (int m = 0; m < M; m++)
                                 {
-                                    sum += left[n, m] * right[m, p];
+                                    float l = left[j, 0, n, m];
+                                    float r = right[k, 0, m];
+                                    sum += l * r;
                                 }
-                                result[n, p] = sum;
+                                result[j, k, 0, n] = sum;
                             }
-                        });    
-                    else
-                        Parallel.For(0, P, p =>
+                        }
+                    });
+
+                }
+                else if (left_rank == 1)
+                {
+                    Parallel.For(0, P, p =>
+                    {
+                        for (int j = 0; j < J; j++)
                         {
-                            for (int n = 0; n < N; n++)
+                            for (int k = 0; k < K; k++)
                             {
                                 float sum = 0f;
                                 for (int m = 0; m < M; m++)
                                 {
-                                    sum += left[n, m] * right[m, p];
+                                    float l = left[j, 0, 0, m];
+                                    float r = right[k, m, p];
+                                    sum += l * r;
                                 }
-                                result[n, p] = sum;
+                                result[j, k, 0, p] = sum;
+                            }
+                        }
+                    });
+                }
+                else
+                {
+                    // note: starting with 64x64 matmul, GPU based multiplication becomes better
+                    // case non-batched and non-channeled matmul
+                    if (J == 1 && K == 1)
+                    {
+                        if (N > P)
+                            Parallel.For(0, N, n =>
+                            {
+                                for (int p = 0; p < P; p++)
+                                {
+                                    float sum = 0f;
+                                    for (int m = 0; m < M; m++)
+                                    {
+                                        sum += left[n, m] * right[m, p];
+                                    }
+                                    result[n, p] = sum;
+                                }
+                            });
+                        else
+                            Parallel.For(0, P, p =>
+                            {
+                                for (int n = 0; n < N; n++)
+                                {
+                                    float sum = 0f;
+                                    for (int m = 0; m < M; m++)
+                                    {
+                                        sum += left[n, m] * right[m, p];
+                                    }
+                                    result[n, p] = sum;
+                                }
+                            });
+
+                    }
+                    else if (J > 1)
+                        Parallel.For(0, J, j =>
+                        {
+                            for (int k = 0; k < K; k++)
+                            {
+                                for (int n = 0; n < N; n++)
+                                {
+                                    for (int p = 0; p < P; p++)
+                                    {
+                                        float sum = 0f;
+                                        for (int m = 0; m < M; m++)
+                                        {
+                                            sum += left[j, 0, n, m] * right[k, m, p];
+                                        }
+                                        result[j, k, n, p] = sum;
+                                    }
+                                }
                             }
                         });
-
-                }                
-                else if (J > 1)
-                    Parallel.For(0, J, j =>
-                    {
-                        for (int k = 0; k < K; k++)
+                    else // if (K > 1) no batch case
+                        Parallel.For(0, K, k =>
                         {
                             for (int n = 0; n < N; n++)
                             {
@@ -754,188 +822,158 @@ namespace DeepUnity
                                     float sum = 0f;
                                     for (int m = 0; m < M; m++)
                                     {
-                                        sum += left[j, 0, n, m] * right[k, m, p];
+                                        sum += left[0, n, m] * right[k, m, p];
                                     }
-                                    result[j, k, n, p] = sum;
+                                    result[k, n, p] = sum;
                                 }
                             }
-                        }
-                    });
-                else // if (K > 1) no batch case
-                    Parallel.For(0, K, k =>
-                    {
-                        for (int n = 0; n < N; n++)
-                        {
-                            for (int p = 0; p < P; p++)
-                            {
-                                float sum = 0f;
-                                for (int m = 0; m < M; m++)
-                                {
-                                    sum += left[0, n, m] * right[k, m, p];
-                                }
-                                result[k, n, p] = sum;
-                            }
-                        }
 
-                    });
-            }
+                        });
+                }
 
 
-            // The result keeps the smallest rank
-            LinkedList<int> resultShape = new LinkedList<int>();
+                // The result keeps the smallest rank
+                LinkedList<int> resultShape = new LinkedList<int>();
 
 
-            if (right.Rank > 1)
-                resultShape.AddFirst(P);
+                if (right.Rank > 1)
+                    resultShape.AddFirst(P);
 
-            if (left.Rank > 1)
-                resultShape.AddFirst(N);
-                       
-            if(J > 1)
-            {
-                resultShape.AddFirst(K);
-                resultShape.AddFirst(J);
-               
-            }
-            else if(K > 1)
-            {
-                resultShape.AddFirst(K);           
-            }
-            
-            result.shape = resultShape.ToArray();
-            return result;
-        }
-        /// <summary>
-        /// Matrix multiplication where matrices are loaded on GPU where operations are done. Efficient for matrices large matrices, where output's dimensions <b>N * M * P > 100,000</b>. <br></br>
-        /// Left: <b>(J, 1, N, M)</b> <br></br>
-        /// Right: <b>(K, N, P)</b> <br></br>
-        /// 
-        /// <br></br>
-        /// <em>
-        /// A benchmark matmul was made on the following matrices (24, 64) * (64, 64) for 100 runs. <br></br>
-        /// (i5 9300h) CPU time: 0.26s. <br></br>
-        /// (GTX 1650) GPU time: 0.24s. <br></br>
-        /// Where output N * M * P = 24 * 64 * 64 = 98,304. <br></br>
-        /// </em>
-        /// </summary>
-        /// <returns>Output: <b>(J, K, N, P)</b></returns>
-        public static Tensor MatMulGPU(Tensor left, Tensor right)
-        {
-            int left_rank = left.Rank;
-            int right_rank = right.Rank;
+                if (left.Rank > 1)
+                    resultShape.AddFirst(N);
 
-            // Special cases .. that will maybe be forbidden in the future
-            if (left_rank == 1 && right_rank == 1)
-                throw new ArgumentException($"At least one of the tensors must have a shape > 1 for matrix multiplication");
+                if (J > 1)
+                {
+                    resultShape.AddFirst(K);
+                    resultShape.AddFirst(J);
 
-            if (left_rank == 1 && left.Width != right.Height)
-                throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
+                }
+                else if (K > 1)
+                {
+                    resultShape.AddFirst(K);
+                }
 
-            if (right_rank == 1 && left.Width != right.Width)
-                throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
-
-            if (left_rank > 1 && right_rank > 1 && left.Width != right.Height)
-                throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
-
-
-            int N = left.Height;
-            int M = left.Width;
-            int P = right.Width;
-            int K = right.Channels;
-            int J = left.Batch;
-
-            Tensor result;
-            if (left_rank == 1)
-                result = new(CreateShape(left.Rank, J, K, 1, P));
-            else if (right_rank == 1)
-                result = new(CreateShape(left.Rank, J, K, 1, N));
-            else
-                result = new(CreateShape(left.Rank, J, K, N, P));
-
-
-            ComputeShader cs = DeepUnityMeta.TensorCS;
-
-            ComputeBuffer leftData = new(left.data.Length, 4);
-            ComputeBuffer rightData = new(right.data.Length, 4);
-            ComputeBuffer resultData = new(J * K * N * P, 4);
-
-            leftData.SetData(left.data);
-            rightData.SetData(right.data);
-
-            int kernel = cs.FindKernel("MatMul");
-
-            cs.SetBuffer(kernel, "data1", leftData);
-            cs.SetBuffer(kernel, "data2", rightData);
-            cs.SetBuffer(kernel, "result", resultData);
-
-            cs.SetInt("w1", left.Width);
-            cs.SetInt("h1", left.Height);
-            cs.SetInt("c1", left.Channels);
-            cs.SetInt("b1", left.Batch);
-            cs.SetInt("r1", left.Rank);
-
-            cs.SetInt("w2", right.Width);
-            cs.SetInt("h2", right.Height);
-            cs.SetInt("c2", right.Channels);
-            cs.SetInt("b2", right.Batch);
-            cs.SetInt("r2", right.Rank);
-
-            if(left_rank == 1)
-            {
-                cs.SetInt("wr", P);
-                cs.SetInt("hr", 1);
-            }
-            else if(right_rank == 1)
-            {
-                cs.SetInt("wr", N);
-                cs.SetInt("hr", 1);
+                result.shape = resultShape.ToArray();
+                return result;
             }
             else
             {
-                cs.SetInt("wr", P);
-                cs.SetInt("hr", N);          
+                int left_rank = left.Rank;
+                int right_rank = right.Rank;
+
+                // Special cases .. that will maybe be forbidden in the future
+                if (left_rank == 1 && right_rank == 1)
+                    throw new ArgumentException($"At least one of the tensors must have a shape > 1 for matrix multiplication");
+
+                if (left_rank == 1 && left.Width != right.Height)
+                    throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
+
+                if (right_rank == 1 && left.Width != right.Width)
+                    throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
+
+                if (left_rank > 1 && right_rank > 1 && left.Width != right.Height)
+                    throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
+
+
+                int N = left.Height;
+                int M = left.Width;
+                int P = right.Width;
+                int K = right.Channels;
+                int J = left.Batch;
+
+                Tensor result;
+                if (left_rank == 1)
+                    result = new(CreateShape(left.Rank, J, K, 1, P));
+                else if (right_rank == 1)
+                    result = new(CreateShape(left.Rank, J, K, 1, N));
+                else
+                    result = new(CreateShape(left.Rank, J, K, N, P));
+
+
+                ComputeShader cs = DeepUnityMeta.TensorCS;
+
+                ComputeBuffer leftData = new(left.data.Length, 4);
+                ComputeBuffer rightData = new(right.data.Length, 4);
+                ComputeBuffer resultData = new(J * K * N * P, 4);
+
+                leftData.SetData(left.data);
+                rightData.SetData(right.data);
+
+                int kernel = cs.FindKernel("MatMul");
+
+                cs.SetBuffer(kernel, "data1", leftData);
+                cs.SetBuffer(kernel, "data2", rightData);
+                cs.SetBuffer(kernel, "result", resultData);
+
+                cs.SetInt("w1", left.Width);
+                cs.SetInt("h1", left.Height);
+                cs.SetInt("c1", left.Channels);
+                cs.SetInt("b1", left.Batch);
+                cs.SetInt("r1", left.Rank);
+
+                cs.SetInt("w2", right.Width);
+                cs.SetInt("h2", right.Height);
+                cs.SetInt("c2", right.Channels);
+                cs.SetInt("b2", right.Batch);
+                cs.SetInt("r2", right.Rank);
+
+                if (left_rank == 1)
+                {
+                    cs.SetInt("wr", P);
+                    cs.SetInt("hr", 1);
+                }
+                else if (right_rank == 1)
+                {
+                    cs.SetInt("wr", N);
+                    cs.SetInt("hr", 1);
+                }
+                else
+                {
+                    cs.SetInt("wr", P);
+                    cs.SetInt("hr", N);
+                }
+                cs.SetInt("cr", K);
+                cs.SetInt("br", J);
+                cs.SetInt("rr", result.Rank);
+
+
+                cs.Dispatch(kernel,
+                      (P + 7) / 8,
+                      (N + 7) / 8,
+                      (K + 7) / 8);
+
+                resultData.GetData(result.data);
+
+                leftData.Release();
+                rightData.Release();
+                resultData.Release();
+
+
+                // The result keeps the smallest rank
+
+                LinkedList<int> resultShape = new LinkedList<int>();
+
+
+                if (right.Rank > 1)
+                    resultShape.AddFirst(P);
+
+                if (left.Rank > 1)
+                    resultShape.AddFirst(N);
+
+                if (J > 1)
+                {
+                    resultShape.AddFirst(K);
+                    resultShape.AddFirst(J);
+
+                }
+                else if (K > 1)
+                {
+                    resultShape.AddFirst(K);
+                }
+
+                result.shape = resultShape.ToArray();
+                return result;
             }
-            cs.SetInt("cr", K);
-            cs.SetInt("br", J);
-            cs.SetInt("rr", result.Rank);
-
-
-            cs.Dispatch(kernel,
-                  (P + 7) / 8,
-                  (N + 7) / 8,
-                  (K + 7) / 8);
-
-            resultData.GetData(result.data);
-
-            leftData.Release();
-            rightData.Release();
-            resultData.Release();
-
-
-            // The result keeps the smallest rank
-
-            LinkedList<int> resultShape = new LinkedList<int>();
-
-
-            if (right.Rank > 1)
-                resultShape.AddFirst(P);
-
-            if (left.Rank > 1)
-                resultShape.AddFirst(N);
-
-            if (J > 1)
-            {
-                resultShape.AddFirst(K);
-                resultShape.AddFirst(J);
-
-            }
-            else if (K > 1)
-            {
-                resultShape.AddFirst(K);
-            }
-
-            result.shape = resultShape.ToArray();
-            return result;
         }
         /// <summary>
         /// Input: <b>(B, C, H, W)</b> <br></br>
@@ -1183,6 +1221,13 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Computes the Element-Wise equality.
+        /// </summary>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <returns></returns>
+        /// <exception cref="OperationCanceledException"></exception>
         public static Tensor Eq(Tensor left, Tensor right)
         {
             if (!left.shape.SequenceEqual(right.shape))
@@ -1198,7 +1243,7 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
-        /// Computes the element-wise non-equality
+        /// Computes the Element-Wise non-equality.
         /// </summary>
         /// <param name="left"></param>
         /// <param name="right"></param>
@@ -1439,7 +1484,7 @@ namespace DeepUnity
         }
         /// <summary>
         /// All tensors must have the same shape. <br></br>
-        /// If <b>axis == null</b>, all tensors are Unsqueezed(0). <br></br>
+        /// If <b>axis == null</b>, all tensors are unsequeezed on axis 0, and than concatenated on axis 0. <br></br>
         /// Example: <br></br>
         /// Cat(axis: 0,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (8,3) <br></br>
         /// Cat(axis: 1,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (2,12) <br></br>
@@ -2883,6 +2928,99 @@ namespace DeepUnity
             }
             return result;
         }
+        /// <summary>
+        /// Computes the cumulative product along the specified axis for each element.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <returns></returns>
+        public static Tensor CumProd(Tensor tensor, int axis)
+        {
+            HandleAxis(tensor, ref axis);
+
+            int batch = tensor.Batch;
+            int channels = tensor.Channels;
+            int height = tensor.Height;
+            int width = tensor.Width;
+
+            Dim dimIndex = AxisToDim(tensor, axis);
+
+            Tensor result = Zeros(tensor.shape);
+
+            if (dimIndex == Dim.width)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int k = 0; k < channels; k++)
+                    {
+                        for (int j = 0; j < height; j++)
+                        {
+                            float prod = 1f;
+                            for (int i = 0; i < width; i++)
+                            {
+                                prod *= tensor[l, k, j, i];
+                                result[l, k, j, i] = prod;
+                            }
+                        }
+                    }
+                }
+            }
+            else if (dimIndex == Dim.height)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int k = 0; k < channels; k++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            float prod = 1f;
+                            for (int j = 0; j < height; j++)
+                            {
+                                prod *= tensor[l, k, j, i];
+                                result[l, k, j, i] = prod;
+                            }
+                        }
+                    }
+                }
+            }
+            else if (dimIndex == Dim.channel)
+            {
+                for (int l = 0; l < batch; l++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            float prod = 1f;
+                            for (int k = 0; k < channels; k++)
+                            {
+                                prod *= tensor[l, k, j, i];
+                                result[l, k, j, i] = prod;
+                            }
+                        }
+                    }
+                }
+            }
+            else if (dimIndex == Dim.batch)
+            {
+                for (int k = 0; k < channels; k++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            float prod = 1f;
+                            for (int l = 0; l < batch; l++)
+                            {
+                                prod *= tensor[l, k, j, i];
+                                result[l, k, j, i] = prod;
+                            }
+                        }
+                    }
+                }
+            }
+            return result;
+        }
         public static Tensor Pow(Tensor tensor, float power)
         {
             Tensor result = new(tensor.shape);
@@ -2978,6 +3116,13 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Clamps all values of the tensor within the range (<paramref name="min"/>, <paramref name="max"/>)
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="min"></param>
+        /// <param name="max"></param>
+        /// <returns></returns>
         public static Tensor Clip(Tensor tensor, float min, float max)
         {
             Tensor result = new(tensor.shape);
@@ -2989,6 +3134,7 @@ namespace DeepUnity
 
             return result;
         }
+
         #endregion Statics
 
 
@@ -3073,6 +3219,10 @@ namespace DeepUnity
         public Tensor CumSum(int axis)
         {
             return CumSum(this, axis);
+        }
+        public Tensor CumProd(int axis)
+        {
+            return CumProd(this, axis);
         }
         public Tensor Pow(float power)
         {

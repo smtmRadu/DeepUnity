@@ -261,8 +261,6 @@ namespace DeepUnity.Sensors
         }
     }
 
-
-
 #if UNITY_EDITOR
 
     [CustomEditor(typeof(RaySensor)), CanEditMultipleObjects]

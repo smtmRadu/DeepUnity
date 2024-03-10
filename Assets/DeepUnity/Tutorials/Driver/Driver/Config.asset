@@ -16,9 +16,9 @@ MonoBehaviour:
   maxSteps: 2000000000
   learningRate: 0.0003
   gamma: 0.99
+  LRSchedule: 0
   batchSize: 800
   bufferSize: 16000
-  LRSchedule: 0
   horizon: 255
   numEpoch: 8
   beta: 0.005
@@ -28,12 +28,13 @@ MonoBehaviour:
   KLDivergence: 0
   targetKL: 0.015
   normalizeAdvantages: 0
-  updateEvery: 1000
+  replayBufferSize: 1000000
+  minibatchSize: 128
+  updateInterval: 64
   updateAfter: 1024
   updatesNum: 8
   alpha: 0.2
   tau: 0.005
-  saveRecordBuffer: 0
   debug: 0
   timescaleAdjustment: 1
-  timescale: 45.1
+  timescale: 60.56

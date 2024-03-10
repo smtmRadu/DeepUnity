@@ -1,0 +1,184 @@
+// For now this will remain unused (the implementation is not correct i do not really care)
+
+RWStructuredBuffer<float> weights;
+RWStructuredBuffer<float> weights_grad;
+RWStructuredBuffer<float> biases;
+RWStructuredBuffer<float> biases_grad;
+
+RWStructuredBuffer<float> r_weights;
+RWStructuredBuffer<float> r_weights_grad;
+RWStructuredBuffer<float> r_biases;
+RWStructuredBuffer<float> r_biases_grad;
+
+RWStructuredBuffer<float> input;
+RWStructuredBuffer<float> output;
+RWStructuredBuffer<float> loss;
+
+int batch_size;
+int seq_size;
+int in_features;
+int out_features;
+int current_timestep;
+bool isTanh;
+bool returnLastHiddenState;
+
+// W
+float weights_get(int h, int w)
+{
+    return weights[h * in_features + w];
+}
+
+// B
+float biases_get(int w)
+{
+    return biases[w];
+}
+
+// RW
+float r_weights_get(int h, int w)
+{
+    return r_weights[h * out_features + w];
+}
+
+// RB
+float r_biases_get(int w)
+{
+    return r_biases[w];
+}
+
+
+// OTHER
+float input_get(int b, int s, int f)
+{
+    return input[b * seq_size * in_features + s * in_features + f];
+}
+float output_get(int b, int s, int f)
+{
+    return output[b * seq_size * out_features + s * out_features + f];
+}
+void output_set(int b, int s, int f, float val)
+{
+    output[b * seq_size * out_features + s * out_features + f] = val;
+}
+
+float Tanh(float x)
+{
+    float e2x = exp(2. * x);
+    return (e2x - 1.) / (e2x + 1);
+}
+
+float ReLU(float x)
+{
+    return max(0, x);
+
+}
+
+#pragma kernel Predict
+[numthreads(32, 32, 1)]
+void Predict(uint3 id : SV_DispatchThreadID)
+{
+    // Get x from input
+    
+    if(id.x >= out_features || id.y >= batch_size)
+        return;
+    
+    // linear 1
+    float sum = biases_get(id.x);
+    for (int m = 0; m < in_features; m++)
+    {
+        sum += input_get(id.y, current_timestep, m) * weights_get(id.x, m); // transposed_gamma_get(m, id.x);
+    }
+    
+    // linear 2
+    float sum2 = r_biases_get(id.x);
+    for (int m = 0; m < out_features; m++)
+    {
+        float prev_h;
+        if (current_timestep == 0)
+            prev_h = 0;
+        else
+            prev_h = output_get(id.y, current_timestep - 1, m);
+        
+        sum2 += prev_h * r_weights_get(id.x, m);
+    }
+    
+    float h = isTanh ? Tanh(sum + sum2) : ReLU(sum + sum2);
+    
+    if(returnLastHiddenState)
+        output_set(id.y, 0, id.x, h);
+    else
+        output_set(id.y, current_timestep, id.x, h);
+}
+
+
+// int H_in = weights.Size(-1);
+// int H_out = biases.Size(-1);
+// int seq_len = input.Size(-2);
+// ComputeShader cs = DeepUnityMeta.RNNCellCS;
+// 
+// ComputeBuffer inputBuff = newComputeBuffer(input.Count(), 4);
+//                 inputBuff.SetData(input.ToArray());
+//                 cs.SetBuffer(0, "input", inputBuff);
+// 
+// ComputeBuffer weightsBuffer = newComputeBuffer(weights.Count(), 4);
+//                 weightsBuffer.SetData(weights.ToArray());
+//                 cs.SetBuffer(0, "weights", weightsBuffer);
+// 
+// ComputeBuffer biasesBuffer = newComputeBuffer(biases.Count(), 4);
+//                 biasesBuffer.SetData(biases.ToArray());
+//                 cs.SetBuffer(0, "biases", biasesBuffer);
+// 
+// ComputeBuffer r_weightsBuffer = newComputeBuffer(r_weights.Count(), 4);
+//                 r_weightsBuffer.SetData(r_weights.ToArray());
+//                 cs.SetBuffer(0, "r_weights", r_weightsBuffer);
+// 
+// ComputeBuffer r_biasesBuffer = newComputeBuffer(r_biases.Count(), 4);
+//                 r_biasesBuffer.SetData(r_biases.ToArray());
+//                 cs.SetBuffer(0, "r_biases", r_biasesBuffer);
+// 
+// ComputeBuffer outputBuffer = onReturn == HiddenStates.ReturnLast ?
+//                     newComputeBuffer(batch_size * biases.Size(-1), 4):
+// new ComputeBuffer(batch_size* seq_len* H_out, 4);
+//                 // outputBuffer.SetData(zero_values); // we do not need this because the values are set (not added) to the rw structrured buffer.
+//                 cs.SetBuffer(0, "output", outputBuffer);
+// 
+//                 cs.SetInt("batch_size", batch_size);
+//                 cs.SetInt("in_features", H_in);
+//                 cs.SetInt("out_features", H_out);
+//                 cs.SetInt("seq_size", seq_len);
+//                 cs.SetBool("isTanh", nonlinearity == NonLinearity.Tanh);
+//                 cs.SetBool("returnLastHiddenState", onReturn == HiddenStates.ReturnLast);
+// 
+//                 for (
+// int i = 0;i <
+// seq_len; i++)
+//                 {
+//                     cs.SetInt("current_timestep", i);
+//                     cs.Dispatch(0,
+//                         (H_out + 31) / 32,
+//                         (batch_size + 31) / 32,
+//                         1);
+//                 }
+// 
+// Tensor result;
+//                 if(onReturn == HiddenStates.ReturnLast)
+//                 {
+//                     result = isBatched ? Tensor.Constant(outputBuffer, batch_size, H_out) :
+//                         Tensor.Constant(outputBuffer, H_out);
+//                 }
+//                 else
+//                 {
+//                     result = isBatched ? Tensor.Constant(outputBuffer, batch_size, seq_len, H_out) :
+//                         Tensor.Constant(outputBuffer, seq_len, H_out);
+// 
+//                 }
+// 
+//                 inputBuff.Release();
+//                 weightsBuffer.Release();
+//                 biasesBuffer.Release();
+//                 r_weightsBuffer.Release();
+//                 r_biasesBuffer.Release();
+//                 outputBuffer.Release();
+// 
+//                 return
+// result;

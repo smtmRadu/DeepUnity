@@ -188,5 +188,5 @@ MonoBehaviour:
     mean: 0
     m2: 0
   standardDeviation: 0
-  standardDeviationValue: 2.5
+  standardDeviationValue: 1.97
   standardDeviationScale: 1

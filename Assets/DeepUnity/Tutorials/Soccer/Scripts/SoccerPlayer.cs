@@ -1,4 +1,3 @@
-using DeepUnity;
 using DeepUnity.ReinforcementLearning;
 using UnityEngine;
 
@@ -6,6 +5,8 @@ namespace DeepUnityTutorials
 {
     public class SoccerPlayer : Agent
     {
+        [Header("Plus 5 additional observations")]
+        [SerializeField] public Transform ball;
         [SerializeField] public float speed = 20f;
         [SerializeField] public float rotationSpeed = 10f;
         [SerializeField] public PlayerType type;
@@ -20,9 +21,12 @@ namespace DeepUnityTutorials
         }
         public override void CollectObservations(StateVector sensorBuffer)
         {
+            // Rays are responsible for positioning in the arena (can see goals of each types and walls only)
+            // Grid is responsible for other agents and ball
             // rayinfo: 192 + 2 = 194
             sensorBuffer.AddObservation((int)type);
             sensorBuffer.AddObservation((int)team);
+            sensorBuffer.AddObservation((transform.position - ball.position).normalized);
         }
 
         public override void OnActionReceived(ActionBuffer actionBuffer)
@@ -63,20 +67,6 @@ namespace DeepUnityTutorials
         {
             Pink,
             Blue
-        }
-
-        const float goalie_inZone_bonus = 1e-4f;
-        public void OnTriggerStay(Collider other)
-        {
-            if(this.type == PlayerType.Goalie)
-            {
-                if (this.team == PlayerTeam.Pink && other.name == "PinkGoalArea")
-                    AddReward(goalie_inZone_bonus);
-
-                if (this.team == PlayerTeam.Blue && other.name == "BlueGoalArea")
-                    AddReward(goalie_inZone_bonus);
-
-            }
         }
     }
 }

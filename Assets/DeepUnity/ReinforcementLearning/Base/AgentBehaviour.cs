@@ -14,7 +14,7 @@ using DeepUnity.Models;
 namespace DeepUnity.ReinforcementLearning
 {
     [Serializable]
-    public sealed class AgentBehaviour : ScriptableObject
+    internal sealed class AgentBehaviour : ScriptableObject
     {
         [Header("Behaviour Properties")]
         [SerializeField, ViewOnly] public string behaviourName;
@@ -302,34 +302,29 @@ namespace DeepUnity.ReinforcementLearning
         }
         public void InitSchedulers(Hyperparameters hp, TrainerType trainer)
         {
-            // LR 0 = initialLR * (gamma^n) => gamma = nth-root(initial_lr);
-
             int total_epochs = (int)hp.maxSteps / hp.bufferSize * hp.numEpoch; // THIS IS FOR PPO, but for now i will let it for SAC as well
-            int step_size = 1;
-            float gamma = Mathf.Pow(hp.learningRate, 1f / total_epochs);
-
 
             if (trainer == TrainerType.SAC)
             {
-                vScheduler = new LRScheduler(vOptimizer, step_size, gamma);
-                q1Scheduler = new LRScheduler(q1Optimizer, step_size, gamma);
-                q2Scheduler = new LRScheduler(q1Optimizer, step_size, gamma);
-                muScheduler = new LRScheduler(muOptimizer, step_size, gamma);
-                sigmaScheduler = new LRScheduler(sigmaOptimizer, step_size, gamma);
+                vScheduler = new LinearLR(vOptimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+                q1Scheduler = new LinearLR(q1Optimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+                q2Scheduler = new LinearLR(q1Optimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+                muScheduler = new LinearLR(muOptimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+                sigmaScheduler = new LinearLR(sigmaOptimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
             }
             else if (trainer == TrainerType.PPO)
             {
-                vScheduler = new LRScheduler(vOptimizer, step_size, gamma);
+                vScheduler = new LinearLR(vOptimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
 
                 if (IsUsingContinuousActions)
                 {
-                    muScheduler = new LRScheduler(muOptimizer, step_size, gamma);
-                    sigmaScheduler = new LRScheduler(sigmaOptimizer, step_size, gamma);
+                    muScheduler = new LinearLR(muOptimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+                    sigmaScheduler = new LinearLR(sigmaOptimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
                 }
 
                 if (IsUsingDiscreteActions)
                 {
-                    discreteScheduler = new LRScheduler(discreteOptimizer, step_size, gamma);
+                    discreteScheduler = new LinearLR(discreteOptimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
                 }
             }
         }

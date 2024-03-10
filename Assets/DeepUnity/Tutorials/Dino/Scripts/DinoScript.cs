@@ -1,4 +1,3 @@
-using DeepUnity;
 using DeepUnity.ReinforcementLearning;
 using JetBrains.Annotations;
 using System.Runtime.InteropServices;

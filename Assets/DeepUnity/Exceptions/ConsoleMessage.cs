@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace DeepUnity
 {
-    public static class ConsoleMessage
+    internal static class ConsoleMessage
     {
         /// <summary>
         /// Display some event in the Debug Console.

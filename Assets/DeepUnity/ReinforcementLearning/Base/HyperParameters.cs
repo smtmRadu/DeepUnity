@@ -25,7 +25,7 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("[Typical range: 0.8 - 0.9997] Discount factor.")]
         [Min(0.001f)] public float gamma = 0.99f;
 
-        [Tooltip("Applies logarithmic decay on learning rate with respect to the maxSteps. When maxSteps is reached, lr will be 0.")]
+        [Tooltip("Applies linear decay on learning rate with respect to the maxSteps. When maxSteps is reached, lr will be 0.")]
         [SerializeField] public bool LRSchedule = false;
 
         // ========================================================================================================================================================================

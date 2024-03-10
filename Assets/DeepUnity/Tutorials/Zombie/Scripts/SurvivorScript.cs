@@ -1,5 +1,4 @@
 using UnityEngine;
-using DeepUnity;
 using System.Linq.Expressions;
 using DeepUnity.ReinforcementLearning;
 

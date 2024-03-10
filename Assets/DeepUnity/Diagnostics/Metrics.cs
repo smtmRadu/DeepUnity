@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 
 namespace DeepUnity
 {
@@ -8,7 +7,6 @@ namespace DeepUnity
     /// </summary>
     public static class Metrics
     {
-
         /// <summary>
         /// <b>Accuracy = Correct Predictions / (Correct Predictions + Wrong Predictions)</b><br></br>
         /// <br></br>

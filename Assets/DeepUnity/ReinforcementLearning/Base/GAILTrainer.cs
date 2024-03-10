@@ -11,7 +11,7 @@ namespace DeepUnity
     /// The user controls the agent (with DecisionRequester period set on 1).
     /// When the memory reaches the size of a batch, One Update is made.
     /// </summary>
-    public class GAILTrainer : DeepUnityTrainer
+    internal class GAILTrainer : DeepUnityTrainer
     {
         List<Tensor> states_batches;
         List<Tensor> cont_act_batches;

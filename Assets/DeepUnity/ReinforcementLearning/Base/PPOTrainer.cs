@@ -16,7 +16,7 @@ namespace DeepUnity.ReinforcementLearning
     /// </summary>
     /// What may cause NaN values:
     /// 1. Softmax activation on discrete head may "explode"
-    public sealed class PPOTrainer : DeepUnityTrainer
+    internal sealed class PPOTrainer : DeepUnityTrainer
     {
         protected override void Initialize() { }
         protected override void OnBeforeFixedUpdate()

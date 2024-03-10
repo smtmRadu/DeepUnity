@@ -27,7 +27,7 @@ namespace DeepUnity
             this.targets = targets;
         }
         /// <summary>
-        /// Mean Square Error loss. <br></br>
+        /// Mean Squared Error loss. <br></br>
         /// Predicts: (B, *) or (*) for unbatched input <br></br>
         /// Targets: (B, *) or (*) for unbatched input <br></br>
         /// where * = input Shape
@@ -40,6 +40,12 @@ namespace DeepUnity
         /// where * = input Shape
         /// </summary>
         public static Loss MAE(Tensor predicts, Tensor targets) => new Loss(LossType.MAE, predicts, targets);
+        /// <summary>
+        /// Root Mean Squared Error loss. <br></br>
+        /// Predicts: (B, *) or (*) for unbatched input <br></br>
+        /// Targets: (B, *) or (*) for unbatched input <br></br>
+        /// </summary>
+        public static Loss RMSE(Tensor predicts, Tensor targets) => new Loss(LossType.RMSE, predicts, targets);
         /// <summary>
         /// Cross Entropy loss. <br></br>
         /// Predicts: (B, *) or (*) for unbatched input <br></br>
@@ -90,6 +96,8 @@ namespace DeepUnity
                         return Tensor.Pow(predicts - targets, 2);
                     case LossType.MAE:
                         return Tensor.Abs(predicts - targets);
+                    case LossType.RMSE:
+                        return Tensor.Sqrt(Tensor.Pow(predicts - targets, 2));
 
                     case LossType.CE:
                         return -targets * Tensor.Log(predicts + Utils.EPSILON);
@@ -116,7 +124,8 @@ namespace DeepUnity
                         return 2f * (predicts - targets);
                     case LossType.MAE:
                         return predicts.Zip(targets, (p, t) => p - t > 0 ? 1f : -1f);
-
+                    case LossType.RMSE:
+                        Tensor diff = predicts - targets; return diff / diff.Pow(2f).Sqrt();
                     case LossType.CE:
                         return -targets / (predicts + Utils.EPSILON);
                     case LossType.BCE:
@@ -135,6 +144,7 @@ namespace DeepUnity
         {
             MSE,
             MAE,
+            RMSE,
             CE,
             BCE,
             HE,            

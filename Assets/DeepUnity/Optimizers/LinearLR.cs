@@ -1,0 +1,41 @@
+namespace DeepUnity.Optimizers
+{
+    /// <summary>
+    /// https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.LinearLR.html#torch.optim.lr_scheduler.LinearLR
+    /// </summary>
+    public class LinearLR : LRScheduler
+    {
+        private readonly float endFactor;
+        private readonly float startFactor;
+        private readonly int total_iters;
+
+        /// <summary>
+        /// Decays the learning rate by linearly changing small multiplicative factor until the number of epoch reaches <paramref name="total_iters"/>. 
+        /// Notice that such decay can happen simultaneously with other changes to the learning rate from outside this scheduler.
+        /// </summary>
+        public LinearLR(Optimizer optimizer, float start_factor = 1f, float end_factor = 1e-8f, int total_iters = 10)
+            :base(optimizer, -1)
+        {
+            this.endFactor = end_factor;
+            this.startFactor = start_factor;
+            this.total_iters = total_iters;
+
+
+            optimizer.gamma = initialLR * start_factor;
+        }
+
+        public override void Step()
+        {
+            currentStep++;
+
+            if(currentStep <= total_iters)
+            {
+                optimizer.gamma = initialLR * (startFactor + (endFactor - startFactor) / total_iters * currentStep);
+            }
+        }
+
+    }
+
+}
+
+

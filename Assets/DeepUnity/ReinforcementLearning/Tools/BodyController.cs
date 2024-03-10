@@ -1,4 +1,3 @@
-using DeepUnity.ReinforcementLearning;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -91,7 +90,7 @@ namespace DeepUnity.ReinforcementLearning
     }
 }
 
-namespace DeepUnity
+namespace DeepUnity.ReinforcementLearning
 {
     /// <summary>
     /// Setup:
@@ -110,13 +109,13 @@ namespace DeepUnity
         /// </summary>
         /// <param name="bodyPart"></param>
         /// <returns></returns>
-        public ReinforcementLearning.BodyPart this[GameObject bodyPart] { get => bodyPartsDict[bodyPart]; }
-        [HideInInspector] public Dictionary<GameObject, ReinforcementLearning.BodyPart> bodyPartsDict = new Dictionary<GameObject, ReinforcementLearning.BodyPart>();
-        [HideInInspector] public List<ReinforcementLearning.BodyPart> bodyPartsList = new List<ReinforcementLearning.BodyPart>();
+        public BodyPart this[GameObject bodyPart] { get => bodyPartsDict[bodyPart]; }
+        [HideInInspector] public Dictionary<GameObject, BodyPart> bodyPartsDict = new Dictionary<GameObject, BodyPart>();
+        [HideInInspector] public List<BodyPart> bodyPartsList = new List<BodyPart>();
 
         private void AddBodyPart(Transform bodyPart)
         {
-            ReinforcementLearning.BodyPart bp = new ReinforcementLearning.BodyPart
+            BodyPart bp = new BodyPart
             {
                 gameObject = bodyPart.gameObject,
                 rigidbody = bodyPart.GetComponent<Rigidbody>(),

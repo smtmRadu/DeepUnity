@@ -99,11 +99,7 @@ namespace DeepUnity.Layers
         public int ParametersCount()
         {
             int paramst = W_O.ParametersCount();
-
-            for (int i = 0; i < attention_heads.Length; i++)
-            {
-                paramst += attention_heads[i].ParametersCount();
-            }
+            paramst += attention_heads.Sum(x => x.ParametersCount());
             return paramst;
         }
         public Parameter[] Parameters()

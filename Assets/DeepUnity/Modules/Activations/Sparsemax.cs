@@ -25,7 +25,6 @@ namespace DeepUnity.Activations
         /// </summary>
         public Sparsemax()
         {
-
         }
 
         public Tensor Predict(Tensor z)

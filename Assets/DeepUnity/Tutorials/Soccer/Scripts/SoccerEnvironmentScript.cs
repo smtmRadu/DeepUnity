@@ -1,4 +1,5 @@
 using DeepUnity;
+using DeepUnity.ReinforcementLearning;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;

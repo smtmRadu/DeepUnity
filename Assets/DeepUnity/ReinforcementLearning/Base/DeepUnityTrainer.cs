@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace DeepUnity.ReinforcementLearning
 {
-    public abstract class DeepUnityTrainer : MonoBehaviour
+    internal abstract class DeepUnityTrainer : MonoBehaviour
     {
         public static DeepUnityTrainer Instance;
 

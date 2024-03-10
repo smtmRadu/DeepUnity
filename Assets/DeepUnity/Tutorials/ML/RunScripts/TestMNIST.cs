@@ -22,7 +22,7 @@ namespace DeepUnityTutorials
         [SerializeField] private PerformanceGraph accuracyGraph;
         [SerializeField] private PerformanceGraph lossGraph;
         Optimizer optim;
-        LRScheduler scheduler;
+        StepLR scheduler;
         List<(Tensor, Tensor)> train = new();
         List<(Tensor, Tensor)[]> train_batches;
         int epochIndex = 1;
@@ -77,7 +77,7 @@ namespace DeepUnityTutorials
 
             network.SetDevice(Device.GPU);
             optim = new Adam(network.Parameters(),  lr: lr, weightDecay: weightDecay);
-            scheduler = new LRScheduler(optim, schedulerStepSize, schedulerDecay);
+            scheduler = new StepLR(optim, schedulerStepSize, schedulerDecay);
             accuracyGraph = new PerformanceGraph();
             lossGraph = new PerformanceGraph();
             Utils.Shuffle(train);

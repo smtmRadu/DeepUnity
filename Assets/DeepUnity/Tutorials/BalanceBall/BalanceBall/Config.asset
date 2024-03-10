@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5970f7530cba1f0499a4a3dbe7d27f96, type: 3}
   m_Name: Config
   m_EditorClassIdentifier: 
-  trainer: 1
+  trainer: 0
   maxSteps: 2000000000
   learningRate: 0.0003
   gamma: 0.99
@@ -27,7 +27,7 @@ MonoBehaviour:
   gradClipNorm: 0.5
   KLDivergence: 0
   targetKL: 0.015
-  normalizeAdvantages: 0
+  normalizeAdvantages: 1
   replayBufferSize: 1000000
   minibatchSize: 128
   updateInterval: 64
@@ -36,5 +36,5 @@ MonoBehaviour:
   alpha: 0.2
   tau: 0.005
   debug: 0
-  timescaleAdjustment: 1
-  timescale: 40
+  timescaleAdjustment: 0
+  timescale: 1

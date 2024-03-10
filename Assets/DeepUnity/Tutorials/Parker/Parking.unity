@@ -584,9 +584,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   spaceSize: 62
+  spaceHeight: 144
+  spaceWidth: 256
+  spaceChannels: 3
   stackedInputs: 1
   continuousActions: 3
   discreteActions: 0
+  archType: 0
   numLayers: 2
   hidUnits: 64
   model: {fileID: 11400000, guid: 4c6579b67bb158646874bf1d471d8028, type: 2}

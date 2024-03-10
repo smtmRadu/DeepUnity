@@ -14,7 +14,7 @@ namespace DeepUnityTutorials
         [SerializeField] private PerformanceGraph validLossGraph = new PerformanceGraph();
 
         private Optimizer optim;
-        private LRScheduler scheduler;
+        private StepLR scheduler;
 
         private Tensor train_inputs;
         private Tensor train_targets;
@@ -33,7 +33,7 @@ namespace DeepUnityTutorials
                     new Dense(64, 1)).CreateAsset("TutorialModel");
             }
             optim = new Adam(network.Parameters(),0.001f);
-            scheduler = new LRScheduler(optim, 30, 0.1f);
+            scheduler = new StepLR(optim, 30, 0.1f);
 
             // Generate training dataset
             int data_size = 1024;

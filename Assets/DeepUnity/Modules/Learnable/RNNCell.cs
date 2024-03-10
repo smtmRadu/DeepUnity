@@ -70,7 +70,7 @@ namespace DeepUnity.Layers
             r_weightsGrad = Tensor.Zeros(r_weights.Shape);
             r_biasesGrad = Tensor.Zeros(r_biases.Shape);
             this.nonlinearity = nonlinearity;
-            onReturn = on_forward;
+            this.onReturn = on_forward;
             this.device = device;
         }
         private RNNCell() { }
@@ -92,10 +92,8 @@ namespace DeepUnity.Layers
             bool isBatched = input.Rank == 3;
             int batch_size = isBatched ? input.Size(0) : 1;
 
-
             Tensor[] sequences = input.Split(isBatched ? 1 : 0, 1);
             Tensor h = isBatched ? Tensor.Zeros(batch_size, biases.Size(-1)) : Tensor.Zeros(biases.Size(-1));
-
 
             IActivation activation = nonlinearity == NonLinearity.Tanh ? new Tanh() : new ReLU();
             Tensor[] hiddenStates = new Tensor[sequences.Length];
@@ -119,7 +117,6 @@ namespace DeepUnity.Layers
                 return h;
             else
                 return Tensor.Concat(isBatched ? 1 : 0, hiddenStates);
-
         }
         public Tensor Forward(Tensor input)
         {
@@ -128,7 +125,6 @@ namespace DeepUnity.Layers
             if (input.Size(-1) != weights.Size(-1))
             {
                 throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the Dense Layer input features_num ({weights.Size(-1)}).");
-
             }
             if (input.Rank != 3 && input.Rank != 2)
             {
@@ -136,7 +132,6 @@ namespace DeepUnity.Layers
             }
             bool isBatched = input.Rank == 3;
             int batch_size = isBatched ? input.Size(0) : 1;
-
 
             Tensor[] sequences = input.Split(isBatched ? 1 : 0, 1);
             Tensor h = isBatched ? Tensor.Zeros(batch_size, biases.Size(-1)) : Tensor.Zeros(biases.Size(-1));
@@ -166,7 +161,6 @@ namespace DeepUnity.Layers
                 return h;
             else
                 return Tensor.Concat(isBatched ? 1 : 0, hiddenStates);
-
         }
         public Tensor Backward(Tensor dLdY)
         {
@@ -180,8 +174,6 @@ namespace DeepUnity.Layers
             int sequence_length = InputCache.Count;
             int hin = weights.Size(-1);
             int hout = biases.Size(-1);
-
-
 
             Tensor[] dLdH; // [] (B, H) // split along the sequence dimension
             if (onReturn == HiddenStates.ReturnLast) // place dLdY at the last position in the array
@@ -237,23 +229,13 @@ namespace DeepUnity.Layers
                     Tensor.CopyTo(r_biases_grad, r_biasesGrad);
                 }
 
-
-                if (device == Device.CPU)
-                {
-                    inputGrad[InputCache.Count] = Tensor.MatMul(dLdLinear, weights).Unsqueeze(isBatched ? 1 : 0);
-                    dLdH[InputCache.Count] += Tensor.MatMul(dLdLinear, r_weights);
-                }
-                else
-                {
-                    inputGrad[InputCache.Count] = Tensor.MatMulGPU(dLdLinear, weights).Unsqueeze(isBatched ? 1 : 0);
-                    dLdH[InputCache.Count] += Tensor.MatMulGPU(dLdLinear, r_weights);
-                }
-
+                inputGrad[InputCache.Count] = Tensor.MatMul(dLdLinear, weights, device).Unsqueeze(isBatched ? 1 : 0);
+                dLdH[InputCache.Count] += Tensor.MatMul(dLdLinear, r_weights, device);
             }
             return Tensor.Concat(isBatched ? 1 : 0, inputGrad);
         }
 
-        private Tensor Linear(Tensor x, Tensor weights, Tensor biases, bool isBatched, int B_size)
+        private static Tensor Linear(Tensor x, Tensor weights, Tensor biases, bool isBatched, int B_size)
         {
             // x = (B, H_in) or (H_in)
             // W = (H_out, H_in)
@@ -295,7 +277,7 @@ namespace DeepUnity.Layers
 
             return y;
         }
-        private Tensor LinearGPU(Tensor x, Tensor weights, Tensor biases, bool isBatched, int batch_size)
+        private static Tensor LinearGPU(Tensor x, Tensor weights, Tensor biases, bool isBatched, int batch_size)
         {
             int H_out = biases.Size(-1);
             ComputeShader cs = DeepUnityMeta.DenseCS;
@@ -424,7 +406,6 @@ namespace DeepUnity.Layers
             weightsGradBuffer.Release();
             biasesGradBuffer.Release();
         }
-
 
 
         public int ParametersCount()

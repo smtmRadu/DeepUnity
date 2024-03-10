@@ -136,7 +136,7 @@ namespace DeepUnity.ReinforcementLearning
         /// </summary>
         /// <param name="behaviourName"></param>
         /// <returns></returns>
-        public string ExportAsSVG(string behaviourName, Hyperparameters hp, AgentBehaviour behaviour, DecisionRequester decisionRequester)
+        internal string ExportAsSVG(string behaviourName, Hyperparameters hp, AgentBehaviour behaviour, DecisionRequester decisionRequester)
         {
             string behaviourAssetPath = AssetDatabase.GetAssetPath(behaviour);
 

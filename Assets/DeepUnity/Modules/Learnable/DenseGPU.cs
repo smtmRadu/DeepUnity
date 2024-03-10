@@ -1,4 +1,4 @@
-using System;
+/*using System;
 using UnityEngine;
 
 namespace DeepUnity.Layers
@@ -143,4 +143,4 @@ namespace DeepUnity.Layers
             biasesGrad = TensorGPU.Zeros(biases.Shape);
         }
     }
-}
+}*/

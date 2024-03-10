@@ -13,7 +13,7 @@ namespace DeepUnity.ReinforcementLearning
     // Actually q networks are receiving both squashed and unsquashed inputs
 
     // So SAC trains Q1 and Q2 without an aditional value function
-    public class SACTrainer : DeepUnityTrainer
+    internal class SACTrainer : DeepUnityTrainer
     {
         // Q target networks
         private static Sequential Qtarg1;

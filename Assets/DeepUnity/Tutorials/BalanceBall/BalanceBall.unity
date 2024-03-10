@@ -414,12 +414,11 @@ MonoBehaviour:
   archType: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 5b3c9eb71d25c4c4dbbe3d21978bd8cc, type: 2}
+  model: {fileID: 11400000, guid: 7413de1e6975bba4c833d5c2cd268587, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0
   ball: {fileID: 1198115738}
-  cameraSens: {fileID: 0}
 --- !u!114 &742690638
 MonoBehaviour:
   m_ObjectHideFlags: 0

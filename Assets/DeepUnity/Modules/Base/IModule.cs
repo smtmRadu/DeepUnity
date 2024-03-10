@@ -51,7 +51,7 @@ namespace DeepUnity.Layers
         public Exponential exponential = null;
         public GELU gelu = null;
         public Sparsemax sparsemax = null;
-
+        public LogSoftmax logsoftmax = null;
         private IModuleWrapper(IModule module)
         {
             name = module.GetType().Name;
@@ -159,6 +159,10 @@ namespace DeepUnity.Layers
             else if(module is MultiheadAttention multiheadattentionModule)
             {
                 multiheadattention = multiheadattentionModule;
+            }
+            else if(module is LogSoftmax logsofrmaxModule)
+            {
+                logsoftmax = logsofrmaxModule;
             }
             else
                 throw new Exception("Unhandled module type while wrapping.");
@@ -275,6 +279,10 @@ namespace DeepUnity.Layers
             else if(typeof(MultiheadAttention).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.multiheadattention;
+            }
+            else if (typeof(LogSoftmax).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.logsoftmax;
             }
             else
                 throw new Exception("Unhandled module type while unwrapping.");

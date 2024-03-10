@@ -58,6 +58,7 @@ namespace DeepUnity.Layers
             }
             else
             {
+                int H_in = weights.Size(-1);
                 int H_out = biases.Size(-1);
                 ComputeShader cs = DeepUnityMeta.DenseCS;
 
@@ -73,14 +74,13 @@ namespace DeepUnity.Layers
                 biasesBuffer.SetData(biases.ToArray());
                 cs.SetBuffer(0, "beta", biasesBuffer);
 
-                ComputeBuffer outputBuffer = new ComputeBuffer(batch_size * biases.Size(-1), 4);
+                ComputeBuffer outputBuffer = new ComputeBuffer(batch_size * H_out, 4);
                 // outputBuffer.SetData(zero_values); // we do not need this because the values are set (not added) to the rw structrured buffer.
                 cs.SetBuffer(0, "output", outputBuffer);
 
                 cs.SetInt("batch_size", batch_size);
-                cs.SetInt("in_features", weights.Size(-1));
-                cs.SetInt("out_features", biases.Size(-1));
-                cs.SetInt("input_rank", input.Rank);
+                cs.SetInt("in_features", H_in);
+                cs.SetInt("out_features", H_out);
 
                 cs.Dispatch(0,
                     (H_out + 31) / 32,
@@ -133,8 +133,6 @@ namespace DeepUnity.Layers
 
                 Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
                 Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
-
-                return Tensor.MatMul(loss, weights);
             }
             else
             {
@@ -177,8 +175,10 @@ namespace DeepUnity.Layers
                 weightsGradBuffer.Release();
                 biasesGradBuffer.Release();
 
-                return Tensor.MatMulGPU(loss, weights);
+                
             }
+
+            return Tensor.MatMul(loss, weights, device);
         }
 
         /// <summary>
