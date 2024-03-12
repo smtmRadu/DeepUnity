@@ -1,5 +1,5 @@
 using System.Threading.Tasks;
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 namespace DeepUnity.Optimizers
 {
     // https://arxiv.org/pdf/1412.6980.pdf also adamax algorithm is there, though i extended it with pytorch doc.

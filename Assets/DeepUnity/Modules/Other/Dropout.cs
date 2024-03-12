@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace DeepUnity.Layers
+namespace DeepUnity.Modules
 {
     /// <summary>
     /// <b>Placed after the non-linear activation function.</b> <br></br>

@@ -1,4 +1,4 @@
-namespace DeepUnity.Layers
+namespace DeepUnity.Modules
 {
     /// <summary>
     /// The parameter of a learnable layer. 

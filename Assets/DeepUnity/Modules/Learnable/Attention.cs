@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DeepUnity.Activations;
 
-namespace DeepUnity.Layers
+namespace DeepUnity.Modules
 {
     /// https://www.tensorflow.org/api_docs/python/tf/keras/layers/Attention
     /// https://arxiv.org/pdf/1706.03762.pdf
@@ -27,6 +27,8 @@ namespace DeepUnity.Layers
     [Serializable]
     public class Attention : ILearnable, IModule
     {
+        [SerializeField] public Device Device { get; set; } = Device.CPU;
+
         [SerializeField] private int d;
 
         [SerializeField] private Tensor W_Q;
@@ -53,10 +55,11 @@ namespace DeepUnity.Layers
         /// </summary>
         /// <param name="input_size">Input features size</param>
         /// <param name="embed_dim">Dimension of the attention mechanism.</param>
-        public Attention(int input_size, int embed_dim)
+        public Attention(int input_size, int embed_dim, Device device = Device.CPU)
         {
             // H and d have the same dimension
             d = embed_dim;
+            this.Device = device;
             int H = input_size;
             float range = MathF.Sqrt(1f / H);
 
@@ -78,41 +81,6 @@ namespace DeepUnity.Layers
 
         public Tensor Predict(Tensor input)
         {
-            // softmax(Q * KT / Sqrt(D)) * V [Scaled Dot-Product Attention, page 4]
-            // input shape (B, L, H) or (L, H)
-            if (input.Size(-1) != W_Q.Size(0))
-            {
-                throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the Dense Layer features_num ({W_Q.Size(0)}).");
-
-            }
-            if (input.Rank != 3 && input.Rank != 2)
-            {
-                throw new ShapeException($"Input must be of shape (B, L, H) or (L, H) for unabatches input, and input received has shape ({input.Shape.ToCommaSeparatedString()}).");
-            }
-
-            bool isBatched = input.Rank == 3;
-            int batch_size = isBatched ? input.Size(0) : 1;
-
-            Tensor[] batch_elem = isBatched ? input.Split(0, 1) : new Tensor[] { input };
-            Tensor[] SDPA = new Tensor[batch_size];
-
-            for (int i = 0; i < batch_size; i++)
-            {
-                Tensor x = isBatched ? batch_elem[i].Squeeze(1) : batch_elem[i];
-                Tensor _Q = Tensor.MatMul(x, W_Q); // (L, H) * (H, D) = (L, D)
-                Tensor _K = Tensor.MatMul(x, W_K); // (L, D)
-                Tensor _V = Tensor.MatMul(x, W_V); // (L, D)
-                Tensor sdpa = Tensor.MatMul(_Q, _K.Transpose(0, 1)); //(L, D) * (D, L) = (L, L)
-                sdpa /= MathF.Sqrt(d);
-                sdpa = new Softmax().Forward(sdpa);
-                SDPA[i] = Tensor.MatMul(sdpa, _V); // (L, D)
-            }
-
-            return Tensor.Concat(null, SDPA); // (B, L, D)
-        }
-
-        public Tensor Forward(Tensor input)
-        {
             if (input.Size(-1) != W_Q.Size(0))
             {
                 throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the Dense Layer features_num ({W_Q.Size(0)}).");
@@ -132,18 +100,23 @@ namespace DeepUnity.Layers
             {
                 Tensor x = isBatched ? batch_elem[i].Squeeze(0) : batch_elem[i];
                 InputCache.Push(x);
-                Q.Push(Tensor.MatMul(x, W_Q)); // (L, H) * (H, D) = (L, D)
-                K.Push(Tensor.MatMul(x, W_K)); // (L, D)
-                V.Push(Tensor.MatMul(x, W_V)); // (L, D)
-                Tensor sdpa = Tensor.MatMul(Q.Peek(), K.Peek().Transpose(0, 1)); //(L, D) * (D, L) = (L, L)
+                Q.Push(Tensor.MatMul(x, W_Q, Device)); // (L, H) * (H, D) = (L, D)
+                K.Push(Tensor.MatMul(x, W_K, Device)); // (L, D)
+                V.Push(Tensor.MatMul(x, W_V, Device)); // (L, D)
+                Tensor sdpa = Tensor.MatMul(Q.Peek(), K.Peek().Transpose(0, 1), Device); //(L, D) * (D, L) = (L, L)
                 sdpa /= MathF.Sqrt(d);
                 SoftmaxCache.Push(new Softmax());
                 sdpa = SoftmaxCache.Peek().Forward(sdpa); // (L, L)
-                PostSoftmaxCache.Push(sdpa.Clone() as Tensor);
-                SDPA[i] = Tensor.MatMul(sdpa, V.Peek()); // (L, D)
+                PostSoftmaxCache.Push(sdpa); // no need for clone because concat makes a copy
+                SDPA[i] = Tensor.MatMul(sdpa, V.Peek(), Device); // (L, D)
             }
 
             return Tensor.Concat(null, SDPA);
+        }
+
+        public Tensor Forward(Tensor input)
+        {
+            return Predict(input);
         }
         public Tensor Backward(Tensor dLdY)
         {
@@ -155,21 +128,21 @@ namespace DeepUnity.Layers
             for (int i = batch_size - 1; i >= 0; i--)
             {
                 Tensor lossGrad = isBatched ? batch_elem[i].Squeeze(0) : batch_elem[i];
-                Tensor vGrad = Tensor.MatMul(PostSoftmaxCache.Pop(), lossGrad);    // V = (L, D), dLDY = (L, D), PSM = (L, L)
-                Tensor QK_T_grad = SoftmaxCache.Pop().Backward(Tensor.MatMul(V.Pop(), lossGrad.Transpose(0, 1))) / MathF.Sqrt(d); // (L, L)
-                Tensor qGrad = Tensor.MatMul(QK_T_grad, K.Pop()); // QKT = (L, L), k = (L, D), Q = (L, D)
-                Tensor kGrad = Tensor.MatMul(QK_T_grad, Q.Pop());
+                Tensor vGrad = Tensor.MatMul(PostSoftmaxCache.Pop(), lossGrad, Device);    // V = (L, D), dLDY = (L, D), PSM = (L, L)
+                Tensor QK_T_grad = SoftmaxCache.Pop().Backward(Tensor.MatMul(V.Pop(), lossGrad.Transpose(0, 1), Device)) / MathF.Sqrt(d); // (L, L)
+                Tensor qGrad = Tensor.MatMul(QK_T_grad, K.Pop(), Device); // QKT = (L, L), k = (L, D), Q = (L, D)
+                Tensor kGrad = Tensor.MatMul(QK_T_grad, Q.Pop(), Device);
 
                 Tensor x = InputCache.Pop(); // x = (L, H), vGrad = (L, D)
                 Tensor xT = x.Transpose(0, 1);
-                W_V_grad += Tensor.MatMul(xT, vGrad) / batch_size;
-                W_Q_grad += Tensor.MatMul(xT, qGrad) / batch_size;
-                W_K_grad += Tensor.MatMul(xT, kGrad) / batch_size;
+                W_V_grad += Tensor.MatMul(xT, vGrad, Device) / batch_size;
+                W_Q_grad += Tensor.MatMul(xT, qGrad, Device) / batch_size;
+                W_K_grad += Tensor.MatMul(xT, kGrad, Device) / batch_size;
 
                 input_grad[i] = Tensor.Zeros(x.Size(-2), x.Size(-1));
-                input_grad[i] += Tensor.MatMul(vGrad, W_V.Transpose(0, 1)); // (L, D) * (H, D)
-                input_grad[i] += Tensor.MatMul(kGrad, W_K.Transpose(0, 1));
-                input_grad[i] += Tensor.MatMul(qGrad, W_Q.Transpose(0, 1));
+                input_grad[i] += Tensor.MatMul(vGrad, W_V.Transpose(0, 1), Device); // (L, D) * (H, D)
+                input_grad[i] += Tensor.MatMul(kGrad, W_K.Transpose(0, 1), Device);
+                input_grad[i] += Tensor.MatMul(qGrad, W_Q.Transpose(0, 1), Device);
             }
 
             return Tensor.Concat(null, input_grad);
@@ -180,6 +153,7 @@ namespace DeepUnity.Layers
             var att = new Attention();
 
             att.d = d;
+            att.Device = Device;
             att.W_Q = (Tensor)W_Q.Clone();
             att.W_K = (Tensor)W_K.Clone();
             att.W_V = (Tensor)W_V.Clone();
@@ -195,17 +169,6 @@ namespace DeepUnity.Layers
 
             return att;
         }
-
-
-
-        public void SetDevice(Device device)
-        {
-            return;
-        }
-        public int ParametersCount()
-        {
-            return W_Q.Count() + W_K.Count() + W_V.Count();
-        }
         public Parameter[] Parameters()
         {
             if (W_Q_grad == null)
@@ -217,6 +180,7 @@ namespace DeepUnity.Layers
 
             return new Parameter[] { q, k, v };
         }
+
         public virtual void OnBeforeSerialize()
         {
 

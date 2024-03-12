@@ -4,7 +4,7 @@ using DeepUnity.Activations;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 using DeepUnity.Models;
 
 namespace DeepUnityTutorials
@@ -36,10 +36,10 @@ namespace DeepUnityTutorials
             if (network == null)
             {
                 network = new Sequential(
-                     new Conv2D((1, 28, 28), 5, 3, device: Device.GPU),
+                     new Conv2D(1, 5, 3, device: Device.GPU),
                      new ReLU(),
                      new MaxPool2D(2),
-                     new Conv2D((5, 13, 13), 10, 3, device: Device.GPU),
+                     new Conv2D(5, 10, 3, device: Device.GPU),
                      new ReLU(),
                      new MaxPool2D(2),
                      new Flatten(-3, -1),

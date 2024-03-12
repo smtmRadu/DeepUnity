@@ -1,6 +1,6 @@
 using System;
 using UnityEngine;
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 
 namespace DeepUnity.Activations
 {

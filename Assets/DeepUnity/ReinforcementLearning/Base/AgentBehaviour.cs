@@ -1,6 +1,6 @@
 ﻿using DeepUnity.Optimizers;
 using DeepUnity.Activations;
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -107,7 +107,7 @@ namespace DeepUnity.ReinforcementLearning
         public bool IsUsingDiscreteActions { get => discreteDim > 0; }
 
 
-        private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int VISUAL_INPUT_WIDTH, in int VISUAL_INPUT_HEIGHT, in int VISUAL_INPUT_CHANNELS, 
+        private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int VISUAL_INPUT_CHANNELS, 
             in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS, in ArchitectureType ARCHITECTURE)
         {
             
@@ -174,33 +174,29 @@ namespace DeepUnity.ReinforcementLearning
                 }
                 throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
             }
-            static IModule[] CreateCNN(int width, int height, int channels, int outputs, int layers, int hidUnits)
+            static IModule[] CreateCNN(int channels_in, int outputs, int layers, int hidUnits)
             {
-
-                int conv_hout = height - 3 + 1;
-                int conv_wout = width - 3 + 1;
-                int pool_hout = (int)MathF.Floor((conv_hout - 2f) / 2f + 1);
-                int pool_wout = (int)MathF.Floor((conv_wout - 2f) / 2f + 1);
+                int channels_out = channels_in * 6;
                 if (layers == 1)
                 {
                     return new IModule[]
                     {
-                        new Conv2D((channels, height, width), 1, 3),
+                        new Conv2D(channels_in, channels_out, 3),
                         new MaxPool2D(2),
                         new Flatten(),
                         HiddenActivation(),
-                        new Dense(pool_hout * pool_wout, outputs)
+                        new LazyDense(outputs)
                     };
                 }
                 if(layers == 2)
                 {
                     return new IModule[]
                    {
-                        new Conv2D((channels, height, width), 1, 3),
+                        new Conv2D(channels_in, channels_out, 3),
                         new MaxPool2D(2),
                         new Flatten(),
                         HiddenActivation(),
-                        new Dense(pool_hout * pool_wout, hidUnits),
+                        new LazyDense(hidUnits),
                         HiddenActivation(),
                         new Dense(hidUnits, outputs),
                    };
@@ -209,11 +205,11 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     return new IModule[]
                     {
-                        new Conv2D((channels, height, width), 1, 3),
+                        new Conv2D(channels_in, channels_out, 3),
                         new MaxPool2D(2),
                         new Flatten(),
                         HiddenActivation(),
-                        new Dense(pool_hout * pool_wout, hidUnits),
+                        new LazyDense (hidUnits),
                         HiddenActivation(),
                         new Dense(hidUnits, hidUnits),
                         HiddenActivation(),
@@ -256,16 +252,16 @@ namespace DeepUnity.ReinforcementLearning
             }
             else if(ARCHITECTURE == ArchitectureType.CNN)
             {
-                vNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                vNetwork = new Sequential(CreateCNN(VISUAL_INPUT_CHANNELS, 1, NUM_LAYERS, HIDDEN_UNITS));
 
                 if(CONTINUOUS_ACTIONS_NUM > 0)
                 {
-                    muNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
-                    sigmaNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
+                    muNetwork = new Sequential(CreateCNN(VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                    sigmaNetwork = new Sequential(CreateCNN(VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
                 }
 
                 if(DISCRETE_ACTIONS_NUM > 0)
-                    discreteNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
+                    discreteNetwork = new Sequential(CreateCNN(VISUAL_INPUT_CHANNELS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
             }
                      
 
@@ -276,6 +272,8 @@ namespace DeepUnity.ReinforcementLearning
         {
             const float lambda = 0f;
             const float epsilon = 1e-5F; // PPO openAI eps they use :D, but in Andrychowicz, et al. (2021) they use tf default 1e-7
+
+            // I ve done tests with Adan over Adam and it works pretty nice :D
             if (trainer == TrainerType.SAC)
             {
                 vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
@@ -287,7 +285,7 @@ namespace DeepUnity.ReinforcementLearning
             else if(trainer == TrainerType.PPO)
             {
                 vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
-
+                
                 if (IsUsingContinuousActions)
                 {
                     muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
@@ -427,7 +425,7 @@ namespace DeepUnity.ReinforcementLearning
         /// Creates a new Agent behaviour folder containing all auxiliar neural networks, or loads it if already exists one for this behaviour.
         /// </summary>
         /// <returns></returns>
-        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int widthSize, int heightSize, int channelSize, int continuousActions, int discreteActions, int numLayers, int hidUnits, ArchitectureType aType)
+        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int channelSize, int continuousActions, int discreteActions, int numLayers, int hidUnits, ArchitectureType aType)
         {          
             var instance = UnityEditor.AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
 
@@ -438,7 +436,7 @@ namespace DeepUnity.ReinforcementLearning
             }
 
 
-            AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, stackedInputs, widthSize, heightSize, channelSize, continuousActions, discreteActions, numLayers, hidUnits, aType);
+            AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, stackedInputs, channelSize, continuousActions, discreteActions, numLayers, hidUnits, aType);
             newAgBeh.behaviourName = name;
             newAgBeh.observationSize = stateSize;
             newAgBeh.stackedInputs = stackedInputs;

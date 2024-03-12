@@ -19,7 +19,7 @@ MonoBehaviour:
   LRSchedule: 0
   batchSize: 1000
   bufferSize: 40000
-  horizon: 512
+  horizon: 1024
   numEpoch: 4
   beta: 0.005
   epsilon: 0.2
@@ -37,4 +37,4 @@ MonoBehaviour:
   tau: 0.005
   debug: 0
   timescaleAdjustment: 1
-  timescale: 2.5
+  timescale: 14.88

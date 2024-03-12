@@ -1,7 +1,7 @@
 using DeepUnity;
 using DeepUnity.Optimizers;
 using DeepUnity.Activations;
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -15,10 +15,8 @@ namespace DeepUnityTutorials
     {
         [SerializeField] Sequential network;
         [SerializeField] new string name = "MNIST_MODEL";
-        [SerializeField] private float lr = 0.0002f;
+        [SerializeField] private float lr = 0.0001f;
         [SerializeField] private float weightDecay = 0.001f;
-        [SerializeField] private int schedulerStepSize = 1;
-        [SerializeField] private float schedulerDecay = 0.99f;
         [SerializeField] private int batch_size = 64;
         [SerializeField] private bool augment_data = false;
         [SerializeField] private float augment_strength = 1f;
@@ -39,48 +37,21 @@ namespace DeepUnityTutorials
             if (network == null)
             {
                 network = new Sequential(
-                     new Conv2D((1, 28, 28), 5, 3, device: Device.GPU),
-                     new ReLU(),
-                     new MaxPool2D(2),
-                     new Conv2D((5, 13, 13), 10, 3, device: Device.GPU),
-                     new ReLU(),
-                     new MaxPool2D(2),
+                     new Conv2D(1, 10, 3), // 10 26 26
+                     new MaxPool2D(2), // 10 13 13
+                     new GELU(),
                      new Flatten(-3, -1),
-                     new Dense(250, 128, device: Device.GPU),
+                     new Dense(1690, 512),
                      new Dropout(0.2f),
-                     new Dense(128, 10),
+                     new Dense(512, 10),
                      new Softmax()
                      ).CreateAsset(name);
-
-                // network = new Sequential(
-                //     new Flatten(),
-                //     new Dense(784, 10, init: InitType.Glorot_Uniform, device: Device.GPU),
-                //     new Softmax()
-                //     ).Compile(name);
-
-                // network = new Sequential(
-                //     new Conv2D((1, 28, 28), 5, 3, Device.GPU),
-                //     new Sigmoid(),
-                //     new Flatten(),
-                //     new Dense(5 * 26 * 26, 100, device: Device.GPU),
-                //     new Sigmoid(),
-                //     new Dense(100, 10),
-                //     new Softmax()
-                //     );
-
-                // network = new Sequential(
-                //     new Flatten(),
-                //     new Dense(784, 100, init: InitType.HE_Normal, device: Device.GPU),
-                //     new ReLU(),
-                //     new Dense(100, 10, InitType.HE_Normal, device: Device.GPU),
-                //     new Softmax()).Compile(name);
 
                 Debug.Log("Network created.");
             }
 
             network.SetDevice(Device.GPU);
             optim = new Adam(network.Parameters(), lr: lr, weightDecay: weightDecay);
-            scheduler = new StepLR(optim, schedulerStepSize, schedulerDecay);
             accuracyGraph = new PerformanceGraph();
             lossGraph = new PerformanceGraph();
             Utils.Shuffle(train);

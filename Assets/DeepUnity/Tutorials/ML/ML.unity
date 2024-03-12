@@ -868,7 +868,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1255005308
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1320,7 +1320,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1539047896
 Transform:
   m_ObjectHideFlags: 0
@@ -1348,12 +1348,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45ec7b8831bf73c4bbed236ccf4948d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  network: {fileID: 11400000, guid: eb6d087da4520f2469c00f64a61aaace, type: 2}
+  network: {fileID: 11400000, guid: b7bf12910574eb94da101a5de9df695d, type: 2}
   name: MNIST
   lr: 0.0003
   weightDecay: 0.001
-  schedulerStepSize: 10
-  schedulerDecay: 0.99
   batch_size: 64
   augment_data: 1
   augment_strength: 0.6

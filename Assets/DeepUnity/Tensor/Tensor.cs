@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
+using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 
 namespace DeepUnity
@@ -91,6 +92,12 @@ namespace DeepUnity
 
 
         #region Create
+        /// <summary>
+        /// Default hidden Tensor Constructor. Equivalent to Zeros
+        /// </summary>
+        /// <param name="shape"></param>
+        /// <exception cref="ShapeException"></exception>
+        /// <exception cref="NotSupportedException"></exception>
         private Tensor(params int[] shape)
         {
             if (shape == null)
@@ -108,8 +115,8 @@ namespace DeepUnity
                 size *= item;
             }       
 
-            if (size > 67_108_864) // old 67_108_864
-                throw new NotSupportedException($"Tensor dimensions is too large on initialization (cannot surpass 67,108,864 units, size attentded = {size}).");
+            if (size == int.MaxValue) // old 67_108_864
+                throw new NotSupportedException($"Tensor dimensions is too large on initialization (cannot surpass {int.MaxValue} units, size attentded = {size}).");
 
             this.shape = shape.ToArray();
             data = new float[size];
@@ -366,6 +373,12 @@ namespace DeepUnity
             }
             return t;
         }
+        /// <summary>
+        ///  Returns a tensor filled with the value given as argument.
+        /// </summary>
+        /// <param name="value"></param>
+        /// <param name="shape"></param>
+        /// <returns></returns>
         public static Tensor Fill(float value, params int[] shape)
         {
             Tensor t = new(shape);
@@ -375,6 +388,11 @@ namespace DeepUnity
             }
             return t;
         }
+        /// <summary>
+        /// Returns a tensor of random real numbers drawn from separate uniform distributions whose bounds are [0, 1] (inclusive range).
+        /// </summary>
+        /// <param name="shape"></param>
+        /// <returns></returns>
         public static Tensor Random01(params int[] shape)
         {
             Tensor t = new(shape);
@@ -384,6 +402,12 @@ namespace DeepUnity
             }
             return t;
         }
+        /// <summary>
+        /// Returns a tensor of random numbers drawn from separate normal distributions whose mean = 0 and standard deviation = 1.
+        /// </summary>
+        /// <param name="mean_sd"></param>
+        /// <param name="shape"></param>
+        /// <returns></returns>
         public static Tensor RandomNormal(params int[] shape)
         {
             Tensor t = new(shape);
@@ -393,6 +417,12 @@ namespace DeepUnity
             }
             return t;
         }
+        /// <summary>
+        /// Returns a tensor of random numbers drawn from separate normal distributions whose mean and standard deviation are given.
+        /// </summary>
+        /// <param name="mean_sd">mean and standard deviation</param>
+        /// <param name="shape"></param>
+        /// <returns></returns>
         public static Tensor RandomNormal((float, float) mean_sd, params int[] shape)
         {
             Tensor t = new(shape);
@@ -402,12 +432,47 @@ namespace DeepUnity
             }
             return t;
         }
+        /// <summary>
+        /// Returns a tensor of random real numbers drawn from separate uniform distributions whose bounds are given as arguments.
+        /// </summary>
+        /// <param name="min_max"></param>
+        /// <param name="shape"></param>
+        /// <returns></returns>
         public static Tensor RandomRange((float, float) min_max, params int[] shape)
         {
             Tensor t = new(shape);
             for (int i = 0; i < t.data.Length; i++)
             {
                 t.data[i] = Utils.Random.Range(min_max.Item1, min_max.Item2);
+            }
+            return t;
+        }
+        /// <summary>
+        /// Returns a tensor of random integers drawn from separate uniform distributions whose bounds are given as arguments.
+        /// </summary>
+        /// <param name="min_max"></param>
+        /// <param name="shape"></param>
+        /// <returns></returns>
+        public static Tensor RandomRangeInt((int, int) min_max, params int[] shape)
+        {
+            Tensor t = new(shape);
+            for (int i = 0; i < t.data.Length; i++)
+            {
+                t.data[i] = Utils.Random.Range(min_max.Item1, min_max.Item2);
+            }
+            return t;
+        }
+        /// <summary>
+        /// Returns a tensor with 0 and 1 elements drawn from a bernoulli distribution parametrized by the input tensor.
+        /// </summary>
+        /// <param name="probabilities"></param>
+        /// <returns></returns>
+        public static Tensor Bernoulli(Tensor probabilities)
+        {
+            Tensor t = new(probabilities.shape);
+            for (int i = 0; i < t.data.Length; i++)
+            {
+                t.data[i] = Utils.Random.Bernoulli(probabilities.data[i]) == true ? 1f : 0f;
             }
             return t;
         }
@@ -677,6 +742,7 @@ namespace DeepUnity
             toTensor.shape = fromTensor.shape.ToArray();
         }
         /// <summary>
+        /// Computes the matrix multiplication of two tensors. <br></br>
         /// Left: <b>(J, 1, N, M)</b> <br></br>
         /// Right: <b>(K, M, P)</b> <br></br>
         /// <br></br>
@@ -974,6 +1040,30 @@ namespace DeepUnity
                 result.shape = resultShape.ToArray();
                 return result;
             }
+        }
+        /// <summary>
+        /// Computes the dot product of two 1D tensors.
+        /// </summary>
+        /// <param name="input1"></param>
+        /// <param name="input2"></param>
+        /// <returns>Tensor of shape <b>(1)</b></returns>
+        public static Tensor Dot(Tensor input1, Tensor input2)
+        {
+            int leftRank = input1.Rank;
+            int rightRank = input2.Rank;
+            if (leftRank != 1)
+                throw new ArgumentException($"First tensor in the dot product must have the rank equal to 1 (received {leftRank}");
+
+            if (rightRank != 1)
+                throw new ArgumentException($"First tensor in the dot product must have the rank equal to 1 (received {rightRank}");
+
+            float result = 0f;
+            for (int i = 0; i < input1.data.Length; i++)
+            {
+                result += input1.data[i] * input2.data[i];
+            }
+
+            return Constant(result);
         }
         /// <summary>
         /// Input: <b>(B, C, H, W)</b> <br></br>
@@ -3087,6 +3177,17 @@ namespace DeepUnity
 
             return result;
         }
+        public static Tensor ArcSin(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Asin(tensor.data[i]);
+            }
+
+            return result;
+        }
         public static Tensor Cos(Tensor tensor)
         {
             Tensor result = new(tensor.shape);
@@ -3098,6 +3199,40 @@ namespace DeepUnity
 
             return result;
         }
+        public static Tensor ArcCos(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Acos(tensor.data[i]);
+            }
+
+            return result;
+        }
+        public static Tensor Tan(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Tan(tensor.data[i]);
+            }
+
+            return result;
+        }
+        public static Tensor ArcTan(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Atan(tensor.data[i]);
+            }
+
+            return result;
+        }
+
         /// <summary>
         /// Returns the signs of each value in the tensor. <br></br>
         /// Example: t = [-1.2, 3.2, 0, 1]
@@ -3248,9 +3383,25 @@ namespace DeepUnity
         {
             return Sin(this);
         }
+        public Tensor ArcSin()
+        {
+            return ArcSin(this);
+        }
         public Tensor Cos()
         {
             return Cos(this);
+        }
+        public Tensor ArcCos()
+        {
+            return ArcCos(this);
+        }
+        public Tensor Tan()
+        {
+            return Tan(this);
+        }
+        public Tensor ArcTan()
+        {
+            return ArcTan(this);
         }
         public Tensor Sign()
         {

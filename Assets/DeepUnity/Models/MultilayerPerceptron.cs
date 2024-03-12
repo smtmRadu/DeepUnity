@@ -4,7 +4,7 @@ using System.Text;
 using System;
 using UnityEngine;
 using DeepUnity.Activations;
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 namespace DeepUnity.Models
 {
     public class MultilayerPerceptron : Model<MultilayerPerceptron, Tensor>, ISerializationCallbackReceiver
@@ -114,7 +114,7 @@ namespace DeepUnity.Models
         {
             foreach (var item in modules.OfType<ILearnable>())
             {
-                item.SetDevice(device);
+                item.Device = device;
             }
         }
         /// <summary>

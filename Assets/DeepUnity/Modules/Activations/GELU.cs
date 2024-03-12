@@ -1,5 +1,5 @@
 using System;
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 /// <summary>
 /// GELU_Activation_Function_in_Deep_Learning_A_Compre.pdf
 /// Minhyeok Lee

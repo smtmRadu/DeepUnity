@@ -1,7 +1,7 @@
 using DeepUnity.Activations;
 using System;
 
-namespace DeepUnity.Layers
+namespace DeepUnity.Modules
 {
     /// <summary>
     /// Whenever a new Serializable imodule is created,
@@ -29,6 +29,7 @@ namespace DeepUnity.Layers
         public RNNCell rnncell = null;
         public Attention attention = null;
         public MultiheadAttention multiheadattention = null;
+        public LazyDense lazydense = null;
 
         // Other modules
         public Dropout dropout = null;
@@ -52,6 +53,8 @@ namespace DeepUnity.Layers
         public GELU gelu = null;
         public Sparsemax sparsemax = null;
         public LogSoftmax logsoftmax = null;
+        public RReLU rrelu = null;
+
         private IModuleWrapper(IModule module)
         {
             name = module.GetType().Name;
@@ -160,12 +163,20 @@ namespace DeepUnity.Layers
             {
                 multiheadattention = multiheadattentionModule;
             }
-            else if(module is LogSoftmax logsofrmaxModule)
+            else if(module is LogSoftmax logsoftmaxModule)
             {
-                logsoftmax = logsofrmaxModule;
+                logsoftmax = logsoftmaxModule;
+            }
+            else if (module is RReLU rreluModule)
+            {
+                rrelu = rreluModule;
+            }
+            else if (module is LazyDense lazydenseModule)
+            {
+                lazydense = lazydenseModule;
             }
             else
-                throw new Exception("Unhandled module type while wrapping.");
+                throw new Exception($"Unhandled module type while wrapping ({module.GetType().Name}).");
         }
 
         public static IModuleWrapper Wrap(IModule module)
@@ -284,8 +295,16 @@ namespace DeepUnity.Layers
             {
                 module = moduleWrapper.logsoftmax;
             }
+            else if (typeof(RReLU).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.rrelu;
+            }
+            else if (typeof(LazyDense).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.lazydense;
+            }
             else
-                throw new Exception("Unhandled module type while unwrapping.");
+                throw new Exception($"Unhandled module type while unwrapping ({moduleWrapper.name}).");
 
             return module;
         }

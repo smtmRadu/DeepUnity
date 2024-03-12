@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using UnityEngine;
 
-namespace DeepUnity.Layers
+namespace DeepUnity.Modules
 {
     /// <summary>
     /// <b>Applied a Self Scaled Dot-Product Attention with multiple heads.</b> <br></br>
@@ -16,7 +16,7 @@ namespace DeepUnity.Layers
     [SerializeField]
     public class MultiheadAttention : ILearnable, IModule
     {
-        [SerializeField] private Device device;
+        [SerializeField] public Device Device { get; set; } = Device.CPU;
         [SerializeField] private Attention[] attention_heads;
         [SerializeField] private Dense W_O;
 
@@ -31,7 +31,7 @@ namespace DeepUnity.Layers
         /// <exception cref="ArgumentException">Embedding dimension must be divisible by heads number</exception>
         public MultiheadAttention(int embed_dim, int heads_num, Device device = Device.CPU)
         {
-            this.device = device;
+            this.Device = device;
             if (embed_dim % heads_num != 0)
             {
                 throw new ArgumentException("Embedding dimension must be divisible by heads number");
@@ -39,7 +39,7 @@ namespace DeepUnity.Layers
             attention_heads = new Attention[heads_num];
             for (int i = 0; i < heads_num; i++)
             {
-                attention_heads[i] = new Attention(embed_dim, embed_dim / heads_num);
+                attention_heads[i] = new Attention(embed_dim, embed_dim / heads_num, device);
             }
             W_O = new Dense(embed_dim, embed_dim, device: device);
         }
@@ -89,19 +89,14 @@ namespace DeepUnity.Layers
 
         public void SetDevice(Device device)
         {
-            this.device = device;
+            this.Device = device;
             for (int i = 0; i < attention_heads.Length; i++)
             {
-                attention_heads[i].SetDevice(device);
+                attention_heads[i].Device = device;
             }
-            W_O.SetDevice(device);
+            W_O.Device = device;
         }
-        public int ParametersCount()
-        {
-            int paramst = W_O.ParametersCount();
-            paramst += attention_heads.Sum(x => x.ParametersCount());
-            return paramst;
-        }
+
         public Parameter[] Parameters()
         {
             var attpar = attention_heads.Select(x => x.Parameters());
@@ -131,7 +126,7 @@ namespace DeepUnity.Layers
         {
             var matt = new MultiheadAttention();
             matt.attention_heads = attention_heads.Select(x => x.Clone() as Attention).ToArray();
-            matt.device = device;
+            matt.Device = Device;
             matt.W_O = W_O.Clone() as Dense;
             return matt;
         }

@@ -2,7 +2,7 @@ using System;
 using Unity.VisualScripting;
 using UnityEngine;
 
-namespace DeepUnity.Layers
+namespace DeepUnity.Modules
 {
     /// <summary>
     /// <b>Placed before or after the non-linear activation function.</b>    <br />
@@ -24,6 +24,7 @@ namespace DeepUnity.Layers
     public class BatchNorm : ILearnable, IModule
     {
         // https://arxiv.org/pdf/1502.03167.pdf
+        [SerializeField] public Device Device { get; set; } = Device.CPU;
 
         private Tensor xCentered { get; set; }
         private Tensor std { get; set; }
@@ -182,14 +183,6 @@ namespace DeepUnity.Layers
             bnclone.runningVar = (Tensor)runningVar.Clone();
             return bnclone;
         }
-
-        /// <summary>
-        /// Returns the number of all learnable parameters of this <see cref="Learnable"/> module.
-        /// </summary>
-        public int ParametersCount() => gamma.Count() + beta.Count();
-
-
-        public void SetDevice(Device device) { return; }
         public Parameter[] Parameters()
         {
             if (gammaGrad == null)

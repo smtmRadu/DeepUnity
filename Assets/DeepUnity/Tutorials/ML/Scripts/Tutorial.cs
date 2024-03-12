@@ -2,7 +2,7 @@ using UnityEngine;
 using DeepUnity;
 using DeepUnity.Optimizers;
 using DeepUnity.Activations;
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 using DeepUnity.Models;
 namespace DeepUnityTutorials
 {

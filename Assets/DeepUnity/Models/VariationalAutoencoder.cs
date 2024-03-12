@@ -1,4 +1,4 @@
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -163,15 +163,15 @@ namespace DeepUnity.Models
         }
         public override void SetDevice(Device device)
         {
-            mu.SetDevice(device);
-            log_var.SetDevice(device);
+            mu.Device = device;
+            log_var.Device = device;
             foreach (var item in encoder.OfType<ILearnable>())
             {
-                item.SetDevice(device);
+                item.Device = device;
             }
             foreach (var item in decoder.OfType<ILearnable>())
             {
-                item.SetDevice(device);
+                item.Device = device;
             }
         }
 
@@ -182,7 +182,7 @@ namespace DeepUnity.Models
             stringBuilder.AppendLine($"Name: {name}");
             stringBuilder.AppendLine($"Type: {GetType().Name}");
             stringBuilder.AppendLine($"Parameters: " +
-                $"{encoder.Where(x => x is ILearnable).Select(x => (ILearnable)x).Sum(x => x.ParametersCount()) + decoder.Where(x => x is ILearnable).Select(x => (ILearnable)x).Sum(x => x.ParametersCount()) + mu.ParametersCount() + log_var.ParametersCount()}");
+                $"{encoder.Where(x => x is ILearnable).Select(x => (ILearnable)x).Sum(x => x.ParametersCount()) + decoder.Where(x => x is ILearnable).Select(x => (ILearnable)x).Sum(x => x.ParametersCount()) + ((ILearnable)mu).ParametersCount() + ((ILearnable)log_var).ParametersCount()}");
             return stringBuilder.ToString();
         }
         public override object Clone()

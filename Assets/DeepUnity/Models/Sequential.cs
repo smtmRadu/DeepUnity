@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 namespace DeepUnity.Models
 {
     /// <summary>
@@ -82,7 +82,7 @@ namespace DeepUnity.Models
         {
             foreach (var item in modules.OfType<ILearnable>())
             {
-                item.SetDevice(device);
+                item.Device = device;
             }
         }
         /// <summary>

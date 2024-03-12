@@ -19,7 +19,7 @@ MonoBehaviour:
   LRSchedule: 0
   batchSize: 512
   bufferSize: 10240
-  horizon: 256
+  horizon: 512
   numEpoch: 8
   beta: 0.007
   epsilon: 0.2

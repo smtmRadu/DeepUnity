@@ -1,4 +1,4 @@
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -235,15 +235,15 @@ namespace DeepUnity.Models
         {
             foreach (var item in backboneModules.OfType<ILearnable>())
             {
-                item.SetDevice(device);
+                item.Device = device;
             }
             foreach (var item in inputHeadsModules.SelectMany(x => x.OfType<ILearnable>()))
             {
-                item.SetDevice(device);
+                item.Device = device;
             }
             foreach (var item in outputHeadsModules.SelectMany(x => x.OfType<ILearnable>()))
             {
-                item.SetDevice(device);
+                item.Device = device;
             }
         }
 

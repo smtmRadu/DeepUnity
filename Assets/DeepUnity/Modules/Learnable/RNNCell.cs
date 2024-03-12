@@ -5,7 +5,7 @@ using Unity.VisualScripting;
 using System.Threading.Tasks;
 using DeepUnity.Activations;
 
-namespace DeepUnity.Layers
+namespace DeepUnity.Modules
 {
     // The implementation is adapted for this framework so it works for our models
     // https://pytorch.org/docs/stable/generated/torch.nn.RNNCell.html#torch.nn.RNNCell
@@ -23,7 +23,8 @@ namespace DeepUnity.Layers
     [Serializable]
     public class RNNCell : ILearnable, IModule
     {
-        [SerializeField] private Device device;
+        [SerializeField] public Device Device { get; set; } = Device.CPU;
+
         [SerializeField] private NonLinearity nonlinearity;
         [SerializeField] private HiddenStates onReturn;
         [SerializeField] private Tensor weights;
@@ -71,7 +72,7 @@ namespace DeepUnity.Layers
             r_biasesGrad = Tensor.Zeros(r_biases.Shape);
             this.nonlinearity = nonlinearity;
             this.onReturn = on_forward;
-            this.device = device;
+            this.Device = device;
         }
         private RNNCell() { }
 
@@ -103,7 +104,7 @@ namespace DeepUnity.Layers
                 Tensor x = sequences[i].Squeeze(isBatched ? 1 : 0);
 
                 Tensor l;
-                if (device == Device.CPU)
+                if (Device == Device.CPU)
                     l = Linear(x, weights, biases, isBatched, batch_size) + Linear(h, r_weights, r_biases, isBatched, batch_size);
                 else
                     l = LinearGPU(x, weights, biases, isBatched, batch_size) + LinearGPU(h, r_weights, r_biases, isBatched, batch_size);
@@ -144,7 +145,7 @@ namespace DeepUnity.Layers
                 InputCache.Push(x);
 
                 Tensor l;
-                if (device == Device.CPU)
+                if (Device == Device.CPU)
                     l = Linear(x, weights, biases, isBatched, batch_size) + Linear(h, r_weights, r_biases, isBatched, batch_size);
                 else
                     l = LinearGPU(x, weights, biases, isBatched, batch_size) + LinearGPU(h, r_weights, r_biases, isBatched, batch_size);
@@ -208,7 +209,7 @@ namespace DeepUnity.Layers
                 Tensor biases_grad;
                 Tensor r_weights_grad;
                 Tensor r_biases_grad;
-                if (device == Device.CPU)
+                if (Device == Device.CPU)
                 {
                     ComputeGradients(InputCache.Pop(), dLdLinear, isBatched, batch_size, hin, hout, out weights_grad, out biases_grad);
                     ComputeGradients(HiddenCache.Pop(), dLdLinear, isBatched, batch_size, hout, hout, out r_weights_grad, out r_biases_grad);
@@ -229,8 +230,8 @@ namespace DeepUnity.Layers
                     Tensor.CopyTo(r_biases_grad, r_biasesGrad);
                 }
 
-                inputGrad[InputCache.Count] = Tensor.MatMul(dLdLinear, weights, device).Unsqueeze(isBatched ? 1 : 0);
-                dLdH[InputCache.Count] += Tensor.MatMul(dLdLinear, r_weights, device);
+                inputGrad[InputCache.Count] = Tensor.MatMul(dLdLinear, weights, Device).Unsqueeze(isBatched ? 1 : 0);
+                dLdH[InputCache.Count] += Tensor.MatMul(dLdLinear, r_weights, Device);
             }
             return Tensor.Concat(isBatched ? 1 : 0, inputGrad);
         }
@@ -407,11 +408,6 @@ namespace DeepUnity.Layers
             biasesGradBuffer.Release();
         }
 
-
-        public int ParametersCount()
-        {
-            return weights.Count() + biases.Count() + r_weights.Count() + r_biases.Count();
-        }
         public Parameter[] Parameters()
         {
             if (weightsGrad == null)
@@ -424,8 +420,22 @@ namespace DeepUnity.Layers
 
             return new Parameter[] { w, b, rw, rb };
         }
-
-        public void SetDevice(Device device) { this.device = device; }
+        public object Clone()
+        {
+            var rnncell = new RNNCell();
+            rnncell.InputCache = new();
+            rnncell.HiddenCache = new();
+            rnncell.ActivationCache = new();
+            rnncell.weights = (Tensor)weights.Clone();
+            rnncell.biases = (Tensor)biases.Clone();
+            rnncell.r_weights = (Tensor)r_weights.Clone();
+            rnncell.r_biases = (Tensor)r_biases.Clone();
+            rnncell.weightsGrad = (Tensor)weightsGrad.Clone();
+            rnncell.biasesGrad = (Tensor)biasesGrad.Clone();
+            rnncell.r_weightsGrad = (Tensor)r_weightsGrad.Clone();
+            rnncell.r_biasesGrad = (Tensor)r_biasesGrad.Clone();
+            return rnncell;
+        }
 
         public void OnBeforeSerialize()
         {
@@ -453,25 +463,7 @@ namespace DeepUnity.Layers
             r_weightsGrad = Tensor.Zeros(r_weights.Shape);
             r_biasesGrad = Tensor.Zeros(r_biases.Shape);
 
-        }
-
-
-        public object Clone()
-        {
-            var rnncell = new RNNCell();
-            rnncell.InputCache = new();
-            rnncell.HiddenCache = new();
-            rnncell.ActivationCache = new();
-            rnncell.weights = (Tensor)weights.Clone();
-            rnncell.biases = (Tensor)biases.Clone();
-            rnncell.r_weights = (Tensor)r_weights.Clone();
-            rnncell.r_biases = (Tensor)r_biases.Clone();
-            rnncell.weightsGrad = (Tensor)weightsGrad.Clone();
-            rnncell.biasesGrad = (Tensor)biasesGrad.Clone();
-            rnncell.r_weightsGrad = (Tensor)r_weightsGrad.Clone();
-            rnncell.r_biasesGrad = (Tensor)r_biasesGrad.Clone();
-            return rnncell;
-        }
+        }    
     }
 
 }

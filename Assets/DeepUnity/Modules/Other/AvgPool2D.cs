@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
 
-namespace DeepUnity.Layers
+namespace DeepUnity.Modules
 {
     /// <summary>
     /// Input: <b>(B, C, H_in, W_in)</b> or <b>(C, H_in, W_in)</b> <br></br>
@@ -62,13 +62,12 @@ namespace DeepUnity.Layers
 
             Tensor pooled_input = Tensor.Zeros(batch_size, channel_size, H_out, W_out);
 
-            if (batch_size == 1)
-            {
-                LinkedList<float> values_pool = new LinkedList<float>();
-
-                // Foreach channel
-                for (int c = 0; c < channel_size; c++)
+            Parallel.For(0, batch_size, b =>
+            {           
+                Parallel.For(0, channel_size, c =>
                 {
+                    LinkedList<float> values_pool = new LinkedList<float>();
+
                     // foreach pool result
                     for (int j = 0; j < H_out; j++)
                     {
@@ -81,58 +80,19 @@ namespace DeepUnity.Layers
                                 {
                                     try
                                     {
-                                        values_pool.AddLast(input[0, c, j * kernel_size + kj, i * kernel_size + ki]);
+                                        values_pool.AddLast(input[b, c, j * kernel_size + kj, i * kernel_size + ki]);
                                     }
                                     catch { }
 
                                 }
                             }
 
-                            pooled_input[0, c, j, i] = values_pool.Average();
+                            pooled_input[b, c, j, i] = values_pool.Average();
                             values_pool.Clear();
                         }
                     }
-                }
-
-            }
-            else
-            {
-                Parallel.For(0, batch_size, b =>
-                {
-                    LinkedList<float> values_pool = new LinkedList<float>();
-
-                    // Foreach channel
-                    for (int c = 0; c < channel_size; c++)
-                    {
-                        // foreach pool result
-                        for (int j = 0; j < H_out; j++)
-                        {
-                            for (int i = 0; i < W_out; i++)
-                            {
-                                // foreach pool element in the pool
-                                for (int kj = 0; kj < kernel_size; kj++)
-                                {
-                                    for (int ki = 0; ki < kernel_size; ki++)
-                                    {
-                                        try
-                                        {
-                                            values_pool.AddLast(input[b, c, j * kernel_size + kj, i * kernel_size + ki]);
-                                        }
-                                        catch { }
-
-                                    }
-                                }
-
-                                pooled_input[b, c, j, i] = values_pool.Average();
-                                values_pool.Clear();
-                            }
-                        }
-                    }
-
                 });
-
-
-            }
+            });
 
             return pooled_input;
         }
@@ -162,66 +122,34 @@ namespace DeepUnity.Layers
 
             Tensor gradInput = Tensor.Zeros(Batch, Channels, H_in, W_in);
 
-            if (Batch == 1)
+            Parallel.For(0, Batch, b =>
             {
-                for (int b = 0; b < Batch; b++)
+                Parallel.For(0, Channels, c =>
                 {
-                    for (int c = 0; c < Channels; c++)
+                    for (int i = 0; i < W_out; i++)
                     {
-                        for (int i = 0; i < W_out; i++)
+                        for (int j = 0; j < H_out; j++)
                         {
-                            for (int j = 0; j < H_out; j++)
+                            float averageValue = loss[b, c, j, i] / (kernel_size * kernel_size);
+
+                            for (int pi = 0; pi < kernel_size; pi++)
                             {
-                                float averageValue = loss[b, c, j, i] / (kernel_size * kernel_size);
-
-                                for (int pi = 0; pi < kernel_size; pi++)
+                                for (int pj = 0; pj < kernel_size; pj++)
                                 {
-                                    for (int pj = 0; pj < kernel_size; pj++)
+                                    int rowIndex = j * kernel_size + pj;
+                                    int colIndex = i * kernel_size + pi;
+
+                                    if (rowIndex >= 0 && colIndex >= 0 && rowIndex < H_in && colIndex < W_in)
                                     {
-                                        int rowIndex = j * kernel_size + pj;
-                                        int colIndex = i * kernel_size + pi;
-
-                                        if (rowIndex >= 0 && colIndex >= 0 && rowIndex < H_in && colIndex < W_in)
-                                        {
-                                            gradInput[b, c, rowIndex, colIndex] += averageValue;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                Parallel.For(0, Batch, b =>
-                {
-                    for (int c = 0; c < Channels; c++)
-                    {
-                        for (int i = 0; i < W_out; i++)
-                        {
-                            for (int j = 0; j < H_out; j++)
-                            {
-                                float averageValue = loss[b, c, j, i] / (kernel_size * kernel_size);
-
-                                for (int pi = 0; pi < kernel_size; pi++)
-                                {
-                                    for (int pj = 0; pj < kernel_size; pj++)
-                                    {
-                                        int rowIndex = j * kernel_size + pj;
-                                        int colIndex = i * kernel_size + pi;
-
-                                        if (rowIndex >= 0 && colIndex >= 0 && rowIndex < H_in && colIndex < W_in)
-                                        {
-                                            gradInput[b, c, rowIndex, colIndex] += averageValue;
-                                        }
+                                        gradInput[b, c, rowIndex, colIndex] += averageValue;
                                     }
                                 }
                             }
                         }
                     }
                 });
-            }
+            });
+            
 
             return gradInput;
         }

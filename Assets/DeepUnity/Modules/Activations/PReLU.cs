@@ -1,13 +1,14 @@
 using UnityEngine;
 using System;
 using System.Linq;
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 
 namespace DeepUnity.Activations
 {
     [Serializable]
     public class PReLU : ILearnable, IModule, IActivation
     {
+        [SerializeField] public Device Device { get; set; } = Device.CPU;
         private Tensor InputCache { get; set; }
 
         [SerializeField] private Tensor alpha;
@@ -40,17 +41,6 @@ namespace DeepUnity.Activations
             float dLda = loss.Select(x => x >= 0f ? x : 0).ToArray().Average();
             alphaGrad[0] = dLda;
             return loss * InputCache.Select(x => x >= 0f ? 1f : alpha[0]);
-        }
-
-
-
-        public void SetDevice(Device device)
-        {
-            return;
-        }
-        public int ParametersCount()
-        {
-            return alpha.Count();
         }
 
         public Parameter[] Parameters()

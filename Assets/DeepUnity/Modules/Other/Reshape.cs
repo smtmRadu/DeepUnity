@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using Unity.VisualScripting;
 using UnityEngine;
-namespace DeepUnity.Layers
+namespace DeepUnity.Modules
 {
     /// <summary>
     /// Input: <b>(B, *)</b> or <b>(*)</b> for unbatched input. <br></br>

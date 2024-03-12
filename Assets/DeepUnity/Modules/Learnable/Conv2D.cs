@@ -1,44 +1,27 @@
-using System;
 using System.Threading.Tasks;
+using System;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.Windows;
+using System.Runtime.Remoting.Channels;
 
-namespace DeepUnity.Layers
+namespace DeepUnity.Modules
 {
-    // https://www.youtube.com/watch?v=Lakz2MoHy6o
-    // https://github.com/TheIndependentCode/Neural-Network/blob/master/convolutional.py
-    /// <summary>
-    /// Input: (<b>B</b>, <b>C_in</b>, <b>H_in</b>, <b>W_in</b>) or (<b>C_in</b>, <b>H_in</b>, <b>W_in</b>) for unbatched input.<br/>
-    /// Output: <b>(B, C_out, H_out, W_out)</b> or <b>(C_out, H_out, W_out)</b> for unbatched input.<br></br>
-    /// <br></br>
-    /// where <br></br>
-    /// B = batch_size <br></br>
-    /// C_in = in_channels <br></br> 
-    /// C_out = out_channels, <br></br>
-    /// H_out = H_in - kernel.height + 1 <br></br> 
-    /// W_out = W_in - kernel.width + 1
-    /// </summary>
     [Serializable]
     public class Conv2D : ILearnable, IModule
     {
-
+        [SerializeField] public Device Device { get; set; } = Device.CPU;
         private Tensor InputCache { get; set; }
+       
+        private int GetOutChannels { get => kernels.Size(-4); }
+        private int GetInChannels { get => kernels.Size(-3); }
+        private int GetKernelHeight { get => kernels.Size(-2); }
+        private int GetKernelWidth { get => kernels.Size(-1); }
 
-        [SerializeField] private int[] inputShape;
-        [SerializeField] private int outChannels;
-        [SerializeField] private int kernelWidth;
-        [SerializeField] private int kernelHeight;
-
-        [SerializeField] private Device device;
         [SerializeField] private Tensor kernels;
         [SerializeField] private Tensor biases;
-        [NonSerialized] private Tensor kernelsGrad;
-        [NonSerialized] private Tensor biasesGrad;
-
-        // Biases are applied over the final output. Biases (out_channels, out_height, out_width).
-        // input shape  = (B, iC, H, W)
-        // output_shape = (B, oC, H - K + 1, W - K + 1] 
-        // In Conv2D, Gamma represents kernels, Beta represents biases
+        [NonSerialized] public Tensor kernelsGrad;
+        [NonSerialized] public Tensor biasesGrad;
 
 
         /// <summary>
@@ -57,9 +40,9 @@ namespace DeepUnity.Layers
         /// <param name="kernel_size"></param>
         /// <param name="gamma_init">Initializer used for weights.</param>
         /// <param name="beta_init">Initializer used for biases.</param>
-        public Conv2D((int, int, int) input_shape, int out_channels, int kernel_size, InitType gamma_init = InitType.LeCun_Uniform, InitType beta_init = InitType.LeCun_Uniform, Device device = Device.CPU)
+        public Conv2D(int in_channels, int out_channels, int kernel_size, Device device = Device.CPU)
         {
-            if (input_shape.Item1 < 1)
+            if (in_channels < 1)
                 throw new ArgumentException("Cannot have less than 1 input channels.");
 
             if (out_channels < 1)
@@ -68,59 +51,36 @@ namespace DeepUnity.Layers
             if (kernel_size < 2)
                 throw new ArgumentException("Cannot have less than 2 kernel size.");
 
-            this.device = device;
-            inputShape = new int[] { input_shape.Item1, input_shape.Item2, input_shape.Item3 };
-            outChannels = out_channels;
-            kernelWidth = kernel_size;
-            kernelHeight = kernel_size;
+            this.Device = device;
 
-            int fan_in = input_shape.Item1 * input_shape.Item2 * input_shape.Item3;
-            int fan_out = out_channels * (input_shape.Item2 - kernel_size + 1) * (input_shape.Item3 - kernel_size + 1);
-            kernels = Initializer.CreateParameter(new int[] { out_channels, input_shape.Item1, kernel_size, kernel_size }, fan_in, fan_out, gamma_init);
-            biases = Initializer.CreateParameter(new int[] { out_channels, input_shape.Item2 - kernel_size + 1, input_shape.Item3 - kernel_size + 1 }, fan_in, fan_out, gamma_init);
+            float k = 1f / (out_channels * kernel_size * kernel_size);
+            k = Mathf.Sqrt(k);
+            kernels = Tensor.RandomRange((-k, k), out_channels, in_channels, kernel_size, kernel_size);
+            biases = Tensor.RandomRange((-k, k), out_channels);
             kernelsGrad = Tensor.Zeros(kernels.Shape);
             biasesGrad = Tensor.Zeros(biases.Shape);
         }
-        /// <summary>
-        /// Input: (<b>B</b>, <b>C_in</b>, <b>H_in</b>, <b>W_in</b>) or (<b>C_in</b>, <b>H_in</b>, <b>W_in</b>) for unbatched input.<br/>
-        /// Output: <b>(B, C_out, H_out, W_out)</b> or <b>(C_out, H_out, W_out)</b> for unbatched input.<br></br>
-        /// <br></br>
-        /// where <br></br>
-        /// B = batch_size <br></br>
-        /// C_in = in_channels <br></br> 
-        /// C_out = out_channels, <br></br>
-        /// H_out = H_in - kernel_shape.Item1 + 1 <br></br> 
-        /// W_out = W_in - kernel_shape.Item2 + 1
-        /// </summary>
-        /// <param name="input_shape">(C_in, H, W)</param>
-        /// <param name="gamma_init">Initializer used for weights.</param>
-        /// <param name="beta_init">Initializer used for biases.</param>
-        public Conv2D((int, int, int) input_shape, int out_channels, (int, int) kernel_shape, InitType gamma_init = InitType.Glorot_Uniform, InitType beta_init = InitType.Zeros, Device device = Device.CPU)
+
+        public Conv2D(int in_channels, int out_channels,(int, int) kernel_shape, Device device = Device.CPU)
         {
-            if (input_shape.Item1 < 1)
+            if (in_channels < 1)
                 throw new ArgumentException("Cannot have less than 1 input channels.");
 
             if (out_channels < 1)
                 throw new ArgumentException("Cannot have less than 1 output channel.");
 
-            if (kernel_shape.Item1 < 2 || kernel_shape.Item2 < 2)
-                throw new ArgumentException("Kernel cannot have a dimension < 2.");
+            if (kernel_shape.Item1 < 2 || kernel_shape.Item2 < 2) 
+                throw new ArgumentException("Cannot have less than 2 kernel size.");
 
-            inputShape = new int[] { input_shape.Item1, input_shape.Item2, input_shape.Item3 };
-            outChannels = out_channels;
-            kernelWidth = kernel_shape.Item2;
-            kernelHeight = kernel_shape.Item1;
+            this.Device = device;
 
-            int fan_in = input_shape.Item1 * input_shape.Item2 * input_shape.Item3;
-            int fan_out = out_channels * (input_shape.Item2 - kernel_shape.Item1 + 1) * (input_shape.Item3 - kernel_shape.Item1 + 1);
-            kernels = Initializer.CreateParameter(new int[] { out_channels, input_shape.Item1, kernel_shape.Item1, kernel_shape.Item2 }, fan_in, fan_out, gamma_init);
-            biases = Initializer.CreateParameter(new int[] { out_channels, input_shape.Item2 - kernel_shape.Item1 + 1, input_shape.Item3 - kernel_shape.Item2 + 1 }, fan_in, fan_out, gamma_init);
+            float k = 1f / (out_channels * kernel_shape.Item1 * kernel_shape.Item2);
+            k = Mathf.Sqrt(k);
+            kernels = Tensor.RandomRange((-k, k), out_channels, in_channels, kernel_shape.Item1, kernel_shape.Item2);
+            biases = Tensor.RandomRange((-k, k), out_channels);
             kernelsGrad = Tensor.Zeros(kernels.Shape);
             biasesGrad = Tensor.Zeros(biases.Shape);
         }
-
-
-
 
         /// <param name="input">(B, C_in, H, W)</param>
         /// <returns></returns>
@@ -129,26 +89,72 @@ namespace DeepUnity.Layers
             if (input.Rank < 3)
                 throw new ShapeException($"The input ({input.Shape.ToCommaSeparatedString()}) in Conv2D module must be (B, C, H, W) or (C, H, W) for unbatched input.");
 
-            if (input.Size(-3) != inputShape[0] || input.Size(-2) != inputShape[1] || input.Size(-1) != inputShape[2])
-                throw new ShapeException($"Input shape ({input.Shape.ToCommaSeparatedString()}) received in Conv2D module must be ({inputShape.ToCommaSeparatedString()})");
+            if (input.Size(-3) != GetInChannels)
+                throw new ShapeException($"Input shape ({input.Shape.ToCommaSeparatedString()}) received in Conv2D module must have {GetInChannels} channels.");
 
             int batch_size = input.Rank == 4 ? input.Size(-4) : 1;
 
-            if (device == Device.CPU)
+            if (Device == Device.CPU)
             {
-                if (input.Rank == 3)
-                    return Correlate2DValid_input_kernels(input, kernels).Squeeze(-4) + biases; // if input (C, H, W), we keep the shape
-                else
-                    return Correlate2DValid_input_kernels(input, kernels) + Tensor.Expand(Tensor.Unsqueeze(biases, 0), 0, batch_size);
+                int outputChannels = GetOutChannels;
+                int inputChannels = GetInChannels;
+
+                bool isBatched = input.Rank == 4 ? true : false;
+                int batchSize = isBatched ? input.Size(-4) : 1;
+             
+                int inputHeight = input.Size(-2);
+                int inputWidth = input.Size(-1);
+                int kernelHeight = GetKernelHeight;
+                int kernelWidth = GetKernelWidth;
+
+
+                int outputHeight = inputHeight - kernelHeight + 1;
+                int outputWidth = inputWidth - kernelWidth + 1;
+
+
+                Tensor output = input.Rank == 3 ?
+                    Tensor.Zeros(outputChannels, outputHeight, outputWidth) :
+                    Tensor.Zeros(batchSize, outputChannels, outputHeight, outputWidth);
+
+
+                Parallel.For(0, batchSize, b =>
+                {
+                    Parallel.For(0, outputChannels, oc =>
+                    {
+                        for (int h = 0; h < outputHeight; h++)
+                        {
+                            for (int w = 0; w < outputWidth; w++)
+                            {
+                                float sum = biases[oc];
+
+                                for (int ic = 0; ic < inputChannels; ic++)
+                                {
+                                    for (int j = 0; j < kernelHeight; j++)
+                                    {
+                                        for (int i = 0; i < kernelWidth; i++)
+                                        {
+                                            sum += input[b, ic, h + j, w + i] * kernels[oc, ic, j, i];
+                                        }
+                                    }
+                                }
+
+                                output[b, oc, h, w] = sum; // summation over input channels
+                            }
+                        }
+                    });
+                });
+
+
+                return output;
             }
             else
             {
                 int C_in = input.Size(-3);
                 int H_in = input.Size(-2);
                 int W_in = input.Size(-1);
-                int C_out = outChannels;
-                int H_out = H_in - kernelHeight + 1;
-                int W_out = W_in - kernelWidth + 1;
+                int C_out = GetOutChannels;
+                int H_out = H_in - GetKernelHeight + 1;
+                int W_out = W_in - GetKernelWidth + 1;
 
                 ComputeShader cs = DeepUnityMeta.Conv2DCS;
 
@@ -159,6 +165,10 @@ namespace DeepUnity.Layers
                 ComputeBuffer gammaBuffer = new ComputeBuffer(kernels.Count(), 4);
                 gammaBuffer.SetData(kernels.ToArray());
                 cs.SetBuffer(0, "gamma", gammaBuffer);
+
+                ComputeBuffer betaBuffer = new ComputeBuffer(biases.Count(), 4);
+                betaBuffer.SetData(biases.ToArray());
+                cs.SetBuffer(0, "beta", betaBuffer);
 
                 ComputeBuffer outputBuffer = new ComputeBuffer(batch_size * C_out * H_out * W_out, 4);
                 outputBuffer.SetData(new float[batch_size * C_out * H_out * W_out]);
@@ -171,24 +181,24 @@ namespace DeepUnity.Layers
                 cs.SetInt("out_channels", C_out);
                 cs.SetInt("out_height", H_out);
                 cs.SetInt("out_width", W_out);
-                cs.SetInt("kernel_height", kernelHeight);
-                cs.SetInt("kernel_width", kernelWidth);
+                cs.SetInt("kernel_height", GetKernelHeight);
+                cs.SetInt("kernel_width", GetKernelWidth);
 
                 cs.Dispatch(0,
                     (W_out + 15) / 16,
                     (H_out + 15) / 16,
                     (C_out + 3) / 4);
 
-                Tensor result = Tensor.Constant(outputBuffer, batch_size, outChannels, H_out, W_out);
+                Tensor output = input.Rank == 3 ?
+                        Tensor.Constant(outputBuffer, C_out, H_out, W_out) :
+                        Tensor.Constant(outputBuffer, batch_size, C_out, H_out, W_out);
 
                 inputBuffer.Release();
                 gammaBuffer.Release();
+                betaBuffer.Release(); 
                 outputBuffer.Release();
 
-                if (input.Rank == 3)
-                    return result.Squeeze(-4) + biases;
-                else
-                    return result + Tensor.Expand(Tensor.Unsqueeze(biases, 0), 0, batch_size);
+                return output;
             }
         }
 
@@ -206,13 +216,114 @@ namespace DeepUnity.Layers
         public Tensor Backward(Tensor loss)
         {
             bool isBatched = loss.Rank == 4;
-            int batch_size = isBatched ? loss.Size(-4) : 1;
+            int batchSize = isBatched ? loss.Size(-4) : 1;
 
-            if (device == Device.CPU)
+            int kernelHeight = GetKernelHeight;
+            int kernelWidth = GetKernelWidth;
+
+            int inputChannels = InputCache.Size(-3);
+            int inputHeight = InputCache.Size(-2);
+            int inputWidth = InputCache.Size(-1);
+
+            int outputChannels = kernels.Size(-4);
+            int outputHeight = inputHeight - kernelHeight + 1;
+            int outputWidth = inputWidth - kernelWidth + 1;
+
+            float grad_scale = batchSize * inputChannels * outputChannels * kernelHeight * kernelWidth * inputHeight * inputWidth; // or sometimes * outputWidth * outputHeight
+            
+            // Bias grad
+            Parallel.For(0, outputChannels, oc =>
             {
-                Tensor.CopyTo(kernelsGrad + Correlate2DValid_input_loss(InputCache, loss) / batch_size, kernelsGrad);
-                Tensor.CopyTo(biasesGrad + (isBatched ? Tensor.Mean(loss, -4) : loss), biasesGrad);
-                return Convolve2DFull_loss_gamma(loss, kernels);
+                float sum = 0f;
+
+                for (int b = 0; b < batchSize; b++)
+                {
+                    for (int h = 0; h < outputHeight; h++)
+                    {
+                        for (int w = 0; w < outputWidth; w++)
+                            sum += loss[b, oc, h, w];
+                    }
+                }
+
+                biasesGrad[oc] += sum / grad_scale;
+            });
+
+         
+
+
+            if (Device == Device.CPU)
+            {
+                Tensor inputGrad = isBatched ?
+                        Tensor.Zeros(batchSize, inputChannels, inputHeight, inputWidth) :
+                        Tensor.Zeros(inputChannels, inputHeight, inputWidth);
+
+                // Compute the gradients of the weights - valid correlation(x,loss)      
+                Parallel.For(0, outputChannels, oc =>
+                {
+                    Parallel.For(0, inputChannels, ic =>
+                    {
+                        for (int kh = 0; kh < kernelHeight; kh++)
+                        {
+                            for (int kw = 0; kw < kernelWidth; kw++)
+                            {
+                                float sum = 0f;
+
+                                for (int b = 0; b < batchSize; b++)
+                                {
+                                    for (int j = 0; j < outputHeight; j++)
+                                    {
+                                        for (int i = 0; i < outputWidth; i++)
+                                        {
+                                            sum += InputCache[b, ic, j + kh, i + kw] * loss[b, oc, j, i];
+                                        }
+                                    }
+                                }
+                               
+                                kernelsGrad[oc, ic, kh, kw] = sum / grad_scale;
+                            }
+                        }                                                 
+                    });                                                                     
+                });
+
+
+                // Compute the gradient of the input - full convolution(loss, kernels)
+                Parallel.For(0, batchSize, b =>
+                {
+                    Parallel.For(0, inputChannels, ic =>
+                    {
+                        for (int h = 0; h < inputHeight; h++)
+                        {
+                            for (int w = 0; w < inputWidth; w++)
+                            {
+                                float sum = 0f;
+
+                                for (int oc = 0; oc < outputChannels; oc++)
+                                {
+                                    for (int j = 0; j < kernelHeight; j++)
+                                    {
+                                        for (int i = 0; i < kernelWidth; i++)
+                                        {
+                                            int inputRow = h - j;
+                                            int inputCol = w - i;
+
+                                            if (inputRow >= 0 && inputRow < outputHeight && inputCol >= 0 && inputCol < outputWidth)
+                                            {
+                                                // the kernels are rotated by 180 degrees, so we get the inversed index of the kernel.
+                                                int jIndexOfRotatedKernel = kernelHeight - j - 1;
+                                                int iIndexOfRotatedKernel = kernelWidth - i - 1;
+                                                sum += loss[b, oc, inputRow, inputCol] * kernels[oc, ic, jIndexOfRotatedKernel, iIndexOfRotatedKernel];
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                inputGrad[b, ic, h, w] = sum / grad_scale;
+                            }
+                        }                    
+                    });
+                });
+
+                return inputGrad;
             }
             else
             {
@@ -225,7 +336,7 @@ namespace DeepUnity.Layers
                 int H_out = loss.Size(-2);
                 int W_out = loss.Size(-1);
 
-                cs.SetInt("batch_size", batch_size);
+                cs.SetInt("batch_size", batchSize);
                 cs.SetInt("in_channels", C_in);
                 cs.SetInt("in_height", H_in);
                 cs.SetInt("in_width", W_in);
@@ -234,9 +345,10 @@ namespace DeepUnity.Layers
                 cs.SetInt("out_width", W_out);
                 cs.SetInt("kernel_height", kernelHeight);
                 cs.SetInt("kernel_width", kernelWidth);
+                cs.SetFloat("grad_scale", grad_scale);
 
 
-                // Compute the gradients of the loss wrt. parameters ------------------------------------------------------------
+                // Compute the gradients of the loss w.r.t. weights ------------------------------------------------------------
                 int KINDEX = kernelHeight <= 3 ? 1 : 2;
 
                 ComputeBuffer lossBuffer = new ComputeBuffer(loss.Count(), 4);
@@ -263,7 +375,6 @@ namespace DeepUnity.Layers
                         (C_out + 31) / 32);
 
                 Tensor.CopyTo(kernelsGrad + Tensor.Constant(gammaGradBuffer, kernelsGrad.Shape), kernelsGrad);
-                Tensor.CopyTo(biasesGrad + (isBatched ? Tensor.Mean(loss, -4) : loss), biasesGrad);// faster on CPU
 
                 inputBuffer.Release();
                 gammaGradBuffer.Release();
@@ -287,292 +398,24 @@ namespace DeepUnity.Layers
                 cs.Dispatch(3,
                     (W_in + 15) / 16,
                     (H_in + 15) / 16,
-                    (batch_size + 3) / 4);
+                    (batchSize + 3) / 4);
 
-                Tensor inputGrad = Tensor.Constant(inputGradBuffer, batch_size, C_in, H_in, W_in);
+                Tensor inputGrad = isBatched ?
+                    Tensor.Constant(inputGradBuffer, batchSize, C_in, H_in, W_in):
+                    Tensor.Constant(inputGradBuffer, C_in, H_in, W_in);
 
                 lossBuffer.Release();
                 gammaBuffer.Release();
                 inputGradBuffer.Release();
 
                 return inputGrad;
-                // Computes the gradient of the loss wrt input. -------------------------------------------------------------------------
             }
+
+
+            
         }
 
 
-
-        // These methods were made for more efficient correlation/covolution than Tensor class provided methods.
-
-        /// <summary>
-        /// Performs the 2d correlation required for input with kernels
-        /// </summary>
-        /// <param name="input">(B, iC, H, W)</param>
-        /// <param name="kernels">(oC, iC, K, K)</param>
-        /// <param name="correlationType"></param>
-        /// <returns>(B, oC, H*, W*)</returns>
-        private static Tensor Correlate2DValid_input_kernels(Tensor input, Tensor kernels)
-        {
-            Tensor output = null;
-
-            // Output shape : [batch, kern.batch, *W, *H] 
-
-            int outputChannels = kernels.Size(-4);
-            int inputChannels = kernels.Size(-3);
-
-            int batchSize = input.Rank == 4 ? input.Size(-4) : 1;
-            int inputHeight = input.Size(-2);
-            int inputWidth = input.Size(-1);
-            int kernelHeight = kernels.Size(-2);
-            int kernelWidth = kernels.Size(-1);
-
-
-            int outputHeight = inputHeight - kernelHeight + 1;
-            int outputWidth = inputWidth - kernelWidth + 1;
-
-
-            output = Tensor.Zeros(batchSize, outputChannels, outputHeight, outputWidth);
-
-            if (batchSize > 1)
-                Parallel.For(0, batchSize, b =>
-                {
-                    for (int oc = 0; oc < outputChannels; oc++)
-                    {
-                        for (int ic = 0; ic < inputChannels; ic++)
-                        {
-                            for (int h = 0; h < outputHeight; h++)
-                            {
-                                for (int w = 0; w < outputWidth; w++)
-                                {
-                                    float sum = 0f;
-
-                                    for (int j = 0; j < kernelHeight; j++)
-                                    {
-                                        for (int i = 0; i < kernelWidth; i++)
-                                        {
-                                            sum += input[b, ic, h + j, w + i] * kernels[oc, ic, j, i];
-                                        }
-                                    }
-
-                                    output[b, oc, h, w] += sum;
-                                }
-                            }
-                        }
-                    }
-                });
-            else
-                Parallel.For(0, outputChannels, oc =>
-                {
-                    for (int ic = 0; ic < inputChannels; ic++)
-                    {
-                        for (int h = 0; h < outputHeight; h++)
-                        {
-                            for (int w = 0; w < outputWidth; w++)
-                            {
-                                float poolSum = 0f;
-
-                                for (int j = 0; j < kernelHeight; j++)
-                                {
-                                    for (int i = 0; i < kernelWidth; i++)
-                                    {
-                                        poolSum += input[0, ic, h + j, w + i] * kernels[oc, ic, j, i];
-                                    }
-                                }
-
-                                output[0, oc, h, w] += poolSum;
-                            }
-                        }
-                    }
-                });
-
-
-
-            return output;
-        }
-
-        /// <summary>
-        ///  Performs the 2d correlation required for input with loss
-        /// </summary>
-        /// <param name="input">(B, C_in, H, W)</param>
-        /// <param name="loss">(B, C_out, H*, W*)</param>
-        /// <param name="mode"></param>
-        /// <returns>kernel_gradient(C_out, C_in, K, K)</returns>
-        private Tensor Correlate2DValid_input_loss(Tensor input, Tensor loss)
-        {
-            int batchSize = input.Rank == 4 ? input.Size(0) : 1;
-            int inChannels = inputShape[0];
-            Tensor kernGrad = Tensor.Zeros(outChannels, inChannels, kernelHeight, kernelWidth);
-
-
-            int lossHeight = loss.Size(-2);
-            int lossWidth = loss.Size(-1);
-
-            // correlation type = valid
-            if (batchSize > 1)
-                Parallel.For(0, batchSize, b =>
-                {
-                    for (int oc = 0; oc < outChannels; oc++)
-                    {
-                        for (int ic = 0; ic < inChannels; ic++)
-                        {
-                            for (int h = 0; h < kernelHeight; h++)
-                            {
-                                for (int w = 0; w < kernelWidth; w++)
-                                {
-                                    float sum = 0f;
-
-                                    for (int j = 0; j < lossHeight; j++)
-                                    {
-                                        for (int i = 0; i < lossWidth; i++)
-                                        {
-                                            sum += input[b, ic, h + j, w + i] * loss[b, oc, j, i];
-                                        }
-                                    }
-
-                                    kernGrad[oc, ic, h, w] += sum;
-                                }
-                            }
-                        }
-                    }
-                });
-            else
-                Parallel.For(0, outChannels, oc =>
-                {
-                    for (int ic = 0; ic < inChannels; ic++)
-                    {
-                        for (int h = 0; h < kernelHeight; h++)
-                        {
-                            for (int w = 0; w < kernelWidth; w++)
-                            {
-                                float sum = 0f;
-
-                                for (int j = 0; j < lossHeight; j++)
-                                {
-                                    for (int i = 0; i < lossWidth; i++)
-                                    {
-                                        sum += input[0, ic, h + j, w + i] * loss[0, oc, j, i];
-                                    }
-                                }
-
-                                kernGrad[oc, ic, h, w] += sum;
-                            }
-                        }
-                    }
-                });
-
-
-            return kernGrad;
-        }
-
-        /// <summary>
-        /// Performs the 2d convolution required for loss with gamma to obtain loss grad wrt input
-        /// </summary>
-        /// <param name="loss">(B, oC, H*, W*)</param>
-        /// <param name="kernels">(oC, iC, K, K)</param>
-        /// <returns>input_gradient(B, iC, H, W)</returns>
-        private Tensor Convolve2DFull_loss_gamma(Tensor loss, Tensor kernels)
-        {
-            int batchSize = loss.Rank == 4 ? loss.Size(-4) : 1;
-
-            int inChannels = inputShape[0];
-            int inputGradHeight = loss.Size(-2) + kernelHeight - 1;
-            int inputGradWidth = loss.Size(-1) + kernelWidth - 1;
-
-            int lossHeight = loss.Size(-2);
-            int lossWidth = loss.Size(-1);
-            /// convolution type == full
-            Tensor inputGrad = Tensor.Zeros(batchSize, inChannels, inputGradHeight, inputGradWidth);
-
-            if (batchSize > 1)
-                Parallel.For(0, batchSize, b =>
-                {
-                    for (int ic = 0; ic < inChannels; ic++)
-                    {
-                        for (int oc = 0; oc < outChannels; oc++)
-                        {
-                            for (int h = 0; h < inputGradHeight; h++)
-                            {
-                                for (int w = 0; w < inputGradWidth; w++)
-                                {
-                                    float poolSum = 0f;
-
-                                    for (int j = 0; j < kernelHeight; j++)
-                                    {
-                                        for (int i = 0; i < kernelWidth; i++)
-                                        {
-                                            int inputRow = h - j;
-                                            int inputCol = w - i;
-
-                                            if (inputRow >= 0 && inputRow < lossHeight && inputCol >= 0 && inputCol < lossWidth)
-                                            {
-                                                // the kernels are rotated by 180 degrees, so we get the inversed index of the kernel.
-                                                int jIndexOfRotatedKernel = kernelHeight - j - 1;
-                                                int iIndexOfRotatedKernel = kernelWidth - i - 1;
-                                                poolSum += loss[b, oc, inputRow, inputCol] * kernels[oc, ic, jIndexOfRotatedKernel, iIndexOfRotatedKernel];
-                                            }
-                                        }
-                                    }
-                                    inputGrad[b, ic, h, w] += poolSum;
-                                }
-                            }
-                        }
-                    }
-                });
-            else
-                Parallel.For(0, outChannels, oc =>
-                {
-                    for (int ic = 0; ic < inChannels; ic++)
-                    {
-                        for (int h = 0; h < inputGradHeight; h++)
-                        {
-                            for (int w = 0; w < inputGradWidth; w++)
-                            {
-                                float sum = 0f;
-
-                                for (int j = 0; j < kernelHeight; j++)
-                                {
-                                    for (int i = 0; i < kernelWidth; i++)
-                                    {
-                                        int inputRow = h - j;
-                                        int inputCol = w - i;
-
-                                        if (inputRow >= 0 && inputRow < lossHeight && inputCol >= 0 && inputCol < lossWidth)
-                                        {
-                                            // the kernels are rotated by 180 degrees, so we get the inversed index of the kernel.
-                                            int jIndexOfRotatedKernel = kernelHeight - j - 1;
-                                            int iIndexOfRotatedKernel = kernelWidth - i - 1;
-                                            sum += loss[0, oc, inputRow, inputCol] * kernels[oc, ic, jIndexOfRotatedKernel, iIndexOfRotatedKernel];
-                                        }
-                                    }
-                                }
-                                inputGrad[0, ic, h, w] += sum;
-                            }
-                        }
-                    }
-                });
-
-            return inputGrad;
-        }
-
-
-
-        public object Clone()
-        {
-            var conv = new Conv2D((inputShape[0], inputShape[1], inputShape[2]), outChannels, kernel_shape: (kernelHeight, kernelWidth), device: device);
-            conv.kernels = (Tensor)kernels.Clone();
-            conv.biases = (Tensor)biases.Clone();
-            conv.kernelsGrad = (Tensor)kernelsGrad.Clone();
-            conv.biasesGrad = (Tensor)biasesGrad.Clone();
-
-            return conv;
-        }
-
-
-        public void SetDevice(Device device) => this.device = device;
-        public int ParametersCount()
-        {
-            return kernels.Count() + biases.Count();
-        }
         public Parameter[] Parameters()
         {
             if (kernelsGrad == null)
@@ -604,6 +447,21 @@ namespace DeepUnity.Layers
             biasesGrad = Tensor.Zeros(biases.Shape);
 
         }
+        public object Clone()
+        {
+            var conv = new Conv2D(GetInChannels, GetOutChannels, kernel_shape: (GetKernelHeight, GetKernelWidth), device: Device);
+            conv.kernels = (Tensor)kernels.Clone();
+            conv.biases = (Tensor)biases.Clone();
+            conv.kernelsGrad = (Tensor)kernelsGrad.Clone();
+            conv.biasesGrad = (Tensor)biasesGrad.Clone();
+
+            return conv;
+        }
+
+
     }
+
+
 }
+
 

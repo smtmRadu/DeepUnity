@@ -1,4 +1,4 @@
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 namespace DeepUnity.Optimizers
 {
     // https://pytorch.org/docs/stable/generated/torch.optim.Adagrad.html

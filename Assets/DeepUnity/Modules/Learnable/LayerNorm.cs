@@ -3,7 +3,7 @@ using Unity.VisualScripting;
 using UnityEngine;
 
 
-namespace DeepUnity.Layers
+namespace DeepUnity.Modules
 {
     /// <summary>
     /// <b>Placed before the non-linear activation function. </b>    <br />
@@ -18,6 +18,7 @@ namespace DeepUnity.Layers
         // Epsilon should be 1e-5f as default, but i keep it on default 1e-8f
         // Just a good reference paper to learn from, i made this just by adapting batchnorm layer.
         /// https://proceedings.neurips.cc/paper_files/paper/2019/file/2f4fe03d77724a7217006e5d16728874-Paper.pdf
+        [SerializeField] public Device Device { get; set; } = Device.CPU;
 
         private Tensor xCentered { get; set; }
         private Tensor xHat { get; set; }
@@ -125,13 +126,6 @@ namespace DeepUnity.Layers
 
             return laynorm;
         }
-
-
-        public void SetDevice(Device device) { return; }
-        public int ParametersCount()
-        {
-            return gamma.Count() + beta.Count();
-        }
         public Parameter[] Parameters()
         {
             if (gammaGrad == null)
@@ -142,6 +136,7 @@ namespace DeepUnity.Layers
 
             return new Parameter[] { g, b };
         }
+
         public virtual void OnBeforeSerialize()
         {
 

@@ -1,11 +1,19 @@
+using System.Linq;
+using UnityEngine;
 
-namespace DeepUnity.Layers
+namespace DeepUnity.Modules
 {
     public interface ILearnable
     {
-        public Parameter[] Parameters();
-        public int ParametersCount();
-        public void SetDevice(Device device);
+        [SerializeField] public Device Device { get; set; }
+
+        public Parameter[] Parameters(); 
+        
+        // Has default implementation
+        public int ParametersCount()
+        {
+            return Parameters().Sum(x => x.theta.Count());
+        }
     }
 
 }

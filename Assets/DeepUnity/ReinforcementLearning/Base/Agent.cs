@@ -13,10 +13,6 @@ namespace DeepUnity.ReinforcementLearning
     {
         [Tooltip("The number of observations received at a specific timestep.")]
         [SerializeField, Min(1), HideInInspector] private int spaceSize = 0;
-        [Tooltip("Height of the visual observation")]
-        [SerializeField, Min(9), HideInInspector] private int spaceHeight = 144;
-        [Tooltip("Width of the visual observation")]
-        [SerializeField, Min(16), HideInInspector] private int spaceWidth = 256;
         [Tooltip("Channels of the visual observation")]
         [SerializeField, Min(1), HideInInspector] private int spaceChannels = 3;
         [Tooltip("The inputs are enqueued in a queue buffer. t1 = [0, 0, x1] -> t2 = [0, x1, x2] -> t3 = [x1, x2, x3] -> t4 = [x2, x3, x4] -> .... For now they are disabled.")]
@@ -181,7 +177,7 @@ namespace DeepUnity.ReinforcementLearning
                 return;
             }
 
-            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, stackedInputs, spaceWidth, spaceHeight, spaceChannels, continuousActions, discreteActions, numLayers, hidUnits, archType);
+            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, stackedInputs, spaceChannels, continuousActions, discreteActions, numLayers, hidUnits, archType);
         }
         private void InitBuffers()
         {
@@ -514,9 +510,9 @@ namespace DeepUnity.ReinforcementLearning
                 propertyFieldRect.width = 50; // Adjust the width as needed
 
                 SerializedProperty typeProperty = serializedObject.FindProperty("archType");
-                EditorGUI.BeginDisabledGroup(true); // they prove very slow in computation.. better with mlp (also visual observations are not enough sometimes)
+                // EditorGUI.BeginDisabledGroup(true); // they prove very slow in computation.. better with mlp (also visual observations are not enough sometimes)
                 EditorGUI.PropertyField(propertyFieldRect, typeProperty, GUIContent.none);
-                EditorGUI.EndDisabledGroup();
+                // EditorGUI.EndDisabledGroup();
                 EditorGUILayout.EndHorizontal();
 
                 EditorGUILayout.Space();
@@ -557,19 +553,7 @@ namespace DeepUnity.ReinforcementLearning
 
                     EditorGUILayout.BeginHorizontal();
                     EditorGUILayout.Space(20);
-                    EditorGUILayout.PrefixLabel("Width");
-                    EditorGUILayout.PropertyField(serializedObject.FindProperty("spaceWidth"), GUIContent.none);
-                    EditorGUILayout.EndHorizontal();
-
-                    EditorGUILayout.BeginHorizontal();
-                    EditorGUILayout.Space(20);
-                    EditorGUILayout.PrefixLabel("Height");
-                    EditorGUILayout.PropertyField(serializedObject.FindProperty("spaceHeight"), GUIContent.none);
-                    EditorGUILayout.EndHorizontal();
-
-                    EditorGUILayout.BeginHorizontal();
-                    EditorGUILayout.Space(20);
-                    EditorGUILayout.PrefixLabel("Channels");
+                    EditorGUILayout.PrefixLabel("Space Channels");
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("spaceChannels"), GUIContent.none);
                     EditorGUILayout.EndHorizontal();
                 }

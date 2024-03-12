@@ -1,4 +1,4 @@
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 namespace DeepUnity.Optimizers
 {
     // The implementation is took from the paper https://arxiv.org/pdf/2208.06677.pdf

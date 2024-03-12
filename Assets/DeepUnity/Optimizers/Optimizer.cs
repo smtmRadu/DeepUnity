@@ -1,5 +1,5 @@
 using System.Linq;
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 
 namespace DeepUnity.Optimizers
 {

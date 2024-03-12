@@ -1,7 +1,8 @@
 using System;
 using UnityEngine;
 using System.Threading.Tasks;
-namespace DeepUnity.Layers
+using Unity.VisualScripting;
+namespace DeepUnity.Modules
 {
     // https://www.youtube.com/watch?v=tMjdQLylyGI&t=602s
     // https://proceedings.mlr.press/v9/glorot10a/glorot10a.pdf (251 - 253)
@@ -13,9 +14,9 @@ namespace DeepUnity.Layers
     [Serializable]
     public class Dense : ILearnable, IModule
     {
+        [SerializeField] public Device Device { get; set; } = Device.CPU;
         private Tensor InputCache { get; set; }
 
-        [SerializeField] private Device device;
         [SerializeField] private Tensor weights;
         [SerializeField] private Tensor biases;
         [NonSerialized] private Tensor weightsGrad;
@@ -28,19 +29,19 @@ namespace DeepUnity.Layers
         /// </summary>
         /// <param name="in_features">Input's last dimension value (H_in).</param>
         /// <param name="out_features">Output's last dimension value (H_out).</param>
-        /// <param name="gamma_init">Initializer used for weights.</param>
-        /// <param name="beta_init">Initializer used for biases.</param>
+        /// <param name="weight_init">Initializer used for weights.</param>
+        /// <param name="bias_init">Initializer used for biases.</param>
         /// <param name="device">Computation device used. Recommended <see cref="Device.GPU"/> for large <see cref="Dense"/> layers with <b>in_features</b> &amp; <b>out_features > 64</b>.</param>
-        public Dense(int in_features, int out_features, InitType gamma_init = InitType.LeCun_Uniform, InitType beta_init = InitType.LeCun_Uniform, Device device = Device.CPU)
+        public Dense(int in_features, int out_features, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = Device.CPU)
         {
             if (in_features < 1)
                 throw new ArgumentException("In_features cannot be less than 1.");
             if (out_features < 1)
                 throw new ArgumentException("Out_features cannot be less than 1.");
 
-            this.device = device;
-            weights = Initializer.CreateParameter(new int[] { out_features, in_features }, in_features, out_features, gamma_init);
-            biases = Initializer.CreateParameter(new int[] { out_features }, in_features, out_features, beta_init);
+            this.Device = device;
+            weights = Initializer.CreateParameter(new int[] { out_features, in_features }, in_features, out_features, weight_init);
+            biases = Initializer.CreateParameter(new int[] { out_features }, in_features, out_features, bias_init);
             weightsGrad = Tensor.Zeros(weights.Shape);
             biasesGrad = Tensor.Zeros(biases.Shape);
         }
@@ -49,10 +50,13 @@ namespace DeepUnity.Layers
             if (input.Size(-1) != weights.Size(-1))
                 throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the Dense Layer features_num ({weights.Size(-1)}).");
 
+            if (input.Rank > 2)
+                throw new ArgumentException($"Input must have the shape as (H_in) or (B, H_in), and the received input is ({input.Shape.ToCommaSeparatedString()})");
+
             bool isBatched = input.Rank == 2;
             int batch_size = isBatched ? input.Size(-2) : 1;
 
-            if (device == Device.CPU)
+            if (Device == Device.CPU)
             {
                 return Linear(input, weights, biases, isBatched, batch_size); // faster inference x10 with this...
             }
@@ -115,7 +119,7 @@ namespace DeepUnity.Layers
             bool isBatched = loss.Rank == 2;
             int batch_size = isBatched ? loss.Size(-2) : 1;
 
-            if (device == Device.CPU)
+            if (Device == Device.CPU)
             {
                 // Benchmark : 0.93s avg (This method was replaced due to performance benchmark)
                 // Tensor transposedLoss = isBatched ?
@@ -178,7 +182,7 @@ namespace DeepUnity.Layers
                 
             }
 
-            return Tensor.MatMul(loss, weights, device);
+            return Tensor.MatMul(loss, weights, Device);
         }
 
         /// <summary>
@@ -285,11 +289,7 @@ namespace DeepUnity.Layers
             weights_grad = wg;
             biases_grad = bg;
         }
-        public void SetDevice(Device device) { this.device = device; }
-        public int ParametersCount()
-        {
-            return weights.Count() + biases.Count();
-        }
+
         public Parameter[] Parameters()
         {
             if (weightsGrad == null)
@@ -300,10 +300,9 @@ namespace DeepUnity.Layers
 
             return new Parameter[] { w, b };
         }
-
         public object Clone()
         {
-            var dense = new Dense(1, 1, device: device);
+            var dense = new Dense(1, 1, device: Device);
             dense.weights = (Tensor)weights.Clone();
             dense.biases = (Tensor)biases.Clone();
             dense.weightsGrad = (Tensor)weightsGrad.Clone();

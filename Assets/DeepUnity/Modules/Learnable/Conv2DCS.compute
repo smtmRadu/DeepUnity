@@ -1,5 +1,6 @@
 RWStructuredBuffer<float> input; // (in_channels, in_height, in_width)
 RWStructuredBuffer<float> gamma; // (out_channels, in_channels, kernelSize, kernelSize)
+RWStructuredBuffer<float> beta; // (out_channels)
 RWStructuredBuffer<float> output;
 RWStructuredBuffer<float> gamma_grad;
 RWStructuredBuffer<float> beta_grad;
@@ -15,6 +16,8 @@ int out_height;
 int out_width;
 int kernel_height;
 int kernel_width;
+int grad_scale;
+
 
 float gamma_get(int b, int c, int h, int w)
 {
@@ -46,11 +49,7 @@ void input_grad_add(int b, int c, int h, int w, float value)
 void Forward(int3 id : SV_DispatchThreadID)
 {
    // id.x = out_width, id.y = out_height, id.z = out_channels
-   // 1. Apply valid correlation between input and gamma
-   // 2. Add beta to the end
     
-    
-    // note -> output is set to 0 from C#
     if (id.x >= out_width || id.y >= out_height || id.z >= out_channels)
         return;
     
@@ -58,7 +57,7 @@ void Forward(int3 id : SV_DispatchThreadID)
     {
         for (int ic = 0; ic < in_channels; ic++)
         {
-            float sum = 0.0f; // beta is added in C# (due to an error - first byte of the float number is incremeneted by one sometime no reason why - beta no longer added here, also efficiency reasons)
+            float sum = beta[id.z] / in_channels; 
             for (int j = 0; j < kernel_height; j++)
             {
                 for (int i = 0; i < kernel_width; i++)
@@ -70,6 +69,7 @@ void Forward(int3 id : SV_DispatchThreadID)
         }
     }
 }
+
 
 #pragma kernel ComputeKernelsGradients3
 [numthreads(3, 3, 64)]
@@ -91,11 +91,11 @@ void ComputeKernelsGradients3(int3 id : SV_DispatchThreadID)
             {
                 for (int i = 0; i < out_width; i++)
                 {
-                    sum += input_get(b, ic, id.y + j, id.x + i) * loss_get(b, id.z, j, i);
+                    sum += input_get(b, ic, j + id.y, i + id.x) * loss_get(b, id.z, j, i);
                 }
             }
            
-            gamma_grad_add(id.z, ic, id.y, id.x, sum / batch_size);
+            gamma_grad_add(id.z, ic, id.y, id.x, sum / grad_scale);
         }
     }
     
@@ -126,16 +126,16 @@ void ComputeKernelsGradients5(int3 id : SV_DispatchThreadID)
                 }
             }
            
-            gamma_grad_add(id.z, ic, id.y, id.x, sum / batch_size);
+            gamma_grad_add(id.z, ic, id.y, id.x, sum / grad_scale);
         }
     }
     
     // Beta grad computing on GPU was deprecated due the fact is faster on CPU
 }
 
-#pragma kernel ComputeInputGradients
+#pragma kernel ComputeInputGradient
 [numthreads(16, 16, 4)]
-void ComputeInputGradients(int3 id : SV_DispatchThreadID)
+void ComputeInputGradient(int3 id : SV_DispatchThreadID)
 {
     // id.x = in_width, id.y = in_height, id.z = batch_size
     // Convolves loss and kernels
@@ -166,7 +166,7 @@ void ComputeInputGradients(int3 id : SV_DispatchThreadID)
 
             }
             
-            input_grad_add(id.z, ic, id.y, id.x, sum);
+            input_grad_add(id.z, ic, id.y, id.x, sum / grad_scale);
         }
 
     }

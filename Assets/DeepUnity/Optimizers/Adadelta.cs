@@ -1,4 +1,4 @@
-using DeepUnity.Layers;
+using DeepUnity.Modules;
 namespace DeepUnity.Optimizers
 {
     public class Adadelta : Optimizer
