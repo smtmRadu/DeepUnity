@@ -10,15 +10,15 @@ namespace DeepUnity.Optimizers
         private readonly int total_iters;
 
         /// <summary>
-        /// Decays the learning rate by linearly changing small multiplicative factor until the number of epoch reaches <paramref name="total_iters"/>. 
+        /// Decays the learning rate by linearly changing small multiplicative factor until the number of epoch reaches <paramref name="epochs"/> argument. 
         /// Notice that such decay can happen simultaneously with other changes to the learning rate from outside this scheduler.
         /// </summary>
-        public LinearLR(Optimizer optimizer, float start_factor = 1f, float end_factor = 1e-8f, int total_iters = 10)
+        public LinearLR(Optimizer optimizer, float start_factor = 1f, float end_factor = 1e-8f, int epochs = 10)
             :base(optimizer, -1)
         {
             this.endFactor = end_factor;
             this.startFactor = start_factor;
-            this.total_iters = total_iters;
+            this.total_iters = epochs;
 
 
             optimizer.gamma = initialLR * start_factor;

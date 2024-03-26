@@ -1,5 +1,7 @@
 using UnityEngine;
 using DeepUnity.ReinforcementLearning;
+using DeepUnity;
+using DeepUnity.Sensors;
 
 namespace DeepUnityTutorials
 {
@@ -8,7 +10,7 @@ namespace DeepUnityTutorials
     {
         [SerializeField] Rigidbody ball;
         [SerializeField] const float rotationSpeed = 1f;
-
+        // [SerializeField] private CameraSensor camsens;
         public override void Awake()
         {
             base.Awake();

@@ -1320,7 +1320,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1539047896
 Transform:
   m_ObjectHideFlags: 0
@@ -1348,12 +1348,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45ec7b8831bf73c4bbed236ccf4948d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  network: {fileID: 11400000, guid: b7bf12910574eb94da101a5de9df695d, type: 2}
-  name: MNIST
-  lr: 0.0003
+  network: {fileID: 11400000, guid: 1f492c2e206fe6e42a2f07801120cf28, type: 2}
+  name: MNIST_2
+  lr: 0.0001
+  epochs: 100
   weightDecay: 0.001
   batch_size: 64
-  augment_data: 1
+  augment_data: 0
   augment_strength: 0.6
   accuracyGraph:
     graph:
@@ -1770,7 +1771,7 @@ MonoBehaviour:
   image: {fileID: 998186862}
   digitPredictionText: {fileID: 2101666738}
   softmaxOutputText: {fileID: 1459484847}
-  network: {fileID: 11400000, guid: eb6d087da4520f2469c00f64a61aaace, type: 2}
+  network: {fileID: 11400000, guid: 1f492c2e206fe6e42a2f07801120cf28, type: 2}
   brushRadius: 2
   brushStrength: 0.02
 --- !u!1 &1820971845
@@ -2216,7 +2217,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1946006905
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2230,9 +2231,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   canvas: {fileID: 1823018698}
-  discriminator: {fileID: 11400000, guid: bc550329dab25934bbb33f5e69db4a35, type: 2}
-  generator: {fileID: 11400000, guid: 800a1912ccb74bf428369eb9b4267eea, type: 2}
-  batch_size: 100
+  discriminator: {fileID: 11400000, guid: 47496d455a73afb4e88b79071656e143, type: 2}
+  generator: {fileID: 11400000, guid: 2d7b6fab82ee2184aa5f80bfe481603c, type: 2}
+  batch_size: 64
   lr: 0.0002
   perform: 1
   writeLoss: 1

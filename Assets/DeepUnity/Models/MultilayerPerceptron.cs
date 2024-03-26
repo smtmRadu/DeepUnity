@@ -109,12 +109,14 @@ namespace DeepUnity.Models
         /// <summary>
         /// Changes the device of all <see cref="ILearnable"/> modules.
         /// </summary>
-        /// <param name="device"></param>
-        public override void SetDevice(Device device)
+        public override Device Device
         {
-            foreach (var item in modules.OfType<ILearnable>())
+            set
             {
-                item.Device = device;
+                foreach (var item in modules.OfType<ILearnable>())
+                {
+                    item.Device = value;
+                }
             }
         }
         /// <summary>

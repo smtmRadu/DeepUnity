@@ -157,10 +157,7 @@ void ComputeInputGradient(int3 id : SV_DispatchThreadID)
                     
                     if (inputRow >= 0 && inputRow < out_height && inputCol >= 0 && inputCol < out_width)
                     {
-                        // the kernels are rotated by 180 degrees, so we get the inversed index of the kernel.
-                        int jIndexOfRotatedKernel = kernel_height - j - 1;
-                        int iIndexOfRotatedKernel = kernel_width - i - 1;
-                        sum += loss_get(id.z, oc, inputRow, inputCol) * gamma_get(oc, ic, jIndexOfRotatedKernel, iIndexOfRotatedKernel);
+                        sum += loss_get(id.z, oc, inputRow, inputCol) * gamma_get(oc, ic, kernel_height - j - 1, kernel_width - i - 1);
                     }
                 }
 

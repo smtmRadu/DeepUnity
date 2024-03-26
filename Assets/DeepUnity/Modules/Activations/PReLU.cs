@@ -31,7 +31,7 @@ namespace DeepUnity.Activations
 
         public Tensor Forward(Tensor input)
         {
-            InputCache = Tensor.Identity(input);
+            InputCache = input.Clone() as Tensor;
             return Predict(input);
         }
 

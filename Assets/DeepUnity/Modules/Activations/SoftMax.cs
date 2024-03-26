@@ -1,5 +1,6 @@
 using System;
 using DeepUnity.Modules;
+using UnityEngine;
 
 namespace DeepUnity.Activations
 {
@@ -14,13 +15,20 @@ namespace DeepUnity.Activations
     [Serializable]
     public class Softmax : IModule, IActivation
     {
+        [SerializeField] private float temperature = 1f;
         /// <summary>
         /// <b>Applies the Softmax function over the last input's dimension H (axis: -1).</b> <br></br>
         /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input <br></br>
         /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input <br></br>
         /// where * = any shape and H = features_num
         /// </summary>
-        public Softmax() { }
+        public Softmax(float temperature = 1f) 
+        {
+            if (temperature <= 0f)
+                throw new ArgumentException("Temperature cannot be less or equal than 1");
+
+            this.temperature = temperature;
+        }
 
         private Tensor OutputCache { get; set; }
         public Tensor Predict(Tensor input)
@@ -30,7 +38,7 @@ namespace DeepUnity.Activations
                 throw new ShapeException("Softmax input must be of shape (B, H) or (H).");
 
             // softmax(x[i]) = e^x[i] / sum{j:1->H}(e^x[j]])
-            Tensor exp = Tensor.Exp(input);
+            Tensor exp = Tensor.Exp(input / temperature);
             Tensor exp_sum = Tensor.Sum(exp, -1, true);
             exp_sum = Tensor.Expand(exp_sum, -1, exp.Size(-1));
             Tensor y = exp / exp_sum;

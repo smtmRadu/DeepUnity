@@ -231,22 +231,22 @@ namespace DeepUnity.Models
             }
             return multihead;
         }
-        public override void SetDevice(Device device)
-        {
-            foreach (var item in backboneModules.OfType<ILearnable>())
-            {
-                item.Device = device;
-            }
-            foreach (var item in inputHeadsModules.SelectMany(x => x.OfType<ILearnable>()))
-            {
-                item.Device = device;
-            }
-            foreach (var item in outputHeadsModules.SelectMany(x => x.OfType<ILearnable>()))
-            {
-                item.Device = device;
-            }
-        }
 
+        public override Device Device { set
+                {
+                foreach (var item in backboneModules.OfType<ILearnable>())
+                {
+                    item.Device = value;
+                }
+                foreach (var item in inputHeadsModules.SelectMany(x => x.OfType<ILearnable>()))
+                {
+                    item.Device = value;
+                }
+                foreach (var item in outputHeadsModules.SelectMany(x => x.OfType<ILearnable>()))
+                {
+                    item.Device = value;
+                }
+            } }
 
     }
 }

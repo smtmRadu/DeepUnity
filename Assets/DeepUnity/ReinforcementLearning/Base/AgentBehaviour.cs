@@ -1,6 +1,7 @@
-﻿using DeepUnity.Optimizers;
-using DeepUnity.Activations;
+﻿using DeepUnity.Activations;
+using DeepUnity.Models;
 using DeepUnity.Modules;
+using DeepUnity.Optimizers;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -8,31 +9,30 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
-using DeepUnity.Models;
 
 
 namespace DeepUnity.ReinforcementLearning
 {
     [Serializable]
-    internal sealed class AgentBehaviour : ScriptableObject
+    public sealed class AgentBehaviour : ScriptableObject
     {
         [Header("Behaviour Properties")]
         [SerializeField, ViewOnly] public string behaviourName;
         [SerializeField, HideInInspector] private bool assetCreated = false;
         [SerializeField, ViewOnly] public int observationSize;
-        [SerializeField, ViewOnly, Min(1)] public int stackedInputs;      
+        [SerializeField, ViewOnly, Min(1)] public int stackedInputs;
         [SerializeField, ViewOnly] public int continuousDim;
         [SerializeField, ViewOnly] public int discreteDim;
 
         [Header("Hyperparameters")]
-        [Tooltip("The scriptable object file containing the training hyperparameters.")]    
+        [Tooltip("The scriptable object file containing the training hyperparameters.")]
         [SerializeField] public Hyperparameters config;
-        
+
         [Header("Critic")]
         [SerializeField] public Sequential vNetwork;
         [SerializeField] public Sequential q1Network;
         [SerializeField] public Sequential q2Network;
-        
+
         [Space]
 
         [Header("Policy")]
@@ -46,11 +46,11 @@ namespace DeepUnity.ReinforcementLearning
         // [SerializeField] public NeuralNetwork discContNetwork;
         // [Tooltip("Neural Network used for Behavioral Cloning")]
         // [SerializeField] public NeuralNetwork discDiscNetwork;
-        
 
 
 
-        [ Header("Behaviour Configurations")]
+
+        [Header("Behaviour Configurations")]
         [SerializeField, Tooltip("The frames per second runned by the physics engine. [Time.fixedDeltaTime = 1 / targetFPS]")]
         [Range(30, 100)]
         public int targetFPS = 50;
@@ -65,7 +65,7 @@ namespace DeepUnity.ReinforcementLearning
         [SerializeField, Tooltip("Auto-normalize input observations and rewards for a stable training.")]
         public bool normalize = false;
 
-        [ViewOnly, SerializeField, Tooltip("Observations normalizer.")] 
+        [ViewOnly, SerializeField, Tooltip("Observations normalizer.")]
         public RunningNormalizer observationsNormalizer;
 
         [Range(1f, 10f), SerializeField, Tooltip("The observations are clipped [after normarlization] in range [-clip, clip]")]
@@ -75,10 +75,10 @@ namespace DeepUnity.ReinforcementLearning
         public RewardsNormalizer rewardsNormalizer;
 
         [Header("Standard Deviation for Continuous Actions")]
-        [SerializeField, Tooltip("The standard deviation for Continuous Actions")] 
+        [SerializeField, Tooltip("The standard deviation for Continuous Actions")]
         public StandardDeviationType standardDeviation = StandardDeviationType.Trainable;
         [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
-        [SerializeField, Min(0.001f)] 
+        [SerializeField, Min(0.001f)]
         public float standardDeviationValue = 1f;
 
         [Tooltip("Modify this value to change the exploration/exploitation ratio. The standard deviation obtained by softplus(std_dev) * standardDeviationScale. 1.5scale  ~ 1fixed, 3scale  ~ 1.5fixed, 4.5scale ~ 2fixed")]
@@ -100,31 +100,31 @@ namespace DeepUnity.ReinforcementLearning
         public LRScheduler muScheduler { get; private set; }
         public LRScheduler sigmaScheduler { get; private set; }
         public LRScheduler discreteScheduler { get; private set; }
-        public LRScheduler dContScheduler{ get; private set; }
+        public LRScheduler dContScheduler { get; private set; }
         public LRScheduler dDiscScheduler { get; private set; }
 
         public bool IsUsingContinuousActions { get => continuousDim > 0; }
         public bool IsUsingDiscreteActions { get => discreteDim > 0; }
 
 
-        private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int VISUAL_INPUT_CHANNELS, 
+        private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int VISUAL_INPUT_WIDTH, in int VISUAL_INPUT_HEIGHT, in int VISUAL_INPUT_CHANNELS,
             in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS, in ArchitectureType ARCHITECTURE)
         {
-            
+
             const InitType INIT_W = InitType.HE_Normal;
             const InitType INIT_B = InitType.Zeros;
             static IActivation HiddenActivation() => new Tanh();
 
             static IModule[] CreateMLP(int inputs, int stack, int outputs, int layers, int hidUnits)
             {
-                if(layers == 1)
+                if (layers == 1)
                 {
                     return new IModule[] {
                         new Dense(inputs * stack, hidUnits, INIT_W, INIT_B),
                         HiddenActivation(),
                         new Dense(hidUnits, outputs, INIT_W, INIT_B)};
                 }
-                if(layers == 2)
+                if (layers == 2)
                 {
                     return new IModule[] {
                         new Dense(inputs * stack, hidUnits, INIT_W, INIT_B),
@@ -133,7 +133,7 @@ namespace DeepUnity.ReinforcementLearning
                         HiddenActivation(),
                         new Dense(hidUnits, outputs, INIT_W, INIT_B)};
                 }
-                if(layers == 3)
+                if (layers == 3)
                 {
                     return new IModule[] {
                         new Dense(inputs * stack, hidUnits, INIT_W, INIT_B),
@@ -152,16 +152,16 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     return new IModule[] {
                         new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
-                        new RNNCell(inputs, hidUnits, HiddenStates.ReturnAll),
-                        new RNNCell(hidUnits, outputs, HiddenStates.ReturnLast)};
+                        new RNNCell(inputs, hidUnits, HiddenStates.ReturnLast),
+                        new Dense(hidUnits, outputs)};
                 }
                 if (layers == 2)
                 {
                     return new IModule[] {
                         new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
                         new RNNCell(inputs, hidUnits, HiddenStates.ReturnAll),
-                        new RNNCell(hidUnits, hidUnits, HiddenStates.ReturnAll),
-                        new RNNCell(hidUnits, outputs, HiddenStates.ReturnLast)};
+                        new RNNCell(hidUnits, hidUnits, HiddenStates.ReturnLast),
+                        new Dense(hidUnits, outputs)};
                 }
                 if (layers == 3)
                 {
@@ -169,47 +169,51 @@ namespace DeepUnity.ReinforcementLearning
                         new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
                         new RNNCell(inputs, hidUnits, HiddenStates.ReturnAll),
                         new RNNCell(hidUnits, hidUnits, HiddenStates.ReturnAll),
-                        new RNNCell(hidUnits, hidUnits, HiddenStates.ReturnAll),
-                        new RNNCell(hidUnits, outputs, HiddenStates.ReturnLast)};
+                        new RNNCell(hidUnits, hidUnits, HiddenStates.ReturnLast),
+                        new Dense(hidUnits, outputs)};
                 }
                 throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
             }
-            static IModule[] CreateCNN(int channels_in, int outputs, int layers, int hidUnits)
+            static IModule[] CreateCNN(int width, int height, int channels, int outputs, int layers, int hidUnits)
             {
-                int channels_out = channels_in * 6;
+
+                int conv_hout = height - 3 + 1;
+                int conv_wout = width - 3 + 1;
+                int pool_hout = (int)MathF.Floor((conv_hout - 2f) / 2f + 1);
+                int pool_wout = (int)MathF.Floor((conv_wout - 2f) / 2f + 1);
                 if (layers == 1)
                 {
                     return new IModule[]
                     {
-                        new Conv2D(channels_in, channels_out, 3),
+                        new Conv2D(channels, 1, 3),
                         new MaxPool2D(2),
                         new Flatten(),
                         HiddenActivation(),
-                        new LazyDense(outputs)
+                        new Dense(pool_hout * pool_wout, outputs)
                     };
                 }
-                if(layers == 2)
+                if (layers == 2)
                 {
                     return new IModule[]
                    {
-                        new Conv2D(channels_in, channels_out, 3),
+                        new Conv2D(channels, 1, 3),
                         new MaxPool2D(2),
                         new Flatten(),
                         HiddenActivation(),
-                        new LazyDense(hidUnits),
+                        new Dense(pool_hout * pool_wout, hidUnits),
                         HiddenActivation(),
                         new Dense(hidUnits, outputs),
                    };
                 }
-                if(layers == 3)
+                if (layers == 3)
                 {
                     return new IModule[]
                     {
-                        new Conv2D(channels_in, channels_out, 3),
+                        new Conv2D(channels, 1, 3),
                         new MaxPool2D(2),
                         new Flatten(),
                         HiddenActivation(),
-                        new LazyDense (hidUnits),
+                        new Dense(pool_hout * pool_wout, hidUnits),
                         HiddenActivation(),
                         new Dense(hidUnits, hidUnits),
                         HiddenActivation(),
@@ -221,7 +225,7 @@ namespace DeepUnity.ReinforcementLearning
             //------------------ NETWORK INITIALIZATION ----------------//
 
 
-            if(ARCHITECTURE == ArchitectureType.MLP)
+            if (ARCHITECTURE == ArchitectureType.MLP)
             {
                 vNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
                 if (CONTINUOUS_ACTIONS_NUM > 0)
@@ -235,11 +239,11 @@ namespace DeepUnity.ReinforcementLearning
                 if (DISCRETE_ACTIONS_NUM > 0)
                     discreteNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
             }
-            else if(ARCHITECTURE == ArchitectureType.RNN)
+            else if (ARCHITECTURE == ArchitectureType.RNN)
             {
                 vNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
 
-                if(CONTINUOUS_ACTIONS_NUM > 0)
+                if (CONTINUOUS_ACTIONS_NUM > 0)
                 {
                     muNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
                     sigmaNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
@@ -247,33 +251,31 @@ namespace DeepUnity.ReinforcementLearning
                     q2Network = new Sequential(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
                 }
 
-                if(DISCRETE_ACTIONS_NUM > 0)
+                if (DISCRETE_ACTIONS_NUM > 0)
                     discreteNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
             }
-            else if(ARCHITECTURE == ArchitectureType.CNN)
+            else if (ARCHITECTURE == ArchitectureType.CNN)
             {
-                vNetwork = new Sequential(CreateCNN(VISUAL_INPUT_CHANNELS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                vNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, 1, NUM_LAYERS, HIDDEN_UNITS));
 
-                if(CONTINUOUS_ACTIONS_NUM > 0)
+                if (CONTINUOUS_ACTIONS_NUM > 0)
                 {
-                    muNetwork = new Sequential(CreateCNN(VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
-                    sigmaNetwork = new Sequential(CreateCNN(VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
+                    muNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                    sigmaNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
                 }
 
-                if(DISCRETE_ACTIONS_NUM > 0)
-                    discreteNetwork = new Sequential(CreateCNN(VISUAL_INPUT_CHANNELS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
+                if (DISCRETE_ACTIONS_NUM > 0)
+                    discreteNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
             }
-                     
 
-           
+
+
         }
 
         public void InitOptimisers(Hyperparameters hp, TrainerType trainer)
         {
             const float lambda = 0f;
             const float epsilon = 1e-5F; // PPO openAI eps they use :D, but in Andrychowicz, et al. (2021) they use tf default 1e-7
-
-            // I ve done tests with Adan over Adam and it works pretty nice :D
             if (trainer == TrainerType.SAC)
             {
                 vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
@@ -282,21 +284,21 @@ namespace DeepUnity.ReinforcementLearning
                 muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
                 sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
             }
-            else if(trainer == TrainerType.PPO)
+            else if (trainer == TrainerType.PPO)
             {
                 vOptimizer = new Adam(vNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
-                
+
                 if (IsUsingContinuousActions)
                 {
                     muOptimizer = new Adam(muNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
                     sigmaOptimizer = new Adam(sigmaNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
                 }
-                
-                if(IsUsingDiscreteActions)
+
+                if (IsUsingDiscreteActions)
                 {
                     discreteOptimizer = new Adam(discreteNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: lambda);
                 }
-            }                   
+            }
         }
         public void InitSchedulers(Hyperparameters hp, TrainerType trainer)
         {
@@ -304,25 +306,25 @@ namespace DeepUnity.ReinforcementLearning
 
             if (trainer == TrainerType.SAC)
             {
-                vScheduler = new LinearLR(vOptimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
-                q1Scheduler = new LinearLR(q1Optimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
-                q2Scheduler = new LinearLR(q1Optimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
-                muScheduler = new LinearLR(muOptimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
-                sigmaScheduler = new LinearLR(sigmaOptimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+                vScheduler = new LinearLR(vOptimizer, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
+                q1Scheduler = new LinearLR(q1Optimizer, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
+                q2Scheduler = new LinearLR(q1Optimizer, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
+                muScheduler = new LinearLR(muOptimizer, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
+                sigmaScheduler = new LinearLR(sigmaOptimizer, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
             }
             else if (trainer == TrainerType.PPO)
             {
-                vScheduler = new LinearLR(vOptimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+                vScheduler = new LinearLR(vOptimizer, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
 
                 if (IsUsingContinuousActions)
                 {
-                    muScheduler = new LinearLR(muOptimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
-                    sigmaScheduler = new LinearLR(sigmaOptimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+                    muScheduler = new LinearLR(muOptimizer, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
+                    sigmaScheduler = new LinearLR(sigmaOptimizer, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
                 }
 
                 if (IsUsingDiscreteActions)
                 {
-                    discreteScheduler = new LinearLR(discreteOptimizer, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+                    discreteScheduler = new LinearLR(discreteOptimizer, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
                 }
             }
         }
@@ -350,7 +352,7 @@ namespace DeepUnity.ReinforcementLearning
             action = mu.Zip(sigma, (x, y) => Utils.Random.Normal(x, y));
             probs = Tensor.Probability(action, mu, sigma);
 
-            
+
         }
         /// <summary>
         /// Input: <paramref name="stateBatch"/> - <em>s</em> | Tensor (<em>Batch Size, Observations</em>) <br></br>
@@ -368,7 +370,7 @@ namespace DeepUnity.ReinforcementLearning
 
             muBatch = muNetwork.Forward(stateBatch);
             sigmaBatch = standardDeviation == StandardDeviationType.Trainable ?
-                           sigmaNetwork.Forward(stateBatch) * standardDeviationScale:
+                           sigmaNetwork.Forward(stateBatch) * standardDeviationScale :
                            Tensor.Fill(standardDeviationValue, muBatch.Shape);
         }
         /// <summary>
@@ -378,7 +380,7 @@ namespace DeepUnity.ReinforcementLearning
         /// </summary>
         public void DiscretePredict(Tensor state, out Tensor action, out Tensor phi)
         {
-           
+
             if (!IsUsingDiscreteActions)
             {
                 action = null;
@@ -415,7 +417,7 @@ namespace DeepUnity.ReinforcementLearning
                 return;
             }
 
-            phi = discreteNetwork.Forward(stateBatch);        
+            phi = discreteNetwork.Forward(stateBatch);
         }
 
 
@@ -425,8 +427,8 @@ namespace DeepUnity.ReinforcementLearning
         /// Creates a new Agent behaviour folder containing all auxiliar neural networks, or loads it if already exists one for this behaviour.
         /// </summary>
         /// <returns></returns>
-        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int channelSize, int continuousActions, int discreteActions, int numLayers, int hidUnits, ArchitectureType aType)
-        {          
+        public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int widthSize, int heightSize, int channelSize, int continuousActions, int discreteActions, int numLayers, int hidUnits, ArchitectureType aType)
+        {
             var instance = UnityEditor.AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
 
             if (instance != null)
@@ -436,7 +438,7 @@ namespace DeepUnity.ReinforcementLearning
             }
 
 
-            AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, stackedInputs, channelSize, continuousActions, discreteActions, numLayers, hidUnits, aType);
+            AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, stackedInputs, widthSize, heightSize, channelSize, continuousActions, discreteActions, numLayers, hidUnits, aType);
             newAgBeh.behaviourName = name;
             newAgBeh.observationSize = stateSize;
             newAgBeh.stackedInputs = stackedInputs;
@@ -461,7 +463,7 @@ namespace DeepUnity.ReinforcementLearning
             newAgBeh.q1Network?.CreateAsset($"{name}/Q1");
             newAgBeh.q2Network?.CreateAsset($"{name}/Q2");
             newAgBeh.discreteNetwork?.CreateAsset($"{name}/Discrete");
-            
+
 
             return newAgBeh;
         }
@@ -470,7 +472,7 @@ namespace DeepUnity.ReinforcementLearning
         /// </summary>
         public void Save()
         {
-            if(!assetCreated)
+            if (!assetCreated)
             {
                 ConsoleMessage.Warning("Cannot save the Behaviour because it requires compilation first");
             }
@@ -479,7 +481,7 @@ namespace DeepUnity.ReinforcementLearning
 
             vNetwork?.Save();
             q1Network?.Save();
-            q2Network?.Save();  
+            q2Network?.Save();
             muNetwork?.Save();
             sigmaNetwork?.Save();
             discreteNetwork?.Save();
@@ -607,11 +609,11 @@ namespace DeepUnity.ReinforcementLearning
                 script.standardDeviationValue = 1f;
             }
 
-            if(script.standardDeviationScale <= 0)
+            if (script.standardDeviationScale <= 0)
             {
                 script.standardDeviationScale = 1f;
             }
-            if(!script.normalize)
+            if (!script.normalize)
             {
                 dontDrawMe.Add("observationsNormalizer");
             }
@@ -622,4 +624,3 @@ namespace DeepUnity.ReinforcementLearning
     }
 #endif
 }
-

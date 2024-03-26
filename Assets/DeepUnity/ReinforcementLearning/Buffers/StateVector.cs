@@ -15,19 +15,7 @@ namespace DeepUnity.ReinforcementLearning
         public readonly int StackedInputs;
 
         private LinkedList<float> StateSequenceVector;
-        public Tensor State
-        {
-            get
-            {
-                Tensor state = Tensor.Zeros(Capacity);
-                int index = 0;
-                foreach (var item in StateSequenceVector)
-                {
-                    state[index++] = item;
-                }
-                return state;
-            }
-        }
+        public Tensor State => Tensor.Constant(StateSequenceVector);
 
         public StateVector(int state_size, int stacked_states)
         {

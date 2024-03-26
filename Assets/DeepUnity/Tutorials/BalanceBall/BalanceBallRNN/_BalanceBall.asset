@@ -1,0 +1,208 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
+  m_Name: _BalanceBall
+  m_EditorClassIdentifier: 
+  behaviourName: BalanceBall
+  assetCreated: 1
+  observationSize: 10
+  stackedInputs: 8
+  continuousDim: 2
+  discreteDim: 0
+  config: {fileID: 11400000, guid: bf6290a154219f44baa221c831168b5f, type: 2}
+  vNetwork: {fileID: 11400000, guid: 091255ce3583cea419581286e25cffd3, type: 2}
+  q1Network: {fileID: 11400000, guid: 421098c4ea3d118458cdb9166a10d117, type: 2}
+  q2Network: {fileID: 11400000, guid: f425be9f300438c49975cebfc884ad96, type: 2}
+  muNetwork: {fileID: 11400000, guid: c08498c96797ee8499bc548a56f0fc11, type: 2}
+  sigmaNetwork: {fileID: 11400000, guid: 44893527850b61a47b9be869bb36b183, type: 2}
+  discreteNetwork: {fileID: 0}
+  targetFPS: 50
+  inferenceDevice: 0
+  trainingDevice: 1
+  normalize: 0
+  observationsNormalizer:
+    step: 0
+    mean:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 50000000
+    m2:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 50000000
+  observationsClip: 5
+  rewardsNormalizer:
+    step: 0
+    R: 0
+    mean: 0
+    m2: 0
+  standardDeviation: 0
+  standardDeviationValue: 2
+  standardDeviationScale: 1.5

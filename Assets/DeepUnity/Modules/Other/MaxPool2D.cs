@@ -53,10 +53,13 @@ namespace DeepUnity.Modules
             if (padding > 0)
                 input = Tensor.MatPad(input, padding, padding_mode);
 
-            int batch_size = input.Rank == 4 ? input.Size(-4) : 1;
+            bool isBatched = input.Rank == 4;
+            int batch_size = isBatched ? input.Size(-4) : 1;
             int channel_size = input.Rank >= 3 ? input.Size(-3) : 1;
 
-            Tensor pooled_input = Tensor.Zeros(batch_size, channel_size, H_out, W_out);
+            Tensor pooled_input = isBatched?
+                Tensor.Zeros(batch_size, channel_size, H_out, W_out):
+                Tensor.Zeros(channel_size, H_out, W_out);
 
             Parallel.For(0, batch_size, b =>
             {
@@ -90,9 +93,7 @@ namespace DeepUnity.Modules
                 });
             });
 
-            if (input.Rank == 3)
-                return pooled_input.Squeeze(-4);
-            else return pooled_input;
+            return pooled_input;
         }
         public Tensor Forward(Tensor input)
         {
@@ -111,14 +112,17 @@ namespace DeepUnity.Modules
             // GradInput = [[0, -0.7],[0, 0]].
             // Find the max value in the input cache (on index [0,1]). On that place the gradient wrt input will get the loss vlaue. ALl others are 0.
 
-            int Batch = loss.Rank == 4 ? loss.Size(-4) : 1;
+            bool isBatched = loss.Rank == 4;
+            int Batch = isBatched  ? loss.Size(-4) : 1;
             int Channels = loss.Rank >= 3 ? loss.Size(-3) : 1;
             int H_out = loss.Size(-2);
             int W_out = loss.Size(-1);
             int H_in = InputCache.Size(-2);
             int W_in = InputCache.Size(-1);
 
-            Tensor gradInput = Tensor.Zeros(Batch, Channels, H_in, W_in);
+            Tensor gradInput = isBatched ? 
+                Tensor.Zeros(Batch, Channels, H_in, W_in):
+                Tensor.Zeros(Channels, H_in, W_in);
 
 
             Parallel.For(0, Batch, b =>

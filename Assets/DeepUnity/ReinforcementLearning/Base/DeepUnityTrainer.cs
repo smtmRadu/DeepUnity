@@ -36,7 +36,7 @@ namespace DeepUnity.ReinforcementLearning
         [Min(1)] public int autosave = 15; protected float autosaveSecondsElapsed = 0f;
         [ViewOnly] public bool ended = false;
 
-        [SerializeField] private float avgDeltaTime = 0.02f;
+        [SerializeField, ViewOnly] private float avgDeltaTime = 0.02f;
         const float avgDeltaTimeMomentum = 0.96f;
         string _learningText = "Learning";
         GUIStyle _learningTextStyle;

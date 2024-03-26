@@ -2,8 +2,6 @@ using System.Threading.Tasks;
 using System;
 using Unity.VisualScripting;
 using UnityEngine;
-using UnityEngine.Windows;
-using System.Runtime.Remoting.Channels;
 
 namespace DeepUnity.Modules
 {
@@ -40,28 +38,21 @@ namespace DeepUnity.Modules
         /// <param name="kernel_size"></param>
         /// <param name="gamma_init">Initializer used for weights.</param>
         /// <param name="beta_init">Initializer used for biases.</param>
-        public Conv2D(int in_channels, int out_channels, int kernel_size, Device device = Device.CPU)
-        {
-            if (in_channels < 1)
-                throw new ArgumentException("Cannot have less than 1 input channels.");
+        public Conv2D(int in_channels, int out_channels, int kernel_size, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = Device.CPU)
+            : this(in_channels, out_channels, (kernel_size, kernel_size), weight_init, bias_init, device) { }
 
-            if (out_channels < 1)
-                throw new ArgumentException("Cannot have less than 1 output channel.");
-
-            if (kernel_size < 2)
-                throw new ArgumentException("Cannot have less than 2 kernel size.");
-
-            this.Device = device;
-
-            float k = 1f / (out_channels * kernel_size * kernel_size);
-            k = Mathf.Sqrt(k);
-            kernels = Tensor.RandomRange((-k, k), out_channels, in_channels, kernel_size, kernel_size);
-            biases = Tensor.RandomRange((-k, k), out_channels);
-            kernelsGrad = Tensor.Zeros(kernels.Shape);
-            biasesGrad = Tensor.Zeros(biases.Shape);
-        }
-
-        public Conv2D(int in_channels, int out_channels,(int, int) kernel_shape, Device device = Device.CPU)
+        /// <summary>
+        /// Input: (<b>B</b>, <b>C_in</b>, <b>H_in</b>, <b>W_in</b>) or (<b>C_in</b>, <b>H_in</b>, <b>W_in</b>) for unbatched input.<br/>
+        /// Output: <b>(B, C_out, H_out, W_out)</b> or <b>(C_out, H_out, W_out)</b> for unbatched input.<br></br>
+        /// <br></br>
+        /// where <br></br>
+        /// B = batch_size <br></br>
+        /// C_in = in_channels <br></br> 
+        /// C_out = out_channels, <br></br>
+        /// H_out = H_in - kernel_size + 1 <br></br> 
+        /// W_out = W_in - kernel_size + 1
+        /// </summary>
+        public Conv2D(int in_channels, int out_channels,(int, int) kernel_shape, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = Device.CPU)
         {
             if (in_channels < 1)
                 throw new ArgumentException("Cannot have less than 1 input channels.");
@@ -74,10 +65,12 @@ namespace DeepUnity.Modules
 
             this.Device = device;
 
-            float k = 1f / (out_channels * kernel_shape.Item1 * kernel_shape.Item2);
-            k = Mathf.Sqrt(k);
-            kernels = Tensor.RandomRange((-k, k), out_channels, in_channels, kernel_shape.Item1, kernel_shape.Item2);
-            biases = Tensor.RandomRange((-k, k), out_channels);
+            int fanIn = in_channels * kernel_shape.Item1 * kernel_shape.Item2;
+            int fanOut = out_channels;
+
+            kernels = Parameter.Create(new int[] { out_channels, in_channels, kernel_shape.Item1, kernel_shape.Item2 }, fanIn, fanOut, weight_init);
+            biases = Parameter.Create(new int[] { out_channels }, fanIn, fanOut, bias_init);
+
             kernelsGrad = Tensor.Zeros(kernels.Shape);
             biasesGrad = Tensor.Zeros(biases.Shape);
         }
@@ -206,7 +199,7 @@ namespace DeepUnity.Modules
         /// <returns></returns>
         public Tensor Forward(Tensor input)
         {
-            InputCache = Tensor.Identity(input);
+            InputCache = input.Clone() as Tensor;
 
             return Predict(input);
         }
@@ -229,7 +222,7 @@ namespace DeepUnity.Modules
             int outputHeight = inputHeight - kernelHeight + 1;
             int outputWidth = inputWidth - kernelWidth + 1;
 
-            float grad_scale = batchSize * inputChannels * outputChannels * kernelHeight * kernelWidth * inputHeight * inputWidth; // or sometimes * outputWidth * outputHeight
+            float grad_scale = batchSize * inputChannels * outputChannels * kernelHeight * kernelWidth * inputHeight * inputWidth; ; // * outputWidth * outputHeight;
             
             // Bias grad
             Parallel.For(0, outputChannels, oc =>
@@ -284,40 +277,37 @@ namespace DeepUnity.Modules
                         }                                                 
                     });                                                                     
                 });
-
-
-                // Compute the gradient of the input - full convolution(loss, kernels)
+                
+                // Compute the gradient of the input - full convolution(loss, kernels) (no pad involved, just checkings)
                 Parallel.For(0, batchSize, b =>
                 {
                     Parallel.For(0, inputChannels, ic =>
                     {
-                        for (int h = 0; h < inputHeight; h++)
+                        for (int ih = 0; ih < inputHeight; ih++)
                         {
-                            for (int w = 0; w < inputWidth; w++)
+                            for (int iw = 0; iw < inputWidth; iw++)
                             {
                                 float sum = 0f;
 
                                 for (int oc = 0; oc < outputChannels; oc++)
                                 {
-                                    for (int j = 0; j < kernelHeight; j++)
+                                    for (int kh = 0; kh < kernelHeight; kh++)
                                     {
-                                        for (int i = 0; i < kernelWidth; i++)
+                                        for (int kw = 0; kw < kernelWidth; kw++)
                                         {
-                                            int inputRow = h - j;
-                                            int inputCol = w - i;
-
-                                            if (inputRow >= 0 && inputRow < outputHeight && inputCol >= 0 && inputCol < outputWidth)
+                                            int oh = ih + kh - kernelHeight + 1;
+                                            int ow = iw + kw - kernelWidth + 1;
+                                            
+                                            if (oh >= 0 && oh < outputHeight && ow >= 0 && ow < outputWidth)
                                             {
-                                                // the kernels are rotated by 180 degrees, so we get the inversed index of the kernel.
-                                                int jIndexOfRotatedKernel = kernelHeight - j - 1;
-                                                int iIndexOfRotatedKernel = kernelWidth - i - 1;
-                                                sum += loss[b, oc, inputRow, inputCol] * kernels[oc, ic, jIndexOfRotatedKernel, iIndexOfRotatedKernel];
+                                                sum += loss[b, oc, oh, ow] * kernels[oc, ic, kernelHeight - kh - 1, kernelWidth - kw - 1]; // kernel is rotated by 180d
                                             }
+                                            // used when appling pad to the loss sum += loss[b, oc, ih + kh, iw + kw] * kernels[oc, ic, kernelHeight - kh - 1, kernelWidth - kw - 1]; // kernel is rotated by 180d
                                         }
                                     }
                                 }
                                 
-                                inputGrad[b, ic, h, w] = sum / grad_scale;
+                                inputGrad[b, ic, ih, iw] = sum / grad_scale;
                             }
                         }                    
                     });

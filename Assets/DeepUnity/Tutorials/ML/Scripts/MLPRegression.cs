@@ -52,17 +52,21 @@ namespace DeepUnityTutorials
             {
                 net = new Sequential(
                  new Dense(2, hiddenSize,init_w, init_b),
-                 new Tanh(),
-                 new Dense(hiddenSize, hiddenSize, init_w, init_b),
+                 new LazyBatchNorm(),
                  new Tanh(),
                
+                 new Dense(hiddenSize, hiddenSize, init_w, init_b),
+                 new LazyBatchNorm(),
+                 new Tanh(),
+
                  new Dense(hiddenSize, 1, init_w, init_b)
                  );
             }
 
-            net.SetDevice(device);
+            net.Device = device;
+            net.Predict(Tensor.Random01(2));
 
-            optimizer = new Adam(net.Parameters(), lr: learningRate, amsgrad: true);
+            optimizer = new Adam(net.Parameters(), lr: learningRate);
             scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
 
 

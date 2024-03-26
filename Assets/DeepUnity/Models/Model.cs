@@ -5,13 +5,17 @@ using DeepUnity.Modules;
 namespace DeepUnity.Models
 {
     /// <typeparam name="ModelType">Type of the model class that inherits. It is used as a box to serialize models as Scriptable Objects.</typeparam>
-   
+
     [Serializable]
     public abstract class Model<ModelType, IOType> : ScriptableObject, ICloneable where ModelType : Model<ModelType, IOType>
     {
         [SerializeField, ViewOnly] private int version = 1;
         [SerializeField, HideInInspector] private bool assetCreated = false;
 
+        /// <summary>
+        /// Set the device of all model <see cref="IModule"/>s that are <see cref="ILearnable"/>.
+        /// </summary>
+        [SerializeField] public abstract Device Device { set; }
 
 
         /// <summary>
@@ -45,11 +49,7 @@ namespace DeepUnity.Models
         /// </summary>
         /// <returns></returns>
         public abstract object Clone();
-        /// <summary>
-        /// Set the device of all model <see cref="IModule"/>s that are <see cref="ILearnable"/>.
-        /// </summary>
-        /// <param name="device"></param>
-        public abstract void SetDevice(Device device);
+       
 
 
 

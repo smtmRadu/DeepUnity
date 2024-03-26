@@ -39,7 +39,7 @@ namespace DeepUnity.Modules
             attention_heads = new Attention[heads_num];
             for (int i = 0; i < heads_num; i++)
             {
-                attention_heads[i] = new Attention(embed_dim, embed_dim / heads_num, device);
+                attention_heads[i] = new Attention(embed_dim, embed_dim / heads_num, device: device);
             }
             W_O = new Dense(embed_dim, embed_dim, device: device);
         }
@@ -109,11 +109,13 @@ namespace DeepUnity.Modules
 
         public virtual void OnBeforeSerialize()
         {
-
+            throw new Exception("Multihead attention cannot be serialized:(");
         }
 
         public virtual void OnAfterDeserialize()
         {
+            throw new Exception("Multihead attention cannot be serialized:(");
+
             W_O.OnAfterDeserialize();
 
             for (int i = 0; i < attention_heads.Length; i++)

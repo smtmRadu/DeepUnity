@@ -154,8 +154,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   cameras:
   - {fileID: 1607580647}
-  - {fileID: 648308861}
   - {fileID: 1238026460}
+  - {fileID: 1504517481}
+  - {fileID: 648308861}
 --- !u!4 &136318361
 Transform:
   m_ObjectHideFlags: 0
@@ -405,16 +406,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   spaceSize: 10
-  spaceHeight: 20
-  spaceWidth: 20
+  spaceHeight: 16
+  spaceWidth: 16
   spaceChannels: 3
-  stackedInputs: 1
+  stackedInputs: 8
   continuousActions: 2
   discreteActions: 0
-  archType: 0
+  archType: 2
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 7413de1e6975bba4c833d5c2cd268587, type: 2}
+  model: {fileID: 11400000, guid: ec1930606fe915141a5e1a79bd909d16, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0
@@ -974,7 +975,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1504517480}
   m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 0, y: 2.91, z: -0}
+  m_LocalPosition: {x: 0, y: 2.91, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

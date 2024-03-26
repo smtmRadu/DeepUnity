@@ -35,7 +35,7 @@ namespace DeepUnity.Sensors
         /// <returns>Returns a float[] with length = <b>3 * width * height</b> if capture is RGB else  <b>1 * width * height</b>.</returns>
         public float[] GetObservationsVector()
         {
-            Color[] pixels = GetObservationPixels();
+            Color[] pixels = GetPixels();
             int channels = type == CaptureType.RGB ? 3 : 1;
             float[] vector = new float[pixels.Length * channels];
             int index = 0;
@@ -68,7 +68,7 @@ namespace DeepUnity.Sensors
         /// Returns the pixels of the camera rendered image. The pixels are not affected by Grayscale type.
         /// </summary>
         /// <returns></returns>
-        public Color[] GetObservationPixels()
+        public Color[] GetPixels()
         {
             if (cam == null)
             {
@@ -214,7 +214,7 @@ namespace DeepUnity.Sensors
             // Display the rendered image
             if (script.renderTexture != null)
             {
-                script.GetObservationPixels();
+                script.GetPixels();
                 EditorGUILayout.Space();
                 Rect previewRect = GUILayoutUtility.GetRect(100,100);
                 EditorGUI.DrawPreviewTexture(previewRect, script.renderTexture, null, ScaleMode.ScaleToFit);

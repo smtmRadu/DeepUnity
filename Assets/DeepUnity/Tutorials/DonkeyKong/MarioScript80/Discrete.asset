@@ -17,7 +17,6 @@ MonoBehaviour:
   serializedModules:
   - name: Dense
     dense:
-      device: 0
       weights:
         data:
         - -0.0881126
@@ -16458,11 +16457,6 @@ MonoBehaviour:
         - 0
         shape: 01000000
     conv2d:
-      inputShape: 
-      outChannels: 0
-      kernelWidth: 0
-      kernelHeight: 0
-      device: 0
       kernels:
         data: []
         shape: 
@@ -16474,7 +16468,6 @@ MonoBehaviour:
         data: []
         shape: 
     rnncell:
-      device: 0
       nonlinearity: 0
       onReturn: 0
       weights:
@@ -16500,6 +16493,17 @@ MonoBehaviour:
       W_V:
         data: []
         shape: 
+    lazydense:
+      weights:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+      isInitialized: 0
+      out_features: 0
+      weightInit: 0
+      biasInit: 0
     dropout:
       dropout: 0
     flatten:
@@ -16516,6 +16520,8 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    softmax:
+      temperature: 0
     leakyrelu:
       alpha: 0
     softplus:
@@ -16529,9 +16535,11 @@ MonoBehaviour:
     hardtanh:
       min_value: -1
       max_value: 1
+    rrelu:
+      lower: 0
+      upper: 0
   - name: Tanh
     dense:
-      device: 0
       weights:
         data: []
         shape: 
@@ -16572,11 +16580,6 @@ MonoBehaviour:
         - 0
         shape: 01000000
     conv2d:
-      inputShape: 
-      outChannels: 0
-      kernelWidth: 0
-      kernelHeight: 0
-      device: 0
       kernels:
         data: []
         shape: 
@@ -16588,7 +16591,6 @@ MonoBehaviour:
         data: []
         shape: 
     rnncell:
-      device: 0
       nonlinearity: 0
       onReturn: 0
       weights:
@@ -16614,6 +16616,17 @@ MonoBehaviour:
       W_V:
         data: []
         shape: 
+    lazydense:
+      weights:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+      isInitialized: 0
+      out_features: 0
+      weightInit: 0
+      biasInit: 0
     dropout:
       dropout: 0
     flatten:
@@ -16630,6 +16643,8 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    softmax:
+      temperature: 0
     leakyrelu:
       alpha: 0
     softplus:
@@ -16643,9 +16658,11 @@ MonoBehaviour:
     hardtanh:
       min_value: -1
       max_value: 1
+    rrelu:
+      lower: 0
+      upper: 0
   - name: Dense
     dense:
-      device: 0
       weights:
         data:
         - -0.019035295
@@ -23166,11 +23183,6 @@ MonoBehaviour:
         - 0
         shape: 01000000
     conv2d:
-      inputShape: 
-      outChannels: 0
-      kernelWidth: 0
-      kernelHeight: 0
-      device: 0
       kernels:
         data: []
         shape: 
@@ -23182,7 +23194,6 @@ MonoBehaviour:
         data: []
         shape: 
     rnncell:
-      device: 0
       nonlinearity: 0
       onReturn: 0
       weights:
@@ -23208,6 +23219,17 @@ MonoBehaviour:
       W_V:
         data: []
         shape: 
+    lazydense:
+      weights:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+      isInitialized: 0
+      out_features: 0
+      weightInit: 0
+      biasInit: 0
     dropout:
       dropout: 0
     flatten:
@@ -23224,6 +23246,8 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    softmax:
+      temperature: 0
     leakyrelu:
       alpha: 0
     softplus:
@@ -23237,9 +23261,11 @@ MonoBehaviour:
     hardtanh:
       min_value: -1
       max_value: 1
+    rrelu:
+      lower: 0
+      upper: 0
   - name: Tanh
     dense:
-      device: 0
       weights:
         data: []
         shape: 
@@ -23280,11 +23306,6 @@ MonoBehaviour:
         - 0
         shape: 01000000
     conv2d:
-      inputShape: 
-      outChannels: 0
-      kernelWidth: 0
-      kernelHeight: 0
-      device: 0
       kernels:
         data: []
         shape: 
@@ -23296,7 +23317,6 @@ MonoBehaviour:
         data: []
         shape: 
     rnncell:
-      device: 0
       nonlinearity: 0
       onReturn: 0
       weights:
@@ -23322,6 +23342,17 @@ MonoBehaviour:
       W_V:
         data: []
         shape: 
+    lazydense:
+      weights:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+      isInitialized: 0
+      out_features: 0
+      weightInit: 0
+      biasInit: 0
     dropout:
       dropout: 0
     flatten:
@@ -23338,6 +23369,8 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    softmax:
+      temperature: 0
     leakyrelu:
       alpha: 0
     softplus:
@@ -23351,9 +23384,11 @@ MonoBehaviour:
     hardtanh:
       min_value: -1
       max_value: 1
+    rrelu:
+      lower: 0
+      upper: 0
   - name: Dense
     dense:
-      device: 0
       weights:
         data:
         - 0.0037183054
@@ -23799,11 +23834,6 @@ MonoBehaviour:
         - 0
         shape: 01000000
     conv2d:
-      inputShape: 
-      outChannels: 0
-      kernelWidth: 0
-      kernelHeight: 0
-      device: 0
       kernels:
         data: []
         shape: 
@@ -23815,7 +23845,6 @@ MonoBehaviour:
         data: []
         shape: 
     rnncell:
-      device: 0
       nonlinearity: 0
       onReturn: 0
       weights:
@@ -23841,6 +23870,17 @@ MonoBehaviour:
       W_V:
         data: []
         shape: 
+    lazydense:
+      weights:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+      isInitialized: 0
+      out_features: 0
+      weightInit: 0
+      biasInit: 0
     dropout:
       dropout: 0
     flatten:
@@ -23857,6 +23897,8 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    softmax:
+      temperature: 0
     leakyrelu:
       alpha: 0
     softplus:
@@ -23870,9 +23912,11 @@ MonoBehaviour:
     hardtanh:
       min_value: -1
       max_value: 1
+    rrelu:
+      lower: 0
+      upper: 0
   - name: Softmax
     dense:
-      device: 0
       weights:
         data: []
         shape: 
@@ -23913,11 +23957,6 @@ MonoBehaviour:
         - 0
         shape: 01000000
     conv2d:
-      inputShape: 
-      outChannels: 0
-      kernelWidth: 0
-      kernelHeight: 0
-      device: 0
       kernels:
         data: []
         shape: 
@@ -23929,7 +23968,6 @@ MonoBehaviour:
         data: []
         shape: 
     rnncell:
-      device: 0
       nonlinearity: 0
       onReturn: 0
       weights:
@@ -23955,6 +23993,17 @@ MonoBehaviour:
       W_V:
         data: []
         shape: 
+    lazydense:
+      weights:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+      isInitialized: 0
+      out_features: 0
+      weightInit: 0
+      biasInit: 0
     dropout:
       dropout: 0
     flatten:
@@ -23971,6 +24020,8 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    softmax:
+      temperature: 1
     leakyrelu:
       alpha: 0
     softplus:
@@ -23984,3 +24035,6 @@ MonoBehaviour:
     hardtanh:
       min_value: -1
       max_value: 1
+    rrelu:
+      lower: 0
+      upper: 0

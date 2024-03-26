@@ -5,20 +5,20 @@ using UnityEngine;
 namespace DeepUnity.Activations
 {
     /// <summary>
-    /// Applies the randomized leaky rectified linear unit activation function. The gradient is 
+    /// Applies the randomized leaky rectified linear unit activation function. The slope is 
     /// extracted from the uniform distribution U(<paramref name="lower"/>, <paramref name="upper"/>) on training,
-    /// and on inference the gradient is (<paramref name="lower"/> + <paramref name="upper"/>) / 2.
+    /// and on inference the slope is (<paramref name="lower"/> + <paramref name="upper"/>) / 2.
     /// </summary>
     [Serializable]
     public class RReLU : IModule, IActivation
     {
-        [SerializeField] private float lower;
-        [SerializeField] private float upper;
+        [SerializeField] private float lower = 0.1249999999776482582f;
+        [SerializeField] private float upper = 0.329999999776482582f;
 
         /// <summary>
-        /// Applies the randomized leaky rectified linear unit activation function. The gradient is 
+        /// Applies the randomized leaky rectified linear unit activation function. The slope is 
         /// extracted from the uniform distribution U(<paramref name="lower"/>, <paramref name="upper"/>) on training,
-        /// and on inference the gradient is (<paramref name="lower"/> + <paramref name="upper"/>) / 2.
+        /// and on inference the slope is (<paramref name="lower"/> + <paramref name="upper"/>) / 2.
         /// </summary>
         public RReLU(float lower = 0.125f, float upper = 1f/3f)
         {

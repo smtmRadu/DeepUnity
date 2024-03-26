@@ -122,7 +122,7 @@ namespace DeepUnity
             data = new float[size];
         }
         /// <summary>
-        /// Return a Tensor with the same shape and contents as <paramref name="other"/>.
+        /// Return a Tensor with the same shape and contents as <paramref name="other"/>. Better use Clone() instead.
         /// </summary>
         /// <param name="other"></param>
         /// <returns></returns>
@@ -133,6 +133,11 @@ namespace DeepUnity
             return clone;
 
         }
+        /// <summary>
+        /// Return a Tensor that lives in RAM with the values gained from a <see cref="TensorGPU"/>.
+        /// </summary>
+        /// <param name="other"></param>
+        /// <returns></returns>
         public static Tensor Identity(TensorGPU other)
         {
             Tensor clone = new(other.Shape);
@@ -359,7 +364,23 @@ namespace DeepUnity
                 
             return result;
         }
-     
+        /// <summary>
+        /// Creates a 1D tensor with the values from the given <paramref name="collection"/>.
+        /// </summary>
+        /// <param name="collection"></param>
+        /// <returns></returns>
+        public static Tensor Constant(IEnumerable<float> collection)
+        {
+            int length = collection.Count();
+            Tensor outs = Tensor.Zeros(length);
+            int index = 0;
+            foreach (var item in collection)
+            {
+                outs[index++] = item;
+            }
+            return outs;
+        }
+
         public static Tensor Zeros(params int[] shape)
         {
             return new(shape);
@@ -3122,6 +3143,22 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Returns the given tensor raised to the 2nd power.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        public static Tensor Square(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Pow(tensor.data[i], 2f);
+            }
+
+            return result;
+        }
         public static Tensor Sqrt(Tensor tensor)
         {
             Tensor result = new(tensor.shape);
@@ -3129,6 +3166,22 @@ namespace DeepUnity
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] = MathF.Sqrt(tensor.data[i]);
+            }
+
+            return result;
+        }
+        /// <summary>
+        /// Returns the reciprocal of square root of x, which is 1 / sqrt(x)
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        public static Tensor RSqrt(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = 1f / MathF.Sqrt(tensor.data[i]);
             }
 
             return result;
@@ -3232,7 +3285,6 @@ namespace DeepUnity
 
             return result;
         }
-
         /// <summary>
         /// Returns the signs of each value in the tensor. <br></br>
         /// Example: t = [-1.2, 3.2, 0, 1]
@@ -3265,6 +3317,28 @@ namespace DeepUnity
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] = Math.Clamp(tensor.data[i], min, max);
+            }
+
+            return result;
+        }
+        public static Tensor Ceil(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Ceiling(tensor.data[i]);
+            }
+
+            return result;
+        }
+        public static Tensor Floor(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Floor(tensor.data[i]);
             }
 
             return result;
@@ -3363,9 +3437,17 @@ namespace DeepUnity
         {
             return Pow(this, power);
         }
+        public Tensor Square()
+        {
+            return Square(this);
+        }
         public Tensor Sqrt()
         {
             return Sqrt(this);
+        }
+        public Tensor RSqrt()
+        {
+            return RSqrt(this);
         }
         public Tensor Exp()
         {
@@ -3410,6 +3492,14 @@ namespace DeepUnity
         public Tensor Clip(float min, float max)
         {
             return Clip(this, min, max);
+        }
+        public Tensor Ceil()
+        {
+            return Ceil(this);
+        }
+        public Tensor Floor()
+        {
+            return Floor(this);
         }
 
         #endregion Instance

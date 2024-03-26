@@ -30,13 +30,15 @@ namespace DeepUnity.Modules
         public Attention attention = null;
         public MultiheadAttention multiheadattention = null;
         public LazyDense lazydense = null;
+        public LazyBatchNorm lazybatchnorm1d = null;
 
         // Other modules
         public Dropout dropout = null;
         public Flatten flatten = null;
         public Reshape reshape = null;
-        public AvgPool2D avgPool2d = null;
-        public MaxPool2D maxPool2d = null;
+        public AvgPool2D avgpool2d = null;
+        public MaxPool2D maxpool2d = null;
+        public MaxPool1D maxpool1d = null;
 
         // Activations modules
         public ReLU relu = null;
@@ -54,6 +56,7 @@ namespace DeepUnity.Modules
         public Sparsemax sparsemax = null;
         public LogSoftmax logsoftmax = null;
         public RReLU rrelu = null;
+        public SELU selu = null;
 
         private IModuleWrapper(IModule module)
         {
@@ -125,11 +128,11 @@ namespace DeepUnity.Modules
             }
             else if (module is MaxPool2D maxpool2dModule)
             {
-                maxPool2d = maxpool2dModule;
+                maxpool2d = maxpool2dModule;
             }
             else if(module is AvgPool2D avgpool2dModule)
             {
-                avgPool2d = avgpool2dModule;
+                avgpool2d = avgpool2dModule;
             }
             else if (module is HardTanh hardtanhModule)
             {
@@ -174,6 +177,18 @@ namespace DeepUnity.Modules
             else if (module is LazyDense lazydenseModule)
             {
                 lazydense = lazydenseModule;
+            }
+            else if (module is LazyBatchNorm lazybatchnorm1dModule)
+            {
+                lazybatchnorm1d = lazybatchnorm1dModule;
+            }
+            else if (module is MaxPool1D maxpool1dModule)
+            {
+                maxpool1d = maxpool1dModule;
+            }
+            else if (module is SELU seluModule)
+            {
+                selu = seluModule;
             }
             else
                 throw new Exception($"Unhandled module type while wrapping ({module.GetType().Name}).");
@@ -253,11 +268,11 @@ namespace DeepUnity.Modules
             }
             else if (typeof(MaxPool2D).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.maxPool2d;
+                module = moduleWrapper.maxpool2d;
             }
             else if (typeof(AvgPool2D).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.avgPool2d;
+                module = moduleWrapper.avgpool2d;
             }
             else if (typeof(HardTanh).Name.Equals(moduleWrapper.name))
             {
@@ -302,6 +317,18 @@ namespace DeepUnity.Modules
             else if (typeof(LazyDense).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.lazydense;
+            }
+            else if (typeof(LazyBatchNorm).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.lazybatchnorm1d;
+            }
+            else if(typeof(MaxPool1D).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.maxpool1d;
+            }
+            else if (typeof(SELU).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.selu;
             }
             else
                 throw new Exception($"Unhandled module type while unwrapping ({moduleWrapper.name}).");

@@ -16,6 +16,7 @@ namespace DeepUnityTutorials
         [SerializeField] Sequential network;
         [SerializeField] new string name = "MNIST_MODEL";
         [SerializeField] private float lr = 0.0001f;
+        [SerializeField] private int epochs = 100;
         [SerializeField] private float weightDecay = 0.001f;
         [SerializeField] private int batch_size = 64;
         [SerializeField] private bool augment_data = false;
@@ -23,7 +24,7 @@ namespace DeepUnityTutorials
         [SerializeField] private PerformanceGraph accuracyGraph;
         [SerializeField] private PerformanceGraph lossGraph;
         Optimizer optim;
-        StepLR scheduler;
+        LRScheduler scheduler;
         List<(Tensor, Tensor)> train = new();
         List<(Tensor, Tensor)[]> train_batches;
         int epochIndex = 1;
@@ -37,12 +38,19 @@ namespace DeepUnityTutorials
             if (network == null)
             {
                 network = new Sequential(
-                     new Conv2D(1, 10, 3), // 10 26 26
-                     new MaxPool2D(2), // 10 13 13
-                     new GELU(),
+                     new Conv2D(1, 16, 3),
+                     new MaxPool2D(2), 
+                     new Tanh(),
+
+                     new Conv2D(16, 32, 3),
+                     new MaxPool2D(2),
+                     new Tanh(),
+
                      new Flatten(-3, -1),
-                     new Dense(1690, 512),
+                     new LazyDense(512),
+                     new Tanh(),
                      new Dropout(0.2f),
+
                      new Dense(512, 10),
                      new Softmax()
                      ).CreateAsset(name);
@@ -50,8 +58,11 @@ namespace DeepUnityTutorials
                 Debug.Log("Network created.");
             }
 
-            network.SetDevice(Device.GPU);
+            print(network.Predict(Tensor.Random01(1, 28, 28)));
+
+            network.Device = Device.GPU;
             optim = new Adam(network.Parameters(), lr: lr, weightDecay: weightDecay);
+            scheduler = new LinearLR(optim, epochs: epochs);
             accuracyGraph = new PerformanceGraph();
             lossGraph = new PerformanceGraph();
             Utils.Shuffle(train);
@@ -96,7 +107,7 @@ namespace DeepUnityTutorials
 
             optim.ZeroGrad();
             network.Backward(loss.Gradient);
-            optim.ClipGradNorm(0.5f);
+            // optim.ClipGradNorm(0.5f);
             optim.Step();
 
             float acc = Metrics.Accuracy(prediction, target);

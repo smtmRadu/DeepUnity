@@ -70,7 +70,7 @@ namespace DeepUnity.ReinforcementLearning
             else if (GetComponent<Agent>().behaviourType == BehaviourType.Learn)
             {
                 Instance = this;
-                EditorApplication.playModeStateChanged += ExportOnEnd;
+                EditorApplication.playModeStateChanged += Instance.ExportOnEnd;
             }
         }
 

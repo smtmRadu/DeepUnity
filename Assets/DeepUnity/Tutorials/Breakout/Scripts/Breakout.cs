@@ -37,7 +37,7 @@ namespace DeepUnityTutorials
         }
         public override void CollectObservations(out Tensor state)
         {
-            var pixels = view.GetObservationPixels();
+            var pixels = view.GetPixels();
             state = Tensor.Constant(pixels, (1,32, 40));
 
         }

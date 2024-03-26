@@ -55,17 +55,19 @@ namespace DeepUnity.Modules
         /// </summary>
         /// <param name="input_size">Input features size</param>
         /// <param name="embed_dim">Dimension of the attention mechanism.</param>
-        public Attention(int input_size, int embed_dim, Device device = Device.CPU)
+        public Attention(int input_size, int embed_dim, InitType weight_init = InitType.LeCun_Uniform, Device device = Device.CPU)
         {
             // H and d have the same dimension
             d = embed_dim;
             this.Device = device;
             int H = input_size;
-            float range = MathF.Sqrt(1f / H);
 
-            W_Q = Tensor.RandomRange((-range, range), H, d);
-            W_K = Tensor.RandomRange((-range, range), H, d);
-            W_V = Tensor.RandomRange((-range, range), H, d);
+            int fanIn = H;
+            int fanOut = embed_dim;
+
+            W_Q = Parameter.Create(new int[] { H, d }, fanIn, fanOut, weight_init);
+            W_K = Parameter.Create(new int[]{H, d}, fanIn, fanOut, weight_init);
+            W_V = Parameter.Create(new int[] { H, d }, fanIn, fanOut, weight_init);
             W_Q_grad = Tensor.Zeros(W_Q.Shape);
             W_K_grad = Tensor.Zeros(W_K.Shape);
             W_V_grad = Tensor.Zeros(W_V.Shape);
@@ -113,7 +115,6 @@ namespace DeepUnity.Modules
 
             return Tensor.Concat(null, SDPA);
         }
-
         public Tensor Forward(Tensor input)
         {
             return Predict(input);

@@ -53,8 +53,8 @@ namespace DeepUnity.Modules
             if(!isInitialized)
             {
                 int in_features = input.Size(-1);
-                weights = Initializer.CreateParameter(new int[] { out_features, in_features }, in_features, out_features, weightInit);
-                biases = Initializer.CreateParameter(new int[] { out_features }, in_features, out_features, biasInit);
+                weights = Parameter.Create(new int[] { out_features, in_features }, in_features, out_features, weightInit);
+                biases = Parameter.Create(new int[] { out_features }, in_features, out_features, biasInit);
 
                 weightsGrad = Tensor.Zeros(weights.Shape);
                 biasesGrad = Tensor.Zeros(biases.Shape);
@@ -298,6 +298,9 @@ namespace DeepUnity.Modules
         {
             if (weightsGrad == null)
                 OnAfterDeserialize();
+
+            if (!isInitialized)
+                throw new Exception("Cannot get parameters of Lazy Dense layer because the parameters were not infered.");
 
             var w = new Parameter(weights, weightsGrad);
             var b = new Parameter(biases, biasesGrad);

@@ -49,23 +49,23 @@ namespace DeepUnity.Modules
         /// Output:  <b>(B, H_out)</b> or <b>(H_out)</b> for unbatched input when <paramref name="on_forward"/> == <see cref="HiddenStates.ReturnLast"/> or  <br></br>
         ///  <b>(B, L, H_out)</b> or <b>(L, H_out)</b> for unbatched input when <paramref name="on_forward"/> == <see cref="HiddenStates.ReturnAll"/> <br></br>
         ///  <br></br>
-        /// where B = batch_size, L = sequence_length, H_in = input_size, H_out = hidden_size.
+        /// where B = batch_size, L = sequence_length, H_in = input_size, H_out = hidden_size. <br></br><br></br>
         /// </summary>
         /// <param name="input_size"></param>
         /// <param name="hidden_size"></param>
         /// <param name="on_forward">Either return the last or all hidden states.</param>
         /// <param name="nonlinearity">Non-linear activation used in the layer.</param>
-        public RNNCell(int input_size, int hidden_size, HiddenStates on_forward = HiddenStates.ReturnLast, NonLinearity nonlinearity = NonLinearity.Tanh, Device device = default)
+        public RNNCell(int input_size, int hidden_size, HiddenStates on_forward = HiddenStates.ReturnAll, NonLinearity nonlinearity = NonLinearity.Tanh, 
+                        InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = default)
         {
             InputCache = new();
             HiddenCache = new();
             ActivationCache = new();
 
-            float range = MathF.Sqrt(1f / hidden_size);
-            weights = Tensor.RandomRange((-range, range), hidden_size, input_size);
-            biases = Tensor.RandomRange((-range, range), hidden_size);
-            r_weights = Tensor.RandomRange((-range, range), hidden_size, hidden_size);
-            r_biases = Tensor.RandomRange((-range, range), hidden_size);
+            weights = Parameter.Create(new int[] { hidden_size, input_size }, input_size, hidden_size, weight_init);
+            biases = Parameter.Create(new int[] { hidden_size}, input_size, hidden_size, bias_init);
+            r_weights = Parameter.Create(new int[] { hidden_size, hidden_size }, input_size, hidden_size, weight_init);
+            r_biases = Parameter.Create(new int[] { hidden_size }, input_size, hidden_size, bias_init);
             weightsGrad = Tensor.Zeros(weights.Shape);
             biasesGrad = Tensor.Zeros(biases.Shape);
             r_weightsGrad = Tensor.Zeros(r_weights.Shape);

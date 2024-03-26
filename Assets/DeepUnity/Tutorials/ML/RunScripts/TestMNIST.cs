@@ -75,7 +75,7 @@ namespace DeepUnityTutorials
                 Debug.Log("Network created.");
             }
 
-            network.SetDevice(Device.GPU);
+            network.Device = Device.GPU;
             optim = new Adam(network.Parameters(),  lr: lr, weightDecay: weightDecay);
             scheduler = new StepLR(optim, schedulerStepSize, schedulerDecay);
             accuracyGraph = new PerformanceGraph();

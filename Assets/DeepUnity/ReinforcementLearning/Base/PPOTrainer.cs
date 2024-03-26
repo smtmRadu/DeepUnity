@@ -55,10 +55,17 @@ namespace DeepUnity.ReinforcementLearning
         {
             // https://openreview.net/forum?id=nIAxjsniDzg shows that the advantages must be normalized over the mini-batch
 
-            model.vNetwork.SetDevice(model.trainingDevice); // This is always on training device because it is used to compute the values of the entire train_data of states once..
-            model.muNetwork?.SetDevice(model.trainingDevice);
-            model.sigmaNetwork?.SetDevice(model.trainingDevice);
-            model.discreteNetwork?.SetDevice(model.trainingDevice);
+            model.vNetwork.Device = model.trainingDevice; // This is always on training device because it is used to compute the values of the entire train_data of states once..
+            
+            if(model.muNetwork != null)
+                model.muNetwork.Device = model.trainingDevice;
+
+            if (model.sigmaNetwork != null)
+                model.sigmaNetwork.Device = model.trainingDevice;
+
+            if (model.discreteNetwork != null)
+                model.discreteNetwork.Device = model.trainingDevice;
+
             for (int epoch_index = 0; epoch_index < hp.numEpoch; epoch_index++)
             {
                 // shuffle the dataset
@@ -143,9 +150,12 @@ namespace DeepUnity.ReinforcementLearning
                 }
             }
 
-            model.muNetwork?.SetDevice(model.inferenceDevice);
-            model.sigmaNetwork?.SetDevice(model.inferenceDevice);
-            model.discreteNetwork?.SetDevice(model.inferenceDevice);
+            if (model.muNetwork != null)
+                model.muNetwork.Device = model.inferenceDevice;
+            if(model.sigmaNetwork != null)
+                model.sigmaNetwork.Device = model.inferenceDevice; 
+            if(model.discreteNetwork != null)
+                model.discreteNetwork.Device = model.inferenceDevice;
 
 
             train_data.Clear();

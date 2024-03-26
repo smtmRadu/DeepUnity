@@ -161,17 +161,20 @@ namespace DeepUnity.Models
             return param.ToArray();
 
         }
-        public override void SetDevice(Device device)
+        public override Device Device
         {
-            mu.Device = device;
-            log_var.Device = device;
-            foreach (var item in encoder.OfType<ILearnable>())
+            set
             {
-                item.Device = device;
-            }
-            foreach (var item in decoder.OfType<ILearnable>())
-            {
-                item.Device = device;
+                mu.Device = value;
+                log_var.Device = value;
+                foreach (var item in encoder.OfType<ILearnable>())
+                {
+                    item.Device = value;
+                }
+                foreach (var item in decoder.OfType<ILearnable>())
+                {
+                    item.Device = value;
+                }
             }
         }
 

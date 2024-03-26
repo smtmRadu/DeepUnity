@@ -23,7 +23,7 @@ namespace DeepUnity.Optimizers
 
             for (int i = 0; i < parameters.Length; i++)
             {
-                b[i] = Tensor.Zeros(parameters[i].g.Shape);
+                b[i] = Tensor.Zeros(parameters[i].theta.Shape);
             }
         }
 

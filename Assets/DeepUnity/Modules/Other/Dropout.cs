@@ -12,8 +12,8 @@ namespace DeepUnity.Modules
     [Serializable]
     public class Dropout : IModule
     {
-        [SerializeField] private float dropout;
-        public Tensor InputCache { get; set; }
+        [SerializeField] private float dropout = 0.499999777646258f;
+        private Tensor OutputCache { get; set; }
 
         /// <summary>
         /// <b>Placed after the non-linear activation function.</b> <br></br>
@@ -25,23 +25,21 @@ namespace DeepUnity.Modules
         public Dropout(float dropout = 0.5f)
         {
             if (dropout < Utils.EPSILON || dropout > 1f - Utils.EPSILON)
-            {
                 throw new ArgumentException("Dropout value must be in range (0,1) when creating a Dropout layer module.");
-            }
+
             this.dropout = dropout;
         }
 
         public Tensor Predict(Tensor input) => input;
         public Tensor Forward(Tensor input)
         {
-            InputCache = Tensor.Identity(input);
-
-            return input.Select(x => x = Utils.Random.Bernoulli(dropout) ? 0f : x);
-
+            float scale = 1f / (1f - dropout);
+            OutputCache = input.Select(x => x = Utils.Random.Bernoulli(dropout) ? 0f : x * scale);
+            return OutputCache.Clone() as Tensor;
         }
         public Tensor Backward(Tensor loss)
         {
-            return loss.Zip(InputCache, (l, i) => i != 0f ? l : 0f);
+            return loss.Zip(OutputCache, (l, i) => i != 0f ? l : 0f);
         }
 
         public object Clone() => new Dropout(dropout);

@@ -40,8 +40,8 @@ namespace DeepUnityTutorials
         private int batch_index = 0;
 
         const int latent_dim = 16;
-        const int size = 256; // 1024 original
-        const float dropout = 0.1f; // 0.3f original
+        const int size = 1024; // 1024 original
+        const float dropout = 0.3f; // 0.3f original
         private void Start()
         {          
             if (discriminator == null)
@@ -50,15 +50,15 @@ namespace DeepUnityTutorials
                     new Flatten(),
 
                     new Dense(784, size, device: Device.GPU),
-                    new LeakyReLU(),
+                    new LeakyReLU(0.2f),
                     new Dropout(dropout),
                 
                     new Dense(size, size/2, device: Device.GPU),
-                    new LeakyReLU(),
+                    new LeakyReLU(0.2f),
                     new Dropout(dropout),
 
                     new Dense(size / 2, size / 4, device: Device.GPU),
-                    new LeakyReLU(),
+                    new LeakyReLU(0.2f),
                     new Dropout(dropout),
 
                     new Dense(size / 4, 1, device: Device.GPU),
@@ -69,21 +69,23 @@ namespace DeepUnityTutorials
             {
                 generator = new Sequential(
                     new Dense(latent_dim, size / 4, device: Device.GPU),
-                    new LeakyReLU(),
+                    new LeakyReLU(0.2f),
 
                     new Dense(size / 4, size / 2, device: Device.GPU),
-                    new LeakyReLU(),
+                    new LeakyReLU(0.2f),
 
                     new Dense(size / 2, size,  device: Device.GPU),
-                    new LeakyReLU(),
+                    new LeakyReLU(0.2f),
 
                     new Dense(size, 784, device: Device.GPU),
-                    new Sigmoid(),
+                    new Tanh(),
 
                     new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 })
                     ).CreateAsset("generator");
             }
 
+            generator.Device = Device.GPU;
+            discriminator.Device = Device.GPU;
             d_optim = new Adam(discriminator.Parameters(), lr);
             g_optim = new Adam(generator.Parameters(), lr);
 
@@ -187,7 +189,7 @@ namespace DeepUnityTutorials
             if (displays.Count == 0)
                 return;
 
-            generator.SetDevice(Device.CPU);
+            generator.Device = Device.CPU;
 
             foreach (var dis in displays)
             {
@@ -203,7 +205,7 @@ namespace DeepUnityTutorials
                 display.Apply();
             }
 
-            generator.SetDevice(Device.GPU);
+            generator.Device = Device.GPU;
         }
 
         public void SaveNetworks()

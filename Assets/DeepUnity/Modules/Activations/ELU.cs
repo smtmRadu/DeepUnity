@@ -7,7 +7,7 @@ namespace DeepUnity.Activations
     [Serializable]
     public class ELU : IModule, IActivation
     {
-        [SerializeField] private float alpha = 1f;
+        [SerializeField] private float alpha = 0.9999999776482582f;
 
         protected Tensor InputCache { get; set; }
         public ELU(float alpha = 1f) => this.alpha = alpha;
