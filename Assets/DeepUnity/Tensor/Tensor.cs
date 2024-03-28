@@ -3186,6 +3186,22 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Returns the reciprocal of the tensor elements, which is 1 / x.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        public static Tensor Reciprocal(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = 1f / tensor.data[i];
+            }
+
+            return result;
+        }
         public static Tensor Exp(Tensor tensor)
         {
             Tensor result = new(tensor.shape);
@@ -3448,6 +3464,10 @@ namespace DeepUnity
         public Tensor RSqrt()
         {
             return RSqrt(this);
+        }
+        public Tensor Reciprocal()
+        {
+            return Reciprocal(this);
         }
         public Tensor Exp()
         {

@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.Windows;
 
 namespace DeepUnity.Modules
 {
@@ -13,7 +14,7 @@ namespace DeepUnity.Modules
     /// where B = batch_size, H_in = in_features and H_out = out_features.
     /// </summary>
     [Serializable]
-    public class LazyDense : ILearnable, IModule
+    public class LazyDense : ILearnable, IModule, ILazy
     {
         [SerializeField] public Device Device { get; set; } = Device.CPU;
         private Tensor InputCache { get; set; }
@@ -50,16 +51,7 @@ namespace DeepUnity.Modules
         }
         public Tensor Predict(Tensor input)
         {
-            if(!isInitialized)
-            {
-                int in_features = input.Size(-1);
-                weights = Parameter.Create(new int[] { out_features, in_features }, in_features, out_features, weightInit);
-                biases = Parameter.Create(new int[] { out_features }, in_features, out_features, biasInit);
-
-                weightsGrad = Tensor.Zeros(weights.Shape);
-                biasesGrad = Tensor.Zeros(biases.Shape);
-                isInitialized = true;
-            }
+            LazyInit(input);
 
             if (input.Size(-1) != weights.Size(-1))
                 throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the Dense Layer features_num ({weights.Size(-1)}).");
@@ -296,11 +288,13 @@ namespace DeepUnity.Modules
 
         public Parameter[] Parameters()
         {
+
+            if (!LazyInit(null))
+                throw new Exception("Cannot get parameters of Lazy Dense layer because the parameters were not infered.");
+
+
             if (weightsGrad == null)
                 OnAfterDeserialize();
-
-            if (!isInitialized)
-                throw new Exception("Cannot get parameters of Lazy Dense layer because the parameters were not infered.");
 
             var w = new Parameter(weights, weightsGrad);
             var b = new Parameter(biases, biasesGrad);
@@ -319,7 +313,21 @@ namespace DeepUnity.Modules
             ldense.biasesGrad = (Tensor)biasesGrad.Clone();
             return ldense;
         }
+        public bool LazyInit(Tensor input)
+        {
+            if (!isInitialized)
+            {
+                int in_features = input.Size(-1);
+                weights = Parameter.Create(new int[] { out_features, in_features }, in_features, out_features, weightInit);
+                biases = Parameter.Create(new int[] { out_features }, in_features, out_features, biasInit);
 
+                weightsGrad = Tensor.Zeros(weights.Shape);
+                biasesGrad = Tensor.Zeros(biases.Shape);
+                isInitialized = true;
+                return false;
+            }
+            return true;
+        }
         public void OnBeforeSerialize()
         {
 

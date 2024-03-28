@@ -4,7 +4,6 @@ using DeepUnity;
 using System.Collections.Generic;
 using UnityEngine.UI;
 using DeepUnity.Modules;
-using DeepUnity.Activations;
 
 namespace DeepUnityTutorials
 {
@@ -18,7 +17,7 @@ namespace DeepUnityTutorials
 
         private void Start()
         {
-
+            RMSNorm rmsnorm = new RMSNorm();
             Tensor input = Tensor.Random01(10);
             print(new Dropout(0.1f).Forward(input));
             // Tensor input = Tensor.Random01(64, 3, 256, 256);

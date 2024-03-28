@@ -52,11 +52,10 @@ namespace DeepUnityTutorials
             {
                 net = new Sequential(
                  new Dense(2, hiddenSize,init_w, init_b),
-                 new LazyBatchNorm(),
+                 new RMSNorm(),
                  new Tanh(),
                
-                 new Dense(hiddenSize, hiddenSize, init_w, init_b),
-                 new LazyBatchNorm(),
+                 new LazyDense(hiddenSize, init_w, init_b),
                  new Tanh(),
 
                  new Dense(hiddenSize, 1, init_w, init_b)

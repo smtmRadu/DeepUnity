@@ -21,7 +21,7 @@ namespace DeepUnity.Modules
     /// </em>
     /// </summary>
     [Serializable]
-    public class LazyBatchNorm : ILearnable, IModule
+    public class LazyBatchNorm : ILearnable, IModule, ILazy
     {
         // https://arxiv.org/pdf/1502.03167.pdf
         [SerializeField] public Device Device { get; set; } = Device.CPU;
@@ -68,12 +68,12 @@ namespace DeepUnity.Modules
             this.momentum = momentum;
         }
 
-        private void CheckInitialize(int h)
+        public bool LazyInit(Tensor input)
         {
             if (num_features != -1)
-                return;
+                return true;
 
-            this.num_features = h;
+            this.num_features = input.Size(-1);
           
             gamma = Tensor.Ones(num_features);
             beta = Tensor.Zeros(num_features);
@@ -82,12 +82,14 @@ namespace DeepUnity.Modules
 
             runningVar = Tensor.Ones(num_features);
             runningMean = Tensor.Zeros(num_features);
+            return false;
         }
 
         public Tensor Predict(Tensor input)
         {
+            LazyInit(input);
             int h = input.Size(-1);
-            CheckInitialize(h);
+           
 
             if (input.Rank > 2)
                 throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) must be (B, H) or (H).");
@@ -122,8 +124,8 @@ namespace DeepUnity.Modules
         }
         public Tensor Forward(Tensor input)
         {
+            LazyInit(input);
             int h = input.Size(-1);
-            CheckInitialize(h);
 
             if (h != num_features)
                 throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) last dimension is not equal to num_features ({num_features})");
@@ -196,6 +198,9 @@ namespace DeepUnity.Modules
         }
         public Parameter[] Parameters()
         {
+            if (!LazyInit(null))
+                throw new Exception("Cannot get parameters of Lazy Batch Norm layer because the parameters were not infered.");
+
             if (gammaGrad == null)
                 OnAfterDeserialize();
 

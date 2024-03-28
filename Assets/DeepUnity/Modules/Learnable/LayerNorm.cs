@@ -56,6 +56,10 @@ namespace DeepUnity.Modules
         }
         public Tensor Predict(Tensor input)
         {
+            if (input.Rank > 2)
+                throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) received is invalid for LayerNorm. Make sure is of shape (B, H) or (H).");
+
+
             Tensor input_centered = (input - runningMean[0]) / MathF.Sqrt(runningVar[0] + Utils.EPSILON);
             Tensor output = gamma[0] * input_centered + beta[0];
             return output;
