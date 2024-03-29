@@ -40,7 +40,7 @@ namespace DeepUnityTutorials
         private int batch_index = 0;
 
         const int latent_dim = 16;
-        const int size = 1024; // 1024 original
+        const int size = 512; // 1024 original
         const float dropout = 0.3f; // 0.3f original
         private void Start()
         {          
@@ -49,35 +49,35 @@ namespace DeepUnityTutorials
                 discriminator = new Sequential(
                     new Flatten(),
 
-                    new Dense(784, size, device: Device.GPU),
-                    new LeakyReLU(0.2f),
+                    new Dense(784, size),
+                    new RReLU(),
                     new Dropout(dropout),
                 
-                    new Dense(size, size/2, device: Device.GPU),
-                    new LeakyReLU(0.2f),
+                    new Dense(size, size/4),
+                    new RReLU(),
                     new Dropout(dropout),
 
-                    new Dense(size / 2, size / 4, device: Device.GPU),
-                    new LeakyReLU(0.2f),
-                    new Dropout(dropout),
-
-                    new Dense(size / 4, 1, device: Device.GPU),
+                    new Dense(size / 4, 1),
                     new Sigmoid()
                     ).CreateAsset("discriminator");
             }
             if (generator == null)
             {
                 generator = new Sequential(
-                    new Dense(latent_dim, size / 4, device: Device.GPU),
-                    new LeakyReLU(0.2f),
+                    new Dense(latent_dim, size / 4),
+                    new LayerNorm(),
+                    new Tanh(),
 
-                    new Dense(size / 4, size / 2, device: Device.GPU),
-                    new LeakyReLU(0.2f),
+                    new Dense(size / 4, size / 2),
+                    new LayerNorm(),
+                    new Tanh(),
 
-                    new Dense(size / 2, size,  device: Device.GPU),
-                    new LeakyReLU(0.2f),
+                    new Dense(size / 2, size),
+                    new LayerNorm(),
+                    new Tanh(),
 
-                    new Dense(size, 784, device: Device.GPU),
+                    new Dense(size, 784),
+                    new LayerNorm(),
                     new Tanh(),
 
                     new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 })

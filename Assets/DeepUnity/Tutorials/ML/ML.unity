@@ -1320,7 +1320,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1539047896
 Transform:
   m_ObjectHideFlags: 0
@@ -1349,10 +1349,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   network: {fileID: 11400000, guid: 1f492c2e206fe6e42a2f07801120cf28, type: 2}
-  name: MNIST_2
-  lr: 0.0001
+  name: MNIST_4
+  lr: 0.001
   epochs: 100
-  weightDecay: 0.001
+  weightDecay: 0
   batch_size: 64
   augment_data: 0
   augment_strength: 0.6
@@ -1771,7 +1771,7 @@ MonoBehaviour:
   image: {fileID: 998186862}
   digitPredictionText: {fileID: 2101666738}
   softmaxOutputText: {fileID: 1459484847}
-  network: {fileID: 11400000, guid: 1f492c2e206fe6e42a2f07801120cf28, type: 2}
+  network: {fileID: 11400000, guid: 9c2fdcfb82335cd45b440a86e96a78a5, type: 2}
   brushRadius: 2
   brushStrength: 0.02
 --- !u!1 &1820971845
@@ -1904,7 +1904,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1823018699
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2217,7 +2217,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1946006905
 MonoBehaviour:
   m_ObjectHideFlags: 0

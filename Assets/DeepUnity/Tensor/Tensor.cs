@@ -1098,57 +1098,93 @@ namespace DeepUnity
             if (padding == 0)
                 return Identity(tensor);
 
-            int w = tensor.Width + 2;
-            int h = tensor.Height + 2;
-            int b = tensor.Channels;
-            int n = tensor.Batch;
-            Tensor result = new(CreateShape(tensor.Rank, n, b, h, w));
-
-            for (int l = 0; l < tensor.Batch; l++)
+            if(paddingMode == PaddingType.Zeros)
             {
-                for (int k = 0; k < tensor.Channels; k++)
-                {
-                    for (int j = 0; j < tensor.Height; j++)
+                int w = tensor.Width + padding * 2;
+                int h = tensor.Height + padding * 2;
+                int b = tensor.Channels;
+                int n = tensor.Batch;
+                Tensor result = new(CreateShape(tensor.Rank, n, b, h, w));
+                // it is ok with threading (not too much loss for small matrices)
+                if (n > 1)
+                    for (int l = 0; l < n; l++)
                     {
-                        for (int i = 0; i < tensor.Width; i++)
+                        for (int k = 0; k < b; k++)
                         {
-                            result[l, k, j + 1, i + 1] = tensor[k, j, i];
+                            for (int j = 0; j < tensor.Height; j++)
+                            {
+                                for (int i = 0; i < tensor.Width; i++)
+                                {
+                                    result[l, k, j + padding, i + padding] = tensor[k, j, i];
+                                }
+                            }
+                        }
+                    }
+                else
+                    Parallel.For(0, n, l =>
+                    {
+                        for (int k = 0; k < b; k++)
+                        {
+                            for (int j = 0; j < tensor.Height; j++)
+                            {
+                                for (int i = 0; i < tensor.Width; i++)
+                                {
+                                    result[l, k, j + padding, i + padding] = tensor[k, j, i];
+                                }
+                            }
+                        }
+                    });
+                return result;
+            }   
+            else if (paddingMode == PaddingType.Mirror)
+            {
+                 int w = tensor.Width + 2;
+                 int h = tensor.Height + 2;
+                 int channels = tensor.Channels;
+                 int batch_size = tensor.Batch;
+                 Tensor result = new(CreateShape(tensor.Rank, batch_size, channels, h, w));
+
+                for (int l = 0; l < batch_size; l++)
+                {
+                    for (int k = 0; k < channels; k++)
+                    {
+                        for (int j = 0; j < tensor.Height; j++)
+                        {
+                            for (int i = 0; i < tensor.Width; i++)
+                            {
+                                result[l, k, j + 1, i + 1] = tensor[k, j, i];
+                            }
                         }
                     }
                 }
-            }
+                for (int l = 0; l < batch_size; l++)
+                 {
+                     for (int k = 0; k < channels; k++)
+                     {
+                         for (int i = 0; i < w - 1; i++)
+                         {
+                             result[l, k, 0, i] = result[l, k, 1, i];
+                             result[l, k, h - 1, i] = result[l, k, h - 2, i];
+                         }
+                 
+                         for (int j = 0; j < h - 1; j++)
+                         {
+                             result[l, k, j, 0] = result[l, k, j, 1];
+                             result[l, k, j, w - 1] = result[l, k, j, w - 2];
+                         }
 
-
-            if (paddingMode == PaddingType.Mirror)
-            {
-
-                for (int l = 0; l < tensor.Batch; l++)
-                {
-                    for (int k = 0; k < tensor.Channels; k++)
-                    {
-                        result[l, k, 0, 0] = result[l, k, 1, 1];
                         result[l, k, h - 1, 0] = result[l, k, h - 2, 1];
-                        result[l, k, 0, w - 1] = result[l, k, 1, w - 2];
                         result[l, k, h - 1, w - 1] = result[l, k, h - 2, w - 2];
 
-                        for (int i = 0; i < w - 1; i++)
-                        {
-                            result[l, k, 0, i] = result[l, k, 1, i];
-                            result[l, k, h - 1, i] = result[l, k, h - 2, i];
-                        }
-
-                        for (int j = 0; j < h - 1; j++)
-                        {
-                            result[l, k, j, 0] = result[l, k, j, 1];
-                            result[l, k, j, w - 1] = result[l, k, j, w - 2];
-                        }
                     }
                 }
-
+                 
+                 return MatPad(result, padding - 1, PaddingType.Mirror);
             }
+            throw new ArgumentException("Unhandled padding mode");
 
 
-            return MatPad(result, padding - 1, paddingMode);
+           
         }     
         /// <summary>
         /// Performs 2D cross-correlation. Inputs must have the same number of dimensions.

@@ -104,7 +104,7 @@ namespace DeepUnity.Modules
             int m = isBatched ? dLdY.Size(0) : 1;
 
             Tensor dLdxHat = dLdY * gamma[0];
-            Tensor dLdVar = dLdxHat * xCentered * (-1f / 2f) * Tensor.Pow(std.Pow(2f) + Utils.EPSILON, -3f / 2f);
+            Tensor dLdVar = dLdxHat * xCentered * (-1f / 2f) * Tensor.Pow(std.Square() + Utils.EPSILON, -3f / 2f);
             Tensor dLdMu = dLdxHat * -1f / std + dLdVar * -2f * xCentered / m;
             Tensor dLdX = dLdxHat * 1f / std + dLdVar * 2f * xCentered / m + dLdMu * (1f / m);
             Tensor dLdGamma = Tensor.Mean(dLdY + xCentered, 0);

@@ -11,7 +11,7 @@ namespace DeepUnity.Modules
     /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br />
     /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br />
     /// where  B = batch_size and H = in_features.<br />
-    /// <b>Applies normalization over the last dimension (H) of the input.</b> 
+    /// <b>Applies root mean square normalization over the last dimension (H) of the input.</b> 
     /// </summary>
     [Serializable]
     public class RMSNorm : ILearnable, IModule
@@ -33,7 +33,7 @@ namespace DeepUnity.Modules
         /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br />
         /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br />
         /// where  B = batch_size and H = in_features.<br />
-        /// <b>Applies normalization over the last dimension (H) of the input.</b> 
+        /// <b>Applies root mean square normalization over the last dimension (H) of the input.</b> 
         /// </summary>
         public RMSNorm()
         {
@@ -106,8 +106,8 @@ namespace DeepUnity.Modules
                 dLdGamma.Mean(0).Mean(0)[0]:
                 dLdGamma.Mean(0)[0];
 
-            Tensor dLdX = (rms * gamma[0]).Reciprocal() - InputCache.Square() / (rms.Pow(3f) * gamma[0]);
-            return dLdY * dLdX;
+            Tensor dLdX = (gamma[0] * rms.Reciprocal()) * (dLdY - xHat * (dLdY * xHat).Mean(-1, keepDim: true).Expand(-1, dLdY.Size(-1)));
+            return dLdX;
         }
 
         public virtual void OnBeforeSerialize()

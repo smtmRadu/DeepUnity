@@ -37,21 +37,29 @@ namespace DeepUnityTutorials
 
             if (network == null)
             {
+                var skip = new SkipConnectionFork();
                 network = new Sequential(
-                     new Conv2D(1, 16, 3),
-                     new MaxPool2D(2), 
-                     new Tanh(),
-
-                     new Conv2D(16, 32, 3),
+                     new Conv2D(1, 6, 3),  
                      new MaxPool2D(2),
-                     new Tanh(),
+                     new Conv2D(6, 12, 3),
+                     new MaxPool2D(2),
 
                      new Flatten(-3, -1),
+                     new LayerNorm(),
+                     new PReLU(),
+
                      new LazyDense(512),
-                     new Tanh(),
+                     new LayerNorm(),
+                     new PReLU(),
                      new Dropout(0.2f),
 
-                     new Dense(512, 10),
+                     skip,
+                     new LazyDense(512),
+                     new LayerNorm(),
+                     new PReLU(),
+                     new SkipConnectionJoin(skip),
+
+                     new LazyDense(10),
                      new Softmax()
                      ).CreateAsset(name);
 
@@ -61,7 +69,7 @@ namespace DeepUnityTutorials
             print(network.Predict(Tensor.Random01(1, 28, 28)));
 
             network.Device = Device.GPU;
-            optim = new Adam(network.Parameters(), lr: lr, weightDecay: weightDecay);
+            optim = new Adam(network.Parameters(), lr: lr, weightDecay: weightDecay, amsgrad: true);
             scheduler = new LinearLR(optim, epochs: epochs);
             accuracyGraph = new PerformanceGraph();
             lossGraph = new PerformanceGraph();

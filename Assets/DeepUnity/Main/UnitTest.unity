@@ -521,7 +521,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &173192358
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -535,7 +535,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   device: 1
-  net: {fileID: 11400000, guid: 1f492c2e206fe6e42a2f07801120cf28, type: 2}
+  net: {fileID: 11400000, guid: 1bb25f70dd39f5743ae5eb7014719e58, type: 2}
   canvas: {fileID: 1012927895}
 --- !u!4 &173192359
 Transform:
@@ -1501,7 +1501,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &621327370
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1514,7 +1514,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b84b8b2bedacc4a45b998f855a119d27, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  device: 1
+  device: 0
   net: {fileID: 11400000, guid: 8097ac88e1a99c84c8b6784ef12a53c9, type: 2}
   TrainLossGraph:
     graph:
@@ -1536,8 +1536,8 @@ MonoBehaviour:
     steps: 0
     current: 0
     mean: 0
-  learningRate: 0.01
-  hiddenSize: 64
+  learningRate: 0.001
+  hiddenSize: 32
   trainingSamples: 1024
   batch_size: 64
   validationSamples: 32

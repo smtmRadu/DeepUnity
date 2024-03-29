@@ -42,6 +42,7 @@ namespace DeepUnity.Activations
 
         public Tensor Forward(Tensor input)
         {
+            InputCache = input.Clone() as Tensor;
             ACache = Tensor.RandomRange((lower, upper), input.Shape);
 
             return input.Zip(ACache, (x, a) =>

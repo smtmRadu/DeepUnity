@@ -4,6 +4,7 @@ using DeepUnity;
 using System.Collections.Generic;
 using UnityEngine.UI;
 using DeepUnity.Modules;
+using DeepUnity.Activations;
 
 namespace DeepUnityTutorials
 {
@@ -17,9 +18,15 @@ namespace DeepUnityTutorials
 
         private void Start()
         {
-            RMSNorm rmsnorm = new RMSNorm();
-            Tensor input = Tensor.Random01(10);
-            print(new Dropout(0.1f).Forward(input));
+            Tensor img = Tensor.Random01(64, 3, 64, 64);
+
+            BenchmarkClock.Start();
+            for (int i = 0; i < 100; i++)
+            {
+                Tensor.MatPad(img, 2, PaddingType.Zeros);
+            }
+            BenchmarkClock.Stop();
+
             // Tensor input = Tensor.Random01(64, 3, 256, 256);
             // 
             // Conv2D conv = new Conv2D(3, 32, 3, device: Device.GPU);
@@ -28,11 +35,11 @@ namespace DeepUnityTutorials
             // conv.Predict(input);
             // BenchmarkClock.Stop();
 
-           // Optimizer optimizer = new SGD(net.Parameters());
-           // 
-           // BenchmarkClock.Start();
-           // optimizer.ZeroGrad();
-           // BenchmarkClock.Stop();
+            // Optimizer optimizer = new SGD(net.Parameters());
+            // 
+            // BenchmarkClock.Start();
+            // optimizer.ZeroGrad();
+            // BenchmarkClock.Stop();
 
 
             // int ic = 2, oc = 3, ih = 6, iw = 6;
