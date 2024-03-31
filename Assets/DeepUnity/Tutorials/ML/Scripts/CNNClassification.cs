@@ -37,7 +37,6 @@ namespace DeepUnityTutorials
 
             if (network == null)
             {
-                var skip = new SkipConnectionFork();
                 network = new Sequential(
                      new Conv2D(1, 6, 3),  
                      new MaxPool2D(2),
@@ -53,11 +52,11 @@ namespace DeepUnityTutorials
                      new PReLU(),
                      new Dropout(0.2f),
 
-                     skip,
+                     new ResidualConnection.Fork(),
                      new LazyDense(512),
                      new LayerNorm(),
                      new PReLU(),
-                     new SkipConnectionJoin(skip),
+                     new ResidualConnection.Join(),
 
                      new LazyDense(10),
                      new Softmax()

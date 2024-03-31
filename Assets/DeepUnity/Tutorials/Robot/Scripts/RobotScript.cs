@@ -67,6 +67,7 @@ namespace DeepUnityTutorials
             };
 
             bodyController.bodyPartsDict[body].ColliderContact.OnEnter = hitGround;
+            bodyController.bodyPartsDict[head].ColliderContact.OnEnter = hitGround;
             bodyController.bodyPartsDict[leftThigh].ColliderContact.OnEnter = hitGround;
             bodyController.bodyPartsDict[rightThigh].ColliderContact.OnEnter = hitGround;
 

@@ -2,6 +2,9 @@ using System;
 using UnityEngine;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
+using System.Linq;
+using UnityEngine.Windows;
+using System.Drawing.Printing;
 namespace DeepUnity.Modules
 {
     // https://www.youtube.com/watch?v=tMjdQLylyGI&t=602s
@@ -23,9 +26,9 @@ namespace DeepUnity.Modules
         [NonSerialized] private Tensor biasesGrad;
 
         /// <summary>
-        /// Input: <b>(B, H_in)</b> or <b>(H_in)</b> for unbatched input.<br></br>
-        /// Output: <b>(B, H_out)</b> or <b>(H_out)</b> for unbatched input.<br></br>
-        /// where B = batch_size, H_in = in_features and H_out = out_features.
+        /// Input: <b>(B, H_in)</b>, <b>(H_in)</b> or <b>(B, L, H_in)</b>, <b>(L, H_in)</b> for sequential input.<br></br>
+        /// Output: <b>(B, H_out)</b>, <b>(H_out)</b> or <b>(B, L, H_out)</b>, <b>(L, H_out)</b> for sequential input.<br></br>
+        /// where B = batch_size, L = sequence_length, H_in = in_features and H_out = out_features.
         /// </summary>
         /// <param name="in_features">Input's last dimension value (H_in).</param>
         /// <param name="out_features">Output's last dimension value (H_out).</param>
@@ -47,12 +50,19 @@ namespace DeepUnity.Modules
         }
         public Tensor Predict(Tensor input)
         {
+            if (input.Rank > 3)
+                throw new ArgumentException($"Input must have the shape as (H_in), (B, H_in), (L, H_in) or (B, L, H_in), and the received input is ({input.Shape.ToCommaSeparatedString()})");
+
+            if (input.Rank == 3)
+            {
+                Tensor[] batchElems_input = input.Split(0, 1);
+                return Tensor.Concat(null, batchElems_input.Select(x => Predict(x.Squeeze(0))).ToArray());                
+            }
+
             if (input.Size(-1) != weights.Size(-1))
                 throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the Dense Layer features_num ({weights.Size(-1)}).");
 
-            if (input.Rank > 2)
-                throw new ArgumentException($"Input must have the shape as (H_in) or (B, H_in), and the received input is ({input.Shape.ToCommaSeparatedString()})");
-
+         
             bool isBatched = input.Rank == 2;
             int batch_size = isBatched ? input.Size(-2) : 1;
 
@@ -111,6 +121,18 @@ namespace DeepUnity.Modules
         }
         public Tensor Backward(Tensor loss)
         {
+            if(loss.Rank == 3)
+            {
+                Tensor[] batchElems_loss = loss.Split(0, 1);
+                Tensor[] batchElems_input = InputCache.Split(0, 1);
+                Tensor[] batchElems_inputGrad = new Tensor[batchElems_loss.Length];
+                for (int b = 0; b < batchElems_loss.Length; b++)
+                {
+                    InputCache = batchElems_input[b]; //.Squeeze(0);
+                    batchElems_inputGrad[b] = Backward(batchElems_loss[b].Squeeze(0));
+                }
+                return Tensor.Concat(null, batchElems_inputGrad);
+            }
             // input = (B, IN)
             // loss = (B, OUT)
             // tloss = (OUT, B)
@@ -177,9 +199,7 @@ namespace DeepUnity.Modules
                 lossBuffer.Release();
                 inputCacheBuffer.Release();
                 weightsGradBuffer.Release();
-                biasesGradBuffer.Release();
-
-                
+                biasesGradBuffer.Release();                
             }
 
             return Tensor.MatMul(loss, weights, Device);

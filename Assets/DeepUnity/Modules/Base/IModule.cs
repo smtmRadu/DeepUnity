@@ -40,9 +40,9 @@ namespace DeepUnity.Modules
         public AvgPool2D avgpool2d = null;
         public MaxPool2D maxpool2d = null;
         public MaxPool1D maxpool1d = null;
-        public Padding2D padding2d = null;
-        public SkipConnectionFork skipconnectionfork = null;
-        public SkipConnectionJoin skipconnectionjoin = null;
+        public Pad2D pad2d = null;
+        public ResidualConnection.Fork residualconnectionfork = null;
+        public ResidualConnection.Join residualconnectionjoin = null;
 
         // Activations modules
         public ReLU relu = null;
@@ -198,17 +198,17 @@ namespace DeepUnity.Modules
             {
                 rmsnorm = rmsnormModule;
             }
-            else if (module is Padding2D padding2dModule)
+            else if (module is Pad2D padding2dModule)
             {
-                padding2d = padding2dModule;
+                pad2d = padding2dModule;
             }
-            else if (module is SkipConnectionFork resconforkModule)
+            else if (module is ResidualConnection.Fork resconforkModule)
             {
-                skipconnectionfork = resconforkModule;
+                residualconnectionfork = resconforkModule;
             }
-            else if (module is SkipConnectionJoin resconjoinModule)
+            else if (module is ResidualConnection.Join resconjoinModule)
             {
-                skipconnectionjoin = resconjoinModule;
+                residualconnectionjoin = resconjoinModule;
             }
             else
                 throw new Exception($"Unhandled module type while wrapping ({module.GetType().Name}).");
@@ -354,17 +354,17 @@ namespace DeepUnity.Modules
             {
                 module = moduleWrapper.rmsnorm;
             }
-            else if (typeof(Padding2D).Name.Equals(moduleWrapper.name))
+            else if (typeof(Pad2D).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.padding2d;
+                module = moduleWrapper.pad2d;
             }
-            else if (typeof(SkipConnectionFork).Name.Equals(moduleWrapper.name))
+            else if (typeof(ResidualConnection.Fork).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.skipconnectionfork;
+                module = moduleWrapper.residualconnectionfork;
             }
-            else if (typeof(SkipConnectionJoin).Name.Equals(moduleWrapper.name))
+            else if (typeof(ResidualConnection.Join).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.skipconnectionjoin;
+                module = moduleWrapper.residualconnectionjoin;
             }
             else
                 throw new Exception($"Unhandled module type while unwrapping ({moduleWrapper.name}).");

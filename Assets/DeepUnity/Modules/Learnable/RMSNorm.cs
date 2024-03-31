@@ -1,6 +1,4 @@
-using DeepUnity.Optimizers;
 using System;
-using System.Drawing.Printing;
 using Unity.VisualScripting;
 using UnityEngine;
 
@@ -106,6 +104,7 @@ namespace DeepUnity.Modules
                 dLdGamma.Mean(0).Mean(0)[0]:
                 dLdGamma.Mean(0)[0];
 
+            
             Tensor dLdX = (gamma[0] * rms.Reciprocal()) * (dLdY - xHat * (dLdY * xHat).Mean(-1, keepDim: true).Expand(-1, dLdY.Size(-1)));
             return dLdX;
         }

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ffdd4f9587b2d8846a37ba5240ae14b2, type: 3}
   m_Name: Sigma
   m_EditorClassIdentifier: 
-  version: 47
+  version: 226
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -11255,6 +11255,17 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    rmsnorm:
+      p: -1
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      runningRms:
+        data:
+        - 1
+        shape: 01000000
+      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -11271,6 +11282,16 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    pad2d:
+      padding: 0
+      paddingType: 0
+    residualconnectionfork:
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      forkSource:
+        rid: 4665014147068461372
     softmax:
       temperature: 0
     leakyrelu:
@@ -11393,6 +11414,17 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    rmsnorm:
+      p: -1
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      runningRms:
+        data:
+        - 1
+        shape: 01000000
+      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -11409,6 +11441,16 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    pad2d:
+      padding: 0
+      paddingType: 0
+    residualconnectionfork:
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      forkSource:
+        rid: 4665014147068461373
     softmax:
       temperature: 0
     leakyrelu:
@@ -28043,6 +28085,17 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    rmsnorm:
+      p: -1
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      runningRms:
+        data:
+        - 1
+        shape: 01000000
+      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -28059,6 +28112,16 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    pad2d:
+      padding: 0
+      paddingType: 0
+    residualconnectionfork:
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      forkSource:
+        rid: 4665014147068461374
     softmax:
       temperature: 0
     leakyrelu:
@@ -28181,6 +28244,17 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    rmsnorm:
+      p: -1
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      runningRms:
+        data:
+        - 1
+        shape: 01000000
+      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -28197,6 +28271,16 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    pad2d:
+      padding: 0
+      paddingType: 0
+    residualconnectionfork:
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      forkSource:
+        rid: 4665014147068461375
     softmax:
       temperature: 0
     leakyrelu:
@@ -44831,6 +44915,17 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    rmsnorm:
+      p: -1
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      runningRms:
+        data:
+        - 1
+        shape: 01000000
+      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -44847,6 +44942,16 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    pad2d:
+      padding: 0
+      paddingType: 0
+    residualconnectionfork:
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      forkSource:
+        rid: 4665014147068461376
     softmax:
       temperature: 0
     leakyrelu:
@@ -44969,6 +45074,17 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    rmsnorm:
+      p: -1
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      runningRms:
+        data:
+        - 1
+        shape: 01000000
+      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -44985,6 +45101,16 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    pad2d:
+      padding: 0
+      paddingType: 0
+    residualconnectionfork:
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      forkSource:
+        rid: 4665014147068461377
     softmax:
       temperature: 0
     leakyrelu:
@@ -48461,6 +48587,17 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    rmsnorm:
+      p: -1
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      runningRms:
+        data:
+        - 1
+        shape: 01000000
+      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -48477,6 +48614,16 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    pad2d:
+      padding: 0
+      paddingType: 0
+    residualconnectionfork:
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      forkSource:
+        rid: 4665014147068461378
     softmax:
       temperature: 0
     leakyrelu:
@@ -48599,6 +48746,17 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    rmsnorm:
+      p: -1
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      runningRms:
+        data:
+        - 1
+        shape: 01000000
+      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -48615,6 +48773,16 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    pad2d:
+      padding: 0
+      paddingType: 0
+    residualconnectionfork:
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      forkSource:
+        rid: 4665014147068461379
     softmax:
       temperature: 0
     leakyrelu:
@@ -48633,3 +48801,54 @@ MonoBehaviour:
     rrelu:
       lower: 0
       upper: 0
+  references:
+    version: 2
+    RefIds:
+    - rid: 4665014147068461372
+      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
+      data:
+        linearProjection:
+          data: []
+          shape: 
+    - rid: 4665014147068461373
+      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
+      data:
+        linearProjection:
+          data: []
+          shape: 
+    - rid: 4665014147068461374
+      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
+      data:
+        linearProjection:
+          data: []
+          shape: 
+    - rid: 4665014147068461375
+      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
+      data:
+        linearProjection:
+          data: []
+          shape: 
+    - rid: 4665014147068461376
+      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
+      data:
+        linearProjection:
+          data: []
+          shape: 
+    - rid: 4665014147068461377
+      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
+      data:
+        linearProjection:
+          data: []
+          shape: 
+    - rid: 4665014147068461378
+      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
+      data:
+        linearProjection:
+          data: []
+          shape: 
+    - rid: 4665014147068461379
+      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
+      data:
+        linearProjection:
+          data: []
+          shape: 

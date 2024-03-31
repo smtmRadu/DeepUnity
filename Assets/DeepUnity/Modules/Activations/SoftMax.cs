@@ -52,28 +52,42 @@ namespace DeepUnity.Activations
         }
         public Tensor Backward(Tensor dLdY)
         {
-            bool isBatched = OutputCache.Rank == 2;
-            int B = isBatched ? OutputCache.Size(-2) : 1;
-            int H = OutputCache.Size(-1);
-
-            Tensor jacobian_softmax = isBatched ? Tensor.Zeros(B, H, H) : Tensor.Zeros(H, H);
-
-            for (int b = 0; b < B; b++)
+            if(dLdY.Rank == 2)
             {
-                for (int j = 0; j < H; j++)
+                if (OutputCache.Rank != 2)
+                    throw new ArgumentException("Input received in Softmax is Rank 1 and the output gradient is Rank 2.");
+
+                Tensor[] batchElems_sm = OutputCache.Split(0, 1);
+                Tensor[] batchElems_loss = dLdY.Split(0, 1);
+                Tensor[] batchElems_inputGrad = new Tensor[batchElems_sm.Length];
+                for (int i = 0; i < batchElems_loss.Length; i++)
                 {
-                    for (int i = 0; i < H; i++)
-                    {
-                        float delta = i == j ? 1 : 0;
-                        jacobian_softmax[b, j, i] = OutputCache[b, i] * (delta - OutputCache[b, j]);
-                    }
+                    OutputCache = batchElems_sm[i];
+                    batchElems_inputGrad[i] = Backward(batchElems_loss[i].Squeeze(0));
                 }
+                return Tensor.Concat(null, batchElems_inputGrad);
             }
 
-            return Tensor.MatMul(dLdY, jacobian_softmax); //  (B, H) * (H, H)
+
+            int H = OutputCache.Size(-1);
+
+            Tensor jacobian_softmax = Tensor.Zeros(H, H);
+
+            for (int j = 0; j < H; j++)
+            {
+                for (int i = 0; i < H; i++)
+                {
+                    float delta = i == j ? 1 : 0;
+                    jacobian_softmax[j, i] += OutputCache[i] * (delta - OutputCache[j]);
+                }
+            }
+            
+
+            return Tensor.MatMul(dLdY, jacobian_softmax);
         }
 
-        public object Clone() => new Softmax();
+
+        public object Clone() => new Softmax(temperature);
     }
 
 }

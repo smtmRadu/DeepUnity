@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using UnityEngine.UI;
 using DeepUnity.Modules;
 using DeepUnity.Activations;
+using TMPro;
 
 namespace DeepUnityTutorials
 {
@@ -18,14 +19,54 @@ namespace DeepUnityTutorials
 
         private void Start()
         {
-            Tensor img = Tensor.Random01(64, 3, 64, 64);
+            // net = new Sequential(
+            //     new ResidualConnection.Fork(),
+            //     new Attention(100, 100),
+            //     new Dense(100, 100),
+            //     new ResidualConnection.Join(),
+            //     
+            //     new ResidualConnection.Fork(),
+            //     new RNNCell(100, 100),
+            //     new Dense(100, 100),
+            //     new ResidualConnection.Join(),
+            //     
+            //     new ResidualConnection.Fork(),
+            //     new RNNCell(100, 100),
+            //     new Dense(100, 100),
+            //     new ResidualConnection.Join(),
+            //     
+            //     new ResidualConnection.Fork(),
+            //     new RNNCell(100, 100),
+            //     new Dense(100, 100),
+            //     new ResidualConnection.Join(),
+            //     
+            //     new ResidualConnection.Fork(),
+            //     new RNNCell(100, 100),
+            //     new Dense(100, 100),
+            //     new ResidualConnection.Join(),
+            //     
+            //     new RNNCell(100, 100, HiddenStates.ReturnLast),
+            //     new Dense(100, 128),
+            //     new GELU(),
+            //     new Dense(128, 100),
+            //     new Softmax()
+            //     );
+            // 
+            // print(net.Forward(Tensor.Random01(64, 100)));
+            // print(net.Backward(Tensor.Random01(100)));
 
-            BenchmarkClock.Start();
-            for (int i = 0; i < 100; i++)
-            {
-                Tensor.MatPad(img, 2, PaddingType.Zeros);
-            }
-            BenchmarkClock.Stop();
+
+            Tensor input = Tensor.Random01(8, 100);
+
+            Attention att = new Attention(100, 100);
+            print(att.Forward(input));
+            print(att.Backward(Tensor.Random01(8, 100)));
+
+            print(att.Forward(input.Unsqueeze(0)));
+            print(att.Backward(Tensor.Random01(1, 8, 100)));
+
+            print(att.Forward((input.Unsqueeze(0).Expand(0, 5))));
+            print(att.Backward(Tensor.Random01(5, 8, 100)));
 
             // Tensor input = Tensor.Random01(64, 3, 256, 256);
             // 

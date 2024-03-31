@@ -18,23 +18,23 @@ namespace DeepUnity
         {
             UnityEditor.EditorApplication.playModeStateChanged += DeallocateTensors;
         }
-        private readonly static Dictionary<TensorGPU, TensorGPU> AllocatedTensors = new Dictionary<TensorGPU, TensorGPU>();
+        private readonly static Lazy<Dictionary<TensorGPU, TensorGPU>> AllocatedTensors = new Lazy<Dictionary<TensorGPU, TensorGPU>>();
         private readonly static int MAX_ALLOC_TENSORS = 128;
 
         private static void DeallocateTensors(UnityEditor.PlayModeStateChange state)
         {
             if (state == UnityEditor.PlayModeStateChange.ExitingPlayMode)
             {
-                if(AllocatedTensors.Count > 0)
+                if(AllocatedTensors.Value.Count > 0)
                 {
-                    ConsoleMessage.Info($"{AllocatedTensors.Count} TensorGPUs deallocated. Please dispose TensorGPUs after use.");
+                    ConsoleMessage.Info($"{AllocatedTensors.Value.Count} TensorGPUs deallocated. Please dispose TensorGPUs after use.");
 
-                    foreach (var item in AllocatedTensors)
+                    foreach (var item in AllocatedTensors.Value)
                     {
                         item.Value.data.Release();
                        
                     }
-                    AllocatedTensors.Clear();
+                    AllocatedTensors.Value.Clear();
                 }
               
             }
@@ -264,7 +264,7 @@ namespace DeepUnity
         /// Deallocates the Tensor from VRAM and destroys the object.
         public void Dispose()
         {       
-            AllocatedTensors.Remove(this);
+            AllocatedTensors.Value.Remove(this);
             data.Release();
             GC.SuppressFinalize(this);
         }
@@ -301,9 +301,9 @@ namespace DeepUnity
             cs.SetBuffer(kernel, "result", this.data);
             cs.Dispatch(kernel, 1, 1, 1);
 
-            AllocatedTensors.Add(this, this);
+            AllocatedTensors.Value.Add(this, this);
 
-            if (AllocatedTensors.Count > MAX_ALLOC_TENSORS)
+            if (AllocatedTensors.Value.Count > MAX_ALLOC_TENSORS)
             {
                 ConsoleMessage.Error($"Cannot allocate more than {MAX_ALLOC_TENSORS} TensorGPUs in the same time. Make sure there are no memory leaks and all unused TensorGPUs are Disposed!");
                 UnityEditor.EditorApplication.isPlaying = false;
@@ -1511,7 +1511,7 @@ namespace DeepUnity
         {
             data = new ComputeBuffer(serialized_data.Length, 4);
             data.SetData(serialized_data);
-            AllocatedTensors.Add(this, this);
+            AllocatedTensors.Value.Add(this, this);
         }
 
         // inside use      

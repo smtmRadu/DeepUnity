@@ -48,17 +48,14 @@ namespace DeepUnityTutorials
         public InitType init_b = InitType.LeCun_Normal;
         public void Start()
         {
-            var skipFork = new SkipConnectionFork();
             if (net == null)
             {
                 net = new Sequential(
                  new Dense(2, hiddenSize,init_w, init_b),
                  new Tanh(),
-                 skipFork,
                  new LazyDense(hiddenSize),
                  new LayerNorm(),
                  new Tanh(),
-                 new SkipConnectionJoin(skipFork),
 
                  new Dense(hiddenSize, 1, init_w, init_b)
                  );

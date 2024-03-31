@@ -97,7 +97,7 @@ namespace DeepUnity.Modules
 
             Tensor[] batch_elem = isBatched ? input.Split(0, 1) : new Tensor[] { input };
             Tensor[] SDPA = new Tensor[batch_size];
-
+            Q.Clear(); K.Clear(); V.Clear(); SoftmaxCache.Clear(); PostSoftmaxCache.Clear(); /// on simple predict there is no need for continuous forward caching.. so that's it
             for (int i = 0; i < batch_size; i++)
             {
                 Tensor x = isBatched ? batch_elem[i].Squeeze(0) : batch_elem[i];
@@ -113,19 +113,26 @@ namespace DeepUnity.Modules
                 SDPA[i] = Tensor.MatMul(sdpa, V.Peek(), Device); // (L, D)
             }
 
+            if (!isBatched)
+                return Tensor.Concat(0, SDPA);
+
             return Tensor.Concat(null, SDPA);
         }
         public Tensor Forward(Tensor input)
         {
             return Predict(input);
         }
-        public Tensor Backward(Tensor dLdY)
+        public Tensor Backward(Tensor dLdy)
         {
-            bool isBatched = dLdY.Rank == 3;
-            int batch_size = isBatched ? dLdY.Size(0) : 1;
+            bool isBatched = dLdy.Rank == 3;
+            int batch_size = isBatched ? dLdy.Size(0) : 1;
 
-            Tensor[] batch_elem = isBatched ? dLdY.Split(0, 1) : new Tensor[] { dLdY };
+            Tensor[] batch_elem = isBatched ? dLdy.Split(0, 1) : new Tensor[] { dLdy };
             Tensor[] input_grad = new Tensor[batch_size];
+
+            if(batch_size != SoftmaxCache.Count)
+                throw new ArgumentException("Loss batch size is not matching the input batch size");
+            
             for (int i = batch_size - 1; i >= 0; i--)
             {
                 Tensor lossGrad = isBatched ? batch_elem[i].Squeeze(0) : batch_elem[i];
@@ -145,6 +152,9 @@ namespace DeepUnity.Modules
                 input_grad[i] += Tensor.MatMul(kGrad, W_K.Transpose(0, 1), Device);
                 input_grad[i] += Tensor.MatMul(qGrad, W_Q.Transpose(0, 1), Device);
             }
+
+            if (!isBatched)
+                return Tensor.Concat(0, input_grad);
 
             return Tensor.Concat(null, input_grad);
         }

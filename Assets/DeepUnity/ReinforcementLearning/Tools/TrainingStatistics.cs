@@ -175,7 +175,7 @@ namespace DeepUnity.ReinforcementLearning
             svgBuilder.AppendLine(@"<svg width=""2000"" height=""2500"" xmlns=""http://www.w3.org/2000/svg"">");
             int y = 20;
 
-            svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""26"" fill=""black""> [{behaviourName}] Training Session</text>");
+            svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""26"" fill=""black""> [<tspan font-weight=""bold"" fill=""blue"">{behaviourName}</tspan>] Training Session</text>");
             y += 30;
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Statistics]</text>");
             y += 20;

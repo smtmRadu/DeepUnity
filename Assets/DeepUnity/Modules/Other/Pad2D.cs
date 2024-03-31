@@ -12,7 +12,7 @@ namespace DeepUnity.Modules
     /// W_out = W_in + 2 * padding.<br />
     /// </summary>
     [Serializable]
-    public class Padding2D : IModule
+    public class Pad2D : IModule
     {
         [SerializeField] private int padding;
         [SerializeField] private PaddingType paddingType;
@@ -24,7 +24,7 @@ namespace DeepUnity.Modules
         /// H_out = H_in + 2 * padding, <br></br>
         /// W_out = W_in + 2 * padding.<br />
         /// </summary>
-        public Padding2D(int padding, PaddingType paddingType = PaddingType.Zeros)
+        public Pad2D(int padding, PaddingType paddingType = PaddingType.Zeros)
         {
             if (padding < 1)
                 throw new System.ArgumentException("Padding cannot be less than 1.");
@@ -64,7 +64,7 @@ namespace DeepUnity.Modules
 
         public object Clone()
         {
-            return new Padding2D(padding, paddingType);
+            return new Pad2D(padding, paddingType);
         }
 
         public Tensor Forward(Tensor input)

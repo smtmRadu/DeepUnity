@@ -231,7 +231,9 @@ namespace DeepUnity.Modules
                 }
 
                 inputGrad[InputCache.Count] = Tensor.MatMul(dLdLinear, weights, Device).Unsqueeze(isBatched ? 1 : 0);
-                dLdH[InputCache.Count] += Tensor.MatMul(dLdLinear, r_weights, Device);
+
+                if(InputCache.Count > 0)
+                    dLdH[InputCache.Count - 1] += Tensor.MatMul(dLdLinear, r_weights, Device);
             }
             return Tensor.Concat(isBatched ? 1 : 0, inputGrad);
         }

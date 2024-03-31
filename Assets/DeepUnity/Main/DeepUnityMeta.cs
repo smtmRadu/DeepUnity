@@ -20,9 +20,8 @@ namespace DeepUnity
         internal readonly static ComputeShader RNNCellCS;
 
         internal readonly static int THREADS_NUM = 256;
-        internal readonly static ParallelOptions MULTITHREADS_8 = new ParallelOptions() { MaxDegreeOfParallelism = 8 };
-        internal readonly static ParallelOptions MULTITHREADS_4 = new ParallelOptions() { MaxDegreeOfParallelism = 4 };
-
+        internal readonly static Lazy<ParallelOptions> MULTITHREADS_8 = new Lazy<ParallelOptions>(() => new ParallelOptions { MaxDegreeOfParallelism = 8 });
+        internal readonly static Lazy<ParallelOptions> MULTITHREADS_4 = new Lazy<ParallelOptions>(() => new ParallelOptions { MaxDegreeOfParallelism = 4 });
         static DeepUnityMeta()
         {
             try
@@ -187,13 +186,6 @@ namespace DeepUnity
     {
         Weighted,
         Micro,
-    }
-
-    public enum ModelType
-    {
-        NN,
-        CNN,
-        RNN
     }
 
     public enum KLType
