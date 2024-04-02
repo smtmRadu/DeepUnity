@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ffdd4f9587b2d8846a37ba5240ae14b2, type: 3}
   m_Name: Q1
   m_EditorClassIdentifier: 
-  version: 226
+  version: 304
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -14619,7 +14619,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461351
+        rid: 1628825360402219359
     softmax:
       temperature: 0
     leakyrelu:
@@ -14778,7 +14778,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461352
+        rid: 1628825360402219360
     softmax:
       temperature: 0
     leakyrelu:
@@ -31449,7 +31449,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461353
+        rid: 1628825360402219361
     softmax:
       temperature: 0
     leakyrelu:
@@ -31608,7 +31608,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461354
+        rid: 1628825360402219362
     softmax:
       temperature: 0
     leakyrelu:
@@ -48279,7 +48279,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461355
+        rid: 1628825360402219363
     softmax:
       temperature: 0
     leakyrelu:
@@ -48438,7 +48438,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461356
+        rid: 1628825360402219364
     softmax:
       temperature: 0
     leakyrelu:
@@ -48726,7 +48726,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461357
+        rid: 1628825360402219365
     softmax:
       temperature: 0
     leakyrelu:
@@ -48748,43 +48748,43 @@ MonoBehaviour:
   references:
     version: 2
     RefIds:
-    - rid: 4665014147068461351
+    - rid: 1628825360402219359
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:
           data: []
           shape: 
-    - rid: 4665014147068461352
+    - rid: 1628825360402219360
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:
           data: []
           shape: 
-    - rid: 4665014147068461353
+    - rid: 1628825360402219361
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:
           data: []
           shape: 
-    - rid: 4665014147068461354
+    - rid: 1628825360402219362
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:
           data: []
           shape: 
-    - rid: 4665014147068461355
+    - rid: 1628825360402219363
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:
           data: []
           shape: 
-    - rid: 4665014147068461356
+    - rid: 1628825360402219364
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:
           data: []
           shape: 
-    - rid: 4665014147068461357
+    - rid: 1628825360402219365
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:

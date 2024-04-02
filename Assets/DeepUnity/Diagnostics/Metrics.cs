@@ -15,6 +15,8 @@ namespace DeepUnity
         /// where B = batch_size and H = output_size (H > 2)
         /// </summary>
         /// <returns>Returns a float value in range [0, 1].</returns>
+        /// <param name="predictions">The probabilities</param>
+        /// <param name="targets">The onehot embedding of target</param>
         public static float Accuracy(Tensor predictions, Tensor targets)
         {
             if (predictions.Rank > 2 || targets.Rank > 2)

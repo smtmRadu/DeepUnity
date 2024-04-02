@@ -3,16 +3,14 @@ using UnityEngine;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
 using System.Linq;
-using UnityEngine.Windows;
-using System.Drawing.Printing;
 namespace DeepUnity.Modules
 {
     // https://www.youtube.com/watch?v=tMjdQLylyGI&t=602s
     // https://proceedings.mlr.press/v9/glorot10a/glorot10a.pdf (251 - 253)
     /// <summary>
-    /// Input: <b>(B, H_in)</b> or <b>(H_in)</b> for unbatched input.<br></br>
-    /// Output: <b>(B, H_out)</b> or <b>(H_out)</b> for unbatched input.<br></br>
-    /// where B = batch_size, H_in = in_features and H_out = out_features.
+    /// Input: <b>(B, H_in)</b>, <b>(H_in)</b> or <b>(B, L, H_in)</b>, <b>(L, H_in)</b> for sequential input.<br></br>
+    /// Output: <b>(B, H_out)</b>, <b>(H_out)</b> or <b>(B, L, H_out)</b>, <b>(L, H_out)</b> for sequential input.<br></br>
+    /// where B = batch_size, L = sequence_length, H_in = in_features and H_out = out_features.
     /// </summary>
     [Serializable]
     public class Dense : ILearnable, IModule
@@ -35,7 +33,7 @@ namespace DeepUnity.Modules
         /// <param name="weight_init">Initializer used for weights.</param>
         /// <param name="bias_init">Initializer used for biases.</param>
         /// <param name="device">Computation device used. Recommended <see cref="Device.GPU"/> for large <see cref="Dense"/> layers with <b>in_features</b> &amp; <b>out_features > 64</b>.</param>
-        public Dense(int in_features, int out_features, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = Device.CPU)
+        public Dense(int in_features, int out_features, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = default)
         {
             if (in_features < 1)
                 throw new ArgumentException("In_features cannot be less than 1.");

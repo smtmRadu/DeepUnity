@@ -216,7 +216,8 @@ namespace DeepUnity.ReinforcementLearning
         // Loop
         private void PostTimestep()
         {
-            // Generally saves the previous timestep
+            // Generally this method saves the previous timestep
+
             if (behaviourType == BehaviourType.Off)
                 return;
 
@@ -228,10 +229,11 @@ namespace DeepUnity.ReinforcementLearning
 
             EpsiodeCumulativeReward += Timestep.reward[0];
 
+            // Observe s'
+            lastState = GetState();
+
             if (behaviourType == BehaviourType.Learn)
-            {
-                // Observe s'
-                lastState = GetState();
+            {            
                 Timestep.nextState = lastState.Clone() as Tensor;
 
                 // Scale and clip reward - there was a problem with the rewards normalizer (idk why), but anyways they should not be normalized online because we can use off-policy alogorithms. Just use a constant (0,1) bro to scale it
@@ -243,12 +245,12 @@ namespace DeepUnity.ReinforcementLearning
                     EndEpisode();
             }
 
-            // These checkup applies also for Manual and Inference..
+            // These checkups applies also for Manual and Inference..
             if (Timestep?.done[0] == 1)
             {
                 OnEpisodeEnd?.Invoke(this, EventArgs.Empty);
                 StatesBuffer.ResetToZero(); // For Stacked inputs reset to 0 all sequence
-                lastState = null;// On Next episode there was no last state
+                lastState = null;// On Next episode (on timestep 0) there will be no last state
 
                 EpisodeStepCount = 0;
                 EpsiodeCumulativeReward = 0f;

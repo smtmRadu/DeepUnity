@@ -56,7 +56,16 @@ namespace DeepUnity
                 {
                     test.Add((collect_test_image[i], collect_test_label[i]));
                 }
-            }            
+            }
+
+            json_train_image = null;
+            json_train_label = null;
+            json_test_image = null;
+            json_test_label = null;
+            collect_train_image?.Clear();
+            collect_train_label?.Clear();
+            collect_test_image?.Clear();
+            collect_test_label?.Clear();
         }
         /// <summary>
         /// Item1 = input: Tensor(10)<br />

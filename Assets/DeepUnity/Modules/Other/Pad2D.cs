@@ -27,7 +27,7 @@ namespace DeepUnity.Modules
         public Pad2D(int padding, PaddingType paddingType = PaddingType.Zeros)
         {
             if (padding < 1)
-                throw new System.ArgumentException("Padding cannot be less than 1.");
+                throw new ArgumentException("Padding cannot be less than 1.");
             this.padding = padding;
             this.paddingType = paddingType;
         }

@@ -21,7 +21,7 @@ MonoBehaviour:
   bufferSize: 10240
   horizon: 512
   numEpoch: 8
-  beta: 0.005
+  beta: 0.01
   epsilon: 0.2
   lambda: 0.96
   gradClipNorm: 0.5
@@ -37,4 +37,4 @@ MonoBehaviour:
   tau: 0.005
   debug: 0
   timescaleAdjustment: 1
-  timescale: 16.6
+  timescale: 20.01

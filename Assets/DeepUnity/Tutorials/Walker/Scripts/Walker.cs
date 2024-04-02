@@ -76,7 +76,7 @@ namespace DeepUnityTutorials
                     {
                         if (col.CompareTag("Target"))
                         {
-                            AddReward(+0.075f);
+                            AddReward(+0.1f);
                         }
 
                         col.gameObject.SetActive(false);

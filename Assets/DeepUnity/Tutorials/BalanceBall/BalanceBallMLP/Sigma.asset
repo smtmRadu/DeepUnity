@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ffdd4f9587b2d8846a37ba5240ae14b2, type: 3}
   m_Name: Sigma
   m_EditorClassIdentifier: 
-  version: 19
+  version: 23
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -808,6 +808,32 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    lazybatchnorm1d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    rmsnorm:
+      p: -1
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      runningRms:
+        data:
+        - 1
+        shape: 01000000
+      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -816,14 +842,26 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
-    avgPool2d:
+    avgpool2d:
       kernel_size: 0
       padding: 0
       padding_mode: 0
-    maxPool2d:
+    maxpool2d:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    pad2d:
+      padding: 0
+      paddingType: 0
+    residualconnectionfork:
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      forkSource:
+        rid: 1628825356438078230
+    softmax:
+      temperature: 0
     leakyrelu:
       alpha: 0
     softplus:
@@ -929,6 +967,32 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    lazybatchnorm1d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    rmsnorm:
+      p: -1
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      runningRms:
+        data:
+        - 1
+        shape: 01000000
+      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -937,14 +1001,26 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
-    avgPool2d:
+    avgpool2d:
       kernel_size: 0
       padding: 0
       padding_mode: 0
-    maxPool2d:
+    maxpool2d:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    pad2d:
+      padding: 0
+      paddingType: 0
+    residualconnectionfork:
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      forkSource:
+        rid: 1628825356438078231
+    softmax:
+      temperature: 0
     leakyrelu:
       alpha: 0
     softplus:
@@ -5210,6 +5286,32 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    lazybatchnorm1d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    rmsnorm:
+      p: -1
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      runningRms:
+        data:
+        - 1
+        shape: 01000000
+      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -5218,14 +5320,26 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
-    avgPool2d:
+    avgpool2d:
       kernel_size: 0
       padding: 0
       padding_mode: 0
-    maxPool2d:
+    maxpool2d:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    pad2d:
+      padding: 0
+      paddingType: 0
+    residualconnectionfork:
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      forkSource:
+        rid: 1628825356438078232
+    softmax:
+      temperature: 0
     leakyrelu:
       alpha: 0
     softplus:
@@ -5331,6 +5445,32 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    lazybatchnorm1d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    rmsnorm:
+      p: -1
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      runningRms:
+        data:
+        - 1
+        shape: 01000000
+      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -5339,14 +5479,26 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
-    avgPool2d:
+    avgpool2d:
       kernel_size: 0
       padding: 0
       padding_mode: 0
-    maxPool2d:
+    maxpool2d:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    pad2d:
+      padding: 0
+      paddingType: 0
+    residualconnectionfork:
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      forkSource:
+        rid: 1628825356438078233
+    softmax:
+      temperature: 0
     leakyrelu:
       alpha: 0
     softplus:
@@ -5582,6 +5734,32 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    lazybatchnorm1d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    rmsnorm:
+      p: -1
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      runningRms:
+        data:
+        - 1
+        shape: 01000000
+      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -5590,14 +5768,26 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
-    avgPool2d:
+    avgpool2d:
       kernel_size: 0
       padding: 0
       padding_mode: 0
-    maxPool2d:
+    maxpool2d:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    pad2d:
+      padding: 0
+      paddingType: 0
+    residualconnectionfork:
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      forkSource:
+        rid: 1628825356438078234
+    softmax:
+      temperature: 0
     leakyrelu:
       alpha: 0
     softplus:
@@ -5703,6 +5893,32 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    lazybatchnorm1d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    rmsnorm:
+      p: -1
+      gamma:
+        data:
+        - 1
+        shape: 01000000
+      runningRms:
+        data:
+        - 1
+        shape: 01000000
+      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -5711,14 +5927,26 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
-    avgPool2d:
+    avgpool2d:
       kernel_size: 0
       padding: 0
       padding_mode: 0
-    maxPool2d:
+    maxpool2d:
       kernel_size: 0
       padding: 0
       padding_mode: 0
+    pad2d:
+      padding: 0
+      paddingType: 0
+    residualconnectionfork:
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      forkSource:
+        rid: 1628825356438078235
+    softmax:
+      temperature: 0
     leakyrelu:
       alpha: 0
     softplus:
@@ -5735,3 +5963,42 @@ MonoBehaviour:
     rrelu:
       lower: 0
       upper: 0
+  references:
+    version: 2
+    RefIds:
+    - rid: 1628825356438078230
+      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
+      data:
+        linearProjection:
+          data: []
+          shape: 
+    - rid: 1628825356438078231
+      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
+      data:
+        linearProjection:
+          data: []
+          shape: 
+    - rid: 1628825356438078232
+      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
+      data:
+        linearProjection:
+          data: []
+          shape: 
+    - rid: 1628825356438078233
+      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
+      data:
+        linearProjection:
+          data: []
+          shape: 
+    - rid: 1628825356438078234
+      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
+      data:
+        linearProjection:
+          data: []
+          shape: 
+    - rid: 1628825356438078235
+      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
+      data:
+        linearProjection:
+          data: []
+          shape: 

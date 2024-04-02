@@ -8,6 +8,7 @@ namespace DeepUnityTutorials
     // This might be resolved actually if i send to all the agents that they have the key.... we ll see...
     public class KnightScript : Agent
     {
+        [Header("No need for normalization. 210 inputs")]
         [SerializeField] public float initialHealth = 100f;
         [ViewOnly] public float health = 100f;
         [SerializeField] private float speed = 10f;
@@ -51,7 +52,7 @@ namespace DeepUnityTutorials
         }
         public override void CollectObservations(StateVector stateBuffer)
         {
-            //240 from sensors
+            //200 from sensors
 
             // 10 new inputs
             Vector3 dirToKey = dungeonManager.key.transform.position - transform.position;

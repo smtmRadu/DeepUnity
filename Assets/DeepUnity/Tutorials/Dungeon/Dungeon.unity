@@ -153,15 +153,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 333837eb6d1d1ff428ab09ea22110253, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 333837eb6d1d1ff428ab09ea22110253, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 333837eb6d1d1ff428ab09ea22110253, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 333837eb6d1d1ff428ab09ea22110253, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -243,15 +243,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f88828c08728aed41b296058b0a6cf9c, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f88828c08728aed41b296058b0a6cf9c, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f88828c08728aed41b296058b0a6cf9c, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f88828c08728aed41b296058b0a6cf9c, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -660,14 +660,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6333d6cc48047d74aace0f7035849f1f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  spaceSize: 250
+  spaceSize: 210
+  spaceHeight: 144
+  spaceWidth: 256
+  spaceChannels: 3
   stackedInputs: 1
   continuousActions: 0
   discreteActions: 9
   archType: 0
   numLayers: 2
-  hidUnits: 128
-  model: {fileID: 11400000, guid: 82b4472f85ee60e46bdabeb9e4700c33, type: 2}
+  hidUnits: 64
+  model: {fileID: 11400000, guid: 0eec04b4cfae4b04b95f7234383ae015, type: 2}
   behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 1
@@ -810,7 +813,6 @@ GameObject:
   - component: {fileID: 208340294}
   - component: {fileID: 208340293}
   - component: {fileID: 208340292}
-  - component: {fileID: 208340291}
   - component: {fileID: 208340290}
   - component: {fileID: 208340289}
   - component: {fileID: 208340287}
@@ -834,13 +836,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   spaceSize: 250
+  spaceHeight: 144
+  spaceWidth: 256
+  spaceChannels: 3
   stackedInputs: 1
   continuousActions: 0
   discreteActions: 9
   archType: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 82b4472f85ee60e46bdabeb9e4700c33, type: 2}
+  model: {fileID: 11400000, guid: 0eec04b4cfae4b04b95f7234383ae015, type: 2}
   behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 1
@@ -861,7 +866,7 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 208340286}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 10, y: -3.5, z: 33.28}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -923,40 +928,6 @@ MonoBehaviour:
   alpha: 0.298
   missColor: {r: 0.5, g: 0.5, b: 0.5, a: 0.105882354}
   missingMaterialColor: {r: 1, g: 1, b: 1, a: 1}
---- !u!114 &208340291
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 208340286}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  world: 0
-  layerMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  detectableTags:
-  - Agent
-  - Enemy
-  - Target
-  - Key
-  - Box
-  - Ground
-  rays: 5
-  fieldOfView: 30
-  rotationOffset: 180
-  distance: 150
-  sphereCastRadius: 0.45
-  xOffset: 0
-  yOffset: 0
-  zOffset: 0
-  tilt: 0
-  rayColor: {r: 0, g: 1, b: 0, a: 1}
-  missRayColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!136 &208340292
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -1469,15 +1440,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f671799bcb0d05e4586c7f7b81ea2911, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f671799bcb0d05e4586c7f7b81ea2911, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f671799bcb0d05e4586c7f7b81ea2911, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f671799bcb0d05e4586c7f7b81ea2911, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -1842,15 +1813,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: d1fb613c987329d44b6092f9bef6e43f, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: d1fb613c987329d44b6092f9bef6e43f, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: d1fb613c987329d44b6092f9bef6e43f, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: d1fb613c987329d44b6092f9bef6e43f, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -8269,7 +8240,6 @@ GameObject:
   - component: {fileID: 1743306852}
   - component: {fileID: 1743306851}
   - component: {fileID: 1743306850}
-  - component: {fileID: 1743306849}
   - component: {fileID: 1743306848}
   - component: {fileID: 1743306847}
   - component: {fileID: 1743306846}
@@ -8293,13 +8263,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   spaceSize: 250
+  spaceHeight: 144
+  spaceWidth: 256
+  spaceChannels: 3
   stackedInputs: 1
   continuousActions: 0
   discreteActions: 9
   archType: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 82b4472f85ee60e46bdabeb9e4700c33, type: 2}
+  model: {fileID: 11400000, guid: 0eec04b4cfae4b04b95f7234383ae015, type: 2}
   behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 1
@@ -8362,40 +8335,6 @@ MonoBehaviour:
   alpha: 0.298
   missColor: {r: 0.5, g: 0.5, b: 0.5, a: 0.105882354}
   missingMaterialColor: {r: 1, g: 1, b: 1, a: 1}
---- !u!114 &1743306849
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1743306845}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  world: 0
-  layerMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  detectableTags:
-  - Agent
-  - Enemy
-  - Target
-  - Key
-  - Box
-  - Ground
-  rays: 5
-  fieldOfView: 30
-  rotationOffset: 180
-  distance: 150
-  sphereCastRadius: 0.45
-  xOffset: 0
-  yOffset: 0
-  zOffset: 0
-  tilt: 0
-  rayColor: {r: 0, g: 1, b: 0, a: 1}
-  missRayColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!136 &1743306850
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -8474,7 +8413,7 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1743306845}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: -10, y: -3.5, z: 33.28}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -8978,15 +8917,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 318f3801ce28ac74b8e9708b74de202c, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 318f3801ce28ac74b8e9708b74de202c, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 318f3801ce28ac74b8e9708b74de202c, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 318f3801ce28ac74b8e9708b74de202c, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -9384,7 +9323,7 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 919132148413026799}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: -3.5, z: 33.28}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -9427,7 +9366,6 @@ GameObject:
   - component: {fileID: 129352480}
   - component: {fileID: 919132148413026802}
   - component: {fileID: 919132148413026801}
-  - component: {fileID: 919132148413026804}
   - component: {fileID: 129352483}
   - component: {fileID: 919132148413026800}
   - component: {fileID: 129352482}
@@ -9497,40 +9435,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 0.19508696, z: 1}
   m_Center: {x: 0, y: -2.182389, z: 0}
---- !u!114 &919132148413026804
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 919132148413026799}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cabd3c993544a7846a00b28653e3b56f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  world: 0
-  layerMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  detectableTags:
-  - Agent
-  - Enemy
-  - Target
-  - Key
-  - Box
-  - Ground
-  rays: 5
-  fieldOfView: 30
-  rotationOffset: 180
-  distance: 150
-  sphereCastRadius: 0.45
-  xOffset: 0
-  yOffset: 0
-  zOffset: 0
-  tilt: 0
-  rayColor: {r: 0, g: 1, b: 0, a: 1}
-  missRayColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &2296393079533514514
 GameObject:
   m_ObjectHideFlags: 0

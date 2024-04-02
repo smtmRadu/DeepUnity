@@ -1,15 +1,26 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace DeepUnity.Modules
 {
+    /// <summary>
+    /// How to create a residual connection while defining your model: <br></br>
+    /// <br></br>
+    /// new <see cref="ResidualConnection.Fork"/>(), <br></br>
+    /// yatta(), yatta(), yatta() ... <br></br>
+    /// new <see cref="ResidualConnection.Join"/>(), <br></br>
+    /// </summary>
     public static class ResidualConnection
     {
         [Serializable]
-        public class Fork : IModule
-        {
-            public static Lazy<Stack<Fork>> UnjoinedForks = new Lazy<Stack<Fork>>();
+        public class Fork : IModule, ISerializationCallbackReceiver
+        {            
+            public static Lazy<Stack<Fork>> UnjoinedForksOnCreate = new Lazy<Stack<Fork>>(); // this is used on creating them, the last fork added matched the first join created.
+            public static Lazy<ConcurrentDictionary<int, Fork>> UnjoinedForksWaitingRoom = new(); // this is used on deserializing, they find themselves by their own residualConnectionHas;
+
+            [SerializeField] private int residualConnectionHash;
             public Tensor ConnectionGrad { private get; set; }
             public Tensor Identity { get; private set; }
 
@@ -17,7 +28,7 @@ namespace DeepUnity.Modules
 
             public Fork()
             {
-                UnjoinedForks.Value.Push(this);
+                UnjoinedForksOnCreate.Value.Push(this);
             }
 
             // /// <summary>
@@ -51,20 +62,33 @@ namespace DeepUnity.Modules
                 Identity = input.Clone() as Tensor;
                 return input;
             }
+
+            public void OnBeforeSerialize()
+            {
+                residualConnectionHash = GetHashCode();
+            }
+            public void OnAfterDeserialize()
+            {
+                if(!UnjoinedForksWaitingRoom.Value.ContainsKey(residualConnectionHash))
+                    UnjoinedForksWaitingRoom.Value.TryAdd(residualConnectionHash, this);
+            }
         }
 
         [Serializable]
-        public class Join : IModule
+        public class Join : IModule, ISerializationCallbackReceiver
         {
-            [SerializeReference] Fork forkSource;
+            [SerializeField] private int residualConnectionHash;
+            private Fork forkSource;
 
             public Join()
             {
-                if (Fork.UnjoinedForks.Value.Count == 0)
-                    throw new Exception("Before joining a residual connection to a main path, a fork must be created firstly.");
-
-                forkSource = Fork.UnjoinedForks.Value.Pop();
+                try
+                {
+                    forkSource = Fork.UnjoinedForksOnCreate.Value.Pop();
+                }
+                catch { }
             }
+            
 
             public Tensor Backward(Tensor loss)
             {
@@ -85,6 +109,30 @@ namespace DeepUnity.Modules
             public Tensor Predict(Tensor input)
             {
                 return input + forkSource.Identity;
+            }
+
+            public void OnBeforeSerialize()
+            {
+                try
+                {
+                    residualConnectionHash = forkSource.GetHashCode();
+                }
+                catch { }
+            }
+            public void OnAfterDeserialize()
+            {
+                bool remove = false;
+                foreach (var item in Fork.UnjoinedForksWaitingRoom.Value)
+                {
+                    if(item.Key == residualConnectionHash)
+                    {
+                        this.forkSource = item.Value;
+                        remove = true;
+                        break;
+                    }
+                }
+                if(remove)
+                    Fork.UnjoinedForksWaitingRoom.Value.TryRemove(residualConnectionHash, out _);
             }
         }
     }

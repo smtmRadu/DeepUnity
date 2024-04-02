@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ffdd4f9587b2d8846a37ba5240ae14b2, type: 3}
   m_Name: Sigma
   m_EditorClassIdentifier: 
-  version: 226
+  version: 304
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -11291,7 +11291,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461372
+        rid: 1628825360402219380
     softmax:
       temperature: 0
     leakyrelu:
@@ -11450,7 +11450,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461373
+        rid: 1628825360402219381
     softmax:
       temperature: 0
     leakyrelu:
@@ -28121,7 +28121,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461374
+        rid: 1628825360402219382
     softmax:
       temperature: 0
     leakyrelu:
@@ -28280,7 +28280,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461375
+        rid: 1628825360402219383
     softmax:
       temperature: 0
     leakyrelu:
@@ -44951,7 +44951,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461376
+        rid: 1628825360402219384
     softmax:
       temperature: 0
     leakyrelu:
@@ -45110,7 +45110,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461377
+        rid: 1628825360402219385
     softmax:
       temperature: 0
     leakyrelu:
@@ -48623,7 +48623,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461378
+        rid: 1628825360402219386
     softmax:
       temperature: 0
     leakyrelu:
@@ -48782,7 +48782,7 @@ MonoBehaviour:
         shape: 
     residualconnectionjoin:
       forkSource:
-        rid: 4665014147068461379
+        rid: 1628825360402219387
     softmax:
       temperature: 0
     leakyrelu:
@@ -48804,49 +48804,49 @@ MonoBehaviour:
   references:
     version: 2
     RefIds:
-    - rid: 4665014147068461372
+    - rid: 1628825360402219380
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:
           data: []
           shape: 
-    - rid: 4665014147068461373
+    - rid: 1628825360402219381
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:
           data: []
           shape: 
-    - rid: 4665014147068461374
+    - rid: 1628825360402219382
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:
           data: []
           shape: 
-    - rid: 4665014147068461375
+    - rid: 1628825360402219383
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:
           data: []
           shape: 
-    - rid: 4665014147068461376
+    - rid: 1628825360402219384
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:
           data: []
           shape: 
-    - rid: 4665014147068461377
+    - rid: 1628825360402219385
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:
           data: []
           shape: 
-    - rid: 4665014147068461378
+    - rid: 1628825360402219386
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:
           data: []
           shape: 
-    - rid: 4665014147068461379
+    - rid: 1628825360402219387
       type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
       data:
         linearProjection:
