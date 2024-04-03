@@ -5,6 +5,9 @@ using DeepUnity.Modules;
 
 namespace DeepUnity.Activations
 {
+    /// <summary>
+    /// Parametric ReLU activation. It is recommended to not use weight decay with PReLU.
+    /// </summary>
     [Serializable]
     public class PReLU : ILearnable, IModule, IActivation
     {
@@ -15,7 +18,7 @@ namespace DeepUnity.Activations
         [NonSerialized] private Tensor alphaGrad;
 
         /// <summary>
-        /// Parametric ReLU activation. Do not use weight decay for better performance.
+        /// Parametric ReLU activation. It is recommended to not use weight decay with PReLU.
         /// </summary>
         /// <param name="init_value">The initial value of the learnable parameter.</param>
         public PReLU(float init_value = 0.25f)

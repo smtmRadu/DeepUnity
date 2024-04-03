@@ -1,6 +1,6 @@
 # DeepUnity
 ###### In development - does not currently accept Pull Requests, though feel free to Fork and expand upon it
-![version](https://img.shields.io/badge/version-v0.9.7.9-blue)
+![version](https://img.shields.io/badge/version-v0.9.7.10-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO) and Soft Actor-Critic (SAC).
 
@@ -22,8 +22,6 @@ public class Tutorial : MonoBehaviour
     
     private Tensor train_inputs;
     private Tensor train_targets;
-    private Tensor valid_inputs;
-    private Tensor valid_targets;
     
     public void Start()
     {
@@ -45,13 +43,6 @@ public class Tutorial : MonoBehaviour
         Tensor y = Tensor.RandomNormal(data_size, 1);
         train_inputs = Tensor.Concat(1, x, y);
         train_targets = x * x + y * y;
-    
-        // Generate validation set
-        int valid_size = 64;
-        x = Tensor.RandomNormal(valid_size, 1);
-        y = Tensor.RandomNormal(valid_size, 1);
-        valid_inputs = Tensor.Cat(1, x, y);
-        valid_targets = x * x + y * y;
     }
     
     public void Update()
@@ -74,10 +65,7 @@ public class Tutorial : MonoBehaviour
         }
         train_loss /= input_batches.Length;
         
-        // Validation
-        Tensor valid_prediction = network.Predict(valid_inputs);
-        float valid_loss = Metrics.MeanSquaredError(valid_prediction, valid_targets);
-        print($"Epoch: {Time.frameCount} - Train Loss: {train_loss} - Valid Loss: {valid_loss}");
+        print($"Epoch: {Time.frameCount} - Train Loss: {train_loss}");
         
         scheduler.Step();
         network.Save();
@@ -204,7 +192,10 @@ All tutorial scripts are included inside _Assets/DeepUnity/Tutorials_ folder, co
 ![sorter](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/sorter.gif?raw=true)
 
 ###### _These crawlers are training to scrape over the internet_
-![digits](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/crawlers.gif?raw=true)
+![crawlers](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/crawlers.gif?raw=true)
+
+###### _Disney Robots are on the way_
+![robot](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/robot.gif?raw=true)
 
 
 _A paper describing how to implement deep neural nets, PPO and SAC from scratch will be released this spring..._

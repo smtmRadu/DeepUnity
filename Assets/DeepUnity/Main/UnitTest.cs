@@ -4,10 +4,7 @@ using DeepUnity;
 using System.Collections.Generic;
 using UnityEngine.UI;
 using DeepUnity.Modules;
-using DeepUnity.Activations;
-using TMPro;
-using System.Linq;
-using System.Threading;
+
 
 namespace DeepUnityTutorials
 {
@@ -21,51 +18,12 @@ namespace DeepUnityTutorials
 
         private void Start()
         {
-            int hidden = 16;
-            net = new Sequential(
-                         new Conv2D(1, hidden, 3),
-                         new AvgPool2D(2),
 
-                         new ResidualConnection.Fork(),
-                         new Pad2D(1),
-                         new Conv2D(hidden, hidden, 3),
-                         new PReLU(),
-                         new ResidualConnection.Join(),
+            AvgPool1D avg = new AvgPool1D(2);
 
-                         new ResidualConnection.Fork(),
-                         new Pad2D(1),
-                         new Conv2D(hidden, hidden, 3),
-                         new PReLU(),
-                         new ResidualConnection.Join(),
-
-                         new ResidualConnection.Fork(),
-                         new Pad2D(1),
-                         new Conv2D(hidden, hidden, 3),
-                         new PReLU(),
-                         new ResidualConnection.Join(),
-
-                         new ResidualConnection.Fork(),
-                         new Pad2D(1),
-                         new Conv2D(hidden, hidden, 3),
-                         new PReLU(),
-                         new ResidualConnection.Join(),
-
-                         new Flatten(),
-                         new LazyDense(512),
-                         new LayerNorm(),
-                         new PReLU(),
-                         new Dropout(0.2f),
-                         new Dense(512, 512),
-                         new LayerNorm(),
-                         new PReLU(),
-                         new Dense(512, 10),
-
-                         new Softmax()).CreateAsset("MNIST_ResNet");
-
-            net.Forward(Tensor.Random01(1, 28, 28));
-            print(net.Parameters().Sum(x => x.theta.Count()));
-
-
+            Tensor input = Tensor.Random01(1, 6);
+            print(input);
+            print(avg.Predict(input));
             // net = new Sequential(
             //     new ResidualConnection.Fork(),
             //     new Attention(100, 100),

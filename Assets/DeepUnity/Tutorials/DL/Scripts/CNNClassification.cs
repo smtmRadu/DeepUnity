@@ -42,19 +42,19 @@ namespace DeepUnityTutorials
                          new AvgPool2D(2),
 
                          new ResidualConnection.Fork(),
-                         new Pad2D(1),
+                         new ZeroPad2D(1),
                          new Conv2D(6, 6, 3),
                          new PReLU(),
                          new ResidualConnection.Join(),
 
                          new ResidualConnection.Fork(),
-                         new Pad2D(1),
+                         new ZeroPad2D(1),
                          new Conv2D(6, 6, 3),
                          new PReLU(),
                          new ResidualConnection.Join(),
 
                          new ResidualConnection.Fork(),
-                         new Pad2D(1),
+                         new ZeroPad2D(1),
                          new Conv2D(6, 6, 3),
                          new PReLU(),
                          new ResidualConnection.Join(),

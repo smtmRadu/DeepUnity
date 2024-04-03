@@ -20,31 +20,41 @@ namespace DeepUnity.Modules
     {
         public string name;
 
-        // Learnable modules
-        public Dense dense = null;
-        public BatchNorm batchnorm1d = null;
-        public LayerNorm layernorm = null;
-        public Conv2D conv2d = null;
-        public PReLU prelu = null;
+        // Learnable
+        public Dense dense = null;      
         public RNNCell rnncell = null;
         public Attention attention = null;
-        public MultiheadAttention multiheadattention = null;
         public LazyDense lazydense = null;
+              
+        // Normalization
+        public BatchNorm batchnorm1d = null;
         public LazyBatchNorm lazybatchnorm1d = null;
+        public LayerNorm layernorm = null;
         public RMSNorm rmsnorm = null;
 
         // Other modules
         public Dropout dropout = null;
         public Flatten flatten = null;
         public Reshape reshape = null;
-        public AvgPool2D avgpool2d = null;
-        public MaxPool2D maxpool2d = null;
-        public MaxPool1D maxpool1d = null;
-        public Pad2D pad2d = null;
+
+        // Residual
         public ResidualConnection.Fork residualconnectionfork = null;
         public ResidualConnection.Join residualconnectionjoin = null;
 
-        // Activations modules
+        // 2D
+        public Conv2D conv2d = null;
+        public AvgPool2D avgpool2d = null;
+        public MaxPool2D maxpool2d = null;    
+        public ZeroPad2D zeropad2d = null;
+        public MirrorPad2D mirrorpad2d = null;
+
+        // 1D
+        public AvgPool1D avgpool1d = null;
+        public MaxPool1D maxpool1d = null;     
+        public ZeroPad1D zeropad1d = null;
+        public MirrorPad1D mirrorpad1d = null;
+      
+        // Activations
         public ReLU relu = null;
         public Tanh tanh = null;
         public Softmax softmax = null;
@@ -61,6 +71,9 @@ namespace DeepUnity.Modules
         public LogSoftmax logsoftmax = null;
         public RReLU rrelu = null;
         public SELU selu = null;
+
+        // Learnable Activations
+        public PReLU prelu = null;
 
         private IModuleWrapper(IModule module)
         {
@@ -166,10 +179,6 @@ namespace DeepUnity.Modules
             {
                 sparsemax = sparsemaxModule;
             }
-            else if(module is MultiheadAttention multiheadattentionModule)
-            {
-                multiheadattention = multiheadattentionModule;
-            }
             else if(module is LogSoftmax logsoftmaxModule)
             {
                 logsoftmax = logsoftmaxModule;
@@ -198,9 +207,9 @@ namespace DeepUnity.Modules
             {
                 rmsnorm = rmsnormModule;
             }
-            else if (module is Pad2D padding2dModule)
+            else if (module is ZeroPad2D zeropad2DModule)
             {
-                pad2d = padding2dModule;
+                zeropad2d = zeropad2DModule;
             }
             else if (module is ResidualConnection.Fork resconforkModule)
             {
@@ -209,6 +218,22 @@ namespace DeepUnity.Modules
             else if (module is ResidualConnection.Join resconjoinModule)
             {
                 residualconnectionjoin = resconjoinModule;
+            }
+            else if (module is MirrorPad2D mirrorpad2dModule)
+            {
+                mirrorpad2d = mirrorpad2dModule;
+            }
+            else if (module is ZeroPad1D zeropad1dModule)
+            {
+                zeropad1d = zeropad1dModule;
+            }
+            else if (module is MirrorPad1D mirrorpad1dModule)
+            {
+                mirrorpad1d = mirrorpad1dModule;
+            }
+            else if (module is AvgPool1D avgpool1dModule)
+            {
+                avgpool1d = avgpool1dModule;
             }
             else
                 throw new Exception($"Unhandled module type while wrapping ({module.GetType().Name}).");
@@ -322,10 +347,6 @@ namespace DeepUnity.Modules
             {
                 module = moduleWrapper.sparsemax;
             }
-            else if(typeof(MultiheadAttention).Name.Equals(moduleWrapper.name))
-            {
-                module = moduleWrapper.multiheadattention;
-            }
             else if (typeof(LogSoftmax).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.logsoftmax;
@@ -354,9 +375,9 @@ namespace DeepUnity.Modules
             {
                 module = moduleWrapper.rmsnorm;
             }
-            else if (typeof(Pad2D).Name.Equals(moduleWrapper.name))
+            else if (typeof(ZeroPad2D).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.pad2d;
+                module = moduleWrapper.zeropad2d;
             }
             else if (typeof(ResidualConnection.Fork).Name.Equals(moduleWrapper.name))
             {
@@ -365,6 +386,22 @@ namespace DeepUnity.Modules
             else if (typeof(ResidualConnection.Join).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.residualconnectionjoin;
+            }
+            else if (typeof(MirrorPad2D).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.mirrorpad2d;
+            }
+            else if (typeof(ZeroPad1D).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.zeropad1d;
+            }
+            else if (typeof(MirrorPad1D).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.mirrorpad1d;
+            }
+            else if (typeof(AvgPool1D).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.avgpool1d;
             }
             else
                 throw new Exception($"Unhandled module type while unwrapping ({moduleWrapper.name}).");

@@ -92,7 +92,6 @@ namespace DeepUnity.Modules
             runningRms = runningRms * weight_old + rms_over_batch * weight_new;
             step = total_samples;
 
-
             return y;
         }
         public Tensor Backward(Tensor dLdY)
@@ -105,7 +104,7 @@ namespace DeepUnity.Modules
                 dLdGamma.Mean(0)[0];
 
             
-            Tensor dLdX = (gamma[0] * rms.Reciprocal()) * (dLdY - xHat * (dLdY * xHat).Mean(-1, keepDim: true).Expand(-1, dLdY.Size(-1)));
+            Tensor dLdX = gamma[0] * rms.Reciprocal() * (dLdY - xHat * (dLdY * xHat).Mean(-1, keepDim: true).Expand(-1, dLdY.Size(-1)));
             return dLdX;
         }
 

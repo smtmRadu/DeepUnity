@@ -36,7 +36,7 @@ namespace DeepUnity.Modules
             if (padding < 0)
                 throw new ArgumentException("Padding cannot be less than 0");
             if (kernel_size < 2)
-                throw new ArgumentException("Kernel_size cannot be less than 2");
+                throw new ArgumentException("Kernel Size cannot be less than 2");
 
             this.kernel_size = kernel_size;
             this.padding = padding;
