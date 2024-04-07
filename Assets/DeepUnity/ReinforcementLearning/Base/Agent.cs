@@ -11,7 +11,9 @@ using UnityEngine;
 /// </summary> 
 namespace DeepUnity.ReinforcementLearning
 {
-
+    /// <summary>
+    /// Note that the Agent Learning behavior is disabled on build.
+    /// </summary>
     [DisallowMultipleComponent, RequireComponent(typeof(DecisionRequester))]
     public abstract class Agent : MonoBehaviour
     {
@@ -74,7 +76,9 @@ namespace DeepUnity.ReinforcementLearning
             if (model == null)
             {
                 ConsoleMessage.Error($"<b>Bake/Load</b> model before using the <i>{GetType().Name}</i> behaviour");
+#if UNITY_EDITOR
                 EditorApplication.isPlaying = false;
+#endif
                 return;
             }
 
@@ -82,14 +86,18 @@ namespace DeepUnity.ReinforcementLearning
             if (missingComponents.Count > 0)
             {
                 ConsoleMessage.Error($"<i>{GetType().Name}</i> behaviour is missing the {string.Join(", ", missingComponents)} assets");
+#if UNITY_EDITOR
                 EditorApplication.isPlaying = false;
+#endif
                 return;
             }
 
             if (model.targetFPS < 30 || model.targetFPS > 100)
             {
                 ConsoleMessage.Warning($"Behaviour's TargetFPS ({model.targetFPS}) allowed range is [30, 100].");
+#if UNITY_EDITOR
                 EditorApplication.isPlaying = false;
+#endif
                 return;
             }
 
@@ -121,7 +129,9 @@ namespace DeepUnity.ReinforcementLearning
                     catch
                     {
                         ConsoleMessage.Error("Cannot <b>Reset Environment</b> on episode reset because the agent was not introduced inside an Environment");
+#if UNITY_EDITOR
                         EditorApplication.isPlaying = false;
+#endif
                     }
                     break;
             }
@@ -133,6 +143,9 @@ namespace DeepUnity.ReinforcementLearning
 
             if (model == null)
                 return;
+
+            if (!Application.isEditor && behaviourType == BehaviourType.Learn)
+                behaviourType = BehaviourType.Inference;
 
             if (behaviourType == BehaviourType.Learn)
             {
@@ -311,7 +324,9 @@ namespace DeepUnity.ReinforcementLearning
                 if (ok_sbuff != 0)
                 {
                     ConsoleMessage.Warning($"Make sure you added exactly {model.observationSize} (difference of {ok_sbuff}).");
+#if UNITY_EDITOR
                     EditorApplication.isPlaying = false;
+#endif
                     return null;
                 }
                 state = StatesBuffer.State.Clone() as Tensor;
@@ -334,7 +349,7 @@ namespace DeepUnity.ReinforcementLearning
         /// </summary>
         public event EventHandler OnEpisodeEnd;
         /// <summary>
-        /// Reinitialize the current environment (stochastically). It is automatically called in Start() method and at the beginning of a new episode.<br></br>
+        /// Reinitializes the current environment [stochastically]. It is automatically called in <see cref="Start()"/> method and at the beginning of a new episode for any <see cref="BehaviourType"/> (except <see cref="BehaviourType.Off"/>).<br></br>
         /// <br></br>
         /// </summary>
         public virtual void OnEpisodeBegin() { }
@@ -353,12 +368,12 @@ namespace DeepUnity.ReinforcementLearning
         /// <param name="stateVector"></param>
         public virtual void CollectObservations(StateVector stateVector) { }
         /// <summary>
-        /// Set a custom shaped state by setting up the state <see cref="Tensor"/>. Note that cannot be used in parallel with the StateVector arg method, and it works for PPO only.
+        /// Set a custom shaped state by setting up the state <see cref="Tensor"/>. Note that cannot be used in parallel with the <see cref="StateVector"/> arg method, and it works for <see cref="TrainerType.PPO"/> only.
         /// </summary>
         /// <param name="stateTensor">The <see cref="Tensor"/> observation input.</param>
         public virtual void CollectObservations(out Tensor stateTensor) { stateTensor = null; }
         /// <summary>
-        /// Assign an action for each <em>Continuous</em> or <em>Discrete</em> value inside <b>ActionBuffer</b>'s arrays.
+        /// Assign an action for each <em>Continuous</em> or <em>Discrete</em> value inside <see cref="ActionBuffer"/>'s arrays.
         /// <br></br>
         /// <br></br>
         /// <em>Example: <br></br>
@@ -370,7 +385,7 @@ namespace DeepUnity.ReinforcementLearning
         /// <param name="actionBuffer"></param>
         public virtual void OnActionReceived(ActionBuffer actionBuffer) { }
         /// <summary>
-        /// Manually introduce actions controlled using user inputs inside <b>ActionBuffer</b>'s <em>Continuous</em> or <em>Discrete</em> arrays. Note that for Discrete Actions, a "do-nothing" action must be considered.
+        /// Manually introduce actions controlled using user inputs inside <see cref="ActionBuffer"/>'s <em>Continuous</em> or <em>Discrete</em> arrays. Note that for Discrete Actions, a "do-nothing" action must be considered.
         /// <br></br>
         /// <br></br>
         /// <em>Example: <br></br>

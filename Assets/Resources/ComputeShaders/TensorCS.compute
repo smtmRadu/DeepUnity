@@ -1,0 +1,1271 @@
+#define THREADS_NUM 256
+
+#define FLOAT_MIN -340282346638528859811704183484516925440.0000000000000000f
+#define FLOAT_MAX 340282346638528859811704183484516925440.0000000000000000f
+#define PI 3.14159274F
+#define E 2.71828175F
+#define RANDOM_IA 16807
+#define RANDOM_IM 2147483647
+#define RANDOM_AM (1.0f/float(RANDOM_IM))
+#define RANDOM_IQ 127773u
+#define RANDOM_IR 2836
+#define RANDOM_MASK 123459876
+
+
+// ------------------------------------------------------------------- Data Fields
+RWStructuredBuffer<float> data1;
+int w1 = 1;
+int h1 = 1;
+int c1 = 1;
+int b1 = 1;
+int r1 = 0;
+
+RWStructuredBuffer<float> data2;
+int w2 = 1;
+int h2 = 1;
+int c2 = 1;
+int b2 = 1;
+int r2 = 0;
+
+RWStructuredBuffer<float> result;
+int wr = 1;
+int hr = 1;
+int cr = 1;
+int br = 1;
+int rr = 0;
+
+// Additional fields used for operations
+int seed;
+int axis;
+int axis0;
+int axis1;
+float value;
+float power;
+float base;
+float minvalue;
+float maxvalue;
+int split_size;
+int times;
+int correction;
+float mu;
+float sigma;
+float start;
+float end;
+float step;
+// ------------------------------------------------------------------- Data Fields
+
+
+// ------------------------------------------------------------------Utils
+int axisToDim(int axis, int rank)
+{
+    if(axis > rank)
+    {
+        // Problem error
+        return 3;
+    }
+    
+    if (rank == 0 && (axis == 0 || axis == -1))
+        return 3;
+
+    if (axis >= 0)
+        return 4 - rank + axis;
+    else
+        return 4 + axis;
+}
+void data1_set(int b, int c, int h, int w, float value)
+{
+    data1[b * c1 * h1 * w1 + c * h1 * w1 + h * w1 + w] = value;
+}
+float data1_get(int b, int c, int h, int w)
+{
+    return data1[b * c1 * h1 * w1 + c * h1 * w1 + h * w1 + w];
+}
+void data2_set(int b, int c, int h, int w, float value)
+{
+    data2[b * c2 * h2 * w2 + c * h2 * w2 + h * w2 + w] = value;
+}
+float data2_get(int b, int c, int h, int w)
+{
+    return data2[b * c2 * h2 * w2 + c * h2 * w2 + h * w2 + w];
+}
+void result_set(int b, int c, int h, int w, float value)
+{
+    result[b * cr * hr * wr + c * hr * wr + h * wr + w] = value;
+}
+float result_get(int b, int c, int h, int w)
+{
+    return result[b * cr * hr * wr + c * hr * wr + h * wr + w];
+}
+float runif()
+{
+    /// Consider this is not thread safe !!!
+    seed ^= 2747636419u;
+    seed *= 2654435769u;
+    seed ^= seed >> 16;
+    seed *= 2654435769u;
+    seed ^= seed >> 16;
+    seed *= 2654435769u;
+    return float(seed) / 4294967295.0 + 0.5f;
+}
+float rnorm(float mean, float sd)
+{
+    float x1 = 1.0f - runif();
+    float x2 = 1.0f - runif();
+    
+    float e = sqrt(-2.0f * log(x1)) * cos(2.0f * x2 * PI);
+    return e * sd + mean;
+
+}
+//-------------------------------------------------------------------Utils
+
+// ----------------------------------------------------------------- Kernels
+
+// please keep this the first index 0 !!!
+#pragma kernel GetAtIndex
+[numthreads(1, 1, 1)]
+void GetAtIndex(int3 id : SV_DispatchThreadID)
+{
+    float valueAtIndx = data1_get(b1, c1, h1, w1);
+    result[0] = valueAtIndx;
+}
+
+// please keep this the first index 1 !!!
+#pragma kernel SetAtIndex
+[numthreads(1, 1, 1)]
+void SetAtIndex(int3 id : SV_DispatchThreadID)
+{
+    data1_set(b1, c1, h1, w1, value);
+}
+
+// Create
+#pragma kernel Zeros
+[numthreads(1,1,1)]
+void Zeros(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+
+    for (uint i = 0; i < count; i++)
+    {
+        result[i] = 0.0f;
+
+    }
+    
+}
+#pragma kernel Ones
+[numthreads(1, 1, 1)]
+void Ones(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+
+    for (uint i = 0; i < count; i++)
+    {
+        result[i] = 1.0f;
+
+    }
+}
+
+#pragma kernel Fill
+[numthreads(1, 1, 1)]
+void Fill(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+
+    for (uint i = 0; i < count; i++)
+    {
+        result[i] = value;
+
+    }
+}
+
+
+#pragma kernel Arange
+[numthreads(1, 1, 1)]
+void Arange(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+
+
+    int value = start;
+    for (uint i = 0; i < count; i++)
+    {
+        result[i] = value;
+        
+        if (start < end)
+            value += step;
+        else
+            value -= step;
+    }
+}
+
+#pragma kernel Random01
+[numthreads(1, 1, 1)]
+void Random01(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+
+    for (uint i = 0; i < count; i++)
+    {
+        result[i] = runif();
+
+    }
+}
+
+#pragma kernel RandomNormal
+[numthreads(1, 1, 1)]
+void RandomNormal(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+
+    for (uint i = 0; i < count; i++)
+    {
+        result[i] = rnorm(mu, sigma);
+
+    }
+}
+
+#pragma kernel RandomRange
+[numthreads(1, 1, 1)]
+void RandomRange(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+
+    for (uint i = 0; i < count; i++)
+    {
+        result[i] = runif() * (maxvalue - minvalue) + minvalue;
+
+    }
+}
+
+
+
+
+
+// Operator overloading
+#pragma kernel AdditionElementWise
+[numthreads(THREADS_NUM, 1, 1)]
+void AdditionElementWise(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = data1[i] + data2[i];
+    }
+}
+
+#pragma kernel SubtractionElementWise
+[numthreads(THREADS_NUM, 1, 1)]
+void SubtractionElementWise(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = data1[i] - data2[i];
+    }
+}
+
+#pragma kernel MultiplicationElementWise
+[numthreads(THREADS_NUM, 1, 1)]
+void MultiplicationElementWise(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = data1[i] * data2[i];
+    }
+}
+
+#pragma kernel DivisionElementWise
+[numthreads(THREADS_NUM, 1, 1)]
+void DivisionElementWise(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = data1[i] / data2[i];
+    }
+}
+
+#pragma kernel AdditionWithScalar
+[numthreads(THREADS_NUM, 1, 1)]
+void AdditionWithScalar(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = data1[i] + value;
+    }
+}
+
+#pragma kernel SubtractionWithScalar
+[numthreads(THREADS_NUM, 1, 1)]
+void SubtractionWithScalar(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = data1[i] - value;
+    }
+}
+
+#pragma kernel MultiplicationWithScalar
+[numthreads(THREADS_NUM, 1, 1)]
+void MultiplicationWithScalar(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = data1[i] * value;
+    }
+}
+
+#pragma kernel DivisionWithScalar
+[numthreads(THREADS_NUM, 1, 1)]
+void DivisionWithScalar(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = data1[i] / value;
+    }
+}
+
+#pragma kernel MinElementWise
+[numthreads(THREADS_NUM, 1, 1)]
+void MinElementWise(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = min(data1[i], data2[i]);
+    }
+}
+
+#pragma kernel MaxElementWise
+[numthreads(THREADS_NUM, 1, 1)]
+void MaxElementWise(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = max(data1[i], data2[i]);
+    }
+}
+
+// Special operations
+#pragma kernel MatMul
+[numthreads(8, 8, 8)]
+void MatMul(int3 id : SV_DispatchThreadID)
+{
+    // id.x = p , id.y = n, id.z = k
+    
+    // input [J x 1 x N x M] * other [K x M x P]
+    // out [J x K x N x P]
+    
+    // make sure if id is inside the matrix
+    if (id.x >= wr || id.y >= hr || id.z >= cr)
+        return;
+    
+    if (r2 == 1)
+    {
+        for (int j = 0; j < br; j++)
+        {
+            float sum = 0.0f;
+            for (int m = 0; m < w1; m++)
+            {
+                float l = data1_get(j, 0, id.y, m);
+                float r = data2_get(0, id.z, 0, m);
+                sum += l * r;
+            }
+        
+            result_set(j, id.z, 0, id.y, sum);
+        }
+    }
+    else if (r1 == 1)
+    {
+        for (int j = 0; j < br; j++)
+        {
+            float sum = 0.0f;
+            for (int m = 0; m < w1; m++)
+            {
+                float l = data1_get(j, 0, 0, m);
+                float r = data2_get(0, id.z, m, id.x);
+                sum += l * r;
+            }
+        
+            result_set(j, id.z, 0, id.x, sum);
+        }
+    }
+    else
+    {
+        for (int j = 0; j < br; j++)
+        {
+            float sum = 0.0f;
+            for (int m = 0; m < w1; m++)
+            {
+                sum += data1_get(j, 0, id.y, m) * data2_get(0, id.z, m, id.x);
+            }
+        
+            result_set(j, id.z, id.y, id.x, sum);
+        }
+    }
+}
+
+
+
+#pragma kernel Transpose
+[numthreads(1, 1, 1)]
+void Transpose(int3 id : SV_DispatchThreadID)
+{
+    int ax0 = axisToDim(axis0, r1);
+    int ax1 = axisToDim(axis1, r1);
+    int temp;
+    for (int l = 0; l < b1; l++)
+    {
+        for (int k = 0; k < c1; k++)
+        {
+            for (int j = 0; j < h1; j++)
+            {
+                for (int i = 0; i < w1; i++)
+                {
+                    int tranposedIndices[] = {l, k, j, i};
+                    temp = tranposedIndices[ax0];
+                    tranposedIndices[ax0] = tranposedIndices[ax1];
+                    tranposedIndices[ax1] = temp;
+                    
+                    float val = data1_get(l, k, j, i);
+                    result_set(tranposedIndices[0], tranposedIndices[1], tranposedIndices[2], tranposedIndices[3], val);
+                }
+            }
+        }
+    }
+}
+#pragma kernel Expand
+[numthreads(1,1,1)]
+void Expand(int3 id : SV_DispatchThreadID)
+{
+    int a = axisToDim(axis, r1);
+    
+    for (int t = 0; t < times; t++)
+    {
+        for (int l = 0; l < b1; l++)
+        {
+            for (int k = 0; k < c1; k++)
+            {
+                for (int j = 0; j < h1; j++)
+                {
+                    for (int i = 0; i < w1; i++)
+                    {
+                        float val = data1_get(l, k, j, i);
+                        switch (a)
+                        {                        
+                            case 3:                             
+                                result_set(l, k, j, t * w1 + i, val);
+                                break;
+                            case 2:
+                                result_set(l, k, t * h1 + j, i, val);
+                                break;
+                            case 1:
+                                result_set(l, t * c1 + k, j, i, val);
+                                break;
+                            case 0:
+                                result_set(t * b1 + l, k, j, i, val);
+                                break;
+                                       
+                        }
+                    }
+                }
+            }
+        }
+    }
+       
+
+}
+
+// Operations on matrix
+#pragma kernel Mean
+[numthreads(1, 1, 1)]
+void Mean(int3 id : SV_DispatchThreadID)
+{
+    int a = axisToDim(axis, r1);
+    
+    if (a == 3)
+    {
+        for (int l = 0; l < b1; l++)
+        {
+            for (int k = 0; k < c1; k++)
+            {
+                for (int j = 0; j < h1; j++)
+                {
+                    float sum = 0.0;
+                    for (int i = 0; i < w1; i++)
+                    {
+                        sum += data1_get(l, k, j, i);
+                                       
+                    }
+                    sum /= float(w1);
+                    result_set(l, k, j, 0, sum);
+
+                }
+            }
+
+        }
+    }
+    else if (a == 2)
+    {
+    
+            for (int l = 0; l < b1; l++)
+            {
+                for (int k = 0; k < c1; k++)
+                {
+                    for (int i = 0; i < w1; i++)
+                    {
+                        float sum = 0.0;
+                        for (int j = 0; j < h1; j++)
+                        {
+                            sum += data1_get(l, k, j, i);
+
+                        }
+                        sum /= float(h1);
+                        result_set(l, k, 0, i, sum);
+                    }
+                }
+            }
+    }
+    else if (a == 1)
+    {
+        for (int l = 0;l <b1; l++)
+        {
+            for (int j = 0; j < h1; j++)
+            {
+                for (int i = 0; i < w1; i++)
+                {
+                    float sum = 0.0;
+                    for (int k = 0; k < c1; k++)
+                    {
+                        sum += data1_get(l, k, j, i);
+                    }
+                    sum /= float(c1);
+                    result_set(l, 0, j, i, sum);
+                }
+            }
+        }
+    }
+    else if (a == 0)
+    {  
+        for (int k = 0; k < c1; k++)
+        {
+            for (int j = 0; j < h1; j++)
+            {             
+                for (int i = 0; i < w1; i++)
+                {
+                    float sum = 0.0;
+                    for (int l = 0; l < b1; l++)
+                    {
+                        sum += data1_get(l, k, j, i);
+                    }
+                    sum /= float(b1);
+                    result_set(0, k, j, i, sum);
+                   
+                }
+            }
+        }
+    }
+}
+
+#pragma kernel Var
+[numthreads(1, 1, 1)]
+void Var(int3 id : SV_DispatchThreadID)
+{
+    int a = axisToDim(axis, r1);
+    int l;
+    if (a == 3)
+        for (l = 0; l < b1; l++)
+        {
+            for (int k = 0; k < c1; k++)
+            {
+                for (int j = 0; j < h1; j++)
+                {
+                    float sum = 0.0;
+                    float sumsqr = 0.0;
+                    for (int i = 0; i < w1; i++)
+                    {
+                        float v = data1_get(l, k, j, i);
+                        sum += v;
+                        sumsqr += v * v;
+                    }
+                    float var = (sumsqr - (sum * sum) / float(w1)) / (float(w1) - correction);
+                    result_set(l, k, j, 0, var);
+
+                }
+            }
+
+        }
+    else if (a == 2)
+        for (l = 0; l < b1; l++)
+        {
+            for (int k = 0; k < c1; k++)
+            {
+                for (int i = 0; i < w1; i++)
+                {
+                    float sum = 0.0;
+                    float sumsqr = 0.0;
+                    for (int j = 0; j < h1; j++)
+                    {
+                        float v = data1_get(l, k, j, i);
+                        sum += v;
+                        sumsqr += v * v;
+
+                    }
+                    float var = (sumsqr - (sum * sum) / float(h1)) / (float(h1) - correction);
+                    result_set(l, k, 0, i, var);
+
+                }
+            }
+        }
+    else if (a == 1)
+        for (l = 0; l < b1; l++)
+        {
+            for (int j = 0; j < h1; j++)
+            {
+                for (int i = 0; i < w1; i++)
+                {
+                    float sum = 0.0;
+                    float sumsqr = 0.0;
+                    for (int k = 0; k < c1; k++)
+                    {
+                        float v = data1_get(l, k, j, i);
+                        sum += v;
+                        sumsqr += v * v;
+                    }
+                    float var = (sumsqr - (sum * sum) / float(c1)) / (float(c1) - correction);
+                    result_set(l, 0, j, i, var);
+                }
+            }
+        }
+    else if (a == 0)
+        for (int k = 0; k < c1; k++)
+        {
+            for (int j = 0; j < h1; j++)
+            {
+               
+                for (int i = 0; i < w1; i++)
+                {
+                    float sum = 0.0;
+                    float sumsqr = 0.0;
+                    for (l = 0; l < b1; l++)
+                    {
+                        float v = data1_get(l, k, j, i);
+                        sum += v;
+                        sumsqr += v * v;
+                    }
+                    float var = (sumsqr - (sum * sum) / float(b1)) / (float(b1) - correction);
+                    result_set(0, k, j, i, var);
+                   
+                }
+            }
+        }
+       
+
+}
+
+#pragma kernel Std
+[numthreads(1, 1, 1)]
+void Std(int3 id : SV_DispatchThreadID)
+{
+    int a = axisToDim(axis, r1);
+    
+    if (a == 3)
+    {   
+        for (int l = 0; l < b1; l++)
+        {
+            for (int k = 0; k < c1; k++)
+            {
+                for (int j = 0; j < h1; j++)
+                {
+                    float sum = 0.0;
+                    float sumsqr = 0.0;
+                    for (int i = 0; i < w1; i++)
+                    {
+                        float v = data1_get(l, k, j, i);
+                        sum += v;
+                        sumsqr += v * v;
+                    }
+                    float var = (sumsqr - (sum * sum) / float(w1)) / (float(w1) - correction);
+                    result_set(l, k, j, 0, sqrt(var));
+                    // for (int i = 0; i < wr; i++)
+                    // {
+                    //     result_set(l, k, j, i, sqrt(var));
+                    //                    
+                    // }
+                }
+            }
+
+        }
+    }
+    else if (a == 2)
+        for (int l = 0; l < b1; l++)
+        {
+            for (int k = 0; k < c1; k++)
+            {
+                for (int i = 0; i < w1; i++)
+                {
+                    float sum = 0.0;
+                    float sumsqr = 0.0;
+                    for (int j = 0; j < h1; j++)
+                    {
+                        float v = data1_get(l, k, j, i);
+                        sum += v;
+                        sumsqr += v * v;
+
+                    }
+                    float var = (sumsqr - (sum * sum) / float(h1)) / (float(h1) - correction);
+                    result_set(l, k, 0, i, sqrt(var));
+                    // for (int j = 0; j < hr; j++)
+                    // {
+                    //     result_set(l, k, j, i, sqrt(var));
+                    // }
+                }
+            }
+        }
+    else if (a == 1)
+    {
+        for (int l = 0; l < b1; l++)
+        {
+            for (int j = 0; j < h1; j++)
+            {
+                for (int i = 0; i < w1; i++)
+                {
+                    float sum = 0.0;
+                    float sumsqr = 0.0;
+                    for (int k = 0; k < c1; k++)
+                    {
+                        float v = data1_get(l, k, j, i);
+                        sum += v;
+                        sumsqr += v * v;
+                    }
+                    float var = (sumsqr - (sum * sum) / float(c1)) / (float(c1) - correction);
+                    result_set(l, 0, j, i, sqrt(var));
+                    // for (int k = 0; k < cr; k++)
+                    // {
+                    //     result_set(l, k, j, i, sqrt(var));
+                    // }
+                }
+            }
+        }
+    }
+    else if (a == 0)
+        for (int k = 0; k < c1; k++)
+        {
+            for (int j = 0; j < h1; j++)
+            {
+               
+                for (int i = 0; i < w1; i++)
+                {
+                    float sum = 0.0;
+                    float sumsqr = 0.0;
+                    for (int l = 0; l < b1; l++)
+                    {
+                        float v = data1_get(l, k, j, i);
+                        sum += v;
+                        sumsqr += v * v;
+                    }
+                    float var = (sumsqr - (sum * sum) / float(b1)) / (float(b1) - correction);
+                    
+                    result_set(0, k, j, i, sqrt(var));
+                    // for (int l = 0; l < br; l++)
+                    // {
+                    //     result_set(l, k, j, i, sqrt(var));
+                    // }
+                }
+            }
+        }
+       
+
+}
+
+#pragma kernel Sum
+[numthreads(1, 1, 1)]
+void Sum(int3 id : SV_DispatchThreadID)
+{
+    int a = axisToDim(axis, r1);
+
+    if (a == 3)
+        for (int l = 0; l < b1; l++)
+        {
+            for (int k = 0; k < c1; k++)
+            {
+                for (int j = 0; j < h1; j++)
+                {
+                    float sum = 0.0;
+                    for (int i = 0; i < w1; i++)
+                    {
+                        sum += data1_get(l, k, j, i);
+                                       
+                    }
+                    result_set(l, k, j, 0, sum);
+                    // for (int i = 0; i < wr; i++)
+                    // {
+                    //     result_set(l, k, j, i, sum);
+                    //                    
+                    // }
+                }
+            }
+
+        }
+    else if (a == 2)
+    {
+   
+        for (int l = 0; l < b1; l++)
+        {
+            for (int k = 0; k < c1; k++)
+            {
+                for (int i = 0; i < w1; i++)
+                {
+                    float sum = 0.0;
+                    for (int j = 0; j < h1; j++)
+                    {
+                        sum += data1_get(l, k, j, i);
+
+                    }
+                    result_set(l, k, 0, i, sum);
+                    // for (int j = 0; j < hr; j++)
+                    // {
+                    //     result_set(l, k, j, i, sum);
+                    // 
+                    // }
+                }
+            }
+        }
+    }
+    else if (a == 1)
+    {
+    
+        for (int l = 0; l < b1; l++)
+        {
+            for (int j = 0; j < h1; j++)
+            {
+                for (int i = 0; i < w1; i++)
+                {
+                    float sum = 0.0;
+                    for (int k = 0; k < c1; k++)
+                    {
+                        sum += data1_get(l, k, j, i);
+                    }
+                    result_set(l, 0, j, i, sum);
+                    // for (int k = 0; k < cr; k++)
+                    // {
+                    //     result_set(l, k, j, i, sum);
+                    // }
+                }
+            }
+        }
+    }
+    else if (a == 0)
+        for (int k = 0; k < c1; k++)
+        {
+            for (int j = 0; j < h1; j++)
+            {
+               
+                for (int i = 0; i < w1; i++)
+                {
+                    float sum = 0.0;
+                    for (int l = 0; l < b1; l++)
+                    {
+                        sum += data1_get(l, k, j, i);
+                    }
+                    result_set(0, k, j, i, sum);
+                    //for (int l = 0; l < br; l++)
+                    //{
+                    //    result_set(l, k, j, i, sum);
+                    //}
+                }
+            }
+        }
+       
+
+}
+
+#pragma kernel Min
+[numthreads(1, 1, 1)]
+void Min(int3 id : SV_DispatchThreadID)
+{
+    int a = axisToDim(axis, r1);
+    
+    if (a == 3)
+        for (int l = 0; l < b1; l++)
+        {
+            for (int k = 0; k < c1; k++)
+            {
+                for (int j = 0; j < h1; j++)
+                {
+                    float m = FLOAT_MAX;
+                    for (int i = 0; i < w1; i++)
+                    {
+                        m = min(m, data1_get(l, k, j, i));
+                                       
+                    }
+                    result_set(l, k, j, 0, m);
+                    // for (int i = 0; i < wr; i++)
+                    // {
+                    //     result_set(l, k, j, i, m);
+                    //                    
+                    // }
+
+                }
+            }
+
+        }
+    else if (a == 2)
+    {
+    
+        for (int l = 0; l < b1; l++)
+        {
+            for (int k = 0; k < c1; k++)
+            {
+                for (int i = 0; i < w1; i++)
+                {
+                    float m = FLOAT_MAX;
+                    for (int j = 0; j < h1; j++)
+                    {
+                        m = min(m, data1_get(l, k, j, i));
+
+                    }
+                    result_set(l, k, 0, i, m);
+                    // for (int j = 0; j < hr; j++)
+                    // {
+                    //     result_set(l, k, j, i, m);
+                    // 
+                    // }
+
+                }
+            }
+        }
+    }
+    else if (a == 1)
+    {
+    
+        for (int l = 0; l < b1; l++)
+        {
+            for (int j = 0; j < h1; j++)
+            {
+                for (int i = 0; i < w1; i++)
+                {
+                    float m = FLOAT_MAX;
+                    for (int k = 0; k < c1; k++)
+                    {
+                        m = min(m, data1_get(l, k, j, i));
+                    }
+                    result_set(l, 0, j, i, m);
+                    // for (int k = 0; k < cr; k++)
+                    // {
+                    //     result_set(l, k, j, i, m);
+                    // }
+                }
+            }
+        }
+    }
+    else if (a == 0)
+        for (int k = 0; k < c1; k++)
+        {
+            for (int j = 0; j < h1; j++)
+            {
+               
+                for (int i = 0; i < w1; i++)
+                {
+                    float m = FLOAT_MAX;
+                    for (int l = 0; l < b1; l++)
+                    {
+                        m = min(m, data1_get(l, k, j, i));
+                    }
+                    result_set(0, k, j, i, m);
+                    // for (int l = 0; l < br; l++)
+                    // {
+                    //     result_set(l, k, j, i, m);
+                    // }
+                   
+                }
+            }
+        }
+       
+
+}
+
+#pragma kernel Max
+[numthreads(1, 1, 1)]
+void Max(int3 id : SV_DispatchThreadID)
+{
+    int a = axisToDim(axis, r1);
+    
+    if (a == 3)
+        for (int l = 0; l < b1; l++)
+        {
+            for (int k = 0; k < c1; k++)
+            {
+                for (int j = 0; j < h1; j++)
+                {
+                    float m = FLOAT_MIN;
+                    for (int i = 0; i < w1; i++)
+                    {
+                        m = max(m, data1_get(l, k, j, i));
+                                       
+                    }
+                    result_set(l, k, j, 0, m);
+
+                }
+            }
+
+        }
+    else if (a == 2)
+    {
+    
+        for (int l = 0; l < b1; l++)
+        {
+            for (int k = 0; k < c1; k++)
+            {
+                for (int i = 0; i < w1; i++)
+                {
+                    float m = FLOAT_MIN;
+                    for (int j = 0; j < h1; j++)
+                    {
+                        m = max(m, data1_get(l, k, j, i));
+
+                    }
+                    result_set(l, k, 0, i, m);
+
+                }
+            }
+        }
+    }
+    else if (a == 1)
+    {
+    
+        for (int l = 0; l < b1; l++)
+        {
+            for (int j = 0; j < h1; j++)
+            {
+                for (int i = 0; i < w1; i++)
+                {
+                    float m = FLOAT_MIN;
+                    for (int k = 0; k < c1; k++)
+                    {
+                        m = max(m, data1_get(l, k, j, i));
+                    }
+                    result_set(l, 0, j, i, m);
+                }
+            }
+        }
+    }
+    else if (a == 0)
+        for (int k = 0; k < c1; k++)
+        {
+            for (int j = 0; j < h1; j++)
+            {
+               
+                for (int i = 0; i < w1; i++)
+                {
+                    float m = FLOAT_MIN;
+                    for (int l = 0; l < b1; l++)
+                    {
+                        m = max(m, data1_get(l, k, j, i));
+                    }
+                    result_set(0, k, j, i, m);
+                   
+                }
+            }
+        }
+       
+
+}
+
+
+
+
+
+// Math operations
+
+#pragma kernel Pow
+[numthreads(THREADS_NUM, 1, 1)]
+void Pow(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = pow(data1[i], power);
+    }
+}
+
+#pragma kernel Sqrt
+[numthreads(THREADS_NUM, 1, 1)]
+void Sqrt(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = sqrt(data1[i]);
+
+    }
+}
+
+#pragma kernel Log
+[numthreads(THREADS_NUM, 1, 1)]
+void Log(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        if(base == E)
+            result[i] = log(data1[i]);
+        else if(base == 2.0f)
+            result[i] = log2(data1[i]);
+        else if(base == 10.0f)
+            result[i] = log10(data1[i]);
+    }
+}
+
+#pragma kernel Exp
+[numthreads(THREADS_NUM, 1, 1)]
+void Exp(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = exp(data1[i]);
+    }
+}
+
+#pragma kernel Sin
+[numthreads(THREADS_NUM, 1, 1)]
+void Sin(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = sin(data1[i]);
+    }
+}
+
+#pragma kernel Cos
+[numthreads(THREADS_NUM, 1, 1)]
+void Cos(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = cos(data1[i]);
+    }
+}
+
+#pragma kernel Abs
+[numthreads(THREADS_NUM, 1, 1)]
+void Abs(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = abs(data1[i]);
+    }
+}
+
+#pragma kernel Clip
+[numthreads(THREADS_NUM, 1, 1)]
+void Clip(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    result.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        result[i] = clamp(data1[i], minvalue, maxvalue);
+    }
+}

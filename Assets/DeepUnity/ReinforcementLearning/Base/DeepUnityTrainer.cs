@@ -58,7 +58,9 @@ namespace DeepUnity.ReinforcementLearning
                 _learningTextStyle.wordWrap = true;
                 _learningTextStyle.normal.textColor = Color.white;
                 StartCoroutine("DrawDotsToLearningText");
+#if UNITY_EDITOR // It seems like that when i build the application the quallity is dropped and this is the reason. SO LET IT LIKE THIS YOU MF.
                 QualitySettings.SetQualityLevel(0, true);
+#endif
             }
         }
         /// <summary>
@@ -120,7 +122,9 @@ namespace DeepUnity.ReinforcementLearning
         {
             if (Instance == null)
             {
+#if UNITY_EDITOR
                 UnityEditor.EditorApplication.playModeStateChanged += Autosave;
+#endif
                 GameObject go = new GameObject($"[DeepUnity] Trainer - {trainer}");
 
                 switch (trainer)
@@ -166,7 +170,9 @@ namespace DeepUnity.ReinforcementLearning
             {
                 ConsoleMessage.Info("Training Session Ended! " + reason);
                 Instance.model.Save();
+#if UNITY_EDITOR
                 UnityEditor.EditorApplication.isPlaying = false;
+#endif
             }
 
             Instance.ended = true;

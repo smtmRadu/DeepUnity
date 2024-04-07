@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using UnityEditor;
 using UnityEngine;
 
 
@@ -21,7 +20,9 @@ namespace DeepUnity.ReinforcementLearning
         [SerializeField, HideInInspector] private bool assetCreated = false;
         [SerializeField, ViewOnly] public int observationSize;
         [SerializeField, ViewOnly, Min(1)] public int stackedInputs;
+        [Tooltip("Number of continuous actions this model uses.")]
         [SerializeField, ViewOnly] public int continuousDim;
+        [Tooltip("Number of discrete actions this model uses.")]
         [SerializeField, ViewOnly] public int discreteDim;
 
         [Header("Hyperparameters")]
@@ -40,14 +41,6 @@ namespace DeepUnity.ReinforcementLearning
         [SerializeField] public Sequential sigmaNetwork;
         [SerializeField] public Sequential discreteNetwork;
         [Space]
-
-        // [Header("Discriminator")]
-        // [Tooltip("Neural Network used for Behavioral Cloning")]
-        // [SerializeField] public NeuralNetwork discContNetwork;
-        // [Tooltip("Neural Network used for Behavioral Cloning")]
-        // [SerializeField] public NeuralNetwork discDiscNetwork;
-
-
 
 
         [Header("Behaviour Configurations")]
@@ -68,15 +61,15 @@ namespace DeepUnity.ReinforcementLearning
         [ViewOnly, SerializeField, Tooltip("Observations normalizer.")]
         public RunningNormalizer observationsNormalizer;
 
-        [Range(1f, 10f), SerializeField, Tooltip("The observations are clipped [after normarlization] in range [-clip, clip]")]
-        public float observationsClip = 5f; // old 1.5f - 3.5f
+        [Range(1f, 10f), SerializeField, Tooltip("The observations are clipped [after normarlization] in range [-clip, clip]. Note that using a low clipping (c > 5) may induce instability on large number of inputs.")]
+        public float observationsClip = 5f;
 
         [HideInInspector, SerializeField, ToolboxItem("Rewards normalizer")]
         public RewardsNormalizer rewardsNormalizer;
 
         [Header("Standard Deviation for Continuous Actions")]
         [SerializeField, Tooltip("The standard deviation for Continuous Actions")]
-        public StandardDeviationType standardDeviation = StandardDeviationType.Trainable;
+        public StandardDeviationType standardDeviation = StandardDeviationType.Fixed;
         [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
         [SerializeField, Min(0.001f)]
         public float standardDeviationValue = 1f;
@@ -429,6 +422,7 @@ namespace DeepUnity.ReinforcementLearning
         /// <returns></returns>
         public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int widthSize, int heightSize, int channelSize, int continuousActions, int discreteActions, int numLayers, int hidUnits, ArchitectureType aType)
         {
+#if UNITY_EDITOR
             var instance = UnityEditor.AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
 
             if (instance != null)
@@ -436,7 +430,7 @@ namespace DeepUnity.ReinforcementLearning
                 ConsoleMessage.Info($"Behaviour {name} asset loaded");
                 return instance;
             }
-
+#endif
 
             AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, stackedInputs, widthSize, heightSize, channelSize, continuousActions, discreteActions, numLayers, hidUnits, aType);
             newAgBeh.behaviourName = name;
@@ -453,7 +447,10 @@ namespace DeepUnity.ReinforcementLearning
             // Create the asset
             if (!Directory.Exists($"Assets/{name}"))
                 Directory.CreateDirectory($"Assets/{name}");
+
+#if UNITY_EDITOR
             UnityEditor.AssetDatabase.CreateAsset(newAgBeh, $"Assets/{name}/_{name}.asset");
+#endif
 
             // Create aux assets
             newAgBeh.config = Hyperparameters.CreateOrLoadAsset(name);
@@ -477,7 +474,7 @@ namespace DeepUnity.ReinforcementLearning
                 ConsoleMessage.Warning("Cannot save the Behaviour because it requires compilation first");
             }
 
-            ConsoleMessage.Info($"Agent behaviour <b><i>{behaviourName}</i></b> autosaved");
+            ConsoleMessage.Info($"<b>[AUTOSAVE]</b> Agent behaviour <b><i>{behaviourName}</i></b> saved");
 
             vNetwork?.Save();
             q1Network?.Save();
@@ -485,8 +482,6 @@ namespace DeepUnity.ReinforcementLearning
             muNetwork?.Save();
             sigmaNetwork?.Save();
             discreteNetwork?.Save();
-            // discContNetwork?.Save();
-            // discDiscNetwork?.Save();
         }
         /// <summary>
         /// Before using, checks if config file or neural networks are not attached to this scriptable object.

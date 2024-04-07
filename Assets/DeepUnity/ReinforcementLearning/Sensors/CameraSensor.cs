@@ -141,7 +141,7 @@ namespace DeepUnity.Sensors
                 Debug.LogError("CameraSensor Cam object reference not set to an instance of an object. Please assign a Camera for the first field!");
                 return;
             }
-
+#if UNITY_EDITOR
             if (!Directory.Exists("Assets/CamShots"))
                 Directory.CreateDirectory("Assets/CamShots");
 
@@ -169,6 +169,7 @@ namespace DeepUnity.Sensors
             }            
 
             AssetDatabase.Refresh();
+#endif
         }  
         private void ExecuteShotImageSave(string atPath)
         {

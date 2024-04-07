@@ -67,40 +67,10 @@ namespace DeepUnity
             collect_test_image?.Clear();
             collect_test_label?.Clear();
         }
-        /// <summary>
-        /// Item1 = input: Tensor(10)<br />
-        /// Item2 = target: Tensor(2) -> onehot encoding<br /></summary>
-        /// <param name="train"></param>
-        public static void BinaryClassification(out List<(Tensor, Tensor)> train)
-        {
-            var csguid = UnityEditor.AssetDatabase.FindAssets("simple_classif_dataset")[0];
-            var cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
-            TextAsset file = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(TextAsset)) as TextAsset;
 
-            string text = file.text;
-
-            train = new();
-            using (var reader = new StringReader(text))
-            {
-                // Read and skip the header
-                string headerLine = reader.ReadLine();
-
-                while (reader.Peek() != -1)
-                {
-                    string line = reader.ReadLine();
-                    string[] fields = line.Split(',');
-
-                    // Assuming your data is in the order of features followed by target_0 and target_1
-                    float[] features = fields.Take(10).Select(float.Parse).ToArray();
-                    float[] target = { float.Parse(fields[10]), float.Parse(fields[11]) };
-
-                    train.Add((Tensor.Constant(features), Tensor.Constant(target)));
-                }
-            }
-        }
         private static void SerializeMNIST()
         {
-            BenchmarkClock.Start();
+            Benckmark.Start();
             string trainPath = "C:\\Users\\radup\\OneDrive\\Desktop\\TRAIN\\";
             string testPath = "C:\\Users\\radup\\OneDrive\\Desktop\\TEST\\";
 
@@ -175,7 +145,7 @@ namespace DeepUnity
             test_l.Close();
 
             Debug.Log("MNIST Serialized.");
-            BenchmarkClock.Stop();
+            Benckmark.Stop();
         }
         
         private static Color[] GetTexturePixels(string filePath)
@@ -199,7 +169,7 @@ namespace DeepUnity
         
         private static void SerializeFaces250()
         {
-            BenchmarkClock.Start();
+            Benckmark.Start();
             string trainPath = "C:\\Users\\radup\\OneDrive\\Desktop\\faces\\";
 
 
@@ -240,7 +210,7 @@ namespace DeepUnity
 
             Debug.Log($"Faces 250x250 serialized {images.Count}.");
             images.Clear();
-            BenchmarkClock.Stop();
+            Benckmark.Stop();
         }
     }
 

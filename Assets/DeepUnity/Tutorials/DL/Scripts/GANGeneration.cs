@@ -21,8 +21,6 @@ namespace DeepUnityTutorials
         [SerializeField] private Sequential discriminator;
         [SerializeField] private Sequential generator;
         
-        
-
         [Button("SaveNetworks")]
         [SerializeField] private int batch_size = 64;
         [SerializeField] private float lr = 2e-4f;
@@ -39,8 +37,8 @@ namespace DeepUnityTutorials
 
         private int batch_index = 0;
 
-        const int latent_dim = 16;
-        const int size = 512; // 1024 original
+        const int latent_dim = 100;
+        const int size = 1024; // 1024 original
         const float dropout = 0.3f; // 0.3f original
         private void Start()
         {          
@@ -50,11 +48,11 @@ namespace DeepUnityTutorials
                     new Flatten(),
 
                     new Dense(784, size),
-                    new RReLU(),
+                    new Tanh(),
                     new Dropout(dropout),
                 
                     new Dense(size, size/4),
-                    new RReLU(),
+                    new Tanh(),
                     new Dropout(dropout),
 
                     new Dense(size / 4, 1),
@@ -65,19 +63,15 @@ namespace DeepUnityTutorials
             {
                 generator = new Sequential(
                     new Dense(latent_dim, size / 4),
-                    new LayerNorm(),
                     new Tanh(),
 
                     new Dense(size / 4, size / 2),
-                    new LayerNorm(),
                     new Tanh(),
 
                     new Dense(size / 2, size),
-                    new LayerNorm(),
                     new Tanh(),
 
                     new Dense(size, 784),
-                    new LayerNorm(),
                     new Tanh(),
 
                     new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 })

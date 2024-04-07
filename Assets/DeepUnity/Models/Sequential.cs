@@ -13,10 +13,10 @@ namespace DeepUnity.Models
     [Serializable]
     public class Sequential : Model<Sequential, Tensor>, ISerializationCallbackReceiver
     {
-        [NonSerialized] private IModule[] modules;
+        [NonSerialized] private IModule[] Modules;
         [SerializeField] private IModuleWrapper[] serializedModules;
 
-        public Sequential(params IModule[] modules) => this.modules = modules;
+        public Sequential(params IModule[] modules) => this.Modules = modules;
 
         /// <summary>
         /// Same as Forward but used only for network inference.
@@ -25,10 +25,10 @@ namespace DeepUnity.Models
         /// <returns></returns>
         public override Tensor Predict(Tensor input)
         {
-            Tensor output = modules[0].Predict(input);
-            for (int i = 1; i < modules.Length; i++)
+            Tensor output = Modules[0].Predict(input);
+            for (int i = 1; i < Modules.Length; i++)
             {
-                output = modules[i].Predict(output);
+                output = Modules[i].Predict(output);
             }
             return output;
         }
@@ -39,10 +39,10 @@ namespace DeepUnity.Models
         /// <returns></returns>
         public override Tensor Forward(Tensor input)
         {
-            Tensor output = modules[0].Forward(input);
-            for (int i = 1; i < modules.Length; i++)
+            Tensor output = Modules[0].Forward(input);
+            for (int i = 1; i < Modules.Length; i++)
             {
-                output = modules[i].Forward(output);
+                output = Modules[i].Forward(output);
             }
             return output;
         }
@@ -53,10 +53,10 @@ namespace DeepUnity.Models
         /// <returns><returns>The backpropagated loss derivative (dLdX).</returns>
         public override Tensor Backward(Tensor lossGradient)
         {
-            Tensor loss = modules[modules.Length - 1].Backward(lossGradient);
-            for (int i = modules.Length - 2; i >= 0; i--)
+            Tensor loss = Modules[Modules.Length - 1].Backward(lossGradient);
+            for (int i = Modules.Length - 2; i >= 0; i--)
             {
-                loss = modules[i].Backward(loss);
+                loss = Modules[i].Backward(loss);
             }
             return loss;
         }
@@ -68,7 +68,7 @@ namespace DeepUnity.Models
         public override Parameter[] Parameters()
         {
             List<Parameter> param = new();
-            foreach (var item in modules.OfType<ILearnable>())
+            foreach (var item in Modules.OfType<ILearnable>())
             {
                 param.AddRange(item.Parameters());
             }
@@ -82,7 +82,7 @@ namespace DeepUnity.Models
         {
             set
             {
-                foreach (var item in modules.OfType<ILearnable>())
+                foreach (var item in Modules.OfType<ILearnable>())
                 {
                     item.Device = value;
                 }
@@ -98,12 +98,12 @@ namespace DeepUnity.Models
 
             stringBuilder.AppendLine($"Name: {name}");
             stringBuilder.AppendLine($"Type: {GetType().Name}");
-            stringBuilder.AppendLine($"Layers : {modules.Length}");
-            foreach (var module in modules)
+            stringBuilder.AppendLine($"Layers : {Modules.Length}");
+            foreach (var module in Modules)
             {
                 stringBuilder.AppendLine($"         {module.GetType().Name}");
             }
-            stringBuilder.AppendLine($"Parameters: {modules.Where(x => x is ILearnable).Select(x => (ILearnable)x).Sum(x => x.ParametersCount())}");
+            stringBuilder.AppendLine($"Parameters: {Modules.Where(x => x is ILearnable).Select(x => (ILearnable)x).Sum(x => x.ParametersCount())}");
             return stringBuilder.ToString();
         }
 
@@ -111,15 +111,15 @@ namespace DeepUnity.Models
 
         public void OnBeforeSerialize()
         {
-            serializedModules = modules.Select(x => IModuleWrapper.Wrap(x)).ToArray();
+            serializedModules = Modules.Select(x => IModuleWrapper.Wrap(x)).ToArray();
         }
         public void OnAfterDeserialize()
         {
-            modules = serializedModules.Select(x => IModuleWrapper.Unwrap(x)).ToArray();
+            Modules = serializedModules.Select(x => IModuleWrapper.Unwrap(x)).ToArray();
         }
         public override object Clone()
         {
-            var cloned_modules = modules.Select(x => (IModule)x.Clone()).ToArray();
+            var cloned_modules = Modules.Select(x => (IModule)x.Clone()).ToArray();
             var net = new Sequential(cloned_modules);
             return net;
         }

@@ -98,10 +98,10 @@ namespace DeepUnity.ReinforcementLearning
         public bool debug = false;
 
         [Space(50)]
-        [Tooltip("How does the timescale is adjusted during training.")]
-        public TimescaleAdjustmentType timescaleAdjustment = TimescaleAdjustmentType.Dynamic;
+        [Tooltip("How does the timescale modifies during training.")]
+        public TimescaleAdjustmentType timescaleAdjustment = TimescaleAdjustmentType.Constant;
         [Tooltip("Timescale of the training session.")]
-        [Min(0.01f)] public float timescale = 1f;
+        [Min(0.1f)] public float timescale = 1f;
 
 
         private void Awake()
@@ -123,16 +123,19 @@ namespace DeepUnity.ReinforcementLearning
         /// <returns></returns>
         public static Hyperparameters CreateOrLoadAsset(string behaviourName)
         {
+            Hyperparameters hp = new Hyperparameters();
+#if UNITY_EDITOR
             var instance = AssetDatabase.LoadAssetAtPath<Hyperparameters>($"Assets/{behaviourName}/Config.asset");
 
             if (instance != null)
                 return instance;
 
-            Hyperparameters hp = new Hyperparameters();
+           
 
             AssetDatabase.CreateAsset(hp, $"Assets/{behaviourName}/Config.asset");
             AssetDatabase.SaveAssets();
             Debug.Log($"<color=#0ef0bf>[<b>{behaviourName}/Config</b> <i>Hyperparameters</i> asset created]</color>");
+#endif
             return hp;
         }
     }

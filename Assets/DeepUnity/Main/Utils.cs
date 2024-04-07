@@ -15,10 +15,27 @@ namespace DeepUnity
         public const float EPSILON = 1e-8f;
         private static System.Random RNG = new System.Random(DateTime.Now.Millisecond);
 
+        /// <summary>
+        /// Checks whether or not we are on the current thread.
+        /// </summary>
+        /// <returns></returns>
         public static bool IsMainThread()
         {
             return Thread.CurrentThread.ManagedThreadId == 1;
         }
+        /// <summary>
+        /// Get the path to the machine's Desktop.
+        /// </summary>
+        /// <returns></returns>
+        public static string GetDesktopPath()
+        {
+            return Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        }
+        /// <summary>
+        /// Shuffles the elements of the given array.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="arrayToShuffle"></param>
         public static void Shuffle<T>(T[] arrayToShuffle)
         {
             lock (RNG)
@@ -32,6 +49,11 @@ namespace DeepUnity
                 }
             }
         }
+        /// <summary>
+        /// Shuffles the elements of the given list.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="listToShuffle"></param>
         public static void Shuffle<T>(List<T> listToShuffle)
         {
             lock (RNG)
@@ -45,6 +67,11 @@ namespace DeepUnity
                 }
             }
         }
+        /// <summary>
+        /// Debug some info in a unique file created on desktop automatically named 'DeepUnity-Debug.txt'.
+        /// </summary>
+        /// <param name="text"></param>
+        /// <param name="append"></param>
         public static void DebugInFile(string text, bool append = true)
         {
             string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
@@ -55,12 +82,24 @@ namespace DeepUnity
                 sw.Write(text);
             }
         }
+        /// <summary>
+        /// Swap the values of two objects. Can be used on lists or so.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="obj1"></param>
+        /// <param name="obj2"></param>
         public static void Swap<T>(ref T obj1, ref T obj2)
         {
             T temp = obj1;
             obj1 = obj2;
             obj2 = temp;
         }
+        /// <summary>
+        /// Get the index of the maximum element in the array. Note that the <see cref="T"/> must be convertible to double.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="values"></param>
+        /// <returns></returns>
         public static int ArgMax<T>(T[] values) where T : struct, IConvertible
         {
             int index = -1;
@@ -73,6 +112,12 @@ namespace DeepUnity
                 }
             return index;
         }
+        /// <summary>
+        /// Transforms a matrix into a vector.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="matrix"></param>
+        /// <returns></returns>
         public static T[] MatrixToVector<T>(T[,] matrix)
         {
             int w = matrix.GetLength(0);
@@ -90,6 +135,14 @@ namespace DeepUnity
 
             return flat;
         }
+        /// <summary>
+        /// Transforms a vector into a matrix of size <see cref="w"/> * <see cref="h"/>.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="vector"></param>
+        /// <param name="w"></param>
+        /// <param name="h"></param>
+        /// <returns></returns>
         public static T[,] VectorToMatrix<T>(T[] vector, int w, int h)
         {
             T[,] matrix = new T[w, h];
@@ -103,6 +156,12 @@ namespace DeepUnity
             }
             return matrix;
         }
+        /// <summary>
+        /// Transforms a collection into a string, optionally with a given tag at the beginning.
+        /// </summary>
+        /// <param name="collection"></param>
+        /// <param name="tag"></param>
+        /// <returns></returns>
         public static string StringOf(IEnumerable collection, string tag = null)
         {
             StringBuilder sb = new StringBuilder();
@@ -137,18 +196,28 @@ namespace DeepUnity
         {
             return string.Format("#{0:X2}{1:X2}{2:X2}", r, g, b);
         }
-        public static IEnumerable<T> GetRange<T>(IEnumerable<T> arr, int start, int count)
+        /// <summary>
+        /// Get a number of values from a certain range in the givven collection.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="collection"></param>
+        /// <param name="start"></param>
+        /// <param name="count"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        public static IEnumerable<T> GetRange<T>(IEnumerable<T> collection, int start, int count)
         {
-            if (arr == null)
-                throw new ArgumentNullException(nameof(arr));
+            if (collection == null)
+                throw new ArgumentNullException(nameof(collection));
 
-            if (start < 0 || start >= arr.Count())
+            if (start < 0 || start >= collection.Count())
                 throw new ArgumentOutOfRangeException(nameof(start));
 
-            if (count < 0 || start + count > arr.Count())
+            if (count < 0 || start + count > collection.Count())
                 throw new ArgumentOutOfRangeException(nameof(count));
 
-            return arr.Skip(start).Take(count);
+            return collection.Skip(start).Take(count);
         }
         public static List<T[]> Split<T>(IEnumerable<T> collection, int split_size)
         {
@@ -213,12 +282,21 @@ namespace DeepUnity
 
             return colors;
         }
+        /// <summary>
+        /// Clamps the value in the given interval.
+        /// </summary>
+        /// <param name="value"></param>
+        /// <param name="min"></param>
+        /// <param name="max"></param>
+        /// <returns></returns>
         public static float Clip(float value, float min, float max) 
         {
             return Math.Clamp(value, min, max);
         }
 
-        // https://en.wikipedia.org/wiki/Hyperbolic_functions
+        /// <summary>
+        /// A class that contains all hyberbolic functions
+        /// </summary>
         public static class Hyperbolics
         {
             public static float Sinh(float x)
@@ -514,7 +592,6 @@ namespace DeepUnity
                 return blurredImage;
             }
         }
-
 
         /// <summary>
 /// A thread-safe way to extract random numbers.

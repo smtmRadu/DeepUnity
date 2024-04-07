@@ -1197,6 +1197,7 @@ namespace DeepUnity
         /// where P = padding</returns>
         public static Tensor VecPad(Tensor tensor, int padding, PaddingType paddingMode)
         {
+            // Note that here actualy there is no Width, only height, so the input is technically (B, C, H). Though anyways, it doesn t matter (just for the fact the variables are named according to the Tensor default dim naming).
             if (padding == 0)
                 return Identity(tensor);
 
@@ -1566,6 +1567,77 @@ namespace DeepUnity
                     return nan_replacement;
                 return x;
             });
+        }
+        /// <summary>
+        /// Computes the Discrete Fast Fourier Transform (FFT) of the given vector.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        public static Tensor FFT(Tensor tensor)
+        {
+            if (!(tensor.Rank == 1 || tensor.Rank == 0))
+                throw new ArgumentException("FFT works only for tensors with rank 0 or 1.");
+
+            int n = tensor.Size(-1);
+
+            if (n == 1)
+                return Identity(tensor);
+
+            Tensor odd = Zeros(n / 2);
+            Tensor even = Zeros(n / 2);
+            for (int i = 0; i < n/2; i++)
+            {
+                odd[i] = tensor[i * 2];
+                even[i] = tensor[i * 2 + 1];
+            }
+
+            odd = FFT(odd);
+            even = FFT(even);
+
+            Tensor y = Zeros(n);
+            for (int i = 0; i < n/2; i++)
+            {
+                float t = MathF.Cos(-2 * MathF.PI * i / n) + MathF.Sin(-2 * MathF.PI * i / n);
+                y[i] = even[i] + t * odd[i];
+                y[i + n / 2] = even[i] - t * odd[i];
+            }
+            return y;
+        }
+        /// <summary>
+        /// Compute the Discrete Inversed Fast Fourier Transform (IFFT) of the given vector.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        public static Tensor IFFT(Tensor tensor)
+        {
+            if (!(tensor.Rank == 1 || tensor.Rank == 0))
+                throw new ArgumentException("IFFT works only for tensors with rank 0 or 1.");
+
+            int n = tensor.Size(-1);
+
+            if (n == 1)
+                return Identity(tensor);
+
+            Tensor odd = Zeros(n / 2);
+            Tensor even = Zeros(n / 2);
+            for (int i = 0; i < n / 2; i++)
+            {
+                odd[i] = tensor[i * 2 + 1];
+                even[i] = tensor[i * 2];
+            }
+
+            Tensor ifftEven = IFFT(even);
+            Tensor ifftOdd = IFFT(odd);
+
+            Tensor y = Zeros(n);
+            for (int i = 0; i < n / 2; i++)
+            {
+                float t = MathF.Cos(2 * MathF.PI * i / n) + MathF.Sin(2 * MathF.PI * i / n);
+                y[i] = (ifftEven[i] + t * ifftOdd[i]) / n;
+                y[i + n / 2] = (ifftEven[i] - t * ifftOdd[i]) / n;
+            }
+            return y;
         }
 
         #endregion Special

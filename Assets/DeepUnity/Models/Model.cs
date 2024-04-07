@@ -1,6 +1,9 @@
 using System;
 using UnityEngine;
 using DeepUnity.Modules;
+using UnityEditor;
+using System.Runtime.Serialization.Formatters.Binary;
+using System.IO;
 
 namespace DeepUnity.Models
 {
@@ -68,9 +71,10 @@ namespace DeepUnity.Models
                 return;
             }
             version++;
+            
 #if UNITY_EDITOR
-            UnityEditor.EditorUtility.SetDirty(this);
-            UnityEditor.AssetDatabase.SaveAssetIfDirty(this);
+            EditorUtility.SetDirty(this);
+            AssetDatabase.SaveAssetIfDirty(this);
 #endif
         }
         /// <summary>

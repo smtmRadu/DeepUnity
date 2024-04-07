@@ -18,6 +18,7 @@ namespace DeepUnity
         internal readonly static ComputeShader Conv2DCS;
         internal readonly static ComputeShader OptimizerCS;
         internal readonly static ComputeShader RNNCellCS;
+        internal readonly static ComputeShader ConvTranpose2DCS;
 
         internal readonly static int THREADS_NUM = 256;
         internal readonly static Lazy<ParallelOptions> MULTITHREADS_8 = new Lazy<ParallelOptions>(() => new ParallelOptions { MaxDegreeOfParallelism = 8 });
@@ -28,45 +29,60 @@ namespace DeepUnity
             {
                 // I have no clue how can i make them loadable using Resouces.Load without moving them into a folder called Resources
 
-                var csguid = UnityEditor.AssetDatabase.FindAssets("TensorCS")[0];
-                var cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
-                TensorCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+                TensorCS = Resources.Load<ComputeShader>("ComputeShaders/TensorCS");
+                DenseCS = Resources.Load<ComputeShader>("ComputeShaders/DenseCS");
+                Conv2DCS = Resources.Load<ComputeShader>("ComputeShaders/Conv2DCS");
+                OptimizerCS = Resources.Load<ComputeShader>("ComputeShaders/OptimizerCS");
+                RNNCellCS = Resources.Load<ComputeShader>("ComputeShaders/RNNCellCS");
+                ConvTranpose2DCS = Resources.Load<ComputeShader>("ComputeShaders/ConvTranpose2DCS");
 
-                csguid = UnityEditor.AssetDatabase.FindAssets("DenseCS")[0];
-                cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
-                DenseCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
-  
-                csguid = UnityEditor.AssetDatabase.FindAssets("Conv2DCS")[0]; 
-                cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
-                Conv2DCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+                if (TensorCS == null)
+                    throw new Exception("The Compute Shader scripts were moved from Resources/ComputeShaders folder. Please move them back or modify this script that finds them by adjusting the path.");
 
-                csguid = UnityEditor.AssetDatabase.FindAssets("OptimizerCS")[0];
-                cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
-                OptimizerCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
 
-                csguid = UnityEditor.AssetDatabase.FindAssets("RNNCellCS")[0];
-                cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
-                RNNCellCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+                // var csguid = UnityEditor.AssetDatabase.FindAssets("TensorCS")[0];
+                // var cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
+                // TensorCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+                // 
+                // csguid = UnityEditor.AssetDatabase.FindAssets("DenseCS")[0];
+                // cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
+                // DenseCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+                // 
+                // csguid = UnityEditor.AssetDatabase.FindAssets("Conv2DCS")[0]; 
+                // cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
+                // Conv2DCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+                // 
+                // csguid = UnityEditor.AssetDatabase.FindAssets("OptimizerCS")[0];
+                // cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
+                // OptimizerCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+                // 
+                // csguid = UnityEditor.AssetDatabase.FindAssets("RNNCellCS")[0];
+                // cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
+                // RNNCellCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
+                // 
+                // csguid = UnityEditor.AssetDatabase.FindAssets("ConvTranspose2DCS")[0];
+                // cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
+                // ConvTranpose2DCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
             }
             catch 
             {
-                ConsoleMessage.Warning("Compute Shader files where not found! Make sure DeepUnity framework files were not modified or deleted");          
+                ConsoleMessage.Error("Compute Shader files where not found! Make sure DeepUnity framework files were not modified or deleted.");          
             }
         }
  	   
     }
-    public static class BenchmarkClock
+    public static class Benckmark
     {
-        static Stopwatch clock;
+        static Stopwatch _clock;
         public static void Start()
         {
-            clock = Stopwatch.StartNew();
+            _clock = Stopwatch.StartNew();
         }
         public static TimeSpan Stop()
         {
-            clock.Stop();
-            ConsoleMessage.Info("[Timer] : " + clock.Elapsed);
-            return clock.Elapsed;
+            _clock.Stop();
+            ConsoleMessage.Info("[TIMER] : " + _clock.Elapsed);
+            return _clock.Elapsed;
         }
     }
    
@@ -194,7 +210,7 @@ namespace DeepUnity
         Off,
         [Tooltip("Use of early stopping.")]
         KLE_Stop,
-        // [Tooltip("If KLD > KL_target, the policy is rollbacked to the old state.")]
+        // [Tooltip("If KLD > KL_target, the policy is rollbacked to the old state.")] // disabled because it doesn t worth to cache the old state of the network.. it consumes resources.
         // KLE_Rollback
     }
 
@@ -218,10 +234,10 @@ namespace DeepUnity
 
     public enum TimescaleAdjustmentType
     {
-        [Tooltip("Dynamic adjustment of timescale during training to get the maximum efficiency.")]
-        Dynamic,
-        [Tooltip("Manual adjustment of timescale during training.")]
-        Static
+        [Tooltip("The timescale remains constant, but can be modified during training.")]
+        Constant,
+        [Tooltip("Dynamic adjustment of timescale during training (it can be used for fast sketch ups when you are too lazy to see what constant value matches your pc performance).")]
+        Dynamic      
     }
     public enum NonLinearity
     {

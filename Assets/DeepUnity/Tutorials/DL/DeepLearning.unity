@@ -360,7 +360,7 @@ GameObject:
   - component: {fileID: 492610712}
   - component: {fileID: 492610711}
   m_Layer: 0
-  m_Name: ImageReconstruct
+  m_Name: VAE Reconstruction
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -863,7 +863,7 @@ GameObject:
   - component: {fileID: 1255005309}
   - component: {fileID: 1255005308}
   m_Layer: 0
-  m_Name: ImageDenoise
+  m_Name: VAE Denoising
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1316,12 +1316,12 @@ GameObject:
   - component: {fileID: 1539047897}
   - component: {fileID: 1539047898}
   m_Layer: 0
-  m_Name: CNN
+  m_Name: CNN Classification
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1539047896
 Transform:
   m_ObjectHideFlags: 0
@@ -2236,12 +2236,12 @@ GameObject:
   - component: {fileID: 1946006906}
   - component: {fileID: 1946006905}
   m_Layer: 0
-  m_Name: ImageGeneration
+  m_Name: GAN Generation
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1946006905
 MonoBehaviour:
   m_ObjectHideFlags: 0

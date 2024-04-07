@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 namespace DeepUnity
@@ -8,6 +9,8 @@ namespace DeepUnity
     /// </summary>
     public class CameraManager : MonoBehaviour
     {
+        [Header("Add all Cameras you want to control.\n" +
+            "Use keys 1, 2, 3 etc. to select the camera at runtime.")]
         [SerializeField] private List<Camera> cameras = new List<Camera>();
         private int currentIndex = -1;
 
@@ -35,7 +38,7 @@ namespace DeepUnity
 
         private void Update()
         {
-            if (cameras.Count > 0)
+            if (Input.anyKeyDown && cameras.Count > 0)
             {
                 for (int i = 0; i < cameras.Count; i++)
                 {
@@ -59,5 +62,19 @@ namespace DeepUnity
             currentIndex = newIndex;
         }
     }
+
+#if UNITY_EDITOR
+    [CustomEditor(typeof(CameraManager), true), CanEditMultipleObjects]
+    sealed class CameraManagerEditor : Editor
+    {
+        string[] drawNow = new string[] { "m_Script" };
+        public override void OnInspectorGUI()
+        {
+            DrawPropertiesExcluding(serializedObject, drawNow);
+            serializedObject.ApplyModifiedProperties();
+            serializedObject.Update();
+        }
+    }
+#endif
 
 }

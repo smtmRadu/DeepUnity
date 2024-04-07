@@ -32,8 +32,14 @@ namespace DeepUnity.ReinforcementLearning
         [HideInInspector] public BodyController Controller { get; set; }
 
         public Vector3 CurrentEulerRotation { get; set; } = Vector3.zero;
+        /// <summary>
+        /// Joint's rotation within it's limits (normalized).
+        /// </summary>
         public Vector3 CurrentNormalizedEulerRotation { get; set; } = Vector3.zero;
         public float CurrentStrength { get; set; } = 0f;
+        /// <summary>
+        /// Joint's strength of this gameobject.
+        /// </summary>
         public float CurrentNormalizedStrength { get; set; } = 0f;
 
 

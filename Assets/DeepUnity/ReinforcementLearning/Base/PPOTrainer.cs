@@ -197,7 +197,7 @@ namespace DeepUnity.ReinforcementLearning
             Tensor mu, sigma;
             model.ContinuousForward(states, out mu, out sigma);
             pi = Tensor.Probability(actions, mu, sigma);
-            Tensor sigmaSquared = sigma.Pow(2f);
+            Tensor sigmaSquared = sigma.Square();
 
             Tensor ratio = pi / piOld; // a.k.a pₜ(θ) = πθ(a|s) / πθold(a|s)
 
@@ -210,7 +210,7 @@ namespace DeepUnity.ReinforcementLearning
             float surrogateItem = LClip.Abs().ToArray().Average();
             if (float.IsNaN(surrogateItem))
             {
-                ConsoleMessage.Warning($"PPO surrogate LCLIP batch containing NaN values skipped");
+                ConsoleMessage.Warning($"PPO LCLIP batch containing NaN values was skipped. Consider clipping the observations strongly");
                 return;
             }
             actorLoss += surrogateItem;
@@ -311,7 +311,7 @@ namespace DeepUnity.ReinforcementLearning
             float surrogateItem = LClip.Abs().ToArray().Average();
             if (float.IsNaN(surrogateItem))
             {
-                ConsoleMessage.Warning($"PPO surrogate LCLIP batch containing NaN values skipped");
+                ConsoleMessage.Warning($"PPO LCLIP batch containing NaN values was skipped. Consider clipping the observations strongly");
                 return;
             }
             actorLoss += surrogateItem;
@@ -445,7 +445,7 @@ namespace DeepUnity.ReinforcementLearning
     }
 #if UNITY_EDITOR
     [CustomEditor(typeof(PPOTrainer), true), CanEditMultipleObjects]
-    sealed class CustomTrainerEditor : Editor
+    sealed class CustomPPOTrainerEditor : Editor
     {
         static string[] dontDrawMe = new string[] { "m_Script" };
         public override void OnInspectorGUI()

@@ -13,6 +13,7 @@ namespace DeepUnity.ReinforcementLearning
     [DisallowMultipleComponent, AddComponentMenu("DeepUnity/Training Statistics")]
     public class TrainingStatistics : MonoBehaviour
     {
+        private static bool MainSaved = false;
         private TrainingStatistics Instance;
 
         [ViewOnly, Tooltip("When the simulation started.")]
@@ -70,7 +71,9 @@ namespace DeepUnity.ReinforcementLearning
             else if (GetComponent<Agent>().behaviourType == BehaviourType.Learn)
             {
                 Instance = this;
+#if UNITY_EDITOR
                 EditorApplication.playModeStateChanged += Instance.ExportOnEnd;
+#endif
             }
         }
 
@@ -138,6 +141,8 @@ namespace DeepUnity.ReinforcementLearning
         /// <returns></returns>
         internal string ExportAsSVG(string behaviourName, Hyperparameters hp, AgentBehaviour behaviour, DecisionRequester decisionRequester)
         {
+            string path = "";
+#if UNITY_EDITOR
             string behaviourAssetPath = AssetDatabase.GetAssetPath(behaviour);
 
             string extra = new string(startedAt.Select(x =>
@@ -155,7 +160,7 @@ namespace DeepUnity.ReinforcementLearning
 
             string directoryPath = Path.Combine(Path.GetDirectoryName(behaviourAssetPath), "Logs");
             string name = $"[{behaviourName}]_{extra}";
-            string path = Path.Combine(directoryPath, $"{name}.svg");
+            path = Path.Combine(directoryPath, $"{name}.svg");
 
 
             if (!Directory.Exists(directoryPath))
@@ -166,6 +171,7 @@ namespace DeepUnity.ReinforcementLearning
 
             File.Create(path).Dispose();
             File.WriteAllText(path, GenerateSVG(behaviourName, hp, behaviour, decisionRequester));
+#endif
             return path;
         }
         private string GenerateSVG(string behaviourName, Hyperparameters hp, AgentBehaviour ab, DecisionRequester dr)
@@ -324,11 +330,12 @@ namespace DeepUnity.ReinforcementLearning
                 startedAt = DeepUnityTrainer.Instance.timeWhenTheTrainingStarted.ToLongTimeString() + ", " + DeepUnityTrainer.Instance.timeWhenTheTrainingStarted.ToLongDateString();
                 finishedAt = DateTime.Now.ToLongTimeString() + ", " + DateTime.Now.ToLongDateString();
 
-                if (iterations > 0)
+                if (iterations > 0 && !MainSaved)
                 {
                     string pth = ExportAsSVG(DeepUnityTrainer.Instance.model.behaviourName, DeepUnityTrainer.Instance.hp, DeepUnityTrainer.Instance.model, DeepUnityTrainer.Instance.parallelAgents[0].DecisionRequester);
                     Debug.Log($"<color=#57f542>Training Session log saved at <b><i>{pth}</i></b>.</color>");
                     AssetDatabase.Refresh();
+                    MainSaved = true;
                 }
             }
 

@@ -263,8 +263,10 @@ namespace DeepUnity
       
         /// Deallocates the Tensor from VRAM and destroys the object.
         public void Dispose()
-        {       
+        {
+#if UNITY_EDITOR
             AllocatedTensors.Value.Remove(this);
+#endif
             data.Release();
             GC.SuppressFinalize(this);
         }
@@ -301,14 +303,15 @@ namespace DeepUnity
             cs.SetBuffer(kernel, "result", this.data);
             cs.Dispatch(kernel, 1, 1, 1);
 
+#if UNITY_EDITOR
             AllocatedTensors.Value.Add(this, this);
 
             if (AllocatedTensors.Value.Count > MAX_ALLOC_TENSORS)
             {
                 ConsoleMessage.Error($"Cannot allocate more than {MAX_ALLOC_TENSORS} TensorGPUs in the same time. Make sure there are no memory leaks and all unused TensorGPUs are Disposed!");
                 UnityEditor.EditorApplication.isPlaying = false;
-            }
-
+             }
+#endif
         }
         public static TensorGPU Identity(TensorGPU other)
         {
@@ -1511,7 +1514,9 @@ namespace DeepUnity
         {
             data = new ComputeBuffer(serialized_data.Length, 4);
             data.SetData(serialized_data);
+#if UNITY_EDITOR
             AllocatedTensors.Value.Add(this, this);
+#endif
         }
 
         // inside use      

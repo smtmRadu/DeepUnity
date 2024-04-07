@@ -36,7 +36,6 @@ namespace DeepUnity.ReinforcementLearning
             {
                 sb.Append($"({item.time}, {item.value})\n");
             }
-
             string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
             string filePath = Path.Combine(desktopPath, "cumulative_reward.txt");
 

@@ -100,7 +100,7 @@ namespace DeepUnityTutorials
             validationInputs = Tensor.Concat(1, x1, x2);
             validationTargets = y;
 
-            BenchmarkClock.Start();
+            Benckmark.Start();
         }
 
         public void Update()
@@ -113,7 +113,7 @@ namespace DeepUnityTutorials
                 i = 0;
                 // net.Save();
                 if (epoch == timerStopEpoch)
-                    BenchmarkClock.Stop();
+                    Benckmark.Stop();
 
                 return;
             }

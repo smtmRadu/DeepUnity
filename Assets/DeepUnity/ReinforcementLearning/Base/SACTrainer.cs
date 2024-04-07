@@ -12,7 +12,7 @@ namespace DeepUnity.ReinforcementLearning
     // https://spinningup.openai.com/en/latest/algorithms/sac.html
     // Actually q networks are receiving both squashed and unsquashed inputs
 
-    // So SAC trains Q1 and Q2 without an aditional value function
+    // OpenAI SAC trains critic without an aditional value function
     internal class SACTrainer : DeepUnityTrainer
     {
         // Q target networks
@@ -26,12 +26,12 @@ namespace DeepUnity.ReinforcementLearning
             Qtarg2 = model.q2Network.Clone() as Sequential;
             if (model.standardDeviation == StandardDeviationType.Fixed)
             {
-                ConsoleMessage.Info("Behaviour's standard deviation is Trainable");
+                ConsoleMessage.Info("Behaviour's standard deviation is forced to be Trainable");
                 model.standardDeviation = StandardDeviationType.Trainable;
             }
             if (hp.updateAfter <= hp.minibatchSize)
             {
-                ConsoleMessage.Info("'Update After' was set higher than the 'batch size'.");
+                ConsoleMessage.Info("'Update After' was set higher than the 'batch size'");
                 hp.updateAfter = hp.minibatchSize * 5;
             }
 
@@ -179,8 +179,6 @@ namespace DeepUnity.ReinforcementLearning
             actorLoss = objectiveFunctionJ.ToArray().Average();
 
 
-
-
             // Start differentiating the objective loss
             Tensor sech_u = u.Select(x => Utils.Hyperbolics.Sech(x));
             Tensor tanh_u = aTildeS; // right?:D
@@ -295,4 +293,17 @@ namespace DeepUnity.ReinforcementLearning
         }
 
     }
+
+#if UNITY_EDITOR
+    [CustomEditor(typeof(SACTrainer), true), CanEditMultipleObjects]
+    sealed class CustomSACTrainerEditor : Editor
+    {
+        static string[] dontDrawMe = new string[] { "m_Script" };
+        public override void OnInspectorGUI()
+        {
+            DrawPropertiesExcluding(serializedObject, dontDrawMe);
+            serializedObject.ApplyModifiedProperties();
+        }
+    }
+#endif
 }
