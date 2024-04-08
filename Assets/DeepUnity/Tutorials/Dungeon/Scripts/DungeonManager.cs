@@ -2,7 +2,7 @@ using UnityEngine;
 using DeepUnity;
 using System.Collections.Generic;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class DungeonManager : MonoBehaviour
     {

@@ -325,7 +325,7 @@ namespace DeepUnity.ReinforcementLearning
 #if UNITY_EDITOR
         private void ExportOnEnd(PlayModeStateChange state)
         {
-            if (state == PlayModeStateChange.ExitingPlayMode)
+            if (state == PlayModeStateChange.ExitingPlayMode && DeepUnityTrainer.Instance != null) // this check is not mandatory (i inserted it to show less null ref exc when something happens when the assets of behavior are missing)
             {
                 startedAt = DeepUnityTrainer.Instance.timeWhenTheTrainingStarted.ToLongTimeString() + ", " + DeepUnityTrainer.Instance.timeWhenTheTrainingStarted.ToLongDateString();
                 finishedAt = DateTime.Now.ToLongTimeString() + ", " + DateTime.Now.ToLongDateString();

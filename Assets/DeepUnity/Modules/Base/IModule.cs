@@ -27,7 +27,8 @@ namespace DeepUnity.Modules
         public LazyDense lazydense = null;
               
         // Normalization
-        public BatchNorm batchnorm1d = null;
+        public BatchNorm1D batchnorm1d = null;
+        public BatchNorm2D batchnorm2d = null;
         public LazyBatchNorm lazybatchnorm1d = null;
         public LayerNorm layernorm = null;
         public RMSNorm rmsnorm = null;
@@ -83,7 +84,7 @@ namespace DeepUnity.Modules
             {
                 dense = denseModule;
             }
-            else if (module is BatchNorm batchnormModule)
+            else if (module is BatchNorm1D batchnormModule)
             {
                 batchnorm1d = batchnormModule;
             }
@@ -235,6 +236,10 @@ namespace DeepUnity.Modules
             {
                 avgpool1d = avgpool1dModule;
             }
+            else if (module is BatchNorm2D batchnorm2dModule)
+            {
+                batchnorm2d = batchnorm2dModule;
+            }
             else
                 throw new Exception($"Unhandled module type while wrapping ({module.GetType().Name}).");
         }
@@ -251,7 +256,7 @@ namespace DeepUnity.Modules
             {
                 module = moduleWrapper.dense;
             }
-            else if (typeof(BatchNorm).Name.Equals(moduleWrapper.name))
+            else if (typeof(BatchNorm1D).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.batchnorm1d;
             }
@@ -402,6 +407,10 @@ namespace DeepUnity.Modules
             else if (typeof(AvgPool1D).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.avgpool1d;
+            }
+            else if (typeof(BatchNorm2D).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.batchnorm2d;
             }
             else
                 throw new Exception($"Unhandled module type while unwrapping ({moduleWrapper.name}).");

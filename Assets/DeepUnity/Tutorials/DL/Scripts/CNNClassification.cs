@@ -8,7 +8,7 @@ using UnityEngine;
 using DeepUnity.Models;
 
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     // https://machinelearningmastery.com/how-to-develop-a-convolutional-neural-network-from-scratch-for-mnist-handwritten-digit-classification/
     public class CNNClassification : MonoBehaviour
@@ -37,37 +37,46 @@ namespace DeepUnityTutorials
 
             if (network == null)
             {
+                const int cout = 16;
                 network = new Sequential(
-                         new Conv2D(1, 6, 3),
-                         new AvgPool2D(2),
+                         new Conv2D(1, cout, 3),
+                         new PReLU(),
+                         // new BatchNorm2D(cout),
+                         new MaxPool2D(2),
 
                          new ResidualConnection.Fork(),
                          new ZeroPad2D(1),
-                         new Conv2D(6, 6, 3),
+                         new Conv2D(cout, cout, 3),
                          new PReLU(),
+                         //new BatchNorm2D(cout),
                          new ResidualConnection.Join(),
+                         new MaxPool2D(2),
 
                          new ResidualConnection.Fork(),
                          new ZeroPad2D(1),
-                         new Conv2D(6, 6, 3),
+                         new Conv2D(cout, cout, 3),
                          new PReLU(),
+                         //new BatchNorm2D(cout),
                          new ResidualConnection.Join(),
+                         new MaxPool2D(2),
 
                          new ResidualConnection.Fork(),
                          new ZeroPad2D(1),
-                         new Conv2D(6, 6, 3),
+                         new Conv2D(cout, cout, 3),
                          new PReLU(),
+                         //new BatchNorm2D(cout),
                          new ResidualConnection.Join(),
+                         new MaxPool2D(2),
 
                          new Flatten(),
-                         new LazyDense(512),
-                         new LayerNorm(),
+                         new LazyDense(128),
+                         new RMSNorm(),
                          new PReLU(),
                          new Dropout(0.1f),
-                         new Dense(512, 512),
-                         new LayerNorm(),
+                         new Dense(128, 128),
+                         new RMSNorm(),
                          new PReLU(),
-                         new Dense(512, 10),
+                         new Dense(128, 10),
 
                          new Softmax()).CreateAsset(name);
             }

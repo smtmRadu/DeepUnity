@@ -4,6 +4,7 @@ using UnityEngine;
 
 namespace DeepUnity.Modules
 {
+    // I HAVE TO MAKE THIS SERIALIZABLE IN THE FUTURE (just remove attention heads and make them from scratch pfah..)
     /// <summary>
     /// <b>Applied a Self Scaled Dot-Product Attention with multiple heads.</b> <br></br>
     /// Input: <b>(B, L, H)</b> or <b>(L, H)</b> for unbatched input. <br></br>

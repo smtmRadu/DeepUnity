@@ -2,7 +2,7 @@ using UnityEngine;
 using System.Linq.Expressions;
 using DeepUnity.ReinforcementLearning;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class SurvivorScript : Agent
     {

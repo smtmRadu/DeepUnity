@@ -1,7 +1,7 @@
 using DeepUnity;
 using UnityEngine;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class StableDiffusionGeneration : MonoBehaviour
     {

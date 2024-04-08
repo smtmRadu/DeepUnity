@@ -7,7 +7,7 @@ using UnityEngine;
 using DeepUnity.Modules;
 using DeepUnity.Models;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class TrainMNIST : MonoBehaviour
     {

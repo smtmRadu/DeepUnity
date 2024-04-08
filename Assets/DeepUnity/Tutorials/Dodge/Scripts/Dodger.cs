@@ -3,7 +3,7 @@ using DeepUnity;
 using System.Collections.Generic;
 using DeepUnity.ReinforcementLearning;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class Dodger : Agent
     {

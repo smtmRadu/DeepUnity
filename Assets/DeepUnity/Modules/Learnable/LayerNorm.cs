@@ -24,12 +24,6 @@ namespace DeepUnity.Modules
         private Tensor xHat { get; set; }
         private Tensor std { get; set; }
 
-        [SerializeField] private int step;
-
-        // Learnable parameters
-        [SerializeField] private Tensor runningMean;
-        [SerializeField] private Tensor runningVar;
-
         [SerializeField] private Tensor gamma;
         [SerializeField] private Tensor beta;
         [NonSerialized] private Tensor gammaGrad;
@@ -45,56 +39,30 @@ namespace DeepUnity.Modules
         /// </summary>
         public LayerNorm()
         {
-            runningMean = Tensor.Zeros(1);
-            runningVar = Tensor.Ones(1);
-
             gamma = Tensor.Ones(1);
             beta = Tensor.Zeros(1);
             gammaGrad = Tensor.Zeros(1);
             betaGrad = Tensor.Zeros(1);
-            step = 0;
         }
         public Tensor Predict(Tensor input)
         {
             if (input.Rank > 2)
                 throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) received is invalid for LayerNorm. Make sure is of shape (B, H) or (H).");
 
+            int feature_size = input.Size(-1);
 
-            Tensor input_centered = (input - runningMean[0]) / MathF.Sqrt(runningVar[0] + Utils.EPSILON);
-            Tensor output = gamma[0] * input_centered + beta[0];
-            return output;
+            Tensor mu = input.Mean(-1, keepDim: true).Expand(-1, feature_size);
+            
+            std = input.Std(-1, correction: 0, keepDim: true).Expand(-1, feature_size);
+            xCentered = input - mu;
+            xHat = xCentered / (std + Utils.EPSILON);
+
+            return gamma[0] * xHat + beta[0];
         }
 
         public Tensor Forward(Tensor input)
         {
-            if (input.Rank > 2)
-                throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) received is invalid for LayerNorm. Make sure is of shape (B, H) or (H).");
-
-            bool isBatched = input.Rank == 2;
-            int batch_size = isBatched ? input.Size(0) : 1;
-            int feature_size = input.Size(-1);
-
-            Tensor mu = input.Mean(-1, keepDim: true).Expand(-1, feature_size);
-            Tensor var = input.Var(-1, keepDim: true).Expand(-1, feature_size);
-
-            xCentered = input - mu;
-            std = Tensor.Sqrt(var + Utils.EPSILON);
-            xHat = xCentered / std;
-
-            Tensor y = gamma[0] * xHat + beta[0];
-
-            float mu_over_batch = isBatched ? mu.Mean(-2)[0] : mu[0];
-            float var_over_batch = isBatched ? var.Mean(-2)[0] : var[0];
-
-            // Update running mean and running var
-            int total_samples = batch_size + step;
-            float weight_old = step / (float)total_samples;
-            float weight_new = batch_size / (float)total_samples;
-            runningMean = runningMean * weight_old + mu_over_batch * weight_new;
-            runningVar = runningVar * weight_old + var_over_batch * weight_new;
-            step = total_samples;
-
-            return y;
+            return Predict(input);
         }
         public Tensor Backward(Tensor dLdY)
         {
@@ -119,15 +87,10 @@ namespace DeepUnity.Modules
         public object Clone()
         {
             LayerNorm laynorm = new LayerNorm();
-            laynorm.step = step;
             laynorm.gamma = (Tensor)gamma.Clone();
             laynorm.beta = (Tensor)beta.Clone();
             laynorm.gammaGrad = (Tensor)gammaGrad.Clone();
             laynorm.betaGrad = (Tensor)betaGrad.Clone();
-            laynorm.runningMean = (Tensor)runningMean.Clone();
-            laynorm.runningVar = (Tensor)runningVar.Clone();
-
-
             return laynorm;
         }
         public Parameter[] Parameters()

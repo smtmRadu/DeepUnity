@@ -21,7 +21,7 @@ namespace DeepUnity.Modules
     /// </em>
     /// </summary>
     [Serializable]
-    public class BatchNorm : ILearnable, IModule
+    public class BatchNorm1D : ILearnable, IModule
     {
         // https://arxiv.org/pdf/1502.03167.pdf
         [SerializeField] public Device Device { get; set; } = Device.CPU;
@@ -62,10 +62,10 @@ namespace DeepUnity.Modules
         /// </summary>
         /// <param name="num_features">Input's last axis dimension (H).</param>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
-        public BatchNorm(int num_features, float momentum = 0.9f)
+        public BatchNorm1D(int num_features, float momentum = 0.9f)
         {
             if (num_features < 1)
-                throw new ArgumentException($"BatchNorm layer cannot have num_layers < 1. (Received arg: {num_features})");
+                throw new ArgumentException($"BatchNorm layer cannot have num_features < 1. (Received arg: {num_features})");
 
             this.num_features = num_features;
             this.momentum = momentum;
@@ -125,19 +125,19 @@ namespace DeepUnity.Modules
 
             // When training (only on mini-batch training), we cache the values for backprop also
             var mean = Tensor.Mean(input, 0, keepDim: true); // mini-batch means      [1, features_mean]
-            var variance = Tensor.Var(input, 0, keepDim: true); // mini-batch variances  [1, features_mean]
+            var variance_biased = Tensor.Var(input, 0, correction: 0, keepDim: true); // no-corrected mini-batch variances  [1, features_mean]
 
 
             // normalize and cache
             xCentered = input - Tensor.Expand(mean, 0, batch_size);
-            std = Tensor.Sqrt(variance + Utils.EPSILON).Expand(0, batch_size);
+            std = Tensor.Sqrt(variance_biased + Utils.EPSILON).Expand(0, batch_size);
             xHat = xCentered / std;
 
 
             // compute running mean and var
+            var variance_unbiased = input.Var(0, correction: 1); // corrected variance
             runningMean = runningMean * momentum + mean.Squeeze(0) * (1f - momentum);
-            runningVar = runningVar * momentum + variance.Squeeze(0) * (1f - momentum);
-
+            runningVar = runningVar * momentum + variance_unbiased * (1f - momentum);
 
             // scale and shift
             var y = Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size) * xHat + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
@@ -174,7 +174,7 @@ namespace DeepUnity.Modules
 
         public object Clone()
         {
-            BatchNorm bnclone = new BatchNorm(num_features, momentum);
+            BatchNorm1D bnclone = new BatchNorm1D(num_features, momentum);
             bnclone.gamma = (Tensor)gamma.Clone();
             bnclone.beta = (Tensor)beta.Clone();
             bnclone.gammaGrad = (Tensor)gammaGrad.Clone();

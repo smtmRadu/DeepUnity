@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class SoccerEnvironmentScript : MonoBehaviour
     {

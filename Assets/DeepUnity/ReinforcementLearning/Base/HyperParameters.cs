@@ -20,10 +20,10 @@ namespace DeepUnity.ReinforcementLearning
         [Min(10_000f)] public long maxSteps = 2_000_000_000;
 
         [Tooltip("[Typical range: (PPO) 5e-6 - 3e-3, (SAC) 1e-5 - 1e-3] Initial learning rate for Adam optimizer (both all networks).")]
-        [Min(5e-6f)] public float learningRate = 3e-4f;
+        [MinMax(5e-6f, 1f)] public float learningRate = 3e-4f;
 
         [Tooltip("[Typical range: 0.8 - 0.9997] Discount factor.")]
-        [Min(0.001f)] public float gamma = 0.99f;
+        [MinMax(0.001f, 1f)] public float gamma = 0.99f;
 
         [Tooltip("Applies linear decay on learning rate with respect to the maxSteps. When maxSteps is reached, lr will be 0.")]
         [SerializeField] public bool LRSchedule = false;
@@ -33,34 +33,34 @@ namespace DeepUnity.ReinforcementLearning
         [Header("PPO specific Configuration")] // https://github.com/yosider/ml-agents-1/blob/master/docs/Training-PPO.md
 
         [Tooltip("[Typical range: (Continuous) 512 - 5120, (Discrete) 32 - 512] Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer size.")]
-        [Min(64)] public int batchSize = 512;
+        [MinMax(64, 5120)] public int batchSize = 512;
 
         [Tooltip("[Typical range: 2048 - 409600] Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch size. Typically a larger buffer size corresponds to more stable training updates.")]
-        [Min(2048)] public int bufferSize = 10240; // Do not exagerate with this, keep it at a max of 1M.
+        [MinMax(2048, 409600)] public int bufferSize = 10240; // Do not exagerate with this, keep it at a max of 1M.
 
         [Tooltip("[Typical range: 64 - 2048] How many steps of experience to collect per-agent before adding it to the experience buffer.")]
-        [Min(32)] public int horizon = 256;
+        [MinMax(32, 4096)] public int horizon = 256;
 
         [Tooltip("[Typical range: 3 - 10] Number of epochs per buffer.")]
-        [Min(3)] public int numEpoch = 8;
+        [MinMax(3, 20)] public int numEpoch = 8;
 
         [Tooltip("[Typical range: 1e-4 - 1e-2] Entropy regularization for trainable standard deviation. Also used for Shannon entropy in discrete action space.")]
-        [Min(0f)] public float beta = 5e-3f;
+        [MinMax(0f, 0.01f)] public float beta = 5e-3f;
 
         [Tooltip("[Typical range: 0.1 - 0.3] Clip factor.")]
-        [Min(0.1f)] public float epsilon = 0.2f;
+        [MinMax(0.1f, 0.3f)] public float epsilon = 0.2f;
 
         [Tooltip("[Typical range: 0.92 - 0.98] GAE factor.")]
-        [Min(0.001f)] public float lambda = 0.96f;
+        [MinMax(0.9f, 1f)] public float lambda = 0.96f;
 
         [Tooltip("[Typical range: 0 - 1] Global Gradient Clipping max norm value. Set to 0 to turn off.")]
-        [Min(0)] public float gradClipNorm = 0.5f;
+        [MinMax(0.1f, 1f)] public float gradClipNorm = 0.5f;
 
         [Tooltip("Use of KLE")]
         public KLType KLDivergence = KLType.Off;
 
         [Tooltip("Kullback-Leibler divergence target value")]
-        [Min(0.015f)] public float targetKL = 0.015f;
+        [MinMax(0.015f, 0.15f)] public float targetKL = 0.015f;
 
         [Tooltip("Normalize the advantages at minibatch level. Might improve convergence for relative large minibatches, but might cause harm when minibatches are small.")]
         public bool normalizeAdvantages = true;
@@ -72,22 +72,22 @@ namespace DeepUnity.ReinforcementLearning
         [Min(50000)] public int replayBufferSize = 1_000_000;
 
         [Tooltip("[Typical range: 64 - 1024] The number of samples in the minibatch when performing a policy or Q update.")]
-        [Min(64)] public int minibatchSize = 128;
+        [MinMax(64, 1024)] public int minibatchSize = 128;
 
         [Tooltip("[Typicall range: 1 - 128] Number of steps taken before updating the policy. Doesn't count for parallel agents, this considers only 1 decision.")]
-        [Min(1)] public int updateInterval = 64;
+        [MinMax(1, 128)] public int updateInterval = 64;
 
         [Tooltip("[Typicall range > Batch Size] Number of steps collected before updating the policy.")]
         [Min(64)] public int updateAfter = 1024;
 
         [Tooltip("[Typical range: 1 - 8] Number of mini-batches sampled on policy model update. This can be increased while also increasing updateEvery.")]
-        [Min(1)] public int updatesNum = 1;
+        [MinMax(1, 8)] public int updatesNum = 1;
 
         [Tooltip("[Typicall range: (Continuous) 0.5 - 1.0 ~(Discrete) 0.05 - 0.5] Entropy tradeoff coefficient. Lower alpha means low exploration.")]
-        [Min(1e-8f)] public float alpha = 0.2f;
+        [MinMax(1e-8f, 0.5f)] public float alpha = 0.2f;
 
         [Tooltip("[Typicall range: 0.005 - 0.01] Inversed Polyak. How aggresively to update the target network used for boostraping value estimation.")]
-        [Min(0.005f)] public float tau = 0.005f;
+        [MinMax(0.001f, 0.005f)] public float tau = 0.005f;
 
 
         // ========================================================================================================================================================================

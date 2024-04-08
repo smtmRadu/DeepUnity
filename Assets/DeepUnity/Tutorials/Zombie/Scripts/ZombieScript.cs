@@ -1,4 +1,4 @@
-using DeepUnityTutorials;
+using DeepUnity.Tutorials;
 using UnityEngine;
 using UnityEngine.AI;
 

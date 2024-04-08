@@ -2,7 +2,7 @@ using UnityEngine;
 using DeepUnity.ReinforcementLearning;
 using System;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class RobotScript : Agent
     {

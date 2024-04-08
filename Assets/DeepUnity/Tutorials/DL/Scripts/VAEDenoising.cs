@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using DeepUnity.Models;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class VAEDenoising : MonoBehaviour
     {

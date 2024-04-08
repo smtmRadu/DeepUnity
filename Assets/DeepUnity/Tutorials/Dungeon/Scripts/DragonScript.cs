@@ -1,7 +1,7 @@
 using UnityEngine;
 using DeepUnity;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class DragonScript : MonoBehaviour
     {

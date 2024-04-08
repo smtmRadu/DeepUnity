@@ -2,7 +2,7 @@ using UnityEngine;
 using DeepUnity;
 using DeepUnity.ReinforcementLearning;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     // Note: because i forgot to send input if the dragon is alive or not, the guy that get's the key basically knows it, and he can go for the door and then the episode ends.
     // This might be resolved actually if i send to all the agents that they have the key.... we ll see...

@@ -3,7 +3,7 @@ using UnityEngine;
 using System.IO;
 using UnityEngine.UI;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class TestAugmentation : MonoBehaviour
     {

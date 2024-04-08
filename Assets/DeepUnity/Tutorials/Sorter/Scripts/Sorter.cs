@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine.UI;
 using System.Text;
 using DeepUnity.ReinforcementLearning;
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class Sorter : Agent
     {

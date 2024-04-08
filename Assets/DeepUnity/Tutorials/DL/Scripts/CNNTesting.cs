@@ -6,7 +6,7 @@ using System.Globalization;
 using System.Linq;
 using UnityEngine;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class CNNTesting : MonoBehaviour
     {

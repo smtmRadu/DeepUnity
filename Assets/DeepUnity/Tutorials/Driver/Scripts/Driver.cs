@@ -2,7 +2,7 @@ using DeepUnity.ReinforcementLearning;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
 
     public class Driver : Agent

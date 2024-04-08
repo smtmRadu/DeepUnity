@@ -15,8 +15,8 @@ namespace DeepUnity.Sensors
         public int Height => height;
 
         [SerializeField] public Camera cam;
-        [SerializeField, Min(16)]private int width = 640;
-        [SerializeField, Min(9)]private int height = 480;
+        [SerializeField, Min(16)]private int width = 1920;// 640;
+        [SerializeField, Min(9)] private int height = 1080; // 480;
         [SerializeField] private CaptureType type = CaptureType.RGB;
         [SerializeField] private CompressionType compression = CompressionType.PNG;
 

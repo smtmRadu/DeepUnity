@@ -2,7 +2,7 @@ using UnityEngine;
 using DeepUnity;
 using DeepUnity.ReinforcementLearning;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class Jumper : Agent
     {

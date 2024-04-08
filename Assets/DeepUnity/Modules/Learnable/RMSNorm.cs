@@ -16,15 +16,12 @@ namespace DeepUnity.Modules
     {
         [SerializeField] public Device Device { get; set; } = Device.CPU;
 
-        [SerializeField] private float p = -1;
         [SerializeField] private Tensor gamma;
         [NonSerialized] private Tensor gammaGrad;
-        [SerializeField] private Tensor runningRms;
-        [SerializeField] private int step;
 
         private Tensor InputCache { get; set; }
         private Tensor xHat { get; set; }
-        private Tensor rms { get; set; }
+        private Tensor rmsNorm { get; set; }
 
         /// <summary>
         /// <b>Placed before the non-linear activation function. </b>    <br />
@@ -37,8 +34,6 @@ namespace DeepUnity.Modules
         {
             gamma = Tensor.Ones(1);
             gammaGrad = Tensor.Zeros(1);
-            runningRms = Tensor.Ones(1);
-            step = 0;
         }
 
         public object Clone()
@@ -46,7 +41,6 @@ namespace DeepUnity.Modules
             RMSNorm rmsnorm = new RMSNorm();
             rmsnorm.gamma = (Tensor)gamma.Clone();
             rmsnorm.gammaGrad = (Tensor)gammaGrad.Clone();
-            rmsnorm.runningRms = (Tensor)runningRms.Clone();
             return rmsnorm;
         }
         public Parameter[] Parameters()
@@ -64,47 +58,29 @@ namespace DeepUnity.Modules
         {
             if (input.Rank > 2)
                 throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) received is invalid for LayerNorm. Make sure is of shape (B, H) or (H).");
-           
-            return input / runningRms[0] * gamma[0];
+
+            // x = gamma * x / norm(x)
+            InputCache = input.Clone() as Tensor;
+            rmsNorm = (input.Square().Mean(-1, keepDim: true) + Utils.EPSILON).Sqrt().Expand(-1, input.Size(-1));
+            xHat = input / rmsNorm;
+
+            return gamma[0] * xHat;
         }
         public Tensor Forward(Tensor input)
         {
-            if (input.Rank > 2)
-                throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) received is invalid for LayerNorm. Make sure is of shape (B, H) or (H).");
-
-            bool isBatched = input.Rank == 2;
-            int batch_size = isBatched ? input.Size(0) : 1;
-            int feature_size = input.Size(-1);
-
-            InputCache = input.Clone() as Tensor;
-            rms = (input.Square().Mean(-1, keepDim: true) + Utils.EPSILON).Sqrt().Expand(-1, feature_size);
-            xHat = input / rms;
-
-            Tensor y = gamma[0] * xHat;
-
-
-            float rms_over_batch = isBatched ? rms.Mean(-2)[0] : rms[0];
-
-            // Update running rms
-            int total_samples = batch_size + step;
-            float weight_old = step / (float)total_samples;
-            float weight_new = batch_size / (float)total_samples;
-            runningRms = runningRms * weight_old + rms_over_batch * weight_new;
-            step = total_samples;
-
-            return y;
+            return Predict(input);
         }
         public Tensor Backward(Tensor dLdY)
         {
             bool isBatched = dLdY.Rank == 2;
 
-            Tensor dLdGamma = dLdY * - InputCache / (rms * gamma[0] * gamma[0]);
-            gammaGrad[0] = isBatched ?
+            Tensor dLdGamma = dLdY * InputCache / rmsNorm;
+            gammaGrad[0] += isBatched ?
                 dLdGamma.Mean(0).Mean(0)[0]:
                 dLdGamma.Mean(0)[0];
 
             
-            Tensor dLdX = gamma[0] * rms.Reciprocal() * (dLdY - xHat * (dLdY * xHat).Mean(-1, keepDim: true).Expand(-1, dLdY.Size(-1)));
+            Tensor dLdX = dLdY * gamma[0] / rmsNorm;
             return dLdX;
         }
 

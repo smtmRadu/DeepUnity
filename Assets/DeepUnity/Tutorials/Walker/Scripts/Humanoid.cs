@@ -2,7 +2,7 @@ using UnityEngine;
 using DeepUnity;
 using DeepUnity.ReinforcementLearning;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     /// <summary>
     /// This script was made for the tall mode. This is very hard to train due to it's nature cause balancing is the first problem.

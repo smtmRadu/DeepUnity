@@ -66,6 +66,8 @@ namespace DeepUnity
             collect_train_label?.Clear();
             collect_test_image?.Clear();
             collect_test_label?.Clear();
+
+            System.GC.Collect();
         }
 
         private static void SerializeMNIST()

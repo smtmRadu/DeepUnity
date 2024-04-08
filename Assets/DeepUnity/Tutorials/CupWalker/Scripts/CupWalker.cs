@@ -1,7 +1,7 @@
 using UnityEngine;
 using DeepUnity.ReinforcementLearning;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class CupWalker : Agent
     {

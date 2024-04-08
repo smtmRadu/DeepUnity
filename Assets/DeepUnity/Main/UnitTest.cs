@@ -6,7 +6,7 @@ using UnityEngine.UI;
 using DeepUnity.Modules;
 
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class UnitTest : MonoBehaviour
     {
@@ -18,12 +18,11 @@ namespace DeepUnityTutorials
 
         private void Start()
         {
+            Tensor input = Tensor.Random01(64, 5, 28, 28);
+            BatchNorm2D bn2d = new BatchNorm2D(5);
 
-            AvgPool1D avg = new AvgPool1D(2);
-
-            Tensor input = Tensor.Random01(1, 6);
-            print(input);
-            print(avg.Predict(input));
+            var output = bn2d.Forward(input);
+            bn2d.Backward(output);
             // net = new Sequential(
             //     new ResidualConnection.Fork(),
             //     new Attention(100, 100),

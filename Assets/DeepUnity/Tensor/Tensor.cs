@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -1656,7 +1656,7 @@ namespace DeepUnity
             return tensor.shape[axis];
         }
         /// <summary>
-        /// Changes the shape of the tensor. Pi(shape) must be equal to Pi(<paramref name="newShape"/>)
+        /// Changes the shape of the tensor. Π(<paramref name="tensor"/>.shape) must be equal to Π(<paramref name="newShape"/>).
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="newShape"></param>
@@ -2406,6 +2406,7 @@ namespace DeepUnity
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>
+        /// <param name="correction">Bessel's correction</param>
         /// <param name="keepDim">If false, squeezes the tensor on <paramref name="axis"/>.</param>
         /// <returns></returns>
         public static Tensor Var(Tensor tensor, int axis, int correction = 1, bool keepDim = false)
@@ -2538,6 +2539,7 @@ namespace DeepUnity
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>
+        /// <param name="correction">Bessel's correction</param>
         /// <param name="keepDim">If false, squeezes the tensor on <paramref name="axis"/>.</param>
         /// <returns></returns>
         public static Tensor Std(Tensor tensor, int axis, int correction = 1, bool keepDim = false)

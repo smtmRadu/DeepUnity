@@ -5,7 +5,7 @@ using DeepUnity.Modules;
 using UnityEngine;
 using DeepUnity.Models;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class MLPRegression : MonoBehaviour
     {
@@ -56,13 +56,13 @@ namespace DeepUnityTutorials
 
                  new ResidualConnection.Fork(),
                  new Dense(hiddenSize, hiddenSize),
-                 new LayerNorm(),
+                 new RMSNorm(),
                  new ELU(),
                  new ResidualConnection.Join(),
 
                  new ResidualConnection.Fork(),
                  new Dense(hiddenSize, hiddenSize),
-                 new LayerNorm(),
+                 new RMSNorm(),
                  new ELU(),
                  new ResidualConnection.Join(),
 

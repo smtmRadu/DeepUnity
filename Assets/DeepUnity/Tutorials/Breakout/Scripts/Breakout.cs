@@ -3,7 +3,7 @@ using UnityEngine;
 using DeepUnity.Sensors;
 using DeepUnity.ReinforcementLearning;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class Breakout : Agent
     {

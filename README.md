@@ -1,6 +1,6 @@
 # DeepUnity
 ###### In development - does not currently accept Pull Requests, though feel free to Fork and expand upon it
-![version](https://img.shields.io/badge/version-v0.9.8-blue)
+![version](https://img.shields.io/badge/version-v0.9.8.1-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO) and Soft Actor-Critic (SAC).
 
@@ -15,59 +15,37 @@ using DeepUnity.Models;
 
 public class Tutorial : MonoBehaviour
 {
-    [Header("Learning z = x^2 + y^2.")]
-    public Sequential network;
+    [SerializeField] private Sequential network;
     private Optimizer optim;
-    private LRScheduler scheduler;
-    
-    private Tensor train_inputs;
-    private Tensor train_targets;
-    
+    private Tensor x;
+    private Tensor y;
+
     public void Start()
     {
-        if (network == null)
-        {
-            network = new Sequential(
-                new Dense(2, 64),
-                new Tanh(),
-                new Dense(64, 64, device: Device.GPU),
-                new ReLU(),
-                new Dense(64, 1)).CreateAsset("TutorialModel");
-        }
+        network = new Sequential(
+            new Dense(512, 256),
+            new ReLU(),
+            new Dropout(0.1f),
+            new Dense(256, 64, device: Device.GPU),
+            new LayerNorm(),
+            new ReLU(),
+            new Dense(64, 32)).CreateAsset("TutorialModel");
+        
         optim = new Adam(network.Parameters());
-        scheduler = new LinearLR(optim, 1f, 1e-3f, 100);
-    
-        // Generate training dataset
-        int data_size = 1024;
-        Tensor x = Tensor.RandomNormal(data_size, 1);
-        Tensor y = Tensor.RandomNormal(data_size, 1);
-        train_inputs = Tensor.Concat(1, x, y);
-        train_targets = x * x + y * y;
+        x = Tensor.RandomNormal(64, 512);
+        y = Tensor.RandomNormal(64, 32);
     }
-    
+
     public void Update()
     {
-        // Training. Split the dataset into batches of 32.
-        float train_loss = 0f;
-        Tensor[] input_batches = train_inputs.Split(0, 32);
-        Tensor[] target_batches = train_targets.Split(0, 32);
-        for (int i = 0; i < input_batches.Length; i++)
-        {
-            Tensor prediction = network.Forward(input_batches[i]);
-            Loss loss = Loss.MSE(prediction, target_batches[i]);
-    
-            optim.ZeroGrad();
-            network.Backward(loss.Gradient);
-            optim.ClipGradNorm(0.5f);
-            optim.Step();
-    
-            train_loss += loss.Item;
-        }
-        train_loss /= input_batches.Length;
-        
-        print($"Epoch: {Time.frameCount} - Train Loss: {train_loss}");
-        
-        scheduler.Step();
+        Tensor yHat = network.Forward(x);
+        Loss loss = Loss.MSE(yHat, y);
+
+        optim.ZeroGrad();
+        network.Backward(loss.Gradient);
+        optim.Step();
+
+        print($"Epoch: {Time.frameCount} - Train Loss: {loss.Item}");
         network.Save();
     }
 }
@@ -104,52 +82,34 @@ using DeepUnity.ReinforcementLearning;
 public class MoveToGoal : Agent
 {
     public Transform apple;
-    public float speed = 10f;
-    public float norm_scale = 8f;
+
     public override void OnEpisodeBegin()
     {
-        float xrand = Random.Range(-norm_scale, norm_scale);
-        float zrand = Random.Range(-norm_scale, norm_scale);
+        float xrand = Random.Range(-8, 8);
+        float zrand = Random.Range(-8, 8);
         apple.localPosition = new Vector3(xrand, 2.25f, zrand);
         
-        xrand = Random.Range(-norm_scale, norm_scale);
-        zrand = Random.Range(-norm_scale, norm_scale);
+        xrand = Random.Range(-8, 8);
+        zrand = Random.Range(-8, 8);
         transform.localPosition = new Vector3(xrand, 2.25f, zrand);
     }
+
     public override void CollectObservations(StateVector sensorBuffer)
     {
-        sensorBuffer.AddObservation(transform.localPosition.x / norm_scale);
-        sensorBuffer.AddObservation(transform.localPosition.z / norm_scale);
-        sensorBuffer.AddObservation(apple.transform.localPosition.x / norm_scale);
-        sensorBuffer.AddObservation(apple.transform.localPosition.z / norm_scale);
+        sensorBuffer.AddObservation(transform.localPosition.x);
+        sensorBuffer.AddObservation(transform.localPosition.z);
+        sensorBuffer.AddObservation(apple.transform.localPosition.x);
+        sensorBuffer.AddObservation(apple.transform.localPosition.z);
     }
+
     public override void OnActionReceived(ActionBuffer actionBuffer)
     {
         float xmov = actionBuffer.ContinuousActions[0];
         float zmov = actionBuffer.ContinuousActions[1];
 
-        transform.position += new Vector3(xmov, 0, zmov) * Time.fixedDeltaTime * speed;
+        transform.position += new Vector3(xmov, 0, zmov) * Time.fixedDeltaTime * 10f;
         AddReward(-0.0025f); // Step penalty
-    }
-    public override void Heuristic(ActionBuffer actionsOut)
-    {
-        float xmov = 0;
-        float zmov = 0;
-
-        if (Input.GetKey(KeyCode.W))
-            zmov = 1;
-        else if (Input.GetKey(KeyCode.S))
-            zmov = -1;
-
-        if (Input.GetKey(KeyCode.D))
-            xmov = 1;
-        else if (Input.GetKey(KeyCode.A))
-            xmov = -1;
-
-        actionsOut.ContinuousActions[0] = xmov;
-        actionsOut.ContinuousActions[1] = zmov;
-        
-    }  
+    } 
 
     private void OnTriggerEnter(Collider other)
     {

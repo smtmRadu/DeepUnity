@@ -3,7 +3,7 @@ using DeepUnity.ReinforcementLearning;
 using DeepUnity;
 using DeepUnity.Sensors;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     // Usually, using a 2048 buffer size and x20 it must learn in 1.5 minutes
     public class BalanceBall : Agent

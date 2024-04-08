@@ -3,7 +3,7 @@ using UnityEngine;
 using DeepUnity;
 using System.Linq;
 
-namespace DeepUnityTutorials
+namespace DeepUnity.Tutorials
 {
     public class ZombieSurvivalManager : MonoBehaviour
     {
