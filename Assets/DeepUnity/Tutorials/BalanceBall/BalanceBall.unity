@@ -414,9 +414,9 @@ MonoBehaviour:
   discreteActions: 0
   archType: 0
   numLayers: 2
-  hidUnits: 32
-  model: {fileID: 11400000, guid: 9b08b1ff0ebab554287709b2fb2da567, type: 2}
-  behaviourType: 2
+  hidUnits: 64
+  model: {fileID: 11400000, guid: 19c2273f5216c414fa870473dcc4f4a1, type: 2}
+  behaviourType: 1
   onEpisodeEnd: 2
   useSensors: 0
   ball: {fileID: 1198115738}

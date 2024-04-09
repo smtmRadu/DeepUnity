@@ -89,14 +89,14 @@ namespace DeepUnity
     public enum InitType
     {
         [Tooltip("[Kaiming He] N(0, s) where s = sqrt(2 / fan_in). Works well with ReLU / LeakyReLU activation functions.")]
-        HE_Normal,
+        Kaiming_Uniform,
         [Tooltip("[Kaiming He] U(-k, k) where k = sqrt(6 / fan_in). Works well with ReLU / LeakyReLU  activation functions.")]
-        HE_Uniform, 
+        Kaiming_Normal, 
         
         [Tooltip("[Xavier Glorot] N(0, s) where s = sqrt(2 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation functions.")]
-        Glorot_Normal,
+        Xavier_Normal,
         [Tooltip("[Xavier Gloro] U(-k, k) where k = sqrt(6 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation functions.")]
-        Glorot_Uniform,
+        Xavier_Uniform,
 
         [Tooltip("[Yann LeCun] N(0, s) where s = sqrt(1 / fan_in). Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
         LeCun_Normal,

@@ -37,18 +37,17 @@ namespace DeepUnity.Tutorials
 
             if (network == null)
             {
-                const int cout = 16;
+                const int cout = 32;
                 network = new Sequential(
                          new Conv2D(1, cout, 3),
                          new PReLU(),
                          // new BatchNorm2D(cout),
-                         new MaxPool2D(2),
 
                          new ResidualConnection.Fork(),
                          new ZeroPad2D(1),
                          new Conv2D(cout, cout, 3),
                          new PReLU(),
-                         //new BatchNorm2D(cout),
+                         // new BatchNorm2D(cout),
                          new ResidualConnection.Join(),
                          new MaxPool2D(2),
 
@@ -56,25 +55,24 @@ namespace DeepUnity.Tutorials
                          new ZeroPad2D(1),
                          new Conv2D(cout, cout, 3),
                          new PReLU(),
-                         //new BatchNorm2D(cout),
+                         // new BatchNorm2D(cout),
                          new ResidualConnection.Join(),
-                         new MaxPool2D(2),
 
                          new ResidualConnection.Fork(),
                          new ZeroPad2D(1),
                          new Conv2D(cout, cout, 3),
                          new PReLU(),
-                         //new BatchNorm2D(cout),
+                         // new BatchNorm2D(cout),
                          new ResidualConnection.Join(),
                          new MaxPool2D(2),
 
                          new Flatten(),
                          new LazyDense(128),
-                         new RMSNorm(),
+                         new LayerNorm(),
                          new PReLU(),
                          new Dropout(0.1f),
                          new Dense(128, 128),
-                         new RMSNorm(),
+                         new LayerNorm(),
                          new PReLU(),
                          new Dense(128, 10),
 
@@ -130,7 +128,7 @@ namespace DeepUnity.Tutorials
 
             optim.ZeroGrad();
             network.Backward(loss.Gradient);
-            // optim.ClipGradNorm(0.5f);
+            optim.ClipGradNorm(0.5f);
             optim.Step();
 
             float acc = Metrics.Accuracy(prediction, target);

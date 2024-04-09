@@ -99,7 +99,6 @@ namespace DeepUnity.Modules
                 Tensor expanded_gamma = Tensor.Zeros(batch_size, num_features, height, width);
                 Tensor expanded_beta = Tensor.Zeros(batch_size, num_features, height, width);
 
-                // Maybe parallel will be removed out from here
                 Parallel.For(0, batch_size, b =>
                 {
                     for (int c = 0; c < num_features; c++)
@@ -165,39 +164,16 @@ namespace DeepUnity.Modules
             int width = input.Size(-1);
 
             // When training (only on mini-batch training), we cache the values for backprop also
-            var mean = input.Mean(0,true).Mean(2, true).Mean(3, true); // mini-batch means      [1, channels, 1, 1]
-            var variance_biased = input.Var(0, 0, keepDim: true).Var(2, 0, keepDim: true).Var(3, 0, keepDim: true); // mini-batch variances  [1, channels, 1, 1]
-
+            var batch_mean = input.Mean(0,true).Mean(2, true).Mean(3, true); // mini-batch means      [1, channels, 1, 1]
+            var batch_var_unbiased = input.Var(0).Mean(1).Mean(1); // [channels]
+            var batch_std_biased = input.Std(0, correction: 0, true).Mean(2, true).Mean(3, true); // [1, channels, 1, 1]
             Tensor expanded_mean = Tensor.Zeros(batch_size, num_features, height, width);
-            Tensor expanded_std = Tensor.Zeros(batch_size, num_features, height, width);
-            for (int b = 0; b < batch_size; b++)
-            {
-                for (int c = 0; c < num_features; c++)
-                {
-                    for (int h = 0; h < height; h++)
-                    {
-                        for (int w = 0; w < width; w++)
-                        {
-                            expanded_mean[b, c, h, w] = mean[0, c, 0, 0];
-                            expanded_std[b, c, h, w] = MathF.Sqrt(variance_biased[0, c, 0, 0] + Utils.EPSILON);
-                        }
-                    }
-                }
-            }
-            // normalize and cache
-            xCentered = input - expanded_mean;
-            std = expanded_std;
-            xHat = xCentered / expanded_std;
-
-            // compute running mean and var
-            var variance_unbiased = input.Var(0, 1).Var(2, 1).Var(3, 1);
-            runningMean = runningMean * momentum + mean.Reshape(num_features) * (1f - momentum);
-            runningVar = runningVar * momentum + variance_unbiased * (1f - momentum);
-
-            // scale and shift then expand 'em
+            Tensor expanded_std_biased = Tensor.Zeros(batch_size, num_features, height, width);
             Tensor expanded_gamma = Tensor.Zeros(batch_size, num_features, height, width);
             Tensor expanded_beta = Tensor.Zeros(batch_size, num_features, height, width);
-            for (int b = 0; b < batch_size; b++)
+
+            // for (64, 1, 28, 28) i get the same performance when using parallel vs 1 thread. Su keep it parallel :D
+            Parallel.For(0, batch_size, b =>
             {
                 for (int c = 0; c < num_features; c++)
                 {
@@ -205,12 +181,23 @@ namespace DeepUnity.Modules
                     {
                         for (int w = 0; w < width; w++)
                         {
+                            expanded_mean[b, c, h, w] = batch_mean[0, c, 0, 0];
+                            expanded_std_biased[b, c, h, w] = batch_std_biased[0, c, 0, 0];
                             expanded_gamma[b, c, h, w] = gamma[c];
                             expanded_beta[b, c, h, w] = beta[c];
                         }
                     }
                 }
-            }
+            });
+
+            // normalize and cache
+            xCentered = input - expanded_mean;
+            std = expanded_std_biased;
+            xHat = xCentered / expanded_std_biased;
+
+            // compute running mean and var          
+            runningMean = runningMean * momentum + batch_mean.Reshape(num_features) * (1f - momentum);
+            runningVar = runningVar * momentum + batch_var_unbiased * (1f - momentum);
 
             Tensor y = expanded_gamma * xHat + expanded_beta;
             return y;
@@ -218,9 +205,25 @@ namespace DeepUnity.Modules
         public Tensor Backward(Tensor dLdY)
         {
             int m = dLdY.Size(0);
-
+            int chan = dLdY.Size(1);
+            int heig = dLdY.Size(2);
+            int widt = dLdY.Size(3);
             // differentiation on https://arxiv.org/pdf/1502.03167.pdf page 4
-            Tensor expanded_gamma = Tensor.Zeros(m, num_features, dLdY.Size(-2), dLdY.Size(-1));
+            Tensor expanded_gamma = Tensor.Zeros(m, num_features, heig, widt);
+
+            Parallel.For(0, m, b =>
+            {
+                for (int c = 0; c < chan; c++)
+                {
+                    for (int h = 0; h < heig; h++)
+                    {
+                        for (int w = 0; w < widt; w++)
+                        {
+                            expanded_gamma[b,c,h,w] = gamma[c]; 
+                        }
+                    }
+                }
+            });
 
             var dLdxHat = dLdY * expanded_gamma; // [batch, C, H, W]
 

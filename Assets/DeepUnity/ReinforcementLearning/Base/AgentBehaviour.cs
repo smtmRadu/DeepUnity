@@ -104,7 +104,7 @@ namespace DeepUnity.ReinforcementLearning
             in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS, in ArchitectureType ARCHITECTURE)
         {
 
-            const InitType INIT_W = InitType.HE_Normal;
+            const InitType INIT_W = InitType.Kaiming_Uniform;
             const InitType INIT_B = InitType.Zeros;
             static IActivation HiddenActivation() => new Tanh();
 

@@ -423,7 +423,7 @@ namespace DeepUnity
             return t;
         }
         /// <summary>
-        /// Returns a tensor of random numbers drawn from separate normal distributions whose mean = 0 and standard deviation = 1.
+        /// Returns a tensor of random numbers drawn from separate normal distributions whose mean = 0 and standard-deviation = 1.
         /// </summary>
         /// <param name="mean_sd"></param>
         /// <param name="shape"></param>
@@ -2442,10 +2442,6 @@ namespace DeepUnity
                             }
                             float vr = (sumSqr - (sum * sum) / width) / (width - correction);
                             result[l, k, j, 0] = vr;
-                            // for (int i = 0; i < newShape[axis]; i++)
-                            // {
-                            //     result[l, k, j, i] = vr;
-                            // }
                         }
                     }
                 }
@@ -2468,10 +2464,6 @@ namespace DeepUnity
                             }
                             float vr = (sumSqr - (sum * sum) / height) / (height - correction);
                             result[l, k, 0, i] = vr;
-                            // for (int j = 0; j < newShape[axis]; j++)
-                            // {
-                            //     result[l, k, j, i] = vr;
-                            // }
                         }
                     }
                 }
@@ -2495,10 +2487,6 @@ namespace DeepUnity
 
                             float vr = (sumSqr - (sum * sum) / channels) / (channels - correction);
                             result[l, 0, j, i] = vr;
-                            // for (int k = 0; k < newShape[axis]; k++)
-                            // {
-                            //     result[l, k, j, i] = vr;
-                            // }
                         }
                     }
                 }
@@ -2521,10 +2509,6 @@ namespace DeepUnity
                             }
                             float vr = (sumSqr - (sum * sum) / batch) / (batch - correction);
                             result[0, k, j, i] = vr;
-                            // for (int l = 0; l < newShape[axis]; l++)
-                            // {
-                            //     result[l, k, j, i] = vr;
-                            // }
                         }
                     }
                 }

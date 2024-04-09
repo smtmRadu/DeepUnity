@@ -32,17 +32,17 @@ namespace DeepUnity.Modules
         {
             switch (initializer)
             {
-                case InitType.HE_Normal:
+                case InitType.Kaiming_Uniform:
                     float sigmaHE = MathF.Sqrt(2f / fan_in);
                     return Tensor.RandomNormal((0, sigmaHE), shape);
-                case InitType.HE_Uniform:
+                case InitType.Kaiming_Normal:
                     float bound = MathF.Sqrt(6f / fan_in);
                     return Tensor.RandomRange((-bound, bound), shape);
 
-                case InitType.Glorot_Normal:
+                case InitType.Xavier_Normal:
                     float sigmaXA = MathF.Sqrt(2f / (fan_in + fan_out));
                     return Tensor.RandomNormal((0, sigmaXA), shape);
-                case InitType.Glorot_Uniform:
+                case InitType.Xavier_Uniform:
                     float limit = MathF.Sqrt(6f / (fan_in + fan_out));
                     return Tensor.RandomRange((-limit, limit), shape);
 
@@ -106,19 +106,19 @@ namespace DeepUnity.Modules
         {
             switch (initializer)
             {
-                case InitType.HE_Normal:
+                case InitType.Kaiming_Uniform:
                     float sigmaHE = MathF.Sqrt(2f / fan_in);
                     return TensorGPU.RandomNormal((0, sigmaHE), shape);
 
-                case InitType.HE_Uniform:
+                case InitType.Kaiming_Normal:
                     float bound = MathF.Sqrt(6f / fan_in);
                     return TensorGPU.RandomRange((-bound, bound), shape);
 
-                case InitType.Glorot_Normal:
+                case InitType.Xavier_Normal:
                     float sigmaXA = MathF.Sqrt(2f / (fan_in + fan_out));
                     return TensorGPU.RandomNormal((0, sigmaXA), shape);
 
-                case InitType.Glorot_Uniform:
+                case InitType.Xavier_Uniform:
                     float limit = MathF.Sqrt(6f / (fan_in + fan_out));
                     return TensorGPU.RandomRange((-limit, limit), shape);
 

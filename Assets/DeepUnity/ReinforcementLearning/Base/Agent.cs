@@ -51,7 +51,7 @@ namespace DeepUnity.ReinforcementLearning
 
         public MemoryBuffer Memory { get; private set; }
         public DecisionRequester DecisionRequester { get; private set; }
-        private TimestepTuple Timestep { get; set; }
+        public TimestepTuple Timestep { get; private set; } // well this must be private completely but I had to make it public to get in Training Statistics the correct Cumulated Reward
         private List<ISensor> Sensors { get; set; }
         private PoseReseter PositionReseter { get; set; }
         private StateVector StatesBuffer { get; set; }
@@ -64,7 +64,7 @@ namespace DeepUnity.ReinforcementLearning
         /// <summary>
         /// The cumulated reward in the current episode.
         /// </summary>
-        public float EpsiodeCumulativeReward { get; private set; } = 0f;
+        public float EpisodeCumulativeReward { get; private set; } = 0f;
         private int EpisodeFixedFramesCount { get; set; } = -1;
 
         public virtual void Awake()
@@ -181,10 +181,6 @@ namespace DeepUnity.ReinforcementLearning
             }
         }
 
-
-
-
-
         // Init
         public void BakeModel()
         {
@@ -240,7 +236,14 @@ namespace DeepUnity.ReinforcementLearning
             if (!DecisionRequester.IsFrameBeforeDecisionFrame(EpisodeFixedFramesCount))
                 return;
 
-            EpsiodeCumulativeReward += Timestep.reward[0];
+            // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state (maxStep == 0 means unlimited steps per episode)
+            if (EpisodeStepCount == DecisionRequester.maxStep && DecisionRequester.maxStep != 0)
+                EndEpisode();
+
+            if (Timestep?.done[0] == 1)
+                OnEpisodeEnd?.Invoke(this, EventArgs.Empty);
+
+            EpisodeCumulativeReward += Timestep.reward[0];
 
             // Observe s'
             lastState = GetState();
@@ -249,24 +252,20 @@ namespace DeepUnity.ReinforcementLearning
             {            
                 Timestep.nextState = lastState.Clone() as Tensor;
 
-                // Scale and clip reward - there was a problem with the rewards normalizer (idk why), but anyways they should not be normalized online because we can use off-policy alogorithms. Just use a constant (0,1) bro to scale it
+                // Scale and clip reward - there was a problem with the rewards normalizer (idk why), but anyways they should not be normalized online because we can use off-policy alogorithms like SAC. Just use a constant bro to scale it
                 // Timestep.reward[0] = model.rewardsNormalizer.ScaleReward(Timestep.reward[0]);
-                Memory.Add(Timestep);
-
-                // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state (maxStep == 0 means unlimited steps per episode)
-                if (EpisodeStepCount == DecisionRequester.maxStep && DecisionRequester.maxStep != 0)
-                    EndEpisode();
+                
+                Memory.Add(Timestep);              
             }
 
             // These checkups applies also for Manual and Inference..
             if (Timestep?.done[0] == 1)
             {
-                OnEpisodeEnd?.Invoke(this, EventArgs.Empty);
                 StatesBuffer.ResetToZero(); // For Stacked inputs reset to 0 all sequence
                 lastState = null;// On Next episode (on timestep 0) there will be no last state
 
                 EpisodeStepCount = 0;
-                EpsiodeCumulativeReward = 0f;
+                EpisodeCumulativeReward = 0f;
                 EpisodeFixedFramesCount = 0; // Used to make the agent take a decision in the first step of the new epiode
                 PositionReseter?.Reset();
                 OnEpisodeBegin();
@@ -345,7 +344,8 @@ namespace DeepUnity.ReinforcementLearning
 
         // User call
         /// <summary>
-        /// An event that is invoked when the agent enters in a terminal state.
+        /// An event that is invoked when the agent enters in a terminal state.  <br></br>
+        /// To subscribe to event, write in Start: <b>OnEpisodeEnd += (s, e) => { <em>// do whatever you want</em>};</b>
         /// </summary>
         public event EventHandler OnEpisodeEnd;
         /// <summary>
@@ -398,7 +398,7 @@ namespace DeepUnity.ReinforcementLearning
         public virtual void Heuristic(ActionBuffer actionOut) { }
         /// <summary>
         /// Called only inside <b>OnActionReceived()</b>, and <b>OnTriggerXXX()</b> or <b>OnCollisionXXX()</b>. <br></br>
-        /// Marks current state as terminal.
+        /// Marks the current state as terminal.
         /// </summary>
         public void EndEpisode()
         {
@@ -448,7 +448,7 @@ namespace DeepUnity.ReinforcementLearning
                 EditorGUILayout.HelpBox(stepcount, MessageType.None);
 
                 // Draw Reward
-                string cumReward = $"Cumulative Reward [{script.EpsiodeCumulativeReward}]";
+                string cumReward = $"Cumulative Reward [{script.EpisodeCumulativeReward}]";
                 EditorGUILayout.HelpBox(cumReward, MessageType.None);
 
                 // Draw buffer           

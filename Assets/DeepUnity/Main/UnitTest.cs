@@ -4,7 +4,8 @@ using DeepUnity;
 using System.Collections.Generic;
 using UnityEngine.UI;
 using DeepUnity.Modules;
-
+using DeepUnity.Activations;
+using DeepUnity.Optimizers;
 
 namespace DeepUnity.Tutorials
 {
@@ -13,155 +14,49 @@ namespace DeepUnity.Tutorials
         public Device device = Device.CPU;
         public Sequential net;
         public GameObject canvas;
+        public Optimizer optim;
 
         private List<RawImage> displays;
+        public PerformanceGraph performanceGraph = new PerformanceGraph();  
 
+        Tensor input = Tensor.Random01(128, 1, 28, 28);
+        Tensor target = Tensor.RandomNormal(128, 2);
         private void Start()
         {
-            Tensor input = Tensor.Random01(64, 5, 28, 28);
-            BatchNorm2D bn2d = new BatchNorm2D(5);
+            net = new Sequential(
+                new Conv2D(1, 3, 3),
+                new BatchNorm2D(3),
+                new MaxPool2D(2),
+                new Conv2D(3, 6, 3),
+                new BatchNorm2D(6),
+                new MaxPool2D(2),
+                new Flatten(),
+                new LazyDense(64),
+                new ReLU(),
+                new Dense(64, 2));
 
-            var output = bn2d.Forward(input);
-            bn2d.Backward(output);
-            // net = new Sequential(
-            //     new ResidualConnection.Fork(),
-            //     new Attention(100, 100),
-            //     new Dense(100, 100),
-            //     new ResidualConnection.Join(),
-            //     
-            //     new ResidualConnection.Fork(),
-            //     new RNNCell(100, 100),
-            //     new Dense(100, 100),
-            //     new ResidualConnection.Join(),
-            //     
-            //     new ResidualConnection.Fork(),
-            //     new RNNCell(100, 100),
-            //     new Dense(100, 100),
-            //     new ResidualConnection.Join(),
-            //     
-            //     new ResidualConnection.Fork(),
-            //     new RNNCell(100, 100),
-            //     new Dense(100, 100),
-            //     new ResidualConnection.Join(),
-            //     
-            //     new ResidualConnection.Fork(),
-            //     new RNNCell(100, 100),
-            //     new Dense(100, 100),
-            //     new ResidualConnection.Join(),
-            //     
-            //     new RNNCell(100, 100, HiddenStates.ReturnLast),
-            //     new Dense(100, 128),
-            //     new GELU(),
-            //     new Dense(128, 100),
-            //     new Softmax()
-            //     );
-            // 
-            // print(net.Forward(Tensor.Random01(64, 100)));
-            // print(net.Backward(Tensor.Random01(100)));
+            net.Predict(Tensor.Random01(1, 28, 28));
+            optim = new Adam(net.Parameters());
+        }
 
 
-            // Tensor input = Tensor.Random01(8, 100);
-            // 
-            // Attention att = new Attention(100, 100);
-            // print(att.Forward(input));
-            // print(att.Backward(Tensor.Random01(8, 100)));
-            // 
-            // print(att.Forward(input.Unsqueeze(0)));
-            // print(att.Backward(Tensor.Random01(1, 8, 100)));
-            // 
-            // print(att.Forward((input.Unsqueeze(0).Expand(0, 5))));
-            // print(att.Backward(Tensor.Random01(5, 8, 100)));
-
-            // Tensor input = Tensor.Random01(64, 3, 256, 256);
-            // 
-            // Conv2D conv = new Conv2D(3, 32, 3, device: Device.GPU);
-            // 
-            // BenchmarkClock.Start();
-            // conv.Predict(input);
-            // BenchmarkClock.Stop();
-
-            // Optimizer optimizer = new SGD(net.Parameters());
-            // 
-            // BenchmarkClock.Start();
-            // optimizer.ZeroGrad();
-            // BenchmarkClock.Stop();
-
-
-            // int ic = 2, oc = 3, ih = 6, iw = 6;
-            // Conv2D conv = new Conv2D(ic, oc, 3, InitType.Ones, InitType.Ones, device: Device.CPU);
-            // 
-            // Tensor input = Tensor.Arange(0, ic * ih * iw).Reshape(ic, ih, iw);
-            // // input = Tensor.Random01(ic, ih, iw);
-            // 
-            // print(input);
-            // var output = conv.Forward(input);
-            // print(output);
-            // var inputGrad = conv.Backward(output);
-            // print(inputGrad);
-            // print("kern_grad - " + conv.kernelsGrad);
-            // print("bias_grad - " + conv.biasesGrad);
-            // 
-            // new Adam(conv.Parameters()).ZeroGrad();
-            // 
-            // 
-            // print("repeat");
-            // conv.Device = Device.GPU;
-            // 
-            // print(input);
-            // output = conv.Forward(input);
-            // print(output);
-            // inputGrad = conv.Backward(output);
-            // print(inputGrad);
-            // print(conv.kernelsGrad);
-            // print(conv.biasesGrad);
-
-
-            //  displays = new();
-            //  for (int i = 0; i < canvas.transform.childCount; i++)
-            //  {
-            //      var child = canvas.transform.GetChild(i);
-            //      var img = child.GetComponent<RawImage>();
-            //      displays.Add(img);
-            //  }
-            //  List<(Tensor, Tensor)> tests;
-            //  Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out _, out tests, DatasetSettings.LoadTestOnly);
-            // 
-            //  var layers = net.modules;
-            // 
-            // 
-            //  // (C, H, W)
-            // 
-            //  Tensor input = Utils.Random.Sample(tests).Item1;
-            //  displays[0].texture = new Texture2D(28, 28);
-            //  Texture2D tex = displays[0].texture as Texture2D;
-            //  
-            //  tex.SetPixels(Utils.TensorToColorArray(input));
-            //  tex.Apply();
-            // 
-            // 
-            // 
-            //  Tensor convolved = layers[0].Predict(input);
-            //  convolved = layers[1].Predict(convolved);
-            //  // convolved = layers[2].Predict(convolved);
-            //  // convolved = layers[3].Predict(convolved);
-            // 
-            //  print(convolved);
-            // 
-            //  Tensor[] channels = Tensor.Split(convolved, 0, 1);
-            // 
-            // 
-            // 
-            //  for (int i = 1; i < 18; i++)
-            //  {
-            // 
-            //      displays[i].texture = new Texture2D(13, 13);
-            //      tex = displays[i].texture as Texture2D;
-            //      tex.SetPixels(Utils.TensorToColorArray(channels[i]));
-            //      tex.Apply();
-            // 
-            //  }
-
-
+        private void Update()
+        {
+            Tensor[] batches_i = input.Split(0, 8);
+            Tensor[] batches_t = target.Split(0, 8);
+            float mean_loss = 0f;
+            for (int i = 0; i < batches_i.Length; i++)
+            {
+                var output = net.Forward(batches_i[i]);
+                Loss mse = Loss.MSE(output, batches_t[i]);
+                optim.ZeroGrad();
+                net.Backward(mse.Gradient);
+                optim.Step();
+                mean_loss += mse.Item;
+               
+            }
+            performanceGraph.Append(mean_loss / batches_i.Length);
+            print($"Loss {mean_loss / batches_i.Length}");
         }
 
     }

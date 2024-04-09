@@ -119,7 +119,7 @@ namespace DeepUnity.ReinforcementLearning
         [HideInInspector] public Dictionary<GameObject, BodyPart> bodyPartsDict = new Dictionary<GameObject, BodyPart>();
         [HideInInspector] public List<BodyPart> bodyPartsList = new List<BodyPart>();
 
-        private void AddBodyPart(Transform bodyPart)
+        private BodyPart AddBodyPart(Transform bodyPart)
         {
             BodyPart bp = new BodyPart
             {
@@ -145,8 +145,10 @@ namespace DeepUnity.ReinforcementLearning
             bp.Controller = this;
             bodyPartsDict.Add(bodyPart.gameObject, bp);
             bodyPartsList.Add(bp);
+
+            return bp;
         }
-        public void AddBodyPart(GameObject bodyPart) => AddBodyPart(bodyPart.transform);
+        public BodyPart AddBodyPart(GameObject bodyPart) => AddBodyPart(bodyPart.transform);
     }
 
 

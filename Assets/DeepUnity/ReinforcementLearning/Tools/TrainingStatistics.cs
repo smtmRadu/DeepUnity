@@ -10,7 +10,7 @@ namespace DeepUnity.ReinforcementLearning
     /// <summary>
     /// Note: TrainingStatistics Track ram usage increases over time. Planning long training sessions may require more RAM memory.
     /// </summary>
-    [DisallowMultipleComponent, AddComponentMenu("DeepUnity/Training Statistics")]
+    [DisallowMultipleComponent, AddComponentMenu("DeepUnity/Training Statistics"), ExecuteInEditMode] // last is for to be called before agent script
     public class TrainingStatistics : MonoBehaviour
     {
         private static bool MainSaved = false;
@@ -111,7 +111,7 @@ namespace DeepUnity.ReinforcementLearning
             Agent ag = (Agent)sender;
             episodeCount++;
             episodeLength.Append(ag.EpisodeStepCount);
-            cumulativeReward.Append(ag.EpsiodeCumulativeReward);
+            cumulativeReward.Append(ag.EpisodeCumulativeReward + ag.Timestep.reward[0]); // Why this? because OnEpisodeEnd is called before the last reward to be added.
         }
         private void UpdateTrainerStuff()
         {

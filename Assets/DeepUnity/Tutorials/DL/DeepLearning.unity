@@ -1344,13 +1344,13 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1539047894}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 45ec7b8831bf73c4bbed236ccf4948d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  network: {fileID: 0}
-  name: MLP
+  network: {fileID: 11400000, guid: a706b346ce016664b94713b8c4fe0f21, type: 2}
+  name: MNIST
   lr: 0.001
   epochs: 100
   weightDecay: 0
@@ -1384,12 +1384,12 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1539047894}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5eb36009ab4e4094db676f56eb66ed1c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  net: {fileID: 11400000, guid: de2d973a8b07f2443b2ac5e71d95dcc7, type: 2}
+  net: {fileID: 11400000, guid: b5d48a9e416e0544a9d46d5a067600c2, type: 2}
   performanceGraph:
     graph:
       serializedVersion: 2
@@ -1795,7 +1795,7 @@ MonoBehaviour:
   image: {fileID: 998186862}
   digitPredictionText: {fileID: 2101666738}
   softmaxOutputText: {fileID: 1459484847}
-  network: {fileID: 11400000, guid: 225ed722af4ebd04196930204a6351ba, type: 2}
+  network: {fileID: 11400000, guid: b5d48a9e416e0544a9d46d5a067600c2, type: 2}
   brushRadius: 2
   brushStrength: 0.02
 --- !u!1 &1820971845

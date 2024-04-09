@@ -437,7 +437,7 @@ namespace DeepUnity.ReinforcementLearning
         /// </summary>
         private static Tensor NormalizeAdvantages(Tensor advantages)
         {
-            float std = advantages.Std(0, 1)[0]; // note that we use biased estimator
+            float std = advantages.Std(0, 0)[0]; // note that we use biased estimator
             float mean = advantages.Mean(0)[0];
             return (advantages - mean) / (std + Utils.EPSILON);
 

@@ -4,7 +4,8 @@ using DeepUnity.Modules;
 
 namespace DeepUnity.Optimizers
 {
-    // Note that parameters and gradients value should not be reassigned elsewhere, only the values of the tensors inside
+    // Note that parameters and gradients value should not be reassigned elsewhere, only the values of the tensors inside.
+    // Note that LazyLayers parameters must be infered before initializing the optimizer.
     public abstract class Optimizer
     {
         protected Parameter[] parameters;
@@ -21,7 +22,10 @@ namespace DeepUnity.Optimizers
         /// numerical stability value
         /// </summary>
         protected float epsilon;
-        protected int t; // step counter
+        /// <summary>
+        /// step counter
+        /// </summary>
+        protected int t;
 
         protected Optimizer(Parameter[] parameters, float lr, float eps, float weightDecay)
         {
@@ -81,11 +85,11 @@ namespace DeepUnity.Optimizers
             if (norm[0] <= max_norm)
                 return;
 
-            float scale = max_norm / norm[0];
+            float c = max_norm / norm[0];
 
             foreach (var param in parameters)
             {
-                Tensor.CopyTo(param.g * scale, param.g);
+                Tensor.CopyTo(param.g * c, param.g);
             }
         }
 

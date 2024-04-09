@@ -537,6 +537,16 @@ MonoBehaviour:
   device: 1
   net: {fileID: 11400000, guid: e71db13f1a82b834bb48aec7f3c9d5a3, type: 2}
   canvas: {fileID: 1012927895}
+  performanceGraph:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
 --- !u!4 &173192359
 Transform:
   m_ObjectHideFlags: 0
@@ -1501,7 +1511,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &621327370
 MonoBehaviour:
   m_ObjectHideFlags: 0

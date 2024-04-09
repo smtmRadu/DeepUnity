@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &4811717641368747420
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2701061530144356503}
+  - component: {fileID: 2738907649904613238}
+  m_Layer: 0
+  m_Name: GROUND_GENERATOR
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2701061530144356503
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811717641368747420}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -8.062164, y: 0.26158288, z: -20.723858}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 3
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2738907649904613238
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811717641368747420}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 625097fde07ce524092faa9b6be3c88d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  tiles:
+  - {fileID: 8840067393856636202, guid: bef221490fd8a83478277c0685cafe6b, type: 3}
+  - {fileID: 2168846132257811814, guid: bc3b008367544764cab5f91de22e63ab, type: 3}
+  - {fileID: 4130092452883112145, guid: 43cb406cf01dd3443a5430f435a227fe, type: 3}
+  - {fileID: 2871306977327724188, guid: 3991e3e4d9034994680f7914ed17fca0, type: 3}
+  - {fileID: 9178724627933224585, guid: 154de7f22f0570545b4042595a505db9, type: 3}
+  - {fileID: 7345553950141028102, guid: c484317ff48f8ee48a0bc96f6cfdb0e8, type: 3}
+  - {fileID: 8790524581852847659, guid: 8fb087778776c4e49936e8d65d12476c, type: 3}
+  - {fileID: 8143823074636751007, guid: f4de6f983ebf58e45883f193c0b8a90f, type: 3}
+  height: 10
+  width: 10
+  scale: 3
