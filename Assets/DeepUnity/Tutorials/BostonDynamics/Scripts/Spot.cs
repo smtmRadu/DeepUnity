@@ -25,14 +25,14 @@ namespace DeepUnity.Tutorials
         public GameObject rightFoot;
 
         BodyController bodyController;
-        private GameObject targetInstance;
-
+        private GameObject target;
+        
         public override void OnEpisodeBegin()
         {
-            if(targetInstance != null)
-                Destroy(targetInstance);
+            if(target != null)
+                Destroy(target);
 
-            targetInstance = Instantiate(targetPrefab, transform.position + Vector3.right * targetSpawnDistance, Quaternion.identity);
+            target = Instantiate(targetPrefab, transform.position + Vector3.right * targetSpawnDistance, Quaternion.identity);
             
         }
 
@@ -73,11 +73,6 @@ namespace DeepUnity.Tutorials
             bodyController.bodyPartsDict[rightShin].ColliderContact.OnEnter = touch_gr;
             bodyController.bodyPartsDict[rightLeg].ColliderContact.OnEnter = touch_gr;
             bodyController.bodyPartsDict[rightForearm].ColliderContact.OnEnter = touch_gr;
-
-            OnEpisodeEnd += (s, e) => {
-                float distanceFromTarg = Vector3.Distance(transform.position, targetInstance.transform.position) / targetSpawnDistance;
-                AddReward(-Mathf.Clamp01(distanceFromTarg));
-                };
         }
 
         public override void CollectObservations(StateVector stateVector)
@@ -139,8 +134,7 @@ namespace DeepUnity.Tutorials
                     bodyController.bodyPartsList[i].SetJointStrength(actions_vector[a++]);
                 }
             }
-
-            AddReward(0.001f);
+            AddReward(0.01f / Vector3.Distance(transform.position, target.transform.position));
             // AddReward(- Vector3.Distance(transform.position, targetInstance.transform.position) / targetSpawnDistance * 0.001f);
         }
     }

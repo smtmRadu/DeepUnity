@@ -33,7 +33,7 @@ namespace DeepUnity.ReinforcementLearning
 
 
         public readonly DateTime timeWhenTheTrainingStarted = DateTime.Now;
-        [Min(1)] public int autosave = 15; protected float autosaveSecondsElapsed = 0f;
+        [Min(1)] public int autosave = 15; protected float autosaveSecondsElapsed = 0f; // editor only autosave
         [ViewOnly] public bool ended = false;
 
         [SerializeField, ViewOnly] private float avgDeltaTime = 0.02f;
@@ -135,9 +135,6 @@ namespace DeepUnity.ReinforcementLearning
                     case TrainerType.SAC:
                         Instance = go.AddComponent<SACTrainer>();
                         break;
-                    // case TrainerType.GAIL:
-                    //     Instance = go.AddComponent<GAILTrainer>();
-                    //   break;
                     default: throw new ArgumentException("Unhandled trainer type");
                 }
 
@@ -164,6 +161,8 @@ namespace DeepUnity.ReinforcementLearning
 #if UNITY_EDITOR
         private static void Autosave(UnityEditor.PlayModeStateChange state) => Instance.model.Save();
 #endif
+        private void OnApplicationQuit() => Instance.model.Save();
+
         protected static void EndTrainingSession(string reason)
         {
             if (!Instance.ended)

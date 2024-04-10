@@ -1,6 +1,6 @@
 # DeepUnity
 ###### In development - does not currently accept Pull Requests, though feel free to Fork and expand upon it
-![version](https://img.shields.io/badge/version-v0.9.8.2-blue)
+![version](https://img.shields.io/badge/version-v0.9.8.3-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO) and Soft Actor-Critic (SAC).
 
@@ -132,7 +132,7 @@ public class MoveToGoal : Agent
 
 
 
-TIPS: 
+### Tips 
 - **Parallel training** is one option to use your device at maximum efficiency. After inserting your agent inside an Environment GameObject, you can duplicate that environment several times along the scene before starting the training session; this method is necessary for multi-agent co-op or adversarial training. Note that DeepUnity dynamically adapts the timescale of the simulation to get the maximum efficiency out of your machine.
 
 - In order to properly get use of _AddReward()_ and _EndEpisode()_ consult the diagram below. These methods work well being called inside _OnTriggerXXX()_ or _OnCollisionXXX()_, as well as inside _OnActionReceived()_ rightafter actions are performed. 
@@ -142,6 +142,13 @@ TIPS:
 - **Input Normalization** plays a huge role in policy convergence. To outcome this problem, observations can be auto-normalized by checking the corresponding box inside behaviour asset, but instead, is highly recommended to manually normalize all input values before adding them to the __SensorBuffer__. Scalar values can be normalized within [0, 1] or [-1, 1] ranges by using the formula **normalized_value = (value - min) / (max - min)**. Note that inputs are clipped for network scability (default [-5, 5]).
 
 - The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. If neccesary, in order to override them, call the their **base** each time, respecting the logic of the diagram below.
+
+### Training on built application for faster inference (x10)
+- Training inside the Editor is a bit more cumbersome comparing to the built version. Building the application and open it up to start up the training enables faster inference, and the framework was adapted for this.
+
+- Whenever you want to stop the training, close the .exe file. The trained behavior is automatically saved and serialized in .json format on your desktop. Go back in Unity and check your behavior asset, and press on the newly button to overwrite the editor behavior with the trained weights from .json.
+
+- The previous built app, along with the trained weights in .json format are now disposable (remove them and replace the build with a new one).
 
 ###### _Base Agent class - order of execution for event functions_
 ![agentclass](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/agentclass.png?raw=true)

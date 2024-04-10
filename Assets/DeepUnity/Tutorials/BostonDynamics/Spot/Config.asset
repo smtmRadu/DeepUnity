@@ -17,13 +17,13 @@ MonoBehaviour:
   learningRate: 0.0003
   gamma: 0.99
   LRSchedule: 0
-  batchSize: 256
-  bufferSize: 4096
-  horizon: 4096
-  numEpoch: 10
+  batchSize: 512
+  bufferSize: 10240
+  horizon: 64
+  numEpoch: 8
   beta: 0.005
   epsilon: 0.2
-  lambda: 0.96
+  lambda: 0.95
   gradClipNorm: 0.5
   KLDivergence: 0
   targetKL: 0.015

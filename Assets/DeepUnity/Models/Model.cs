@@ -52,7 +52,7 @@ namespace DeepUnity.Models
         /// </summary>
         /// <returns></returns>
         public abstract object Clone();
-       
+
 
 
 
@@ -61,6 +61,7 @@ namespace DeepUnity.Models
         /// Notes: <br></br>
         /// <![CDATA[-]]> Cannot save a network that was not created as an asset. <br></br>
         /// <![CDATA[-]]> Consider saving is a costly operation in terms of performance, so save the network manually sparsely throughout the training process.<br></br>
+        /// <![CDATA[-]]> Models cannot be saved while not in Editor.
         /// <![CDATA[-]]> Version increments on each save.
         /// </summary>
         public void Save()

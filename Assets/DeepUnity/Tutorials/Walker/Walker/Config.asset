@@ -23,7 +23,7 @@ MonoBehaviour:
   numEpoch: 8
   beta: 0.005
   epsilon: 0.2
-  lambda: 0.95
+  lambda: 0.94
   gradClipNorm: 0.5
   KLDivergence: 0
   targetKL: 0.015
@@ -36,5 +36,5 @@ MonoBehaviour:
   alpha: 0.2
   tau: 0.005
   debug: 0
-  timescaleAdjustment: 1
+  timescaleAdjustment: 0
   timescale: 1

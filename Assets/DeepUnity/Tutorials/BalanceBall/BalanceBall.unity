@@ -415,7 +415,7 @@ MonoBehaviour:
   archType: 0
   numLayers: 2
   hidUnits: 64
-  model: {fileID: 11400000, guid: 19c2273f5216c414fa870473dcc4f4a1, type: 2}
+  model: {fileID: 11400000, guid: 8750bef7a605e2d44af848083cbb1298, type: 2}
   behaviourType: 1
   onEpisodeEnd: 2
   useSensors: 0

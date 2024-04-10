@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ffdd4f9587b2d8846a37ba5240ae14b2, type: 3}
   m_Name: Q1
   m_EditorClassIdentifier: 
-  version: 50
+  version: 62
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -11275,6 +11275,21 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    batchnorm2d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     lazybatchnorm1d:
       num_features: 0
       momentum: 0
@@ -11291,15 +11306,6 @@ MonoBehaviour:
         data: []
         shape: 
     layernorm:
-      step: 0
-      runningMean:
-        data:
-        - 0
-        shape: 01000000
-      runningVar:
-        data:
-        - 1
-        shape: 01000000
       gamma:
         data:
         - 1
@@ -11309,16 +11315,10 @@ MonoBehaviour:
         - 0
         shape: 01000000
     rmsnorm:
-      p: -1
       gamma:
         data:
         - 1
         shape: 01000000
-      runningRms:
-        data:
-        - 1
-        shape: 01000000
-      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -11328,12 +11328,12 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 1752913034
+      residualConnectionHash: 1230368050
       linearProjection:
         data: []
         shape: 
     residualconnectionjoin:
-      residualConnectionHash: 1752913034
+      residualConnectionHash: 1230368050
     conv2d:
       kernels:
         data: []
@@ -11439,6 +11439,21 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    batchnorm2d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     lazybatchnorm1d:
       num_features: 0
       momentum: 0
@@ -11455,15 +11470,6 @@ MonoBehaviour:
         data: []
         shape: 
     layernorm:
-      step: 0
-      runningMean:
-        data:
-        - 0
-        shape: 01000000
-      runningVar:
-        data:
-        - 1
-        shape: 01000000
       gamma:
         data:
         - 1
@@ -11473,16 +11479,10 @@ MonoBehaviour:
         - 0
         shape: 01000000
     rmsnorm:
-      p: -1
       gamma:
         data:
         - 1
         shape: 01000000
-      runningRms:
-        data:
-        - 1
-        shape: 01000000
-      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -11492,12 +11492,12 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -1105951910
+      residualConnectionHash: -1093293452
       linearProjection:
         data: []
         shape: 
     residualconnectionjoin:
-      residualConnectionHash: -1105951910
+      residualConnectionHash: -1093293452
     conv2d:
       kernels:
         data: []
@@ -15763,6 +15763,21 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    batchnorm2d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     lazybatchnorm1d:
       num_features: 0
       momentum: 0
@@ -15779,15 +15794,6 @@ MonoBehaviour:
         data: []
         shape: 
     layernorm:
-      step: 0
-      runningMean:
-        data:
-        - 0
-        shape: 01000000
-      runningVar:
-        data:
-        - 1
-        shape: 01000000
       gamma:
         data:
         - 1
@@ -15797,16 +15803,10 @@ MonoBehaviour:
         - 0
         shape: 01000000
     rmsnorm:
-      p: -1
       gamma:
         data:
         - 1
         shape: 01000000
-      runningRms:
-        data:
-        - 1
-        shape: 01000000
-      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -15816,12 +15816,12 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 865353884
+      residualConnectionHash: 878012342
       linearProjection:
         data: []
         shape: 
     residualconnectionjoin:
-      residualConnectionHash: 865353884
+      residualConnectionHash: 878012342
     conv2d:
       kernels:
         data: []
@@ -15927,6 +15927,21 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    batchnorm2d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     lazybatchnorm1d:
       num_features: 0
       momentum: 0
@@ -15943,15 +15958,6 @@ MonoBehaviour:
         data: []
         shape: 
     layernorm:
-      step: 0
-      runningMean:
-        data:
-        - 0
-        shape: 01000000
-      runningVar:
-        data:
-        - 1
-        shape: 01000000
       gamma:
         data:
         - 1
@@ -15961,16 +15967,10 @@ MonoBehaviour:
         - 0
         shape: 01000000
     rmsnorm:
-      p: -1
       gamma:
         data:
         - 1
         shape: 01000000
-      runningRms:
-        data:
-        - 1
-        shape: 01000000
-      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -15980,12 +15980,12 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -1458307618
+      residualConnectionHash: -1445649160
       linearProjection:
         data: []
         shape: 
     residualconnectionjoin:
-      residualConnectionHash: -1458307618
+      residualConnectionHash: -1445649160
     conv2d:
       kernels:
         data: []
@@ -16156,6 +16156,21 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    batchnorm2d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     lazybatchnorm1d:
       num_features: 0
       momentum: 0
@@ -16172,15 +16187,6 @@ MonoBehaviour:
         data: []
         shape: 
     layernorm:
-      step: 0
-      runningMean:
-        data:
-        - 0
-        shape: 01000000
-      runningVar:
-        data:
-        - 1
-        shape: 01000000
       gamma:
         data:
         - 1
@@ -16190,16 +16196,10 @@ MonoBehaviour:
         - 0
         shape: 01000000
     rmsnorm:
-      p: -1
       gamma:
         data:
         - 1
         shape: 01000000
-      runningRms:
-        data:
-        - 1
-        shape: 01000000
-      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -16209,12 +16209,12 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -22205266
+      residualConnectionHash: 525656634
       linearProjection:
         data: []
         shape: 
     residualconnectionjoin:
-      residualConnectionHash: -22205266
+      residualConnectionHash: 525656634
     conv2d:
       kernels:
         data: []

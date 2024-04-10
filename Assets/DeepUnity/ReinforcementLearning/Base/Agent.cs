@@ -144,9 +144,9 @@ namespace DeepUnity.ReinforcementLearning
             if (model == null)
                 return;
 
-            if (!Application.isEditor && behaviourType == BehaviourType.Learn)
-                behaviourType = BehaviourType.Inference;
-
+            // if (!Application.isEditor && behaviourType == BehaviourType.Learn)
+            //     behaviourType = BehaviourType.Inference;
+            // 
             if (behaviourType == BehaviourType.Learn)
             {
                 TrainingStatistics pf;

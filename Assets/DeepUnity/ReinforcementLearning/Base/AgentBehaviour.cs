@@ -7,6 +7,8 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using Unity.VisualScripting;
+using UnityEditor;
 using UnityEngine;
 
 
@@ -100,6 +102,13 @@ namespace DeepUnity.ReinforcementLearning
         public bool IsUsingDiscreteActions { get => discreteDim > 0; }
 
 
+
+        const string valueNetNamingConvention = "V";
+        const string q1NetNamingConvention = "Q1";
+        const string q2NetNamingConvention = "Q2";
+        const string muNetNamingConvention = "Mu";
+        const string sigmaNetNamingConvention = "Sigma";
+        const string discreteNetNamingConvention = "Discrete";
         private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int VISUAL_INPUT_WIDTH, in int VISUAL_INPUT_HEIGHT, in int VISUAL_INPUT_CHANNELS,
             in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS, in ArchitectureType ARCHITECTURE)
         {
@@ -423,7 +432,7 @@ namespace DeepUnity.ReinforcementLearning
         public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int widthSize, int heightSize, int channelSize, int continuousActions, int discreteActions, int numLayers, int hidUnits, ArchitectureType aType)
         {
 #if UNITY_EDITOR
-            var instance = UnityEditor.AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/{name}.asset");
+            var instance = UnityEditor.AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/_{name}.asset");
 
             if (instance != null)
             {
@@ -454,12 +463,12 @@ namespace DeepUnity.ReinforcementLearning
 
             // Create aux assets
             newAgBeh.config = Hyperparameters.CreateOrLoadAsset(name);
-            newAgBeh.vNetwork?.CreateAsset($"{name}/V");
-            newAgBeh.muNetwork?.CreateAsset($"{name}/Mu");
-            newAgBeh.sigmaNetwork?.CreateAsset($"{name}/Sigma");
-            newAgBeh.q1Network?.CreateAsset($"{name}/Q1");
-            newAgBeh.q2Network?.CreateAsset($"{name}/Q2");
-            newAgBeh.discreteNetwork?.CreateAsset($"{name}/Discrete");
+            newAgBeh.vNetwork?.CreateAsset($"{name}/{valueNetNamingConvention}");
+            newAgBeh.muNetwork?.CreateAsset($"{name}/{muNetNamingConvention}");
+            newAgBeh.sigmaNetwork?.CreateAsset($"{name}/{sigmaNetNamingConvention}");
+            newAgBeh.q1Network?.CreateAsset($"{name}/{q1NetNamingConvention}");
+            newAgBeh.q2Network?.CreateAsset($"{name}/{q2NetNamingConvention}");
+            newAgBeh.discreteNetwork?.CreateAsset($"{name}/{discreteNetNamingConvention}");
 
 
             return newAgBeh;
@@ -482,6 +491,48 @@ namespace DeepUnity.ReinforcementLearning
             muNetwork?.Save();
             sigmaNetwork?.Save();
             discreteNetwork?.Save();
+
+#if !UNITY_EDITOR
+            string folderPath = Path.Combine(Utils.GetDesktopPath(), $"{this.behaviourName}_Trained");
+            if(!Directory.Exists(folderPath))
+                Directory.CreateDirectory(folderPath);
+
+            {
+                string beh = JsonUtility.ToJson(this);
+                File.WriteAllText(Path.Combine(folderPath, $"_{this.behaviourName}.json"), beh);
+            }
+
+            if(vNetwork!=null)
+            {
+                string vnet = JsonUtility.ToJson(vNetwork);
+                File.WriteAllText(Path.Combine(folderPath, $"{valueNetNamingConvention}.json"), vnet);
+            }
+            if (q1Network != null)
+            {
+                string q1net = JsonUtility.ToJson(vNetwork);
+                File.WriteAllText(Path.Combine(folderPath, $"{q1NetNamingConvention}.json"), q1net);
+            }
+            if (q2Network != null)
+            {
+                string q2net = JsonUtility.ToJson(vNetwork);
+                File.WriteAllText(Path.Combine(folderPath, $"{q2NetNamingConvention}.json"), q2net);
+            }
+            if (muNetwork != null)
+            {
+                string munet = JsonUtility.ToJson(muNetwork);
+                File.WriteAllText(Path.Combine(folderPath, $"{muNetNamingConvention}.json"), munet);
+            }
+            if (sigmaNetwork != null)
+            {
+                string sigmanet = JsonUtility.ToJson(muNetwork);
+                File.WriteAllText(Path.Combine(folderPath, $"{sigmaNetNamingConvention}.json"), sigmanet);
+            }
+            if (discreteNetwork != null)
+            {
+                string discretenet = JsonUtility.ToJson(discreteNetwork);
+                File.WriteAllText(Path.Combine(folderPath, $"{discreteNetNamingConvention}.json"), discretenet);
+            }
+#endif
         }
         /// <summary>
         /// Before using, checks if config file or neural networks are not attached to this scriptable object.
@@ -544,33 +595,97 @@ namespace DeepUnity.ReinforcementLearning
         }
         private void TryReassignReference()
         {
-            return;// it seems like it cannot find the object anyways idk why
+#if UNITY_EDITOR
+            if(config == null)
+            {
+                string path = AssetDatabase.GetAssetPath(GetInstanceID());
+                string dirpath = Path.GetDirectoryName(path);
 
+                string[] guids = AssetDatabase.FindAssets("t:Object", new[] { dirpath });
+                List<UnityEngine.Object> allBehaviorAssets = new();
+                foreach (string guid in guids)
+                {
+                    string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                    allBehaviorAssets.Add(AssetDatabase.LoadAssetAtPath(assetPath, typeof(UnityEngine.Object)));
+                }
 
-            // if(config == null)
-            // {
-            //     string path = AssetDatabase.GetAssetPath(GetInstanceID());
-            //     path = Path.GetDirectoryName(path);
-            //     config = AssetDatabase.LoadAllAssetsAtPath(path).OfType<Hyperparameters>().FirstOrDefault();
-            // 
-            //     if (vNetwork == null)
-            //     {
-            //         var networks = AssetDatabase.LoadAllAssetsAtPath(path).OfType<NeuralNetwork>();
-            // 
-            //         vNetwork = networks.FirstOrDefault(x => x.name == "V");
-            //         muNetwork = networks.FirstOrDefault(x => x.name == "Mu");
-            //         sigmaNetwork = networks.FirstOrDefault(x => x.name == "Sigma");
-            //         discreteNetwork = networks.FirstOrDefault(x => x.name == "Discrete");
-            //         q1Network = networks.FirstOrDefault(x => x.name == "Q1");
-            //         q2Network = networks.FirstOrDefault(x => x.name == "Q2");
-            //     }
-            // }
+                this.config = allBehaviorAssets.OfType<Hyperparameters>().FirstOrDefault();
+
+                if (vNetwork == null)
+                {
+                    var networks = allBehaviorAssets.OfType<Sequential>();
+                    vNetwork = networks.FirstOrDefault(x => x.name == valueNetNamingConvention);
+                    muNetwork = networks.FirstOrDefault(x => x.name == muNetNamingConvention);
+                    sigmaNetwork = networks.FirstOrDefault(x => x.name == sigmaNetNamingConvention);
+                    discreteNetwork = networks.FirstOrDefault(x => x.name == discreteNetNamingConvention);
+                    q1Network = networks.FirstOrDefault(x => x.name == q1NetNamingConvention);
+                    q2Network = networks.FirstOrDefault(x => x.name == q2NetNamingConvention);
+                }
+            }
+#endif
+        }
+        public void UpdateFromDesktop()
+        {
+            // it seems like the overwrite doesn t work.
+            string path = Path.Combine(Utils.GetDesktopPath(), $"{this.behaviourName}_Trained");
+
+            if(vNetwork != null)
+            {
+                string vnetPath = Path.Combine(path, $"{valueNetNamingConvention}.json");
+                string jsonData = File.ReadAllText(vnetPath);
+                JsonUtility.FromJsonOverwrite(jsonData, vNetwork);
+            }
+            
+            if (q1Network != null)
+            {
+                string q1netPath = Path.Combine(path, $"{q1NetNamingConvention}.json");
+                string jsonData = File.ReadAllText(q1netPath);
+                JsonUtility.FromJsonOverwrite(jsonData, q1Network);
+            }
+            
+            if (q2Network != null)
+            {
+                string q2netPath = Path.Combine(path, $"{q2NetNamingConvention}.json");
+                string jsonData = File.ReadAllText(q2netPath);
+                JsonUtility.FromJsonOverwrite(jsonData, q2Network);
+            }
+            
+            if (muNetwork != null)
+            {
+                string munetPath = Path.Combine(path, $"{muNetNamingConvention}.json");
+                string jsonData = File.ReadAllText(munetPath);
+                JsonUtility.FromJsonOverwrite(jsonData, muNetwork);
+            }
+            
+            if (sigmaNetwork != null)
+            {
+                string sigmanetPath = Path.Combine(path, $"{sigmaNetNamingConvention}.json");
+                string jsonData = File.ReadAllText(sigmanetPath);
+                JsonUtility.FromJsonOverwrite(jsonData, sigmaNetwork);
+            }
+            
+            if (discreteNetwork != null)
+            {
+                string discretenetPath = Path.Combine(path, $"{discreteNetNamingConvention}.json");
+                string jsonData = File.ReadAllText(discretenetPath);
+                JsonUtility.FromJsonOverwrite(jsonData, discreteNetwork);
+            }
+
+            // The behaviour is last because is changes the reference to the correct networks and the reupdate will not work.
+            string behPath = Path.Combine(path, $"_{this.behaviourName}.json");
+            string jsonDataBeh = File.ReadAllText(behPath);
+            JsonUtility.FromJsonOverwrite(jsonDataBeh, this);
+
+            TryReassignReference();
+            ConsoleMessage.Info($"<b>[OVERWRITE]</b> Agent behaviour <b><i>{behaviourName}</i></b> was overriden with new weights from desktop");
+            // well this complete reassignation.. a lot of stuff going on i'm to lazy to implement it for now.
         }
     }
 #if UNITY_EDITOR
     [UnityEditor.CustomEditor(typeof(AgentBehaviour), true), UnityEditor.CanEditMultipleObjects]
     sealed class CustomAgentBehaviourEditor : UnityEditor.Editor
     {
+        const string updateButtonMessage = "A trained version of this behavior is available on the desktop. \nPress this button to update this policy with the weights of that version.";
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -578,6 +693,13 @@ namespace DeepUnity.ReinforcementLearning
 
             AgentBehaviour script = (AgentBehaviour)target;
 
+            
+            if(Directory.Exists(Path.Combine(Utils.GetDesktopPath(), $"{script.behaviourName}_Trained")) && GUILayout.Button(updateButtonMessage))
+            {
+                // GUILayout.Box .HelpBox("A new version of this behavior is available on your desktop. Press the button above to take the new weights.", MessageType.Info);
+                script.UpdateFromDesktop();
+              
+            }
             // See or not standard deviation
             if (!script.IsUsingContinuousActions)
             {

@@ -4,8 +4,8 @@ namespace DeepUnity.Optimizers
 {
     // https://openreview.net/forum?id=OM0jvwB8jIp57ZJjtNEZ
     // https://pytorch.org/docs/stable/generated/torch.optim.NAdam.html#torch.optim.NAdam
-    // 
-    public sealed class NAdam : Optimizer
+    // In the paper is called Nadam, not NAdam
+    public sealed class Nadam : Optimizer
     {
         private readonly float beta1;
         private readonly float beta2;
@@ -23,7 +23,7 @@ namespace DeepUnity.Optimizers
 
 
 
-        public NAdam(Parameter[] parameters, float lr = 0.002f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8f, float weightDecay = 0f, float momentum_decay = 0.004f, bool decoupled_weight_decay = false) : base(parameters, lr, eps, weightDecay)
+        public Nadam(Parameter[] parameters, float lr = 0.002f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8f, float weightDecay = 0f, float momentum_decay = 0.004f, bool decoupled_weight_decay = false) : base(parameters, lr, eps, weightDecay)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;
