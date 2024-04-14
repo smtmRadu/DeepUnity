@@ -79,6 +79,10 @@ namespace DeepUnity.ReinforcementLearning
 
         private void FixedUpdate()
         {
+            // Training statistics is disabled completely on build
+#if !UNITY_EDITOR
+            return;
+#endif
             if (DeepUnityTrainer.Instance == null)
                 return;
 

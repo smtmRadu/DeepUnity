@@ -254,9 +254,14 @@ namespace DeepUnity
 
     public enum ArchitectureType
     {
+        [Tooltip("Multilayer Perceptron")]
         MLP,
+        [Tooltip("Convolutional Neural Network")]
         CNN,
-        RNN
+        [Tooltip("Recurrent Neural Network")]
+        RNN,
+        [Tooltip("Self-Attention Neural Network")]
+        ATT
     }
 }
 

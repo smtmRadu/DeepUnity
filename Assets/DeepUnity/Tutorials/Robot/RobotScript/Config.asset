@@ -36,5 +36,5 @@ MonoBehaviour:
   alpha: 0.2
   tau: 0.005
   debug: 0
-  timescaleAdjustment: 1
+  timescaleAdjustment: 0
   timescale: 1

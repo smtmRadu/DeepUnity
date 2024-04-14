@@ -18,6 +18,7 @@ namespace DeepUnity.ReinforcementLearning
     public sealed class AgentBehaviour : ScriptableObject
     {
         [Header("Behaviour Properties")]
+        [SerializeField, ViewOnly, Tooltip("A counter of the number of saves, to keep track which version is the most trained.")] private int version = 1;
         [SerializeField, ViewOnly] public string behaviourName;
         [SerializeField, HideInInspector] private bool assetCreated = false;
         [SerializeField, ViewOnly] public int observationSize;
@@ -122,29 +123,29 @@ namespace DeepUnity.ReinforcementLearning
                 if (layers == 1)
                 {
                     return new IModule[] {
-                        new Dense(inputs * stack, hidUnits, INIT_W, INIT_B),
+                        new Dense(inputs * stack, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
                         HiddenActivation(),
-                        new Dense(hidUnits, outputs, INIT_W, INIT_B)};
+                        new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
                 }
                 if (layers == 2)
                 {
                     return new IModule[] {
-                        new Dense(inputs * stack, hidUnits, INIT_W, INIT_B),
+                        new Dense(inputs * stack, hidUnits, weight_init: INIT_W, bias_init: INIT_B),
                         HiddenActivation(),
-                        new Dense(hidUnits, hidUnits, INIT_W, INIT_B),
+                        new Dense(hidUnits, hidUnits, weight_init: INIT_W, bias_init : INIT_B),
                         HiddenActivation(),
-                        new Dense(hidUnits, outputs, INIT_W, INIT_B)};
+                        new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
                 }
                 if (layers == 3)
                 {
                     return new IModule[] {
-                        new Dense(inputs * stack, hidUnits, INIT_W, INIT_B),
+                        new Dense(inputs * stack, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
                         HiddenActivation(),
-                        new Dense(hidUnits, hidUnits, INIT_W, INIT_B),
+                        new Dense(hidUnits, hidUnits, weight_init: INIT_W, bias_init : INIT_B),
                         HiddenActivation(),
-                        new Dense(hidUnits, hidUnits, INIT_W, INIT_B),
+                        new Dense(hidUnits, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
                         HiddenActivation(),
-                        new Dense(hidUnits, outputs, INIT_W, INIT_B)};
+                        new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
                 }
                 throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
             }
@@ -224,6 +225,40 @@ namespace DeepUnity.ReinforcementLearning
                 }
                 throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
             }
+            static IModule[] CreateATT(int inputs, int stack, int outputs, int layers, int hidUnits)
+            {
+                if (layers == 1)
+                {
+                    return new IModule[] {
+                        new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
+                        new Attention(inputs, hidUnits),
+                        new LastSequenceElementModule(),
+                        new Dense(hidUnits, outputs)};
+                }
+                if (layers == 2)
+                {
+                    return new IModule[] {
+                        new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
+                        new Attention(inputs, hidUnits),
+                        new LastSequenceElementModule(),
+                        new Dense (hidUnits, hidUnits),
+                        HiddenActivation(),
+                        new Dense(hidUnits, outputs)};
+                }
+                if (layers == 3)
+                {
+                    return new IModule[] {
+                        new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
+                        new Attention(inputs, hidUnits),
+                        new LastSequenceElementModule(),
+                        new Dense(hidUnits, hidUnits),
+                        HiddenActivation(),
+                        new Dense(hidUnits, hidUnits),
+                        HiddenActivation(),
+                        new Dense(hidUnits, outputs)};
+                }
+                throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
+            }
             //------------------ NETWORK INITIALIZATION ----------------//
 
 
@@ -269,7 +304,22 @@ namespace DeepUnity.ReinforcementLearning
                 if (DISCRETE_ACTIONS_NUM > 0)
                     discreteNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
             }
+            else if(ARCHITECTURE == ArchitectureType.ATT)
+            {
+                vNetwork = new Sequential(CreateATT(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
 
+                if (CONTINUOUS_ACTIONS_NUM > 0)
+                {
+                    muNetwork = new Sequential(CreateATT(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS));
+                    sigmaNetwork = new Sequential(CreateATT(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softplus() }).ToArray());
+                    q1Network = new Sequential(CreateATT((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                    q2Network = new Sequential(CreateATT((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS));
+                }
+
+                if (DISCRETE_ACTIONS_NUM > 0)
+                    discreteNetwork = new Sequential(CreateATT(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS).Concat(new IModule[] { new Softmax() }).ToArray());
+
+            }
 
 
         }
@@ -481,9 +531,16 @@ namespace DeepUnity.ReinforcementLearning
             if (!assetCreated)
             {
                 ConsoleMessage.Warning("Cannot save the Behaviour because it requires compilation first");
+                return;
             }
 
+            version++;
             ConsoleMessage.Info($"<b>[AUTOSAVE]</b> Agent behaviour <b><i>{behaviourName}</i></b> saved");
+
+#if UNITY_EDITOR
+            EditorUtility.SetDirty(this);
+            AssetDatabase.SaveAssetIfDirty(this);
+#endif
 
             vNetwork?.Save();
             q1Network?.Save();
@@ -540,7 +597,7 @@ namespace DeepUnity.ReinforcementLearning
         /// <returns></returns>
         public List<string> CheckForMissingAssets()
         {
-            TryReassignReference();
+            TryReassignReference_EditorOnly();
 
             if (config == null)
             {
@@ -593,7 +650,7 @@ namespace DeepUnity.ReinforcementLearning
             }
             return whatIsMissing;
         }
-        private void TryReassignReference()
+        private void TryReassignReference_EditorOnly()
         {
 #if UNITY_EDITOR
             if(config == null)
@@ -624,8 +681,11 @@ namespace DeepUnity.ReinforcementLearning
             }
 #endif
         }
-        public void UpdateFromDesktop()
+        public void TryUpdateWeightsFromDesktop()
         {
+            if (!Directory.Exists(Path.Combine(Utils.GetDesktopPath(), $"{behaviourName}_Trained")))
+                return;
+
             // it seems like the overwrite doesn t work.
             string path = Path.Combine(Utils.GetDesktopPath(), $"{this.behaviourName}_Trained");
 
@@ -676,7 +736,8 @@ namespace DeepUnity.ReinforcementLearning
             string jsonDataBeh = File.ReadAllText(behPath);
             JsonUtility.FromJsonOverwrite(jsonDataBeh, this);
 
-            TryReassignReference();
+            TryReassignReference_EditorOnly();
+            Save();
             ConsoleMessage.Info($"<b>[OVERWRITE]</b> Agent behaviour <b><i>{behaviourName}</i></b> was overriden with new weights from desktop");
             // well this complete reassignation.. a lot of stuff going on i'm to lazy to implement it for now.
         }
@@ -685,7 +746,7 @@ namespace DeepUnity.ReinforcementLearning
     [UnityEditor.CustomEditor(typeof(AgentBehaviour), true), UnityEditor.CanEditMultipleObjects]
     sealed class CustomAgentBehaviourEditor : UnityEditor.Editor
     {
-        const string updateButtonMessage = "A trained version of this behavior is available on the desktop. \nPress this button to update this policy with the weights of that version.";
+        const string updateButtonMessage = "A version of this behavior is available on the desktop. \nPress this button to update this policy with the weights of that version.";
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -697,7 +758,7 @@ namespace DeepUnity.ReinforcementLearning
             if(Directory.Exists(Path.Combine(Utils.GetDesktopPath(), $"{script.behaviourName}_Trained")) && GUILayout.Button(updateButtonMessage))
             {
                 // GUILayout.Box .HelpBox("A new version of this behavior is available on your desktop. Press the button above to take the new weights.", MessageType.Info);
-                script.UpdateFromDesktop();
+                script.TryUpdateWeightsFromDesktop();
               
             }
             // See or not standard deviation

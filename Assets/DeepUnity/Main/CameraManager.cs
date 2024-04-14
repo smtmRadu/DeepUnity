@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -61,6 +62,17 @@ namespace DeepUnity
 
             currentIndex = newIndex;
         }
+
+        // Finds all cameras in the current scene and assignes them to the list
+        public void AssignAllSceneCameras()
+        {
+            GameObject[] allGameObjects = UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects();
+
+            cameras = cameras == null ? new() : cameras;
+            
+            cameras = GameObject.FindSceneObjectsOfType(typeof(Camera)).OfType<Camera>().ToList();
+            
+        }
     }
 
 #if UNITY_EDITOR
@@ -70,7 +82,15 @@ namespace DeepUnity
         string[] drawNow = new string[] { "m_Script" };
         public override void OnInspectorGUI()
         {
+
+            var script = (CameraManager)target;
+            if (GUILayout.Button("Find all scene cameras"))
+                script.AssignAllSceneCameras();
+
             DrawPropertiesExcluding(serializedObject, drawNow);
+
+            
+
             serializedObject.ApplyModifiedProperties();
             serializedObject.Update();
         }

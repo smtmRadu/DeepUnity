@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ffdd4f9587b2d8846a37ba5240ae14b2, type: 3}
   m_Name: V
   m_EditorClassIdentifier: 
-  version: 304
+  version: 308
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -11159,50 +11159,6 @@ MonoBehaviour:
         - 0.035428043
         - -0.2429013
         shape: 80000000
-    batchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    layernorm:
-      step: 0
-      runningMean:
-        data:
-        - 0
-        shape: 01000000
-      runningVar:
-        data:
-        - 1
-        shape: 01000000
-      gamma:
-        data:
-        - 1
-        shape: 01000000
-      beta:
-        data:
-        - 0
-        shape: 01000000
-    conv2d:
-      kernels:
-        data: []
-        shape: 
-      biases:
-        data: []
-        shape: 
-    prelu:
-      alpha:
-        data: []
-        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -11240,6 +11196,36 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    batchnorm1d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    batchnorm2d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     lazybatchnorm1d:
       num_features: 0
       momentum: 0
@@ -11255,17 +11241,20 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
-    rmsnorm:
-      p: -1
+    layernorm:
       gamma:
         data:
         - 1
         shape: 01000000
-      runningRms:
+      beta:
+        data:
+        - 0
+        shape: 01000000
+    rmsnorm:
+      gamma:
         data:
         - 1
         shape: 01000000
-      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -11274,6 +11263,20 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
+    residualconnectionfork:
+      residualConnectionHash: -1088375520
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      residualConnectionHash: -1088375520
+    conv2d:
+      kernels:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
     avgpool2d:
       kernel_size: 0
       padding: 0
@@ -11282,16 +11285,14 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
-    pad2d:
+    zeropad2d:
       padding: 0
-      paddingType: 0
-    residualconnectionfork:
-      linearProjection:
-        data: []
-        shape: 
-    residualconnectionjoin:
-      forkSource:
-        rid: 1628825360402219352
+    mirrorpad2d:
+      padding: 0
+    zeropad1d:
+      padding: 0
+    mirrorpad1d:
+      padding: 0
     softmax:
       temperature: 0
     leakyrelu:
@@ -11310,6 +11311,10 @@ MonoBehaviour:
     rrelu:
       lower: 0
       upper: 0
+    prelu:
+      alpha:
+        data: []
+        shape: 
   - name: Tanh
     dense:
       weights:
@@ -11318,50 +11323,6 @@ MonoBehaviour:
       biases:
         data: []
         shape: 
-    batchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    layernorm:
-      step: 0
-      runningMean:
-        data:
-        - 0
-        shape: 01000000
-      runningVar:
-        data:
-        - 1
-        shape: 01000000
-      gamma:
-        data:
-        - 1
-        shape: 01000000
-      beta:
-        data:
-        - 0
-        shape: 01000000
-    conv2d:
-      kernels:
-        data: []
-        shape: 
-      biases:
-        data: []
-        shape: 
-    prelu:
-      alpha:
-        data: []
-        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -11399,6 +11360,36 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    batchnorm1d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    batchnorm2d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     lazybatchnorm1d:
       num_features: 0
       momentum: 0
@@ -11414,17 +11405,20 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
-    rmsnorm:
-      p: -1
+    layernorm:
       gamma:
         data:
         - 1
         shape: 01000000
-      runningRms:
+      beta:
+        data:
+        - 0
+        shape: 01000000
+    rmsnorm:
+      gamma:
         data:
         - 1
         shape: 01000000
-      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -11433,6 +11427,20 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
+    residualconnectionfork:
+      residualConnectionHash: 2136184892
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      residualConnectionHash: 2136184892
+    conv2d:
+      kernels:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
     avgpool2d:
       kernel_size: 0
       padding: 0
@@ -11441,16 +11449,14 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
-    pad2d:
+    zeropad2d:
       padding: 0
-      paddingType: 0
-    residualconnectionfork:
-      linearProjection:
-        data: []
-        shape: 
-    residualconnectionjoin:
-      forkSource:
-        rid: 1628825360402219353
+    mirrorpad2d:
+      padding: 0
+    zeropad1d:
+      padding: 0
+    mirrorpad1d:
+      padding: 0
     softmax:
       temperature: 0
     leakyrelu:
@@ -11469,6 +11475,10 @@ MonoBehaviour:
     rrelu:
       lower: 0
       upper: 0
+    prelu:
+      alpha:
+        data: []
+        shape: 
   - name: Dense
     dense:
       weights:
@@ -27989,50 +27999,6 @@ MonoBehaviour:
         - -0.89921033
         - 0.19314131
         shape: 80000000
-    batchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    layernorm:
-      step: 0
-      runningMean:
-        data:
-        - 0
-        shape: 01000000
-      runningVar:
-        data:
-        - 1
-        shape: 01000000
-      gamma:
-        data:
-        - 1
-        shape: 01000000
-      beta:
-        data:
-        - 0
-        shape: 01000000
-    conv2d:
-      kernels:
-        data: []
-        shape: 
-      biases:
-        data: []
-        shape: 
-    prelu:
-      alpha:
-        data: []
-        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -28070,6 +28036,36 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    batchnorm1d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    batchnorm2d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     lazybatchnorm1d:
       num_features: 0
       momentum: 0
@@ -28085,17 +28081,20 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
-    rmsnorm:
-      p: -1
+    layernorm:
       gamma:
         data:
         - 1
         shape: 01000000
-      runningRms:
+      beta:
+        data:
+        - 0
+        shape: 01000000
+    rmsnorm:
+      gamma:
         data:
         - 1
         shape: 01000000
-      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -28104,6 +28103,20 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
+    residualconnectionfork:
+      residualConnectionHash: 1783829184
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      residualConnectionHash: 1783829184
+    conv2d:
+      kernels:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
     avgpool2d:
       kernel_size: 0
       padding: 0
@@ -28112,16 +28125,14 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
-    pad2d:
+    zeropad2d:
       padding: 0
-      paddingType: 0
-    residualconnectionfork:
-      linearProjection:
-        data: []
-        shape: 
-    residualconnectionjoin:
-      forkSource:
-        rid: 1628825360402219354
+    mirrorpad2d:
+      padding: 0
+    zeropad1d:
+      padding: 0
+    mirrorpad1d:
+      padding: 0
     softmax:
       temperature: 0
     leakyrelu:
@@ -28140,6 +28151,10 @@ MonoBehaviour:
     rrelu:
       lower: 0
       upper: 0
+    prelu:
+      alpha:
+        data: []
+        shape: 
   - name: Tanh
     dense:
       weights:
@@ -28148,50 +28163,6 @@ MonoBehaviour:
       biases:
         data: []
         shape: 
-    batchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    layernorm:
-      step: 0
-      runningMean:
-        data:
-        - 0
-        shape: 01000000
-      runningVar:
-        data:
-        - 1
-        shape: 01000000
-      gamma:
-        data:
-        - 1
-        shape: 01000000
-      beta:
-        data:
-        - 0
-        shape: 01000000
-    conv2d:
-      kernels:
-        data: []
-        shape: 
-      biases:
-        data: []
-        shape: 
-    prelu:
-      alpha:
-        data: []
-        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -28229,6 +28200,36 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    batchnorm1d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    batchnorm2d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     lazybatchnorm1d:
       num_features: 0
       momentum: 0
@@ -28244,17 +28245,20 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
-    rmsnorm:
-      p: -1
+    layernorm:
       gamma:
         data:
         - 1
         shape: 01000000
-      runningRms:
+      beta:
+        data:
+        - 0
+        shape: 01000000
+    rmsnorm:
+      gamma:
         data:
         - 1
         shape: 01000000
-      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -28263,6 +28267,20 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
+    residualconnectionfork:
+      residualConnectionHash: 1431473476
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      residualConnectionHash: 1431473476
+    conv2d:
+      kernels:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
     avgpool2d:
       kernel_size: 0
       padding: 0
@@ -28271,16 +28289,14 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
-    pad2d:
+    zeropad2d:
       padding: 0
-      paddingType: 0
-    residualconnectionfork:
-      linearProjection:
-        data: []
-        shape: 
-    residualconnectionjoin:
-      forkSource:
-        rid: 1628825360402219355
+    mirrorpad2d:
+      padding: 0
+    zeropad1d:
+      padding: 0
+    mirrorpad1d:
+      padding: 0
     softmax:
       temperature: 0
     leakyrelu:
@@ -28299,6 +28315,10 @@ MonoBehaviour:
     rrelu:
       lower: 0
       upper: 0
+    prelu:
+      alpha:
+        data: []
+        shape: 
   - name: Dense
     dense:
       weights:
@@ -44819,50 +44839,6 @@ MonoBehaviour:
         - 0.07806985
         - -0.0007385876
         shape: 80000000
-    batchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    layernorm:
-      step: 0
-      runningMean:
-        data:
-        - 0
-        shape: 01000000
-      runningVar:
-        data:
-        - 1
-        shape: 01000000
-      gamma:
-        data:
-        - 1
-        shape: 01000000
-      beta:
-        data:
-        - 0
-        shape: 01000000
-    conv2d:
-      kernels:
-        data: []
-        shape: 
-      biases:
-        data: []
-        shape: 
-    prelu:
-      alpha:
-        data: []
-        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -44900,6 +44876,36 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    batchnorm1d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    batchnorm2d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     lazybatchnorm1d:
       num_features: 0
       momentum: 0
@@ -44915,17 +44921,20 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
-    rmsnorm:
-      p: -1
+    layernorm:
       gamma:
         data:
         - 1
         shape: 01000000
-      runningRms:
+      beta:
+        data:
+        - 0
+        shape: 01000000
+    rmsnorm:
+      gamma:
         data:
         - 1
         shape: 01000000
-      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -44934,6 +44943,20 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
+    residualconnectionfork:
+      residualConnectionHash: 1614321210
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      residualConnectionHash: 1614321210
+    conv2d:
+      kernels:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
     avgpool2d:
       kernel_size: 0
       padding: 0
@@ -44942,16 +44965,14 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
-    pad2d:
+    zeropad2d:
       padding: 0
-      paddingType: 0
-    residualconnectionfork:
-      linearProjection:
-        data: []
-        shape: 
-    residualconnectionjoin:
-      forkSource:
-        rid: 1628825360402219356
+    mirrorpad2d:
+      padding: 0
+    zeropad1d:
+      padding: 0
+    mirrorpad1d:
+      padding: 0
     softmax:
       temperature: 0
     leakyrelu:
@@ -44970,6 +44991,10 @@ MonoBehaviour:
     rrelu:
       lower: 0
       upper: 0
+    prelu:
+      alpha:
+        data: []
+        shape: 
   - name: Tanh
     dense:
       weights:
@@ -44978,50 +45003,6 @@ MonoBehaviour:
       biases:
         data: []
         shape: 
-    batchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    layernorm:
-      step: 0
-      runningMean:
-        data:
-        - 0
-        shape: 01000000
-      runningVar:
-        data:
-        - 1
-        shape: 01000000
-      gamma:
-        data:
-        - 1
-        shape: 01000000
-      beta:
-        data:
-        - 0
-        shape: 01000000
-    conv2d:
-      kernels:
-        data: []
-        shape: 
-      biases:
-        data: []
-        shape: 
-    prelu:
-      alpha:
-        data: []
-        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -45059,6 +45040,36 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    batchnorm1d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    batchnorm2d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     lazybatchnorm1d:
       num_features: 0
       momentum: 0
@@ -45074,17 +45085,20 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
-    rmsnorm:
-      p: -1
+    layernorm:
       gamma:
         data:
         - 1
         shape: 01000000
-      runningRms:
+      beta:
+        data:
+        - 0
+        shape: 01000000
+    rmsnorm:
+      gamma:
         data:
         - 1
         shape: 01000000
-      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -45093,6 +45107,20 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
+    residualconnectionfork:
+      residualConnectionHash: 1261965502
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      residualConnectionHash: 1261965502
+    conv2d:
+      kernels:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
     avgpool2d:
       kernel_size: 0
       padding: 0
@@ -45101,16 +45129,14 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
-    pad2d:
+    zeropad2d:
       padding: 0
-      paddingType: 0
-    residualconnectionfork:
-      linearProjection:
-        data: []
-        shape: 
-    residualconnectionjoin:
-      forkSource:
-        rid: 1628825360402219357
+    mirrorpad2d:
+      padding: 0
+    zeropad1d:
+      padding: 0
+    mirrorpad1d:
+      padding: 0
     softmax:
       temperature: 0
     leakyrelu:
@@ -45129,6 +45155,10 @@ MonoBehaviour:
     rrelu:
       lower: 0
       upper: 0
+    prelu:
+      alpha:
+        data: []
+        shape: 
   - name: Dense
     dense:
       weights:
@@ -45266,50 +45296,6 @@ MonoBehaviour:
         data:
         - 0.20706324
         shape: 01000000
-    batchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    layernorm:
-      step: 0
-      runningMean:
-        data:
-        - 0
-        shape: 01000000
-      runningVar:
-        data:
-        - 1
-        shape: 01000000
-      gamma:
-        data:
-        - 1
-        shape: 01000000
-      beta:
-        data:
-        - 0
-        shape: 01000000
-    conv2d:
-      kernels:
-        data: []
-        shape: 
-      biases:
-        data: []
-        shape: 
-    prelu:
-      alpha:
-        data: []
-        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -45347,6 +45333,36 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    batchnorm1d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    batchnorm2d:
+      num_features: 0
+      momentum: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     lazybatchnorm1d:
       num_features: 0
       momentum: 0
@@ -45362,17 +45378,20 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
-    rmsnorm:
-      p: -1
+    layernorm:
       gamma:
         data:
         - 1
         shape: 01000000
-      runningRms:
+      beta:
+        data:
+        - 0
+        shape: 01000000
+    rmsnorm:
+      gamma:
         data:
         - 1
         shape: 01000000
-      step: 0
     dropout:
       dropout: 0
     flatten:
@@ -45381,6 +45400,20 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
+    residualconnectionfork:
+      residualConnectionHash: 1193818592
+      linearProjection:
+        data: []
+        shape: 
+    residualconnectionjoin:
+      residualConnectionHash: 1193818592
+    conv2d:
+      kernels:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
     avgpool2d:
       kernel_size: 0
       padding: 0
@@ -45389,16 +45422,14 @@ MonoBehaviour:
       kernel_size: 0
       padding: 0
       padding_mode: 0
-    pad2d:
+    zeropad2d:
       padding: 0
-      paddingType: 0
-    residualconnectionfork:
-      linearProjection:
-        data: []
-        shape: 
-    residualconnectionjoin:
-      forkSource:
-        rid: 1628825360402219358
+    mirrorpad2d:
+      padding: 0
+    zeropad1d:
+      padding: 0
+    mirrorpad1d:
+      padding: 0
     softmax:
       temperature: 0
     leakyrelu:
@@ -45417,48 +45448,7 @@ MonoBehaviour:
     rrelu:
       lower: 0
       upper: 0
-  references:
-    version: 2
-    RefIds:
-    - rid: 1628825360402219352
-      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
-      data:
-        linearProjection:
-          data: []
-          shape: 
-    - rid: 1628825360402219353
-      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
-      data:
-        linearProjection:
-          data: []
-          shape: 
-    - rid: 1628825360402219354
-      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
-      data:
-        linearProjection:
-          data: []
-          shape: 
-    - rid: 1628825360402219355
-      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
-      data:
-        linearProjection:
-          data: []
-          shape: 
-    - rid: 1628825360402219356
-      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
-      data:
-        linearProjection:
-          data: []
-          shape: 
-    - rid: 1628825360402219357
-      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
-      data:
-        linearProjection:
-          data: []
-          shape: 
-    - rid: 1628825360402219358
-      type: {class: ResidualConnection/Fork, ns: DeepUnity.Modules, asm: Assembly-CSharp}
-      data:
-        linearProjection:
-          data: []
-          shape: 
+    prelu:
+      alpha:
+        data: []
+        shape: 

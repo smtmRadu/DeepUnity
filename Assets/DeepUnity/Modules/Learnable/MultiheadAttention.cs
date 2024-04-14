@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using UnityEngine;
+using DeepUnity.Activations;
+using System.Collections.Generic;
 
 namespace DeepUnity.Modules
 {
@@ -14,10 +16,21 @@ namespace DeepUnity.Modules
     /// </summary>
     /// <param name="embed_dim"></param>
     /// <param name="heads_num"></param>
-    [SerializeField]
+    [Serializable]
     public class MultiheadAttention : ILearnable, IModule
     {
-        [SerializeField] public Device Device { get; set; } = Device.CPU;
+        [SerializeField] public Device Device
+        { 
+            get => W_O.Device; 
+            set
+                {
+                    for (int i = 0; i < attention_heads.Length; i++)
+                    {
+                        attention_heads[i].Device = value;
+                    }
+                    W_O.Device = value;
+                } 
+        }
         [SerializeField] private Attention[] attention_heads;
         [SerializeField] private Dense W_O;
 
@@ -28,11 +41,12 @@ namespace DeepUnity.Modules
         /// where B = batch_size, L = sequence_length and H = num_features<br></br>
         /// <b>Placed after the non-linear activation function.</b> <br></br>
         /// </summary>
-        /// <param name="embed_dim">Must divisible by heads_num</param>
+        /// <param name="embed_dim">Must be divisible by heads_num.</param>
+        /// <param name="heads_num">Must divide embed_dim exactly.</param>
+        /// <param name="mask">Causal attention.</param>
         /// <exception cref="ArgumentException">Embedding dimension must be divisible by heads number</exception>
-        public MultiheadAttention(int embed_dim, int heads_num, Device device = Device.CPU)
+        public MultiheadAttention(int embed_dim, int heads_num, bool mask = false, Device device = Device.CPU)
         {
-            this.Device = device;
             if (embed_dim % heads_num != 0)
             {
                 throw new ArgumentException("Embedding dimension must be divisible by heads number");
@@ -40,7 +54,7 @@ namespace DeepUnity.Modules
             attention_heads = new Attention[heads_num];
             for (int i = 0; i < heads_num; i++)
             {
-                attention_heads[i] = new Attention(embed_dim, embed_dim / heads_num, device: device);
+                attention_heads[i] = new Attention(embed_dim, embed_dim / heads_num, mask, device: device);
             }
             W_O = new Dense(embed_dim, embed_dim, device: device);
         }
@@ -54,9 +68,7 @@ namespace DeepUnity.Modules
                 outputs[i] = attention_heads[i].Predict(input);
             }
             Tensor output_conc = Tensor.Concat(-1, outputs); // B, L, E
-            Tensor[] sequence = Tensor.Split(output_conc, -2, 1);
-            Tensor[] final_output = sequence.Select(x => W_O.Predict(x.Squeeze(-2))).Select(x => x.Unsqueeze(-1)).ToArray();
-            return Tensor.Concat(-2, final_output);
+            return W_O.Predict(output_conc);
         }
 
         public Tensor Forward(Tensor input)
@@ -67,16 +79,12 @@ namespace DeepUnity.Modules
                 outputs[i] = attention_heads[i].Forward(input);
             }
             Tensor output_conc = Tensor.Concat(-1, outputs); // B, L, E
-            Tensor[] sequence = Tensor.Split(output_conc, -2, 1);
-            Tensor[] final_output = sequence.Select(x => W_O.Forward(x.Squeeze(-2))).Select(x => x.Unsqueeze(-1)).ToArray();
-            return Tensor.Concat(-2, final_output);
+            return W_O.Forward(output_conc);
         }
 
         public Tensor Backward(Tensor loss)
         {
-            Tensor[] sequence = loss.Split(-2, 1);
-            Tensor[] mhatt_loss = sequence.Select(x => W_O.Backward(x.Squeeze(-2))).Select(x => x.Unsqueeze(-1)).ToArray();
-            Tensor mhatt_grad = Tensor.Concat(-2, mhatt_loss);
+            Tensor mhatt_grad = W_O.Backward(loss);
             Tensor[] mhat_grad_splitted = mhatt_grad.Split(-1, mhatt_grad.Size(-1) / attention_heads.Length);
 
             var input_grad = attention_heads[0].Backward(mhat_grad_splitted[0]);
@@ -87,16 +95,6 @@ namespace DeepUnity.Modules
             return input_grad;
         }
 
-
-        public void SetDevice(Device device)
-        {
-            this.Device = device;
-            for (int i = 0; i < attention_heads.Length; i++)
-            {
-                attention_heads[i].Device = device;
-            }
-            W_O.Device = device;
-        }
 
         public Parameter[] Parameters()
         {
@@ -110,13 +108,10 @@ namespace DeepUnity.Modules
 
         public virtual void OnBeforeSerialize()
         {
-            throw new Exception("Multihead attention cannot be serialized:(");
         }
 
         public virtual void OnAfterDeserialize()
         {
-            throw new Exception("Multihead attention cannot be serialized:(");
-
             W_O.OnAfterDeserialize();
 
             for (int i = 0; i < attention_heads.Length; i++)
@@ -134,9 +129,6 @@ namespace DeepUnity.Modules
             return matt;
         }
     }
-
-
-
 }
 
 

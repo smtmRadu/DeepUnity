@@ -25,6 +25,8 @@ namespace DeepUnity.Modules
         public RNNCell rnncell = null;
         public Attention attention = null;
         public LazyDense lazydense = null;
+        public MultiheadAttention multiheadattention = null;
+        public AttentionV2 attentionv2 = null;
               
         // Normalization
         public BatchNorm1D batchnorm1d = null;
@@ -37,6 +39,7 @@ namespace DeepUnity.Modules
         public Dropout dropout = null;
         public Flatten flatten = null;
         public Reshape reshape = null;
+        public LastSequenceElementModule lastsequenceelementmodule = null;
 
         // Residual
         public ResidualConnection.Fork residualconnectionfork = null;
@@ -240,6 +243,18 @@ namespace DeepUnity.Modules
             {
                 batchnorm2d = batchnorm2dModule;
             }
+            else if (module is MultiheadAttention multiheadattentionModule)
+            {
+                multiheadattention = multiheadattentionModule;
+            }
+            else if(module is LastSequenceElementModule lastSequenceElementModule)
+            {
+                lastsequenceelementmodule = lastSequenceElementModule;
+            }
+            else if (module is AttentionV2 attentionv2Module)
+            {
+                attentionv2 = attentionv2Module;
+            }
             else
                 throw new Exception($"Unhandled module type while wrapping ({module.GetType().Name}).");
         }
@@ -411,6 +426,18 @@ namespace DeepUnity.Modules
             else if (typeof(BatchNorm2D).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.batchnorm2d;
+            }
+            else if (typeof(MultiheadAttention).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.multiheadattention;
+            }
+            else if (typeof(LastSequenceElementModule).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.lastsequenceelementmodule;
+            }
+            else if (typeof(AttentionV2).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.attentionv2;
             }
             else
                 throw new Exception($"Unhandled module type while unwrapping ({moduleWrapper.name}).");

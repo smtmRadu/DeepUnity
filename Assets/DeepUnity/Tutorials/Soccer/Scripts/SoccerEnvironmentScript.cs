@@ -8,6 +8,7 @@ namespace DeepUnity.Tutorials
 {
     public class SoccerEnvironmentScript : MonoBehaviour
     {
+        [Header("At least 1 striker and 1 goalie per team")]
         [SerializeField] private float time_per_round = 60f;
         private float current_round_time_left;
         [Space]
@@ -54,12 +55,12 @@ namespace DeepUnity.Tutorials
             blue_score++;
 
             blue_striker.AddReward(goal_reward);
-            blue_striker2.AddReward(goal_reward);
+            blue_striker2?.AddReward(goal_reward);
             
 
             pink_goalie.AddReward(-1f);
             pink_striker.AddReward(-1f);
-            pink_striker2.AddReward(-1f);
+            pink_striker2?.AddReward(-1f);
 
             ChangeScoreLabel();
             StartNewRound();
@@ -70,11 +71,11 @@ namespace DeepUnity.Tutorials
             pink_score++;
 
             pink_striker.AddReward(goal_reward);
-            pink_striker2.AddReward(goal_reward);
+            pink_striker2?.AddReward(goal_reward);
 
             blue_goalie.AddReward(-1f);
             blue_striker.AddReward(-1f);
-            blue_striker2.AddReward(-1f);
+            blue_striker2?.AddReward(-1f);
 
             ChangeScoreLabel();
             StartNewRound();
@@ -102,14 +103,14 @@ namespace DeepUnity.Tutorials
             {
                 pink_striker.AddReward(-1);
                 blue_striker.AddReward(-1);
-                pink_striker2.AddReward(-1);
-                blue_striker2.AddReward(-1);
+                pink_striker2?.AddReward(-1);
+                blue_striker2?.AddReward(-1);
             }
 
-            pink_striker2.EndEpisode();
+            pink_striker2?.EndEpisode();
             pink_striker.EndEpisode();
             pink_goalie.EndEpisode();
-            blue_striker2.EndEpisode();
+            blue_striker2?.EndEpisode();
             blue_striker.EndEpisode();
             blue_goalie.EndEpisode();
 

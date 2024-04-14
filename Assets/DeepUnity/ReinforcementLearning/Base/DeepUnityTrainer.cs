@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity.ReinforcementLearning
@@ -39,7 +40,11 @@ namespace DeepUnity.ReinforcementLearning
         [SerializeField, ViewOnly] private float avgDeltaTime = 0.02f;
         const float avgDeltaTimeMomentum = 0.96f;
         string _learningText = "Learning";
+        string _runtimeStatsText = " - ";
         GUIStyle _learningTextStyle;
+        GUIStyle _runtimeStatsStyle;
+
+        private AudioClip trainingSound;
 
         private void Awake()
         {
@@ -57,6 +62,19 @@ namespace DeepUnity.ReinforcementLearning
                 _learningTextStyle.fontStyle = FontStyle.Bold;
                 _learningTextStyle.wordWrap = true;
                 _learningTextStyle.normal.textColor = Color.white;
+                _runtimeStatsStyle = new GUIStyle(_learningTextStyle);
+                _runtimeStatsStyle.fontSize = 20;
+
+                // Play some music in background
+                // trainingSound = Resources.Load<AudioClip>("Audio/TrainingSound1");
+                // var audiosource = transform.AddComponent<AudioSource>();
+                // audiosource.loop = true;
+                // audiosource.playOnAwake = false;
+                // audiosource.volume = 0.1f;
+                // audiosource.clip = trainingSound;
+                // audiosource.Play();
+
+
                 StartCoroutine("DrawDotsToLearningText");
 #if UNITY_EDITOR // It seems like that when i build the application the quallity is dropped and this is the reason. SO LET IT LIKE THIS YOU MF.
                 QualitySettings.SetQualityLevel(0, true);
@@ -100,10 +118,12 @@ namespace DeepUnity.ReinforcementLearning
         private void Update()
         {
             avgDeltaTime = avgDeltaTime * avgDeltaTimeMomentum + Time.deltaTime * (1f - avgDeltaTimeMomentum);
+            _runtimeStatsText = $"[Timescale: {Time.timeScale.ToString("0.0")} | No. agents {parallelAgents.Count}]";
         }
         public void OnGUI()
         {
             GUI.Label(new Rect(10, Screen.height - 65, 400, 60), _learningText, _learningTextStyle);
+            GUI.Label(new Rect(10, 10, 800, 60), _runtimeStatsText, _runtimeStatsStyle);
         }
 
         protected abstract void Initialize();

@@ -14,25 +14,25 @@
 
 // ------------------------------------------------------------------- Data Fields
 RWStructuredBuffer<float> data1;
-int w1 = 1;
-int h1 = 1;
-int c1 = 1;
-int b1 = 1;
-int r1 = 0;
+int w1 = 1; // width of tensor1
+int h1 = 1; // ...
+int c1 = 1; // ...
+int b1 = 1; // ...
+int r1 = 0; // rank of tensor 1
 
 RWStructuredBuffer<float> data2;
-int w2 = 1;
-int h2 = 1;
-int c2 = 1;
-int b2 = 1;
-int r2 = 0;
+int w2 = 1; // width of tensor2
+int h2 = 1; // ...
+int c2 = 1; // ...
+int b2 = 1; // ...
+int r2 = 0; // rank of tensor 2
 
 RWStructuredBuffer<float> result;
-int wr = 1;
-int hr = 1;
-int cr = 1;
-int br = 1;
-int rr = 0;
+int wr = 1; // width of result tensor
+int hr = 1; // ...
+int cr = 1; // ...
+int br = 1; // ...
+int rr = 0; // rank of result tensor
 
 // Additional fields used for operations
 int seed;
@@ -471,7 +471,23 @@ void MatMul(int3 id : SV_DispatchThreadID)
     }
 }
 
-
+#pragma kernel BatchedMatMul
+[numthreads(8,8,8)]
+void BatchedMatMul(int3 id: SV_DispatchThreadID)
+{
+    // id.x = b , id.y = n, id.z = p
+    // input [B x N x M] * other [B x M x P]
+    if (id.x >= cr || id.y >= hr || id.z >= wr)
+        return;
+    
+    float sum = 0.0f;
+    for (int m = 0; m < w1; m++)
+    {
+        sum += data1_get(0, id.x, id.y, m) * data2_get(0, id.x, m, id.z);
+    }
+    result_set(0, id.x, id.y, id.z, sum);
+    
+}
 
 #pragma kernel Transpose
 [numthreads(1, 1, 1)]

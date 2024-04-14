@@ -6,16 +6,20 @@ namespace DeepUnity
     public class CameraFollow : MonoBehaviour
     {
         public Transform objectToFollow;
-        public float smoothness = 0.3f;
+        [MinMax(0.001f, 0.999f)]public float smoothness = 0.3f;
         private Vector3 offset;
         private Vector3 speed;
         private void Start()
         {
-            offset = transform.position - objectToFollow.position;
+            if (objectToFollow != null)
+                offset = transform.position - objectToFollow.position;
+            else
+                ConsoleMessage.Warning("Camera cannot follow an object because the target was not assigned");
         }
         private void LateUpdate()
         {
-            transform.position = Vector3.SmoothDamp(transform.position, objectToFollow.position + offset, ref speed, smoothness);
+            if (objectToFollow != null)
+                transform.position = Vector3.SmoothDamp(transform.position, objectToFollow.position + offset, ref speed, smoothness);
         }
     }
 #if UNITY_EDITOR

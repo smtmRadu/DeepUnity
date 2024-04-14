@@ -201,6 +201,9 @@ namespace DeepUnity.Tutorials
 
 
             AddReward(+0.0025f);
+
+            if (transform.position.y < -10f)
+                EndEpisode();
         }
     }
 }

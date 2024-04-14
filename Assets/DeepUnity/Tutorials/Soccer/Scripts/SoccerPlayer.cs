@@ -23,10 +23,11 @@ namespace DeepUnity.Tutorials
         {
             // Rays are responsible for positioning in the arena (can see goals of each types and walls only)
             // Grid is responsible for other agents and ball
-            // rayinfo: 192 + 2 = 194
+            // 53 + 8 = 61
             sensorBuffer.AddObservation((int)type);
             sensorBuffer.AddObservation((int)team);
             sensorBuffer.AddObservation((transform.position - ball.position).normalized);
+            sensorBuffer.AddObservation(transform.forward.normalized); // even if it is not exactly forward it doesn t matter (is the actual right rotation).
         }
 
         public override void OnActionReceived(ActionBuffer actionBuffer)
@@ -57,6 +58,12 @@ namespace DeepUnity.Tutorials
 
             if (type == PlayerType.Goalie)
                 AddReward(0.001f); // Existential bonus
+        }
+
+        private void OnCollisionEnter(Collision collision)
+        {
+            if (collision.collider.CompareTag("Ball"))
+                AddReward(0.001f);
         }
         public enum PlayerType
         {

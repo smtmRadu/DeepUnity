@@ -1,5 +1,6 @@
 using System;
 using DeepUnity.Modules;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity.Activations
@@ -18,8 +19,8 @@ namespace DeepUnity.Activations
         [SerializeField] private float temperature = 1f;
         /// <summary>
         /// <b>Applies the Softmax function over the last input's dimension H (axis: -1).</b> <br></br>
-        /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input <br></br>
-        /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input <br></br>
+        /// Input: <b>(B, H)</b>, <b>(H)</b> or  <b>(B, L, H)</b>, <b>(L, H)</b> for sequential input <br></br>
+        /// Output: <b>(B, H)</b>, <b>(H)</b> or  <b>(B, L, H)</b>, <b>(L, H)</b> for sequential input <br></br>
         /// where * = any shape and H = features_num
         /// </summary>
         public Softmax(float temperature = 1f) 
@@ -34,8 +35,8 @@ namespace DeepUnity.Activations
         public Tensor Predict(Tensor input)
         {
             int iRank = input.Rank;
-            if (iRank != 1 && iRank != 2)
-                throw new ShapeException("Softmax input must be of shape (B, H) or (H).");
+            if (iRank == 0 || iRank == 4)
+                throw new ShapeException($"Softmax input must be of shape (H), (B, H), (L, H) or (B, L, H) (received ({input.Shape.ToCommaSeparatedString()})).");
 
             // softmax(x[i]) = e^x[i] / sum{j:1->H}(e^x[j]])
             Tensor exp = Tensor.Exp(input / temperature);
@@ -52,40 +53,51 @@ namespace DeepUnity.Activations
         }
         public Tensor Backward(Tensor dLdY)
         {
-            if(dLdY.Rank == 2)
-            {
-                if (OutputCache.Rank != 2)
-                    throw new ArgumentException("Input received in Softmax is Rank 1 and the output gradient is Rank 2.");
+            if (OutputCache.Rank != dLdY.Rank)
+                throw new ArgumentException($"Input received in Softmax is Rank {OutputCache.Rank} and the output gradient is Rank {dLdY.Rank}.");
 
-                Tensor[] batchElems_sm = OutputCache.Split(0, 1);
+            return RecursiveLoRBackward(dLdY, OutputCache);
+        }
+
+        private Tensor RecursiveLoRBackward(Tensor dLdY, Tensor outputCache)
+        {
+            if (dLdY.Rank == 3)
+            {           
+                Tensor[] batchElems_sm = outputCache.Split(0, 1);
                 Tensor[] batchElems_loss = dLdY.Split(0, 1);
                 Tensor[] batchElems_inputGrad = new Tensor[batchElems_sm.Length];
                 for (int i = 0; i < batchElems_loss.Length; i++)
-                {
-                    OutputCache = batchElems_sm[i];
-                    batchElems_inputGrad[i] = Backward(batchElems_loss[i].Squeeze(0));
-                }
+                    batchElems_inputGrad[i] = RecursiveLoRBackward(batchElems_loss[i].Squeeze(0), batchElems_sm[i].Squeeze(0));
                 return Tensor.Concat(null, batchElems_inputGrad);
             }
-
-
-            int H = OutputCache.Size(-1);
-
-            Tensor jacobian_softmax = Tensor.Zeros(H, H);
-
-            for (int j = 0; j < H; j++)
+            if (dLdY.Rank == 2)
             {
-                for (int i = 0; i < H; i++)
+                Tensor[] seqElems_sm = outputCache.Split(0, 1);
+                Tensor[] seqElems_loss = dLdY.Split(0, 1);
+                Tensor[] seqElems_inputGrad = new Tensor[seqElems_sm.Length];
+                for (int i = 0; i < seqElems_loss.Length; i++)
+                    seqElems_inputGrad[i] = RecursiveLoRBackward(seqElems_loss[i].Squeeze(0), seqElems_sm[i].Squeeze(0));
+                return Tensor.Concat(null, seqElems_inputGrad);
+            }
+            else // Case one vector
+            {
+                int H = outputCache.Size(-1);
+
+                Tensor jacobian_softmax = Tensor.Zeros(H, H);
+
+                for (int j = 0; j < H; j++)
                 {
-                    float delta = i == j ? 1 : 0;
-                    jacobian_softmax[j, i] += OutputCache[i] * (delta - OutputCache[j]);
+                    for (int i = 0; i < H; i++)
+                    {
+                        float delta = i == j ? 1 : 0;
+                        jacobian_softmax[j, i] += outputCache[i] * (delta - outputCache[j]);
+                    }
                 }
+
+                return Tensor.MatMul(dLdY, jacobian_softmax);
             }
             
-
-            return Tensor.MatMul(dLdY, jacobian_softmax);
         }
-
 
         public object Clone() => new Softmax(temperature);
     }

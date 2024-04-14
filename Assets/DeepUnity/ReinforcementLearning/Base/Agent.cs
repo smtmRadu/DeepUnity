@@ -586,7 +586,7 @@ namespace DeepUnity.ReinforcementLearning
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("spaceChannels"), GUIContent.none);
                     EditorGUILayout.EndHorizontal();
                 }
-                else if (arTp == (int)ArchitectureType.RNN)
+                else if (arTp == (int)ArchitectureType.RNN || arTp == (int)ArchitectureType.ATT)
                 {
                     EditorGUILayout.LabelField("Observations");
 

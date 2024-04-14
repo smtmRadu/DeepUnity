@@ -752,7 +752,7 @@ namespace DeepUnity
 
         #region Special
         /// <summary>
-        /// Copies all data from <paramref name="fromTensor"/> and assignes them <paramref name="toTensor"/>.
+        /// Copies all data from <paramref name="fromTensor"/> and assignes them to <paramref name="toTensor"/>, along with the shape.
         /// </summary>
         /// <param name="fromTensor"></param>
         /// <param name="toTensor"></param>
@@ -762,7 +762,7 @@ namespace DeepUnity
             toTensor.shape = fromTensor.shape.ToArray();
         }
         /// <summary>
-        /// Computes the matrix multiplication of two tensors. <br></br>
+        /// Computes the matrix product of two tensors. <br></br>
         /// Left: <b>(J, 1, N, M)</b> <br></br>
         /// Right: <b>(K, M, P)</b> <br></br>
         /// <br></br>
@@ -1060,6 +1060,101 @@ namespace DeepUnity
                 result.shape = resultShape.ToArray();
                 return result;
             }
+        }
+        /// <summary>
+        /// Performs a batched matrix-matrix product. <br></br>
+        /// Left: <b>(B, N, M)</b> or <b>(N, M)</b> for unbatched<br></br>
+        /// Right: <b>(B, M, P)</b> or <b>(M, P)</b> for unbatched<br></br>
+        /// <br></br>
+        /// <em>If device == GPU, the tensors are loaded on VRAM of the GPU, operations are done there, and the result is retrieved back to RAM.</em>
+        /// </summary>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <param name="device"></param>
+        /// <returns>Output: <b>(B, N, P)</b> or <b>(N, P)</b> for unbatched</returns>
+        public static Tensor BatchedMatMul(Tensor left, Tensor right, Device device = Device.CPU)
+        {
+            if (left.Width != right.Height)
+                throw new ArgumentException($"Tensors must have compatible shapes for batched matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
+
+            if (left.Channels != right.Channels)
+                throw new ArgumentException($"Tensors must have compatible shapes for batched matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
+
+            if (left.Rank > 3 || right.Rank > 3)
+                throw new ArgumentException($"Maximum allowed rank is 3");
+
+            if (left.Rank < 2 || right.Rank < 2)
+                throw new ArgumentException($"Minimum allowed rank is 2");
+
+            int C = left.Channels;
+            int N = left.Height;
+            int M = left.Width;
+            int P = right.Width;
+
+            Tensor result = new Tensor(CreateShape(left.Rank, 1, C, N, P));
+
+            if (device == Device.CPU)
+            {               
+                Parallel.For(0, C, c =>
+                {
+                    for (int n = 0; n < N; n++)
+                    {
+                        for (int p = 0; p < P; p++)
+                        {
+                            float sum = 0f;
+                            for (int m = 0; m < M; m++)
+                            {
+                                sum += left[c, n, m] * right[c, m, p];
+                            }
+                            result[c, n, p] = sum;
+                        }
+                    }
+                });
+            }
+            else
+            {
+                ComputeShader cs = DeepUnityMeta.TensorCS;
+
+                ComputeBuffer leftData = new(left.data.Length, 4);
+                ComputeBuffer rightData = new(right.data.Length, 4);
+                ComputeBuffer resultData = new(C * N * P, 4);
+
+                leftData.SetData(left.data);
+                rightData.SetData(right.data);
+
+                int kernel = cs.FindKernel("BatchedMatMul");
+
+                cs.SetBuffer(kernel, "data1", leftData);
+                cs.SetBuffer(kernel, "data2", rightData);
+                cs.SetBuffer(kernel, "result", resultData);
+
+                cs.SetInt("w1", M);
+                cs.SetInt("h1", N);
+                cs.SetInt("c1", C);
+
+                cs.SetInt("w2", P);
+                cs.SetInt("h2", M);
+                cs.SetInt("c2", C);
+
+                cs.SetInt("wr", P);
+                cs.SetInt("hr", N);
+                cs.SetInt("cr", C);
+
+                // channels c are the batch here
+
+                cs.Dispatch(kernel,
+                      (C + 7) / 8,
+                      (N + 7) / 8,
+                      (P + 7) / 8);
+
+                resultData.GetData(result.data);
+
+                leftData.Release();
+                rightData.Release();
+                resultData.Release();
+            }
+
+            return result;
         }
         /// <summary>
         /// Computes the dot product of two 1D tensors.
@@ -1975,7 +2070,9 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
-        /// Transposes the tensor along the two specified axis.
+        /// Transposes the tensor along the two specified axis. <br></br>
+        /// Input: (B, C, H, W) <br></br>
+        /// Output: (N, C, W, H) <br></br>
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis0"></param>

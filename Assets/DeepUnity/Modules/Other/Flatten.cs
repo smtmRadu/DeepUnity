@@ -3,6 +3,14 @@ using UnityEngine;
 
 namespace DeepUnity.Modules
 {
+    /// <summary>
+    /// <b>Use negative values when explicit the start and end axis (-1, -2 or -3).</b> <br></br>
+    /// Input: <b>(B, *)</b> or <b>(*)</b> for unbatched input.<br></br>
+    /// Output: <b>(B, *')</b> or <b>(*')</b> for unbatched input.<br></br>
+    /// where B = batch size, * = input shape and *' = output shape.
+    /// </summary>
+    /// <param name="startAxis"></param>
+    /// <param name="endAxis"></param>
     [Serializable]
     public class Flatten : IModule
     {

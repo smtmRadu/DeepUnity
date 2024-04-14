@@ -409,14 +409,14 @@ MonoBehaviour:
   spaceHeight: 16
   spaceWidth: 16
   spaceChannels: 3
-  stackedInputs: 1
+  stackedInputs: 16
   continuousActions: 2
   discreteActions: 0
-  archType: 0
+  archType: 3
   numLayers: 2
-  hidUnits: 64
-  model: {fileID: 11400000, guid: 8750bef7a605e2d44af848083cbb1298, type: 2}
-  behaviourType: 1
+  hidUnits: 32
+  model: {fileID: 11400000, guid: 2770e7865f0eb314fb3097c549d1edd0, type: 2}
+  behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0
   ball: {fileID: 1198115738}

@@ -244,6 +244,9 @@ namespace DeepUnity.Tutorials
             jdDict[shinR].SetJointStrength(actions_vector[i++]);
             jdDict[footR].SetJointStrength(actions_vector[i++]);
 
+            if (transform.position.y < -10f) // Falls of the platform
+                EndEpisode();
+
             AddReward(0.001f);
         }
     }

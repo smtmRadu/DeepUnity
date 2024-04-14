@@ -1,6 +1,6 @@
 # DeepUnity
 ###### In development - does not currently accept Pull Requests, though feel free to Fork and expand upon it
-![version](https://img.shields.io/badge/version-v0.9.8.3-blue)
+![version](https://img.shields.io/badge/version-v0.9.8.4-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO) and Soft Actor-Critic (SAC).
 
@@ -143,7 +143,7 @@ public class MoveToGoal : Agent
 
 - The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. If neccesary, in order to override them, call the their **base** each time, respecting the logic of the diagram below.
 
-### Training on built application for faster inference (x10)
+### Training on built application for faster inference
 - Training inside the Editor is a bit more cumbersome comparing to the built version. Building the application and open it up to start up the training enables faster inference, and the framework was adapted for this.
 
 - Whenever you want to stop the training, close the .exe file. The trained behavior is automatically saved and serialized in .json format on your desktop. Go back in Unity and check your behavior asset, and press on the newly button to overwrite the editor behavior with the trained weights from .json.

@@ -30,6 +30,7 @@ namespace DeepUnity.Modules
         [SerializeField] public Device Device { get; set; } = Device.CPU;
 
         [SerializeField] private int d;
+        [SerializeField] private bool mask;
 
         [SerializeField] private Tensor W_Q;
         [SerializeField] private Tensor W_K;
@@ -53,12 +54,14 @@ namespace DeepUnity.Modules
         /// where B = batch_size, L = sequence_length, H = input_size and D = embed_dim.<br></br>
         /// <b>Placed after the non-linear activation function.</b> <br></br>
         /// </summary>
-        /// <param name="input_size">Input features size</param>
+        /// <param name="input_size">Input features size.</param>
+        /// <param name="mask">Use attention mask for future tokens.</param>
         /// <param name="embed_dim">Dimension of the attention mechanism.</param>
-        public Attention(int input_size, int embed_dim, InitType weight_init = InitType.LeCun_Uniform, Device device = Device.CPU)
+        public Attention(int input_size, int embed_dim, bool mask = false, InitType weight_init = InitType.LeCun_Uniform, Device device = Device.CPU)
         {
             // H and d have the same dimension
             d = embed_dim;
+            this.mask = mask;
             this.Device = device;
             int H = input_size;
 
@@ -106,7 +109,8 @@ namespace DeepUnity.Modules
                 K.Push(Tensor.MatMul(x, W_K, Device)); // (L, D)
                 V.Push(Tensor.MatMul(x, W_V, Device)); // (L, D)
                 Tensor sdpa = Tensor.MatMul(Q.Peek(), K.Peek().Transpose(0, 1), Device); //(L, D) * (D, L) = (L, L)
-                sdpa /= MathF.Sqrt(d);
+                sdpa /= MathF.Sqrt(d); // (L, L)
+                if (mask) Mask(sdpa);
                 SoftmaxCache.Push(new Softmax());
                 sdpa = SoftmaxCache.Peek().Forward(sdpa); // (L, L)
                 PostSoftmaxCache.Push(sdpa); // no need for clone because concat makes a copy
@@ -221,7 +225,179 @@ namespace DeepUnity.Modules
             PostSoftmaxCache = new();
             InputCache = new();
         }
+
+        /// <summary>
+        /// Masks the sdpa by setting the upper triangular elements as - infinity.
+        /// </summary>
+        /// <param name="shape"></param>
+        /// <returns></returns>
+        private void Mask(Tensor sdpa)
+        {
+            // sdpa is (L, L)
+            int L = sdpa.Size(-1);
+            for (int i = 0; i < L; i++)
+            {
+                for (int j = 0; j < L; j++)
+                {
+                    if (j > i)
+                        sdpa[i, j] = float.MinValue;
+                }
+            }
+        }
     }
 
+    // It seems like the old implementation is faster for larger batchsizes > 32.
+    [Serializable]
+    public class AttentionV2 : ILearnable, IModule
+    {
+        [SerializeField] public Device Device
+        {
+            get => W_Q.Device; set
+            {
+                W_Q.Device = value;
+                W_K.Device = value;
+                W_V.Device = value;
+            }
+        }
+
+        [SerializeField] private int d;
+        [SerializeField] private bool mask;
+
+        [SerializeField] private Dense W_Q;
+        [SerializeField] private Dense W_K;
+        [SerializeField] private Dense W_V;
+        [SerializeField] private Softmax softmax;
+
+        private Tensor InputCache { get; set; }
+        private Tensor PostSoftmaxCache { get; set; }
+        private Tensor QCache { get; set; }
+        private Tensor KCache { get; set; }
+        private Tensor VCache { get; set; }
+
+        public AttentionV2(int input_size, int embed_dim, bool mask = false, InitType weight_init = InitType.LeCun_Uniform, Device device = Device.CPU)
+        {
+            // H and d have the same dimension
+            d = embed_dim;
+            this.mask = mask;
+
+            W_Q = new Dense(input_size, embed_dim, bias: false, weight_init, device: device);
+            W_K = new Dense(input_size, embed_dim, bias: false, weight_init, device: device);
+            W_V = new Dense(input_size, embed_dim, bias: false, weight_init, device: device);
+            softmax = new Softmax();
+        }
+        private AttentionV2() { }
+
+
+        public Tensor Predict(Tensor input)
+        {
+            Tensor Q = W_Q.Predict(input);
+            Tensor K = W_K.Predict(input);
+            Tensor V = W_V.Predict(input);
+
+            var sdpa = Tensor.BatchedMatMul(Q, K.Transpose(-1, -2), device: Device) / Mathf.Sqrt(d);
+            if (mask) Mask(sdpa);
+            sdpa = softmax.Predict(sdpa);
+            return Tensor.BatchedMatMul(sdpa, V, device: Device);
+        }
+
+        public Tensor Forward(Tensor input)
+        {
+            InputCache = input.Clone() as Tensor;
+            QCache = W_Q.Forward(input);
+            KCache = W_K.Forward(input);
+            VCache = W_V.Forward(input);
+
+            var sdpa = Tensor.BatchedMatMul(QCache, KCache.Transpose(-1, -2), device: Device) / Mathf.Sqrt(d);
+            if (mask) Mask(sdpa);
+            sdpa = softmax.Forward(sdpa);
+            PostSoftmaxCache = sdpa;
+            return Tensor.BatchedMatMul(sdpa, VCache, device: Device);
+        }
+
+
+        public Tensor Backward(Tensor dLdY)
+        {
+            if (dLdY.Rank != InputCache.Rank)
+                throw new ArgumentException($"Loss rank {dLdY.Rank} not equal to input rank {InputCache.Rank}");
+
+            Tensor vGrad = Tensor.BatchedMatMul(PostSoftmaxCache, dLdY, Device);
+            Tensor xGrad = W_V.Backward(vGrad);
+
+            Tensor qkTGrad = softmax.Backward(Tensor.BatchedMatMul(VCache, dLdY.Transpose(-1, -2), Device)) / MathF.Sqrt(d);
+            Tensor qGrad = Tensor.BatchedMatMul(qkTGrad, KCache, Device);
+            Tensor kGrad = Tensor.BatchedMatMul(qkTGrad, QCache, Device);
+
+            xGrad += W_Q.Backward(qGrad);
+            xGrad += W_K.Backward(kGrad);
+
+            return xGrad;
+        }
+
+
+        public object Clone()
+        {
+            var att = new AttentionV2();
+            att.d = this.d;
+            att.mask = this.mask;
+            att.Device = this.Device;
+            att.W_Q = this.W_Q.Clone() as Dense;
+            att.W_K = this.W_K.Clone() as Dense;
+            att.W_V = this.W_V.Clone() as Dense;
+            att.softmax = this.softmax.Clone() as Softmax;
+            return att;
+        }
+        public Parameter[] Parameters()
+        {
+            if (W_Q == null)
+                OnAfterDeserialize();
+
+            var list = new List<Parameter>();
+            list.AddRange(W_Q.Parameters());
+            list.AddRange(W_K.Parameters());
+            list.AddRange(W_V.Parameters());
+            return list.ToArray();
+        }
+
+        public virtual void OnBeforeSerialize()
+        {
+
+        }
+        public virtual void OnAfterDeserialize()
+        {
+            W_K.OnAfterDeserialize();
+            W_V.OnAfterDeserialize();
+            W_Q.OnAfterDeserialize();
+        }
+        private void Mask(Tensor sdpa)
+        {
+            // sdpa is (L, L)
+            int L = sdpa.Size(-1);
+
+            if (sdpa.Rank == 3)
+            {
+                int batch_size = sdpa.Size(0);
+                for (int b = 0; b < batch_size; b++)
+                {
+                    for (int i = 0; i < L; i++)
+                    {
+                        for (int j = 0; j < L; j++)
+                        {
+                            if (j > i)
+                                sdpa[b, i, j] = float.MinValue;
+                        }
+                    }
+                }
+            }
+            else
+                for (int i = 0; i < L; i++)
+                {
+                    for (int j = 0; j < L; j++)
+                    {
+                        if (j > i)
+                            sdpa[i, j] = float.MinValue;
+                    }
+                }
+        }
+    }
 }
 

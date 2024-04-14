@@ -51,7 +51,7 @@ namespace DeepUnity.Tutorials
             if (net == null)
             {
                 net = new Sequential(
-                 new Dense(2, hiddenSize,init_w, init_b),
+                 new Dense(2, hiddenSize, weight_init: init_w, bias_init:init_b),
                  new Tanh(),
 
                  new ResidualConnection.Fork(),
@@ -70,7 +70,7 @@ namespace DeepUnity.Tutorials
                  new GELU(),
                  new Dense(hiddenSize,   hiddenSize),
                  new ReLU(),
-                 new Dense(hiddenSize, 1, init_w, init_b)
+                 new Dense(hiddenSize, 1, weight_init: init_w, bias_init: init_b)
                  );
             }
 
