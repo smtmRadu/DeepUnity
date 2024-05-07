@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
   m_Name: _Crawler
   m_EditorClassIdentifier: 
+  version: 0
   behaviourName: Crawler
   assetCreated: 1
   observationSize: 94
@@ -225,7 +226,7 @@ MonoBehaviour:
       - 4532529
       - 4452033
       shape: 5e000000
-  observationsClip: 10
+  clipping: 5
   rewardsNormalizer:
     step: 0
     R: 0

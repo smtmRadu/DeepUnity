@@ -53,6 +53,9 @@ namespace DeepUnity.Modules
             if (padding > 0)
                 input = Tensor.MatPad(input, padding, padding_mode);
 
+            if (H_out < 1 || W_out < 1)
+                throw new ShapeException($"The input shape {input.Shape.ToCommaSeparatedString()} is smaller than the kernel {kernel_size}x{kernel_size} in max2d pooling layer.");
+
             bool isBatched = input.Rank == 4;
             int batch_size = isBatched ? input.Size(-4) : 1;
             int channel_size = input.Rank >= 3 ? input.Size(-3) : 1;

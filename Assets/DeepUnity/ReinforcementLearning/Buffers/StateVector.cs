@@ -38,13 +38,16 @@ namespace DeepUnity.ReinforcementLearning
         /// More than 0 otherwise.
         /// </summary>
         /// <returns></returns>
-        public int IsOk()
+        public int GetOverflow()
         {
             return StateSequenceVector.Count % StateSize;
         }
         public override string ToString()
         {
-            return $"[Observations [{State.ToArray().ToCommaSeparatedString()}]]";
+            if(StackedInputs > 1)
+                return $"[Observations ({StateSize}x{StackedInputs}) [{State.ToArray().ToCommaSeparatedString()}]]";
+            else
+                return $"[Observations ({StateSize}) [{State.ToArray().ToCommaSeparatedString()}]]";
 
         }
 
@@ -120,11 +123,33 @@ namespace DeepUnity.ReinforcementLearning
         /// </summary>
         /// <param name="observationsN"></param>
         /// <exception cref="InsufficientMemoryException"></exception>
-        public void AddObservationRange(IEnumerable observationsN)
+        public void AddObservation(IEnumerable<float> observationsN)
         {
-            IEnumerable<float> castedObservationCollection = observationsN.Cast<float>();
-
-            foreach (var item in castedObservationCollection)
+            foreach (var item in observationsN)
+            {
+                AddObservation(item);
+            }
+        }
+        /// <summary>
+        /// Adds an observation vector of length <b>N</b>.
+        /// </summary>
+        /// <param name="observationsN"></param>
+        /// <exception cref="InsufficientMemoryException"></exception>
+        public void AddObservation(IEnumerable<int> observationsN)
+        {
+            foreach (var item in observationsN)
+            {
+                AddObservation(item);
+            }
+        }
+        /// <summary>
+        /// Adds an observation vector of length <b>N</b>.
+        /// </summary>
+        /// <param name="observationsN"></param>
+        /// <exception cref="InsufficientMemoryException"></exception>
+        public void AddObservation(IEnumerable<bool> observationsN)
+        {
+            foreach (var item in observationsN)
             {
                 AddObservation(item);
             }

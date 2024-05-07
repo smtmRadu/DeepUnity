@@ -34,11 +34,11 @@ namespace DeepUnity.Optimizers
 
             for (int i = 0; i < parameters.Length; i++)
             {
-                m[i] = Tensor.Zeros(parameters[i].theta.Shape);
-                v[i] = Tensor.Zeros(parameters[i].theta.Shape);
+                m[i] = Tensor.Zeros(parameters[i].param.Shape);
+                v[i] = Tensor.Zeros(parameters[i].param.Shape);
 
                 if (amsgrad)
-                    vHatMax[i] = Tensor.Zeros(parameters[i].theta.Shape);           
+                    vHatMax[i] = Tensor.Zeros(parameters[i].param.Shape);           
             }
         }
 
@@ -54,7 +54,7 @@ namespace DeepUnity.Optimizers
                 if (maximize)
                     Tensor.CopyTo(-parameters[i].g, parameters[i].g);
 
-                Tensor.CopyTo(parameters[i].theta - gamma * lambda * parameters[i].theta, parameters[i].theta);
+                Tensor.CopyTo(parameters[i].param - gamma * lambda * parameters[i].param, parameters[i].param);
 
                 m[i] = beta1 * m[i] + (1f - beta1) * parameters[i].g;
                 v[i] = beta2 * v[i] + (1f - beta2) * parameters[i].g.Pow(2f);
@@ -64,10 +64,10 @@ namespace DeepUnity.Optimizers
                 if (amsgrad)
                 {
                     vHatMax[i] = Tensor.Maximum(vHatMax[i], vHat);
-                    Tensor.CopyTo(parameters[i].theta - gamma * mHat / (vHatMax[i].Sqrt() + epsilon), parameters[i].theta);
+                    Tensor.CopyTo(parameters[i].param - gamma * mHat / (vHatMax[i].Sqrt() + epsilon), parameters[i].param);
                 }
                 else
-                    Tensor.CopyTo(parameters[i].theta - gamma * mHat / (vHat.Sqrt() + epsilon), parameters[i].theta);            
+                    Tensor.CopyTo(parameters[i].param - gamma * mHat / (vHat.Sqrt() + epsilon), parameters[i].param);            
             });
         }
     }

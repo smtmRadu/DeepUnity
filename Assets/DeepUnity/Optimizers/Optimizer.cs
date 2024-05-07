@@ -44,7 +44,10 @@ namespace DeepUnity.Optimizers
         {
             foreach (var param in parameters)
             {
-                Tensor.CopyTo(Tensor.Zeros(param.g.Shape), param.g);
+                if (param.Device == Device.CPU)
+                    Tensor.CopyTo(Tensor.Zeros(param.g.Shape), param.g);
+                else
+                    TensorGPU.Zero_(param.gGPU);
             }
         }
         /// <summary>
@@ -54,7 +57,10 @@ namespace DeepUnity.Optimizers
         {
             foreach (var param in parameters)
             {
-                Tensor.CopyTo(param.g.Clip(-clip_value, clip_value), param.g);
+                if (param.Device == Device.CPU)
+                    Tensor.CopyTo(param.g.Clip(-clip_value, clip_value), param.g);
+                else
+                    TensorGPU.Clip_(param.gGPU, -clip_value, clip_value);
             }
         }
         /// <summary>
@@ -66,17 +72,29 @@ namespace DeepUnity.Optimizers
             if (max_norm == 0)
                 return;
 
-            int no_params = parameters.Sum(x => x.theta.Count());
+            int no_params = parameters.Sum(x =>
+            {
+                if (x.Device == Device.CPU)
+                    return x.param.Count();
+                else
+                    return x.paramGPU.Count();
+            });
 
             // Concatenate all gradients in a single tensor vector
             Tensor vector = Tensor.Zeros(no_params);
             int index = 0;
             foreach (var grad_t in parameters)
             {
-                foreach (var grad in grad_t.g.ToArray())
-                {
-                    vector[index++] = grad;
-                }
+                if(grad_t.Device == Device.CPU)
+                    foreach (var grad in grad_t.g.ToArray())
+                    {
+                        vector[index++] = grad;
+                    }
+                else
+                    foreach (var grad in grad_t.gGPU.ToArray())
+                    {
+                        vector[index++] = grad;
+                    }
             }
 
             // Compute norm
@@ -89,7 +107,10 @@ namespace DeepUnity.Optimizers
 
             foreach (var param in parameters)
             {
-                Tensor.CopyTo(param.g * c, param.g);
+                if (param.Device == Device.CPU)
+                    Tensor.CopyTo(param.g * c, param.g);
+                else
+                    TensorGPU.Multiply_(param.gGPU, c);
             }
         }
 

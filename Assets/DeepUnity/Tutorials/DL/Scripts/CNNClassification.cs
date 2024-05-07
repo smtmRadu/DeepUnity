@@ -37,44 +37,23 @@ namespace DeepUnity.Tutorials
 
             if (network == null)
             {
-                const int cout = 32;
                 network = new Sequential(
-                         new Conv2D(1, cout, 3),
-                         new PReLU(),
-                         // new BatchNorm2D(cout),
+                         new Conv2D(1, 64, 3),
 
                          new ResidualConnection.Fork(),
                          new ZeroPad2D(1),
-                         new Conv2D(cout, cout, 3),
-                         new PReLU(),
-                         // new BatchNorm2D(cout),
-                         new ResidualConnection.Join(),
-                         new MaxPool2D(2),
-
-                         new ResidualConnection.Fork(),
+                         new Conv2D(64, 64, 3),
                          new ZeroPad2D(1),
-                         new Conv2D(cout, cout, 3),
-                         new PReLU(),
-                         // new BatchNorm2D(cout),
-                         new ResidualConnection.Join(),
-
-                         new ResidualConnection.Fork(),
+                         new Conv2D(64, 16, 3), // bottle neck
                          new ZeroPad2D(1),
-                         new Conv2D(cout, cout, 3),
-                         new PReLU(),
-                         // new BatchNorm2D(cout),
+                         new Conv2D(16, 64, 3),
                          new ResidualConnection.Join(),
-                         new MaxPool2D(2),
 
                          new Flatten(),
-                         new LazyDense(128),
+                         new LazyDense(64),
                          new LayerNorm(),
                          new PReLU(),
-                         new Dropout(0.1f),
-                         new Dense(128, 128),
-                         new LayerNorm(),
-                         new PReLU(),
-                         new Dense(128, 10),
+                         new Dense(64, 10),
 
                          new Softmax()).CreateAsset(name);
             }

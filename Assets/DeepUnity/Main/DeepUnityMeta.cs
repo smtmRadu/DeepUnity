@@ -192,10 +192,14 @@ namespace DeepUnity
         ResetEnvironment
     }
 
-    public enum StandardDeviationType
+    public enum Stochasticity
     {
-        Fixed,
-        Trainable
+        [Tooltip("Used for stochastic policies (PPO, SAC)")]
+        FixedStandardDeviation,
+        [Tooltip("Used for stochastic policies (PPO, SAC)")]
+        TrainebleStandardDeviation,
+        [Tooltip("Used for deterministic policies (TD3, DDPG)")]
+        ActiveNoise
     }
 
     public enum AverageType
@@ -230,6 +234,10 @@ namespace DeepUnity
         PPO,
         [Tooltip("Soft Actor-Critic")]
         SAC,
+        [Tooltip("Twin Delayed Deep Deterministic Policy Gradient")]
+        TD3,
+        [Tooltip("Deep Deterministic Policy Gradient")]
+        DDPG
     }
 
     public enum TimescaleAdjustmentType

@@ -54,7 +54,7 @@ namespace DeepUnity.Models
         public override Tensor Backward(Tensor lossGradient)
         {
             Tensor loss = Modules[Modules.Length - 1].Backward(lossGradient);
-            for (int i = Modules.Length - 2; i >= 0; i--)
+            for (int i = Modules.Length - 2; i >= 0; --i)
             {
                 loss = Modules[i].Backward(loss);
             }
@@ -68,9 +68,10 @@ namespace DeepUnity.Models
         public override Parameter[] Parameters()
         {
             List<Parameter> param = new();
-            foreach (var item in Modules.OfType<ILearnable>())
+            foreach (var item in Modules)
             {
-                param.AddRange(item.Parameters());
+                if (item is ILearnable litem)
+                    param.AddRange(litem.Parameters());
             }
             return param.ToArray();
         }
@@ -82,9 +83,10 @@ namespace DeepUnity.Models
         {
             set
             {
-                foreach (var item in Modules.OfType<ILearnable>())
+                foreach (var item in Modules)
                 {
-                    item.Device = value;
+                    if(item is ILearnable litem)
+                        litem.Device = value;
                 }
             }
         }

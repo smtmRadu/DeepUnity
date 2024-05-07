@@ -51,26 +51,11 @@ namespace DeepUnity.Tutorials
             if (net == null)
             {
                 net = new Sequential(
-                 new Dense(2, hiddenSize, weight_init: init_w, bias_init:init_b),
+                 new DenseGPU(2, hiddenSize, weight_init: init_w, bias_init:init_b),
                  new Tanh(),
-
-                 new ResidualConnection.Fork(),
-                 new Dense(hiddenSize, hiddenSize),
-                 new RMSNorm(),
-                 new ELU(),
-                 new ResidualConnection.Join(),
-
-                 new ResidualConnection.Fork(),
-                 new Dense(hiddenSize, hiddenSize),
-                 new RMSNorm(),
-                 new ELU(),
-                 new ResidualConnection.Join(),
-
-                 new Dense(hiddenSize, hiddenSize),
-                 new GELU(),
-                 new Dense(hiddenSize,   hiddenSize),
-                 new ReLU(),
-                 new Dense(hiddenSize, 1, weight_init: init_w, bias_init: init_b)
+                 new DenseGPU(hiddenSize, hiddenSize, weight_init: init_w, bias_init: init_b),
+                 new Tanh(),
+                 new DenseGPU(hiddenSize, 1, weight_init: init_w, bias_init: init_b)
                  );
             }
 
@@ -122,7 +107,7 @@ namespace DeepUnity.Tutorials
             TrainLossGraph.Append(loss.Item);
             optimizer.ZeroGrad();
             net.Backward(loss.Gradient);
-            // optimizer.ClipGradNorm(0.5f);
+            optimizer.ClipGradNorm(0.5f);
             optimizer.Step();
 
 

@@ -31,12 +31,12 @@ namespace DeepUnity.Optimizers
                 float tilde_gamma = gamma / (1f + (t - 1f) * eta);
 
                 if (lambda != 0)
-                    Tensor.CopyTo(parameters[i].g + lambda * parameters[i].theta, parameters[i].g);
+                    Tensor.CopyTo(parameters[i].g + lambda * parameters[i].param, parameters[i].g);
 
 
                 state_sum[i] = state_sum[i] + parameters[i].g.Pow(2f);
 
-                Tensor.CopyTo(parameters[i].theta - tilde_gamma * parameters[i].g / (state_sum[i].Sqrt() + epsilon), parameters[i].theta);
+                Tensor.CopyTo(parameters[i].param - tilde_gamma * parameters[i].g / (state_sum[i].Sqrt() + epsilon), parameters[i].param);
             });
         }
     }

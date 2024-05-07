@@ -12,22 +12,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
   m_Name: _KnightScript
   m_EditorClassIdentifier: 
+  version: 4
   behaviourName: KnightScript
   assetCreated: 1
   observationSize: 210
   stackedInputs: 1
   continuousDim: 0
   discreteDim: 9
-  config: {fileID: 0}
-  vNetwork: {fileID: 0}
+  config: {fileID: 11400000, guid: abe2a7e1bc3eb984a85672c75640d467, type: 2}
+  vNetwork: {fileID: 11400000, guid: be2788bbe65b9eb4fb983cb0acf4fabc, type: 2}
   q1Network: {fileID: 0}
   q2Network: {fileID: 0}
   muNetwork: {fileID: 0}
   sigmaNetwork: {fileID: 0}
-  discreteNetwork: {fileID: 0}
-  targetFPS: 50
+  discreteNetwork: {fileID: 11400000, guid: 9bbf944577581144e9cac48f292da9f0, type: 2}
   inferenceDevice: 0
   trainingDevice: 1
+  targetFPS: 50
+  clipping: 5
   normalize: 0
   observationsNormalizer:
     step: 0
@@ -457,7 +459,6 @@ MonoBehaviour:
       - 0
       - 0
       shape: d2000000
-  observationsClip: 5
   rewardsNormalizer:
     step: 0
     R: 0

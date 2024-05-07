@@ -18,11 +18,11 @@ MonoBehaviour:
   gamma: 0.98
   LRSchedule: 1
   batchSize: 1000
-  bufferSize: 30000
+  bufferSize: 20000
   horizon: 256
-  numEpoch: 6
+  numEpoch: 8
   beta: 0.005
-  epsilon: 0.2
+  epsilon: 0.18
   lambda: 0.95
   gradClipNorm: 0.5
   KLDivergence: 0

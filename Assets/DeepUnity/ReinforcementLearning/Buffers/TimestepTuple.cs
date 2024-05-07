@@ -4,6 +4,9 @@ namespace DeepUnity.ReinforcementLearning
 {
     public class TimestepTuple : ICloneable
     {
+        /// <summary>
+        /// The index of the timestep in the episode
+        /// </summary>
         public int index;
 
         /// <summary>
@@ -26,11 +29,26 @@ namespace DeepUnity.ReinforcementLearning
         public Tensor action_discrete;
         public Tensor prob_discrete;
 
+        /// <summary>
+        /// Tensor(1) - positive or negative
+        /// </summary>
         public Tensor reward;
+        /// <summary>
+        /// Tensor(1) - 1 if nextState is terminal, 0 otherwise
+        /// </summary>
         public Tensor done { get; set; }
 
+        /// <summary>
+        /// Tensor(1) - positive or negative
+        /// </summary>
         public Tensor advantage;
-        public Tensor value_target;
+        /// <summary>
+        /// Tensor(1) - The target for the Value function
+        /// </summary>
+        public Tensor v_target;
+        /// <summary>
+        /// Tensor(1) - The target for the Q function
+        /// </summary>
         public Tensor q_target;
 
 
@@ -50,12 +68,16 @@ namespace DeepUnity.ReinforcementLearning
             clone.nextState = nextState;
             clone.action_continuous = action_continuous;
             clone.action_discrete = action_discrete;
-            clone.reward = reward;
+     
             clone.prob_continuous = prob_continuous;
             clone.prob_discrete = prob_discrete;
-            clone.advantage = advantage;
-            clone.value_target = value_target;
+
+            clone.reward = reward;
             clone.done = done;
+
+            clone.advantage = advantage;
+            clone.v_target = v_target;
+            clone.q_target = q_target;         
 
             return clone;
         }

@@ -52,6 +52,7 @@ float sigma;
 float start;
 float end;
 float step;
+float alpha;
 // ------------------------------------------------------------------- Data Fields
 
 
@@ -109,6 +110,7 @@ float runif()
 }
 float rnorm(float mean, float sd)
 {
+    //// Consider this is not thread safe !!!
     float x1 = 1.0f - runif();
     float x2 = 1.0f - runif();
     
@@ -136,6 +138,9 @@ void SetAtIndex(int3 id : SV_DispatchThreadID)
 {
     data1_set(b1, c1, h1, w1, value);
 }
+
+
+
 
 // Create
 #pragma kernel Zeros
@@ -185,7 +190,6 @@ void Fill(int3 id : SV_DispatchThreadID)
 
     }
 }
-
 
 #pragma kernel Arange
 [numthreads(1, 1, 1)]
@@ -516,6 +520,7 @@ void Transpose(int3 id : SV_DispatchThreadID)
         }
     }
 }
+
 #pragma kernel Expand
 [numthreads(1,1,1)]
 void Expand(int3 id : SV_DispatchThreadID)
@@ -1157,6 +1162,273 @@ void Max(int3 id : SV_DispatchThreadID)
 
 
 
+// In Place
+#pragma kernel Subtract_
+[numthreads(THREADS_NUM, 1, 1)]
+void Subtract_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+    uint stride;
+    
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] -= data2[i] * alpha;
+    }
+}
+
+#pragma kernel SubtractSingle_
+[numthreads(THREADS_NUM, 1, 1)]
+void SubtractSingle_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+    uint stride;
+    
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] -= value;
+    }
+}
+
+
+#pragma kernel Add_
+[numthreads(THREADS_NUM, 1, 1)]
+void Add_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+    uint stride;
+    
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] += data2[i] * alpha;
+    }
+}
+
+#pragma kernel AddSingle_
+[numthreads(THREADS_NUM, 1, 1)]
+void AddSingle_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+    uint stride;
+    
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] += value;
+    }
+}
+
+
+#pragma kernel HadamardMultiply_
+[numthreads(THREADS_NUM, 1, 1)]
+void HadamardMultiply_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+    uint stride;
+    
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] *= data2[i] * alpha;
+    }
+}
+
+#pragma kernel MultiplySingle_
+[numthreads(THREADS_NUM, 1, 1)]
+void MultiplySingle_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+    uint stride;
+    
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] *= value;
+    }
+}
+
+
+#pragma kernel Divide_
+[numthreads(THREADS_NUM, 1, 1)]
+void Divide_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+    uint stride;
+    
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] /= data2[i] * alpha;
+    }
+}
+
+#pragma kernel DivideSingle_
+[numthreads(THREADS_NUM, 1, 1)]
+void DivideSingle_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+    uint stride;
+    
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] /= value;
+    }
+}
+
+
+#pragma kernel Pow_
+[numthreads(THREADS_NUM, 1, 1)]
+void Pow_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        if (power % 2 == 0)
+            data1[i] = pow(abs(data1[i]), power);
+        else
+            data1[i] = (data1[i] < 0) ? -pow(abs(data1[i]), power) : pow(data1[i], power);
+    }
+}
+
+#pragma kernel Sqrt_
+[numthreads(THREADS_NUM, 1, 1)]
+void Sqrt_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] = sqrt(data1[i]);
+    }
+}
+
+#pragma kernel Exp_
+[numthreads(THREADS_NUM, 1, 1)]
+void Exp_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] = exp(data1[i]);
+    }
+}
+
+#pragma kernel Log_
+[numthreads(THREADS_NUM, 1, 1)]
+void Log_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] = log(data1[i]);
+    }
+}
+
+#pragma kernel Sin_
+[numthreads(THREADS_NUM, 1, 1)]
+void Sin_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] = sin(data1[i]);
+    }
+}
+
+#pragma kernel Cos_
+[numthreads(THREADS_NUM, 1, 1)]
+void Cos_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] = cos(data1[i]);
+    }
+}
+
+#pragma kernel Clip_
+[numthreads(THREADS_NUM, 1, 1)]
+void Clip_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] = clamp(data1[i], minvalue, maxvalue);
+    }
+}
+
+#pragma kernel Maximum_
+[numthreads(THREADS_NUM, 1, 1)]
+void Maximum_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] = max(data1[i], data2[i]);
+    }
+}
+
+
+
+#pragma kernel Zero_
+[numthreads(THREADS_NUM, 1, 1)]
+void Zero_(int3 id : SV_DispatchThreadID)
+{
+    uint count;
+
+    uint stride;
+    data1.GetDimensions(count, stride);
+    
+    for (uint i = id.x; i < count; i += THREADS_NUM)
+    {
+        data1[i] = 0.;
+    }
+}
+
+
+
 
 // Math operations
 
@@ -1171,7 +1443,10 @@ void Pow(int3 id : SV_DispatchThreadID)
     
     for (uint i = id.x; i < count; i += THREADS_NUM)
     {
-        result[i] = pow(data1[i], power);
+        if (power % 2 == 0)
+            result[i] = pow(abs(data1[i]), power);
+        else
+            result[i] = (data1[i] < 0) ? -pow(abs(data1[i]), power) : pow(data1[i], power);
     }
 }
 
@@ -1271,17 +1546,3 @@ void Abs(int3 id : SV_DispatchThreadID)
     }
 }
 
-#pragma kernel Clip
-[numthreads(THREADS_NUM, 1, 1)]
-void Clip(int3 id : SV_DispatchThreadID)
-{
-    uint count;
-
-    uint stride;
-    result.GetDimensions(count, stride);
-    
-    for (uint i = id.x; i < count; i += THREADS_NUM)
-    {
-        result[i] = clamp(data1[i], minvalue, maxvalue);
-    }
-}

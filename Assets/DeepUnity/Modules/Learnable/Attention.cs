@@ -110,7 +110,7 @@ namespace DeepUnity.Modules
                 V.Push(Tensor.MatMul(x, W_V, Device)); // (L, D)
                 Tensor sdpa = Tensor.MatMul(Q.Peek(), K.Peek().Transpose(0, 1), Device); //(L, D) * (D, L) = (L, L)
                 sdpa /= MathF.Sqrt(d); // (L, L)
-                if (mask) Mask(sdpa);
+                if (mask) CausalMask(sdpa);
                 SoftmaxCache.Push(new Softmax());
                 sdpa = SoftmaxCache.Peek().Forward(sdpa); // (L, L)
                 PostSoftmaxCache.Push(sdpa); // no need for clone because concat makes a copy
@@ -231,7 +231,7 @@ namespace DeepUnity.Modules
         /// </summary>
         /// <param name="shape"></param>
         /// <returns></returns>
-        private void Mask(Tensor sdpa)
+        private void CausalMask(Tensor sdpa)
         {
             // sdpa is (L, L)
             int L = sdpa.Size(-1);
@@ -280,9 +280,9 @@ namespace DeepUnity.Modules
             d = embed_dim;
             this.mask = mask;
 
-            W_Q = new Dense(input_size, embed_dim, bias: false, weight_init, device: device);
-            W_K = new Dense(input_size, embed_dim, bias: false, weight_init, device: device);
-            W_V = new Dense(input_size, embed_dim, bias: false, weight_init, device: device);
+            W_Q = new Dense(input_size, embed_dim, use_bias: false, weight_init, device: device);
+            W_K = new Dense(input_size, embed_dim, use_bias: false, weight_init, device: device);
+            W_V = new Dense(input_size, embed_dim, use_bias: false, weight_init, device: device);
             softmax = new Softmax();
         }
         private AttentionV2() { }
@@ -295,7 +295,7 @@ namespace DeepUnity.Modules
             Tensor V = W_V.Predict(input);
 
             var sdpa = Tensor.BatchedMatMul(Q, K.Transpose(-1, -2), device: Device) / Mathf.Sqrt(d);
-            if (mask) Mask(sdpa);
+            if (mask) CausalMask(sdpa);
             sdpa = softmax.Predict(sdpa);
             return Tensor.BatchedMatMul(sdpa, V, device: Device);
         }
@@ -308,7 +308,7 @@ namespace DeepUnity.Modules
             VCache = W_V.Forward(input);
 
             var sdpa = Tensor.BatchedMatMul(QCache, KCache.Transpose(-1, -2), device: Device) / Mathf.Sqrt(d);
-            if (mask) Mask(sdpa);
+            if (mask) CausalMask(sdpa);
             sdpa = softmax.Forward(sdpa);
             PostSoftmaxCache = sdpa;
             return Tensor.BatchedMatMul(sdpa, VCache, device: Device);
@@ -368,7 +368,7 @@ namespace DeepUnity.Modules
             W_V.OnAfterDeserialize();
             W_Q.OnAfterDeserialize();
         }
-        private void Mask(Tensor sdpa)
+        private void CausalMask(Tensor sdpa)
         {
             // sdpa is (L, L)
             int L = sdpa.Size(-1);

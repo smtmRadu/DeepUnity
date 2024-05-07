@@ -24,23 +24,36 @@ namespace DeepUnity.ReinforcementLearning
         {
             Qtarg1 = model.q1Network.Clone() as Sequential;
             Qtarg2 = model.q2Network.Clone() as Sequential;
-            if (model.standardDeviation == StandardDeviationType.Fixed)
+
+            Qtarg1.Device = model.trainingDevice;
+            Qtarg2.Device = model.trainingDevice;
+            model.q1Network.Device = model.trainingDevice;
+            model.q2Network.Device = model.trainingDevice;
+
+            model.muNetwork.Device = model.inferenceDevice;
+            model.sigmaNetwork.Device = model.inferenceDevice;
+
+            if (model.stochasticity == Stochasticity.FixedStandardDeviation)
             {
                 ConsoleMessage.Info("Behaviour's standard deviation is forced to be Trainable");
-                model.standardDeviation = StandardDeviationType.Trainable;
+                model.stochasticity = Stochasticity.TrainebleStandardDeviation;
             }
-            if (hp.updateAfter <= hp.minibatchSize)
+            if (hp.updateAfter < hp.minibatchSize * 5)
             {
                 ConsoleMessage.Info("'Update After' was set higher than the 'batch size'");
                 hp.updateAfter = hp.minibatchSize * 5;
             }
-
+            if (model.normalize)
+            {
+                ConsoleMessage.Info("Online Normalization is not available for off-policy algorithms");
+                model.normalize = false;
+            }
         }
         protected override void OnBeforeFixedUpdate()
         {
             int decision_freq = parallelAgents[0].DecisionRequester.decisionPeriod;
             new_experiences_collected += parallelAgents.Count;
-            if (new_experiences_collected > hp.updateInterval * decision_freq)
+            if (new_experiences_collected >= hp.updateInterval * decision_freq)
             {
                 // if the buffer will be full after this collection, let's clear the old values
                 if (train_data.Count >= hp.replayBufferSize)
@@ -57,11 +70,16 @@ namespace DeepUnity.ReinforcementLearning
 
                 if (train_data.Count >= hp.updateAfter)
                 {
+                    actorLoss = 0;
+                    criticLoss = 0;
+
                     updateClock = Stopwatch.StartNew();
                     Train();
                     updateClock.Stop();
 
                     updateIterations++;
+                    actorLoss /= hp.updatesNum;
+                    criticLoss /= hp.updatesNum;
                     learningRate = model.muScheduler.CurrentLR;
                     entropy = hp.alpha;
                     currentSteps += new_experiences_collected / decision_freq;
@@ -87,6 +105,15 @@ namespace DeepUnity.ReinforcementLearning
                 UpdateQFunctions(states, raw_continuous_actions, q_targets);
                 UpdatePolicy(states);
                 UpdateTargetNetworks();
+
+
+                if (hp.LRSchedule)
+                {
+                    model.q1Scheduler.Step();
+                    model.q2Scheduler.Step();
+                    model.muScheduler.Step();
+                    model.sigmaScheduler.Step();
+                }
             }
         }
         private void ComputeQTargets(TimestepTuple[] batch, out Tensor y)
@@ -108,8 +135,10 @@ namespace DeepUnity.ReinforcementLearning
 
                 float r = batch[b].reward[0];
                 float d = batch[b].done[0];
+                float Qt1_sa = Qtarg1_sPrime_aTildePrime[b, 0];
+                float Qt2_sa = Qtarg2_sPrime_aTildePrime[b, 0];
 
-                float _y = r + hp.gamma * (1f - d) * (MathF.Min(Qtarg1_sPrime_aTildePrime[b, 0], Qtarg2_sPrime_aTildePrime[b, 0]) - hp.alpha * logPi[b]);
+                float _y = r + hp.gamma * (1f - d) * (MathF.Min(Qt1_sa, Qt2_sa) - hp.alpha * logPi[b]);
 
                 batch[b].q_target = Tensor.Constant(_y);
             }
@@ -124,6 +153,7 @@ namespace DeepUnity.ReinforcementLearning
             Tensor Q1_s_a = model.q1Network.Forward(stateActionPair);
             Tensor Q2_s_a = model.q2Network.Forward(stateActionPair);
 
+            
             Loss q1Loss = Loss.MSE(Q1_s_a, Q_targets);
             Loss q2Loss = Loss.MSE(Q2_s_a, Q_targets);
             criticLoss = (q1Loss.Item + q2Loss.Item) / 2;
@@ -161,8 +191,7 @@ namespace DeepUnity.ReinforcementLearning
             // https://en.wikipedia.org/wiki/Multivariate_normal_distribution
             Tensor muDist = Tensor.Pow(
                                 MathF.Sqrt(MathF.Pow(2f * MathF.PI, D)) *
-                                sigma.Prod(-1, true),
-                            -1)
+                                sigma.Prod(-1, true), -1)
                             * Tensor.Exp(-1f / 2f * Tensor.Sum(ksi.Pow(2f), -1, true)); // mu_dist represents a scalar value, obtained by passing the u value through the dist check appendix C 
             // shape (B, 1) // keep shape like this
 
@@ -176,23 +205,15 @@ namespace DeepUnity.ReinforcementLearning
 
             // ∇θ min[ Qφ1(s,ãθ(s)), Qφ2(s,ãθ(s))] - αlogπθ(ãθ(s)|s) ]
             Tensor objectiveFunctionJ = Tensor.Minimum(Q1s_aTildeS, Q2s_aTildeS) - hp.alpha * logPiaTildeS;
-            actorLoss = objectiveFunctionJ.ToArray().Average();
-
+            actorLoss = objectiveFunctionJ.Average();
 
             // Start differentiating the objective loss
-            Tensor sech_u = u.Select(x => Utils.Hyperbolics.Sech(x));
+      
             Tensor tanh_u = aTildeS; // right?:D
 
             // Firstly, we compute the derivative of minQ1Q2 wrt ãθ(s)
-            Tensor dminQ1Q2_dQ1 = Tensor.Zeros(batch_size, 1);
-            Tensor dminQ1Q2_dQ2 = Tensor.Zeros(batch_size, 1);
-            for (int b = 0; b < batch_size; b++)
-            {
-                if (Q1s_aTildeS[b, 0] <= Q2s_aTildeS[b, 0])
-                    dminQ1Q2_dQ1[b, 0] = 1f;
-                else
-                    dminQ1Q2_dQ2[b, 0] = 1f;
-            }
+            Tensor dminQ1Q2_dQ1 = Q1s_aTildeS <= Q2s_aTildeS;
+            Tensor dminQ1Q2_dQ2 = Tensor.LogicalNot(dminQ1Q2_dQ1);
 
             Tensor dminQ1Q2_ds_aTildeS = model.q1Network.Backward(dminQ1Q2_dQ1) + model.q2Network.Backward(dminQ1Q2_dQ2); // Take the gradients from both networks
 
@@ -218,7 +239,7 @@ namespace DeepUnity.ReinforcementLearning
             // ∇ log πθ(a|s) = dlog μ(u|s)/du - dlog (1 - tanh^2(u))/du = (u - mu)/sigma^2 - (-2 * tanh(u) * sech^2(u) / (1 - tanh^2(u)))
 
             Tensor dLogMuDist_du = (u - mu) / sigma.Pow(2f); // https://observablehq.com/@herbps10/distributions-and-their-gradients
-            Tensor dLog_1mTanh2u_du = -2f * tanh_u * sech_u.Pow(2f) / (-tanh_u.Pow(2f) + 1f); // Wolfram Alpha? maybe..
+            Tensor dLog_1mTanh2u_du = -2f * tanh_u * u.Sech().Pow(2f) / (-tanh_u.Pow(2f) + 1f); // Wolfram Alpha? maybe..
 
             Tensor dAlphaLogPi_aTildeS_s_du = hp.alpha * (dLogMuDist_du - dLog_1mTanh2u_du);
             Tensor dAlphaLogPiaTildeS_s_dMu = dAlphaLogPi_aTildeS_s_du; // * 1f;
@@ -237,14 +258,14 @@ namespace DeepUnity.ReinforcementLearning
         }
         public void UpdateTargetNetworks()
         {
-            Tensor[] phi1 = model.q1Network.Parameters().Select(x => x.theta).ToArray();
-            Tensor[] phi2 = model.q2Network.Parameters().Select(x => x.theta).ToArray();
+            Tensor[] phi1 = model.q1Network.Parameters().Select(x => x.param).ToArray();
+            Tensor[] phi2 = model.q2Network.Parameters().Select(x => x.param).ToArray();
 
-            Tensor[] phi_targ1 = Qtarg1.Parameters().Select(x => x.theta).ToArray();
-            Tensor[] phi_targ2 = Qtarg2.Parameters().Select(x => x.theta).ToArray();
+            Tensor[] phi_targ1 = Qtarg1.Parameters().Select(x => x.param).ToArray();
+            Tensor[] phi_targ2 = Qtarg2.Parameters().Select(x => x.param).ToArray();
 
             // We update the target q functions softly...
-            // OpenAI algorithm uses polyak = 0.995, the same thing with using τ = 0.005, inverse the logic duhh. 
+            // OpenAI algorithm uses polyak = 0.995, the same thing with using τ = 0.005
             // φtarg,i <- (1 - τ)φtarg,i + τφi     for i = 1,2
 
             for (int i = 0; i < phi1.Length; i++)
@@ -263,13 +284,13 @@ namespace DeepUnity.ReinforcementLearning
         {
             int batch_size = stateActionBatch.Size(0);
             Tensor actions = Tensor.Zeros(batch_size, action_size);
-            for (int b = 0; b < batch_size; b++)
+            Parallel.For(0, batch_size, b =>
             {
                 for (int f = 0; f < action_size; f++)
                 {
                     actions[b, f] = stateActionBatch[b, state_size + f];
                 }
-            }
+            });
             return actions;
         }
         private static Tensor StateActionPair(Tensor stateBatch, Tensor actionBatch)

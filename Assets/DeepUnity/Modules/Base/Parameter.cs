@@ -9,13 +9,23 @@ namespace DeepUnity.Modules
     /// </summary>
     public class Parameter
     {
-        public Tensor theta;
+        public Tensor param;
         public Tensor g;
+
+        public TensorGPU paramGPU;
+        public TensorGPU gGPU;
+
+        public Device Device => paramGPU != null ? Device.GPU : Device.CPU;
 
         public Parameter(Tensor param, Tensor grad)
         {
-            this.theta = param;
+            this.param = param;
             this.g = grad;
+        }
+        public Parameter(TensorGPU param, TensorGPU grad)
+        {
+            this.paramGPU = param;
+            this.gGPU = grad;
         }
 
         /// <summary>

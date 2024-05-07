@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ffdd4f9587b2d8846a37ba5240ae14b2, type: 3}
   m_Name: Q1
   m_EditorClassIdentifier: 
-  version: 308
+  version: 393
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -14504,6 +14504,7 @@ MonoBehaviour:
         shape: 
     attention:
       d: 0
+      mask: 0
       W_Q:
         data: []
         shape: 
@@ -14524,6 +14525,41 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    multiheadattention:
+      attention_heads: []
+      W_O:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+    attentionv2:
+      d: 0
+      mask: 0
+      W_Q:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_K:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_V:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      softmax:
+        temperature: 0
     batchnorm1d:
       num_features: 0
       momentum: 0
@@ -14592,12 +14628,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 1993139298
-      linearProjection:
-        data: []
-        shape: 
+      residualConnectionHash: -1960364828
     residualconnectionjoin:
-      residualConnectionHash: 1993139298
+      residualConnectionHash: -1960364828
     conv2d:
       kernels:
         data: []
@@ -14668,6 +14701,7 @@ MonoBehaviour:
         shape: 
     attention:
       d: 0
+      mask: 0
       W_Q:
         data: []
         shape: 
@@ -14688,6 +14722,41 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    multiheadattention:
+      attention_heads: []
+      W_O:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+    attentionv2:
+      d: 0
+      mask: 0
+      W_Q:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_K:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_V:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      softmax:
+        temperature: 0
     batchnorm1d:
       num_features: 0
       momentum: 0
@@ -14756,12 +14825,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -330522204
-      linearProjection:
-        data: []
-        shape: 
+      residualConnectionHash: 1264195584
     residualconnectionjoin:
-      residualConnectionHash: -330522204
+      residualConnectionHash: 1264195584
     conv2d:
       kernels:
         data: []
@@ -31344,6 +31410,7 @@ MonoBehaviour:
         shape: 
     attention:
       d: 0
+      mask: 0
       W_Q:
         data: []
         shape: 
@@ -31364,6 +31431,41 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    multiheadattention:
+      attention_heads: []
+      W_O:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+    attentionv2:
+      d: 0
+      mask: 0
+      W_Q:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_K:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_V:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      softmax:
+        temperature: 0
     batchnorm1d:
       num_features: 0
       momentum: 0
@@ -31432,12 +31534,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 1640783590
-      linearProjection:
-        data: []
-        shape: 
+      residualConnectionHash: 1231393760
     residualconnectionjoin:
-      residualConnectionHash: 1640783590
+      residualConnectionHash: 1231393760
     conv2d:
       kernels:
         data: []
@@ -31508,6 +31607,7 @@ MonoBehaviour:
         shape: 
     attention:
       d: 0
+      mask: 0
       W_Q:
         data: []
         shape: 
@@ -31528,6 +31628,41 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    multiheadattention:
+      attention_heads: []
+      W_O:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+    attentionv2:
+      d: 0
+      mask: 0
+      W_Q:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_K:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_V:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      softmax:
+        temperature: 0
     batchnorm1d:
       num_features: 0
       momentum: 0
@@ -31596,12 +31731,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -682877912
-      linearProjection:
-        data: []
-        shape: 
+      residualConnectionHash: 160986876
     residualconnectionjoin:
-      residualConnectionHash: -682877912
+      residualConnectionHash: 160986876
     conv2d:
       kernels:
         data: []
@@ -48184,6 +48316,7 @@ MonoBehaviour:
         shape: 
     attention:
       d: 0
+      mask: 0
       W_Q:
         data: []
         shape: 
@@ -48204,6 +48337,41 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    multiheadattention:
+      attention_heads: []
+      W_O:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+    attentionv2:
+      d: 0
+      mask: 0
+      W_Q:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_K:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_V:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      softmax:
+        temperature: 0
     batchnorm1d:
       num_features: 0
       momentum: 0
@@ -48272,12 +48440,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -500030178
-      linearProjection:
-        data: []
-        shape: 
+      residualConnectionHash: -1796979158
     residualconnectionjoin:
-      residualConnectionHash: -500030178
+      residualConnectionHash: -1796979158
     conv2d:
       kernels:
         data: []
@@ -48348,6 +48513,7 @@ MonoBehaviour:
         shape: 
     attention:
       d: 0
+      mask: 0
       W_Q:
         data: []
         shape: 
@@ -48368,6 +48534,41 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    multiheadattention:
+      attention_heads: []
+      W_O:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+    attentionv2:
+      d: 0
+      mask: 0
+      W_Q:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_K:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_V:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      softmax:
+        temperature: 0
     batchnorm1d:
       num_features: 0
       momentum: 0
@@ -48436,12 +48637,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 1471275616
-      linearProjection:
-        data: []
-        shape: 
+      residualConnectionHash: 1427581254
     residualconnectionjoin:
-      residualConnectionHash: 1471275616
+      residualConnectionHash: 1427581254
     conv2d:
       kernels:
         data: []
@@ -48641,6 +48839,7 @@ MonoBehaviour:
         shape: 
     attention:
       d: 0
+      mask: 0
       W_Q:
         data: []
         shape: 
@@ -48661,6 +48860,41 @@ MonoBehaviour:
       out_features: 0
       weightInit: 0
       biasInit: 0
+    multiheadattention:
+      attention_heads: []
+      W_O:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+    attentionv2:
+      d: 0
+      mask: 0
+      W_Q:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_K:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_V:
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      softmax:
+        temperature: 0
     batchnorm1d:
       num_features: 0
       momentum: 0
@@ -48729,12 +48963,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -852385886
-      linearProjection:
-        data: []
-        shape: 
+      residualConnectionHash: -896080248
     residualconnectionjoin:
-      residualConnectionHash: -852385886
+      residualConnectionHash: -896080248
     conv2d:
       kernels:
         data: []

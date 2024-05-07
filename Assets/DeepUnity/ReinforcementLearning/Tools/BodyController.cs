@@ -6,6 +6,7 @@ namespace DeepUnity.ReinforcementLearning
 {
     public class BodyPart
     {
+        public Transform transform { get; set; }
         /// <summary>
         /// The GameObject that is the bodypart.
         /// </summary>
@@ -123,6 +124,7 @@ namespace DeepUnity.ReinforcementLearning
         {
             BodyPart bp = new BodyPart
             {
+                transform = bodyPart.transform,
                 gameObject = bodyPart.gameObject,
                 rigidbody = bodyPart.GetComponent<Rigidbody>(),
                 Joint = bodyPart.GetComponent<ConfigurableJoint>(),

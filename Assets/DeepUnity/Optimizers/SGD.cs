@@ -23,7 +23,7 @@ namespace DeepUnity.Optimizers
 
             for (int i = 0; i < parameters.Length; i++)
             {
-                b[i] = Tensor.Zeros(parameters[i].theta.Shape);
+                b[i] = Tensor.Zeros(parameters[i].param.Shape);
             }
         }
 
@@ -34,7 +34,7 @@ namespace DeepUnity.Optimizers
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
                 if (lambda != 0)
-                    Tensor.CopyTo(parameters[i].g + lambda * parameters[i].theta, parameters[i].g);
+                    Tensor.CopyTo(parameters[i].g + lambda * parameters[i].param, parameters[i].g);
                 
 
                 if (mu != 0)
@@ -51,9 +51,9 @@ namespace DeepUnity.Optimizers
                 }
 
                 if (maximize)
-                    Tensor.CopyTo(parameters[i].theta + gamma * parameters[i].g, parameters[i].theta);
+                    Tensor.CopyTo(parameters[i].param + gamma * parameters[i].g, parameters[i].param);
                 else
-                    Tensor.CopyTo(parameters[i].theta - gamma * parameters[i].g, parameters[i].theta);
+                    Tensor.CopyTo(parameters[i].param - gamma * parameters[i].g, parameters[i].param);
             });
         }
 

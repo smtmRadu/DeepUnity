@@ -19,7 +19,7 @@ namespace DeepUnity.Optimizers
 
             for (int i = 0; i < parameters.Length; i++)
             {
-                m[i] = Tensor.Zeros(parameters[i].theta.Shape);
+                m[i] = Tensor.Zeros(parameters[i].param.Shape);
             }
         }
 
@@ -32,8 +32,8 @@ namespace DeepUnity.Optimizers
                 Tensor ct = beta1 * m[i] + (1f - beta1) * parameters[i].g;
 
                 // update model parameters
-                Tensor theta_t = parameters[i].theta - gamma * (Tensor.Sign(ct) + lambda * parameters[i].g);
-                Tensor.CopyTo(theta_t, parameters[i].theta);
+                Tensor theta_t = parameters[i].param - gamma * (Tensor.Sign(ct) + lambda * parameters[i].g);
+                Tensor.CopyTo(theta_t, parameters[i].param);
 
                 // update ema of gt
                 m[i] = beta2 * m[i] + (1f - beta2) * parameters[i].g;    

@@ -7,8 +7,7 @@ namespace DeepUnity.Tutorials
     public class RobotScript : Agent
     {
         [Header("Apply normalization")]
-        public Transform bonus;
-
+      
         public GameObject head;
         public GameObject neck;
         public GameObject body;
@@ -26,6 +25,7 @@ namespace DeepUnity.Tutorials
 
         BodyController bodyController;
 
+        private float currentZpos;
         public override void Awake()
         {
             base.Awake();
@@ -51,19 +51,8 @@ namespace DeepUnity.Tutorials
             {
                 if (col.collider.CompareTag("Ground"))
                 {
-                    AddReward(-1f);
                     EndEpisode();
                 }
-            };
-
-            Action<Collider> hitTarget = (col) =>
-            {
-                if (col.CompareTag("Target"))
-                {
-                    AddReward(+0.5f);
-                }
-
-                col.gameObject.SetActive(false);
             };
 
             bodyController.bodyPartsDict[body].ColliderContact.OnEnter = hitGround;
@@ -71,18 +60,10 @@ namespace DeepUnity.Tutorials
             bodyController.bodyPartsDict[leftThigh].ColliderContact.OnEnter = hitGround;
             bodyController.bodyPartsDict[rightThigh].ColliderContact.OnEnter = hitGround;
 
-            bodyController.bodyPartsDict[body].TriggerContact.OnEnter = hitTarget;
         }
         public override void OnEpisodeBegin()
         {
-            if (bonus == null)
-                return;
-
-            for (int i = 0; i < bonus.childCount; i++)
-            {
-                var child = bonus.GetChild(i);
-                child.gameObject.SetActive(true);
-            }
+            currentZpos = transform.position.z;
         }
         public override void CollectObservations(StateVector stateVector)
         {
@@ -199,8 +180,9 @@ namespace DeepUnity.Tutorials
             jdDict[leftFoot].SetJointStrength(actions_vector[i++]);
             jdDict[rightFoot].SetJointStrength(actions_vector[i++]);
 
+            AddReward((transform.position.z - currentZpos) * 0.01f);
 
-            AddReward(+0.0025f);
+            currentZpos = transform.position.z;
 
             if (transform.position.y < -10f)
                 EndEpisode();

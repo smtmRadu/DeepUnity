@@ -40,7 +40,7 @@ namespace DeepUnity.ReinforcementLearning
             if (network == null)
                 return;
 
-            var oldWeight = network.Parameters()[0].theta;
+            var oldWeight = network.Parameters()[0].param;
             Tensor newWeight = Tensor.Zeros(oldWeight.Size(-2), newSpaceSize);
 
             int oldSpaceSize = oldWeight.Size(-1);

@@ -54,6 +54,8 @@ namespace DeepUnity.Modules
             int H_in = input.Size(-1);
             int H_out = (int)Math.Floor((H_in + 2 * padding - 1 * (kernelSize - 1) - 1) / (float)kernelSize + 1);
 
+            if (H_out < 1)
+                throw new ShapeException($"The input shape {input.Shape.ToCommaSeparatedString()} is smaller than the kernel {kernelSize} in avg1d pooling layer.");
 
 
             Tensor output = isBatched ?

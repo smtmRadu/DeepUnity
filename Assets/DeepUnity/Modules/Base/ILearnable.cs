@@ -12,7 +12,7 @@ namespace DeepUnity.Modules
         // Has default implementation
         public int ParametersCount()
         {
-            return Parameters().Sum(x => x.theta.Count());
+            return Parameters().Sum(x => x.param.Count());
         }
     }
 

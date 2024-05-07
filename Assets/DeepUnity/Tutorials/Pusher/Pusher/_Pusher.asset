@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
   m_Name: _Pusher
   m_EditorClassIdentifier: 
+  version: 0
   behaviourName: Pusher
   assetCreated: 1
   observationSize: 70
@@ -177,7 +178,7 @@ MonoBehaviour:
       - 0
       - 0
       shape: 46000000
-  observationsClip: 10
+  clipping: 5
   rewardsNormalizer:
     step: 0
     R: 0

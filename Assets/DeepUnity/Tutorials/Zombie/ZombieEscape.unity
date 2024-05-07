@@ -4027,7 +4027,7 @@ MonoBehaviour:
   numLayers: 2
   hidUnits: 72
   model: {fileID: 11400000, guid: b777826ca5e0fa44182708936e2c5893, type: 2}
-  behaviourType: 1
+  behaviourType: 2
   onEpisodeEnd: 0
   useSensors: 1
   gun: {fileID: 8643010058125744375}

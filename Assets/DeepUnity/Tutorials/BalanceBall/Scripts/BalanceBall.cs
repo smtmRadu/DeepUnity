@@ -1,7 +1,5 @@
 using UnityEngine;
 using DeepUnity.ReinforcementLearning;
-using DeepUnity;
-using DeepUnity.Sensors;
 
 namespace DeepUnity.Tutorials
 {
@@ -18,6 +16,7 @@ namespace DeepUnity.Tutorials
         public override void CollectObservations(StateVector sensorBuffer)
         {
             // 10 observations
+            sensorBuffer.AddObservation(Random.Range(-1, 2));
             sensorBuffer.AddObservation(transform.rotation);
             sensorBuffer.AddObservation(ball.velocity);
             sensorBuffer.AddObservation(ball.gameObject.transform.position - transform.position);
@@ -32,14 +31,10 @@ namespace DeepUnity.Tutorials
             transform.Rotate(new Vector3(1, 0, 0), xRot * rotationSpeed);
             transform.Rotate(new Vector3(0, 0, 1), zRot * rotationSpeed);
 
+            SetReward(0.025f);
             if (ball.gameObject.transform.position.y < transform.position.y)
-            {
                 EndEpisode();
-            }
-            else
-            {
-                SetReward(0.025f);
-            }
+            
         }
 
         public override void Heuristic(ActionBuffer actionBuffer)

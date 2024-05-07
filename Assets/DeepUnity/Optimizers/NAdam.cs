@@ -36,8 +36,8 @@ namespace DeepUnity.Optimizers
 
             for (int i = 0; i < parameters.Length; i++)
             {
-                m[i] = Tensor.Zeros(parameters[i].theta.Shape);
-                v[i] = Tensor.Zeros(parameters[i].theta.Shape);
+                m[i] = Tensor.Zeros(parameters[i].param.Shape);
+                v[i] = Tensor.Zeros(parameters[i].param.Shape);
             }
         }
 
@@ -54,9 +54,9 @@ namespace DeepUnity.Optimizers
                 if (lambda != 0)
                 {
                     if (decoupled_weight_decay)
-                        Tensor.CopyTo(parameters[i].theta - gamma * lambda * parameters[i].theta, parameters[i].theta);
+                        Tensor.CopyTo(parameters[i].param - gamma * lambda * parameters[i].param, parameters[i].param);
                     else
-                        Tensor.CopyTo(parameters[i].g + lambda * parameters[i].theta, parameters[i].g);
+                        Tensor.CopyTo(parameters[i].g + lambda * parameters[i].param, parameters[i].g);
                 }
 
                 m[i] = beta1 * m[i] + (1f - beta1) * parameters[i].g;
@@ -66,7 +66,7 @@ namespace DeepUnity.Optimizers
                               + (1f - mu_t) * parameters[i].g / (1f - mu_prod_t);
                 Tensor vHat = v[i] / (1f - MathF.Pow(beta2, t));
 
-                Tensor.CopyTo(parameters[i].theta - gamma * mHat / (vHat.Sqrt() + epsilon), parameters[i].theta);
+                Tensor.CopyTo(parameters[i].param - gamma * mHat / (vHat.Sqrt() + epsilon), parameters[i].param);
             });
 
         }

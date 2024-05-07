@@ -20,7 +20,7 @@ namespace DeepUnity.Tutorials
             Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out _, out test, DatasetSettings.LoadTestOnly);
             net.Device = Device.GPU;
             Utils.Shuffle(test);
-            print($"Parameters: {net.Parameters().Sum(x => x.theta.Count())}");
+            print($"Parameters: {net.Parameters().Sum(x => x.param.Count())}");
         }
 
         private void Update()

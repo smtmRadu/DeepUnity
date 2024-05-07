@@ -1,6 +1,7 @@
-using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Text;
+using Unity.VisualScripting;
 
 namespace DeepUnity.ReinforcementLearning
 {
@@ -17,7 +18,7 @@ namespace DeepUnity.ReinforcementLearning
         public Tensor[] ContinuousProbabilities { get => frames.Select(x => x.prob_continuous).ToArray(); }
         public Tensor[] DiscreteActions { get => frames.Select(x => x.action_discrete).ToArray(); }
         public Tensor[] DiscreteProbabilities { get => frames.Select(x => x.prob_discrete).ToArray(); }
-        public Tensor[] ValueTargets { get => frames.Select(x => x.value_target).ToArray(); }
+        public Tensor[] ValueTargets { get => frames.Select(x => x.v_target).ToArray(); }
         public Tensor[] Advantages { get => frames.Select(x => x.advantage).ToArray(); }
 
 
@@ -71,9 +72,9 @@ namespace DeepUnity.ReinforcementLearning
                 frames[i].advantage = frames[r].advantage;
                 frames[r].advantage = temp;
 
-                temp = frames[i].value_target;
-                frames[i].value_target = frames[r].value_target;
-                frames[r].value_target = temp;
+                temp = frames[i].v_target;
+                frames[i].v_target = frames[r].v_target;
+                frames[r].v_target = temp;
 
                 temp = frames[i].done;
                 frames[i].done = frames[r].done;
@@ -107,6 +108,39 @@ namespace DeepUnity.ReinforcementLearning
         public void Clear()
         {
             frames.Clear();
+        }
+
+        public override string ToString()
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine($"Trajectory ({Count})");
+            sb.AppendLine("{");
+            for (int i = 0; i < Count; i++)
+            {
+                sb.Append($" \t| {i.ToString("000")}");
+                sb.Append($" | t: {frames[i].index.ToString("000")}");
+                sb.Append($" | s[t]: [{frames[i].state.ToArray().ToCommaSeparatedString()}]");
+                sb.Append($" | s'[t]: [{frames[i].nextState.ToArray().ToCommaSeparatedString()}]");
+                sb.Append($" | a_cont[t]: [{frames[i].action_continuous?.ToArray().ToCommaSeparatedString()}]");
+                sb.Append($" | a_disc[t]: [{frames[i].action_discrete?.ToArray().ToCommaSeparatedString()}]");
+                sb.Append($" | r[t]: {frames[i].reward[0].ToString("0.000")}");
+
+                if (frames[i].v_target != null)
+                    sb.Append($" | V[t]: {frames[i].v_target[0].ToString("0.000")}");
+
+                if (frames[i].advantage != null)
+                    sb.Append($" | A[t]: {frames[i].advantage[0].ToString("0.000")}");
+
+                if (frames[i].q_target != null)
+                    sb.Append($" | Q[t]: {frames[i].q_target[0].ToString("0.000")}");
+
+                sb.Append("\n");
+
+                if (frames[i].done[0] == 1)
+                    sb.Append("\n");
+            }
+            sb.AppendLine("}");
+            return sb.ToString();
         }
     }
 

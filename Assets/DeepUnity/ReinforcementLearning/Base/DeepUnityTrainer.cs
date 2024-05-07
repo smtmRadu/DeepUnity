@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity.ReinforcementLearning
@@ -17,6 +16,12 @@ namespace DeepUnity.ReinforcementLearning
         /// Current experiences collected by the agents.
         /// </summary>
         public static int MemoriesCount { get => Instance.parallelAgents.Sum(x => x.Memory.Count); }
+        
+        /// <summary>
+        /// The total number or Fixed Updates since the start of the game. (ReadOnly)
+        /// </summary>
+        public int FixedFrameCount { get; private set; } = 0;
+
 
         public event EventHandler OnTrainingSessionEnd;
 
@@ -46,6 +51,8 @@ namespace DeepUnity.ReinforcementLearning
 
         private AudioClip trainingSound;
 
+      
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -66,7 +73,7 @@ namespace DeepUnity.ReinforcementLearning
                 _runtimeStatsStyle.fontSize = 20;
 
                 // Play some music in background
-                // trainingSound = Resources.Load<AudioClip>("Audio/TrainingSound1");
+                // trainingSound = Resources.Load<AudioClip>("Audio/TrainingSound1"); // note that that audio was removed from there
                 // var audiosource = transform.AddComponent<AudioSource>();
                 // audiosource.loop = true;
                 // audiosource.playOnAwake = false;
@@ -114,11 +121,14 @@ namespace DeepUnity.ReinforcementLearning
             }
 
             Time.timeScale = hp.timescale;
+            FixedFrameCount++;
         }
         private void Update()
         {
             avgDeltaTime = avgDeltaTime * avgDeltaTimeMomentum + Time.deltaTime * (1f - avgDeltaTimeMomentum);
-            _runtimeStatsText = $"[Timescale: {Time.timeScale.ToString("0.0")} | No. agents {parallelAgents.Count}]";
+
+            // TO BE MODIFIED FOR SAC (print buffer size from train_data / buffer_size)
+            _runtimeStatsText = $"[No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {MemoriesCount}/{hp.bufferSize} ({(MemoriesCount * 100f / hp.bufferSize).ToString("0.00")}%)]";
         }
         public void OnGUI()
         {
@@ -155,13 +165,19 @@ namespace DeepUnity.ReinforcementLearning
                     case TrainerType.SAC:
                         Instance = go.AddComponent<SACTrainer>();
                         break;
+                    case TrainerType.TD3:
+                        Instance = go.AddComponent<TD3Trainer>();
+                        break;
+                    case TrainerType.DDPG:
+                        Instance = go.AddComponent<DDPGTrainer>();
+                        break;
                     default: throw new ArgumentException("Unhandled trainer type");
                 }
 
 
                 Instance.parallelAgents = new();
                 Instance.hp = agent.model.config;
-                Instance.train_data = new ExperienceBuffer(Instance.hp.bufferSize);
+                Instance.train_data = new ExperienceBuffer(Instance.hp.trainer == TrainerType.PPO ? Instance.hp.bufferSize : Instance.hp.replayBufferSize / 10); // basically this might be full but i will let it like this
                 Instance.model = agent.model;
                 Instance.model.InitOptimisers(Instance.hp, trainer);
                 Instance.model.InitSchedulers(Instance.hp, trainer);
@@ -195,6 +211,99 @@ namespace DeepUnity.ReinforcementLearning
             }
 
             Instance.ended = true;
+        }
+
+
+        /// <summary>
+        ///  This part is dedicated for Parallel inference mode on learning. The states of all agents are concatenated and passed once
+        ///  through the model for faster speed and reason to use GPU on inference. This does't work for inference when the agents are not
+        ///  learning.
+        /// </summary>
+
+        int lastCallFixedUpdateFrame = -1;
+        Dictionary<Agent, (Tensor, Tensor)> agentsContinuousActionsProbs = new();
+        Dictionary<Agent, (Tensor, Tensor)> agentsDiscreteActionsProbs = new();
+        public void ParallelInference(Agent ag, int lcf)
+        {
+            if(lastCallFixedUpdateFrame == lcf)
+            {
+               
+                if (model.IsUsingContinuousActions)
+                {
+                    var valuesc = agentsContinuousActionsProbs[ag];
+                    ag.Timestep.action_continuous = valuesc.Item1;
+                    ag.Timestep.prob_continuous = valuesc.Item2;
+                }
+
+               
+                if (model.IsUsingDiscreteActions)
+                {
+                    var valuesd = agentsDiscreteActionsProbs[ag];
+                    ag.Timestep.action_discrete = valuesd.Item1;
+                    ag.Timestep.prob_discrete = valuesd.Item2;
+                }
+                             
+            }
+            else
+            {
+                lastCallFixedUpdateFrame = lcf;
+                // PARALLEL OBSERVATION PROCESS ----------------------------
+                for (int i = 0; i < parallelAgents.Count; i++)
+                {
+                    if (parallelAgents[i].LastState == null)
+                        parallelAgents[i].Timestep.state = parallelAgents[i].GetState();
+                    else
+                        parallelAgents[i].Timestep.state = parallelAgents[i].LastState;
+                }
+                // PARALLEL OBSERVATION PROCESS ----------------------------
+
+
+                // PARALLEL ACTION PROCESS ---------------------------------
+                var allStates = parallelAgents.Where(x => x.behaviourType == BehaviourType.Learn).Select(x => x.Timestep.state).ToArray();
+                Tensor stateBatch = Tensor.Concat(null, allStates);
+                
+                if(model.IsUsingContinuousActions)
+                {
+                    Tensor cactionBatch;
+                    Tensor cprobBatch;
+                    model.ContinuousPredict(stateBatch, out cactionBatch, out cprobBatch);
+                    Tensor[] continuousActionsBatch = Tensor.Split(cactionBatch, 0, 1);
+                    Tensor[] continuousProbsBatch = Tensor.Split(cprobBatch, 0, 1);
+
+                    int index = 0;
+                    foreach (var agentx in parallelAgents)
+                    {
+                        agentsContinuousActionsProbs[agentx] = (continuousActionsBatch[index].Squeeze(0), continuousProbsBatch[index].Squeeze(0));
+                        index++;
+                    }
+
+                    var valuesc = agentsContinuousActionsProbs[ag];
+                    ag.Timestep.action_continuous = valuesc.Item1;
+                    ag.Timestep.prob_continuous = valuesc.Item2;
+                }
+
+
+                if(model.IsUsingDiscreteActions)
+                {
+                    Tensor dactionBatch;
+                    Tensor dprobBatch;
+                    model.DiscretePredict(stateBatch, out dactionBatch, out dprobBatch);
+                    Tensor[] discreteActionsBatch = Tensor.Split(dactionBatch, 0, 1);
+                    Tensor[] discreteProbsBatch = Tensor.Split(dprobBatch, 0, 1);
+
+                    int index = 0;
+                    foreach (var agentx in parallelAgents)
+                    {
+                        agentsDiscreteActionsProbs[agentx] = (discreteActionsBatch[index].Squeeze(0), discreteProbsBatch[index].Squeeze(0));
+                        index++;
+                    }
+
+                    var valuesc = agentsDiscreteActionsProbs[ag];
+                    ag.Timestep.action_discrete = valuesc.Item1;
+                    ag.Timestep.prob_discrete = valuesc.Item2;
+                }
+                // PARALLEL ACTION PROCESS ---------------------------------
+            }
         }
     }
 }

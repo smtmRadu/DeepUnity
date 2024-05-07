@@ -18,9 +18,9 @@ MonoBehaviour:
   gamma: 0.99
   LRSchedule: 1
   batchSize: 1000
-  bufferSize: 30000
+  bufferSize: 20000
   horizon: 256
-  numEpoch: 5
+  numEpoch: 7
   beta: 0.0075
   epsilon: 0.2
   lambda: 0.95

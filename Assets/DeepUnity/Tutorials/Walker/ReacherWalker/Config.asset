@@ -14,11 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   trainer: 0
   maxSteps: 2000000000
-  learningRate: 0.0003
+  learningRate: 0.0001
   gamma: 0.99
   LRSchedule: 1
-  batchSize: 512
-  bufferSize: 10240
+  batchSize: 1000
+  bufferSize: 20000
   horizon: 256
   numEpoch: 8
   beta: 0.005

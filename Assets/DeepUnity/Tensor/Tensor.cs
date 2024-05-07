@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Unity.Burst;
 using Unity.VisualScripting;
 using UnityEngine;
 
@@ -100,13 +101,13 @@ namespace DeepUnity
         private Tensor(params int[] shape)
         {
             if (shape == null)
-                throw new ShapeException("Tensor cannot be instantiated with null shape.");
+                throw new ShapeException($"Tensor cannot be instantiated with null shape, received shape ({shape.ToCommaSeparatedString()})");
             if (shape.Length == 0)
-                throw new ShapeException("Tensor cannot be instantiated with a shape of length 0.");
+                throw new ShapeException($"Tensor cannot be instantiated with a shape of length 0, received shape ({shape.ToCommaSeparatedString()})");
             if (shape.Length > 4)
-                throw new ShapeException("Tensor cannot be instantiated with more than 4 dimensions.");
+                throw new ShapeException($"Tensor cannot be instantiated with more than 4 dimensions, received shape ({shape.ToCommaSeparatedString()})");
             if (shape.Any(x => x < 1))
-                throw new ShapeException("Tensor cannot be instantiated with a dimension < 1.");
+                throw new ShapeException($"Tensor cannot be instantiated with a dimension < 1, received shape ({shape.ToCommaSeparatedString()}).");
 
             int size = 1;
             foreach (var item in shape)
@@ -195,7 +196,25 @@ namespace DeepUnity
             return linspace;
         }
         /// <summary>
-        /// Creates a predefined zero-dimensional tensor.
+        /// Creates a one-dimensional vector of shape (steps) whose values are evenly spaced from start to end, inclusive. on a logarithmic scale with base <paramref name="base"/>.
+        /// </summary>
+        /// <returns></returns>
+        public static Tensor LogSpace(float start, float end, int steps, float @base = 10f)
+        {
+            if (steps <= 0)
+                throw new ArgumentException("Steps must be more than 0");
+
+            Tensor logspace = LinSpace(MathF.Log(start, @base), MathF.Log(end, @base), steps);
+            
+            for (int i = 0; i < steps; i++)
+            {
+                logspace[i] = MathF.Pow(@base, logspace[i]);
+            }
+
+            return logspace;
+        }
+        /// <summary>
+        /// Creates a predefined tensor of shape (1).
         /// </summary>
         public static Tensor Constant(float scalar)
         {
@@ -380,10 +399,20 @@ namespace DeepUnity
             return outs;
         }
 
+        /// <summary>
+        /// Returns a tensor filled with zeros with the given <paramref name="shape"/>.
+        /// </summary>
+        /// <param name="shape"></param>
+        /// <returns></returns>
         public static Tensor Zeros(params int[] shape)
         {
             return new(shape);
         }
+        /// <summary>
+        /// Returns a tensor filled with ones with the given <paramref name="shape"/>.
+        /// </summary>
+        /// <param name="shape"></param>
+        /// <returns></returns>
         public static Tensor Ones(params int[] shape)
         {
             Tensor t = new(shape);
@@ -1664,7 +1693,7 @@ namespace DeepUnity
             });
         }
         /// <summary>
-        /// Computes the Discrete Fast Fourier Transform (FFT) of the given vector.
+        /// Computes the Discrete Fast Fourier Transform (DFFT) of the given vector.
         /// </summary>
         /// <param name="tensor"></param>
         /// <returns></returns>
@@ -1699,7 +1728,7 @@ namespace DeepUnity
             return y;
         }
         /// <summary>
-        /// Compute the Discrete Inversed Fast Fourier Transform (IFFT) of the given vector.
+        /// Compute the Discrete Inversed Fast Fourier Transform (DIFFT) of the given vector.
         /// </summary>
         /// <param name="tensor"></param>
         /// <returns></returns>
@@ -2292,7 +2321,7 @@ namespace DeepUnity
                 }
             }
             if (!keepDim)
-                FastSqueeze(result, axis);
+                Squeeze_(result, axis);
             return result;
         }
         /// <summary>
@@ -2391,7 +2420,7 @@ namespace DeepUnity
                 }
             }
             if (!keepDim)
-                FastSqueeze(result, axis);
+                Squeeze_(result, axis);
             return result;
         }
         /// <summary>
@@ -2495,7 +2524,7 @@ namespace DeepUnity
                 }
             }
             if(!keepDim)
-                FastSqueeze(result, axis);
+                Squeeze_(result, axis);
             return result;
         }
         /// <summary>
@@ -2612,7 +2641,7 @@ namespace DeepUnity
             }
 
             if(!keepDim)
-                FastSqueeze(result, axis);
+                Squeeze_(result, axis);
             return result;
         }
         /// <summary>
@@ -2742,7 +2771,7 @@ namespace DeepUnity
             }
 
             if (!keepDim)
-                FastSqueeze(result, axis);
+                Squeeze_(result, axis);
             return result;
         }
         /// <summary>
@@ -2843,7 +2872,7 @@ namespace DeepUnity
             }
 
             if (!keepDim)
-                FastSqueeze(result, axis);
+                Squeeze_(result, axis);
             return result;
 
         }
@@ -2963,7 +2992,7 @@ namespace DeepUnity
             }
 
             if (!keepDim)
-                FastSqueeze(result, axis);
+                Squeeze_(result, axis);
             return result;
         }
         /// <summary>
@@ -3082,7 +3111,7 @@ namespace DeepUnity
             }
 
             if (!keepDim)
-                FastSqueeze(result, axis);
+                Squeeze_(result, axis);
             return result;
         }
         /// <summary>
@@ -3636,7 +3665,56 @@ namespace DeepUnity
 
             return result;
         }
+        /// <summary>
+        /// Computes the element-wise logical NOT of the given input tensor. Zeros will become 1 and non-zeros will become 0.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        public static Tensor LogicalNot(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
 
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = result.data[i] == 0 ? 1 : 0;
+            }
+
+            return result;
+        }
+        /// <summary>
+        /// Computes the tensor values passed through the hyperbolic tangent function.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        public static Tensor Tanh(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                float e2x = MathF.Exp(2f * result.data[i]);
+                result.data[i] = (e2x - 1f) / (e2x + 1f);
+            }
+
+            return result;
+        }
+        /// <summary>
+        /// Computes the tensor values passed through the hyperbolic secant function.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        public static Tensor Sech(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = 2f * MathF.Exp(result.data[i]) / (MathF.Exp(2f * result.data[i]) + 1f);
+            }
+
+            return result;
+           
+        }
         #endregion Statics
 
 
@@ -3798,7 +3876,18 @@ namespace DeepUnity
         {
             return Floor(this);
         }
-
+        public Tensor LogicalNot()
+        {
+            return LogicalNot(this);
+        }
+        public Tensor Tanh()
+        {
+            return Tanh(this);
+        }
+        public Tensor Sech()
+        {
+            return Sech(this);
+        }
         #endregion Instance
 
 
@@ -3815,7 +3904,9 @@ namespace DeepUnity
             return result;
         }
         public Tensor Zip(Tensor second, Func<float, float, float> resultSelector)
-        {       
+        {
+            if (!second.shape.SequenceEqual(this.shape))
+                throw new ArgumentException("The shape of the second tensor does not match the shape of this tensor.");
             Tensor result = new(shape);
 
             for (int i = 0; i < data.Length; i++)
@@ -3828,6 +3919,14 @@ namespace DeepUnity
         public bool Contains(float item)
         {
             return data.Contains(item);
+        }
+        public bool Any(Func<float, bool> predicate)
+        {
+            return data.Any(predicate);
+        }
+        public bool All(Func<float, bool> predicate)
+        {
+            return data.All(predicate);
         }
         public int Count(Func<float, bool> predicate = null)
         {
@@ -3850,6 +3949,20 @@ namespace DeepUnity
             else
                 return data.Max(selector);
         }  
+        public float Average(Func<float, float> selector = null)
+        {
+            if (selector == null)
+                return data.Average();
+            else
+                return data.Average(selector);
+        }
+        public float Sum(Func<float, float> selector = null)
+        {
+            if (selector == null)
+                return data.Sum();
+            else
+                return data.Sum(selector);
+        }
         public float[] ToArray()
         {
             return data.ToArray();
@@ -3992,11 +4105,11 @@ namespace DeepUnity
             }     
         }
         /// <summary>
-        /// Squeezes the tensor received as parameter.
+        /// Squeezes the tensor in place.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>
-        private static void FastSqueeze(Tensor tensor, int? axis = null)
+        private static void Squeeze_(Tensor tensor, int? axis = null)
         {
             if (axis == null)
             {

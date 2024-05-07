@@ -105,6 +105,10 @@ namespace DeepUnity.Modules
                 int outputHeight = inputHeight - kernelHeight + 1;
                 int outputWidth = inputWidth - kernelWidth + 1;
 
+                if(outputHeight < 1 || outputWidth < 1)
+                {
+                    throw new ShapeException($"Input received shape in Conv2D ({input.Shape.ToCommaSeparatedString()}) is smaller than the kernel {kernelHeight}x{kernelWidth}. Try using padding.");
+                }
 
                 Tensor output = input.Rank == 3 ?
                     Tensor.Zeros(outputChannels, outputHeight, outputWidth) :

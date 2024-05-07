@@ -44,7 +44,7 @@ namespace DeepUnity.Optimizers
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
                 if (lambda != 0)
-                    Tensor.CopyTo(parameters[i].g + lambda * parameters[i].theta, parameters[i].g);
+                    Tensor.CopyTo(parameters[i].g + lambda * parameters[i].param, parameters[i].g);
 
                 // Update biased first momentum estimate
                 m[i] = beta1 * m[i] + (1f - beta1) * parameters[i].g;
@@ -53,7 +53,7 @@ namespace DeepUnity.Optimizers
                 u[i] = Tensor.Maximum(u[i] * beta2, parameters[i].g.Abs() + epsilon);
 
                 // Update parameters 
-                Tensor.CopyTo(parameters[i].theta - gamma * m[i] / (u[i] * (1 - beta1_t)), parameters[i].theta);
+                Tensor.CopyTo(parameters[i].param - gamma * m[i] / (u[i] * (1 - beta1_t)), parameters[i].param);
             });
         }
     }

@@ -36,8 +36,8 @@ namespace DeepUnity.ReinforcementLearning
                 sb.Append($" | a_disc[t]: [{frames[i].action_discrete?.ToArray().ToCommaSeparatedString()}]");
                 sb.Append($" | r[t]: {frames[i].reward[0].ToString("0.000")}");
 
-                if (frames[i].value_target != null)
-                    sb.Append($" | V[t]: {frames[i].value_target[0].ToString("0.000")}");
+                if (frames[i].v_target != null)
+                    sb.Append($" | V[t]: {frames[i].v_target[0].ToString("0.000")}");
 
                 if (frames[i].advantage != null)
                     sb.Append($" | A[t]: {frames[i].advantage[0].ToString("0.000")}");

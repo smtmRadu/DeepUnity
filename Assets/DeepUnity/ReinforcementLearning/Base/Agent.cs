@@ -56,7 +56,7 @@ namespace DeepUnity.ReinforcementLearning
         private PoseReseter PositionReseter { get; set; }
         private StateVector StatesBuffer { get; set; }
         private ActionBuffer ActionsBuffer { get; set; }
-        private Tensor lastState { get; set; }
+        public Tensor LastState { get; private set; }
         /// <summary>
         /// The number of decisions taken in the current episode.
         /// </summary>
@@ -246,11 +246,11 @@ namespace DeepUnity.ReinforcementLearning
             EpisodeCumulativeReward += Timestep.reward[0];
 
             // Observe s'
-            lastState = GetState();
+            LastState = GetState();
 
             if (behaviourType == BehaviourType.Learn)
             {            
-                Timestep.nextState = lastState.Clone() as Tensor;
+                Timestep.nextState = LastState.Clone() as Tensor;
 
                 // Scale and clip reward - there was a problem with the rewards normalizer (idk why), but anyways they should not be normalized online because we can use off-policy alogorithms like SAC. Just use a constant bro to scale it
                 // Timestep.reward[0] = model.rewardsNormalizer.ScaleReward(Timestep.reward[0]);
@@ -262,7 +262,7 @@ namespace DeepUnity.ReinforcementLearning
             if (Timestep?.done[0] == 1)
             {
                 StatesBuffer.ResetToZero(); // For Stacked inputs reset to 0 all sequence
-                lastState = null;// On Next episode (on timestep 0) there will be no last state
+                LastState = null;// On Next episode (on timestep 0) there will be no last state
 
                 EpisodeStepCount = 0;
                 EpisodeCumulativeReward = 0f;
@@ -285,27 +285,49 @@ namespace DeepUnity.ReinforcementLearning
                 return;
             }
 
-            // OBSERVATION PROCESS ------------------------------------------------------------------
-            if (lastState == null)
-                Timestep.state = GetState();
-            else
-                Timestep.state = lastState; // no need to clone because the timestep was already reset at this point
-            // OBSERVATION PROCESS ------------------------------------------------------------------
-
-
 
             // ACTION PROCESS -----------------------------------------------------------------------
             // Set state[t], action[t] & pi[t]
-            ActionsBuffer.Clear();
-            model.ContinuousPredict(Timestep.state, out Timestep.action_continuous, out Timestep.prob_continuous);
-            model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.prob_discrete);
+
+            // This is a huge update really, the inference speed is amazing.
+            if (behaviourType == BehaviourType.Learn && DeepUnityTrainer.Instance.parallelAgents.Count > 1 && DecisionRequester.decisionPeriod == 1)
+            {
+                DeepUnityTrainer.Instance.ParallelInference(this, DeepUnityTrainer.Instance.FixedFrameCount);
+            } 
+            else
+            {
+                // OBSERVATION PROCESS ------------------------------------------------------------------
+                if (LastState == null)
+                    Timestep.state = GetState();
+                else
+                    Timestep.state = LastState; // no need to clone because the timestep was already reset at this point
+                // OBSERVATION PROCESS ------------------------------------------------------------------
+
+                model.ContinuousPredict(Timestep.state, out Timestep.action_continuous, out Timestep.prob_continuous);
+                model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.prob_discrete);
+            }
 
             // Run agent's actions and clip them
-            ActionsBuffer.ContinuousActions = model.IsUsingContinuousActions ? new Tanh().Predict(Timestep.action_continuous).ToArray() : null;
+            ActionsBuffer.Clear();
+            if(model.IsUsingContinuousActions)
+            {
+                if (model.stochasticity == Stochasticity.FixedStandardDeviation || model.stochasticity == Stochasticity.TrainebleStandardDeviation)
+                    ActionsBuffer.ContinuousActions = Timestep.action_continuous.Tanh().ToArray();
+         
+                else if (model.stochasticity == Stochasticity.ActiveNoise)
+                    ActionsBuffer.ContinuousActions = Timestep.action_continuous.ToArray();
+                
+                else
+                    throw new NotImplementedException("Unhandled stochasticity type");
+                
+            }
+            else
+                ActionsBuffer.ContinuousActions = null;
+
             ActionsBuffer.DiscreteAction = model.IsUsingDiscreteActions ? (int)Timestep.action_discrete.ArgMax(-1)[0] : -1;
             // ACTION PROCESS -----------------------------------------------------------------------
         }
-        private Tensor GetState()
+        public Tensor GetState()
         {
             Tensor state = null;
             CollectObservations(out state); // custom state assignement
@@ -313,16 +335,15 @@ namespace DeepUnity.ReinforcementLearning
             if (state == null) // if no custom state is used, check the StateVector
             {
                 if (useSensors == UseSensorsType.ObservationsVector)
-                    Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetObservationsVector()));
+                    Sensors.ForEach(x => StatesBuffer.AddObservation(x.GetObservationsVector()));
                 else if (useSensors == UseSensorsType.CompressedObservationsVector)
-                    Sensors.ForEach(x => StatesBuffer.AddObservationRange(x.GetCompressedObservationsVector()));
+                    Sensors.ForEach(x => StatesBuffer.AddObservation(x.GetCompressedObservationsVector()));
                 CollectObservations(StatesBuffer);
 
-                // Check StateVector is fullfilled
-                int ok_sbuff = StatesBuffer.IsOk();
-                if (ok_sbuff != 0)
+                // Check StateVector does not exceed the max observations. I do not check btw if the minimum observations are added.
+                if (StatesBuffer.GetOverflow() > 0)
                 {
-                    ConsoleMessage.Warning($"Make sure you added exactly {model.observationSize} (difference of {ok_sbuff}).");
+                    ConsoleMessage.Warning($"Make sure you added exactly {model.observationSize} ({StatesBuffer.GetOverflow()} extra observations added).");
 #if UNITY_EDITOR
                     EditorApplication.isPlaying = false;
 #endif
@@ -337,7 +358,7 @@ namespace DeepUnity.ReinforcementLearning
                 state = model.observationsNormalizer.Normalize(state);
             }
 
-            state = state.Clip(-model.observationsClip, model.observationsClip);
+            state = state.Clip(-model.clipping, model.clipping);
 
             return state;
         }
@@ -411,7 +432,7 @@ namespace DeepUnity.ReinforcementLearning
         /// <param name="reward">positive or negative</param>
         public void AddReward(float reward)
         {
-            Timestep.reward[0] += reward;
+            Timestep.reward[0] += Math.Clamp(reward, -model.clipping, model.clipping);
         }
         /// <summary>
         /// Called only inside <b>OnActionReceived()</b>, and <b>OnTriggerXXX()</b> or <b>OnCollisionXXX()</b>. <br></br>
@@ -420,7 +441,7 @@ namespace DeepUnity.ReinforcementLearning
         /// <param name="reward">positive or negative</param>
         public void SetReward(float reward)
         {
-            Timestep.reward[0] = reward;
+            Timestep.reward[0] = Math.Clamp(reward, -model.clipping, model.clipping);
         }
     }
 
@@ -478,15 +499,17 @@ namespace DeepUnity.ReinforcementLearning
                     EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
                     EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
                 }
-                else if (DeepUnityTrainer.Instance.GetType() == typeof(SACTrainer))
+                else if (DeepUnityTrainer.Instance.GetType() == typeof(SACTrainer)
+                    || DeepUnityTrainer.Instance.GetType() == typeof(TD3Trainer)
+                    || DeepUnityTrainer.Instance.GetType() == typeof(DDPGTrainer))
                 {
                     int collected_data_count = DeepUnityTrainer.Instance.train_data.Count;
-                    float bufferFillPercentage = collected_data_count / ((float)script.model.config.bufferSize) * 100f;
+                    float bufferFillPercentage = collected_data_count / ((float)script.model.config.replayBufferSize) * 100f;
                     StringBuilder sb = new StringBuilder();
                     sb.Append("Buffer [");
                     sb.Append(collected_data_count);
                     sb.Append(" / ");
-                    sb.Append(script.model.config.bufferSize);
+                    sb.Append(script.model.config.replayBufferSize);
                     sb.Append($"] \n[");
                     for (float i = 1.25f; i <= 100f; i += 1.25f)
                     {
@@ -503,6 +526,8 @@ namespace DeepUnity.ReinforcementLearning
                     EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
                     EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
                 }
+                else
+                    throw new NotImplementedException("Unhandled trainer type");
 
 
                 // EditorGUILayout.HelpBox($"Reward [{script.EpsiodeCumulativeReward}]",

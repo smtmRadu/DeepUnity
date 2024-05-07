@@ -1,8 +1,8 @@
 # DeepUnity
 ###### In development - does not currently accept Pull Requests, though feel free to Fork and expand upon it
-![version](https://img.shields.io/badge/version-v0.9.8.4-blue)
+![version](https://img.shields.io/badge/version-v0.9.9-blue)
 
-DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO) and Soft Actor-Critic (SAC).
+DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO), Soft Actor-Critic (SAC), Deep Deterministic Policy Gradient (DDPG) and Twin Delayed DDPG (TD3).
 
 #### Run your first DeepUnity script
 ```csharp
@@ -126,7 +126,7 @@ public class MoveToGoal : Agent
     }
 }
 ```
-###### _This example considers an agent (with 4 space size and 2 continuous actions) positioned in the middle of an arena that moves forward, backward, left or right (Decision Period is 1), and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the apple, and penalized by 1 point if he's falling of the floor, and in both situations the episode ends._
+###### _This example considers an agent (with 4 space size and 2 continuous actions) positioned in the middle of an arena that moves forward, backward, left or right, and must reach a randomly positioned goal (see GIF below). The agent is rewarded by 1 point if he touches the apple, and penalized by 1 point if he's falling of the floor, and in both situations the episode ends._
 
 ![reacher](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/reacher.gif?raw=true)
 
@@ -165,7 +165,7 @@ All tutorial scripts are included inside _Assets/DeepUnity/Tutorials_ folder, co
 ![robot](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/robot.gif?raw=true)
 
 
-_A paper describing how to implement deep neural nets, PPO and SAC from scratch will be released this spring..._
+_A paper describing how to implement deep neural nets, PPO, SAC, DDPG and TD3 from scratch will be released this spring..._
 
 
 

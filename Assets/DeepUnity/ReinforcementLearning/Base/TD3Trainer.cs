@@ -1,0 +1,262 @@
+﻿using DeepUnity.Models;
+using System;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace DeepUnity.ReinforcementLearning
+
+{
+    internal class TD3Trainer : DeepUnityTrainer
+    {
+        private static Sequential Qtarg1;
+        private static Sequential Qtarg2;
+        private static Sequential Pitarg;
+
+        private int new_experiences_collected = 0;
+        private int qFunctionUpdates = 0; // used to track num of phi steps to check for policy delay
+        protected override void Initialize()
+        {
+            Qtarg1 = model.q1Network.Clone() as Sequential;
+            Qtarg2 = model.q2Network.Clone() as Sequential;
+            Pitarg = model.muNetwork.Clone() as Sequential;
+
+            model.muNetwork.Device = model.inferenceDevice;
+
+            Qtarg1.Device = model.trainingDevice;
+            Qtarg2.Device = model.trainingDevice;
+            Pitarg.Device = model.trainingDevice;
+            model.q1Network.Device = model.trainingDevice;
+            model.q2Network.Device = model.trainingDevice;
+
+            if (model.stochasticity != Stochasticity.ActiveNoise)
+            {
+                ConsoleMessage.Info("Behaviour's stochasticity is now given by active noise.");
+                model.stochasticity = Stochasticity.ActiveNoise;
+            }
+            if (hp.updateAfter < hp.minibatchSize * 5)
+            {
+                ConsoleMessage.Info("'Update After' was set higher than the 'batch size'");
+                hp.updateAfter = hp.minibatchSize * 5;
+            }
+            if (model.normalize)
+            {
+                ConsoleMessage.Info("Online Normalization is not available for off-policy algorithms");
+                model.normalize = false;
+            }
+
+        }
+
+        protected override void OnBeforeFixedUpdate()
+        {
+            int decision_freq = parallelAgents[0].DecisionRequester.decisionPeriod;
+            new_experiences_collected += parallelAgents.Count;
+            if (new_experiences_collected >= hp.updateInterval * decision_freq)
+            {
+                // if the buffer will be full after this collection, let's clear the old values
+                if (train_data.Count >= hp.replayBufferSize)
+                    train_data.frames.RemoveRange(0, train_data.Count / 2); // If buffer is full, remove old half
+
+                foreach (var agent_mem in parallelAgents.Select(x => x.Memory))
+                {
+                    if (agent_mem.Count == 0)
+                        continue;
+
+                    train_data.TryAppend(agent_mem, hp.replayBufferSize);
+                    agent_mem.Clear();
+                }
+
+                if (train_data.Count >= hp.updateAfter)
+                {
+                    actorLoss = 0;
+                    criticLoss = 0;
+
+                    updateClock = Stopwatch.StartNew();
+                    Train();
+                    updateClock.Stop();
+
+                    updateIterations++;
+                    actorLoss /= hp.updatesNum;
+                    criticLoss /= hp.updatesNum;
+                    learningRate = model.muScheduler.CurrentLR;
+                    entropy = model.noiseValue;
+                    currentSteps += new_experiences_collected / decision_freq;
+                    new_experiences_collected = 0;
+                }
+            }
+        }
+
+        private void Train()
+        {
+            model.muNetwork.Device = model.trainingDevice;
+
+            for (int epoch_index = 0; epoch_index < hp.updatesNum; epoch_index++)
+            {
+                // Sample a random batch of transitions from the replay buffer
+                TimestepTuple[] batch = Utils.Random.Sample(hp.minibatchSize, train_data.frames);
+
+                // Batchify
+                Tensor states = Tensor.Concat(null, batch.Select(x => x.state).ToArray());
+                Tensor states_prime = Tensor.Concat(null, batch.Select(x => x.nextState).ToArray());
+                Tensor actions = Tensor.Concat(null, batch.Select(x => x.action_continuous).ToArray());
+
+               
+                Tensor q_targets;
+                Tensor a_prime_s_prime;
+                ComputeTargetActions(states_prime, out a_prime_s_prime);
+                ComputeQTargets(batch, states_prime, a_prime_s_prime, out q_targets);
+                UpdateQFunctions(states, actions, q_targets);
+                qFunctionUpdates++;
+
+                if(qFunctionUpdates % hp.policyDelay == 0)
+                {
+                    UpdatePolicy(states);
+                    UpdateTargetNetworks();
+                }
+
+                if (hp.LRSchedule)
+                {
+                    model.q1Scheduler.Step();
+                    model.q2Scheduler.Step();
+                    model.muScheduler.Step();
+                }
+
+            }
+            model.muNetwork.Device = model.inferenceDevice;
+        }
+
+       
+        public void ComputeTargetActions(Tensor sPrime, out Tensor aPrime_sPrime)
+        {
+            Tensor muTarg_sPrime = Pitarg.Predict(sPrime);
+            Tensor eclip = Tensor.RandomNormal((0, model.noiseValue), muTarg_sPrime.Shape).Clip(-hp.noiseClip, hp.noiseClip);
+
+            aPrime_sPrime = (muTarg_sPrime + eclip).Clip(-1f, 1f);
+        }
+        private void ComputeQTargets(TimestepTuple[] batch, Tensor sPrime, Tensor aPrime_sPrime, out Tensor y)
+        {
+            Tensor paired_sPrime_aPrime = StateActionPair(sPrime, aPrime_sPrime);
+            Tensor Qtarg1_sPrime_aTildePrime = Qtarg1.Predict(paired_sPrime_aPrime); // (B, 1)
+            Tensor Qtarg2_sPrime_aTildePrime = Qtarg2.Predict(paired_sPrime_aPrime); // (B, 1)
+
+            for (int b = 0; b < batch.Length; b++)
+            {
+                // y(r,s',d) = r + Ɣ(1 - d)[min(Q1t(s',ã'), Q2t(s',ã'))]
+
+                float r = batch[b].reward[0];
+                float d = batch[b].done[0];
+                float Qt1_sa = Qtarg1_sPrime_aTildePrime[b, 0];
+                float Qt2_sa = Qtarg2_sPrime_aTildePrime[b, 0];
+
+                float _y = r + hp.gamma * (1f - d) * MathF.Min(Qt1_sa, Qt2_sa);
+
+                batch[b].q_target = Tensor.Constant(_y);
+            }
+
+            y = Tensor.Concat(null, batch.Select(x => x.q_target).ToArray());
+        }
+        private void UpdateQFunctions(Tensor states, Tensor actions, Tensor Q_targets)
+        {
+            // Update Q functions          
+            // ∇φ = (Qφ(s,a) - y(r,s',d)^2
+            Tensor stateActionPair = StateActionPair(states, actions);
+            Tensor Q1_s_a = model.q1Network.Forward(stateActionPair);
+            Tensor Q2_s_a = model.q2Network.Forward(stateActionPair);
+
+            Loss q1Loss = Loss.MSE(Q1_s_a, Q_targets);
+            Loss q2Loss = Loss.MSE(Q2_s_a, Q_targets);
+            criticLoss += (q1Loss.Item + q2Loss.Item) / 2;
+
+            model.q1Optimizer.ZeroGrad();
+            model.q2Optimizer.ZeroGrad();
+            model.q1Network.Backward(q1Loss.Gradient * 0.5f);
+            model.q2Network.Backward(q2Loss.Gradient * 0.5f);
+            model.q1Optimizer.Step();
+            model.q2Optimizer.Step();
+        }
+        private void UpdatePolicy(Tensor states)
+        {
+            // ObjectiveLoss = 1/|B| Σ Q1(s, mu(s))
+            Tensor mu_s = model.muNetwork.Forward(states);
+            Tensor pair_s_mu_s = StateActionPair(states, mu_s);
+            Tensor q1_s_mu_s = model.q1Network.Forward(pair_s_mu_s);
+
+            actorLoss += q1_s_mu_s.Average();
+            Tensor objectiveLossGrad = Tensor.Ones(q1_s_mu_s.Shape); // gradient ascent (grad of Mean()) -> mean is computed already on each layer (mean of the batch)
+            Tensor s_mu_s_grad = model.q1Network.Backward(objectiveLossGrad);
+            Tensor mu_grad = ExtractActionFromStateAction(s_mu_s_grad, states.Size(-1), mu_s.Size(-1));
+            model.muOptimizer.ZeroGrad();
+            model.muNetwork.Backward(-mu_grad);
+            model.muOptimizer.Step();
+        }
+        public void UpdateTargetNetworks()
+        {
+            Tensor[] theta = model.muNetwork.Parameters().Select(x => x.param).ToArray();
+            Tensor[] phi1 = model.q1Network.Parameters().Select(x => x.param).ToArray();
+            Tensor[] phi2 = model.q2Network.Parameters().Select(x => x.param).ToArray();
+
+            Tensor[] theta_targ = Pitarg.Parameters().Select(x => x.param).ToArray();
+            Tensor[] phi_targ1 = Qtarg1.Parameters().Select(x => x.param).ToArray();
+            Tensor[] phi_targ2 = Qtarg2.Parameters().Select(x => x.param).ToArray();
+
+            // We update the target q functions and theta softly...
+            // OpenAI algorithm uses polyak = 0.995, the same thing with using τ = 0.005
+            // φtarg,i <- (1 - τ)φtarg,i + τφi     for i = 1,2
+
+            for (int i = 0; i < theta.Length; i++)
+            {
+                Tensor.CopyTo((1f - hp.tau) * theta_targ[i] + hp.tau * theta[i], theta_targ[i]);
+            }
+
+            for (int i = 0; i < phi1.Length; i++)
+            {           
+                Tensor.CopyTo((1f - hp.tau) * phi_targ1[i] + hp.tau * phi1[i], phi_targ1[i]);
+                Tensor.CopyTo((1f - hp.tau) * phi_targ2[i] + hp.tau * phi2[i], phi_targ2[i]);
+            }
+
+            
+        }
+
+
+
+
+        /// <summary>
+        /// Note that this must be changed if i plan to allow different input shape than vectorized. (for cnn for example)
+        /// </summary>
+        private static Tensor ExtractActionFromStateAction(Tensor stateActionBatch, int state_size, int action_size)
+        {
+            int batch_size = stateActionBatch.Size(0);
+            Tensor actions = Tensor.Zeros(batch_size, action_size);
+            Parallel.For(0, batch_size, b =>
+            {
+                for (int f = 0; f < action_size; f++)
+                {
+                    actions[b, f] = stateActionBatch[b, state_size + f];
+                }
+            });
+            return actions;
+        }
+        private static Tensor StateActionPair(Tensor stateBatch, Tensor actionBatch)
+        {
+            int batch_size = stateBatch.Size(0);
+            int state_size = stateBatch.Size(1);
+            int action_size = actionBatch.Size(1);
+            Tensor pair = Tensor.Zeros(batch_size, state_size + action_size);
+            Parallel.For(0, batch_size, b =>
+            {
+                for (int s = 0; s < state_size; s++)
+                {
+                    pair[b, s] = stateBatch[b, s];
+                }
+                for (int a = 0; a < action_size; a++)
+                {
+                    pair[b, state_size + a] = actionBatch[b, a];
+                }
+            });
+            return pair;
+        }
+    }
+
+}
+
+

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEditor;
-using UnityEngine;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
@@ -18,7 +17,25 @@ namespace DeepUnity.ReinforcementLearning
     /// 1. Softmax activation on discrete head may "explode"
     internal sealed class PPOTrainer : DeepUnityTrainer
     {
-        protected override void Initialize() { }
+        protected override void Initialize()
+        {
+            // Initialize inference device
+
+            if (model.muNetwork != null)
+                model.muNetwork.Device = model.inferenceDevice;
+
+            if (model.sigmaNetwork != null)
+                model.sigmaNetwork.Device = model.inferenceDevice;
+
+            if (model.discreteNetwork != null)
+                model.discreteNetwork.Device = model.inferenceDevice;
+
+            if (model.stochasticity != Stochasticity.FixedStandardDeviation || model.stochasticity != Stochasticity.TrainebleStandardDeviation)
+            {
+                ConsoleMessage.Info("Behaviour's stochasticity is now given by fixed standard deviation.");
+                model.stochasticity = Stochasticity.FixedStandardDeviation;
+            }
+        }
         protected override void OnBeforeFixedUpdate()
         {
             // If agents cumulativelly collected enough data to fill up the buffer (it can surpass for multiple agents)
@@ -31,15 +48,18 @@ namespace DeepUnity.ReinforcementLearning
 
                     ComputeGAE_andVtargets(agent_memory, hp.gamma, hp.lambda, hp.horizon, model.vNetwork);
                     train_data.TryAppend(agent_memory, hp.bufferSize);
-                    if (hp.debug) Utils.DebugInFile(agent_memory.ToString());
+                    // if (hp.debug) Utils.DebugInFile(agent_memory.ToString());
                     agent_memory.Clear();
                 }
 
-                updateClock = Stopwatch.StartNew();
-                updateIterations++;
+                actorLoss = 0;
+                criticLoss = 0;
+
+                updateClock = Stopwatch.StartNew();       
                 Train();
                 updateClock.Stop();
 
+                updateIterations++;
                 actorLoss = actorLoss / (hp.bufferSize / hp.batchSize * hp.numEpoch);
                 criticLoss = criticLoss / (hp.bufferSize / hp.batchSize * hp.numEpoch);
                 entropy = entropy / (hp.bufferSize / hp.batchSize * hp.numEpoch);
@@ -207,7 +227,7 @@ namespace DeepUnity.ReinforcementLearning
                                 ratio * advantages,
                                 Tensor.Clip(ratio, 1f - hp.epsilon, 1f + hp.epsilon) * advantages);
 
-            float surrogateItem = LClip.Abs().ToArray().Average();
+            float surrogateItem = LClip.Abs().Average();
             if (float.IsNaN(surrogateItem))
             {
                 ConsoleMessage.Warning($"PPO LCLIP batch containing NaN values was skipped. Consider clipping the observations strongly");
@@ -249,7 +269,7 @@ namespace DeepUnity.ReinforcementLearning
             // Entropy bonus added if σ is trainable
             // H(πθ(a|s)) = - integral( πθ(a|s) log πθ(a|s) ) = 1/2 * log(2πeσ^2) // https://en.wikipedia.org/wiki/Differential_entropy
             // Tensor H = 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2)); 
-            entropy += sigma.ToArray().Average(); // H.ToArray().Average(); // i modified it because is simply to understand since it is sigma         
+            entropy += sigma.Average(); // H.ToArray().Average(); // i modified it because is simply to understand since it is sigma         
 
             // if (dmLClip_dPi.Contains(float.NaN)) return;
 
@@ -265,7 +285,7 @@ namespace DeepUnity.ReinforcementLearning
             model.muOptimizer.ClipGradNorm(hp.gradClipNorm);
             model.muOptimizer.Step();
 
-            if (model.standardDeviation == StandardDeviationType.Trainable)
+            if (model.stochasticity == Stochasticity.TrainebleStandardDeviation)
             {
                 // ∂πθ(a|s) / ∂σ = πθ(a|s) * ((x - μ)^2 - σ^2) / σ^3    (Simple statistical gradient-following for connectionst Reinforcement Learning (pag 14))
                 Tensor dPi_dSigma = pi * ((actions - mu).Pow(2) - sigmaSquared) / (sigmaSquared * sigma);
@@ -375,8 +395,7 @@ namespace DeepUnity.ReinforcementLearning
         private static float ComputeKLDivergence(Tensor probs_new, Tensor probs_old)
         {
             Tensor KL = probs_new * Tensor.Log(probs_new / (probs_old + Utils.EPSILON));
-            KL = KL.Mean(0);
-            KL = KL.Sum(0);
+            KL = KL.Mean(0).Sum(0);
             return KL[0];
         }
         /// <summary>
@@ -428,7 +447,7 @@ namespace DeepUnity.ReinforcementLearning
                 // Vtarg[t] = GAE(gamma, lambda, t) + V[t]
                 float Vtarget_t = Ahat_t + Vw_s[timestep];
 
-                frames[timestep].value_target = Tensor.Constant(Vtarget_t);
+                frames[timestep].v_target = Tensor.Constant(Vtarget_t);
                 frames[timestep].advantage = Tensor.Constant(Ahat_t);
             });
         }

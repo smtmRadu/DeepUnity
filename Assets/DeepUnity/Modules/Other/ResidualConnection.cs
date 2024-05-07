@@ -1,17 +1,25 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
+
+/// 
+///  ------>-[Main Path]-------->      
+///      |                  |          
+///      +->--[modules]--->-|          
+///   
 
 namespace DeepUnity.Modules
 {
     /// <summary>
     /// How to create a residual connection while defining your model: <br></br>
     /// <br></br>
-    /// new <see cref="ResidualConnection.Fork"/>(), <br></br>
+    /// new <see cref="Fork"/>(*arg), <br></br>
     /// yatta(), yatta(), yatta() ... <br></br>
-    /// new <see cref="ResidualConnection.Join"/>(), <br></br>
+    /// new <see cref="Join"/>(), <br></br>
     /// </summary>
+    [Serializable]
     public static class ResidualConnection
     {
         [Serializable]
@@ -24,26 +32,41 @@ namespace DeepUnity.Modules
             public Tensor ConnectionGrad { private get; set; }
             public Tensor Identity { get; private set; }
 
-            [SerializeField] private Tensor linearProjection;
+            // SO fork doesn't allow recursive deserialization (check on before serialization), so as compromise we use nothing for now.
+            // [SerializeField] private IModule[] modules;
+            // [SerializeField] private IModuleWrapper[] serializedModules;
 
+
+            /// <summary>
+            /// Forks a residual connection from the main path. Make sure to create a <see cref="Join"/>. If the input <see cref="Fork"/> doesn't match the shape of the <see cref="Join"/>, insert a linear projection as arg.
+            /// </summary>
+            /// <param name="modules">Modules attached on this residual connection</param>
+            // public Fork(IModule[] modules)
+            // {
+            //     UnjoinedForksOnCreate.Value.Push(this);
+            //     this.modules = modules;
+            // }
+
+            /// <summary>
+            /// Forks a residual connection from the main path. Make sure to create a <see cref="Join"/>.
+            /// </summary>
             public Fork()
             {
                 UnjoinedForksOnCreate.Value.Push(this);
             }
 
-            // /// <summary>
-            // /// Applies a linear projection to the identity to match the result
-            // /// </summary>
-            // /// <param name="linearProjection"></param>
-            // public Fork(Tensor linearProjection)
-            // {
-            //     UnjoinedForks.Value.Push(this);
-            //     this.linearProjection = linearProjection;
-            // }
-
             public Tensor Backward(Tensor loss)
             {
-                return loss + ConnectionGrad;
+                // if(modules == null)
+                     return loss + ConnectionGrad;
+                // else
+                // {                  
+                //     for (int i = modules.Length - 1; i >= 0; --i)
+                //     {
+                //         loss = modules[i].Backward(loss);
+                //     }
+                //     return loss + ConnectionGrad;
+                // }
             }
 
             public object Clone()
@@ -66,11 +89,26 @@ namespace DeepUnity.Modules
             public void OnBeforeSerialize()
             {
                 residualConnectionHash = GetHashCode();
+
+                // try
+                // {
+                //     if (serializedModules != null && serializedModules.Length > 0)
+                //         serializedModules = modules.Select(x => IModuleWrapper.Wrap(x)).ToArray();
+                // }
+                // catch { }
             }
             public void OnAfterDeserialize()
             {
                 if(!UnjoinedForksWaitingRoom.Value.ContainsKey(residualConnectionHash))
                     UnjoinedForksWaitingRoom.Value.TryAdd(residualConnectionHash, this);
+
+                // try
+                // {
+                //     if (modules != null && modules.Length > 0)
+                //         modules = serializedModules.Select(x => IModuleWrapper.Unwrap(x)).ToArray();
+                // }
+                // catch { }
+              
             }
         }
 
@@ -80,6 +118,9 @@ namespace DeepUnity.Modules
             [SerializeField] private int residualConnectionHash;
             private Fork forkSource;
 
+            /// <summary>
+            /// Joins the last created <see cref="Fork"/> to the main path.
+            /// </summary>
             public Join()
             {
                 try

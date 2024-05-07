@@ -8,8 +8,7 @@ namespace DeepUnity.Tutorials
         // Spring: 3000 | Damper: 100 | MaxForce: 6000
 
         [Header("Needs normalization")]
-        public Transform bonus;
-
+        [ViewOnly, SerializeField] private float currentZAdvancement;
         public GameObject head;
         public GameObject hips;
         public GameObject chest;
@@ -70,31 +69,13 @@ namespace DeepUnity.Tutorials
                         }
                     };
                 }
-                if(bodypart.gameObject == head.gameObject)
-                {
-                    bodypart.TriggerContact.OnEnter = (col) =>
-                    {
-                        if (col.CompareTag("Target"))
-                        {
-                            AddReward(+0.1f);
-                        }
-
-                        col.gameObject.SetActive(false);
-                    };
-                }
             });
         }
 
         public override void OnEpisodeBegin()
         {
-            if (bonus == null)
-                return;
-
-            for (int i = 0; i < bonus.childCount; i++)
-            {
-                var child = bonus.GetChild(i);
-                child.gameObject.SetActive(true);
-            }
+            currentZAdvancement = transform.position.z;
+            transform.position = new Vector3(transform.position.x, transform.position.y + Random.value/10f, transform.position.z);
         }
 
         // 120 input variables
@@ -244,10 +225,12 @@ namespace DeepUnity.Tutorials
             jdDict[shinR].SetJointStrength(actions_vector[i++]);
             jdDict[footR].SetJointStrength(actions_vector[i++]);
 
-            if (transform.position.y < -10f) // Falls of the platform
-                EndEpisode();
+            float reward = transform.position.z - currentZAdvancement;
+            AddReward(0.1f * reward);
+            currentZAdvancement += reward;
 
-            AddReward(0.001f);
+            if (transform.position.y < -10f)
+                EndEpisode();
         }
     }
 

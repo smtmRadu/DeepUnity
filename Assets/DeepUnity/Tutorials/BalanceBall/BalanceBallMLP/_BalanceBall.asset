@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
   m_Name: _BalanceBall
   m_EditorClassIdentifier: 
+  version: 0
   behaviourName: BalanceBall
   assetCreated: 1
   observationSize: 10
@@ -25,9 +26,10 @@ MonoBehaviour:
   muNetwork: {fileID: 11400000, guid: cb39a5520b9b6224184b11441f84f688, type: 2}
   sigmaNetwork: {fileID: 11400000, guid: 7d6e28840d09153439edd9056636f44e, type: 2}
   discreteNetwork: {fileID: 0}
-  targetFPS: 50
   inferenceDevice: 0
   trainingDevice: 1
+  targetFPS: 50
+  clipping: 5
   normalize: 0
   observationsNormalizer:
     step: 0
@@ -57,12 +59,11 @@ MonoBehaviour:
       - 0
       - 0
       shape: 0a000000
-  observationsClip: 5
   rewardsNormalizer:
     step: 0
     R: 0
     mean: 0
     m2: 0
-  standardDeviation: 1
+  standardDeviation: 2
   standardDeviationValue: 1
   standardDeviationScale: 1.5

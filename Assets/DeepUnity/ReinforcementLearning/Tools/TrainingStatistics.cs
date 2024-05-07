@@ -216,7 +216,7 @@ namespace DeepUnity.ReinforcementLearning
             y += 20;
             if (hp.trainer == TrainerType.PPO)
                 svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Buffer Size: {hp.bufferSize}        [Batch Size: {hp.batchSize}       (x{hp.bufferSize / hp.batchSize})]</text>");
-            else if (hp.trainer == TrainerType.SAC)
+            else if (hp.trainer == TrainerType.SAC || hp.trainer == TrainerType.TD3 || hp.trainer == TrainerType.DDPG)
                 svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Replay Buffer Size: {hp.replayBufferSize}        [Batch Size: {hp.minibatchSize}       (x{hp.replayBufferSize / hp.minibatchSize})]</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Num Epoch: {hp.numEpoch}</text>");
@@ -232,8 +232,8 @@ namespace DeepUnity.ReinforcementLearning
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Space Size: {ab.observationSize}</text>");
             y += 20;
-            string std_value = ab.standardDeviation == StandardDeviationType.Fixed ? $"[Value: {ab.standardDeviationValue}]" : "";
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Continuous Actions: {ab.continuousDim} [Standard Deviation: {ab.standardDeviation}]     {std_value}</text>");
+            string std_value = ab.stochasticity == Stochasticity.FixedStandardDeviation ? $"[Value: {ab.standardDeviationValue}]" : "";
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Continuous Actions: {ab.continuousDim} [Standard Deviation: {ab.stochasticity}]     {std_value}</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Discrete Actions: {ab.discreteDim}</text>");
             y += 20;

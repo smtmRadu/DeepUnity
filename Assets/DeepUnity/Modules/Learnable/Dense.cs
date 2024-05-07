@@ -5,6 +5,7 @@ using Unity.VisualScripting;
 using System.Linq;
 namespace DeepUnity.Modules
 {
+    // DO NOT TRY TO UNDERSTAND Dense implementation because was over-optimized (cause is the most used layer) and the code became unreadable
     // https://www.youtube.com/watch?v=tMjdQLylyGI&t=602s
     // https://proceedings.mlr.press/v9/glorot10a/glorot10a.pdf (251 - 253)
     /// <summary>
@@ -35,7 +36,7 @@ namespace DeepUnity.Modules
         /// <param name="weight_init">Initializer used for weights.</param>
         /// <param name="bias_init">Initializer used for biases.</param>
         /// <param name="device">Computation device used. Recommended <see cref="Device.GPU"/> for large <see cref="Dense"/> layers with <b>in_features</b> &amp; <b>out_features > 64</b>.</param>
-        public Dense(int in_features, int out_features, bool bias = true, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = default)
+        public Dense(int in_features, int out_features, bool use_bias = true, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = default)
         {
             if (in_features < 1)
                 throw new ArgumentException("In_features cannot be less than 1.");
@@ -46,7 +47,7 @@ namespace DeepUnity.Modules
             weights = Parameter.Create(new int[] { out_features, in_features }, in_features, out_features, weight_init);
             weightsGrad = Tensor.Zeros(weights.Shape);
 
-            if(bias)
+            if(use_bias)
             {
                 biases = Parameter.Create(new int[] { out_features }, in_features, out_features, bias_init);
                 biasesGrad = Tensor.Zeros(biases.Shape);

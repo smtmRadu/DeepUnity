@@ -7,9 +7,8 @@ namespace DeepUnity.Tutorials
 {
     public class Spot : Agent
     {
-        public float targetSpawnDistance = 5f;
-        public GameObject targetPrefab;
-
+        [Header("Reguires observations normalization, 100 fps")]
+        [SerializeField, ViewOnly] float currentXPosition;
         public GameObject chest;
         public GameObject leftArm;
         public GameObject leftForearm;
@@ -25,17 +24,8 @@ namespace DeepUnity.Tutorials
         public GameObject rightFoot;
 
         BodyController bodyController;
-        private GameObject target;
+
         
-        public override void OnEpisodeBegin()
-        {
-            if(target != null)
-                Destroy(target);
-
-            target = Instantiate(targetPrefab, transform.position + Vector3.right * targetSpawnDistance, Quaternion.identity);
-            
-        }
-
         public override void Awake()
         {
             base.Awake();
@@ -75,16 +65,13 @@ namespace DeepUnity.Tutorials
             bodyController.bodyPartsDict[rightForearm].ColliderContact.OnEnter = touch_gr;
         }
 
+        public override void OnEpisodeBegin()
+        {
+            currentXPosition = transform.position.x;
+        }
         public override void CollectObservations(StateVector stateVector)
         {
             BodyPart _chest = bodyController.bodyPartsList[0];
-            // Add rotation relative to target
-            Quaternion relativeRotationToTarget = Quaternion.FromToRotation(transform.forward, targetPrefab.transform.position - transform.position);
-
-            // 110 inputs in total
-
-            // 4
-            stateVector.AddObservation(relativeRotationToTarget);
 
             // 76
             for (int i = 1; i < bodyController.bodyPartsList.Count; i++)
@@ -134,8 +121,13 @@ namespace DeepUnity.Tutorials
                     bodyController.bodyPartsList[i].SetJointStrength(actions_vector[a++]);
                 }
             }
-            AddReward(0.01f / Vector3.Distance(transform.position, target.transform.position));
-            // AddReward(- Vector3.Distance(transform.position, targetInstance.transform.position) / targetSpawnDistance * 0.001f);
+
+            float reward = transform.position.x - currentXPosition;
+            AddReward(0.1f * reward);
+            currentXPosition += reward;
+
+            if (transform.position.y < -10f)
+                EndEpisode();
         }
     }
 }

@@ -19,10 +19,10 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("[Typical range: 1e5 - 1e7] The maximum length in steps of this training session.")]
         [Min(10_000f)] public long maxSteps = 2_000_000_000;
 
-        [Tooltip("[Typical range: (PPO) 5e-6 - 3e-3, (SAC) 1e-5 - 1e-3] Initial learning rate for Adam optimizer (both all networks).")]
+        [Tooltip("[Typical range: (PPO) 5e-6 - 3e-3, (SAC) 1e-5 - 1e-3, (TD3) 1e-5 - 1e-3] Initial learning rate for Adam optimizer (both all networks).")]
         [MinMax(5e-6f, 1f)] public float learningRate = 3e-4f;
 
-        [Tooltip("[Typical range: 0.8 - 0.9997] Discount factor.")]
+        [Tooltip("[Typical range: 0.9 - 0.9997] Discount factor.")]
         [MinMax(0.001f, 1f)] public float gamma = 0.99f;
 
         [Tooltip("Applies linear decay on learning rate with respect to the maxSteps. When maxSteps is reached, lr will be 0.")]
@@ -30,7 +30,7 @@ namespace DeepUnity.ReinforcementLearning
 
         // ========================================================================================================================================================================
 
-        [Header("PPO specific Configuration")] // https://github.com/yosider/ml-agents-1/blob/master/docs/Training-PPO.md
+        [Header("Specific Configuration")] // https://github.com/yosider/ml-agents-1/blob/master/docs/Training-PPO.md
 
         [Tooltip("[Typical range: (Continuous) 512 - 5120, (Discrete) 32 - 512] Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer size.")]
         [MinMax(64, 5120)] public int batchSize = 512;
@@ -67,7 +67,7 @@ namespace DeepUnity.ReinforcementLearning
 
         // ========================================================================================================================================================================
 
-        [Header("SAC specific Configuration")] // https://github.com/yosider/ml-agents-1/blob/master/docs/Training-SAC.md
+        [Header("Specific Configuration")] // https://github.com/yosider/ml-agents-1/blob/master/docs/Training-SAC.md
         [Tooltip("[Typical range: 50000 - 1000000] The maximum capacity to hold experices. When getting fullfilled, the old experiences are removed to enable new space.")]
         [Min(50000)] public int replayBufferSize = 1_000_000;
 
@@ -89,9 +89,16 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("[Typicall range: 0.005 - 0.01] Inversed Polyak. How aggresively to update the target network used for boostraping value estimation.")]
         [MinMax(0.001f, 0.005f)] public float tau = 0.005f;
 
-
         // ========================================================================================================================================================================
 
+        // TD3/DDPG specific
+
+        [Tooltip("The clip applied to the active noise.")]
+        public float noiseClip = 0.5f;
+
+        [Tooltip("Policy will only be updated once every policy_delay times for each update of the Q-networks.")]
+        [MinMax(0, 10)] public int policyDelay = 2;
+        
         [HideInInspector]
         [Tooltip("Debug the train_data into a file.")]
         [Space(30)]
@@ -166,6 +173,10 @@ namespace DeepUnity.ReinforcementLearning
                 dontDrawMe.Add("alpha");
                 dontDrawMe.Add("saveReplayBuffer");
                 dontDrawMe.Add("tau");
+
+                dontDrawMe.Add("activeNoise");
+                dontDrawMe.Add("noiseClip");
+                dontDrawMe.Add("policyDelay");
             }
             else if (script.trainer == TrainerType.SAC)
             {
@@ -182,8 +193,48 @@ namespace DeepUnity.ReinforcementLearning
                 dontDrawMe.Add("gradClipNorm");
                 dontDrawMe.Add("normalizeAdvantages");
 
-                EditorGUILayout.HelpBox("SAC is not released yet!", MessageType.Warning);
+                dontDrawMe.Add("noiseClip");
+                dontDrawMe.Add("policyDelay");
             }
+            else if (script.trainer == TrainerType.TD3)
+            {
+                dontDrawMe.Add("batchSize");
+                dontDrawMe.Add("bufferSize");
+                dontDrawMe.Add("horizon");
+                dontDrawMe.Add("numEpoch");
+                dontDrawMe.Add("beta");
+                dontDrawMe.Add("epsilon");
+                dontDrawMe.Add("lambda");
+                dontDrawMe.Add("normalizeAdvantages");
+                dontDrawMe.Add("KLDivergence");
+                dontDrawMe.Add("targetKL");
+                dontDrawMe.Add("gradClipNorm");
+                dontDrawMe.Add("normalizeAdvantages");
+
+                dontDrawMe.Add("alpha");
+
+            }
+            else if (script.trainer == TrainerType.DDPG)
+            {
+                dontDrawMe.Add("batchSize");
+                dontDrawMe.Add("bufferSize");
+                dontDrawMe.Add("horizon");
+                dontDrawMe.Add("numEpoch");
+                dontDrawMe.Add("beta");
+                dontDrawMe.Add("epsilon");
+                dontDrawMe.Add("lambda");
+                dontDrawMe.Add("normalizeAdvantages");
+                dontDrawMe.Add("KLDivergence");
+                dontDrawMe.Add("targetKL");
+                dontDrawMe.Add("gradClipNorm");
+                dontDrawMe.Add("normalizeAdvantages");
+
+                dontDrawMe.Add("alpha");
+                dontDrawMe.Add("noiseClip");
+                dontDrawMe.Add("policyDelay");
+            }
+            else
+                throw new NotImplementedException("Unhandled trainer type");
 
             dontDrawMe.Add("timescale");
 

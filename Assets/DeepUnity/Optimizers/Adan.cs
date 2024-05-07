@@ -72,7 +72,7 @@ namespace DeepUnity.Optimizers
                 Tensor eta = Tensor.Fill(gamma, n[i].Shape) / (n[i].Sqrt() + epsilon);
 
                 // Update theta
-                Tensor.CopyTo((lambda * eta + 1f).Pow(-1f) * (parameters[i].theta - eta * (m[i] + (1f - beta2) * v[i])), parameters[i].theta);
+                Tensor.CopyTo((lambda * eta + 1f).Pow(-1f) * (parameters[i].param - eta * (m[i] + (1f - beta2) * v[i])), parameters[i].param);
 
 
                 gOld[i] = parameters[i].g.Clone() as Tensor;

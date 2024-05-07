@@ -4,6 +4,7 @@ using System.Text;
 using Unity.VisualScripting;
 using UnityEngine;
 using System.Collections.Generic;
+using DeepUnity.Sensors;
 
 namespace DeepUnity
 {
@@ -19,7 +20,7 @@ namespace DeepUnity
             UnityEditor.EditorApplication.playModeStateChanged += DeallocateTensors;
         }
         private readonly static Lazy<Dictionary<TensorGPU, TensorGPU>> AllocatedTensors = new Lazy<Dictionary<TensorGPU, TensorGPU>>();
-        private readonly static int MAX_ALLOC_TENSORS = 128;
+        private readonly static int MAX_ALLOC_TENSORS = 256;
 
         private static void DeallocateTensors(UnityEditor.PlayModeStateChange state)
         {
@@ -27,7 +28,7 @@ namespace DeepUnity
             {
                 if(AllocatedTensors.Value.Count > 0)
                 {
-                    ConsoleMessage.Info($"{AllocatedTensors.Value.Count} TensorGPUs deallocated. Please dispose TensorGPUs after use.");
+                    ConsoleMessage.Info($"<b>{AllocatedTensors.Value.Count}</b> TensorGPUs deallocated. Please dispose TensorGPUs after use");
 
                     foreach (var item in AllocatedTensors.Value)
                     {
@@ -41,9 +42,15 @@ namespace DeepUnity
         }
 #endif
 
+
+
         public ComputeBuffer data;
         [ViewOnly, SerializeField] private float[] serialized_data;
         [ViewOnly, SerializeField] private int[] shape;
+        
+
+
+
 
         // These fields that are used for fast value extraction on indexing. ..
         private ComputeBuffer valueAtIndex;
@@ -261,7 +268,12 @@ namespace DeepUnity
 
 
       
+
+
+
+        /// <summary>
         /// Deallocates the Tensor from VRAM and destroys the object.
+        /// </summary>
         public void Dispose()
         {
 #if UNITY_EDITOR
@@ -269,8 +281,16 @@ namespace DeepUnity
 #endif
             data.Release();
             GC.SuppressFinalize(this);
+
+            // When application is built the deallocation from GPU is forced.
         }
-        // Allocates the Tensor to VRAM.
+        public int Size(int axis)
+        {
+            if (axis >= 0)
+                return shape[axis];
+            else
+                return shape[shape.Length + axis];
+        }
         private TensorGPU(params int[] shape)
         {
             if (shape == null)
@@ -308,7 +328,7 @@ namespace DeepUnity
 
             if (AllocatedTensors.Value.Count > MAX_ALLOC_TENSORS)
             {
-                ConsoleMessage.Error($"Cannot allocate more than {MAX_ALLOC_TENSORS} TensorGPUs in the same time. Make sure there are no memory leaks and all unused TensorGPUs are Disposed!");
+                ConsoleMessage.Error($"Cannot allocate more than {MAX_ALLOC_TENSORS} TensorGPUs at the same time. Make sure there are no memory leaks and all unused TensorGPUs are Disposed!");
                 UnityEditor.EditorApplication.isPlaying = false;
              }
 #endif
@@ -514,154 +534,19 @@ namespace DeepUnity
             return t;
         }
 
-
-        // Operator overloading
-        public static TensorGPU operator +(TensorGPU left, TensorGPU right)
+        public static void CopyTo(TensorGPU fromTensor, TensorGPU toTensor)
         {
-            if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left and right tensors must have different shape for Element-Wise addition (+).");
-
-            ComputeShader cs = DeepUnityMeta.TensorCS;
-            TensorGPU result = new(left.shape);
-
-            int kernel = cs.FindKernel("AdditionElementWise");
-            cs.SetBuffer(kernel, "data1", left.data);
-            cs.SetBuffer(kernel, "data2", right.data);
-            cs.SetBuffer(kernel, "result", result.data);
-
-            int threads = DeepUnityMeta.THREADS_NUM;
-            cs.Dispatch(kernel, (result.Count() + threads - 1)/threads, 1, 1);
-            return result;
+            Array arr = new float[fromTensor.data.count];
+            fromTensor.data.GetData(arr);
+            toTensor.data.SetData(arr);
         }
-        public static TensorGPU operator -(TensorGPU left, TensorGPU right)
-        {
-            if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left and right tensors must have different shape for Element-Wise subtraction (-).");
-
-            ComputeShader cs = DeepUnityMeta.TensorCS;
-            TensorGPU result = new(left.shape);
-
-            int kernel = cs.FindKernel("SubtractionElementWise");
-            cs.SetBuffer(kernel, "data1", left.data);
-            cs.SetBuffer(kernel, "data2", right.data);
-            cs.SetBuffer(kernel, "result", result.data);
-
-            int threads = DeepUnityMeta.THREADS_NUM;
-            cs.Dispatch(kernel, (result.Count() + threads - 1) / threads, 1, 1);
-            return result;
-        }
-        public static TensorGPU operator *(TensorGPU left, TensorGPU right)
-        {
-            if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left and right tensors must have different shape for Element-Wise multipication (*).");
-
-            ComputeShader cs = DeepUnityMeta.TensorCS;
-            TensorGPU result = new(left.shape);
-
-            int kernel = cs.FindKernel("MultiplicationElementWise");
-            cs.SetBuffer(kernel, "data1", left.data);
-            cs.SetBuffer(kernel, "data2", right.data);
-            cs.SetBuffer(kernel, "result", result.data);
-
-            int threads = DeepUnityMeta.THREADS_NUM;
-            cs.Dispatch(kernel, (result.Count() + threads - 1) / threads, 1, 1);
-            return result;
-        }
-        public static TensorGPU operator /(TensorGPU left, TensorGPU right)
-        {
-            if (!left.shape.SequenceEqual(right.shape))
-                throw new OperationCanceledException($"Left and right tensors must have different shape for Element-Wise division (/).");
-
-            ComputeShader cs = DeepUnityMeta.TensorCS;
-            TensorGPU result = new(left.shape);
-
-            int kernel = cs.FindKernel("DivisionElementWise");
-            cs.SetBuffer(kernel, "data1", left.data);
-            cs.SetBuffer(kernel, "data2", right.data);
-            cs.SetBuffer(kernel, "result", result.data);
-
-            int threads = DeepUnityMeta.THREADS_NUM;
-            cs.Dispatch(kernel, (result.Count() + threads - 1) / threads, 1, 1);
-            return result;
-        }
-        public static TensorGPU operator +(TensorGPU left, float right)
-        {
-            ComputeShader cs = DeepUnityMeta.TensorCS;
-            TensorGPU result = new(left.shape);
-
-            int kernel = cs.FindKernel("AdditionWithScalar");
-            cs.SetBuffer(kernel, "data1", left.data);
-            cs.SetBuffer(kernel, "result", result.data);
-            cs.SetFloat("value", right);
-
-            int threads = DeepUnityMeta.THREADS_NUM;
-            cs.Dispatch(kernel, (result.Count() + threads - 1) / threads, 1, 1);
-            return result;
-        }
-        public static TensorGPU operator -(TensorGPU left, float right)
-        {
-            ComputeShader cs = DeepUnityMeta.TensorCS;
-            TensorGPU result = new(left.shape);
-
-            int kernel = cs.FindKernel("SubtractionWithScalar");
-            cs.SetBuffer(kernel, "data1", left.data);
-            cs.SetBuffer(kernel, "result", result.data);
-            cs.SetFloat("value", right);
-
-            int threads = DeepUnityMeta.THREADS_NUM;
-            cs.Dispatch(kernel, (result.Count() + threads - 1) / threads, 1, 1);
-            return result;
-        }
-        public static TensorGPU operator *(TensorGPU left, float right)
-        {
-            ComputeShader cs = DeepUnityMeta.TensorCS;
-            TensorGPU result = new(left.shape);
-
-            int kernel = cs.FindKernel("MultiplicationWithScalar");
-            cs.SetBuffer(kernel, "data1", left.data);
-            cs.SetBuffer(kernel, "result", result.data);
-            cs.SetFloat("value", right);
-
-            int threads = DeepUnityMeta.THREADS_NUM;
-            cs.Dispatch(kernel, (result.Count() + threads - 1) / threads, 1, 1);
-            return result;
-        }
-        public static TensorGPU operator /(TensorGPU left, float right)
-        {
-            ComputeShader cs = DeepUnityMeta.TensorCS;
-            TensorGPU result = new(left.shape);
-
-            int kernel = cs.FindKernel("DivisionWithScalar");
-            cs.SetBuffer(kernel, "data1", left.data);
-            cs.SetBuffer(kernel, "result", result.data);
-            cs.SetFloat("value", right);
-
-            int threads = DeepUnityMeta.THREADS_NUM;
-            cs.Dispatch(kernel, (result.Count() + threads - 1) / threads, 1, 1);
-            return result;
-        }
-        public static TensorGPU operator +(float left, TensorGPU right)
-        {
-            return right + left;
-        }
-        public static TensorGPU operator -(float left, TensorGPU right)
-        {
-            return right - left;
-        }
-        public static TensorGPU operator *(float left, TensorGPU right)
-        {
-            return right * left;
-        }
-       
-
-        // Special Operations
         public static TensorGPU MatMul(TensorGPU left, TensorGPU right)
         {
             int left_rank = left.Rank;
             int right_rank = right.Rank;
 
             if (left_rank == 1 && right_rank == 1)
-                return left * right;
+                return TensorGPU.Constant(left[0] * right[0]);
 
             if (left_rank == 1 && left.Width != right.Height)
                 throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
@@ -757,129 +642,47 @@ namespace DeepUnity
             return result;
 
         }
-        public static TensorGPU Norm(TensorGPU tensor, NormType norm = NormType.EuclideanL2)
+        public static TensorGPU BatchedMatMul(TensorGPU left, TensorGPU right)
         {
-            throw new NotImplementedException();
-        }
 
+            int C = left.Channels;
+            int N = left.Height;
+            int M = left.Width;
+            int P = right.Width;
 
-        #region Static operations
-        public int Size(int axis)
-        {
-            if (axis >= 0)
-                return shape[axis];
-            else
-                return shape[shape.Length + axis];
-        }
-        public static TensorGPU Reshape(TensorGPU tensor, params int[] newShape)
-        {
-            int count = 1;
-            foreach (var item in newShape)
-            {
-                count *= item;
-            }
+            ComputeShader cs = DeepUnityMeta.TensorCS;
 
-            if (count != tensor.Count())
-                throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
+            TensorGPU result = new(C, N, P);
 
-            TensorGPU result = new TensorGPU(newShape);
-            float[] tensor_data = new float[tensor.Count()];
-            tensor.data.GetData(tensor_data);
-            result.data.SetData(tensor_data);
+            int kernel = cs.FindKernel("BatchedMatMul");
+
+            cs.SetBuffer(kernel, "data1", left.data);
+            cs.SetBuffer(kernel, "data2", right.data);
+            cs.SetBuffer(kernel, "result", result.data);
+
+            cs.SetInt("w1", M);
+            cs.SetInt("h1", N);
+            cs.SetInt("c1", C);
+
+            cs.SetInt("w2", P);
+            cs.SetInt("h2", M);
+            cs.SetInt("c2", C);
+
+            cs.SetInt("wr", P);
+            cs.SetInt("hr", N);
+            cs.SetInt("cr", C);
+
+            // channels c are the batch here
+
+            cs.Dispatch(kernel,
+                  (C + 7) / 8,
+                  (N + 7) / 8,
+                  (P + 7) / 8);
+
             return result;
         }
-        public static TensorGPU Squeeze(TensorGPU tensor, int? axis = null)
-        {
-            if (axis == null)
-            {
-                // Removes all axis with value 1
-                LinkedList<int> squeezedShape = new LinkedList<int>();
 
-                if (tensor.Width > 1)
-                    squeezedShape.AddFirst(tensor.Width);
-
-                if (tensor.Height > 1)
-                    squeezedShape.AddFirst(tensor.Height);
-
-                if (tensor.Channels > 1)
-                    squeezedShape.AddFirst(tensor.Channels);
-
-                if (tensor.Batch > 1)
-                    squeezedShape.AddFirst(tensor.Batch);
-
-                if (squeezedShape.Count == 0)
-                    squeezedShape.AddFirst(tensor.Width);
-
-                TensorGPU result = new(squeezedShape.ToArray());
-                float[] dataarr = new float[tensor.data.count];
-                tensor.data.GetData(dataarr);
-                result.data.SetData(dataarr);
-                return result;
-            }
-            else
-            {
-                int ax = axis.Value;
-                HandleAxis(tensor, ref ax);
-
-
-                // if axis is not 1, tensor remains unchanged
-                if (tensor.shape[ax] != 1)
-                    return Identity(tensor);
-
-                // Esle remove that axis
-                List<int> squeezedShape = tensor.shape.ToList();
-                if(squeezedShape.Count > 1)
-                    squeezedShape.RemoveAt(ax);
-
-                TensorGPU result = new(squeezedShape.ToArray());
-                float[] dataarr = new float[tensor.data.count];
-                tensor.data.GetData(dataarr);
-                result.data.SetData(dataarr);
-                return result;
-            }
-
-        }
-        public static TensorGPU Unsqueeze(TensorGPU tensor, int axis)
-        {
-            HandleAxis(tensor, ref axis);
-
-            List<int> unsqueezedShape = tensor.shape.ToList();
-            unsqueezedShape.Insert(axis, 1);
-            TensorGPU result = new(unsqueezedShape.ToArray());
-            float[] dataarr = new float[tensor.data.count];
-            tensor.data.GetData(dataarr);
-            result.data.SetData(dataarr);
-            return result;
-        }      
-        public static TensorGPU Flatten(TensorGPU tensor, int startAxis = 0, int endAxis = -1)
-        {
-            if (startAxis > endAxis)
-                throw new Exception($"Start axis ({startAxis}) must be greater or equal to the end axis ({endAxis}) when flattening.");
-
-            HandleAxis(tensor, ref startAxis);
-            HandleAxis(tensor, ref endAxis);
-
-            List<int> newShape = new();
-
-            for (int i = 0; i < startAxis; i++)
-            {
-                newShape.Add(tensor.shape[i]);
-            }
-            int mergedDim = 1;
-            for (int i = startAxis; i <= endAxis; i++)
-            {
-                mergedDim *= tensor.shape[i];
-            }
-            newShape.Add(mergedDim);
-            for (int i = endAxis + 1; i < tensor.shape.Length; i++)
-            {
-                newShape.Add(tensor.shape[i]);
-            }
-
-            TensorGPU result = new TensorGPU(newShape.ToArray());
-            result.data.SetData(tensor.ToArray());
-            return result;
-        }
+        #region Static operations  
         public static TensorGPU Concat(int? axis, params TensorGPU[] tensors)
         {
             Tensor result = Tensor.Concat(axis, tensors.Select(x => Tensor.Identity(x)).ToArray());
@@ -985,9 +788,118 @@ namespace DeepUnity
 
             return result;
         }
-        // Split
-        // Shuffle
-        public static TensorGPU Mean(TensorGPU tensor, int axis, bool keepDim = false)
+
+        // These part was let like this. If you wanna create another tensor with this functions applied, just clone yours before that().
+        private static TensorGPU Flatten(TensorGPU tensor, int startAxis = 0, int endAxis = -1)
+        {
+            if (startAxis > endAxis)
+                throw new Exception($"Start axis ({startAxis}) must be greater or equal to the end axis ({endAxis}) when flattening.");
+
+            HandleAxis(tensor, ref startAxis);
+            HandleAxis(tensor, ref endAxis);
+
+            List<int> newShape = new();
+
+            for (int i = 0; i < startAxis; i++)
+            {
+                newShape.Add(tensor.shape[i]);
+            }
+            int mergedDim = 1;
+            for (int i = startAxis; i <= endAxis; i++)
+            {
+                mergedDim *= tensor.shape[i];
+            }
+            newShape.Add(mergedDim);
+            for (int i = endAxis + 1; i < tensor.shape.Length; i++)
+            {
+                newShape.Add(tensor.shape[i]);
+            }
+
+            TensorGPU result = new TensorGPU(newShape.ToArray());
+            result.data.SetData(tensor.ToArray());
+            return result;
+        }
+        private static TensorGPU Reshape(TensorGPU tensor, params int[] newShape)
+        {
+            int count = 1;
+            foreach (var item in newShape)
+            {
+                count *= item;
+            }
+
+            if (count != tensor.Count())
+                throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
+
+            TensorGPU result = new TensorGPU(newShape);
+            float[] tensor_data = new float[tensor.Count()];
+            tensor.data.GetData(tensor_data);
+            result.data.SetData(tensor_data);
+            return result;
+        }
+        private static TensorGPU Squeeze(TensorGPU tensor, int? axis = null)
+        {
+            if (axis == null)
+            {
+                // Removes all axis with value 1
+                LinkedList<int> squeezedShape = new LinkedList<int>();
+
+                if (tensor.Width > 1)
+                    squeezedShape.AddFirst(tensor.Width);
+
+                if (tensor.Height > 1)
+                    squeezedShape.AddFirst(tensor.Height);
+
+                if (tensor.Channels > 1)
+                    squeezedShape.AddFirst(tensor.Channels);
+
+                if (tensor.Batch > 1)
+                    squeezedShape.AddFirst(tensor.Batch);
+
+                if (squeezedShape.Count == 0)
+                    squeezedShape.AddFirst(tensor.Width);
+
+                TensorGPU result = new(squeezedShape.ToArray());
+                float[] dataarr = new float[tensor.data.count];
+                tensor.data.GetData(dataarr);
+                result.data.SetData(dataarr);
+                return result;
+            }
+            else
+            {
+                int ax = axis.Value;
+                HandleAxis(tensor, ref ax);
+
+
+                // if axis is not 1, tensor remains unchanged
+                if (tensor.shape[ax] != 1)
+                    return Identity(tensor);
+
+                // Esle remove that axis
+                List<int> squeezedShape = tensor.shape.ToList();
+                if (squeezedShape.Count > 1)
+                    squeezedShape.RemoveAt(ax);
+
+                TensorGPU result = new(squeezedShape.ToArray());
+                float[] dataarr = new float[tensor.data.count];
+                tensor.data.GetData(dataarr);
+                result.data.SetData(dataarr);
+                return result;
+            }
+
+        }
+        private static TensorGPU Unsqueeze(TensorGPU tensor, int axis)
+        {
+            HandleAxis(tensor, ref axis);
+
+            List<int> unsqueezedShape = tensor.shape.ToList();
+            unsqueezedShape.Insert(axis, 1);
+            TensorGPU result = new(unsqueezedShape.ToArray());
+            float[] dataarr = new float[tensor.data.count];
+            tensor.data.GetData(dataarr);
+            result.data.SetData(dataarr);
+            return result;
+        }
+        private static TensorGPU Mean(TensorGPU tensor, int axis, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
 
@@ -1019,15 +931,12 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-            {
-                TensorGPU res = Squeeze(result, axis);
-                result.Dispose();
-                return res;
-            }
+                return Squeeze_(result, axis);
+            
                 
             return result;
         }
-        public static TensorGPU Sum(TensorGPU tensor, int axis, bool keepDim = false)
+        private static TensorGPU Sum(TensorGPU tensor, int axis, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
 
@@ -1059,14 +968,10 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-            {
-                TensorGPU res = Squeeze(result, axis);
-                result.Dispose();
-                return res;
-            }
+                return Squeeze_(result, axis);
             return result;
         }
-        public static TensorGPU Var(TensorGPU tensor, int axis, int correction = 1, bool keepDim = false)
+        private static TensorGPU Var(TensorGPU tensor, int axis, int correction = 1, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
 
@@ -1101,14 +1006,10 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-            {
-                TensorGPU res = Squeeze(result, axis);
-                result.Dispose();
-                return res;
-            }
+                return Squeeze_(result, axis);
             return result;
         }
-        public static TensorGPU Std(TensorGPU tensor, int axis, int correction = 1, bool keepDim = false)
+        private static TensorGPU Std(TensorGPU tensor, int axis, int correction = 1, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
 
@@ -1142,14 +1043,10 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-            {
-                TensorGPU res = Squeeze(result, axis);
-                result.Dispose();
-                return res;
-            }
+                return Squeeze_(result, axis);
             return result;
         }
-        public static TensorGPU Min(TensorGPU tensor, int axis, bool keepDim = false)
+        private static TensorGPU Min(TensorGPU tensor, int axis, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
 
@@ -1182,14 +1079,10 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-            {
-                TensorGPU res = Squeeze(result, axis);
-                result.Dispose();
-                return res;
-            }
+                return Squeeze_(result, axis);
             return result;
         }
-        public static TensorGPU Max(TensorGPU tensor, int axis, bool keepDim = false)
+        private static TensorGPU Max(TensorGPU tensor, int axis, bool keepDim = false)
         {
             HandleAxis(tensor, ref axis);
 
@@ -1221,14 +1114,10 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
             if (!keepDim)
-            {
-                TensorGPU res = Squeeze(result, axis);
-                result.Dispose();
-                return res;
-            }
+                return Squeeze_(result, axis);
             return result;
         }
-        public static TensorGPU Pow(TensorGPU tensor, float power)
+        private static TensorGPU Pow(TensorGPU tensor, float power)
         {
             TensorGPU t = new(tensor.shape);
             ComputeShader cs = DeepUnityMeta.TensorCS;
@@ -1243,7 +1132,7 @@ namespace DeepUnity
 
             return t;
         }
-        public static TensorGPU Sqrt(TensorGPU tensor)
+        private static TensorGPU Sqrt(TensorGPU tensor)
         {
             TensorGPU t = new(tensor.shape);
             ComputeShader cs = DeepUnityMeta.TensorCS;
@@ -1257,7 +1146,7 @@ namespace DeepUnity
 
             return t;
         }
-        public static TensorGPU Exp(TensorGPU tensor)
+        private static TensorGPU Exp(TensorGPU tensor)
         {
             TensorGPU t = new(tensor.shape);
             ComputeShader cs = DeepUnityMeta.TensorCS;
@@ -1271,7 +1160,7 @@ namespace DeepUnity
 
             return t;
         }
-        public static TensorGPU Log(TensorGPU tensor, float @base = MathF.E)
+        private static TensorGPU Log(TensorGPU tensor, float @base = MathF.E)
         {
             if (@base != MathF.E && @base != 2f && @base != 10f)
                 throw new ArgumentException("Supported base value for Log() is E, 2 or 10.");
@@ -1289,7 +1178,7 @@ namespace DeepUnity
 
             return t;
         }
-        public static TensorGPU Abs(TensorGPU tensor)
+        private static TensorGPU Abs(TensorGPU tensor)
         {
             TensorGPU t = new(tensor.shape);
             ComputeShader cs = DeepUnityMeta.TensorCS;
@@ -1303,7 +1192,7 @@ namespace DeepUnity
 
             return t;
         }
-        public static TensorGPU Sin(TensorGPU tensor)
+        private static TensorGPU Sin(TensorGPU tensor)
         {
             TensorGPU t = new(tensor.shape);
             ComputeShader cs = DeepUnityMeta.TensorCS;
@@ -1317,7 +1206,7 @@ namespace DeepUnity
 
             return t;
         }
-        public static TensorGPU Cos(TensorGPU tensor)
+        private static TensorGPU Cos(TensorGPU tensor)
         {
             TensorGPU t = new(tensor.shape);
             ComputeShader cs = DeepUnityMeta.TensorCS;
@@ -1331,7 +1220,7 @@ namespace DeepUnity
 
             return t;
         }
-        public static TensorGPU Clip(TensorGPU tensor, float min, float max)
+        private static TensorGPU Clip(TensorGPU tensor, float min, float max)
         {
             TensorGPU t = new(tensor.shape);
             ComputeShader cs = DeepUnityMeta.TensorCS;
@@ -1348,7 +1237,328 @@ namespace DeepUnity
             return t;
         }
 
+
+
+
+
         #endregion Static operations
+
+
+        #region InPlace
+        public static TensorGPU Flatten_(TensorGPU tensor, int startAxis = 0, int endAxis = -1)
+        {
+            if (startAxis > endAxis)
+                throw new Exception($"Start axis ({startAxis}) must be greater or equal to the end axis ({endAxis}) when flattening.");
+
+            HandleAxis(tensor, ref startAxis);
+            HandleAxis(tensor, ref endAxis);
+
+            List<int> newShape = new();
+
+            for (int i = 0; i < startAxis; i++)
+            {
+                newShape.Add(tensor.shape[i]);
+            }
+            int mergedDim = 1;
+            for (int i = startAxis; i <= endAxis; i++)
+            {
+                mergedDim *= tensor.shape[i];
+            }
+            newShape.Add(mergedDim);
+            for (int i = endAxis + 1; i < tensor.shape.Length; i++)
+            {
+                newShape.Add(tensor.shape[i]);
+            }
+
+            tensor.shape = newShape.ToArray();
+            return tensor;
+        }
+        public static TensorGPU Reshape_(TensorGPU tensor, params int[] newShape)
+        {
+            int count = 1;
+            foreach (var item in newShape)
+            {
+                count *= item;
+            }
+
+            if (count != tensor.Count())
+                throw new ArgumentException("The new shape must provide the same capacity of the tensor when reshaping it.");
+
+            tensor.shape = newShape;
+
+            return tensor;
+        }
+        public static TensorGPU Squeeze_(TensorGPU tensor, int? axis)
+        {
+            if (axis == null)
+            {
+                // Removes all axis with value 1
+                LinkedList<int> squeezedShape = new LinkedList<int>();
+
+                if (tensor.Width > 1)
+                    squeezedShape.AddFirst(tensor.Width);
+
+                if (tensor.Height > 1)
+                    squeezedShape.AddFirst(tensor.Height);
+
+                if (tensor.Channels > 1)
+                    squeezedShape.AddFirst(tensor.Channels);
+
+                if (tensor.Batch > 1)
+                    squeezedShape.AddFirst(tensor.Batch);
+
+                if (squeezedShape.Count == 0)
+                    squeezedShape.AddFirst(tensor.Width);
+
+                tensor.shape = squeezedShape.ToArray();
+                return tensor;
+            }
+            else
+            {
+                int ax = axis.Value;
+                HandleAxis(tensor, ref ax);
+
+
+                // if axis is not 1, tensor remains unchanged
+                if (tensor.shape[ax] != 1)
+                    return Identity(tensor);
+
+                // Esle remove that axis
+                List<int> squeezedShape = tensor.shape.ToList();
+                if (squeezedShape.Count > 1)
+                    squeezedShape.RemoveAt(ax);
+
+                tensor.shape = squeezedShape.ToArray();
+                return tensor;
+            }
+        }
+        public static TensorGPU Unsqueeze_(TensorGPU tensor, int axis)
+        {
+            HandleAxis(tensor, ref axis);
+
+            List<int> unsqueezedShape = tensor.shape.ToList();
+            unsqueezedShape.Insert(axis, 1);
+            tensor.shape = unsqueezedShape.ToArray();
+            return tensor;
+        }
+        public static TensorGPU Subtract_(TensorGPU tensor, float value)
+        {
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("SubtractSingle_");
+
+            cs.SetFloat("value", value);
+            cs.SetBuffer(kernel, "data1", tensor.data);
+
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU Subtract_(TensorGPU tensor, TensorGPU other, float alpha = 1)
+        {
+            if (!tensor.shape.SequenceEqual(other.shape))
+                throw new ArgumentException("Tensor shapes do not matches");
+
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("Subtract_");
+
+            cs.SetFloat("alpha", alpha);
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "data2", other.data);
+
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU Add_(TensorGPU tensor, float value)
+        {
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("AddSingle_");
+
+            cs.SetFloat("value", value);
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU Add_(TensorGPU tensor, TensorGPU other, float alpha = 1)
+        {
+            if (!tensor.shape.SequenceEqual(other.shape))
+                throw new ArgumentException("Tensor shapes do not matches");
+
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("Add_");
+
+            cs.SetFloat("alpha", alpha);
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "data2", other.data);
+
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU Multiply_(TensorGPU tensor, float value)
+        {
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("MultiplySingle_");
+
+            cs.SetFloat("value", value);
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU HadamardMultiply_(TensorGPU tensor, TensorGPU other, float alpha = 1)
+        {
+            if (!tensor.shape.SequenceEqual(other.shape))
+                throw new ArgumentException("Tensor shapes do not matches");
+
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("HadamardMultiply_");
+
+            cs.SetFloat("alpha", alpha);
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "data2", other.data);
+
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU Divide_(TensorGPU tensor, float value)
+        {
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("DivideSingle_");
+
+            cs.SetFloat("value", value);
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU Divide_(TensorGPU tensor, TensorGPU other, float alpha = 1)
+        {
+            if (!tensor.shape.SequenceEqual(other.shape))
+                throw new ArgumentException("Tensor shapes do not matches");
+
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("Divide_");
+
+            cs.SetFloat("alpha", alpha);
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "data2", other.data);
+
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+
+        public static TensorGPU Pow_(TensorGPU tensor, float pow)
+        {
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("Pow_");
+
+            cs.SetFloat("power", pow);
+            cs.SetBuffer(kernel, "data1", tensor.data);
+
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU Sqrt_(TensorGPU tensor)
+        {
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("Sqrt_");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU Log_(TensorGPU tensor)
+        {
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("Log_");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU Exp_(TensorGPU tensor)
+        {
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("Exp_");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU Sin_(TensorGPU tensor)
+        {
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("Sin_");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU Cos_(TensorGPU tensor)
+        {
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("Cos_");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU Clip_(TensorGPU tensor, float min, float max)
+        {
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("Clip_");
+
+            cs.SetFloat("minvalue", min);
+            cs.SetFloat("maxvalue", max);
+            cs.SetBuffer(kernel, "data1", tensor.data);
+
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU Maximum_(TensorGPU tensor, TensorGPU other)
+        {
+            if (!tensor.shape.SequenceEqual(other.shape))
+                throw new ArgumentException("Tensor shapes do not match");
+
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("Maximum_");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+            cs.SetBuffer(kernel, "data2", other.data);
+
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        public static TensorGPU Zero_(TensorGPU tensor)
+        {
+            ComputeShader cs = DeepUnityMeta.TensorCS;
+            int kernel = cs.FindKernel("Zero_");
+
+            cs.SetBuffer(kernel, "data1", tensor.data);
+
+            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            return tensor;
+        }
+        #endregion InPlace
+
 
 
 
@@ -1504,6 +1714,8 @@ namespace DeepUnity
         }
      
 
+
+
         public void OnBeforeSerialize()
         {
             serialized_data = new float[data.count];
@@ -1518,6 +1730,10 @@ namespace DeepUnity
             AllocatedTensors.Value.Add(this, this);
 #endif
         }
+
+
+
+
 
         // inside use      
         private static void HandleAxis(TensorGPU tensor, ref int axis)

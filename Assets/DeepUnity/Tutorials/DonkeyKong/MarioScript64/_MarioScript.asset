@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
   m_Name: _MarioScript
   m_EditorClassIdentifier: 
+  version: 0
   behaviourName: MarioScript
   assetCreated: 1
   observationSize: 204
@@ -445,7 +446,7 @@ MonoBehaviour:
       - 0
       - 0
       shape: cc000000
-  observationsClip: 5
+  clipping: 5
   rewardsNormalizer:
     step: 0
     R: 0

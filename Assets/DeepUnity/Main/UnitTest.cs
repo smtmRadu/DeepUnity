@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using DeepUnity.Modules;
 using DeepUnity.Optimizers;
 using DeepUnity.Activations;
+using Unity.VisualScripting;
 
 namespace DeepUnity.Tutorials
 {
@@ -24,19 +25,23 @@ namespace DeepUnity.Tutorials
 
         private void Start()
         {
-            Attention att = new Attention(50, 50, true, device: device);
-            AttentionV2 att2 = new AttentionV2(50, 50, true, device: device);
+            // WTF the gpu dense is slower than cpu dense what is wrong broo.
 
-            Tensor input = Tensor.Random01(64, 64, 50);
 
-            Benckmark.Start();
-            for (int i = 0; i < 10; i++)
-            {
-                att.Forward(input);
-                att.Backward(input);
+            // DenseGPU dense = new DenseGPU(512, 512);
+            // dense.Device = Device.GPU;
+            // Tensor input = Tensor.RandomNormal(100, 512);
+            // 
+            // Benckmark.Start();
+            // for (int i = 0; i < 100; i++)
+            // {
+            //     dense.Forward(input);
+            //     // dense.Backward(input);
+            // }
+            // Benckmark.Stop();
 
-            }      
-            Benckmark.Stop();
+            // print(dense.Backward(Tensor.Random01(64, 300)));
+            // print(dense.Backward(Tensor.Random01(64, 300))); print(dense.Backward(Tensor.Random01(64, 300))); print(dense.Backward(Tensor.Random01(64, 300))); print(dense.Backward(Tensor.Random01(64, 300)));
             // Tensor input = Tensor.Random01(10);
             // 
             // Dense dense = new Dense(10, 10);

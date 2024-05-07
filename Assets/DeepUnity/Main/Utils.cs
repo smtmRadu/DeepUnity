@@ -310,11 +310,11 @@ namespace DeepUnity
             
             public static float Csch(float x)
             {
-                return 2f * MathF.Exp(x) / (MathF.Exp(2f * x) - 1);
+                return 2f * MathF.Exp(x) / (MathF.Exp(2f * x) - 1f);
             }
             public static float Sech(float x)
             {
-                return 2f * MathF.Exp(x) / (MathF.Exp(2f * x) + 1);
+                return 2f * MathF.Exp(x) / (MathF.Exp(2f * x) + 1f);
             }
 
             public static float Tanh(float x)
@@ -624,6 +624,56 @@ namespace DeepUnity
                     }
                 } 
             }        
+            public static Vector2 OnUnitCircle
+            {
+                get
+                {
+                    float angle = Range(0f, 2f * MathF.PI - float.MinValue);
+                    return new Vector2(MathF.Cos(angle), MathF.Sin(angle));
+                }
+            }
+            public static Vector2 InUnitCircle
+            {
+                get
+                {
+                    float t = 2f * MathF.PI * Value - float.MinValue;
+                    float u = Value + Value;
+                    float r = u > 1 ? 2 - u : u;
+                    return new Vector2(r * MathF.Cos(t), r * MathF.Sin(t));
+                }
+            }
+            public static Vector3 OnUnitSphere
+            {
+                get
+                {
+                    float theta = Range(0f, 2f * MathF.PI - float.MinValue); 
+                    float phi = Range(0f, MathF.PI - float.MinValue); 
+
+                    float x = MathF.Sin(phi) * MathF.Cos(theta);
+                    float y = MathF.Sin(phi) * MathF.Sin(theta);
+                    float z = MathF.Cos(phi);
+
+                    return new Vector3(x, y, z);
+                }
+            }
+            public static Vector3 InUnitSphere
+            {
+                get
+                {
+                    while (true)
+                    {
+                        float x = Range(-1f, 1f);
+                        float y = Range(-1f, 1f);
+                        float z = Range(-1f, 1f);
+
+                        if (x * x + y * y + z * z <= 1)
+                        {
+                            return new Vector3(x, y, z);
+                        }
+                    }
+                }
+            }
+
             /// <summary>
             /// Returns a float value in range [<paramref name="minInclusive"/>, <paramref name="maxInclusive"/>] thread-safely. (range is inclusive)
             /// </summary>
