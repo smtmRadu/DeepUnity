@@ -3,6 +3,7 @@ using DeepUnity.Sensors;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 
@@ -39,6 +40,8 @@ namespace DeepUnity.ReinforcementLearning
         [SerializeField, Min(1), HideInInspector] private int numLayers = 2;
         [Tooltip("Number of units in a hidden layer in the model.")]
         [SerializeField, Min(32), HideInInspector] private int hidUnits = 64;
+        [Tooltip("The hidden activation used. Tanh yields a more stable policy (less prone to NaN appeareance), but ReLU is more efficient.")]
+        [SerializeField, HideInInspector] private NonLinearity activation = NonLinearity.Tanh;
 
         [SerializeField, HideInInspector] public AgentBehaviour model;
         [SerializeField, HideInInspector] public BehaviourType behaviourType = BehaviourType.Learn;
@@ -194,7 +197,7 @@ namespace DeepUnity.ReinforcementLearning
                 return;
             }
 
-            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, stackedInputs, spaceWidth, spaceHeight, spaceChannels, continuousActions, discreteActions, numLayers, hidUnits, archType);
+            model = AgentBehaviour.CreateOrLoadAsset(GetType().Name, spaceSize, stackedInputs, spaceWidth, spaceHeight, spaceChannels, continuousActions, discreteActions, numLayers, hidUnits, archType, activation);
         }
         private void InitBuffers()
         {
@@ -254,7 +257,6 @@ namespace DeepUnity.ReinforcementLearning
 
                 // Scale and clip reward - there was a problem with the rewards normalizer (idk why), but anyways they should not be normalized online because we can use off-policy alogorithms like SAC. Just use a constant bro to scale it
                 // Timestep.reward[0] = model.rewardsNormalizer.ScaleReward(Timestep.reward[0]);
-                
                 Memory.Add(Timestep);              
             }
 
@@ -314,7 +316,7 @@ namespace DeepUnity.ReinforcementLearning
                 if (model.stochasticity == Stochasticity.FixedStandardDeviation || model.stochasticity == Stochasticity.TrainebleStandardDeviation)
                     ActionsBuffer.ContinuousActions = Timestep.action_continuous.Tanh().ToArray();
          
-                else if (model.stochasticity == Stochasticity.ActiveNoise)
+                else if (model.stochasticity == Stochasticity.ActiveNoise || model.stochasticity == Stochasticity.Random)
                     ActionsBuffer.ContinuousActions = Timestep.action_continuous.ToArray();
                 
                 else
@@ -560,10 +562,12 @@ namespace DeepUnity.ReinforcementLearning
                 EditorGUILayout.Space();
 
                 EditorGUILayout.BeginHorizontal();
-                GUILayout.Label("Num Layers", GUILayout.Width(EditorGUIUtility.labelWidth / 1.08f));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("numLayers"), GUIContent.none, GUILayout.Width(50f));
-                GUILayout.Label("Hidden Units", GUILayout.Width(EditorGUIUtility.labelWidth / 1.08f));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("hidUnits"), GUIContent.none, GUILayout.Width(50f));
+                GUILayout.Label("Num Layers", GUILayout.Width(EditorGUIUtility.labelWidth / 1.6f));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("numLayers"), GUIContent.none, GUILayout.Width(25f));
+                GUILayout.Label("Hidden Units", GUILayout.Width(EditorGUIUtility.labelWidth / 1.5f));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("hidUnits"), GUIContent.none, GUILayout.Width(25f));
+                GUILayout.Label("Activation", GUILayout.Width(EditorGUIUtility.labelWidth / 2f));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("activation"), GUIContent.none, GUILayout.Width(50f));
                 EditorGUILayout.EndHorizontal();
 
 

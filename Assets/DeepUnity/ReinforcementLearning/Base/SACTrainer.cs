@@ -3,8 +3,10 @@ using System.Diagnostics;
 using System.Linq;
 using UnityEditor;
 using System.Threading.Tasks;
-using DeepUnity.Activations;
 using DeepUnity.Models;
+using DeepUnity.Activations;
+using DeepUnity.Modules;
+using DeepUnity.Optimizers;
 
 namespace DeepUnity.ReinforcementLearning
 {
@@ -20,11 +22,42 @@ namespace DeepUnity.ReinforcementLearning
         private static Sequential Qtarg2;
         private int new_experiences_collected = 0;
 
+        public Optimizer optim_q1 { get; set; }
+        public Optimizer optim_q2 { get; set; }
+        public Optimizer optim_mu { get; set; }
+        public Optimizer optim_sigma { get; set; }
+
+        public LRScheduler scheduler_q1 { get; set; }
+        public LRScheduler scheduler_q2 { get; set; }
+        public LRScheduler scheduler_mu { get; set; }
+        public LRScheduler scheduler_sigma { get; set; }
+
+
+
         protected override void Initialize()
         {
+            // MEAN module need Tanh for SAC
+            if (model.muNetwork.Modules.Last().GetType() != typeof(Tanh))
+                model.muNetwork.Modules = model.muNetwork.Modules.Concat(new IModule[] { new Tanh() }).ToArray();
+
+            // Init optimizers
+            const float QnetsL2Reg = 0.0F;
+            optim_q1 = new Adam(model.q1Network.Parameters(), hp.learningRate, weightDecay: QnetsL2Reg);
+            optim_q2 = new Adam(model.q2Network.Parameters(), hp.learningRate, weightDecay: QnetsL2Reg);
+            optim_mu = new Adam(model.muNetwork.Parameters(), hp.learningRate);
+            optim_sigma = new Adam(model.sigmaNetwork.Parameters(), hp.learningRate);
+
+            // Init schedulers
+            scheduler_q1 = new LinearLR(optim_q1, start_factor: 1f, end_factor: 0f, epochs: (int)model.config.maxSteps);
+            scheduler_q2 = new LinearLR(optim_q2, start_factor: 1f, end_factor: 0f, epochs: (int)model.config.maxSteps);
+            scheduler_mu = new LinearLR(optim_mu, start_factor: 1f, end_factor: 0f, epochs: (int)model.config.maxSteps);
+            scheduler_sigma = new LinearLR(optim_sigma, start_factor: 1f, end_factor: 0f, epochs: (int)model.config.maxSteps);
+
+            // Init target networks
             Qtarg1 = model.q1Network.Clone() as Sequential;
             Qtarg2 = model.q2Network.Clone() as Sequential;
 
+            // Set devices
             Qtarg1.Device = model.trainingDevice;
             Qtarg2.Device = model.trainingDevice;
             model.q1Network.Device = model.trainingDevice;
@@ -33,11 +66,9 @@ namespace DeepUnity.ReinforcementLearning
             model.muNetwork.Device = model.inferenceDevice;
             model.sigmaNetwork.Device = model.inferenceDevice;
 
-            if (model.stochasticity == Stochasticity.FixedStandardDeviation)
-            {
-                ConsoleMessage.Info("Behaviour's standard deviation is forced to be Trainable");
-                model.stochasticity = Stochasticity.TrainebleStandardDeviation;
-            }
+            // Set initial random actions
+            model.stochasticity = Stochasticity.Random;
+
             if (hp.updateAfter < hp.minibatchSize * 5)
             {
                 ConsoleMessage.Info("'Update After' was set higher than the 'batch size'");
@@ -70,6 +101,8 @@ namespace DeepUnity.ReinforcementLearning
 
                 if (train_data.Count >= hp.updateAfter)
                 {
+                    model.stochasticity = Stochasticity.TrainebleStandardDeviation;
+
                     actorLoss = 0;
                     criticLoss = 0;
 
@@ -80,7 +113,7 @@ namespace DeepUnity.ReinforcementLearning
                     updateIterations++;
                     actorLoss /= hp.updatesNum;
                     criticLoss /= hp.updatesNum;
-                    learningRate = model.muScheduler.CurrentLR;
+                    learningRate = scheduler_mu.CurrentLR;
                     entropy = hp.alpha;
                     currentSteps += new_experiences_collected / decision_freq;
                     new_experiences_collected = 0;
@@ -109,10 +142,10 @@ namespace DeepUnity.ReinforcementLearning
 
                 if (hp.LRSchedule)
                 {
-                    model.q1Scheduler.Step();
-                    model.q2Scheduler.Step();
-                    model.muScheduler.Step();
-                    model.sigmaScheduler.Step();
+                    scheduler_q1.Step();
+                    scheduler_q2.Step();
+                    scheduler_mu.Step();
+                    scheduler_sigma.Step();
                 }
             }
         }
@@ -158,12 +191,12 @@ namespace DeepUnity.ReinforcementLearning
             Loss q2Loss = Loss.MSE(Q2_s_a, Q_targets);
             criticLoss = (q1Loss.Item + q2Loss.Item) / 2;
 
-            model.q1Optimizer.ZeroGrad();
-            model.q2Optimizer.ZeroGrad();
+            optim_q1.ZeroGrad();
+            optim_q2.ZeroGrad();
             model.q1Network.Backward(q1Loss.Gradient * 0.5f);
             model.q2Network.Backward(q2Loss.Gradient * 0.5f);
-            model.q1Optimizer.Step();
-            model.q2Optimizer.Step();
+            optim_q1.Step();
+            optim_q2.Step();
         }
         private void UpdatePolicy(Tensor states)
         {
@@ -185,7 +218,7 @@ namespace DeepUnity.ReinforcementLearning
 
             // ãθ(s) = tanh(u)
             u = mu + sigma * ksi;
-            aTildeS = new Tanh().Predict(u);
+            aTildeS = u.Tanh();
             int D = aTildeS.Size(-1);
 
             // https://en.wikipedia.org/wiki/Multivariate_normal_distribution
@@ -197,7 +230,7 @@ namespace DeepUnity.ReinforcementLearning
 
             // Check appendinx C
             // log πθ(ãθ(s) |s) = log μ(u|s) - E [log (1 - tanh^2(u))]
-            Tensor logPiaTildeS = Tensor.Log(muDist) - Tensor.Sum(Tensor.Log(-new Tanh().Predict(u).Pow(2f) + 1), -1, true); // (B, 1)
+            Tensor logPiaTildeS = Tensor.Log(muDist) - Tensor.Sum(Tensor.Log(-u.Tanh().Pow(2f) + 1), -1, true); // (B, 1)
 
             Tensor pair_states_aTildeS = StateActionPair(states, aTildeS);
             Tensor Q1s_aTildeS = model.q1Network.Forward(pair_states_aTildeS);
@@ -227,8 +260,6 @@ namespace DeepUnity.ReinforcementLearning
 
 
 
-
-
             // Secondly, we compute the derivative of logπθ(ãθ(s)|s) wrt ãθ(s). Note that we are using Gaussian Distribution squashed, check Appendix C in SAC paper
 
             // So we know that 
@@ -246,14 +277,14 @@ namespace DeepUnity.ReinforcementLearning
             Tensor dAlphaLogPiaTildeS_s_dSigma = dAlphaLogPi_aTildeS_s_du * ksi;
 
             Tensor dJ_dMu = dminQ1Q2_dMu - dAlphaLogPiaTildeS_s_dMu;
-            model.muOptimizer.ZeroGrad();
+            optim_mu.ZeroGrad();
             model.muNetwork.Backward(-dJ_dMu);
-            model.muOptimizer.Step();
+            optim_mu.Step();
 
             Tensor dJ_dSigma = dminQ1Q2_dSigma - dAlphaLogPiaTildeS_s_dSigma;
-            model.sigmaOptimizer.ZeroGrad();
+            optim_sigma.ZeroGrad();
             model.sigmaNetwork.Backward(-dJ_dSigma);
-            model.sigmaOptimizer.Step();
+            optim_sigma.Step();
 
         }
         public void UpdateTargetNetworks()

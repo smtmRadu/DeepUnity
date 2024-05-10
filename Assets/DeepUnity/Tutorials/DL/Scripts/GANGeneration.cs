@@ -7,6 +7,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using DeepUnity.Models;
+using Unity.Properties;
 
 namespace DeepUnity.Tutorials
 {
@@ -48,11 +49,11 @@ namespace DeepUnity.Tutorials
                     new Flatten(),
 
                     new Dense(784, size),
-                    new Tanh(),
+                    new LeakyReLU(0.2f),
                     new Dropout(dropout),
                 
                     new Dense(size, size/4),
-                    new Tanh(),
+                    new LeakyReLU(0.2f),
                     new Dropout(dropout),
 
                     new Dense(size / 4, 1),
@@ -63,16 +64,16 @@ namespace DeepUnity.Tutorials
             {
                 generator = new Sequential(
                     new Dense(latent_dim, size / 4),
-                    new Tanh(),
+                    new LeakyReLU(0.2f),
 
                     new Dense(size / 4, size / 2),
-                    new Tanh(),
+                    new LeakyReLU(0.2f),
 
                     new Dense(size / 2, size),
-                    new Tanh(),
+                    new LeakyReLU(0.2f),
 
                     new Dense(size, 784),
-                    new Tanh(),
+                    new LeakyReLU(0.2f),
 
                     new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 })
                     ).CreateAsset("generator");
@@ -84,7 +85,7 @@ namespace DeepUnity.Tutorials
             g_optim = new Adam(generator.Parameters(), lr);
 
             List<(Tensor, Tensor)> data;
-            Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out data, out _, DatasetSettings.LoadTrainOnly);
+            Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out _, out data, DatasetSettings.LoadTestOnly);
 
             Utils.Shuffle(data);
             while(data.Count % batch_size != 0)
@@ -122,15 +123,16 @@ namespace DeepUnity.Tutorials
                     SaveNetworks();
 
                 // Train Discriminator
-                var real_data = Tensor.Concat(null, Utils.GetRange(dataset, batch_index, batch_size).ToArray());
-                var fake_data = generator.Predict(GeneratorInput(batch_size, latent_dim));
-                var d_error = TrainDiscriminator(real_data, fake_data);
+                var x = Tensor.Concat(null, Utils.GetRange(dataset, batch_index, batch_size).ToArray());
+                var d_error = TrainDiscriminator(x);
                 if(writeLoss) D_graph.Append(d_error);
 
 
                 // Train Generator
                 var g_error = TrainGenerator();
                 if (writeLoss) G_graph.Append(g_error);
+
+
                 batch_index += batch_size;
 
             }
@@ -139,43 +141,43 @@ namespace DeepUnity.Tutorials
 
             
         }
-        private float TrainDiscriminator(Tensor real_data, Tensor generated_data)
+        private float TrainDiscriminator(Tensor x) // works
         {
-            d_optim.ZeroGrad();
-            var prediction_real = discriminator.Forward(real_data);
-            var loss_real = Loss.BCE(prediction_real, RealTarget(batch_size));
-            discriminator.Backward(loss_real.Gradient);
+            // Loss = -(log(D(x)) + log(1 - D(G(z))))
+            // Gradient ascent
 
-            var prediction_fake = discriminator.Forward(generated_data);
-            var loss_fake = Loss.BCE(prediction_fake, FakeTarget(batch_size));
-            discriminator.Backward(loss_fake.Gradient);
+            var z = Tensor.RandomNormal(batch_size, latent_dim);
+            var Gz = generator.Predict(z);
+
+            d_optim.ZeroGrad();
+
+            var Dx = discriminator.Forward(x);
+            var loss = -Dx.Log();
+            discriminator.Backward(-Dx.Reciprocal());
+
+            var DGz = discriminator.Forward(Gz);
+            var loss2 = -(-DGz + 1f).Log();
+            discriminator.Backward((-DGz + 1f).Reciprocal());
+
             d_optim.Step();
-            return loss_fake.Item + loss_real.Item;
+
+            return loss.Average() + loss2.Average();
         }
         private float TrainGenerator()
         {
+            // Loss = log(1 - D(G(z)))
+            // Gradient descent
             g_optim.ZeroGrad();
 
-            var Gz = generator.Forward(GeneratorInput(batch_size, latent_dim));
+            var z = Tensor.RandomNormal(batch_size, latent_dim);
+            var Gz = generator.Forward(z);
             var DGz = discriminator.Forward(Gz);
-            var loss = Loss.BCE(DGz, RealTarget(batch_size)); // (batch_size, 1)
-            generator.Backward(discriminator.Backward(loss.Gradient));
+            var loss = (-DGz + 1f).Log();
+            var dLdG = discriminator.Backward((-DGz + 1f).Reciprocal());
+            generator.Backward(dLdG);
             g_optim.Step();
 
-            return loss.Item;
-        }
-
-        private Tensor RealTarget(int batch_size)
-        {
-            return Tensor.Ones(batch_size, 1);
-        }
-        private Tensor FakeTarget(int batch_size)
-        {
-            return Tensor.Zeros(batch_size, 1);
-        }
-        private Tensor GeneratorInput(int batch_size, int latent_dim)
-        {
-            return Tensor.RandomNormal(batch_size, latent_dim);
+            return loss.Average();
         }
 
         private void DisplayGeneratorProgress()
@@ -193,7 +195,8 @@ namespace DeepUnity.Tutorials
                 if (!dis.enabled)
                     continue;
 
-                var sample = generator.Predict(GeneratorInput(1, latent_dim)).Squeeze(0);
+                var z = Tensor.RandomNormal(1, latent_dim);
+                var sample = generator.Predict(z).Squeeze(0);
                 Texture2D display = dis.texture as Texture2D;
                 display.SetPixels(Utils.TensorToColorArray(sample));
                 display.Apply();

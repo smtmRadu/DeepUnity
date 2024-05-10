@@ -19,7 +19,7 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("[Typical range: 1e5 - 1e7] The maximum length in steps of this training session.")]
         [Min(10_000f)] public long maxSteps = 2_000_000_000;
 
-        [Tooltip("[Typical range: (PPO) 5e-6 - 3e-3, (SAC) 1e-5 - 1e-3, (TD3) 1e-5 - 1e-3] Initial learning rate for Adam optimizer (both all networks).")]
+        [Tooltip("[Typical range: 5e-6 - 1e-3] Initial learning rate for Adam optimizer (both all networks).")]
         [MinMax(5e-6f, 1f)] public float learningRate = 3e-4f;
 
         [Tooltip("[Typical range: 0.9 - 0.9997] Discount factor.")]
@@ -53,8 +53,8 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("[Typical range: 0.92 - 0.98] GAE factor.")]
         [MinMax(0.9f, 1f)] public float lambda = 0.96f;
 
-        [Tooltip("[Typical range: 0 - 1] Global Gradient Clipping max norm value. Set to 0 to turn off.")]
-        [MinMax(0.1f, 1f)] public float gradClipNorm = 0.5f;
+        [Tooltip("[Typical range: 0 - 0.5] Global Gradient Clipping max norm value. Set to 0 to turn off.")]
+        [MinMax(0f, 0.5f)] public float gradClipNorm = 0.5f;
 
         [Tooltip("Use of KLE")]
         public KLType KLDivergence = KLType.Off;
@@ -67,17 +67,18 @@ namespace DeepUnity.ReinforcementLearning
 
         // ========================================================================================================================================================================
 
-        [Header("Specific Configuration")] // https://github.com/yosider/ml-agents-1/blob/master/docs/Training-SAC.md
+        [Header("Specific Configuration")]
+
         [Tooltip("[Typical range: 50000 - 1000000] The maximum capacity to hold experices. When getting fullfilled, the old experiences are removed to enable new space.")]
         [Min(50000)] public int replayBufferSize = 1_000_000;
 
-        [Tooltip("[Typical range: 64 - 1024] The number of samples in the minibatch when performing a policy or Q update.")]
-        [MinMax(64, 1024)] public int minibatchSize = 128;
+        [Tooltip("[Typical range: 32 - 1024] The number of samples in the minibatch when performing a policy or Q update.")]
+        [MinMax(32, 1024)] public int minibatchSize = 64;
 
         [Tooltip("[Typicall range: 1 - 128] Number of steps taken before updating the policy. Doesn't count for parallel agents, this considers only 1 decision.")]
         [MinMax(1, 128)] public int updateInterval = 64;
 
-        [Tooltip("[Typicall range > Batch Size] Number of steps collected before updating the policy.")]
+        [Tooltip("[Typicall range > Batch Size] Number of steps collected before updating the policy. In this timeframe, the actions will be purely random.")]
         [Min(64)] public int updateAfter = 1024;
 
         [Tooltip("[Typical range: 1 - 8] Number of mini-batches sampled on policy model update. This can be increased while also increasing updateEvery.")]
@@ -86,8 +87,8 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("[Typicall range: (Continuous) 0.5 - 1.0 ~(Discrete) 0.05 - 0.5] Entropy tradeoff coefficient. Lower alpha means low exploration.")]
         [MinMax(1e-8f, 0.5f)] public float alpha = 0.2f;
 
-        [Tooltip("[Typicall range: 0.005 - 0.01] Inversed Polyak. How aggresively to update the target network used for boostraping value estimation.")]
-        [MinMax(0.001f, 0.005f)] public float tau = 0.005f;
+        [Tooltip("[Typicall range: 0.001 - 0.01] How aggresively to update the target network used for boostraping value estimation.")]
+        [MinMax(0.001f, 0.01f)] public float tau = 0.005f;
 
         // ========================================================================================================================================================================
 

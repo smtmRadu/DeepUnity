@@ -1,5 +1,6 @@
 using UnityEngine;
 using DeepUnity.ReinforcementLearning;
+using Unity.VisualScripting;
 
 namespace DeepUnity.Tutorials
 {
@@ -34,7 +35,6 @@ namespace DeepUnity.Tutorials
             SetReward(0.025f);
             if (ball.gameObject.transform.position.y < transform.position.y)
                 EndEpisode();
-            
         }
 
         public override void Heuristic(ActionBuffer actionBuffer)

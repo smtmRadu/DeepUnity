@@ -663,7 +663,7 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
-        /// Element-wise multiplication.
+        /// Element-wise (Hadamard) multiplication.
         /// </summary>
         public static Tensor operator *(Tensor left, Tensor right)
         {
@@ -749,6 +749,7 @@ namespace DeepUnity
                 throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and Right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise comparison (>=).");
 
             Tensor result = new(left.shape);
+
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] = left.data[i] >= right.data[i] ? 1 : 0;
@@ -769,6 +770,7 @@ namespace DeepUnity
                 throw new OperationCanceledException($"Left({left.shape.ToCommaSeparatedString()}) and Right({right.shape.ToCommaSeparatedString()}) tensors must have similar shape for Element-wise comparison (<=).");
 
             Tensor result = new(left.shape);
+
             for (int i = 0; i < result.data.Length; i++)
             {
                 result.data[i] = left.data[i] <= right.data[i] ? 1 : 0;
@@ -3676,7 +3678,7 @@ namespace DeepUnity
 
             for (int i = 0; i < result.data.Length; i++)
             {
-                result.data[i] = result.data[i] == 0 ? 1 : 0;
+                result.data[i] = tensor.data[i] == 0 ? 1 : 0;
             }
 
             return result;
@@ -3692,7 +3694,7 @@ namespace DeepUnity
 
             for (int i = 0; i < result.data.Length; i++)
             {
-                float e2x = MathF.Exp(2f * result.data[i]);
+                float e2x = MathF.Exp(2f * tensor.data[i]);
                 result.data[i] = (e2x - 1f) / (e2x + 1f);
             }
 
@@ -3709,7 +3711,7 @@ namespace DeepUnity
 
             for (int i = 0; i < result.data.Length; i++)
             {
-                result.data[i] = 2f * MathF.Exp(result.data[i]) / (MathF.Exp(2f * result.data[i]) + 1f);
+                result.data[i] = 2f * MathF.Exp(tensor.data[i]) / (MathF.Exp(2f * tensor.data[i]) + 1f);
             }
 
             return result;

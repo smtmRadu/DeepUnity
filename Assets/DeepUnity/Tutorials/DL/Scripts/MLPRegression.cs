@@ -1,4 +1,3 @@
-using DeepUnity;
 using DeepUnity.Optimizers;
 using DeepUnity.Activations;
 using DeepUnity.Modules;
@@ -96,7 +95,7 @@ namespace DeepUnity.Tutorials
                 Debug.Log($"Epoch {++epoch}");
                 scheduler.Step();
                 i = 0;
-                // net.Save();
+                //net.Save();
                 if (epoch == timerStopEpoch)
                     Benckmark.Stop();
 

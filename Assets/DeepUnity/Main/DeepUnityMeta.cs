@@ -16,7 +16,6 @@ namespace DeepUnity
         internal readonly static ComputeShader TensorCS;
         internal readonly static ComputeShader DenseCS;
         internal readonly static ComputeShader Conv2DCS;
-        internal readonly static ComputeShader OptimizerCS;
         internal readonly static ComputeShader RNNCellCS;
         internal readonly static ComputeShader ConvTranpose2DCS;
 
@@ -32,7 +31,6 @@ namespace DeepUnity
                 TensorCS = Resources.Load<ComputeShader>("ComputeShaders/TensorCS");
                 DenseCS = Resources.Load<ComputeShader>("ComputeShaders/DenseCS");
                 Conv2DCS = Resources.Load<ComputeShader>("ComputeShaders/Conv2DCS");
-                OptimizerCS = Resources.Load<ComputeShader>("ComputeShaders/OptimizerCS");
                 RNNCellCS = Resources.Load<ComputeShader>("ComputeShaders/RNNCellCS");
                 ConvTranpose2DCS = Resources.Load<ComputeShader>("ComputeShaders/ConvTranpose2DCS");
 
@@ -51,10 +49,6 @@ namespace DeepUnity
                 // csguid = UnityEditor.AssetDatabase.FindAssets("Conv2DCS")[0]; 
                 // cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
                 // Conv2DCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
-                // 
-                // csguid = UnityEditor.AssetDatabase.FindAssets("OptimizerCS")[0];
-                // cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
-                // OptimizerCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
                 // 
                 // csguid = UnityEditor.AssetDatabase.FindAssets("RNNCellCS")[0];
                 // cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
@@ -194,12 +188,14 @@ namespace DeepUnity
 
     public enum Stochasticity
     {
-        [Tooltip("Used for stochastic policies (PPO, SAC)")]
+        [Tooltip("Used for stochastic policies (PPO)")]
         FixedStandardDeviation,
         [Tooltip("Used for stochastic policies (PPO, SAC)")]
         TrainebleStandardDeviation,
-        [Tooltip("Used for deterministic policies (TD3, DDPG)")]
-        ActiveNoise
+        [Tooltip("Zero-mean Gaussian noise is added over the actions. Used for deterministic policies (TD3, DDPG)")]
+        ActiveNoise,
+        [Tooltip("Actions are drawn from an uniform distribution. Used at the beginning in off-policy algorithms (SAC, DDPG, TD3)")]
+        Random
     }
 
     public enum AverageType
@@ -250,7 +246,7 @@ namespace DeepUnity
     public enum NonLinearity
     {
         Tanh,
-        ReLU
+        Relu
     }
     public enum HiddenStates
     {

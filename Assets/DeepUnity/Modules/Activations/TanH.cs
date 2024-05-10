@@ -40,7 +40,7 @@ namespace DeepUnity.Activations
 
         public Tensor Backward(Tensor dLdY)
         {
-            return dLdY * (-OutputCache.Pow(2f) + 1);
+            return dLdY * (-OutputCache.Square() + 1f);
         }
 
         public object Clone() => new Tanh();

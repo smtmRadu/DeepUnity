@@ -9,7 +9,7 @@ using DeepUnity.Sensors;
 namespace DeepUnity
 {
     /// <summary>
-    /// A tensor that lives in VRAM. Note that are hard to use, and each new GPU Tensor must be disposed when is no longer used...
+    /// A tensor that lives in VRAM. Note that are hard to use, and each new GPU Tensor must be disposed when is no longer used. Also if they are serialized, they must be manually deserialized.
     /// </summary>
     [Serializable] // Initialize on Load but was removed
     public sealed class TensorGPU : ISerializationCallbackReceiver, IDisposable, ICloneable, IEquatable<Tensor>, IEquatable<TensorGPU>
@@ -279,7 +279,7 @@ namespace DeepUnity
 #if UNITY_EDITOR
             AllocatedTensors.Value.Remove(this);
 #endif
-            data.Release();
+            data?.Release();
             GC.SuppressFinalize(this);
 
             // When application is built the deallocation from GPU is forced.
@@ -1363,10 +1363,23 @@ namespace DeepUnity
 
             cs.SetFloat("alpha", alpha);
             cs.SetBuffer(kernel, "data1", tensor.data);
-            cs.SetBuffer(kernel, "data2", other.data);
 
-            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+            if(tensor.data == other.data) // self subtraction
+            {
+                var x = TensorGPU.Identity(other);
+                cs.SetBuffer(kernel, "data2", x.data);
+                cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+                x.Dispose();
+            }
+            else
+            {
+                cs.SetBuffer(kernel, "data2", other.data);
+                cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
 
+            }
+            
+
+          
             return tensor;
         }
         public static TensorGPU Add_(TensorGPU tensor, float value)
@@ -1390,9 +1403,20 @@ namespace DeepUnity
 
             cs.SetFloat("alpha", alpha);
             cs.SetBuffer(kernel, "data1", tensor.data);
-            cs.SetBuffer(kernel, "data2", other.data);
 
-            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+            if (tensor.data == other.data) // self subtraction
+            {
+                var x = TensorGPU.Identity(other);
+                cs.SetBuffer(kernel, "data2", x.data);
+                cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+                x.Dispose();
+            }
+            else
+            {
+                cs.SetBuffer(kernel, "data2", other.data);
+                cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+
+            }
 
             return tensor;
         }
@@ -1417,10 +1441,19 @@ namespace DeepUnity
 
             cs.SetFloat("alpha", alpha);
             cs.SetBuffer(kernel, "data1", tensor.data);
-            cs.SetBuffer(kernel, "data2", other.data);
+            if (tensor.data == other.data) // self multiplcation
+            {
+                var x = TensorGPU.Identity(other);
+                cs.SetBuffer(kernel, "data2", x.data);
+                cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+                x.Dispose();
+            }
+            else
+            {
+                cs.SetBuffer(kernel, "data2", other.data);
+                cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
 
-            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
-
+            }
             return tensor;
         }
         public static TensorGPU Divide_(TensorGPU tensor, float value)
@@ -1444,10 +1477,19 @@ namespace DeepUnity
 
             cs.SetFloat("alpha", alpha);
             cs.SetBuffer(kernel, "data1", tensor.data);
-            cs.SetBuffer(kernel, "data2", other.data);
+            if (tensor.data == other.data) // self division
+            {
+                var x = TensorGPU.Identity(other);
+                cs.SetBuffer(kernel, "data2", x.data);
+                cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+                x.Dispose();
+            }
+            else
+            {
+                cs.SetBuffer(kernel, "data2", other.data);
+                cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
 
-            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
-
+            }
             return tensor;
         }
 
@@ -1540,10 +1582,19 @@ namespace DeepUnity
             int kernel = cs.FindKernel("Maximum_");
 
             cs.SetBuffer(kernel, "data1", tensor.data);
-            cs.SetBuffer(kernel, "data2", other.data);
+            if (tensor.data == other.data) // self subtraction
+            {
+                var x = TensorGPU.Identity(other);
+                cs.SetBuffer(kernel, "data2", x.data);
+                cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
+                x.Dispose();
+            }
+            else
+            {
+                cs.SetBuffer(kernel, "data2", other.data);
+                cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
 
-            cs.Dispatch(kernel, (tensor.Count() + DeepUnityMeta.THREADS_NUM - 1) / DeepUnityMeta.THREADS_NUM, 1, 1);
-
+            }
             return tensor;
         }
         public static TensorGPU Zero_(TensorGPU tensor)
@@ -1718,12 +1769,18 @@ namespace DeepUnity
 
         public void OnBeforeSerialize()
         {
+            if (data == null)
+                return;
+
             serialized_data = new float[data.count];
             data.GetData(serialized_data);
             data.Dispose();
         }
         public void OnAfterDeserialize()
         {
+            if (serialized_data.Length == 0)
+                return;
+
             data = new ComputeBuffer(serialized_data.Length, 4);
             data.SetData(serialized_data);
 #if UNITY_EDITOR

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
@@ -13,7 +12,7 @@ namespace DeepUnity.Models
     [Serializable]
     public class Sequential : Model<Sequential, Tensor>, ISerializationCallbackReceiver
     {
-        [NonSerialized] private IModule[] Modules;
+        [NonSerialized] public IModule[] Modules;
         [SerializeField] private IModuleWrapper[] serializedModules;
 
         public Sequential(params IModule[] modules) => this.Modules = modules;
@@ -67,13 +66,7 @@ namespace DeepUnity.Models
         /// <returns></returns>
         public override Parameter[] Parameters()
         {
-            List<Parameter> param = new();
-            foreach (var item in Modules)
-            {
-                if (item is ILearnable litem)
-                    param.AddRange(litem.Parameters());
-            }
-            return param.ToArray();
+            return Modules.OfType<ILearnable>().SelectMany(l => l.Parameters()).ToArray();
         }
         /// <summary>
         /// Changes the device of all <see cref="ILearnable"/> modules.

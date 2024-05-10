@@ -3,17 +3,6 @@ using DeepUnity.ReinforcementLearning;
 
 public class MoveToGoal : Agent
 {
-    // Generally this agent must show significant progress in 100k steps of training.
-    // Test config for 100.000 steps: 
-    //      Decision Period: 1
-    //      Max Step: 1000
-    //      Buffer Size = 4096
-    //      Batch Size = 256
-    //      Horizon = 64
-    //      LR Schedule == Off
-
-
-
     public float speed = 10f;
     public Transform target;
     public float norm_scale = 8f;
@@ -51,16 +40,16 @@ public class MoveToGoal : Agent
                 case 0:
                     break;
                 case 1:
-                    transform.position += new Vector3(0, 0, 1) * Time.fixedDeltaTime * speed;
+                    transform.position += Vector3.forward * Time.fixedDeltaTime * speed;
                     break;
                 case 2:
-                    transform.position += new Vector3(-1, 0, 0) * Time.fixedDeltaTime * speed;
+                    transform.position += -Vector3.right * Time.fixedDeltaTime * speed;
                     break;
                 case 3:
-                    transform.position += new Vector3(0, 0, -1) * Time.fixedDeltaTime * speed;
+                    transform.position += -Vector3.forward * Time.fixedDeltaTime * speed;
                     break;
                 case 4:
-                    transform.position += new Vector3(1, 0, 0) * Time.fixedDeltaTime * speed;
+                    transform.position += Vector3.right * Time.fixedDeltaTime * speed;
                     break;
 
 
@@ -106,21 +95,7 @@ public class MoveToGoal : Agent
                 actionsOut.DiscreteAction = 4;
         }
     }  
-
-    private void OnTriggerEnter(Collider other)
-    {
-        if (other.CompareTag("Goal"))
-        {
-            SetReward(1f);
-            EndEpisode();
-        }
-        if (other.CompareTag("Wall"))
-        {
-            SetReward(-1f);
-            EndEpisode();
-        }
-    }
-    private void OnTriggerStay(Collider other)
+    private void OnTriggerStay(Collider other) //possible to spawn right on the apple collider (we use stay)
     {
         if (other.CompareTag("Goal"))
         {

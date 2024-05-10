@@ -2,10 +2,8 @@
 using DeepUnity.Models;
 using System.Collections.Generic;
 using UnityEngine.UI;
-using DeepUnity.Modules;
 using DeepUnity.Optimizers;
-using DeepUnity.Activations;
-using Unity.VisualScripting;
+
 
 namespace DeepUnity.Tutorials
 {
@@ -19,39 +17,20 @@ namespace DeepUnity.Tutorials
         private List<RawImage> displays;
         public PerformanceGraph performanceGraph = new PerformanceGraph();  
 
-        Tensor input = Tensor.Random01(128, 1, 28, 28);
-        Tensor target = Tensor.RandomNormal(128, 2);
+        private void Update()
+        {
 
 
+        }
         private void Start()
         {
-            // WTF the gpu dense is slower than cpu dense what is wrong broo.
-
-
-            // DenseGPU dense = new DenseGPU(512, 512);
-            // dense.Device = Device.GPU;
-            // Tensor input = Tensor.RandomNormal(100, 512);
+            // Tensor a = Tensor.Random01(2, 3, 4);
             // 
-            // Benckmark.Start();
-            // for (int i = 0; i < 100; i++)
-            // {
-            //     dense.Forward(input);
-            //     // dense.Backward(input);
-            // }
-            // Benckmark.Stop();
-
-            // print(dense.Backward(Tensor.Random01(64, 300)));
-            // print(dense.Backward(Tensor.Random01(64, 300))); print(dense.Backward(Tensor.Random01(64, 300))); print(dense.Backward(Tensor.Random01(64, 300))); print(dense.Backward(Tensor.Random01(64, 300)));
-            // Tensor input = Tensor.Random01(10);
-            // 
-            // Dense dense = new Dense(10, 10);
-            // print(dense.Forward(input));
-            // print(dense.Forward(input.Unsqueeze(0).Expand(0, 2)));
-            // print(dense.Forward(input.Unsqueeze(0).Expand(0, 2).Unsqueeze(0).Expand(0, 2)));
-            // 
-            // print(dense.Backward(input));
-            // print(dense.Backward(input.Unsqueeze(0).Expand(0, 2)));
-            // print(dense.Backward(input.Unsqueeze(0).Expand(0, 2).Unsqueeze(0).Expand(0, 2)));
+            // print(a);
+            // Flatten flt = new Flatten();
+            // var output = flt.Forward(a);
+            // print(output);
+            // print(flt.Backward(output));
         }
         // private void Start()
         // {

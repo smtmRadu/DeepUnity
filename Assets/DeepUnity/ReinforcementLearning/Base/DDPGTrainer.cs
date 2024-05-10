@@ -1,35 +1,53 @@
-﻿using DeepUnity.Models;
+﻿using DeepUnity.Activations;
+using DeepUnity.Models;
+using DeepUnity.Modules;
+using DeepUnity.Optimizers;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
 namespace DeepUnity.ReinforcementLearning
-
 {
     internal class DDPGTrainer : DeepUnityTrainer
     {
-        private static Sequential PhiTarg;
-        private static Sequential ThetaTarg;
+        private Sequential Q_targ;
+        private Sequential Mu_targ;
+
+        public Optimizer optim_q1 { get; set; }
+        public Optimizer optim_mu { get; set; }
+        public LRScheduler scheduler_q1 { get; set; }
+        public LRScheduler scheduler_mu { get; set; }
 
         private int new_experiences_collected = 0;
 
         protected override void Initialize()
         {
-            PhiTarg = model.q1Network.Clone() as Sequential;
-            ThetaTarg = model.muNetwork.Clone() as Sequential;
+            if (model.muNetwork.Modules.Last().GetType() != typeof(Tanh))
+                model.muNetwork.Modules = model.muNetwork.Modules.Concat(new IModule[] { new Tanh() }).ToArray();
 
+            // Initialize optimizers
+            const float qNetL2Reg = 0.0F;
+            optim_q1 = new Adam(model.q1Network.Parameters(), hp.learningRate, weightDecay: qNetL2Reg);
+            optim_mu = new Adam(model.muNetwork.Parameters(), hp.learningRate);
+
+            // Initialize schedulers
+            scheduler_q1 = new LinearLR(optim_q1, start_factor: 1f, end_factor: 0f, epochs: (int)hp.maxSteps * hp.updatesNum / hp.updateInterval);
+            scheduler_mu = new LinearLR(optim_mu, start_factor: 1f, end_factor: 0f, epochs: (int)hp.maxSteps * hp.updatesNum / hp.updateInterval);
+
+            // Initialize target networks
+            Q_targ = model.q1Network.Clone() as Sequential;
+            Mu_targ = model.muNetwork.Clone() as Sequential;
+
+            // Set devices
             model.muNetwork.Device = model.inferenceDevice;
             model.q1Network.Device = model.trainingDevice;
 
-            PhiTarg.Device = model.trainingDevice;
-            ThetaTarg.Device = model.trainingDevice;
-            
+            Q_targ.Device = model.trainingDevice;
+            Mu_targ.Device = model.trainingDevice;
 
-            if (model.stochasticity != Stochasticity.ActiveNoise)
-            {
-                ConsoleMessage.Info("Behaviour's stochasticity is now given by active noise.");
-                model.stochasticity = Stochasticity.ActiveNoise;
-            }
+            // Set random actions initialliy
+            model.stochasticity = Stochasticity.Random; // random until reaching 'UpdateAfter' steps
+
             if (hp.updateAfter < hp.minibatchSize * 5)
             {
                 ConsoleMessage.Info("'Update After' was set higher than the 'batch size'");
@@ -41,7 +59,6 @@ namespace DeepUnity.ReinforcementLearning
                 model.normalize = false;
             }
         }
-
         protected override void OnBeforeFixedUpdate()
         {
             int decision_freq = parallelAgents[0].DecisionRequester.decisionPeriod;
@@ -49,7 +66,7 @@ namespace DeepUnity.ReinforcementLearning
             if (new_experiences_collected >= hp.updateInterval * decision_freq)
             {
                 // if the buffer will be full after this collection, let's clear the old values
-                if (train_data.Count >= hp.replayBufferSize)
+                if (train_data.Count > hp.replayBufferSize)
                     train_data.frames.RemoveRange(0, train_data.Count / 2); // If buffer is full, remove old half
 
                 
@@ -64,6 +81,8 @@ namespace DeepUnity.ReinforcementLearning
                 
                 if (train_data.Count >= hp.updateAfter)
                 {
+                    model.stochasticity = Stochasticity.ActiveNoise;
+
                     actorLoss = 0;
                     criticLoss = 0;
 
@@ -74,7 +93,7 @@ namespace DeepUnity.ReinforcementLearning
                     updateIterations++;
                     actorLoss /= hp.updatesNum;
                     criticLoss /= hp.updatesNum;
-                    learningRate = model.muScheduler.CurrentLR;
+                    learningRate = scheduler_mu.CurrentLR;
                     entropy = model.noiseValue;
                     currentSteps += new_experiences_collected / decision_freq;
                     new_experiences_collected = 0;
@@ -90,96 +109,93 @@ namespace DeepUnity.ReinforcementLearning
             for (int epoch_index = 0; epoch_index < hp.updatesNum; epoch_index++)
             {
                 // Sample a random batch of transitions from the replay buffer
-                TimestepTuple[] batch = Utils.Random.Sample(hp.minibatchSize, train_data.frames);            
+                TimestepTuple[] minibatch = Utils.Random.Sample(hp.minibatchSize, train_data.frames);            
 
                 // Batchify
-                Tensor s = Tensor.Concat(null, batch.Select(x => x.state).ToArray());
-                Tensor sPrime = Tensor.Concat(null, batch.Select(x => x.nextState).ToArray());
-                Tensor a = Tensor.Concat(null, batch.Select(x => x.action_continuous).ToArray());
+                Tensor stateBatch = Tensor.Concat(null, minibatch.Select(x => x.state).ToArray());             
+                Tensor actionBatch = Tensor.Concat(null, minibatch.Select(x => x.action_continuous).ToArray());
 
 
-                Tensor y_r_sPrime_d;
-                ComputeQTargets(batch, sPrime, out y_r_sPrime_d);
-                UpdateQFunctions(s, a, y_r_sPrime_d);
-                UpdatePolicy(s);
+                Tensor yBatch;
+                ComputeQTargets(minibatch, out yBatch);
+                UpdateQFunctions(stateBatch, actionBatch, yBatch);
+                UpdatePolicy(stateBatch);
                 UpdateTargetNetworks();
 
                 if (hp.LRSchedule)
                 {
-                    model.q1Scheduler.Step();
-                    model.muScheduler.Step();
+                    scheduler_q1.Step();
+                    scheduler_mu.Step();
                 }
             }
 
             model.muNetwork.Device = model.inferenceDevice;
         }
 
-        private void ComputeQTargets(TimestepTuple[] batch, Tensor sPrime, out Tensor y)
+        private void ComputeQTargets(TimestepTuple[] batch, out Tensor criticTargets)
         {
-            Tensor QPhiTarg_sPrime_ThetaTarg_sPrime = PhiTarg.Predict(Pairify(sPrime, ThetaTarg.Predict(sPrime))); // (B, 1)
+            Tensor sPrime = Tensor.Concat(null, batch.Select(x => x.nextState).ToArray());
+            Tensor muTarg_sPrime = Mu_targ.Predict(sPrime);
+            Tensor qTarg_Prime = Q_targ.Predict(Pairify(sPrime, muTarg_sPrime)); // (B, 1)
 
             for (int b = 0; b < batch.Length; b++)
             {
-                // y(r,s',d) = r + Ɣ(1 - d) * Q(s',ã')
+                // y(r,s',d) = r + Ɣ(1 - d) * Q(s',μ(s'))
 
                 float r = batch[b].reward[0];
                 float d = batch[b].done[0];
-                float Qt_sa = QPhiTarg_sPrime_ThetaTarg_sPrime[b, 0];
+                float q_ = qTarg_Prime[b, 0];
 
-                float y_r_sPrime_d = r + hp.gamma * (1f - d) * Qt_sa;
+                float y = r + hp.gamma * (1f - d) * q_;
 
-                batch[b].q_target = Tensor.Constant(y_r_sPrime_d);
+                batch[b].q_target = Tensor.Constant(y);
             }
 
-            y = Tensor.Concat(null, batch.Select(x => x.q_target).ToArray());
+            criticTargets = Tensor.Concat(null, batch.Select(x => x.q_target).ToArray());
         }
-        private void UpdateQFunctions(Tensor states, Tensor actions, Tensor Q_targets)
+        private void UpdateQFunctions(Tensor states, Tensor actions, Tensor y)
         {
             // Update Q functions          
             // ∇φ = (Qφ(s,a) - y(r,s',d))^2
-            Tensor Q_s_a = model.q1Network.Forward(Pairify(states, actions));
-            Loss qLoss = Loss.MSE(Q_s_a, Q_targets);
-            float lossItem = qLoss.Item;
-
-            if (float.IsNaN(lossItem))
-                return;
-            else
-                criticLoss += lossItem;
+            Tensor Q_sa = model.q1Network.Forward(Pairify(states, actions));
+            Loss loss = Loss.MSE(Q_sa, y);
+            criticLoss += loss.Item;
            
-            model.q1Optimizer.ZeroGrad();
-            model.q1Network.Backward(qLoss.Gradient * 0.5f);
-            model.q1Optimizer.Step();
+            optim_q1.ZeroGrad();
+            model.q1Network.Backward(loss.Gradient);
+            optim_q1.Step();
         }
         private void UpdatePolicy(Tensor states)
         {
-            // ObjectiveLoss = 1/|B| Σ Q(s, mu(s))
+            // ObjectiveLoss = 1/|B| Σb Q(s, μ(s))
             Tensor mu_s = model.muNetwork.Forward(states);
             Tensor q_s_mu_s = model.q1Network.Forward(Pairify(states, mu_s));
-            actorLoss += q_s_mu_s.Average();
+            actorLoss += -q_s_mu_s.Average();
 
-            Tensor objectiveLossGrad = Tensor.Ones(q_s_mu_s.Shape); //  (grad of Mean())
-            Tensor s_mu_s_grad = model.q1Network.Backward(objectiveLossGrad); //phi params are fixed
-            Tensor mu_s_grad = ExtractActionFromStateAction(s_mu_s_grad, states.Size(-1), mu_s.Size(-1));
+            Tensor lossGrad = -Tensor.Ones(q_s_mu_s.Shape); //  (grad of Mean() is 1/n but the framework already takes it as mean)
+            Tensor qinput_grad = model.q1Network.Backward(lossGrad); //phi params are 'fixed'
+            Tensor mu_grad = ExtractActionFromStateAction(qinput_grad, states.Size(-1), mu_s.Size(-1));
 
-            model.muOptimizer.ZeroGrad();
-            model.muNetwork.Backward(-mu_s_grad); //gradient ascent
-            model.muOptimizer.Step();
+            optim_mu.ZeroGrad();
+            model.muNetwork.Backward(mu_grad); //gradient ascent
+            optim_mu.Step();
         }
-        public void UpdateTargetNetworks()
+        private void UpdateTargetNetworks()
         {
+            // We update the target phi and target theta params... softly      
+
             Tensor[] theta = model.muNetwork.Parameters().Select(x => x.param).ToArray();
-            Tensor[] phi = model.q1Network.Parameters().Select(x => x.param).ToArray();
-
-            Tensor[] theta_targ = ThetaTarg.Parameters().Select(x => x.param).ToArray();
-            Tensor[] phi_targ = PhiTarg.Parameters().Select(x => x.param).ToArray();
-
-            // We update the target q functions and target theta params...
+            Tensor[] theta_targ = Mu_targ.Parameters().Select(x => x.param).ToArray();
 
             for (int i = 0; i < theta.Length; i++)
             {
                 Tensor.CopyTo((1f - hp.tau) * theta_targ[i] + hp.tau * theta[i], theta_targ[i]);
             }
 
+
+            Tensor[] phi = model.q1Network.Parameters().Select(x => x.param).ToArray();
+            Tensor[] phi_targ = Q_targ.Parameters().Select(x => x.param).ToArray();
+            
             for (int i = 0; i < phi.Length; i++)
             {
                 Tensor.CopyTo((1f - hp.tau) * phi_targ[i] + hp.tau * phi[i], phi_targ[i]);

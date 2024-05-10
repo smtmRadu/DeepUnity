@@ -127,8 +127,12 @@ namespace DeepUnity.ReinforcementLearning
         {
             avgDeltaTime = avgDeltaTime * avgDeltaTimeMomentum + Time.deltaTime * (1f - avgDeltaTimeMomentum);
 
-            // TO BE MODIFIED FOR SAC (print buffer size from train_data / buffer_size)
-            _runtimeStatsText = $"[No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {MemoriesCount}/{hp.bufferSize} ({(MemoriesCount * 100f / hp.bufferSize).ToString("0.00")}%)]";
+            if (hp.trainer == TrainerType.PPO)
+                _runtimeStatsText = $"[No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {MemoriesCount}/{hp.bufferSize} ({(MemoriesCount * 100f / hp.bufferSize).ToString("0.00")}%)]";
+            else if (hp.trainer == TrainerType.SAC || hp.trainer == TrainerType.TD3 || hp.trainer == TrainerType.DDPG)
+                _runtimeStatsText = $"[No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {train_data.Count}/{hp.replayBufferSize} ({(train_data.Count * 100f / hp.replayBufferSize).ToString("0.00")}%)]";
+            else
+                throw new NotImplementedException("Unhandled trainer type");
         }
         public void OnGUI()
         {
@@ -179,8 +183,6 @@ namespace DeepUnity.ReinforcementLearning
                 Instance.hp = agent.model.config;
                 Instance.train_data = new ExperienceBuffer(Instance.hp.trainer == TrainerType.PPO ? Instance.hp.bufferSize : Instance.hp.replayBufferSize / 10); // basically this might be full but i will let it like this
                 Instance.model = agent.model;
-                Instance.model.InitOptimisers(Instance.hp, trainer);
-                Instance.model.InitSchedulers(Instance.hp, trainer);
                 Instance.Initialize();
             }
 

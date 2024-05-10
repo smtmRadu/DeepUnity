@@ -22,6 +22,7 @@ namespace DeepUnity.Modules
 
         // Learnable
         public Dense dense = null;      
+        public DenseGPU densegpu = null;
         public RNNCell rnncell = null;
         public Attention attention = null;
         public LazyDense lazydense = null;
@@ -255,6 +256,10 @@ namespace DeepUnity.Modules
             {
                 attentionv2 = attentionv2Module;
             }
+            else if(module is DenseGPU denseGPUModule)
+            {
+                densegpu = denseGPUModule;
+            }
             else
                 throw new Exception($"Unhandled module type while wrapping ({module.GetType().Name}).");
         }
@@ -438,6 +443,10 @@ namespace DeepUnity.Modules
             else if (typeof(AttentionV2).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.attentionv2;
+            }
+            else if (typeof(DenseGPU).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.densegpu;
             }
             else
                 throw new Exception($"Unhandled module type while unwrapping ({moduleWrapper.name}).");

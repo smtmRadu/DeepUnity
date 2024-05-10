@@ -20,7 +20,7 @@ namespace DeepUnity.Tutorials
         public PerformanceGraph graph = new PerformanceGraph();
         public GameObject canvas;
         private List<RawImage> displays;
-
+        public float gradClipNorm = 1f;
         [SerializeField] Sequential encoder;
         [SerializeField] Sequential decoder;
         [SerializeField] Sequential mu;
@@ -101,6 +101,8 @@ namespace DeepUnity.Tutorials
                     Utils.Shuffle(train);
                 }
 
+                optim.ZeroGrad();
+
                 float loss_value = 0f;
 
                 var batch = train_batches[batch_index];
@@ -131,9 +133,9 @@ namespace DeepUnity.Tutorials
                 encoder.Backward(dBCE_dEncoder);
 
 
-                const float kld_weight = 1f;
+                const float kld_weight = 3f;
                 Tensor kld = kld_weight * -0.5f * (1f + log_variance - mean.Pow(2f) - log_variance.Exp());
-                loss_value += kld.ToArray().Average() * kld_weight;
+                loss_value += kld.Average() * kld_weight;
 
                 // Compute gradients for mu
                 Tensor dKLD_dMu = mean; // dKLD / dMu = mean
@@ -146,7 +148,7 @@ namespace DeepUnity.Tutorials
 
                 // Compute gradients for encoder
                 encoder.Backward(dZ_dEnc);
-                optim.ClipGradNorm(1f);
+                optim.ClipGradNorm(gradClipNorm);
                 optim.Step();
 
                 // print($"Batch: {batch_index} | Loss: {loss_value}");

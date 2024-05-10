@@ -21,9 +21,8 @@ namespace DeepUnity.Optimizers
         private readonly Tensor[] v;
         private readonly Tensor[] vHatMax;
 
+        // GPU
         private readonly TensorGPU[] gpu_m;
-
-        // 2nd momentum buffer 
         private readonly TensorGPU[] gpu_v;
         private readonly TensorGPU[] gpu_vHatMax;
 
@@ -108,19 +107,30 @@ namespace DeepUnity.Optimizers
                         Tensor.CopyTo(parameters[i].param - gamma * mHat / (vHat.Sqrt() + epsilon), parameters[i].param);
                 }
             });
-            if(AreThereGPUParams)
+            if (AreThereGPUParams)         
                 for (int i = 0; i < parameters.Length; i++)
                     if (parameters[i].Device == Device.GPU)
-                    {
+                    { 
                         if (maximize)
                             TensorGPU.Subtract_(parameters[i].paramGPU, parameters[i].paramGPU, 2);  // double subtraction
 
                         if (lambda != 0)                     
                             TensorGPU.Add_(parameters[i].gGPU, parameters[i].paramGPU, lambda);
-                        
+
+                        TensorGPU.Multiply_(gpu_m[i], beta1);
+                        TensorGPU.Add_(gpu_m[i], parameters[i].gGPU, 1f - beta1);
+
+
+                        TensorGPU gGPUSquared = TensorGPU.Identity(parameters[i].gGPU);
+                        TensorGPU.Pow_(gGPUSquared, 2f);
+
+                        TensorGPU.Multiply_(gpu_v[i], beta2);
+                        TensorGPU.Add_(gpu_v[i], gGPUSquared, 1f - beta2);
+                        gGPUSquared.Dispose();
 
                         TensorGPU mHat = TensorGPU.Identity(gpu_m[i]);
                         TensorGPU vHat = TensorGPU.Identity(gpu_v[i]);
+
                         TensorGPU.Divide_(mHat, 1f - beta1_t);
                         TensorGPU.Divide_(vHat, 1f - beta2_t);
 
@@ -131,6 +141,7 @@ namespace DeepUnity.Optimizers
                             TensorGPU.Sqrt_(vHatMax);
                             TensorGPU.Add_(vHatMax, epsilon);
                             TensorGPU.Divide_(mHat, vHatMax);
+                         
                             TensorGPU.Subtract_(parameters[i].paramGPU, mHat, gamma);
 
                             vHatMax.Dispose();
@@ -140,13 +151,11 @@ namespace DeepUnity.Optimizers
                             TensorGPU.Sqrt_(vHat);
                             TensorGPU.Add_(vHat, epsilon);
                             TensorGPU.Divide_(mHat, vHat);
-                            TensorGPU.Subtract_(parameters[i].paramGPU, mHat, gamma);
-
-                            mHat.Dispose();
-                            vHat.Dispose();
+                            TensorGPU.Subtract_(parameters[i].paramGPU, mHat, gamma);                            
                         }
 
-                     
+                        mHat.Dispose();
+                        vHat.Dispose();
                     }
                 
 

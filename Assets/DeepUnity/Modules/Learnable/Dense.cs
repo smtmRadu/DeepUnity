@@ -20,10 +20,10 @@ namespace DeepUnity.Modules
         private Tensor InputCache { get; set; }
         private bool UseBias { get => biases != null; }
 
-        [SerializeField] private Tensor weights;
-        [SerializeField] private Tensor biases;
-        [NonSerialized] private Tensor weightsGrad;
-        [NonSerialized] private Tensor biasesGrad;
+        [SerializeField] public Tensor weights;
+        [SerializeField] public Tensor biases;
+        [NonSerialized]  public Tensor weightsGrad;
+        [NonSerialized]  public Tensor biasesGrad;
 
 
         /// <summary>
@@ -54,6 +54,7 @@ namespace DeepUnity.Modules
             }
            
         }
+        private Dense() { }
         public Tensor Predict(Tensor input)
         {
             if (input.Rank > 3)
@@ -371,7 +372,8 @@ namespace DeepUnity.Modules
         }
         public object Clone()
         {
-            var dense = new Dense(1, 1, UseBias, device: Device);
+            var dense = new Dense();
+            dense.Device = Device;
             dense.weights = (Tensor)weights.Clone();          
             dense.weightsGrad = (Tensor)weightsGrad.Clone();
 

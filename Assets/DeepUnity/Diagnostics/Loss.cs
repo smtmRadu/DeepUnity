@@ -81,7 +81,7 @@ namespace DeepUnity
         public float Item { get
             {
                 Tensor lossItem = Value;
-                return lossItem.ToArray().Average();
+                return lossItem.Average();
 
             }
         }
@@ -114,7 +114,7 @@ namespace DeepUnity
             }
         }
         /// <summary>
-        /// Returns the loss(y, t) partial derivative with respect to the predicts (y).
+        /// Returns the <see cref="Loss"/>(pred, targ) partial derivative with respect to the pred.
         /// </summary>
         public Tensor Gradient { get
             {

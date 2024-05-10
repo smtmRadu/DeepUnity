@@ -5,6 +5,8 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using DeepUnity.Models;
+using DeepUnity.Activations;
+using DeepUnity.Optimizers;
 
 namespace DeepUnity.ReinforcementLearning
 {
@@ -17,10 +19,57 @@ namespace DeepUnity.ReinforcementLearning
     /// 1. Softmax activation on discrete head may "explode"
     internal sealed class PPOTrainer : DeepUnityTrainer
     {
-        protected override void Initialize()
-        {
-            // Initialize inference device
+        public Optimizer optim_v { get; set; }   
+        public Optimizer optim_mu { get; set; }
+        public Optimizer optim_sigma { get; set; }
+        public Optimizer optim_discrete { get; set; }
 
+        public LRScheduler scheduler_v { get; set; }
+        public LRScheduler scheduler_mu { get; set; }
+        public LRScheduler scheduler_sigma { get; set; }
+        public LRScheduler scheduler_discrete { get; set; }
+
+        protected override void Initialize()
+        {    
+            // MEAN Tanh module is removed in PPO
+            if (model.IsUsingContinuousActions && model.muNetwork.Modules.Last().GetType() == typeof(Tanh))
+                model.muNetwork.Modules = model.muNetwork.Modules.Take(model.muNetwork.Modules.Length - 1).ToArray();
+
+
+            // Initialize Optimizers
+            const float epsilon = 1e-5F; // PPO openAI eps they use :D, but in Andrychowicz, et al. (2021) they use tf default 1e-7
+            const float vNetL2Regularization = 0.0F;
+            optim_v = new Adam(model.vNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: vNetL2Regularization);
+
+            if (model.IsUsingContinuousActions)
+            {
+                optim_mu = new Adam(model.muNetwork.Parameters(), hp.learningRate, eps: epsilon);
+                optim_sigma = new Adam(model.sigmaNetwork.Parameters(), hp.learningRate, eps: epsilon);
+            }
+
+            if (model.IsUsingDiscreteActions)
+            {
+                optim_discrete = new Adam(model.discreteNetwork.Parameters(), hp.learningRate, eps: epsilon);
+            }
+
+            // Initialize schedulers
+            int total_epochs = (int)hp.maxSteps / hp.bufferSize * hp.numEpoch; // THIS IS FOR PPO, but for now i will let it for SAC as well
+            
+            scheduler_v = new LinearLR(optim_v, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
+
+            if (model.IsUsingContinuousActions)
+            {
+                scheduler_mu = new LinearLR(optim_mu, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
+                scheduler_sigma = new LinearLR(optim_sigma, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
+            }
+
+            if (model.IsUsingDiscreteActions)
+            {
+                scheduler_discrete = new LinearLR(optim_discrete, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
+            }
+      
+
+            // Initialize inference device
             if (model.muNetwork != null)
                 model.muNetwork.Device = model.inferenceDevice;
 
@@ -39,6 +88,7 @@ namespace DeepUnity.ReinforcementLearning
         protected override void OnBeforeFixedUpdate()
         {
             // If agents cumulativelly collected enough data to fill up the buffer (it can surpass for multiple agents)
+
             if (MemoriesCount >= hp.bufferSize)
             {
                 foreach (var agent_memory in parallelAgents.Select(x => x.Memory))
@@ -63,7 +113,7 @@ namespace DeepUnity.ReinforcementLearning
                 actorLoss = actorLoss / (hp.bufferSize / hp.batchSize * hp.numEpoch);
                 criticLoss = criticLoss / (hp.bufferSize / hp.batchSize * hp.numEpoch);
                 entropy = entropy / (hp.bufferSize / hp.batchSize * hp.numEpoch);
-                learningRate = model.vScheduler.CurrentLR;
+                learningRate = scheduler_v.CurrentLR;
                 currentSteps += hp.bufferSize;
             }
         }
@@ -163,10 +213,10 @@ namespace DeepUnity.ReinforcementLearning
                 // Step LR schedulers after each epoch (this allows selection at runtime)
                 if (hp.LRSchedule)
                 {
-                    model.vScheduler.Step();
-                    model.muScheduler?.Step();
-                    model.sigmaScheduler?.Step();
-                    model.discreteScheduler?.Step();
+                    scheduler_v.Step();
+                    scheduler_mu?.Step();
+                    scheduler_sigma?.Step();
+                    scheduler_discrete?.Step();
                 }
             }
 
@@ -195,10 +245,10 @@ namespace DeepUnity.ReinforcementLearning
             else
                 criticLoss += lossItem;
 
-            model.vOptimizer.ZeroGrad();
+            optim_v.ZeroGrad();
             model.vNetwork.Backward(mse.Gradient * 0.5f);
-            model.vOptimizer.ClipGradNorm(hp.gradClipNorm);
-            model.vOptimizer.Step();
+            optim_v.ClipGradNorm(hp.gradClipNorm);
+            optim_v.Step();
 
 
         }
@@ -269,7 +319,7 @@ namespace DeepUnity.ReinforcementLearning
             // Entropy bonus added if σ is trainable
             // H(πθ(a|s)) = - integral( πθ(a|s) log πθ(a|s) ) = 1/2 * log(2πeσ^2) // https://en.wikipedia.org/wiki/Differential_entropy
             // Tensor H = 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2)); 
-            entropy += sigma.Average(); // H.ToArray().Average(); // i modified it because is simply to understand since it is sigma         
+            entropy += sigma.Average(); // H.Average(); // i modified it because is simply to understand since it is sigma         
 
             // if (dmLClip_dPi.Contains(float.NaN)) return;
 
@@ -280,15 +330,15 @@ namespace DeepUnity.ReinforcementLearning
 
             // ∂-LClip / ∂μ = (∂-LClip / ∂πθ(a|s)) * (∂πθ(a|s) / ∂μ)
             Tensor dmLClip_dMu = dmLClip_dPi * dPi_dMu;
-            model.muOptimizer.ZeroGrad();
+            optim_mu.ZeroGrad();
             model.muNetwork.Backward(dmLClip_dMu);
-            model.muOptimizer.ClipGradNorm(hp.gradClipNorm);
-            model.muOptimizer.Step();
+            optim_mu.ClipGradNorm(hp.gradClipNorm);
+            optim_mu.Step();
 
             if (model.stochasticity == Stochasticity.TrainebleStandardDeviation)
             {
                 // ∂πθ(a|s) / ∂σ = πθ(a|s) * ((x - μ)^2 - σ^2) / σ^3    (Simple statistical gradient-following for connectionst Reinforcement Learning (pag 14))
-                Tensor dPi_dSigma = pi * ((actions - mu).Pow(2) - sigmaSquared) / (sigmaSquared * sigma);
+                Tensor dPi_dSigma = pi * ((actions - mu).Square() - sigmaSquared) / (sigmaSquared * sigma);
 
                 // ∂-H / ∂σ = -1/σ
                 Tensor dmH_dSigma = sigma.Select(x => -1f / x);
@@ -296,10 +346,10 @@ namespace DeepUnity.ReinforcementLearning
                 // ∂-LClip / ∂σ = (∂-LClip / ∂πθ(a|s)) * (∂πθ(a|s) / ∂σ) + β * (∂-H / ∂σ)
                 Tensor dmLClip_dSigma = dmLClip_dPi * dPi_dSigma + hp.beta * dmH_dSigma;
 
-                model.sigmaOptimizer.ZeroGrad();
+                optim_sigma.ZeroGrad();
                 model.sigmaNetwork.Backward(dmLClip_dSigma);
-                model.sigmaOptimizer.ClipGradNorm(hp.gradClipNorm);
-                model.sigmaOptimizer.Step();
+                optim_sigma.ClipGradNorm(hp.gradClipNorm);
+                optim_sigma.Step();
             }
 
         }
@@ -328,7 +378,7 @@ namespace DeepUnity.ReinforcementLearning
                                 Tensor.Clip(ratio, 1 - hp.epsilon, 1 + hp.epsilon) * advantages);
 
 
-            float surrogateItem = LClip.Abs().ToArray().Average();
+            float surrogateItem = LClip.Abs().Average();
             if (float.IsNaN(surrogateItem))
             {
                 ConsoleMessage.Warning($"PPO LCLIP batch containing NaN values was skipped. Consider clipping the observations strongly");
@@ -372,7 +422,7 @@ namespace DeepUnity.ReinforcementLearning
             // Entropy bonus for discrete actions
             // H = - φ * log(φ)
             Tensor H = -pi * pi.Log();
-            entropy += H.ToArray().Average();
+            entropy += H.Average();
 
             // ∂-H / ∂φ = log(φ) + 1;
             Tensor dmH_dPhi = pi.Log() + 1;
@@ -380,10 +430,10 @@ namespace DeepUnity.ReinforcementLearning
             // ∂-L / ∂φ = (∂-L / ∂-πθ(a|s)) * (∂-πθ(a|s) / ∂φ) + β * (∂-H / ∂φ) 
             Tensor dmLClip_dPhi = dmLClip_dPi * dPi_dPhi + hp.beta * dmH_dPhi;
 
-            model.discreteOptimizer.ZeroGrad();
+            optim_discrete.ZeroGrad();
             model.discreteNetwork.Backward(dmLClip_dPhi);
-            model.discreteOptimizer.ClipGradNorm(hp.gradClipNorm);
-            model.discreteOptimizer.Step();
+            optim_discrete.ClipGradNorm(hp.gradClipNorm);
+            optim_discrete.Step();
         }
         /// <summary>
         /// DKL(P(μ1,σ1) || Q(μ2, σ2)) = log(σ2,/σ1) + (σ2^2 + (μ1 - μ2)^2) / (2σ2^2) - 1/2 for norm distributions

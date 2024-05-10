@@ -9,13 +9,13 @@ namespace DeepUnity.Modules
     public class DenseGPU : ILearnable, IModule
     {
         [SerializeField] public Device Device { get => Device.GPU; set { } }
-        private TensorGPU gpu_InputCache;
+        private TensorGPU gpu_InputCache { get; set; } = null;
         private bool UseBias { get => bias != null; }
 
         [SerializeField] public TensorGPU weight;
         [SerializeField] public TensorGPU bias;
-        [NonSerialized] private TensorGPU weightGrad;
-        [NonSerialized] private TensorGPU biasGrad;
+        [NonSerialized]  public TensorGPU weightGrad;
+        [NonSerialized]  public TensorGPU biasGrad;
 
         /// <summary>
         /// <b>A Dense layer with the parameters allocated on GPU.</b> <br><br></br></br>
@@ -31,7 +31,7 @@ namespace DeepUnity.Modules
         /// <exception cref="ArgumentException"></exception>
         public DenseGPU(int in_features, int out_features, bool use_bias = true, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform)
         {
-            throw new NotImplementedException("DenseGPU is in testing and was not released yet, it seems that is not even more efficient that the standard Dense");
+            throw new System.UnauthorizedAccessException("DenseGPU seems to be slower somehow than the normal Dense with device set on GPU. So use the classic Dense module instead.");
             if (in_features < 1)
                 throw new ArgumentException("In_features cannot be less than 1.");
             if (out_features < 1)
@@ -46,7 +46,7 @@ namespace DeepUnity.Modules
                 biasGrad = TensorGPU.Zeros(bias.Shape);
             }
         }
-        private DenseGPU() { }
+        public DenseGPU() { }
 
         public Tensor Predict(Tensor input)
         {
@@ -106,13 +106,21 @@ namespace DeepUnity.Modules
 
             bool isBatched = input.Rank == 2;
             int batch_size = isBatched ? input.Size(-2) : 1;
-            int H_in = weight.Size(-1);
-            int H_out = bias.Size(-1);
+            int H_in = weight.Size(1);
+            int H_out = weight.Size(0);
             ComputeShader cs = DeepUnityMeta.DenseCS;
 
             cs.SetBuffer(0, "input", gpu_InputCache.data);
             cs.SetBuffer(0, "gamma", weight.data);
-            cs.SetBuffer(0, "beta", bias.data);
+            ComputeBuffer biasBuff = null;
+            if(UseBias)
+                cs.SetBuffer(0, "beta", bias.data);
+            else
+            {
+                biasBuff = new ComputeBuffer(H_out, 4);
+                biasBuff.SetData(new float[H_out]);
+                cs.SetBuffer(0, "beta", biasBuff);
+            }
             ComputeBuffer gpu_outputBuff = new ComputeBuffer(batch_size * H_out, 4);
             cs.SetBuffer(0, "output", gpu_outputBuff);
 
@@ -130,7 +138,8 @@ namespace DeepUnity.Modules
                    Tensor.Constant(gpu_outputBuff, H_out);
 
             gpu_outputBuff.Dispose();
-
+            if (biasBuff != null)
+                biasBuff.Dispose();
             return result;
         }
         public Tensor Forward(Tensor input) => Predict(input);
@@ -160,8 +169,8 @@ namespace DeepUnity.Modules
 
             bool isBatched = loss.Rank == 2;
             int batch_size = isBatched ? loss.Size(-2) : 1;
-            int H_in = weight.Size(-1);
-            int H_out = bias.Size(-1);
+            int H_in = weight.Size(1);
+            int H_out = weight.Size(0);
 
             // dLoss w.r.t theta
             ComputeShader cs = DeepUnityMeta.DenseCS;
@@ -173,14 +182,16 @@ namespace DeepUnity.Modules
 
             cs.SetBuffer(1, "gamma_grad", weightGrad.data);
 
+            ComputeBuffer biasGradBuff = null;
             if(UseBias)
             {
                 cs.SetBuffer(1, "beta_grad", biasGrad.data);
             }
             else
             {
-                ComputeBuffer biasesGradBuffer = new ComputeBuffer(H_out, 4);
-                biasesGradBuffer.SetData(new float[H_out]);
+                biasGradBuff = new ComputeBuffer(H_out, 4);
+                biasGradBuff.SetData(new float[H_out]);
+                cs.SetBuffer(1, "beta_grad", biasGradBuff);
             }
                     
 
@@ -199,7 +210,8 @@ namespace DeepUnity.Modules
             gpu_inputGrad.Dispose();
             gpu_loss.Dispose();
             gpu_InputCache.Dispose();
-
+            if(biasGradBuff != null)
+                biasGradBuff.Dispose(); 
             return inputGradOnCPU;
         }
 
@@ -228,15 +240,15 @@ namespace DeepUnity.Modules
         }
 
 
-        public void OnBeforeSerialize()
-        {
-
-        }
+        public void OnBeforeSerialize() { }
+        
         public void OnAfterDeserialize()
         {
             // This function is actually having 2 workers on serialization.
             // If shape int[] was not deserialized, we need to break this worker.
             // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
+            if (weight == null)
+                return;
 
             if (weight.Shape == null)
                 return;
