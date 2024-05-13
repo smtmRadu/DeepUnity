@@ -12,10 +12,10 @@ namespace DeepUnity.Modules
         private TensorGPU gpu_InputCache { get; set; } = null;
         private bool UseBias { get => bias != null; }
 
-        [SerializeField] public TensorGPU weight;
-        [SerializeField] public TensorGPU bias;
-        [NonSerialized]  public TensorGPU weightGrad;
-        [NonSerialized]  public TensorGPU biasGrad;
+        [SerializeField] private TensorGPU weight;
+        [SerializeField] private TensorGPU bias;
+        [NonSerialized]  private TensorGPU weightGrad;
+        [NonSerialized]  private TensorGPU biasGrad;
 
         /// <summary>
         /// <b>A Dense layer with the parameters allocated on GPU.</b> <br><br></br></br>

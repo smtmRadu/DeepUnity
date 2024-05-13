@@ -55,8 +55,6 @@ namespace DeepUnity.ReinforcementLearning
         [Header("Policy")]
         [Tooltip("The mean standard deviation of the policy for continuous actions, or -probs * log probs for discrete actions.")]
         public PerformanceGraph entropy = new PerformanceGraph();
-        [Tooltip("Learning rate decay on each epoch.")]
-        public PerformanceGraph learningRate = new PerformanceGraph();
 
 
         private float policyUpdateSecondsElapsed = 0f;
@@ -130,7 +128,6 @@ namespace DeepUnity.ReinforcementLearning
             actorLoss.Append(DeepUnityTrainer.Instance.actorLoss);
             criticLoss.Append(DeepUnityTrainer.Instance.criticLoss);
             entropy.Append(DeepUnityTrainer.Instance.entropy);
-            learningRate.Append(DeepUnityTrainer.Instance.learningRate);
         }
 
 
@@ -223,7 +220,7 @@ namespace DeepUnity.ReinforcementLearning
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Time Horizon: {hp.horizon}</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Gradient Cliping by Norm: {hp.gradClipNorm}</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Gradient Cliping by Norm: {hp.maxNorm}</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Learning Rate Schedule: {hp.LRSchedule}    {""}</text>");
 
@@ -257,11 +254,9 @@ namespace DeepUnity.ReinforcementLearning
             y += 20;
             DrawGraph(svgBuilder, episodeLength.Keys, ref y, 50, 200, 500, $"Episode Length ({episodeCount})");
             y += 20;
-            DrawGraph(svgBuilder, actorLoss.Keys, ref y, 50, 200, 500, "Policy Loss");
+            DrawGraph(svgBuilder, actorLoss.Keys, ref y, 50, 200, 500, "Actor Loss");
             y += 20;
-            DrawGraph(svgBuilder, criticLoss.Keys, ref y, 50, 200, 500, "Value Loss");
-            y += 20;
-            DrawGraph(svgBuilder, learningRate.Keys, ref y, 50, 200, 500, "Learning Rate");
+            DrawGraph(svgBuilder, criticLoss.Keys, ref y, 50, 200, 500, "Critic Loss");
             y += 20;
             DrawGraph(svgBuilder, entropy.Keys, ref y, 50, 200, 500, "Entropy");
 

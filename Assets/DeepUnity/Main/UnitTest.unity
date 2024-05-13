@@ -1511,7 +1511,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &621327370
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1524,7 +1524,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b84b8b2bedacc4a45b998f855a119d27, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  device: 1
+  device: 0
   net: {fileID: 11400000, guid: f70ff345527a0764dba79a3e59a4041f, type: 2}
   TrainLossGraph:
     graph:
@@ -1547,7 +1547,7 @@ MonoBehaviour:
     current: 0
     mean: 0
   learningRate: 0.001
-  hiddenSize: 512
+  hiddenSize: 64
   trainingSamples: 2048
   batch_size: 64
   validationSamples: 128

@@ -20,10 +20,10 @@ namespace DeepUnity.Modules
         private Tensor InputCache { get; set; }
         private bool UseBias { get => biases != null; }
 
-        [SerializeField] public Tensor weights;
-        [SerializeField] public Tensor biases;
-        [NonSerialized]  public Tensor weightsGrad;
-        [NonSerialized]  public Tensor biasesGrad;
+        [SerializeField] private Tensor weights;
+        [SerializeField] private Tensor biases;
+        [NonSerialized]  private Tensor weightsGrad;
+        [NonSerialized]  private Tensor biasesGrad;
 
 
         /// <summary>

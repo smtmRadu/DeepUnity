@@ -50,11 +50,11 @@ namespace DeepUnity.Tutorials
             if (net == null)
             {
                 net = new Sequential(
-                 new DenseGPU(2, hiddenSize, weight_init: init_w, bias_init:init_b),
+                 new Dense(2, hiddenSize, weight_init: init_w, bias_init:init_b),
                  new Tanh(),
-                 new DenseGPU(hiddenSize, hiddenSize, weight_init: init_w, bias_init: init_b),
+                 new Dense(hiddenSize, hiddenSize, weight_init: init_w, bias_init: init_b),
                  new Tanh(),
-                 new DenseGPU(hiddenSize, 1, weight_init: init_w, bias_init: init_b)
+                 new Dense(hiddenSize, 1, weight_init: init_w, bias_init: init_b)
                  );
             }
 
@@ -101,6 +101,7 @@ namespace DeepUnity.Tutorials
 
                 return;
             }
+            optimizer.SpectralNorm(5);
             var trainPrediction = net.Forward(trainXbatches[i]);
             Loss loss = Loss.MSE(trainPrediction, trainYbatches[i]);
             TrainLossGraph.Append(loss.Item);

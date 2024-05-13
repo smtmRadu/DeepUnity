@@ -39,17 +39,17 @@ namespace DeepUnity.ReinforcementLearning
             // Initialize Optimizers
             const float epsilon = 1e-5F; // PPO openAI eps they use :D, but in Andrychowicz, et al. (2021) they use tf default 1e-7
             const float vNetL2Regularization = 0.0F;
-            optim_v = new Adam(model.vNetwork.Parameters(), hp.learningRate, eps: epsilon, weightDecay: vNetL2Regularization);
+            optim_v = new Adam(model.vNetwork.Parameters(), hp.criticLearningRate, eps: epsilon, weightDecay: vNetL2Regularization);
 
             if (model.IsUsingContinuousActions)
             {
-                optim_mu = new Adam(model.muNetwork.Parameters(), hp.learningRate, eps: epsilon);
-                optim_sigma = new Adam(model.sigmaNetwork.Parameters(), hp.learningRate, eps: epsilon);
+                optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon);
+                optim_sigma = new Adam(model.sigmaNetwork.Parameters(), hp.actorLearningRate, eps: epsilon);
             }
 
             if (model.IsUsingDiscreteActions)
             {
-                optim_discrete = new Adam(model.discreteNetwork.Parameters(), hp.learningRate, eps: epsilon);
+                optim_discrete = new Adam(model.discreteNetwork.Parameters(), hp.actorLearningRate, eps: epsilon);
             }
 
             // Initialize schedulers
@@ -113,7 +113,6 @@ namespace DeepUnity.ReinforcementLearning
                 actorLoss = actorLoss / (hp.bufferSize / hp.batchSize * hp.numEpoch);
                 criticLoss = criticLoss / (hp.bufferSize / hp.batchSize * hp.numEpoch);
                 entropy = entropy / (hp.bufferSize / hp.batchSize * hp.numEpoch);
-                learningRate = scheduler_v.CurrentLR;
                 currentSteps += hp.bufferSize;
             }
         }
@@ -238,7 +237,7 @@ namespace DeepUnity.ReinforcementLearning
         {
             Tensor values = model.vNetwork.Forward(states);
             Loss mse = Loss.MSE(values, value_targets);
-            float lossItem = mse.Item;
+            float lossItem = mse.Item * hp.valueCoeff;
 
             if (float.IsNaN(lossItem))
                 return;
@@ -246,8 +245,8 @@ namespace DeepUnity.ReinforcementLearning
                 criticLoss += lossItem;
 
             optim_v.ZeroGrad();
-            model.vNetwork.Backward(mse.Gradient * 0.5f);
-            optim_v.ClipGradNorm(hp.gradClipNorm);
+            model.vNetwork.Backward(mse.Gradient * hp.valueCoeff);
+            optim_v.ClipGradNorm(hp.maxNorm);
             optim_v.Step();
 
 
@@ -332,7 +331,7 @@ namespace DeepUnity.ReinforcementLearning
             Tensor dmLClip_dMu = dmLClip_dPi * dPi_dMu;
             optim_mu.ZeroGrad();
             model.muNetwork.Backward(dmLClip_dMu);
-            optim_mu.ClipGradNorm(hp.gradClipNorm);
+            optim_mu.ClipGradNorm(hp.maxNorm);
             optim_mu.Step();
 
             if (model.stochasticity == Stochasticity.TrainebleStandardDeviation)
@@ -348,7 +347,7 @@ namespace DeepUnity.ReinforcementLearning
 
                 optim_sigma.ZeroGrad();
                 model.sigmaNetwork.Backward(dmLClip_dSigma);
-                optim_sigma.ClipGradNorm(hp.gradClipNorm);
+                optim_sigma.ClipGradNorm(hp.maxNorm);
                 optim_sigma.Step();
             }
 
@@ -432,7 +431,7 @@ namespace DeepUnity.ReinforcementLearning
 
             optim_discrete.ZeroGrad();
             model.discreteNetwork.Backward(dmLClip_dPhi);
-            optim_discrete.ClipGradNorm(hp.gradClipNorm);
+            optim_discrete.ClipGradNorm(hp.maxNorm);
             optim_discrete.Step();
         }
         /// <summary>

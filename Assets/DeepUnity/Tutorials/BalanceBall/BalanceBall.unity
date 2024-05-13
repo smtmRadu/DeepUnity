@@ -316,9 +316,9 @@ MonoBehaviour:
   discreteActions: 0
   archType: 0
   numLayers: 2
-  hidUnits: 64
+  hidUnits: 32
   activation: 1
-  model: {fileID: 11400000, guid: 031cdc7161d83a54d920bb59af304f0b, type: 2}
+  model: {fileID: 11400000, guid: 93b9a936aefccc94caf12564e7a1bb52, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0

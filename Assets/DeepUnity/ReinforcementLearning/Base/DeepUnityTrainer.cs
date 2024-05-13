@@ -35,7 +35,6 @@ namespace DeepUnity.ReinforcementLearning
         [ViewOnly] public float actorLoss;
         [ViewOnly] public float criticLoss;
         [ViewOnly] public float entropy;
-        [ViewOnly] public float learningRate;
 
 
         public readonly DateTime timeWhenTheTrainingStarted = DateTime.Now;

@@ -380,7 +380,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   perform: 1
   lr: 0.001
-  batchSize: 128
+  batchSize: 64
   graph:
     graph:
       serializedVersion: 2
@@ -393,10 +393,7 @@ MonoBehaviour:
     mean: 0
   canvas: {fileID: 1823018698}
   gradClipNorm: 1
-  encoder: {fileID: 11400000, guid: 0acbd25123667dc47afe4f45ca47f09f, type: 2}
-  decoder: {fileID: 11400000, guid: d3aa09c79b413764da791d2cb88b4ff5, type: 2}
-  mu: {fileID: 11400000, guid: a4e448ca326e3844683611b75665cbde, type: 2}
-  logvar: {fileID: 11400000, guid: ebd6518372899e44bae232b683d08845, type: 2}
+  vae: {fileID: 11400000, guid: e416a5444e8611d4eb17a4083c47fe69, type: 2}
 --- !u!4 &492610712
 Transform:
   m_ObjectHideFlags: 0
@@ -2256,9 +2253,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   canvas: {fileID: 1823018698}
-  discriminator: {fileID: 11400000, guid: c07f37c080cccea4d892ff78ed948ba1, type: 2}
-  generator: {fileID: 11400000, guid: 84f97f7c92a601c498bb685ccc753f5a, type: 2}
-  batch_size: 128
+  D: {fileID: 0}
+  G: {fileID: 0}
+  batch_size: 100
   lr: 0.0002
   perform: 1
   writeLoss: 1

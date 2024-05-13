@@ -37,7 +37,7 @@ namespace DeepUnity.Models
             IModule[] encoder,
             int latent_space,
             IModule[] decoder,
-            float kld_weight = 3f)
+            float kld_weight = 1f)
         {
             if (latent_space < 1)
                 throw new ArgumentException("Latent space must be > 0");

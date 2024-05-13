@@ -42,10 +42,10 @@ namespace DeepUnity.ReinforcementLearning
 
             // Init optimizers
             const float QnetsL2Reg = 0.0F;
-            optim_q1 = new Adam(model.q1Network.Parameters(), hp.learningRate, weightDecay: QnetsL2Reg);
-            optim_q2 = new Adam(model.q2Network.Parameters(), hp.learningRate, weightDecay: QnetsL2Reg);
-            optim_mu = new Adam(model.muNetwork.Parameters(), hp.learningRate);
-            optim_sigma = new Adam(model.sigmaNetwork.Parameters(), hp.learningRate);
+            optim_q1 = new Adam(model.q1Network.Parameters(), hp.criticLearningRate, weightDecay: QnetsL2Reg);
+            optim_q2 = new Adam(model.q2Network.Parameters(), hp.criticLearningRate, weightDecay: QnetsL2Reg);
+            optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate);
+            optim_sigma = new Adam(model.sigmaNetwork.Parameters(), hp.actorLearningRate);
 
             // Init schedulers
             scheduler_q1 = new LinearLR(optim_q1, start_factor: 1f, end_factor: 0f, epochs: (int)model.config.maxSteps);
@@ -113,7 +113,6 @@ namespace DeepUnity.ReinforcementLearning
                     updateIterations++;
                     actorLoss /= hp.updatesNum;
                     criticLoss /= hp.updatesNum;
-                    learningRate = scheduler_mu.CurrentLR;
                     entropy = hp.alpha;
                     currentSteps += new_experiences_collected / decision_freq;
                     new_experiences_collected = 0;

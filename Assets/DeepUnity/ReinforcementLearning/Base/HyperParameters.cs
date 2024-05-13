@@ -19,8 +19,11 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("[Typical range: 1e5 - 1e7] The maximum length in steps of this training session.")]
         [Min(10_000f)] public long maxSteps = 2_000_000_000;
 
-        [Tooltip("[Typical range: 5e-6 - 1e-3] Initial learning rate for Adam optimizer (both all networks).")]
-        [MinMax(5e-6f, 1f)] public float learningRate = 3e-4f;
+        [Tooltip("[Typical range: 5e-6 - 3e-4] Initial learning rate for Actor's Adam optimizer.")]
+        [MinMax(5e-6f, 1f)] public float actorLearningRate = 3e-4f;
+
+        [Tooltip("[Typical range: 3e-4 - 1e-3] Initial learning rate for Critic's Adam optimizer")]
+        [MinMax(5e-6f, 1f)] public float criticLearningRate = 3e-4f;
 
         [Tooltip("[Typical range: 0.9 - 0.9997] Discount factor.")]
         [MinMax(0.001f, 1f)] public float gamma = 0.99f;
@@ -54,7 +57,10 @@ namespace DeepUnity.ReinforcementLearning
         [MinMax(0.9f, 1f)] public float lambda = 0.96f;
 
         [Tooltip("[Typical range: 0 - 0.5] Global Gradient Clipping max norm value. Set to 0 to turn off.")]
-        [MinMax(0f, 0.5f)] public float gradClipNorm = 0.5f;
+        [MinMax(0f, 0.5f)] public float maxNorm = 0.5f;
+
+        [Tooltip("[Typical range: 0.5 - 1] Value loss function coefficient")]
+        [MinMax(0.5f, 1f)] public float valueCoeff = 0.5f;
 
         [Tooltip("Use of KLE")]
         public KLType KLDivergence = KLType.Off;
@@ -191,7 +197,8 @@ namespace DeepUnity.ReinforcementLearning
                 dontDrawMe.Add("normalizeAdvantages");
                 dontDrawMe.Add("KLDivergence");
                 dontDrawMe.Add("targetKL");
-                dontDrawMe.Add("gradClipNorm");
+                dontDrawMe.Add("maxNorm");
+                dontDrawMe.Add("valueCoeff");
                 dontDrawMe.Add("normalizeAdvantages");
 
                 dontDrawMe.Add("noiseClip");
@@ -209,7 +216,8 @@ namespace DeepUnity.ReinforcementLearning
                 dontDrawMe.Add("normalizeAdvantages");
                 dontDrawMe.Add("KLDivergence");
                 dontDrawMe.Add("targetKL");
-                dontDrawMe.Add("gradClipNorm");
+                dontDrawMe.Add("maxNorm");
+                dontDrawMe.Add("valueCoeff");
                 dontDrawMe.Add("normalizeAdvantages");
 
                 dontDrawMe.Add("alpha");
@@ -227,7 +235,8 @@ namespace DeepUnity.ReinforcementLearning
                 dontDrawMe.Add("normalizeAdvantages");
                 dontDrawMe.Add("KLDivergence");
                 dontDrawMe.Add("targetKL");
-                dontDrawMe.Add("gradClipNorm");
+                dontDrawMe.Add("maxNorm");
+                dontDrawMe.Add("valueCoeff");
                 dontDrawMe.Add("normalizeAdvantages");
 
                 dontDrawMe.Add("alpha");

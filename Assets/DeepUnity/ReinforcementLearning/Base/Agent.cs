@@ -356,7 +356,9 @@ namespace DeepUnity.ReinforcementLearning
 
             if (model.normalize)
             {
-                model.observationsNormalizer.Update(state);
+                if(behaviourType == BehaviourType.Learn) 
+                    model.observationsNormalizer.Update(state);
+
                 state = model.observationsNormalizer.Normalize(state);
             }
 

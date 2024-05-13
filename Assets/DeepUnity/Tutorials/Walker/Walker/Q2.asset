@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ffdd4f9587b2d8846a37ba5240ae14b2, type: 3}
   m_Name: Q2
   m_EditorClassIdentifier: 
-  version: 331
+  version: 341
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -8735,6 +8735,13 @@ MonoBehaviour:
         - 0.17466111
         - -0.40017027
         shape: 48000000
+    densegpu:
+      weight:
+        serialized_data: []
+        shape: 
+      bias:
+        serialized_data: []
+        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -8876,9 +8883,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 701946694
+      residualConnectionHash: -91861902
     residualconnectionjoin:
-      residualConnectionHash: 701946694
+      residualConnectionHash: -91861902
     conv2d:
       kernels:
         data: []
@@ -8932,6 +8939,13 @@ MonoBehaviour:
       biases:
         data: []
         shape: 
+    densegpu:
+      weight:
+        serialized_data: []
+        shape: 
+      bias:
+        serialized_data: []
+        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -9073,9 +9087,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 349590986
+      residualConnectionHash: 524993142
     residualconnectionjoin:
-      residualConnectionHash: 349590986
+      residualConnectionHash: 524993142
     conv2d:
       kernels:
         data: []
@@ -14385,6 +14399,13 @@ MonoBehaviour:
         - 0.12942776
         - 0.07589072
         shape: 48000000
+    densegpu:
+      weight:
+        serialized_data: []
+        shape: 
+      bias:
+        serialized_data: []
+        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -14526,9 +14547,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 532438720
+      residualConnectionHash: 185977194
     residualconnectionjoin:
-      residualConnectionHash: 532438720
+      residualConnectionHash: 185977194
     conv2d:
       kernels:
         data: []
@@ -14582,6 +14603,13 @@ MonoBehaviour:
       biases:
         data: []
         shape: 
+    densegpu:
+      weight:
+        serialized_data: []
+        shape: 
+      bias:
+        serialized_data: []
+        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -14723,9 +14751,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -1608375048
+      residualConnectionHash: -1236785398
     residualconnectionjoin:
-      residualConnectionHash: -1608375048
+      residualConnectionHash: -1236785398
     conv2d:
       kernels:
         data: []
@@ -14852,6 +14880,13 @@ MonoBehaviour:
         data:
         - -0.009188588
         shape: 01000000
+    densegpu:
+      weight:
+        serialized_data: []
+        shape: 
+      bias:
+        serialized_data: []
+        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -14993,9 +15028,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 1799033098
+      residualConnectionHash: -1666036048
     residualconnectionjoin:
-      residualConnectionHash: 1799033098
+      residualConnectionHash: -1666036048
     conv2d:
       kernels:
         data: []

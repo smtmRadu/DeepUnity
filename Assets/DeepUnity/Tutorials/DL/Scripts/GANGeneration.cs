@@ -8,6 +8,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using DeepUnity.Models;
 using Unity.Properties;
+using System;
 
 namespace DeepUnity.Tutorials
 {
@@ -19,8 +20,8 @@ namespace DeepUnity.Tutorials
     {
         [SerializeField] private GameObject canvas;
         private List<RawImage> displays;
-        [SerializeField] private Sequential discriminator;
-        [SerializeField] private Sequential generator;
+        [SerializeField] private Sequential D;
+        [SerializeField] private Sequential G;
         
         [Button("SaveNetworks")]
         [SerializeField] private int batch_size = 64;
@@ -42,50 +43,52 @@ namespace DeepUnity.Tutorials
         const int size = 1024; // 1024 original
         const float dropout = 0.3f; // 0.3f original
         private void Start()
-        {          
-            if (discriminator == null)
+        {
+            InitType wInit = InitType.Xavier_Uniform;
+            InitType bInit = InitType.Zeros;
+            if (D == null)
             {
-                discriminator = new Sequential(
+                D = new Sequential(
                     new Flatten(),
 
-                    new Dense(784, size),
-                    new LeakyReLU(0.2f),
+                    new Dense(784, size, weight_init:wInit, bias_init:bInit),
+                    new Tanh(),
                     new Dropout(dropout),
                 
-                    new Dense(size, size/4),
-                    new LeakyReLU(0.2f),
+                    new Dense(size, size/4, weight_init: wInit, bias_init: bInit),
+                     new Tanh(),
                     new Dropout(dropout),
 
-                    new Dense(size / 4, 1),
+                    new Dense(size / 4, 1, weight_init: wInit, bias_init: bInit),
                     new Sigmoid()
                     ).CreateAsset("discriminator");
             }
-            if (generator == null)
+            if (G == null)
             {
-                generator = new Sequential(
-                    new Dense(latent_dim, size / 4),
-                    new LeakyReLU(0.2f),
+                G = new Sequential(
+                    new Dense(latent_dim, size / 4, weight_init: wInit, bias_init: bInit),
+                    new Tanh(),
 
-                    new Dense(size / 4, size / 2),
-                    new LeakyReLU(0.2f),
+                    new Dense(size / 4, size / 2, weight_init: wInit, bias_init: bInit),
+                    new Tanh(),
 
-                    new Dense(size / 2, size),
-                    new LeakyReLU(0.2f),
+                    new Dense(size / 2, size, weight_init: wInit, bias_init: bInit),
+                     new Tanh(),
 
-                    new Dense(size, 784),
-                    new LeakyReLU(0.2f),
+                    new Dense(size, 784, weight_init: wInit, bias_init: bInit),
+                     new Tanh(),
 
                     new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 })
                     ).CreateAsset("generator");
             }
 
-            generator.Device = Device.GPU;
-            discriminator.Device = Device.GPU;
-            d_optim = new Adam(discriminator.Parameters(), lr);
-            g_optim = new Adam(generator.Parameters(), lr);
+            G.Device = Device.GPU;
+            D.Device = Device.GPU;
+            d_optim = new Adam(D.Parameters(), lr);
+            g_optim = new Adam(G.Parameters(), lr);
 
             List<(Tensor, Tensor)> data;
-            Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out _, out data, DatasetSettings.LoadTestOnly);
+            Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out data, out _, DatasetSettings.LoadTrainOnly);
 
             Utils.Shuffle(data);
             while(data.Count % batch_size != 0)
@@ -143,21 +146,21 @@ namespace DeepUnity.Tutorials
         }
         private float TrainDiscriminator(Tensor x) // works
         {
-            // Loss = -(log(D(x)) + log(1 - D(G(z))))
+            // Loss = -log(D(x)) - log(1 - D(G(z)))
             // Gradient ascent
 
             var z = Tensor.RandomNormal(batch_size, latent_dim);
-            var Gz = generator.Predict(z);
+            var Gz = G.Predict(z);
 
             d_optim.ZeroGrad();
 
-            var Dx = discriminator.Forward(x);
+            var Dx = D.Forward(x);
             var loss = -Dx.Log();
-            discriminator.Backward(-Dx.Reciprocal());
+            D.Backward(-Dx.Reciprocal());
 
-            var DGz = discriminator.Forward(Gz);
+            var DGz = D.Forward(Gz);
             var loss2 = -(-DGz + 1f).Log();
-            discriminator.Backward((-DGz + 1f).Reciprocal());
+            D.Backward((-DGz + 1f).Reciprocal());
 
             d_optim.Step();
 
@@ -170,11 +173,11 @@ namespace DeepUnity.Tutorials
             g_optim.ZeroGrad();
 
             var z = Tensor.RandomNormal(batch_size, latent_dim);
-            var Gz = generator.Forward(z);
-            var DGz = discriminator.Forward(Gz);
+            var Gz = G.Forward(z);
+            var DGz = D.Forward(Gz);
             var loss = (-DGz + 1f).Log();
-            var dLdG = discriminator.Backward((-DGz + 1f).Reciprocal());
-            generator.Backward(dLdG);
+            var dLdG = D.Backward(-(-DGz + 1f).Reciprocal());
+            G.Backward(dLdG);
             g_optim.Step();
 
             return loss.Average();
@@ -185,7 +188,7 @@ namespace DeepUnity.Tutorials
             if (displays.Count == 0)
                 return;
 
-            generator.Device = Device.CPU;
+            G.Device = Device.CPU;
 
             foreach (var dis in displays)
             {
@@ -196,19 +199,19 @@ namespace DeepUnity.Tutorials
                     continue;
 
                 var z = Tensor.RandomNormal(1, latent_dim);
-                var sample = generator.Predict(z).Squeeze(0);
+                var sample = G.Predict(z).Squeeze(0);
                 Texture2D display = dis.texture as Texture2D;
                 display.SetPixels(Utils.TensorToColorArray(sample));
                 display.Apply();
             }
 
-            generator.Device = Device.GPU;
+            G.Device = Device.GPU;
         }
 
         public void SaveNetworks()
         {
-            generator.Save();
-            discriminator.Save();
+            G.Save();
+            D.Save();
             ConsoleMessage.Info("Networks saved");
         }
 

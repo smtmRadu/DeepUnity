@@ -980,7 +980,7 @@ namespace DeepUnity
 
                 // Special cases .. that will maybe be forbidden in the future
                 if (left_rank == 1 && right_rank == 1)
-                    throw new ArgumentException($"At least one of the tensors must have a shape > 1 for matrix multiplication");
+                    throw new ArgumentException($"At least one of the tensors must have the Rank > 1 for matrix multiplication (both inputs have rank 1)");
 
                 if (left_rank == 1 && left.Width != right.Height)
                     throw new ArgumentException($"Tensor must have compatible shapes for matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
@@ -1628,9 +1628,10 @@ namespace DeepUnity
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="norm"></param>
+        /// <param name="eps">Value for stability when computing <see cref="NormType.EuclideanL2"/> norm.</param>
         /// <returns><see cref="Tensor"/> (1)</returns>
         /// <exception cref="Exception"></exception>
-        public static Tensor Norm(Tensor tensor, NormType norm = NormType.EuclideanL2)
+        public static Tensor Norm(Tensor tensor, NormType norm = NormType.EuclideanL2, float eps = 1e-12f)
         {
             switch (norm)
             {
@@ -1642,7 +1643,7 @@ namespace DeepUnity
                     return Constant(absSum);
                 case NormType.EuclideanL2:
                     float sqrSum = tensor.data.Sum(x => x * x);
-                    return Constant(MathF.Sqrt(sqrSum));
+                    return Constant(MathF.Sqrt(sqrSum + eps));
                 case NormType.MaxLInf:
                     float maxAbs = tensor.data.Max(x => Math.Abs(x));
                     return Constant(maxAbs);
@@ -2150,6 +2151,21 @@ namespace DeepUnity
                 }
             }
             return result;
+        }
+        /// <summary>
+        /// Transposes a tensor matrix (Rank == 2). Expects input to be of Rank <= 2. Tensors of rank 0 or 1 are returned with no modifications, tensors of rank 2 are equivalent to Transpose(tensor, 0, 1)
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        public static Tensor T(Tensor tensor)
+        {
+            if (tensor.Rank == 0 || tensor.Rank == 1)
+                return Identity(tensor);
+
+            if (tensor.Rank > 2)
+                throw new ArgumentException($"Input tensor has rank {tensor.Rank}, and the allowed tensor must be of Rank 0, 1 or 2.");
+
+            return Transpose(tensor, 0, 1);
         }
         /// <summary>
         /// Splits the tensor into multiple tensors along the specified axis. The resulting tensors are having the same rank as the main tensor. <br></br>
@@ -3749,6 +3765,10 @@ namespace DeepUnity
         public Tensor Transpose(int axis0, int axis1)
         {
             return Transpose(this, axis0, axis1);
+        }
+        public Tensor T()
+        {
+            return T(this);
         }
         public Tensor[] Split(int axis, int split_size)
         {

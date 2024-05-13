@@ -24,6 +24,13 @@ namespace DeepUnity.Tutorials
         }
         private void Start()
         {
+            Tensor a = Tensor.Random01(10, 5);
+            Tensor b = Tensor.Random01(5);
+
+            print(Tensor.MatMul(a, b));
+
+            print(a);
+            print(a.Unsqueeze(0).T());
             // Tensor a = Tensor.Random01(2, 3, 4);
             // 
             // print(a);
