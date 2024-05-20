@@ -121,9 +121,9 @@ namespace DeepUnity.ReinforcementLearning
 
             TimeSpan timeElapsed = DateTime.Now - DeepUnityTrainer.Instance.timeWhenTheTrainingStarted;
             trainingSessionTime = $"{(int)timeElapsed.TotalHours} hrs : {(int)timeElapsed.TotalMinutes % 60} min : {(int)timeElapsed.TotalSeconds % 60} sec";
-            policyUpdateSecondsElapsed += (float)DeepUnityTrainer.Instance.updateClock.Elapsed.TotalSeconds;
+            policyUpdateSecondsElapsed += (float)DeepUnityTrainer.Instance.updateBenchmarkClock.Elapsed.TotalSeconds;
             policyUpdateTime = $"{(int)(Math.Ceiling(policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(policyUpdateSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(policyUpdateSecondsElapsed) % 60)} sec";
-            policyUpdateTimePerIteration = $"{(int)DeepUnityTrainer.Instance.updateClock.Elapsed.TotalHours} hrs : {(int)DeepUnityTrainer.Instance.updateClock.Elapsed.TotalMinutes % 60} min : {(int)DeepUnityTrainer.Instance.updateClock.Elapsed.TotalSeconds % 60}.{DeepUnityTrainer.Instance.updateClock.ElapsedMilliseconds % 1000} sec";
+            policyUpdateTimePerIteration = $"{(int)DeepUnityTrainer.Instance.updateBenchmarkClock.Elapsed.TotalHours} hrs : {(int)DeepUnityTrainer.Instance.updateBenchmarkClock.Elapsed.TotalMinutes % 60} min : {(int)DeepUnityTrainer.Instance.updateBenchmarkClock.Elapsed.TotalSeconds % 60}.{DeepUnityTrainer.Instance.updateBenchmarkClock.ElapsedMilliseconds % 1000} sec";
 
             actorLoss.Append(DeepUnityTrainer.Instance.actorLoss);
             criticLoss.Append(DeepUnityTrainer.Instance.criticLoss);
@@ -261,9 +261,10 @@ namespace DeepUnity.ReinforcementLearning
             DrawGraph(svgBuilder, entropy.Keys, ref y, 50, 200, 500, "Entropy");
 
             // Generate smoothed out graphs
+            const int beforeGraphs = 5;
             y -= 120;
-            y -= 200 * 6;
-            y -= 50 * 6;
+            y -= 200 * beforeGraphs;
+            y -= 50 * beforeGraphs;
             cumulativeReward.Smooth(0.05f);
             episodeLength.Smooth(0.05f);
 

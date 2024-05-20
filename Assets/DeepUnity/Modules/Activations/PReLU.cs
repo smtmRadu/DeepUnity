@@ -12,6 +12,7 @@ namespace DeepUnity.Activations
     public class PReLU : ILearnable, IModule, IActivation
     {
         [SerializeField] public Device Device { get; set; } = Device.CPU;
+        [SerializeField] public bool RequiresGrad { get; set; } = true;
         private Tensor InputCache { get; set; }
 
         [SerializeField] private Tensor alpha;
@@ -26,6 +27,7 @@ namespace DeepUnity.Activations
             alpha = Tensor.Constant(init_value);
             alphaGrad = Tensor.Zeros(1);
         }
+        private PReLU() { }
 
         public Tensor Predict(Tensor input)
         {
@@ -40,9 +42,14 @@ namespace DeepUnity.Activations
 
         public Tensor Backward(Tensor loss)
         {
-            // dLoss/dTheta = x if x < 0 and 0 otherwise
-            float dLda = loss.Select(x => x >= 0f ? x : 0).ToArray().Average();
-            alphaGrad[0] = dLda;
+            if(RequiresGrad)
+            {
+                // dLoss/dTheta = x if x < 0 and 0 otherwise
+                float dLda = loss.Select(x => x >= 0f ? x : 0).ToArray().Average();
+                alphaGrad[0] = dLda;
+            }
+           
+
             return loss * InputCache.Select(x => x >= 0f ? 1f : alpha[0]);
         }
 
@@ -68,7 +75,13 @@ namespace DeepUnity.Activations
 
             alphaGrad = Tensor.Zeros(alpha.Shape);
         }
-        public object Clone() => new PReLU(alpha[0]);
+        public object Clone()
+        {
+            var pr = new PReLU(alpha[0]);
+            pr.Device = Device;
+            pr.RequiresGrad = RequiresGrad;
+            return pr;
+        }
     }
 
 }

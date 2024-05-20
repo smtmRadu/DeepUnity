@@ -121,20 +121,20 @@ namespace DeepUnity.Models
             }
 
             // Compute inner kld
-            // Tensor kld = -0.5f * (1f + logvar_v - mu_v.Pow(2f) - logvar_v.Exp());
+            // Tensor kld = kld_weight * -0.5f * (1f + logvar_v - mu_v.Pow(2f) - logvar_v.Exp());
 
             Tensor dKLD_dMu = mu_v;
             Tensor dMu_dEncoded = mu.Backward(dKLD_dMu * kld_weight);
             Tensor dKLD_dLogvar = 0.5f * (logvar_v.Exp() - 1f);
             Tensor dLogvar_dEncoded = log_var.Backward(dKLD_dLogvar * kld_weight);
 
-            Tensor dZ_dInput = encoder[encoder.Length - 1].Backward(dMu_dEncoded + dLogvar_dEncoded);
+            Tensor dKLD_dInput = encoder[encoder.Length - 1].Backward(dMu_dEncoded + dLogvar_dEncoded);
             for (int i = encoder.Length - 2; i >= 0; i--)
             {
-                dZ_dInput = encoder[i].Backward(dZ_dInput);
+                dKLD_dInput = encoder[i].Backward(dKLD_dInput);
             }
 
-            return dLoss_dInput + dZ_dInput;
+            return dLoss_dInput + dKLD_dInput;
         }
 
         private Tensor Reparametrize(Tensor mu, Tensor log_var, out Tensor ksi)
@@ -177,7 +177,22 @@ namespace DeepUnity.Models
                 }
             }
         }
-
+        public override bool RequiresGrad
+        {
+            set
+            {
+                mu.RequiresGrad = value;
+                log_var.RequiresGrad = value;
+                foreach (var item in encoder.OfType<ILearnable>())
+                {
+                    item.RequiresGrad = value;
+                }
+                foreach (var item in decoder.OfType<ILearnable>())
+                {
+                    item.RequiresGrad = value;
+                }
+            }
+        }
         public string Summary()
         {
             StringBuilder stringBuilder = new StringBuilder();

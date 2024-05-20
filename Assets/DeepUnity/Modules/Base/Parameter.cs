@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 
+// Note, in practice, it seems like the uniform distribution is better than normal distribution for this
 namespace DeepUnity.Modules
 {
     /// <summary>
@@ -42,26 +43,30 @@ namespace DeepUnity.Modules
         {
             switch (initializer)
             {
-                case InitType.Kaiming_Uniform:
+                case InitType.Kaiming_Normal:
                     float sigmaHE = MathF.Sqrt(2f / fan_in);
                     return Tensor.RandomNormal((0, sigmaHE), shape);
-                case InitType.Kaiming_Normal:
+
+                case InitType.Kaiming_Uniform:
                     float bound = MathF.Sqrt(6f / fan_in);
                     return Tensor.RandomRange((-bound, bound), shape);
-
+           
                 case InitType.Xavier_Normal:
                     float sigmaXA = MathF.Sqrt(2f / (fan_in + fan_out));
                     return Tensor.RandomNormal((0, sigmaXA), shape);
+                
                 case InitType.Xavier_Uniform:
                     float limit = MathF.Sqrt(6f / (fan_in + fan_out));
                     return Tensor.RandomRange((-limit, limit), shape);
 
-                case InitType.LeCun_Uniform:
-                    float sqrtK = MathF.Sqrt(1f / fan_in);
-                    return Tensor.RandomRange((-sqrtK, sqrtK), shape);
                 case InitType.LeCun_Normal:
-                    float sigmaLC = MathF.Sqrt(3f / fan_in);
+                    float sigmaLC = MathF.Sqrt(1f / fan_in);
                     return Tensor.RandomNormal((0, sigmaLC), shape);
+
+                case InitType.LeCun_Uniform:
+                    float sqrtK = MathF.Sqrt(3f / fan_in);
+                    return Tensor.RandomRange((-sqrtK, sqrtK), shape);
+                
 
                 case InitType.Normal:
                     return Tensor.RandomNormal(shape);
@@ -116,11 +121,11 @@ namespace DeepUnity.Modules
         {
             switch (initializer)
             {
-                case InitType.Kaiming_Uniform:
+                case InitType.Kaiming_Normal:
                     float sigmaHE = MathF.Sqrt(2f / fan_in);
                     return TensorGPU.RandomNormal((0, sigmaHE), shape);
-
-                case InitType.Kaiming_Normal:
+                    
+                case InitType.Kaiming_Uniform:
                     float bound = MathF.Sqrt(6f / fan_in);
                     return TensorGPU.RandomRange((-bound, bound), shape);
 
@@ -132,13 +137,16 @@ namespace DeepUnity.Modules
                     float limit = MathF.Sqrt(6f / (fan_in + fan_out));
                     return TensorGPU.RandomRange((-limit, limit), shape);
 
-                case InitType.LeCun_Uniform:
-                    float sqrtK = MathF.Sqrt(1f / fan_in);
-                    return TensorGPU.RandomRange((-sqrtK, sqrtK), shape);
 
                 case InitType.LeCun_Normal:
-                    float sigmaLC = MathF.Sqrt(3f / fan_in);
+                    float sigmaLC = MathF.Sqrt(1f / fan_in);
                     return TensorGPU.RandomNormal((0, sigmaLC), shape);
+
+                case InitType.LeCun_Uniform:
+                    float sqrtK = MathF.Sqrt(3f / fan_in);
+                    return TensorGPU.RandomRange((-sqrtK, sqrtK), shape);
+
+              
 
                 case InitType.Normal:
                     return TensorGPU.RandomNormal(shape);

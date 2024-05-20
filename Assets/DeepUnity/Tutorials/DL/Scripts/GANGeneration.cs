@@ -41,10 +41,10 @@ namespace DeepUnity.Tutorials
 
         const int latent_dim = 100;
         const int size = 1024; // 1024 original
-        const float dropout = 0.3f; // 0.3f original
+        const float dropout = 0.2f; // 0.3f original
         private void Start()
         {
-            InitType wInit = InitType.Xavier_Uniform;
+            InitType wInit = InitType.LeCun_Uniform;
             InitType bInit = InitType.Zeros;
             if (D == null)
             {
@@ -52,11 +52,11 @@ namespace DeepUnity.Tutorials
                     new Flatten(),
 
                     new Dense(784, size, weight_init:wInit, bias_init:bInit),
-                    new Tanh(),
+                    new SELU(),
                     new Dropout(dropout),
                 
                     new Dense(size, size/4, weight_init: wInit, bias_init: bInit),
-                     new Tanh(),
+                     new SELU(),
                     new Dropout(dropout),
 
                     new Dense(size / 4, 1, weight_init: wInit, bias_init: bInit),
@@ -67,13 +67,13 @@ namespace DeepUnity.Tutorials
             {
                 G = new Sequential(
                     new Dense(latent_dim, size / 4, weight_init: wInit, bias_init: bInit),
-                    new Tanh(),
+                     new SELU(),
 
                     new Dense(size / 4, size / 2, weight_init: wInit, bias_init: bInit),
-                    new Tanh(),
+                    new SELU(),
 
                     new Dense(size / 2, size, weight_init: wInit, bias_init: bInit),
-                     new Tanh(),
+                     new SELU(),
 
                     new Dense(size, 784, weight_init: wInit, bias_init: bInit),
                      new Tanh(),

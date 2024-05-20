@@ -255,7 +255,9 @@ namespace DeepUnity.ReinforcementLearning
             {            
                 Timestep.nextState = LastState.Clone() as Tensor;
 
-                // Scale and clip reward - there was a problem with the rewards normalizer (idk why), but anyways they should not be normalized online because we can use off-policy alogorithms like SAC. Just use a constant bro to scale it
+                // Reward Clip
+                Timestep.reward[0] = Math.Clamp(Timestep.reward[0], -model.clipping, model.clipping);
+                // Reward Scale - there was a problem with the rewards normalizer (idk why), but anyways they should not be normalized online because we can use off-policy alogorithms like SAC. Just use a constant bro to scale it
                 // Timestep.reward[0] = model.rewardsNormalizer.ScaleReward(Timestep.reward[0]);
                 Memory.Add(Timestep);              
             }
@@ -268,7 +270,7 @@ namespace DeepUnity.ReinforcementLearning
 
                 EpisodeStepCount = 0;
                 EpisodeCumulativeReward = 0f;
-                EpisodeFixedFramesCount = 0; // Used to make the agent take a decision in the first step of the new epiode
+                EpisodeFixedFramesCount = 0; // Used to make the agent take a decision in the first step of the new epiode (MUST BE SET TO -1 after finding the bug)
                 PositionReseter?.Reset();
                 OnEpisodeBegin();
             }
@@ -436,7 +438,7 @@ namespace DeepUnity.ReinforcementLearning
         /// <param name="reward">positive or negative</param>
         public void AddReward(float reward)
         {
-            Timestep.reward[0] += Math.Clamp(reward, -model.clipping, model.clipping);
+            Timestep.reward[0] += reward;
         }
         /// <summary>
         /// Called only inside <b>OnActionReceived()</b>, and <b>OnTriggerXXX()</b> or <b>OnCollisionXXX()</b>. <br></br>
@@ -445,7 +447,7 @@ namespace DeepUnity.ReinforcementLearning
         /// <param name="reward">positive or negative</param>
         public void SetReward(float reward)
         {
-            Timestep.reward[0] = Math.Clamp(reward, -model.clipping, model.clipping);
+            Timestep.reward[0] = reward;
         }
     }
 
@@ -564,11 +566,11 @@ namespace DeepUnity.ReinforcementLearning
                 EditorGUILayout.Space();
 
                 EditorGUILayout.BeginHorizontal();
-                GUILayout.Label("Num Layers", GUILayout.Width(EditorGUIUtility.labelWidth / 1.6f));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("numLayers"), GUIContent.none, GUILayout.Width(25f));
-                GUILayout.Label("Hidden Units", GUILayout.Width(EditorGUIUtility.labelWidth / 1.5f));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("hidUnits"), GUIContent.none, GUILayout.Width(25f));
-                GUILayout.Label("Activation", GUILayout.Width(EditorGUIUtility.labelWidth / 2f));
+                GUILayout.Label("Num Layers", GUILayout.Width(EditorGUIUtility.labelWidth / 1.65f));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("numLayers"), GUIContent.none, GUILayout.Width(20f));
+                GUILayout.Label("Hidden Units", GUILayout.Width(EditorGUIUtility.labelWidth / 1.55f));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("hidUnits"), GUIContent.none, GUILayout.Width(30f));
+                GUILayout.Label("Activation", GUILayout.Width(EditorGUIUtility.labelWidth / 1.9f));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("activation"), GUIContent.none, GUILayout.Width(50f));
                 EditorGUILayout.EndHorizontal();
 

@@ -482,7 +482,7 @@ namespace DeepUnity
             return t;
         }
         /// <summary>
-        /// Returns a tensor of random real numbers drawn from separate uniform distributions whose bounds are given as arguments.
+        /// Returns a tensor of random real numbers drawn from separate uniform distributions whose bounds are given as arguments. (Min inclusive, Max inclusive)
         /// </summary>
         /// <param name="min_max"></param>
         /// <param name="shape"></param>
@@ -497,7 +497,7 @@ namespace DeepUnity
             return t;
         }
         /// <summary>
-        /// Returns a tensor of random integers drawn from separate uniform distributions whose bounds are given as arguments.
+        /// Returns a tensor of random integers drawn from separate uniform distributions whose bounds are given as arguments. (Min inclusive, Max exclusive)
         /// </summary>
         /// <param name="min_max"></param>
         /// <param name="shape"></param>
@@ -526,9 +526,9 @@ namespace DeepUnity
             return t;
         }
         /// <summary>
-        /// Creates a 2-D tensor with ones on the diagonal and zeros elsewhere.
+        /// Creates a 2D tensor with ones on the diagonal and zeros elsewhere.
         /// </summary>
-        /// <param name="n"></param>
+        /// <param name="n">The size of the square matrix</param>
         /// <returns></returns>
         public static Tensor Eye(int n)
         {
@@ -698,6 +698,23 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
+        /// Element-wise modulo operator.
+        /// </summary>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <returns></returns>
+        public static Tensor operator %(Tensor left, int right)
+        {
+            Tensor result = Identity(left);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] %= right;
+            }
+
+            return result;
+        }
+        /// <summary>
         /// Element-wise greater than.
         /// </summary>
         /// <param name="obj1"></param>
@@ -793,7 +810,7 @@ namespace DeepUnity
             toTensor.shape = fromTensor.shape.ToArray();
         }
         /// <summary>
-        /// Computes the matrix product of two tensors. <br></br>
+        /// Computes the matrix product of two tensors. <br></br><br></br>
         /// Left: <b>(J, 1, N, M)</b> <br></br>
         /// Right: <b>(K, M, P)</b> <br></br>
         /// <br></br>
@@ -1093,16 +1110,16 @@ namespace DeepUnity
             }
         }
         /// <summary>
-        /// Performs a batched matrix-matrix product. <br></br>
-        /// Left: <b>(B, N, M)</b> or <b>(N, M)</b> for unbatched<br></br>
-        /// Right: <b>(B, M, P)</b> or <b>(M, P)</b> for unbatched<br></br>
+        /// Performs a batched matrix-matrix product. <br></br><br></br>
+        /// Left: <b>(B, N, M)</b> or <b>(N, M)</b> for unbatched inputs<br></br>
+        /// Right: <b>(B, M, P)</b> or <b>(M, P)</b> for unbatched inputs<br></br>
         /// <br></br>
         /// <em>If device == GPU, the tensors are loaded on VRAM of the GPU, operations are done there, and the result is retrieved back to RAM.</em>
         /// </summary>
         /// <param name="left"></param>
         /// <param name="right"></param>
         /// <param name="device"></param>
-        /// <returns>Output: <b>(B, N, P)</b> or <b>(N, P)</b> for unbatched</returns>
+        /// <returns>Output: <b>(B, N, P)</b> or <b>(N, P)</b> for unbatched inputs</returns>
         public static Tensor BatchedMatMul(Tensor left, Tensor right, Device device = Device.CPU)
         {
             if (left.Width != right.Height)
@@ -1624,34 +1641,6 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
-        /// Computes the norm of the tensor.
-        /// </summary>
-        /// <param name="tensor"></param>
-        /// <param name="norm"></param>
-        /// <param name="eps">Value for stability when computing <see cref="NormType.EuclideanL2"/> norm.</param>
-        /// <returns><see cref="Tensor"/> (1)</returns>
-        /// <exception cref="Exception"></exception>
-        public static Tensor Norm(Tensor tensor, NormType norm = NormType.EuclideanL2, float eps = 1e-12f)
-        {
-            switch (norm)
-            {
-                case NormType.NonZeroL0:
-                    int nonzeros = tensor.Count(x => x != 0);
-                    return Constant(nonzeros);
-                case NormType.ManhattanL1:
-                    float absSum = tensor.data.Sum(x => MathF.Abs(x));
-                    return Constant(absSum);
-                case NormType.EuclideanL2:
-                    float sqrSum = tensor.data.Sum(x => x * x);
-                    return Constant(MathF.Sqrt(sqrSum + eps));
-                case NormType.MaxLInf:
-                    float maxAbs = tensor.data.Max(x => Math.Abs(x));
-                    return Constant(maxAbs);
-                default:
-                    throw new Exception("Unhandled norm type.");
-            }
-        }
-        /// <summary>
         /// Computes the element-wise log probability density/mass function w.r.t the received distribution 
         /// N(<paramref name="mu"/>, <paramref name="sigma"/>) at <paramref name="value"/>.  <br></br>
         /// https://stats.stackexchange.com/questions/404191/what-is-the-log-of-the-pdf-for-a-normal-distribution
@@ -1766,7 +1755,6 @@ namespace DeepUnity
             }
             return y;
         }
-
         #endregion Special
 
 
@@ -1796,12 +1784,78 @@ namespace DeepUnity
             {
                 count *= item;
             }
-            if (count != tensor.Count())
+            if (count != tensor.data.Length)
                 throw new ArgumentException($"The shape ({tensor.shape.ToCommaSeparatedString()}) cannot be reshaped to ({newShape.ToCommaSeparatedString()}).");
 
             // if new shape is broader than the original shape
             Tensor result = new Tensor(newShape);
             Array.Copy(tensor.data, result.data, tensor.data.Length);
+            return result;
+        }
+        /// <summary>
+        /// Permutes the dimensions of the tensor according to the specified order.
+        /// </summary>
+        /// <param name="tensor">The input tensor.</param>
+        /// <param name="axes">The desired ordering of dimensions.</param>
+        /// <returns>A new tensor with permuted dimensions.</returns>
+        /// <exception cref="ArgumentException">Thrown if the number of dimensions does not match or dims contains invalid indices.</exception>
+        public static Tensor Permute(Tensor tensor, params int[] axes)
+        {
+           
+            if (axes.Length != tensor.shape.Length)
+                throw new ArgumentException($"Number of dimensions to permute ({axes.Length}) must match the number of tensor dimensions ({tensor.shape.Length}).");
+
+            for (int i = 0; i < axes.Length; i++)
+            {
+                HandleAxis(tensor, ref axes[i]);
+            }
+
+            // Check if dims contains valid indices
+            bool[] seen = new bool[tensor.shape.Length];
+            for (int i = 0; i < axes.Length; i++)
+            {
+                if (axes[i] < 0 || axes[i] >= tensor.shape.Length || seen[axes[i]])
+                    throw new ArgumentException($"Invalid dimension index in permutation array: {axes[i]}");
+                seen[axes[i]] = true;
+            }
+
+            // Calculate the new shape
+            int[] newShape = new int[tensor.shape.Length];
+            for (int i = 0; i < axes.Length; i++)
+            {
+                newShape[i] = tensor.shape[axes[i]];
+            }
+
+            Tensor result = new Tensor(newShape);
+
+            // put the elem in the result
+            int[] indices = new int[tensor.Shape.Length];
+            for (int i = 0; i < tensor.data.Length; i++)
+            {
+                int flatIndex = i;
+                // Convert the flat index to multidimensional indices
+                for (int dim = tensor.Shape.Length - 1; dim >= 0; dim--)
+                {
+                    indices[dim] = flatIndex % tensor.Shape[dim];
+                    flatIndex /= tensor.Shape[dim];
+                }
+                // Rearrange elements based on permutation
+                int[] permutedIndices = new int[tensor.Shape.Length];
+                for (int dim = 0; dim < axes.Length; dim++)
+                {
+                    permutedIndices[dim] = indices[axes[dim]];
+                }
+                // Convert the permuted indices to flat index for the result tensor
+                int resultIndex = 0;
+                int multiplier = 1;
+                for (int dim = tensor.Shape.Length - 1; dim >= 0; dim--)
+                {
+                    resultIndex += permutedIndices[dim] * multiplier;
+                    multiplier *= result.Shape[dim];
+                }
+                result.data[resultIndex] = tensor.data[i];
+            }
+
             return result;
         }
         /// <summary>
@@ -3733,6 +3787,34 @@ namespace DeepUnity
             return result;
            
         }
+        /// <summary>
+        /// Computes the norm of the tensor.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="norm"></param>
+        /// <param name="eps">Value for stability when computing <see cref="NormType.EuclideanL2"/> norm.</param>
+        /// <returns><see cref="Tensor"/> (1)</returns>
+        /// <exception cref="Exception"></exception>
+        public static Tensor Norm(Tensor tensor, NormType norm = NormType.EuclideanL2, float eps = 1e-12f)
+        {
+            switch (norm)
+            {
+                case NormType.NonZeroL0:
+                    int nonzeros = tensor.Count(x => x != 0);
+                    return Constant(nonzeros);
+                case NormType.ManhattanL1:
+                    float absSum = tensor.data.Sum(x => MathF.Abs(x));
+                    return Constant(absSum);
+                case NormType.EuclideanL2:
+                    float sqrSum = tensor.data.Sum(x => x * x);
+                    return Constant(MathF.Sqrt(sqrSum + eps));
+                case NormType.MaxLInf:
+                    float maxAbs = tensor.data.Max(x => Math.Abs(x));
+                    return Constant(maxAbs);
+                default:
+                    throw new Exception("Unhandled norm type.");
+            }
+        }
         #endregion Statics
 
 
@@ -3744,15 +3826,19 @@ namespace DeepUnity
         }
         public Tensor Reshape(params int[] newShape)
         {
-            return Tensor.Reshape(this, newShape);
+            return Reshape(this, newShape);
+        }
+        public Tensor Permute(params int[] axes)
+        {
+            return Permute(this, axes);
         }
         public Tensor Squeeze(int? axis = null)
         {
-            return Tensor.Squeeze(this, axis);
+            return Squeeze(this, axis);
         }
         public Tensor Unsqueeze(int axis)
         {
-            return Tensor.Unsqueeze(this, axis);
+            return Unsqueeze(this, axis);
         }
         public Tensor Flatten(int startAxis, int endAxis)
         {
@@ -3909,6 +3995,10 @@ namespace DeepUnity
         public Tensor Sech()
         {
             return Sech(this);
+        }
+        public Tensor Norm(NormType norm = NormType.EuclideanL2, float eps = 1E-12f)
+        {
+            return Norm(this, norm, eps);
         }
         #endregion Instance
 

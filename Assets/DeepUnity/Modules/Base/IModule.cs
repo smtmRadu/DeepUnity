@@ -41,6 +41,9 @@ namespace DeepUnity.Modules
         public Flatten flatten = null;
         public Reshape reshape = null;
         public LastSequenceElementModule lastsequenceelementmodule = null;
+        public Squeeze squeeze = null;
+        public Unsqueeze unsqueeze = null;
+        public Permute permute = null;
 
         // Residual
         public ResidualConnection.Fork residualconnectionfork = null;
@@ -79,7 +82,10 @@ namespace DeepUnity.Modules
 
         // Learnable Activations
         public PReLU prelu = null;
-
+        public static IModuleWrapper Wrap(IModule module)
+        {
+            return new IModuleWrapper(module);
+        }
         private IModuleWrapper(IModule module)
         {
             name = module.GetType().Name;
@@ -260,14 +266,23 @@ namespace DeepUnity.Modules
             {
                 densegpu = denseGPUModule;
             }
+            else if (module is Squeeze squeezeModule)
+            {
+                squeeze = squeezeModule;
+            }
+            else if (module is Unsqueeze unsqueezeModule)
+            {
+                unsqueeze = unsqueezeModule;
+            }
+            else if (module is Permute permuteModule)
+            {
+                permute = permuteModule;
+            }
             else
                 throw new Exception($"Unhandled module type while wrapping ({module.GetType().Name}).");
         }
 
-        public static IModuleWrapper Wrap(IModule module)
-        {
-            return new IModuleWrapper(module);
-        }
+   
         public static IModule Unwrap(IModuleWrapper moduleWrapper)
         {
             IModule module = null;
@@ -447,6 +462,18 @@ namespace DeepUnity.Modules
             else if (typeof(DenseGPU).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.densegpu;
+            }
+            else if (typeof(Squeeze).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.squeeze;
+            }
+            else if (typeof(Unsqueeze).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.unsqueeze;
+            }
+            else if (typeof(Permute).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.permute;
             }
             else
                 throw new Exception($"Unhandled module type while unwrapping ({moduleWrapper.name}).");

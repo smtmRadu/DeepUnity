@@ -1,12 +1,9 @@
 using System;
 using System.Linq;
 using UnityEngine;
-using DeepUnity.Activations;
-using System.Collections.Generic;
 
 namespace DeepUnity.Modules
 {
-    // I HAVE TO MAKE THIS SERIALIZABLE IN THE FUTURE (just remove attention heads and make them from scratch pfah..)
     /// <summary>
     /// <b>Applied a Self Scaled Dot-Product Attention with multiple heads.</b> <br></br>
     /// Input: <b>(B, L, H)</b> or <b>(L, H)</b> for unbatched input. <br></br>
@@ -30,6 +27,19 @@ namespace DeepUnity.Modules
                     }
                     W_O.Device = value;
                 } 
+        }
+        [SerializeField]
+        public bool RequiresGrad
+        {
+            get => W_O.RequiresGrad;
+            set
+            {
+                for (int i = 0; i < attention_heads.Length; i++)
+                {
+                    attention_heads[i].RequiresGrad = value;
+                }
+                W_O.RequiresGrad = value;
+            }
         }
         [SerializeField] private Attention[] attention_heads;
         [SerializeField] private Dense W_O;
@@ -123,6 +133,8 @@ namespace DeepUnity.Modules
         public object Clone()
         {
             var matt = new MultiheadAttention();
+            matt.Device = Device;
+            matt.RequiresGrad = RequiresGrad;
             matt.attention_heads = attention_heads.Select(x => x.Clone() as Attention).ToArray();
             matt.Device = Device;
             matt.W_O = W_O.Clone() as Dense;

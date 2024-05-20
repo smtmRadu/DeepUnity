@@ -49,7 +49,17 @@ namespace DeepUnity.Modules
 
         public Tensor Predict(Tensor input)
         {
-            return Forward(input);
+            bool isBatched = !input.Shape.SequenceEqual(inputShape);
+
+            if (isBatched)
+            {
+                int[] batch_size = new int[] { input.Size(0) };
+                return Tensor.Reshape(input, batch_size.Concat(outputShape).ToArray());
+            }
+            else
+            {
+                return Tensor.Reshape(input, outputShape);
+            }
         }
         public Tensor Forward(Tensor input)
         {

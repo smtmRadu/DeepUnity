@@ -17,10 +17,11 @@ namespace DeepUnity.Tutorials
         [SerializeField] new string name = "MNIST_MODEL";
         [SerializeField] private float lr = 0.0001f;
         [SerializeField] private int epochs = 100;
-        [SerializeField] private float weightDecay = 0.001f;
+        [SerializeField] private float weightDecay = 0.01f;
         [SerializeField] private int batch_size = 64;
         [SerializeField] private bool augment_data = false;
         [SerializeField] private float augment_strength = 1f;
+        [SerializeField] private float maxNorm = 0.5f;
         [SerializeField] private PerformanceGraph accuracyGraph;
         [SerializeField] private PerformanceGraph lossGraph;
         Optimizer optim;
@@ -32,37 +33,58 @@ namespace DeepUnity.Tutorials
 
         public void Start()
         {
-            Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out train, out _, DatasetSettings.LoadTrainOnly);
-            Debug.Log("MNIST Dataset loaded.");
+
 
             if (network == null)
             {
                 network = new Sequential(
-                         new Conv2D(1, 64, 3),
+
+                         new Conv2D(1, 4, 3),
+                         new ReLU(),
+                         new MaxPool2D(2),
+                         
+                         new Conv2D(4, 8, 3),
+                         new ReLU(),
+                         new MaxPool2D(2),
+                        
+
+                         // Block ===============================================================
+                         new Reshape(new int[] {8, 5, 5}, new int[] { 8, 25 }),
+                         new Permute(-1, -2),
+                         new ResidualConnection.Fork(),
+                         new Attention(8, 8),
+                         new ResidualConnection.Join(),
+                         new Reshape(new int[] {25, 8}, new int[] {200}),
+                         new RMSNorm(),
 
                          new ResidualConnection.Fork(),
-                         new ZeroPad2D(1),
-                         new Conv2D(64, 64, 3),
-                         new ZeroPad2D(1),
-                         new Conv2D(64, 16, 3), // bottle neck
-                         new ZeroPad2D(1),
-                         new Conv2D(16, 64, 3),
-                         new ResidualConnection.Join(),
-
-                         new Flatten(),
-                         new LazyDense(64),
-                         new LayerNorm(),
+                         new Dense(200, 200),
+                         new RMSNorm(),
                          new PReLU(),
-                         new Dense(64, 10),
+                         // new Dropout(0.1f),
+                         new ResidualConnection.Join(),
+                         
+                         // Block ================================================================
+
+                         new Dense(200, 200),                
+                         new RMSNorm(),
+                         new PReLU(),                        
+                         new Dense(200, 10),
 
                          new Softmax()).CreateAsset(name);
             }
 
+            network.Device = Device.GPU;
+
             print(network.Predict(Tensor.Random01(1, 28, 28)));
 
-            network.Device = Device.GPU;
-            optim = new Adam(network.Parameters(), lr: lr, weightDecay: weightDecay, amsgrad: true);
-            scheduler = new LinearLR(optim, epochs: epochs);
+
+            Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out train, out _, DatasetSettings.LoadTrainOnly);
+            Debug.Log("MNIST Dataset loaded.");
+
+           
+            optim = new AdamW(network.Parameters(), lr: lr, weightDecay: weightDecay, amsgrad: true);
+            scheduler = new LinearLR(optim, total_iters: epochs);
             accuracyGraph = new PerformanceGraph();
             lossGraph = new PerformanceGraph();
             Utils.Shuffle(train);
@@ -107,7 +129,7 @@ namespace DeepUnity.Tutorials
 
             optim.ZeroGrad();
             network.Backward(loss.Gradient);
-            optim.ClipGradNorm(0.5f);
+            optim.ClipGradNorm(maxNorm);
             optim.Step();
 
             float acc = Metrics.Accuracy(prediction, target);

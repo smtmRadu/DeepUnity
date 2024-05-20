@@ -20,6 +20,10 @@ namespace DeepUnity.Models
         /// </summary>
         [SerializeField] public abstract Device Device { set; }
 
+        /// <summary>
+        /// Freezes/Unfreezes all the <see cref="ILearnable"/> modules of this model.
+        /// </summary>
+        [SerializeField] public abstract bool RequiresGrad { set; }
 
         /// <summary>
         /// Forwards the input without caching it on the layers.

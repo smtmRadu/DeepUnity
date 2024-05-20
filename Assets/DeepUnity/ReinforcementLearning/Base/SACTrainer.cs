@@ -27,11 +27,6 @@ namespace DeepUnity.ReinforcementLearning
         public Optimizer optim_mu { get; set; }
         public Optimizer optim_sigma { get; set; }
 
-        public LRScheduler scheduler_q1 { get; set; }
-        public LRScheduler scheduler_q2 { get; set; }
-        public LRScheduler scheduler_mu { get; set; }
-        public LRScheduler scheduler_sigma { get; set; }
-
 
 
         protected override void Initialize()
@@ -48,10 +43,10 @@ namespace DeepUnity.ReinforcementLearning
             optim_sigma = new Adam(model.sigmaNetwork.Parameters(), hp.actorLearningRate);
 
             // Init schedulers
-            scheduler_q1 = new LinearLR(optim_q1, start_factor: 1f, end_factor: 0f, epochs: (int)model.config.maxSteps);
-            scheduler_q2 = new LinearLR(optim_q2, start_factor: 1f, end_factor: 0f, epochs: (int)model.config.maxSteps);
-            scheduler_mu = new LinearLR(optim_mu, start_factor: 1f, end_factor: 0f, epochs: (int)model.config.maxSteps);
-            scheduler_sigma = new LinearLR(optim_sigma, start_factor: 1f, end_factor: 0f, epochs: (int)model.config.maxSteps);
+            optim_q1.Scheduler = new LinearLR(optim_q1, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
+            optim_q2.Scheduler = new LinearLR(optim_q2, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
+            optim_mu.Scheduler = new LinearLR(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
+            optim_sigma.Scheduler = new LinearLR(optim_sigma, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
 
             // Init target networks
             Qtarg1 = model.q1Network.Clone() as Sequential;
@@ -106,9 +101,9 @@ namespace DeepUnity.ReinforcementLearning
                     actorLoss = 0;
                     criticLoss = 0;
 
-                    updateClock = Stopwatch.StartNew();
+                    updateBenchmarkClock = Stopwatch.StartNew();
                     Train();
-                    updateClock.Stop();
+                    updateBenchmarkClock.Stop();
 
                     updateIterations++;
                     actorLoss /= hp.updatesNum;
@@ -141,10 +136,10 @@ namespace DeepUnity.ReinforcementLearning
 
                 if (hp.LRSchedule)
                 {
-                    scheduler_q1.Step();
-                    scheduler_q2.Step();
-                    scheduler_mu.Step();
-                    scheduler_sigma.Step();
+                    optim_q1.Scheduler.Step();
+                    optim_q2.Scheduler.Step();
+                    optim_mu.Scheduler.Step();
+                    optim_sigma.Scheduler.Step();
                 }
             }
         }

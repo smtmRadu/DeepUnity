@@ -7,6 +7,7 @@ namespace DeepUnity.Tutorials
     // Usually, using a 2048 buffer size and x20 it must learn in 1.5 minutes
     public class BalanceBall : Agent
     {
+        [Button("SetDefaultHP")]
         [SerializeField] Rigidbody ball;
         [SerializeField] const float rotationSpeed = 1f;
         // [SerializeField] private CameraSensor camsens;
@@ -54,6 +55,17 @@ namespace DeepUnity.Tutorials
 
             actionBuffer.ContinuousActions[0] = xRot;
             actionBuffer.ContinuousActions[1] = zRot;
+        }
+
+        // This exist because balance ball is the best env for testing out.
+        public void SetDefaultHP()
+        {
+            model.config.batchSize = 128;
+            model.config.bufferSize = 2048;
+            model.standardDeviationValue = 2;
+            model.config.timescale = 40;
+
+            print("Config changed for Balance ball");
         }
     }
 

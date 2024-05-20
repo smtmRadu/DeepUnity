@@ -9,6 +9,8 @@ namespace DeepUnity.Modules
     public class DenseGPU : ILearnable, IModule
     {
         [SerializeField] public Device Device { get => Device.GPU; set { } }
+        [SerializeField] public bool RequiresGrad { get; set; } = true;
+
         private TensorGPU gpu_InputCache { get; set; } = null;
         private bool UseBias { get => bias != null; }
 
@@ -167,42 +169,50 @@ namespace DeepUnity.Modules
                 // return inputGrad;
             }
 
-            bool isBatched = loss.Rank == 2;
-            int batch_size = isBatched ? loss.Size(-2) : 1;
-            int H_in = weight.Size(1);
-            int H_out = weight.Size(0);
-
-            // dLoss w.r.t theta
             ComputeShader cs = DeepUnityMeta.DenseCS;
-
             TensorGPU gpu_loss = TensorGPU.Identity(loss);
             cs.SetBuffer(1, "loss", gpu_loss.data);
 
-            cs.SetBuffer(1, "input", gpu_InputCache.data);
-
-            cs.SetBuffer(1, "gamma_grad", weightGrad.data);
-
-            ComputeBuffer biasGradBuff = null;
-            if(UseBias)
+            if (RequiresGrad)
             {
-                cs.SetBuffer(1, "beta_grad", biasGrad.data);
-            }
-            else
-            {
-                biasGradBuff = new ComputeBuffer(H_out, 4);
-                biasGradBuff.SetData(new float[H_out]);
-                cs.SetBuffer(1, "beta_grad", biasGradBuff);
-            }
-                    
+                bool isBatched = loss.Rank == 2;
+                int batch_size = isBatched ? loss.Size(-2) : 1;
+                int H_in = weight.Size(1);
+                int H_out = weight.Size(0);
 
-            cs.SetInt("batch_size", batch_size);
-            cs.SetInt("in_features", H_in);
-            cs.SetInt("out_features", H_out);
+                // dLoss w.r.t theta
+                         
+                cs.SetBuffer(1, "input", gpu_InputCache.data);
 
-            cs.Dispatch(1,
-                (H_in + 31) / 32,
-                (H_out + 31) / 32,
-                1);
+                cs.SetBuffer(1, "gamma_grad", weightGrad.data);
+
+                ComputeBuffer biasGradBuff = null;
+                if (UseBias)
+                {
+                    cs.SetBuffer(1, "beta_grad", biasGrad.data);
+                }
+                else
+                {
+                    biasGradBuff = new ComputeBuffer(H_out, 4);
+                    biasGradBuff.SetData(new float[H_out]);
+                    cs.SetBuffer(1, "beta_grad", biasGradBuff);
+                }
+
+
+                cs.SetInt("batch_size", batch_size);
+                cs.SetInt("in_features", H_in);
+                cs.SetInt("out_features", H_out);
+
+                cs.Dispatch(1,
+                    (H_in + 31) / 32,
+                    (H_out + 31) / 32,
+                    1);
+
+              
+                if (biasGradBuff != null)
+                    biasGradBuff.Dispose();
+            }
+            
 
             TensorGPU gpu_inputGrad = TensorGPU.MatMul(gpu_loss, weight);
             Tensor inputGradOnCPU = Tensor.Identity(gpu_inputGrad);
@@ -210,8 +220,7 @@ namespace DeepUnity.Modules
             gpu_inputGrad.Dispose();
             gpu_loss.Dispose();
             gpu_InputCache.Dispose();
-            if(biasGradBuff != null)
-                biasGradBuff.Dispose(); 
+           
             return inputGradOnCPU;
         }
 
@@ -227,6 +236,9 @@ namespace DeepUnity.Modules
         public object Clone()
         {
             var dense = new DenseGPU();
+
+            dense.Device = Device;
+            dense.RequiresGrad = RequiresGrad;
             dense.weight = (TensorGPU)weight.Clone();
             dense.weightGrad = (TensorGPU)weightGrad.Clone();
 

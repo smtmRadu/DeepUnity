@@ -28,7 +28,7 @@ namespace DeepUnity.Modules
     public class Attention : ILearnable, IModule
     {
         [SerializeField] public Device Device { get; set; } = Device.CPU;
-
+        [SerializeField] public bool RequiresGrad { get; set; } = true;
         [SerializeField] private int d;
         [SerializeField] private bool mask;
 
@@ -88,7 +88,7 @@ namespace DeepUnity.Modules
         {
             if (input.Size(-1) != W_Q.Size(0))
             {
-                throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the Dense Layer features_num ({W_Q.Size(0)}).");
+                throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the Attention input_size ({W_Q.Size(0)}).");
             }
             if (input.Rank != 3 && input.Rank != 2)
             {
@@ -100,6 +100,16 @@ namespace DeepUnity.Modules
 
             Tensor[] batch_elem = isBatched ? input.Split(0, 1) : new Tensor[] { input };
             Tensor[] SDPA = new Tensor[batch_size];
+
+            // if(Q == null)
+            // {
+            //     Q = new();
+            //     K = new();
+            //     V = new();
+            //     SoftmaxCache = new();
+            //     PostSoftmaxCache = new();
+            //     InputCache = new();
+            // }
             Q.Clear(); K.Clear(); V.Clear(); SoftmaxCache.Clear(); PostSoftmaxCache.Clear(); /// on simple predict there is no need for continuous forward caching.. so that's it
             for (int i = 0; i < batch_size; i++)
             {
@@ -146,10 +156,15 @@ namespace DeepUnity.Modules
                 Tensor kGrad = Tensor.MatMul(QK_T_grad, Q.Pop(), Device);
 
                 Tensor x = InputCache.Pop(); // x = (L, H), vGrad = (L, D)
-                Tensor xT = x.Transpose(0, 1);
-                W_V_grad += Tensor.MatMul(xT, vGrad, Device) / batch_size;
-                W_Q_grad += Tensor.MatMul(xT, qGrad, Device) / batch_size;
-                W_K_grad += Tensor.MatMul(xT, kGrad, Device) / batch_size;
+
+                if(RequiresGrad)
+                {
+                    Tensor xT = x.Transpose(0, 1);
+                    W_V_grad += Tensor.MatMul(xT, vGrad, Device) / batch_size;
+                    W_Q_grad += Tensor.MatMul(xT, qGrad, Device) / batch_size;
+                    W_K_grad += Tensor.MatMul(xT, kGrad, Device) / batch_size;
+                }
+                
 
                 input_grad[i] = Tensor.Zeros(x.Size(-2), x.Size(-1));
                 input_grad[i] += Tensor.MatMul(vGrad, W_V.Transpose(0, 1), Device); // (L, D) * (H, D)
@@ -169,6 +184,7 @@ namespace DeepUnity.Modules
 
             att.d = d;
             att.Device = Device;
+            att.RequiresGrad = RequiresGrad;
             att.W_Q = (Tensor)W_Q.Clone();
             att.W_K = (Tensor)W_K.Clone();
             att.W_V = (Tensor)W_V.Clone();
@@ -196,15 +212,17 @@ namespace DeepUnity.Modules
             return new Parameter[] { q, k, v };
         }
 
-        public virtual void OnBeforeSerialize()
+        public void OnBeforeSerialize()
         {
 
         }
-        public virtual void OnAfterDeserialize()
+        public void OnAfterDeserialize()
         {
             // This function is actually having 2 workers on serialization.
             // If shape int[] was not deserialized, we need to break this worker.
             // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
+           
+           
 
             if (W_Q.Shape == null)
                 return;
@@ -217,13 +235,14 @@ namespace DeepUnity.Modules
             W_K_grad = Tensor.Zeros(W_K.Shape);
             W_V_grad = Tensor.Zeros(W_V.Shape);
 
-
+            // Inited on Predict
             Q = new();
             K = new();
             V = new();
             SoftmaxCache = new();
             PostSoftmaxCache = new();
             InputCache = new();
+
         }
 
         /// <summary>
@@ -259,7 +278,15 @@ namespace DeepUnity.Modules
                 W_V.Device = value;
             }
         }
-
+        [SerializeField] public bool RequiresGrad
+        {
+            get => W_Q.RequiresGrad; set
+            {
+                W_Q.RequiresGrad = value;
+                W_K.RequiresGrad = value;
+                W_V.RequiresGrad = value;
+            }
+        }
         [SerializeField] private int d;
         [SerializeField] private bool mask;
 
@@ -337,6 +364,8 @@ namespace DeepUnity.Modules
         public object Clone()
         {
             var att = new AttentionV2();
+            att.Device = Device;
+            att.RequiresGrad = RequiresGrad;
             att.d = this.d;
             att.mask = this.mask;
             att.Device = this.Device;

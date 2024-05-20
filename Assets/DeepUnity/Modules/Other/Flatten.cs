@@ -42,6 +42,7 @@ namespace DeepUnity.Modules
             this.endAxis = endAxis;
         }
         /// <summary>
+        /// <b>Flatten2D</b><br></br><br></br>
         /// Input: <b>(B, C, H, W)</b> or <b>(C, H, W)</b> for unbatched input.<br></br>
         /// Output: <b>(B, F)</b> or <b>(F)</b> for unbatched input.<br></br>
         /// where <br>

@@ -25,7 +25,7 @@ namespace DeepUnity.Modules
     {
         // https://arxiv.org/pdf/1502.03167.pdf
         [SerializeField] public Device Device { get; set; } = Device.CPU;
-
+        [SerializeField] public bool RequiresGrad { get; set; } = true;
         private Tensor xCentered { get; set; }
         private Tensor std { get; set; }
         private Tensor xHat { get; set; }
@@ -238,12 +238,15 @@ namespace DeepUnity.Modules
 
             var dLdX = dLdxHat * 1f / std + dLdVarB * 2f * xCentered / m + dLdMuB * (1f / m);
 
+            if(RequiresGrad)
+            {
+                var dLdGamma = Tensor.Sum(dLdY * xHat, 0).Mean(-1).Mean(-1);
+                var dLdBeta = Tensor.Sum(dLdY, 0).Mean(-1).Mean(-1);
 
-            var dLdGamma = Tensor.Sum(dLdY * xHat, 0).Mean(-1).Mean(-1);
-            var dLdBeta = Tensor.Sum(dLdY, 0).Mean(-1).Mean(-1);
-
-            Tensor.CopyTo(gammaGrad + dLdGamma, gammaGrad);
-            Tensor.CopyTo(betaGrad + dLdBeta, betaGrad);
+                Tensor.CopyTo(gammaGrad + dLdGamma, gammaGrad);
+                Tensor.CopyTo(betaGrad + dLdBeta, betaGrad);
+            }
+           
 
             return dLdX;
         }
@@ -251,6 +254,8 @@ namespace DeepUnity.Modules
         public object Clone()
         {
             BatchNorm2D bnclone = new BatchNorm2D(num_features, momentum);
+            bnclone.Device = Device;
+            bnclone.RequiresGrad = RequiresGrad;
             bnclone.gamma = (Tensor)gamma.Clone();
             bnclone.beta = (Tensor)beta.Clone();
             bnclone.gammaGrad = (Tensor)gammaGrad.Clone();

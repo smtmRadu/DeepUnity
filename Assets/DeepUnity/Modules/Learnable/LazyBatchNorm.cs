@@ -25,7 +25,7 @@ namespace DeepUnity.Modules
     {
         // https://arxiv.org/pdf/1502.03167.pdf
         [SerializeField] public Device Device { get; set; } = Device.CPU;
-
+        [SerializeField] public bool RequiresGrad { get; set; } = true;
         private Tensor xCentered { get; set; }
         private Tensor std { get; set; }
         private Tensor xHat { get; set; }
@@ -174,12 +174,15 @@ namespace DeepUnity.Modules
 
             var dLdX = dLdxHat * 1f / std + dLdVarB * 2f * xCentered / m + dLdMuB * (1f / m);
 
+            if(RequiresGrad)
+            {
+                var dLdGamma = Tensor.Sum(dLdY * xHat, 0);
+                var dLdBeta = Tensor.Sum(dLdY, 0);
 
-            var dLdGamma = Tensor.Sum(dLdY * xHat, 0);
-            var dLdBeta = Tensor.Sum(dLdY, 0);
-
-            Tensor.CopyTo(gammaGrad + dLdGamma, gammaGrad);
-            Tensor.CopyTo(betaGrad + dLdBeta, betaGrad);
+                Tensor.CopyTo(gammaGrad + dLdGamma, gammaGrad);
+                Tensor.CopyTo(betaGrad + dLdBeta, betaGrad);
+            }
+           
 
             return dLdX;
         }
@@ -187,6 +190,8 @@ namespace DeepUnity.Modules
         public object Clone()
         {
             LazyBatchNorm bnclone = new LazyBatchNorm(momentum);
+            bnclone.Device = Device;
+            bnclone.RequiresGrad = RequiresGrad;
             bnclone.num_features = num_features;
             bnclone.gamma = (Tensor)gamma.Clone();
             bnclone.beta = (Tensor)beta.Clone();

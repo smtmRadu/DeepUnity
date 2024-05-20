@@ -29,7 +29,7 @@ namespace DeepUnity.ReinforcementLearning
         [ViewOnly] public Hyperparameters hp;
         [ViewOnly] public AgentBehaviour model;
         [ViewOnly] public ExperienceBuffer train_data;
-        [ViewOnly] public Stopwatch updateClock;
+        [ViewOnly] public Stopwatch updateBenchmarkClock;
         [ViewOnly] public int currentSteps = 0;
         [ViewOnly] public int updateIterations;
         [ViewOnly] public float actorLoss;
@@ -127,9 +127,9 @@ namespace DeepUnity.ReinforcementLearning
             avgDeltaTime = avgDeltaTime * avgDeltaTimeMomentum + Time.deltaTime * (1f - avgDeltaTimeMomentum);
 
             if (hp.trainer == TrainerType.PPO)
-                _runtimeStatsText = $"[No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {MemoriesCount}/{hp.bufferSize} ({(MemoriesCount * 100f / hp.bufferSize).ToString("0.00")}%)]";
+                _runtimeStatsText = $"[Trainer: {hp.trainer} | No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {MemoriesCount}/{hp.bufferSize} ({(MemoriesCount * 100f / hp.bufferSize).ToString("0.00")}%)]";
             else if (hp.trainer == TrainerType.SAC || hp.trainer == TrainerType.TD3 || hp.trainer == TrainerType.DDPG)
-                _runtimeStatsText = $"[No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {train_data.Count}/{hp.replayBufferSize} ({(train_data.Count * 100f / hp.replayBufferSize).ToString("0.00")}%)]";
+                _runtimeStatsText = $"[Trainer: {hp.trainer} | No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {train_data.Count}/{hp.replayBufferSize} ({(train_data.Count * 100f / hp.replayBufferSize).ToString("0.00")}%)]";
             else
                 throw new NotImplementedException("Unhandled trainer type");
         }

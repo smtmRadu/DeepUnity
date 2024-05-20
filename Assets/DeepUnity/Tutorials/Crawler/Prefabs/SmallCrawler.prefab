@@ -899,7 +899,7 @@ Transform:
   m_GameObject: {fileID: 2519311571852862977}
   m_LocalRotation: {x: 0, y: -0.7071068, z: 0, w: 0.7071068}
   m_LocalPosition: {x: -1.815, y: 1.1500001, z: 0.158}
-  m_LocalScale: {x: 0.15, y: 0.15, z: 0.15}
+  m_LocalScale: {x: 0.15000004, y: 0.15, z: 0.15000004}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 3473523354815407894}
@@ -909,7 +909,7 @@ Transform:
   - {fileID: 1915108165416795875}
   - {fileID: 7885751841752895986}
   m_Father: {fileID: 0}
-  m_RootOrder: -1
+  m_RootOrder: 4
   m_LocalEulerAnglesHint: {x: 0, y: -90, z: 0}
 --- !u!33 &4459965553798221067
 MeshFilter:
@@ -1046,11 +1046,11 @@ MonoBehaviour:
   archType: 0
   numLayers: 2
   hidUnits: 140
+  activation: 0
   model: {fileID: 11400000, guid: 77d6e946a1c377a4a8b7b650d3fcab87, type: 2}
   behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 1
-  bonus: {fileID: 0}
   thigh1: {fileID: 994822349332562719}
   thigh2: {fileID: 2308824198987942518}
   thigh3: {fileID: 7512835370030054029}
@@ -1145,16 +1145,6 @@ MonoBehaviour:
     current: 0
     mean: 0
   entropy:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  learningRate:
     graph:
       serializedVersion: 2
       m_Curve: []

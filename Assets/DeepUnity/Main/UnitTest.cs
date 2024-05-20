@@ -3,6 +3,7 @@ using DeepUnity.Models;
 using System.Collections.Generic;
 using UnityEngine.UI;
 using DeepUnity.Optimizers;
+using DeepUnity.Modules;
 
 
 namespace DeepUnity.Tutorials
@@ -17,20 +18,10 @@ namespace DeepUnity.Tutorials
         private List<RawImage> displays;
         public PerformanceGraph performanceGraph = new PerformanceGraph();  
 
-        private void Update()
-        {
-
-
-        }
         private void Start()
         {
-            Tensor a = Tensor.Random01(10, 5);
-            Tensor b = Tensor.Random01(5);
 
-            print(Tensor.MatMul(a, b));
-
-            print(a);
-            print(a.Unsqueeze(0).T());
+            
             // Tensor a = Tensor.Random01(2, 3, 4);
             // 
             // print(a);

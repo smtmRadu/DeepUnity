@@ -67,7 +67,6 @@ namespace DeepUnity
 
             System.GC.Collect();
         }
-
         private static void SerializeMNIST()
         {
             Benckmark.Start();

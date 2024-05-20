@@ -24,11 +24,6 @@ namespace DeepUnity.ReinforcementLearning
         public Optimizer optim_sigma { get; set; }
         public Optimizer optim_discrete { get; set; }
 
-        public LRScheduler scheduler_v { get; set; }
-        public LRScheduler scheduler_mu { get; set; }
-        public LRScheduler scheduler_sigma { get; set; }
-        public LRScheduler scheduler_discrete { get; set; }
-
         protected override void Initialize()
         {    
             // MEAN Tanh module is removed in PPO
@@ -36,38 +31,28 @@ namespace DeepUnity.ReinforcementLearning
                 model.muNetwork.Modules = model.muNetwork.Modules.Take(model.muNetwork.Modules.Length - 1).ToArray();
 
 
-            // Initialize Optimizers
+            // Initialize Optimizers & Schedulers
+            int total_epochs = (int)hp.maxSteps / hp.bufferSize * hp.numEpoch; // THIS IS FOR PPO, but for now i will let it for SAC as well
             const float epsilon = 1e-5F; // PPO openAI eps they use :D, but in Andrychowicz, et al. (2021) they use tf default 1e-7
             const float vNetL2Regularization = 0.0F;
             optim_v = new Adam(model.vNetwork.Parameters(), hp.criticLearningRate, eps: epsilon, weightDecay: vNetL2Regularization);
+            optim_v.Scheduler = new LinearLR(optim_v, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
 
             if (model.IsUsingContinuousActions)
             {
                 optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon);
+                optim_mu.Scheduler = new LinearLR(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+
                 optim_sigma = new Adam(model.sigmaNetwork.Parameters(), hp.actorLearningRate, eps: epsilon);
+                optim_sigma.Scheduler = new LinearLR(optim_sigma, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
             }
 
             if (model.IsUsingDiscreteActions)
             {
                 optim_discrete = new Adam(model.discreteNetwork.Parameters(), hp.actorLearningRate, eps: epsilon);
+                optim_discrete.Scheduler = new LinearLR(optim_discrete, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
             }
 
-            // Initialize schedulers
-            int total_epochs = (int)hp.maxSteps / hp.bufferSize * hp.numEpoch; // THIS IS FOR PPO, but for now i will let it for SAC as well
-            
-            scheduler_v = new LinearLR(optim_v, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
-
-            if (model.IsUsingContinuousActions)
-            {
-                scheduler_mu = new LinearLR(optim_mu, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
-                scheduler_sigma = new LinearLR(optim_sigma, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
-            }
-
-            if (model.IsUsingDiscreteActions)
-            {
-                scheduler_discrete = new LinearLR(optim_discrete, start_factor: 1f, end_factor: 0f, epochs: total_epochs);
-            }
-      
 
             // Initialize inference device
             if (model.muNetwork != null)
@@ -79,11 +64,9 @@ namespace DeepUnity.ReinforcementLearning
             if (model.discreteNetwork != null)
                 model.discreteNetwork.Device = model.inferenceDevice;
 
-            if (model.stochasticity != Stochasticity.FixedStandardDeviation || model.stochasticity != Stochasticity.TrainebleStandardDeviation)
-            {
-                ConsoleMessage.Info("Behaviour's stochasticity is now given by fixed standard deviation.");
+            if (model.stochasticity != Stochasticity.FixedStandardDeviation || model.stochasticity != Stochasticity.TrainebleStandardDeviation)           
                 model.stochasticity = Stochasticity.FixedStandardDeviation;
-            }
+            
         }
         protected override void OnBeforeFixedUpdate()
         {
@@ -105,9 +88,9 @@ namespace DeepUnity.ReinforcementLearning
                 actorLoss = 0;
                 criticLoss = 0;
 
-                updateClock = Stopwatch.StartNew();       
+                updateBenchmarkClock = Stopwatch.StartNew();       
                 Train();
-                updateClock.Stop();
+                updateBenchmarkClock.Stop();
 
                 updateIterations++;
                 actorLoss = actorLoss / (hp.bufferSize / hp.batchSize * hp.numEpoch);
@@ -212,10 +195,10 @@ namespace DeepUnity.ReinforcementLearning
                 // Step LR schedulers after each epoch (this allows selection at runtime)
                 if (hp.LRSchedule)
                 {
-                    scheduler_v.Step();
-                    scheduler_mu?.Step();
-                    scheduler_sigma?.Step();
-                    scheduler_discrete?.Step();
+                    optim_v.Scheduler.Step();
+                    optim_mu?.Scheduler.Step();
+                    optim_sigma?.Scheduler.Step();
+                    optim_discrete?.Scheduler.Step();
                 }
             }
 

@@ -5,11 +5,14 @@ using Unity.VisualScripting;
 namespace DeepUnity
 {
     /// <summary>
-    /// A tool for computing a loss function for predictions and targets. There are 3 properties: <br></br>
-    /// <b>Item</b>: Returns the mean of all loss values in the tensor. <br></br>
+    /// A tool for computing a loss function for predictions and targets. There are 3 properties: <br></br> <br></br>
+    /// <b>Item</b>: Returns the mean of all loss values in the tensor. (scalar) <br></br>
     /// <b>Value</b>: Returns the loss <see cref="Tensor"/> applied element-wisely over predictions and targets.<br></br>
-    /// <b>Derivative</b>: Returns the derivative of the loss function <see cref="Tensor"/> applied element-wisely over predictions and targets. 
+    /// <b>Gradient</b>: Returns the derivative of the loss function <see cref="Tensor"/> applied element-wisely over predictions and targets. 
     /// <b>Used for backpropagation.</b>
+    /// 
+    /// <br></br><br></br>
+    /// <i>Note: The Loss reduction is always <b>mean</b> (layers compute the mean gradients)</i>
     /// </summary>
     public class Loss
     {
@@ -47,7 +50,7 @@ namespace DeepUnity
         /// </summary>
         public static Loss RMSE(Tensor predicts, Tensor targets) => new Loss(LossType.RMSE, predicts, targets);
         /// <summary>
-        /// Cross Entropy loss. <br></br>
+        /// Cross Entropy loss. (note: the predicts must be probabilities) <br></br>
         /// Predicts: (B, *) or (*) for unbatched input <br></br>
         /// Targets: (B, *) or (*) for unbatched input <br></br>
         /// where * = input Shape
@@ -68,7 +71,7 @@ namespace DeepUnity
         /// </summary>
         public static Loss BCE(Tensor predicts, Tensor targets) => new Loss(LossType.BCE, predicts, targets);
         /// <summary>
-        /// Hullback-Liebler Divergence loss. <br></br>
+        /// Kullback-Liebler Divergence loss. <br></br>
         /// Predicts: (B, *) or (*) for unbatched input <br></br>
         /// Targets: (B, *) or (*) for unbatched input <br></br>
         /// where * = input Shape

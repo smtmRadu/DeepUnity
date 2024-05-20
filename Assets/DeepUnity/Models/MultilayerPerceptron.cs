@@ -120,6 +120,19 @@ namespace DeepUnity.Models
             }
         }
         /// <summary>
+        /// Freezes/Unfreezes all <see cref="ILearnable"/> modules.
+        /// </summary>
+        public override bool RequiresGrad
+        {
+            set
+            {
+                foreach (var item in modules.OfType<ILearnable>())
+                {
+                    item.RequiresGrad = value;
+                }
+            }
+        }
+        /// <summary>
         /// Gives a brief summary of the model.
         /// </summary>
         /// <returns></returns>

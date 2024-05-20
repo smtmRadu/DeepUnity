@@ -15,24 +15,25 @@ namespace DeepUnity.ReinforcementLearning
 
         public Optimizer optim_q1 { get; set; }
         public Optimizer optim_mu { get; set; }
-        public LRScheduler scheduler_q1 { get; set; }
-        public LRScheduler scheduler_mu { get; set; }
 
         private int new_experiences_collected = 0;
 
         protected override void Initialize()
         {
             if (model.muNetwork.Modules.Last().GetType() != typeof(Tanh))
+            {
                 model.muNetwork.Modules = model.muNetwork.Modules.Concat(new IModule[] { new Tanh() }).ToArray();
+                model.Save();
+            }
+               
 
             // Initialize optimizers
-            const float qNetL2Reg = 0.0F;
-            optim_q1 = new Adam(model.q1Network.Parameters(), hp.criticLearningRate, weightDecay: qNetL2Reg);
+            optim_q1 = new Adam(model.q1Network.Parameters(), hp.criticLearningRate, weightDecay: 0.0F);
             optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate);
 
             // Initialize schedulers
-            scheduler_q1 = new LinearLR(optim_q1, start_factor: 1f, end_factor: 0f, epochs: (int)hp.maxSteps * hp.updatesNum / hp.updateInterval);
-            scheduler_mu = new LinearLR(optim_mu, start_factor: 1f, end_factor: 0f, epochs: (int)hp.maxSteps * hp.updatesNum / hp.updateInterval);
+            optim_q1.Scheduler = new LinearLR(optim_q1, start_factor: 1f, end_factor: 0f, total_iters: (int)hp.maxSteps * hp.updatesNum / hp.updateInterval);
+            optim_mu.Scheduler = new LinearLR(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: (int)hp.maxSteps * hp.updatesNum / hp.updateInterval);
 
             // Initialize target networks
             Q_targ = model.q1Network.Clone() as Sequential;
@@ -86,9 +87,9 @@ namespace DeepUnity.ReinforcementLearning
                     actorLoss = 0;
                     criticLoss = 0;
 
-                    updateClock = Stopwatch.StartNew();        
+                    updateBenchmarkClock = Stopwatch.StartNew();        
                     Train();
-                    updateClock.Stop();
+                    updateBenchmarkClock.Stop();
 
                     updateIterations++;
                     actorLoss /= hp.updatesNum;
@@ -123,8 +124,8 @@ namespace DeepUnity.ReinforcementLearning
 
                 if (hp.LRSchedule)
                 {
-                    scheduler_q1.Step();
-                    scheduler_mu.Step();
+                    optim_q1.Scheduler.Step();
+                    optim_mu.Scheduler.Step();
                 }
             }
 
@@ -139,13 +140,13 @@ namespace DeepUnity.ReinforcementLearning
 
             for (int b = 0; b < batch.Length; b++)
             {
-                // y(r,s',d) = r + Ɣ(1 - d) * Q(s',μ(s'))
+                // y(r,s',d) = r + Ɣ(1 - d) * Qφt(s',μ(s'))
 
                 float r = batch[b].reward[0];
                 float d = batch[b].done[0];
-                float q_ = qTarg_Prime[b, 0];
+                float qt_ = qTarg_Prime[b, 0];
 
-                float y = r + hp.gamma * (1f - d) * q_;
+                float y = r + hp.gamma * (1f - d) * qt_;
 
                 batch[b].q_target = Tensor.Constant(y);
             }
@@ -166,6 +167,8 @@ namespace DeepUnity.ReinforcementLearning
         }
         private void UpdatePolicy(Tensor states)
         {
+            model.q1Network.RequiresGrad = false;
+
             // ObjectiveLoss = 1/|B| Σb Q(s, μ(s))
             Tensor mu_s = model.muNetwork.Forward(states);
             Tensor q_s_mu_s = model.q1Network.Forward(Pairify(states, mu_s));
@@ -178,6 +181,8 @@ namespace DeepUnity.ReinforcementLearning
             optim_mu.ZeroGrad();
             model.muNetwork.Backward(mu_grad); //gradient ascent
             optim_mu.Step();
+
+            model.q1Network.RequiresGrad = true;
         }
         private void UpdateTargetNetworks()
         {

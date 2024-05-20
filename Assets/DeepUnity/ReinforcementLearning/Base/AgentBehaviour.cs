@@ -58,7 +58,7 @@ namespace DeepUnity.ReinforcementLearning
         [Range(30, 100)]
         public int targetFPS = 50;
 
-        [Range(1f, 10f), SerializeField, Tooltip("The observations are clipped [after normarlization] in range [-clip, clip]. \n A time step reward is clipped in the same range. \nNote that using a low clipping (c > 5) may induce instability on large number of inputs.")]
+        [Range(1f, 10f), SerializeField, Tooltip("Observations are clipped [after normarlization] in range [-clip, clip]. \n Rewards (per timestep) are clipped in range [-clip, clip]. \nNote that using a low clipping (c > 5) may induce instability on large number of inputs.")]
         public float clipping = 5f;
 
         [SerializeField, Tooltip("Auto-normalize input observations and rewards for a stable training.")]
@@ -89,23 +89,24 @@ namespace DeepUnity.ReinforcementLearning
         public bool IsUsingContinuousActions { get => continuousDim > 0; }
         public bool IsUsingDiscreteActions { get => discreteDim > 0; }
 
-        const string valueNetNamingConvention = "V";
-        const string q1NetNamingConvention = "Q1";
-        const string q2NetNamingConvention = "Q2";
-        const string muNetNamingConvention = "Mu";
-        const string sigmaNetNamingConvention = "Sigma";
-        const string discreteNetNamingConvention = "Discrete";
+        const string VALUE_NET_NAMING_CONVENTION = "V";
+        const string Q1_NET_NAMING_CONVENTION = "Q1";
+        const string Q2_NET_NAMING_CONVENTION = "Q2";
+        const string MU_NET_NAMING_CONVENTION = "Mu";
+        const string SIGMA_NET_NAMING_CONVENTION = "Sigma";
+        const string DISCRETE_NET_NAMING_CONVENTION = "Discrete";
         private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int VISUAL_INPUT_WIDTH, in int VISUAL_INPUT_HEIGHT, in int VISUAL_INPUT_CHANNELS,
             in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS, in ArchitectureType ARCHITECTURE, in NonLinearity NONLINEARITY)
         {
 
-            const InitType INIT_W = InitType.Kaiming_Uniform;
-            const InitType INIT_B = InitType.Zeros;
+           
            
             static IActivation HiddenActivation(NonLinearity activ) => activ == NonLinearity.Relu ? new ReLU() : new Tanh();
 
             static IModule[] CreateMLP(int inputs, int stack, int outputs, int layers, int hidUnits, NonLinearity activ)
             {
+                InitType INIT_W = activ == NonLinearity.Relu ? InitType.Kaiming_Uniform : InitType.Xavier_Uniform;
+                InitType INIT_B = InitType.Zeros;
                 if (layers == 1)
                 {
                     return new IModule[] {
@@ -290,7 +291,7 @@ namespace DeepUnity.ReinforcementLearning
                 if (DISCRETE_ACTIONS_NUM > 0)
                     discreteNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softmax() }).ToArray());
             }
-            else if(ARCHITECTURE == ArchitectureType.ATT)
+            else if (ARCHITECTURE == ArchitectureType.ATT)
             {
                 vNetwork = new Sequential(CreateATT(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
 
@@ -342,7 +343,7 @@ namespace DeepUnity.ReinforcementLearning
                     break;
                 case Stochasticity.ActiveNoise:
                     mu = muNetwork.Predict(state);
-                    // Check openai spinningup documentation they forgot to say that the e~N std is configurable
+                    // Check openai spinningup documentation They fkin forgot to say that the e~N std is configurable (i don't think they forgot to clip also, maybe no clipping involved)
                     Tensor xi = Tensor.RandomNormal((0, noiseValue), mu.Shape);
                     action = (mu + xi).Clip(-1f, 1f);
                     probs = null;
@@ -506,12 +507,12 @@ namespace DeepUnity.ReinforcementLearning
 
             // Create aux assets
             newAgBeh.config = Hyperparameters.CreateOrLoadAsset(name);
-            newAgBeh.vNetwork?.CreateAsset($"{name}/{valueNetNamingConvention}");
-            newAgBeh.muNetwork?.CreateAsset($"{name}/{muNetNamingConvention}");
-            newAgBeh.sigmaNetwork?.CreateAsset($"{name}/{sigmaNetNamingConvention}");
-            newAgBeh.q1Network?.CreateAsset($"{name}/{q1NetNamingConvention}");
-            newAgBeh.q2Network?.CreateAsset($"{name}/{q2NetNamingConvention}");
-            newAgBeh.discreteNetwork?.CreateAsset($"{name}/{discreteNetNamingConvention}");
+            newAgBeh.vNetwork?.CreateAsset($"{name}/{VALUE_NET_NAMING_CONVENTION}");
+            newAgBeh.muNetwork?.CreateAsset($"{name}/{MU_NET_NAMING_CONVENTION}");
+            newAgBeh.sigmaNetwork?.CreateAsset($"{name}/{SIGMA_NET_NAMING_CONVENTION}");
+            newAgBeh.q1Network?.CreateAsset($"{name}/{Q1_NET_NAMING_CONVENTION}");
+            newAgBeh.q2Network?.CreateAsset($"{name}/{Q2_NET_NAMING_CONVENTION}");
+            newAgBeh.discreteNetwork?.CreateAsset($"{name}/{DISCRETE_NET_NAMING_CONVENTION}");
 
 
             return newAgBeh;
@@ -683,12 +684,12 @@ namespace DeepUnity.ReinforcementLearning
                 if (vNetwork == null)
                 {
                     var networks = allBehaviorAssets.OfType<Sequential>();
-                    vNetwork = networks.FirstOrDefault(x => x.name == valueNetNamingConvention);
-                    muNetwork = networks.FirstOrDefault(x => x.name == muNetNamingConvention);
-                    sigmaNetwork = networks.FirstOrDefault(x => x.name == sigmaNetNamingConvention);
-                    discreteNetwork = networks.FirstOrDefault(x => x.name == discreteNetNamingConvention);
-                    q1Network = networks.FirstOrDefault(x => x.name == q1NetNamingConvention);
-                    q2Network = networks.FirstOrDefault(x => x.name == q2NetNamingConvention);
+                    vNetwork = networks.FirstOrDefault(x => x.name == VALUE_NET_NAMING_CONVENTION);
+                    muNetwork = networks.FirstOrDefault(x => x.name == MU_NET_NAMING_CONVENTION);
+                    sigmaNetwork = networks.FirstOrDefault(x => x.name == SIGMA_NET_NAMING_CONVENTION);
+                    discreteNetwork = networks.FirstOrDefault(x => x.name == DISCRETE_NET_NAMING_CONVENTION);
+                    q1Network = networks.FirstOrDefault(x => x.name == Q1_NET_NAMING_CONVENTION);
+                    q2Network = networks.FirstOrDefault(x => x.name == Q2_NET_NAMING_CONVENTION);
                 }
             }
 #endif
@@ -707,42 +708,42 @@ namespace DeepUnity.ReinforcementLearning
 
             if(vNetwork != null)
             {
-                string vnetPath = Path.Combine(path, $"{valueNetNamingConvention}.json");
+                string vnetPath = Path.Combine(path, $"{VALUE_NET_NAMING_CONVENTION}.json");
                 string jsonData = File.ReadAllText(vnetPath);
                 JsonUtility.FromJsonOverwrite(jsonData, vNetwork);
             }
             
             if (q1Network != null)
             {
-                string q1netPath = Path.Combine(path, $"{q1NetNamingConvention}.json");
+                string q1netPath = Path.Combine(path, $"{Q1_NET_NAMING_CONVENTION}.json");
                 string jsonData = File.ReadAllText(q1netPath);
                 JsonUtility.FromJsonOverwrite(jsonData, q1Network);
             }
             
             if (q2Network != null)
             {
-                string q2netPath = Path.Combine(path, $"{q2NetNamingConvention}.json");
+                string q2netPath = Path.Combine(path, $"{Q2_NET_NAMING_CONVENTION}.json");
                 string jsonData = File.ReadAllText(q2netPath);
                 JsonUtility.FromJsonOverwrite(jsonData, q2Network);
             }
             
             if (muNetwork != null)
             {
-                string munetPath = Path.Combine(path, $"{muNetNamingConvention}.json");
+                string munetPath = Path.Combine(path, $"{MU_NET_NAMING_CONVENTION}.json");
                 string jsonData = File.ReadAllText(munetPath);
                 JsonUtility.FromJsonOverwrite(jsonData, muNetwork);
             }
             
             if (sigmaNetwork != null)
             {
-                string sigmanetPath = Path.Combine(path, $"{sigmaNetNamingConvention}.json");
+                string sigmanetPath = Path.Combine(path, $"{SIGMA_NET_NAMING_CONVENTION}.json");
                 string jsonData = File.ReadAllText(sigmanetPath);
                 JsonUtility.FromJsonOverwrite(jsonData, sigmaNetwork);
             }
             
             if (discreteNetwork != null)
             {
-                string discretenetPath = Path.Combine(path, $"{discreteNetNamingConvention}.json");
+                string discretenetPath = Path.Combine(path, $"{DISCRETE_NET_NAMING_CONVENTION}.json");
                 string jsonData = File.ReadAllText(discretenetPath);
                 JsonUtility.FromJsonOverwrite(jsonData, discreteNetwork);
             }

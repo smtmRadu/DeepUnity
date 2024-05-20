@@ -15,7 +15,7 @@ namespace DeepUnity.Modules
     public class RMSNorm : ILearnable, IModule
     {
         [SerializeField] public Device Device { get; set; } = Device.CPU;
-
+        [SerializeField] public bool RequiresGrad { get; set; } = true;
         [SerializeField] private Tensor gamma;
         [NonSerialized] private Tensor gammaGrad;
 
@@ -39,6 +39,8 @@ namespace DeepUnity.Modules
         public object Clone()
         {
             RMSNorm rmsnorm = new RMSNorm();
+            rmsnorm.Device = Device;
+            rmsnorm.RequiresGrad = RequiresGrad;
             rmsnorm.gamma = (Tensor)gamma.Clone();
             rmsnorm.gammaGrad = (Tensor)gammaGrad.Clone();
             return rmsnorm;
@@ -72,14 +74,18 @@ namespace DeepUnity.Modules
         }
         public Tensor Backward(Tensor dLdY)
         {
-            bool isBatched = dLdY.Rank == 2;
+            if(RequiresGrad)
+            {
+                bool isBatched = dLdY.Rank == 2;
 
-            Tensor dLdGamma = dLdY * InputCache / rmsNorm;
-            gammaGrad[0] += isBatched ?
-                dLdGamma.Mean(0).Mean(0)[0]:
-                dLdGamma.Mean(0)[0];
+                Tensor dLdGamma = dLdY * InputCache / rmsNorm;
+                gammaGrad[0] += isBatched ?
+                    dLdGamma.Mean(0).Mean(0)[0] :
+                    dLdGamma.Mean(0)[0];
 
-            
+            }
+
+
             Tensor dLdX = dLdY * gamma[0] / rmsNorm;
             return dLdX;
         }

@@ -247,7 +247,27 @@ namespace DeepUnity.Models
                     item.Device = value;
                 }
             } }
-
+        /// <summary>
+        /// Freezes/Unfreezes all <see cref="ILearnable"/> modules.
+        /// </summary>
+        public override bool RequiresGrad
+        {
+            set
+            {
+                foreach (var item in backboneModules.OfType<ILearnable>())
+                {
+                    item.RequiresGrad = value;
+                }
+                foreach (var item in inputHeadsModules.SelectMany(x => x.OfType<ILearnable>()))
+                {
+                    item.RequiresGrad = value;
+                }
+                foreach (var item in outputHeadsModules.SelectMany(x => x.OfType<ILearnable>()))
+                {
+                    item.RequiresGrad = value;
+                }
+            }
+        }
     }
 }
 

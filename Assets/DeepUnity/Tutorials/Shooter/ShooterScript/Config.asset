@@ -14,17 +14,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   trainer: 0
   maxSteps: 2000000000
-  learningRate: 0.0002
+  actorLearningRate: 0.0003
+  criticLearningRate: 0.0003
   gamma: 0.99
-  LRSchedule: 0
-  batchSize: 1000
-  bufferSize: 30000
+  LRSchedule: 1
+  batchSize: 2000
+  bufferSize: 50000
   horizon: 256
-  numEpoch: 6
-  beta: 0.005
+  numEpoch: 8
+  beta: 0.0075
   epsilon: 0.2
   lambda: 0.96
-  gradClipNorm: 0.5
+  maxNorm: 0.5
+  valueCoeff: 0.5
   KLDivergence: 0
   targetKL: 0.015
   normalizeAdvantages: 1
@@ -35,6 +37,8 @@ MonoBehaviour:
   updatesNum: 1
   alpha: 0.2
   tau: 0.005
+  noiseClip: 0.5
+  policyDelay: 2
   debug: 0
   timescaleAdjustment: 0
   timescale: 1

@@ -19,10 +19,10 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("[Typical range: 1e5 - 1e7] The maximum length in steps of this training session.")]
         [Min(10_000f)] public long maxSteps = 2_000_000_000;
 
-        [Tooltip("[Typical range: 5e-6 - 3e-4] Initial learning rate for Actor's Adam optimizer.")]
+        [Tooltip("[Typical range: 1e-4 - 1e-3] Initial learning rate for Actor's Adam optimizer.")]
         [MinMax(5e-6f, 1f)] public float actorLearningRate = 3e-4f;
 
-        [Tooltip("[Typical range: 3e-4 - 1e-3] Initial learning rate for Critic's Adam optimizer")]
+        [Tooltip("[Typical range: 1e-4 - 1e-3] Initial learning rate for Critic's Adam optimizer")]
         [MinMax(5e-6f, 1f)] public float criticLearningRate = 3e-4f;
 
         [Tooltip("[Typical range: 0.9 - 0.9997] Discount factor.")]

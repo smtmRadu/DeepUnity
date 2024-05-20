@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ffdd4f9587b2d8846a37ba5240ae14b2, type: 3}
   m_Name: Sigma
   m_EditorClassIdentifier: 
-  version: 341
+  version: 376
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -8882,10 +8882,16 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
+    squeeze:
+      axis: 0
+    unsqueeze:
+      axis: 0
+    permute:
+      axes: 
     residualconnectionfork:
-      residualConnectionHash: 886179348
+      residualConnectionHash: -1038090940
     residualconnectionjoin:
-      residualConnectionHash: 886179348
+      residualConnectionHash: -1038090940
     conv2d:
       kernels:
         data: []
@@ -9086,10 +9092,16 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
+    squeeze:
+      axis: 0
+    unsqueeze:
+      axis: 0
+    permute:
+      axes: 
     residualconnectionfork:
-      residualConnectionHash: -719430978
+      residualConnectionHash: 763706880
     residualconnectionjoin:
-      residualConnectionHash: -719430978
+      residualConnectionHash: 763706880
     conv2d:
       kernels:
         data: []
@@ -14546,10 +14558,16 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
+    squeeze:
+      axis: 0
+    unsqueeze:
+      axis: 0
+    permute:
+      axes: 
     residualconnectionfork:
-      residualConnectionHash: 1028242514
+      residualConnectionHash: -589978582
     residualconnectionjoin:
-      residualConnectionHash: 1028242514
+      residualConnectionHash: -589978582
     conv2d:
       kernels:
         data: []
@@ -14750,10 +14768,16 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
+    squeeze:
+      axis: 0
+    unsqueeze:
+      axis: 0
+    permute:
+      axes: 
     residualconnectionfork:
-      residualConnectionHash: 1211090248
+      residualConnectionHash: -41435380
     residualconnectionjoin:
-      residualConnectionHash: 1211090248
+      residualConnectionHash: -41435380
     conv2d:
       kernels:
         data: []
@@ -17582,10 +17606,16 @@ MonoBehaviour:
     reshape:
       inputShape: 
       outputShape: 
+    squeeze:
+      axis: 0
+    unsqueeze:
+      axis: 0
+    permute:
+      axes: 
     residualconnectionfork:
-      residualConnectionHash: 2111989158
+      residualConnectionHash: 1760362440
     residualconnectionjoin:
-      residualConnectionHash: 2111989158
+      residualConnectionHash: 1760362440
     conv2d:
       kernels:
         data: []

@@ -17,6 +17,7 @@ namespace DeepUnity.Modules
     public class LazyDense : ILearnable, IModule, ILazy
     {
         [SerializeField] public Device Device { get; set; } = Device.CPU;
+        [SerializeField] public bool RequiresGrad { get; set; } = true;
         private Tensor InputCache { get; set; }
 
         [SerializeField] private Tensor weights;
@@ -125,58 +126,60 @@ namespace DeepUnity.Modules
             bool isBatched = loss.Rank == 2;
             int batch_size = isBatched ? loss.Size(-2) : 1;
 
-            if (Device == Device.CPU)
+            if(RequiresGrad)
             {
-                Tensor weights_grad;
-                Tensor biases_grad;
-                ComputeGradients(InputCache, loss, isBatched, batch_size, out weights_grad, out biases_grad);
+                if (Device == Device.CPU)
+                {
+                    Tensor weights_grad;
+                    Tensor biases_grad;
+                    ComputeGradients(InputCache, loss, isBatched, batch_size, out weights_grad, out biases_grad);
 
-                Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
-                Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
+                    Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
+                    Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
+                }
+                else
+                {
+                    int H_in = weights.Size(-1);
+                    int H_out = biases.Size(-1);
+
+                    // dLoss w.r.t theta
+                    ComputeShader cs = DeepUnityMeta.DenseCS;
+
+                    ComputeBuffer lossBuffer = new ComputeBuffer(loss.Count(), 4);
+                    lossBuffer.SetData(loss.ToArray());
+                    cs.SetBuffer(1, "loss", lossBuffer);
+
+                    ComputeBuffer inputCacheBuffer = new ComputeBuffer(InputCache.Count(), 4);
+                    inputCacheBuffer.SetData(InputCache.ToArray());
+                    cs.SetBuffer(1, "input", inputCacheBuffer);
+
+                    ComputeBuffer weightsGradBuffer = new ComputeBuffer(weightsGrad.Count(), 4);
+                    weightsGradBuffer.SetData(weightsGrad.ToArray());
+                    cs.SetBuffer(1, "gamma_grad", weightsGradBuffer);
+
+                    ComputeBuffer biasesGradBuffer = new ComputeBuffer(biasesGrad.Count(), 4);
+                    biasesGradBuffer.SetData(biasesGrad.ToArray());
+                    cs.SetBuffer(1, "beta_grad", biasesGradBuffer);
+
+                    cs.SetInt("batch_size", batch_size);
+                    cs.SetInt("in_features", H_in);
+                    cs.SetInt("out_features", H_out);
+
+                    cs.Dispatch(1,
+                        (H_in + 31) / 32,
+                        (H_out + 31) / 32,
+                        1);
+
+                    Tensor.CopyTo(Tensor.Constant(weightsGradBuffer, weightsGrad.Shape), weightsGrad);
+                    Tensor.CopyTo(Tensor.Constant(biasesGradBuffer, biases.Shape), biasesGrad);
+
+                    lossBuffer.Release();
+                    inputCacheBuffer.Release();
+                    weightsGradBuffer.Release();
+                    biasesGradBuffer.Release();
+                }
             }
-            else
-            {
-                int H_in = weights.Size(-1);
-                int H_out = biases.Size(-1);
-
-                // dLoss w.r.t theta
-                ComputeShader cs = DeepUnityMeta.DenseCS;
-
-                ComputeBuffer lossBuffer = new ComputeBuffer(loss.Count(), 4);
-                lossBuffer.SetData(loss.ToArray());
-                cs.SetBuffer(1, "loss", lossBuffer);
-
-                ComputeBuffer inputCacheBuffer = new ComputeBuffer(InputCache.Count(), 4);
-                inputCacheBuffer.SetData(InputCache.ToArray());
-                cs.SetBuffer(1, "input", inputCacheBuffer);
-
-                ComputeBuffer weightsGradBuffer = new ComputeBuffer(weightsGrad.Count(), 4);
-                weightsGradBuffer.SetData(weightsGrad.ToArray());
-                cs.SetBuffer(1, "gamma_grad", weightsGradBuffer);
-
-                ComputeBuffer biasesGradBuffer = new ComputeBuffer(biasesGrad.Count(), 4);
-                biasesGradBuffer.SetData(biasesGrad.ToArray());
-                cs.SetBuffer(1, "beta_grad", biasesGradBuffer);
-
-                cs.SetInt("batch_size", batch_size);
-                cs.SetInt("in_features", H_in);
-                cs.SetInt("out_features", H_out);
-
-                cs.Dispatch(1,
-                    (H_in + 31) / 32,
-                    (H_out + 31) / 32,
-                    1);
-
-                Tensor.CopyTo(Tensor.Constant(weightsGradBuffer, weightsGrad.Shape), weightsGrad);
-                Tensor.CopyTo(Tensor.Constant(biasesGradBuffer, biases.Shape), biasesGrad);
-
-                lossBuffer.Release();
-                inputCacheBuffer.Release();
-                weightsGradBuffer.Release();
-                biasesGradBuffer.Release();
-
-
-            }
+            
 
             return Tensor.MatMul(loss, weights, Device);
         }
@@ -304,6 +307,8 @@ namespace DeepUnity.Modules
         public object Clone()
         {
             var ldense = new LazyDense(out_features, device: Device);
+            ldense.Device = Device;
+            ldense.RequiresGrad = RequiresGrad;
             ldense.isInitialized = isInitialized;
             ldense.weightInit = weightInit;
             ldense.biasInit = biasInit;

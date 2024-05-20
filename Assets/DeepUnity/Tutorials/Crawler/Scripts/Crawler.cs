@@ -8,7 +8,6 @@ namespace DeepUnity.Tutorials
     public class Crawler : Agent
     {
         [Header("Requires Normalization")]
-        [SerializeField] GameObject bonus;
 
         [SerializeField] GameObject thigh1;
         [SerializeField] GameObject thigh2;
@@ -32,16 +31,16 @@ namespace DeepUnity.Tutorials
 
         BodyController controller;
 
-
+        float currentZpos;
         public override void OnEpisodeBegin()
         {
-            if (bonus == null)
-                return;
+            currentZpos = transform.position.z;
 
-            for (int i = 0; i < bonus.transform.childCount; i++)
+
+            if (behaviourType == BehaviourType.Learn)
             {
-                Transform x = bonus.transform.GetChild(i);
-                x.gameObject.SetActive(true);
+                float noise = Utils.Random.Range(-0.03f, 0.03f);
+                transform.position = new Vector3(transform.position.x, transform.position.y + noise, transform.position.z); 
             }
         }
 
@@ -74,18 +73,7 @@ namespace DeepUnity.Tutorials
                 }
             };
 
-            Action<Collider> rewards = (col) =>
-            {
-                if (col.CompareTag("Target"))
-                {
-                    AddReward(+0.1f);
-                    col.gameObject.SetActive(false);
-                }
-            };
-
-
             controller.bodyPartsDict[this.gameObject].ColliderContact.OnEnter = end;
-            controller.bodyPartsDict[this.gameObject].TriggerContact.OnEnter = rewards;
             controller.bodyPartsDict[thigh1].ColliderContact.OnEnter = end;
             controller.bodyPartsDict[thigh2].ColliderContact.OnEnter = end;
             controller.bodyPartsDict[thigh3].ColliderContact.OnEnter = end;
@@ -185,8 +173,12 @@ namespace DeepUnity.Tutorials
             // float position_reward = -transform.position.z;
             // float reward = 0.005f * position_reward + 0.001f * orientation_reward;
             // AddReward(Mathf.Clamp(reward, -0.05f, 0.05f));
+            float reward = transform.position.z - currentZpos;
+            AddReward(reward * 0.1f);
+            currentZpos = transform.position.z;
 
-            AddReward(+0.00001f);
+            if (transform.position.y < -10)
+                EndEpisode();
         }
     }
 

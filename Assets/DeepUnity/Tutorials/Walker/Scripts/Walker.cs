@@ -75,7 +75,13 @@ namespace DeepUnity.Tutorials
         public override void OnEpisodeBegin()
         {
             currentZAdvancement = transform.position.z;
-            transform.position = new Vector3(transform.position.x, transform.position.y + Random.value/10f, transform.position.z);
+
+
+            if (behaviourType == BehaviourType.Learn)
+            {
+                float noise = Utils.Random.Range(-0.03f, 0.03f);
+                transform.position = new Vector3(transform.position.x, transform.position.y + noise, transform.position.z);
+            }
         }
 
         // 120 input variables

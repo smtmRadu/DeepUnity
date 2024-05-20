@@ -17,13 +17,13 @@ namespace DeepUnity.Optimizers
             }
         }
         /// <summary>
-        /// Gradient Clipping by norm for all <see cref="Parameter"/>s. If <paramref name="max_norm"/> = 0, no changes are made.
+        /// Gradient Clipping by norm for all <see cref="Parameter"/>s. If <paramref name="max_norm"/> is equal or less than 0, no changes are made.
         /// </summary>
         /// <param name="max_norm">If is 0, the clipping is aborted.</param>
         /// <param name="eps">Value for numerical stability if computing <see cref="NormType.EuclideanL2"/>.</param>
         public void ClipGradNorm(float max_norm, NormType normType = NormType.EuclideanL2, float eps = 1e-12f)
         {
-            if (max_norm == 0)
+            if (max_norm <= 0)
                 return;
 
             int no_params = parameters.Sum(x =>

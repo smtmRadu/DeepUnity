@@ -9,6 +9,7 @@ namespace DeepUnity.Modules
     public class Conv2D : ILearnable, IModule
     {
         [SerializeField] public Device Device { get; set; } = Device.CPU;
+        [SerializeField] public bool RequiresGrad { get; set; } = true;
         private Tensor InputCache { get; set; }
        
         private int GetOutChannels { get => kernels.Size(-4); }
@@ -75,7 +76,7 @@ namespace DeepUnity.Modules
             biasesGrad = Tensor.Zeros(biases.Shape);
         }
 
-
+        private Conv2D() { }
         /// <param name="input">(B, C_in, H, W)</param>
         /// <returns></returns>
         public Tensor Predict(Tensor input)
@@ -229,22 +230,26 @@ namespace DeepUnity.Modules
 
             float grad_scale = batchSize * inputChannels * outputChannels * kernelHeight * kernelWidth * inputHeight * inputWidth; ; // * outputWidth * outputHeight;
             
-            // Bias grad
-            Parallel.For(0, outputChannels, oc =>
+            if(RequiresGrad)
             {
-                float sum = 0f;
-
-                for (int b = 0; b < batchSize; b++)
+                // Bias grad
+                Parallel.For(0, outputChannels, oc =>
                 {
-                    for (int h = 0; h < outputHeight; h++)
-                    {
-                        for (int w = 0; w < outputWidth; w++)
-                            sum += loss[b, oc, h, w];
-                    }
-                }
+                    float sum = 0f;
 
-                biasesGrad[oc] += sum / grad_scale;
-            });
+                    for (int b = 0; b < batchSize; b++)
+                    {
+                        for (int h = 0; h < outputHeight; h++)
+                        {
+                            for (int w = 0; w < outputWidth; w++)
+                                sum += loss[b, oc, h, w];
+                        }
+                    }
+
+                    biasesGrad[oc] += sum / grad_scale;
+                });
+            }
+           
 
          
 
@@ -322,6 +327,7 @@ namespace DeepUnity.Modules
             }
             else
             {
+
                 ComputeShader cs = DeepUnityMeta.Conv2DCS;
 
                 int C_in = InputCache.Size(-3);
@@ -350,29 +356,36 @@ namespace DeepUnity.Modules
                 lossBuffer.SetData(loss.ToArray());
                 cs.SetBuffer(KINDEX, "loss", lossBuffer);
 
-                ComputeBuffer inputBuffer = new ComputeBuffer(InputCache.Count(), 4);
-                inputBuffer.SetData(InputCache.ToArray());
-                cs.SetBuffer(KINDEX, "input", inputBuffer);
+            
+                if(RequiresGrad)
+                {
+                    ComputeBuffer inputBuffer = new ComputeBuffer(InputCache.Count(), 4);
+                    inputBuffer.SetData(InputCache.ToArray());
+                    cs.SetBuffer(KINDEX, "input", inputBuffer);
 
-                ComputeBuffer gammaGradBuffer = new ComputeBuffer(kernelsGrad.Count(), 4);
-                gammaGradBuffer.SetData(kernelsGrad.ToArray());
-                cs.SetBuffer(KINDEX, "gamma_grad", gammaGradBuffer);
 
-                if (KINDEX == 1)
-                    cs.Dispatch(1,
-                        (kernels.Size(-1) + 2) / 3,
-                        (kernels.Size(-2) + 2) / 3,
-                        (C_out + 63) / 64);
-                else
-                    cs.Dispatch(2,
-                        (kernels.Size(-1) + 4) / 5,
-                        (kernels.Size(-2) + 4) / 5,
-                        (C_out + 31) / 32);
+                    ComputeBuffer gammaGradBuffer = new ComputeBuffer(kernelsGrad.Count(), 4);
+                    gammaGradBuffer.SetData(kernelsGrad.ToArray());
+                    cs.SetBuffer(KINDEX, "gamma_grad", gammaGradBuffer);
 
-                Tensor.CopyTo(kernelsGrad + Tensor.Constant(gammaGradBuffer, kernelsGrad.Shape), kernelsGrad);
+                    if (KINDEX == 1)
+                        cs.Dispatch(1,
+                            (kernels.Size(-1) + 2) / 3,
+                            (kernels.Size(-2) + 2) / 3,
+                            (C_out + 63) / 64);
+                    else
+                        cs.Dispatch(2,
+                            (kernels.Size(-1) + 4) / 5,
+                            (kernels.Size(-2) + 4) / 5,
+                            (C_out + 31) / 32);
 
-                inputBuffer.Release();
-                gammaGradBuffer.Release();
+                    Tensor.CopyTo(kernelsGrad + Tensor.Constant(gammaGradBuffer, kernelsGrad.Shape), kernelsGrad);
+                    gammaGradBuffer.Release();
+                    inputBuffer.Release();
+                }
+
+                
+               
                 // Compute the gradients of the loss wrt. parameters --------------------------------------------------------------------
 
 
@@ -444,7 +457,9 @@ namespace DeepUnity.Modules
         }
         public object Clone()
         {
-            var conv = new Conv2D(GetInChannels, GetOutChannels, kernel_shape: (GetKernelHeight, GetKernelWidth), device: Device);
+            var conv = new Conv2D();
+            conv.RequiresGrad = RequiresGrad;
+            conv.Device = Device;
             conv.kernels = (Tensor)kernels.Clone();
             conv.biases = (Tensor)biases.Clone();
             conv.kernelsGrad = (Tensor)kernelsGrad.Clone();

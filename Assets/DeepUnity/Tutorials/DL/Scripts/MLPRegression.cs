@@ -101,13 +101,12 @@ namespace DeepUnity.Tutorials
 
                 return;
             }
-            optimizer.SpectralNorm(5);
+
             var trainPrediction = net.Forward(trainXbatches[i]);
             Loss loss = Loss.MSE(trainPrediction, trainYbatches[i]);
             TrainLossGraph.Append(loss.Item);
             optimizer.ZeroGrad();
-            net.Backward(loss.Gradient);
-            optimizer.ClipGradNorm(0.5f);
+            net.Backward(loss.Gradient);        
             optimizer.Step();
 
 

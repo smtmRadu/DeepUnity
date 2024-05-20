@@ -30,7 +30,7 @@ namespace DeepUnity.ReinforcementLearning
         /// <summary>
         /// The BodyController that controls this BodyPart.
         /// </summary>
-        [HideInInspector] public BodyController Controller { get; set; }
+        public BodyController Controller { get; set; }
 
         public Vector3 CurrentEulerRotation { get; set; } = Vector3.zero;
         /// <summary>

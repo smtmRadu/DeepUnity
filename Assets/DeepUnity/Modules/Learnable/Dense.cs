@@ -17,6 +17,8 @@ namespace DeepUnity.Modules
     public class Dense : ILearnable, IModule
     {
         [SerializeField] public Device Device { get; set; } = Device.CPU;
+        [SerializeField] public bool RequiresGrad { get; set; } = true;
+
         private Tensor InputCache { get; set; }
         private bool UseBias { get => biases != null; }
 
@@ -138,17 +140,21 @@ namespace DeepUnity.Modules
             
             if(loss.Rank == 3)
             {
-                Tensor wsGrad = Tensor.BatchedMatMul(loss.Transpose(1, 2), InputCache);
-                wsGrad /= loss.Size(0); // divide by batch size
-                wsGrad = wsGrad.Sum(0);
-                Tensor.CopyTo(wsGrad, weightsGrad);
-
-                if(UseBias)
+                if(RequiresGrad)
                 {
-                    Tensor bGrad = loss.Mean(0).Sum(0);
-                    Tensor.CopyTo(bGrad, biasesGrad);
+                    Tensor wsGrad = Tensor.BatchedMatMul(loss.Transpose(1, 2), InputCache);
+                    wsGrad /= loss.Size(0); // divide by batch size
+                    wsGrad = wsGrad.Sum(0);
+                    Tensor.CopyTo(wsGrad, weightsGrad);
+
+                    if (UseBias)
+                    {
+                        Tensor bGrad = loss.Mean(0).Sum(0);
+                        Tensor.CopyTo(bGrad, biasesGrad);
+                    }
+
                 }
-              
+
                 Tensor inputGrad = Tensor.BatchedMatMul(loss, weights.Unsqueeze(0).Expand(0, loss.Size(0)));
                 return inputGrad;
             }
@@ -160,67 +166,71 @@ namespace DeepUnity.Modules
             bool isBatched = loss.Rank == 2;
             int batch_size = isBatched ? loss.Size(-2) : 1;
 
-            if (Device == Device.CPU)
+            if(RequiresGrad)
             {
-                // Benchmark : 0.93s avg (This method was replaced due to performance benchmark)
-                // Tensor transposedLoss = isBatched ?
-                //         Tensor.Transpose(loss, 0, 1) :
-                //         Tensor.Transpose(loss.Unsqueeze(0), 0, 1);
-                // 
-                // Tensor.CopyTo(weightsGrad + Tensor.MatMul(transposedLoss, InputCache) / batch_size, weightsGrad);
-                // Tensor.CopyTo(biasesGrad + Tensor.Mean(loss, axis: 0), biasesGrad);
+                if (Device == Device.CPU)
+                {
+                    // Benchmark : 0.93s avg (This method was replaced due to performance benchmark)
+                    // Tensor transposedLoss = isBatched ?
+                    //         Tensor.Transpose(loss, 0, 1) :
+                    //         Tensor.Transpose(loss.Unsqueeze(0), 0, 1);
+                    // 
+                    // Tensor.CopyTo(weightsGrad + Tensor.MatMul(transposedLoss, InputCache) / batch_size, weightsGrad);
+                    // Tensor.CopyTo(biasesGrad + Tensor.Mean(loss, axis: 0), biasesGrad);
 
 
-                // Benchmark : 0.72s avg
-                Tensor weights_grad;
-                Tensor biases_grad;
-                ComputeGradients(InputCache, loss, isBatched, batch_size, out weights_grad, out biases_grad);
+                    // Benchmark : 0.72s avg
+                    Tensor weights_grad;
+                    Tensor biases_grad;
+                    ComputeGradients(InputCache, loss, isBatched, batch_size, out weights_grad, out biases_grad);
 
-                Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
-                if(UseBias)
-                    Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
-            }
-            else
-            {
-                int H_in = weights.Size(-1);
-                int H_out = biases.Size(-1);
+                    Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
+                    if (UseBias)
+                        Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
+                }
+                else
+                {
+                    int H_in = weights.Size(-1);
+                    int H_out = biases.Size(-1);
 
-                // dLoss w.r.t theta
-                ComputeShader cs = DeepUnityMeta.DenseCS;
+                    // dLoss w.r.t theta
+                    ComputeShader cs = DeepUnityMeta.DenseCS;
 
-                ComputeBuffer lossBuffer = new ComputeBuffer(loss.Count(), 4);
-                lossBuffer.SetData(loss.ToArray());
-                cs.SetBuffer(1, "loss", lossBuffer);
+                    ComputeBuffer lossBuffer = new ComputeBuffer(loss.Count(), 4);
+                    lossBuffer.SetData(loss.ToArray());
+                    cs.SetBuffer(1, "loss", lossBuffer);
 
-                ComputeBuffer inputCacheBuffer = new ComputeBuffer(InputCache.Count(), 4);
-                inputCacheBuffer.SetData(InputCache.ToArray());
-                cs.SetBuffer(1, "input", inputCacheBuffer);
+                    ComputeBuffer inputCacheBuffer = new ComputeBuffer(InputCache.Count(), 4);
+                    inputCacheBuffer.SetData(InputCache.ToArray());
+                    cs.SetBuffer(1, "input", inputCacheBuffer);
 
-                ComputeBuffer weightsGradBuffer = new ComputeBuffer(weightsGrad.Count(), 4);
-                weightsGradBuffer.SetData(weightsGrad.ToArray());
-                cs.SetBuffer(1, "gamma_grad", weightsGradBuffer);
+                    ComputeBuffer weightsGradBuffer = new ComputeBuffer(weightsGrad.Count(), 4);
+                    weightsGradBuffer.SetData(weightsGrad.ToArray());
+                    cs.SetBuffer(1, "gamma_grad", weightsGradBuffer);
 
-                ComputeBuffer biasesGradBuffer = new ComputeBuffer(UseBias ? biasesGrad.Count() : H_out, 4);
-                biasesGradBuffer.SetData(UseBias ? biasesGrad.ToArray() : new float[H_out]);
-                cs.SetBuffer(1, "beta_grad", biasesGradBuffer);
+                    ComputeBuffer biasesGradBuffer = new ComputeBuffer(UseBias ? biasesGrad.Count() : H_out, 4);
+                    biasesGradBuffer.SetData(UseBias ? biasesGrad.ToArray() : new float[H_out]);
+                    cs.SetBuffer(1, "beta_grad", biasesGradBuffer);
 
-                cs.SetInt("batch_size", batch_size);
-                cs.SetInt("in_features", H_in);
-                cs.SetInt("out_features", H_out);
+                    cs.SetInt("batch_size", batch_size);
+                    cs.SetInt("in_features", H_in);
+                    cs.SetInt("out_features", H_out);
 
-                cs.Dispatch(1,
-                    (H_in + 31) / 32,
-                    (H_out + 31) / 32,
-                    1);
+                    cs.Dispatch(1,
+                        (H_in + 31) / 32,
+                        (H_out + 31) / 32,
+                        1);
 
-                Tensor.CopyTo(Tensor.Constant(weightsGradBuffer, weightsGrad.Shape), weightsGrad);
-                if (UseBias)
-                    Tensor.CopyTo(Tensor.Constant(biasesGradBuffer, biases.Shape), biasesGrad);
+                    Tensor.CopyTo(Tensor.Constant(weightsGradBuffer, weightsGrad.Shape), weightsGrad);
+                    if (UseBias)
+                        Tensor.CopyTo(Tensor.Constant(biasesGradBuffer, biases.Shape), biasesGrad);
 
-                lossBuffer.Release();
-                inputCacheBuffer.Release();
-                weightsGradBuffer.Release();
-                biasesGradBuffer.Release();                
+                    lossBuffer.Release();
+                    inputCacheBuffer.Release();
+                    weightsGradBuffer.Release();
+                    biasesGradBuffer.Release();
+                }
+
             }
 
             return Tensor.MatMul(loss, weights, Device);

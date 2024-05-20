@@ -24,6 +24,7 @@ namespace DeepUnity.Modules
     public class RNNCell : ILearnable, IModule
     {
         [SerializeField] public Device Device { get; set; } = Device.CPU;
+        [SerializeField] public bool RequiresGrad { get; set; } = true;
 
         [SerializeField] private NonLinearity nonlinearity;
         [SerializeField] private HiddenStates onReturn;
@@ -205,30 +206,34 @@ namespace DeepUnity.Modules
                 // Debug.Log(dLdH[InputCache.Count - 1] + $"{this.onReturn}");
                 Tensor dLdLinear = ActivationCache.Pop().Backward(dLdH[InputCache.Count - 1]);
 
-                Tensor weights_grad;
-                Tensor biases_grad;
-                Tensor r_weights_grad;
-                Tensor r_biases_grad;
-                if (Device == Device.CPU)
+                if(RequiresGrad)
                 {
-                    ComputeGradients(InputCache.Pop(), dLdLinear, isBatched, batch_size, hin, hout, out weights_grad, out biases_grad);
-                    ComputeGradients(HiddenCache.Pop(), dLdLinear, isBatched, batch_size, hout, hout, out r_weights_grad, out r_biases_grad);
+                    Tensor weights_grad;
+                    Tensor biases_grad;
+                    Tensor r_weights_grad;
+                    Tensor r_biases_grad;
+                    if (Device == Device.CPU)
+                    {
+                        ComputeGradients(InputCache.Pop(), dLdLinear, isBatched, batch_size, hin, hout, out weights_grad, out biases_grad);
+                        ComputeGradients(HiddenCache.Pop(), dLdLinear, isBatched, batch_size, hout, hout, out r_weights_grad, out r_biases_grad);
 
-                    Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
-                    Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
-                    Tensor.CopyTo(r_weightsGrad + r_weights_grad, r_weightsGrad);
-                    Tensor.CopyTo(r_biasesGrad + r_biases_grad, r_biasesGrad);
-                }
-                else
-                {
-                    ComputeGradientsGPU(InputCache.Pop(), dLdLinear, weightsGrad, biasesGrad, batch_size, hin, hout, out weights_grad, out biases_grad);
-                    ComputeGradientsGPU(HiddenCache.Pop(), dLdLinear, r_weightsGrad, r_biasesGrad, batch_size, hout, hout, out r_weights_grad, out r_biases_grad);
+                        Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
+                        Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
+                        Tensor.CopyTo(r_weightsGrad + r_weights_grad, r_weightsGrad);
+                        Tensor.CopyTo(r_biasesGrad + r_biases_grad, r_biasesGrad);
+                    }
+                    else
+                    {
+                        ComputeGradientsGPU(InputCache.Pop(), dLdLinear, weightsGrad, biasesGrad, batch_size, hin, hout, out weights_grad, out biases_grad);
+                        ComputeGradientsGPU(HiddenCache.Pop(), dLdLinear, r_weightsGrad, r_biasesGrad, batch_size, hout, hout, out r_weights_grad, out r_biases_grad);
 
-                    Tensor.CopyTo(weights_grad, weightsGrad); // they are automatically added in gpu
-                    Tensor.CopyTo(biases_grad, biasesGrad);
-                    Tensor.CopyTo(r_weights_grad, r_weightsGrad);
-                    Tensor.CopyTo(r_biases_grad, r_biasesGrad);
+                        Tensor.CopyTo(weights_grad, weightsGrad); // they are automatically added in gpu
+                        Tensor.CopyTo(biases_grad, biasesGrad);
+                        Tensor.CopyTo(r_weights_grad, r_weightsGrad);
+                        Tensor.CopyTo(r_biases_grad, r_biasesGrad);
+                    }
                 }
+                
 
                 inputGrad[InputCache.Count] = Tensor.MatMul(dLdLinear, weights, Device).Unsqueeze(isBatched ? 1 : 0);
 
@@ -425,6 +430,8 @@ namespace DeepUnity.Modules
         public object Clone()
         {
             var rnncell = new RNNCell();
+            rnncell.Device = Device;
+            rnncell.RequiresGrad = RequiresGrad;
             rnncell.InputCache = new();
             rnncell.HiddenCache = new();
             rnncell.ActivationCache = new();

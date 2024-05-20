@@ -19,6 +19,7 @@ namespace DeepUnity.Modules
         // Just a good reference paper to learn from, i made this just by adapting batchnorm layer.
         /// https://proceedings.neurips.cc/paper_files/paper/2019/file/2f4fe03d77724a7217006e5d16728874-Paper.pdf
         [SerializeField] public Device Device { get; set; } = Device.CPU;
+        [SerializeField] public bool RequiresGrad { get; set; } = true;
 
         private Tensor xCentered { get; set; }
         private Tensor xHat { get; set; }
@@ -75,11 +76,16 @@ namespace DeepUnity.Modules
             Tensor dLdVar = dLdxHat * xCentered * (-1f / 2f) * Tensor.Pow(std.Square() + Utils.EPSILON, -3f / 2f);
             Tensor dLdMu = dLdxHat * -1f / std + dLdVar * -2f * xCentered / m;
             Tensor dLdX = dLdxHat * 1f / std + dLdVar * 2f * xCentered / m + dLdMu * (1f / m);
-            Tensor dLdGamma = Tensor.Mean(dLdY + xCentered, 0);
-            Tensor dLdBeta = Tensor.Mean(dLdY, 0);
+            
+            if(RequiresGrad)
+            {
+                Tensor dLdGamma = Tensor.Mean(dLdY + xCentered, 0);
+                Tensor dLdBeta = Tensor.Mean(dLdY, 0);
 
-            Tensor.CopyTo(gammaGrad + dLdGamma.Mean(0), gammaGrad);
-            Tensor.CopyTo(betaGrad + dLdBeta.Mean(0), betaGrad);
+                Tensor.CopyTo(gammaGrad + dLdGamma.Mean(0), gammaGrad);
+                Tensor.CopyTo(betaGrad + dLdBeta.Mean(0), betaGrad);
+
+            }
 
             return dLdX;
         }
@@ -87,6 +93,8 @@ namespace DeepUnity.Modules
         public object Clone()
         {
             LayerNorm laynorm = new LayerNorm();
+            laynorm.Device = Device;
+            laynorm.RequiresGrad = RequiresGrad;
             laynorm.gamma = (Tensor)gamma.Clone();
             laynorm.beta = (Tensor)beta.Clone();
             laynorm.gammaGrad = (Tensor)gammaGrad.Clone();

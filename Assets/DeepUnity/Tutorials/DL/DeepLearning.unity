@@ -365,7 +365,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &492610711
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -380,7 +380,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   perform: 1
   lr: 0.001
-  batchSize: 64
+  batchSize: 128
   graph:
     graph:
       serializedVersion: 2
@@ -392,8 +392,10 @@ MonoBehaviour:
     current: 0
     mean: 0
   canvas: {fileID: 1823018698}
+  vae: {fileID: 11400000, guid: e140524ac5c30d64cb965f610d755e30, type: 2}
   gradClipNorm: 1
-  vae: {fileID: 11400000, guid: e416a5444e8611d4eb17a4083c47fe69, type: 2}
+  latent_space: 8
+  kld_w: 0.001
 --- !u!4 &492610712
 Transform:
   m_ObjectHideFlags: 0
@@ -1342,12 +1344,12 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1539047894}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 45ec7b8831bf73c4bbed236ccf4948d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  network: {fileID: 11400000, guid: a706b346ce016664b94713b8c4fe0f21, type: 2}
+  network: {fileID: 11400000, guid: 33b30e424a3326c44913e5d142542e9e, type: 2}
   name: MNIST
   lr: 0.001
   epochs: 100
@@ -1355,6 +1357,7 @@ MonoBehaviour:
   batch_size: 64
   augment_data: 0
   augment_strength: 0.6
+  maxNorm: 0.5
   accuracyGraph:
     graph:
       serializedVersion: 2
@@ -1382,7 +1385,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1539047894}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5eb36009ab4e4094db676f56eb66ed1c, type: 3}
   m_Name: 
