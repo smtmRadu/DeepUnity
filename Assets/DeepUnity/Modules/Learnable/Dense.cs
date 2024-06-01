@@ -340,7 +340,7 @@ namespace DeepUnity.Modules
             weights_grad = wg;
             biases_grad = bg;
         }
-        public Tensor ExpandedBiases(int[] forShape)
+        private Tensor ExpandedBiases(int[] forShape)
         {
             if (forShape.Length == 1)
                 return biases;

@@ -101,7 +101,7 @@ namespace DeepUnity.ReinforcementLearning
 
            
            
-            static IActivation HiddenActivation(NonLinearity activ) => activ == NonLinearity.Relu ? new ReLU() : new Tanh();
+            static IActivation HiddenActivation(NonLinearity activ) => activ == NonLinearity.Relu ? new ReLU(in_place:true) : new Tanh(in_place:true);
 
             static IModule[] CreateMLP(int inputs, int stack, int outputs, int layers, int hidUnits, NonLinearity activ)
             {
@@ -131,6 +131,45 @@ namespace DeepUnity.ReinforcementLearning
                         new Dense(hidUnits, hidUnits, weight_init: INIT_W, bias_init : INIT_B),
                         HiddenActivation(activ),
                         new Dense(hidUnits, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
+                        HiddenActivation(activ),
+                        new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
+                }
+                throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
+            }
+            static IModule[] CreateLnMLP(int inputs, int stack, int outputs, int layers, int hidUnits, NonLinearity activ)
+            {
+                InitType INIT_W = activ == NonLinearity.Relu ? InitType.Kaiming_Uniform : InitType.Xavier_Uniform;
+                InitType INIT_B = InitType.Zeros;
+                if (layers == 1)
+                {
+                    return new IModule[] {
+                        new Dense(inputs * stack, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
+                        new LayerNorm(hidUnits),
+                        HiddenActivation(activ),
+                        new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
+                }
+                if (layers == 2)
+                {
+                    return new IModule[] {
+                        new Dense(inputs * stack, hidUnits, weight_init: INIT_W, bias_init: INIT_B),
+                        new LayerNorm(hidUnits),
+                        HiddenActivation(activ),
+                        new Dense(hidUnits, hidUnits, weight_init: INIT_W, bias_init : INIT_B),
+                        new LayerNorm(hidUnits),
+                        HiddenActivation(activ),
+                        new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
+                }
+                if (layers == 3)
+                {
+                    return new IModule[] {
+                        new Dense(inputs * stack, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
+                        new LayerNorm(hidUnits),
+                        HiddenActivation(activ),
+                        new Dense(hidUnits, hidUnits, weight_init: INIT_W, bias_init : INIT_B),
+                        new LayerNorm(hidUnits),
+                        HiddenActivation(activ),
+                        new Dense(hidUnits, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
+                        new LayerNorm(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
                 }
@@ -263,6 +302,21 @@ namespace DeepUnity.ReinforcementLearning
                 if (DISCRETE_ACTIONS_NUM > 0)
                     discreteNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softmax() }).ToArray());
             }
+            else if (ARCHITECTURE == ArchitectureType.LnMLP)
+            {
+                vNetwork = new Sequential(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                if (CONTINUOUS_ACTIONS_NUM > 0)
+                {
+                    muNetwork = new Sequential(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Tanh() }).ToArray());
+                    sigmaNetwork = new Sequential(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
+                    q1Network = new Sequential(CreateLnMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                    q2Network = new Sequential(CreateLnMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                }
+
+                if (DISCRETE_ACTIONS_NUM > 0)
+                    discreteNetwork = new Sequential(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softmax() }).ToArray());
+
+            }
             else if (ARCHITECTURE == ArchitectureType.RNN)
             {
                 vNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
@@ -307,7 +361,8 @@ namespace DeepUnity.ReinforcementLearning
                     discreteNetwork = new Sequential(CreateATT(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softmax() }).ToArray());
 
             }
-
+            else
+                throw new NotImplementedException("Unhandled ArchType");
 
         }
 
@@ -556,32 +611,32 @@ namespace DeepUnity.ReinforcementLearning
             if(vNetwork!=null)
             {
                 string vnet = JsonUtility.ToJson(vNetwork);
-                File.WriteAllText(Path.Combine(folderPath, $"{valueNetNamingConvention}.json"), vnet);
+                File.WriteAllText(Path.Combine(folderPath, $"{VALUE_NET_NAMING_CONVENTION}.json"), vnet);
             }
             if (q1Network != null)
             {
                 string q1net = JsonUtility.ToJson(vNetwork);
-                File.WriteAllText(Path.Combine(folderPath, $"{q1NetNamingConvention}.json"), q1net);
+                File.WriteAllText(Path.Combine(folderPath, $"{Q1_NET_NAMING_CONVENTION}.json"), q1net);
             }
             if (q2Network != null)
             {
                 string q2net = JsonUtility.ToJson(vNetwork);
-                File.WriteAllText(Path.Combine(folderPath, $"{q2NetNamingConvention}.json"), q2net);
+                File.WriteAllText(Path.Combine(folderPath, $"{Q2_NET_NAMING_CONVENTION}.json"), q2net);
             }
             if (muNetwork != null)
             {
                 string munet = JsonUtility.ToJson(muNetwork);
-                File.WriteAllText(Path.Combine(folderPath, $"{muNetNamingConvention}.json"), munet);
+                File.WriteAllText(Path.Combine(folderPath, $"{MU_NET_NAMING_CONVENTION}.json"), munet);
             }
             if (sigmaNetwork != null)
             {
                 string sigmanet = JsonUtility.ToJson(muNetwork);
-                File.WriteAllText(Path.Combine(folderPath, $"{sigmaNetNamingConvention}.json"), sigmanet);
+                File.WriteAllText(Path.Combine(folderPath, $"{SIGMA_NET_NAMING_CONVENTION}.json"), sigmanet);
             }
             if (discreteNetwork != null)
             {
                 string discretenet = JsonUtility.ToJson(discreteNetwork);
-                File.WriteAllText(Path.Combine(folderPath, $"{discreteNetNamingConvention}.json"), discretenet);
+                File.WriteAllText(Path.Combine(folderPath, $"{DISCRETE_NET_NAMING_CONVENTION}.json"), discretenet);
             }
 #endif
         }

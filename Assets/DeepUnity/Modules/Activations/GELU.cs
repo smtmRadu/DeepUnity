@@ -1,5 +1,6 @@
 using System;
 using DeepUnity.Modules;
+using UnityEngine;
 
 namespace DeepUnity.Activations
 {
@@ -10,14 +11,37 @@ namespace DeepUnity.Activations
     /// mlee @cau.ac.kr
     /// </summary>
     [Serializable]
-    public class GELU : IModule, IActivation
+    public sealed class GELU : IModule, IActivation
     {
+        [SerializeField] private bool inPlace = false;
         private static float sqrt2OverPI = 0.79788456080286535587989211986876f;
+        private Tensor InputCache { get; set; }
 
 
-        protected Tensor InputCache { get; set; }
+        /// <summary>
+        /// <b>Applies the GELU activation function using a negative slope of <paramref name="alpha"/>. </b><br></br>
+        /// Input: (*) <br></br>
+        /// Output: (*) <br></br>
+        /// where * = any shape. 
+        /// </summary>
+        /// <param name="in_place">Modifies the input tensor in place.</param>
+        public GELU(bool in_place = false)
+        {
+            this.inPlace = in_place;
+        }
+       
         public Tensor Predict(Tensor x)
         {
+            if(inPlace)
+            {
+                float tanh_;
+                for (int i = 0; i < x.Count(); i++)
+                {
+                    tanh_ = Utils.Hyperbolics.Tanh(sqrt2OverPI * (x[i] + 0.044715f * x[i] * x[i] * x[i]));
+                    x[i] = 0.5f * x[i] * (1f + tanh_);
+                }
+                return x;
+            }
             return x.Select(x =>
             {
                 float tanh_ = Utils.Hyperbolics.Tanh(sqrt2OverPI * (x + 0.044715f * x * x * x));
@@ -44,7 +68,7 @@ namespace DeepUnity.Activations
             });
         }
 
-        public object Clone() => new GELU();
+        public object Clone() => new GELU(in_place:inPlace);
     }
 }
 

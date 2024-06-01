@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace DeepUnity.Tutorials
 {
-    public class SoccerPlayer : Agent
+    public class FootballPlayer : Agent
     {
         [Header("Plus 5 additional observations")]
         [SerializeField] public Transform ball;

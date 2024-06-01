@@ -84,7 +84,7 @@ namespace DeepUnity.Models
             }
         }
         /// <summary>
-        /// Freezes/Unfreezes all <see cref="ILearnable"/> modules. (default: <b>false</b>)
+        /// Freezes/Unfreezes all <see cref="ILearnable"/> modules. (default: <b>true</b>)
         /// </summary>
         public override bool RequiresGrad
         {

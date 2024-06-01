@@ -1970,8 +1970,8 @@ namespace DeepUnity
         }
         /// <summary>
         /// All tensors must have the same shape. <br></br>
-        /// If <b>axis == null</b>, all tensors are unsequeezed on axis 0, and than concatenated on axis 0. <br></br>
-        /// Example: <br></br>
+        /// If <b>axis == null</b>, all tensors are stacked on a new dimension (unsequeezed on axis 0 then concatenated on axis 0) <br></br>
+        /// E.g.: <br></br>
         /// Cat(axis: 0,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (8,3) <br></br>
         /// Cat(axis: 1,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (2,12) <br></br>
         /// Car(axis: 1,    tensors: {(2,3)} => output (2,3) <br></br>

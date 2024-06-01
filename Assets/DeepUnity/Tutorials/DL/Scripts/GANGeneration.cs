@@ -27,7 +27,6 @@ namespace DeepUnity.Tutorials
         [SerializeField] private int batch_size = 64;
         [SerializeField] private float lr = 2e-4f;
         [SerializeField] private WhatToDo perform = WhatToDo.Train;
-        [SerializeField] private bool writeLoss = true;
 
         public PerformanceGraph G_graph = new PerformanceGraph();
         public PerformanceGraph D_graph = new PerformanceGraph();
@@ -39,12 +38,12 @@ namespace DeepUnity.Tutorials
 
         private int batch_index = 0;
 
-        const int latent_dim = 100;
-        const int size = 1024; // 1024 original
+        const int latent_dim = 64;
+        const int size = 512; // 1024 original
         const float dropout = 0.2f; // 0.3f original
         private void Start()
         {
-            InitType wInit = InitType.LeCun_Uniform;
+            InitType wInit = InitType.Kaiming_Uniform;
             InitType bInit = InitType.Zeros;
             if (D == null)
             {
@@ -52,11 +51,11 @@ namespace DeepUnity.Tutorials
                     new Flatten(),
 
                     new Dense(784, size, weight_init:wInit, bias_init:bInit),
-                    new SELU(),
+                    new LeakyReLU(),
                     new Dropout(dropout),
                 
                     new Dense(size, size/4, weight_init: wInit, bias_init: bInit),
-                     new SELU(),
+                    new LeakyReLU(),
                     new Dropout(dropout),
 
                     new Dense(size / 4, 1, weight_init: wInit, bias_init: bInit),
@@ -67,16 +66,15 @@ namespace DeepUnity.Tutorials
             {
                 G = new Sequential(
                     new Dense(latent_dim, size / 4, weight_init: wInit, bias_init: bInit),
-                     new SELU(),
+                    new LeakyReLU(),
 
                     new Dense(size / 4, size / 2, weight_init: wInit, bias_init: bInit),
-                    new SELU(),
-
+                    new LeakyReLU(),
                     new Dense(size / 2, size, weight_init: wInit, bias_init: bInit),
-                     new SELU(),
+                    new LeakyReLU(),
 
                     new Dense(size, 784, weight_init: wInit, bias_init: bInit),
-                     new Tanh(),
+                    new Tanh(),
 
                     new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 })
                     ).CreateAsset("generator");
@@ -125,16 +123,41 @@ namespace DeepUnity.Tutorials
                 if (batch_index % (batch_size * 50) == 0)
                     SaveNetworks();
 
-                // Train Discriminator
-                var x = Tensor.Concat(null, Utils.GetRange(dataset, batch_index, batch_size).ToArray());
-                var d_error = TrainDiscriminator(x);
-                if(writeLoss) D_graph.Append(d_error);
+                var x = Tensor.Concat(null, Utils.GetRange(dataset, batch_index, batch_size).ToArray()); // real
 
+                // Train Discriminator------------------------------------------------------------------
+                var z = Tensor.RandomNormal(batch_size, latent_dim);
+                var Gz = G.Predict(z); // fake
 
-                // Train Generator
-                var g_error = TrainGenerator();
-                if (writeLoss) G_graph.Append(g_error);
+                d_optim.ZeroGrad();
 
+                var Dx = D.Forward(x); // pred-real
+                Loss loss = Loss.BCE(Dx, Tensor.Ones(Dx.Shape));
+                D.Backward(loss.Gradient);
+
+                var DGz = D.Forward(Gz); // pred-fake
+                Loss loss2 = Loss.BCE(DGz, Tensor.Zeros(DGz.Shape));
+                D.Backward(loss2.Gradient);
+
+                d_optim.Step();
+                D_graph.Append(loss.Item + loss2.Item);
+                // -----------------------------------------------------------------------------------------------------
+
+                // Train Generator ------------------------------------------------------------------
+                z = Tensor.RandomNormal(batch_size, latent_dim);
+                Gz = G.Forward(z);
+
+                D.RequiresGrad = false;
+                g_optim.ZeroGrad();
+                
+                DGz = D.Forward(Gz); // pred-fake 
+                loss = Loss.BCE(DGz, Tensor.Ones(DGz.Shape)); //(maximize realism)
+                G.Backward(D.Backward(loss.Gradient));
+
+                g_optim.Step();
+                D.RequiresGrad = true;
+                G_graph.Append(loss.Item);
+                // -----------------------------------------------------------------------------------------------------
 
                 batch_index += batch_size;
 
@@ -144,45 +167,6 @@ namespace DeepUnity.Tutorials
 
             
         }
-        private float TrainDiscriminator(Tensor x) // works
-        {
-            // Loss = -log(D(x)) - log(1 - D(G(z)))
-            // Gradient ascent
-
-            var z = Tensor.RandomNormal(batch_size, latent_dim);
-            var Gz = G.Predict(z);
-
-            d_optim.ZeroGrad();
-
-            var Dx = D.Forward(x);
-            var loss = -Dx.Log();
-            D.Backward(-Dx.Reciprocal());
-
-            var DGz = D.Forward(Gz);
-            var loss2 = -(-DGz + 1f).Log();
-            D.Backward((-DGz + 1f).Reciprocal());
-
-            d_optim.Step();
-
-            return loss.Average() + loss2.Average();
-        }
-        private float TrainGenerator()
-        {
-            // Loss = log(1 - D(G(z)))
-            // Gradient descent
-            g_optim.ZeroGrad();
-
-            var z = Tensor.RandomNormal(batch_size, latent_dim);
-            var Gz = G.Forward(z);
-            var DGz = D.Forward(Gz);
-            var loss = (-DGz + 1f).Log();
-            var dLdG = D.Backward(-(-DGz + 1f).Reciprocal());
-            G.Backward(dLdG);
-            g_optim.Step();
-
-            return loss.Average();
-        }
-
         private void DisplayGeneratorProgress()
         {
             if (displays.Count == 0)

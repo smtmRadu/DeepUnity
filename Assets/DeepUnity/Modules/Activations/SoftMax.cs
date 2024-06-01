@@ -14,9 +14,11 @@ namespace DeepUnity.Activations
     /// where * = any shape and H = features_num
     /// </summary>
     [Serializable]
-    public class Softmax : IModule, IActivation
+    public sealed class Softmax : IModule, IActivation
     {
         [SerializeField] private float temperature = 1f;
+        private Tensor OutputCache { get; set; }
+
         /// <summary>
         /// <b>Applies the Softmax function over the last input's dimension H (axis: -1).</b> <br></br>
         /// Input: <b>(B, H)</b>, <b>(H)</b> or  <b>(B, L, H)</b>, <b>(L, H)</b> for sequential input <br></br>
@@ -26,12 +28,12 @@ namespace DeepUnity.Activations
         public Softmax(float temperature = 1f) 
         {
             if (temperature <= 0f)
-                throw new ArgumentException("Temperature cannot be less or equal than 1");
+                throw new ArgumentException("Temperature cannot be less or equal with 0");
 
             this.temperature = temperature;
         }
 
-        private Tensor OutputCache { get; set; }
+       
         public Tensor Predict(Tensor input)
         {
             int iRank = input.Rank;
@@ -59,7 +61,7 @@ namespace DeepUnity.Activations
             return RecursiveLoRBackward(dLdY, OutputCache);
         }
 
-        private Tensor RecursiveLoRBackward(Tensor dLdY, Tensor outputCache)
+        private Tensor RecursiveLoRBackward(Tensor dLdY, Tensor outputCache) // LoR means Low Rank decomp
         {
             if (dLdY.Rank == 3)
             {           

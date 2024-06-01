@@ -32,11 +32,13 @@ namespace DeepUnity.Modules
 
         [SerializeField] private int num_features;
         [SerializeField] private float momentum;
+        [SerializeField] private float epsilon;
 
         // Learnable parameters
         [SerializeField] private Tensor runningMean;
         [SerializeField] private Tensor runningVar;
 
+        // Affine parameters
         [SerializeField] private Tensor gamma;
         [SerializeField] private Tensor beta;
         [NonSerialized] private Tensor gammaGrad;
@@ -62,18 +64,24 @@ namespace DeepUnity.Modules
         /// </summary>
         /// <param name="num_features">Input's last axis dimension (H).</param>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
-        public BatchNorm1D(int num_features, float momentum = 0.9f)
+        /// <param name="affine">Do you use gamma and beta affine parameters?</param>       
+        public BatchNorm1D(int num_features, float eps = 1e-5f, float momentum = 0.9f, bool affine = true)
         {
             if (num_features < 1)
                 throw new ArgumentException($"BatchNorm layer cannot have num_features < 1. (Received arg: {num_features})");
 
             this.num_features = num_features;
             this.momentum = momentum;
+            this.epsilon = eps;
 
-            gamma = Tensor.Ones(num_features);
-            beta = Tensor.Zeros(num_features);
-            gammaGrad = Tensor.Zeros(num_features);
-            betaGrad = Tensor.Zeros(num_features);
+            if(affine)
+            {
+                gamma = Tensor.Ones(num_features);
+                beta = Tensor.Zeros(num_features);
+                gammaGrad = Tensor.Zeros(num_features);
+                betaGrad = Tensor.Zeros(num_features);
+            }
+            
 
             runningVar = Tensor.Ones(num_features);
             runningMean = Tensor.Zeros(num_features);
@@ -95,20 +103,26 @@ namespace DeepUnity.Modules
             {
                 int batch_size = input.Size(0);
                 var e_mean = Tensor.Expand(Tensor.Unsqueeze(runningMean, 0), 0, batch_size);
-                var e_var = Tensor.Expand(Tensor.Unsqueeze(runningVar, 0), 0, batch_size);
-                var e_gamma = Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size);
-                var e_beta = Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
+                var e_std = Tensor.Expand(Tensor.Unsqueeze((runningVar + epsilon).Sqrt(), 0), 0, batch_size);
+                var input_centered = (input - e_mean) / e_std;
+                
+                if (gamma == null) // not affine
+                    return input_centered;
 
-                var input_centered = (input - e_mean) / (e_var.Sqrt() + Utils.EPSILON);
+                var e_gamma = Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size);
+                var e_beta = Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);              
                 var output = e_gamma * input_centered + e_beta;
 
                 return output;
             }
             else
             {
-                var input_centered = (input - runningMean) / (runningVar.Sqrt() + Utils.EPSILON);
-                var output = gamma * input_centered + beta;
+                var input_centered = (input - runningMean) / ((runningVar + epsilon).Sqrt());
 
+                if(gamma == null) // not affine
+                    return input_centered;
+
+                var output = gamma * input_centered + beta;
                 return output;
             }
 
@@ -125,12 +139,12 @@ namespace DeepUnity.Modules
 
             // When training (only on mini-batch training), we cache the values for backprop also
             var mean = Tensor.Mean(input, 0, keepDim: true); // mini-batch means      [1, features_mean]
-            var variance_biased = Tensor.Var(input, 0, correction: 0, keepDim: true); // no-corrected mini-batch variances  [1, features_mean]
+            var variance_biased = Tensor.Var(input, 0, correction: 0, keepDim: true); // zero-corrected mini-batch variances  [1, features_mean]
 
 
             // normalize and cache
+            std = (variance_biased + epsilon).Sqrt().Expand(0, batch_size);
             xCentered = input - Tensor.Expand(mean, 0, batch_size);
-            std = Tensor.Sqrt(variance_biased + Utils.EPSILON).Expand(0, batch_size);
             xHat = xCentered / std;
 
 
@@ -139,9 +153,12 @@ namespace DeepUnity.Modules
             runningMean = runningMean * momentum + mean.Squeeze(0) * (1f - momentum);
             runningVar = runningVar * momentum + variance_unbiased * (1f - momentum);
 
-            // scale and shift
-            var y = Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size) * xHat + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
-            return y;
+            // no affine
+            if (gamma == null)
+                return xHat;
+
+            // affine ON
+            return Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size) * xHat + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
         }
         public Tensor Backward(Tensor dLdY)
         {
@@ -149,23 +166,23 @@ namespace DeepUnity.Modules
 
             // differentiation on https://arxiv.org/pdf/1502.03167.pdf page 4
 
-            var dLdxHat = dLdY * gamma.Unsqueeze(0).Expand(0, m); // [batch, outs]
+            var dLdxHat = gamma == null ? dLdY : dLdY * gamma.Unsqueeze(0).Expand(0, m); // [batch, outs]
 
-            var dLdVarB = Tensor.Sum(
-                         dLdxHat * xCentered * (-1f / 2f) * (std.Pow(2f) + Utils.EPSILON).Pow(-3f / 2f),
+            var dLdVarB = Tensor.Mean(
+                         dLdxHat * xCentered * (-1f / 2f) * (std.Pow(2f) + epsilon).Pow(-3f / 2f),
                          axis: 0,
                          keepDim: true).Expand(0, m);
-            var dLdMuB = Tensor.Sum(
+            var dLdMuB = Tensor.Mean(
                          dLdxHat * -1f / std + dLdVarB * -2f * xCentered / m,
                          axis: 0,
                          keepDim: true).Expand(0, m);
 
             var dLdX = dLdxHat * 1f / std + dLdVarB * 2f * xCentered / m + dLdMuB * (1f / m);
 
-            if(RequiresGrad)
+            if(RequiresGrad && gamma != null)
             {
-                var dLdGamma = Tensor.Sum(dLdY * xHat, 0);
-                var dLdBeta = Tensor.Sum(dLdY, 0);
+                var dLdGamma = Tensor.Mean(dLdY * xHat, 0);
+                var dLdBeta = Tensor.Mean(dLdY, 0);
 
                 Tensor.CopyTo(gammaGrad + dLdGamma, gammaGrad);
                 Tensor.CopyTo(betaGrad + dLdBeta, betaGrad);
@@ -177,16 +194,29 @@ namespace DeepUnity.Modules
 
         public object Clone()
         {
-            BatchNorm1D bnclone = new BatchNorm1D(num_features, momentum);
-            bnclone.Device = Device;
-            bnclone.RequiresGrad = RequiresGrad;
-            bnclone.gamma = (Tensor)gamma.Clone();
-            bnclone.beta = (Tensor)beta.Clone();
-            bnclone.gammaGrad = (Tensor)gammaGrad.Clone();
-            bnclone.betaGrad = (Tensor)betaGrad.Clone();
-            bnclone.runningMean = (Tensor)runningMean.Clone();
-            bnclone.runningVar = (Tensor)runningVar.Clone();
-            return bnclone;
+            if(gamma != null)
+            {
+                BatchNorm1D bnclone = new BatchNorm1D(num_features, epsilon, momentum);
+                bnclone.Device = Device;
+                bnclone.RequiresGrad = RequiresGrad;
+                bnclone.gamma = (Tensor)gamma.Clone();
+                bnclone.beta = (Tensor)beta.Clone();
+                bnclone.gammaGrad = (Tensor)gammaGrad.Clone();
+                bnclone.betaGrad = (Tensor)betaGrad.Clone();
+                bnclone.runningMean = (Tensor)runningMean.Clone();
+                bnclone.runningVar = (Tensor)runningVar.Clone();
+                return bnclone;
+            }
+            else
+            {
+                BatchNorm1D bnclone = new BatchNorm1D(1, epsilon, momentum, false);
+                bnclone.Device = Device;
+                bnclone.RequiresGrad = RequiresGrad;
+                bnclone.runningMean = (Tensor)runningMean.Clone();
+                bnclone.runningVar = (Tensor)runningVar.Clone();
+                return bnclone;
+            }
+           
         }
         public Parameter[] Parameters()
         {

@@ -2198,7 +2198,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 10000
-  decisionPeriod: 5
+  decisionPeriod: 10
   takeActionsBetweenDecisions: 1
 --- !u!114 &7951684825950944515
 MonoBehaviour:
@@ -2219,14 +2219,14 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 26
   discreteActions: 0
-  archType: 0
+  archType: 1
   numLayers: 3
-  hidUnits: 128
-  model: {fileID: 11400000, guid: 84354860cf6cc9e41b0e70c8a7321055, type: 2}
-  behaviourType: 1
+  hidUnits: 144
+  activation: 0
+  model: {fileID: 11400000, guid: 8567689bbd0c8e2449e6896658b79a0c, type: 2}
+  behaviourType: 2
   onEpisodeEnd: 1
   useSensors: 0
-  bonus: {fileID: 0}
   head: {fileID: 134705815126749293}
   neck: {fileID: 6719372872287658692}
   body: {fileID: 2350992476039320094}
@@ -2250,9 +2250,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0417462f17fa91146a9428483b2049c2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxJointSpring: 7000
+  maxJointSpring: 6000
   jointDamper: 100
-  maxJointForce: 25000
+  maxJointForce: 20000
 --- !u!1 &2402664956156985392
 GameObject:
   m_ObjectHideFlags: 0

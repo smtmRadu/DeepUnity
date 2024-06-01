@@ -365,7 +365,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &492610711
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1335,7 +1335,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 0
+  m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1539047897
 MonoBehaviour:
@@ -1355,8 +1355,7 @@ MonoBehaviour:
   epochs: 100
   weightDecay: 0
   batch_size: 64
-  augment_data: 0
-  augment_strength: 0.6
+  augment_data: 1
   maxNorm: 0.5
   accuracyGraph:
     graph:
@@ -1903,7 +1902,7 @@ RectTransform:
   - {fileID: 1663557169}
   - {fileID: 1774734172}
   m_Father: {fileID: 0}
-  m_RootOrder: 1
+  m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
@@ -2242,7 +2241,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1946006905
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2258,10 +2257,9 @@ MonoBehaviour:
   canvas: {fileID: 1823018698}
   D: {fileID: 0}
   G: {fileID: 0}
-  batch_size: 100
+  batch_size: 64
   lr: 0.0002
   perform: 1
-  writeLoss: 1
   G_graph:
     graph:
       serializedVersion: 2

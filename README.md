@@ -1,6 +1,6 @@
 # DeepUnity
 ###### In development - does not currently accept Pull Requests, though feel free to Fork and expand upon it
-![version](https://img.shields.io/badge/version-v0.9.9.3-blue)
+![version](https://img.shields.io/badge/version-v0.9.9.4-blue)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using Proximal Policy Optimization (PPO), Soft Actor-Critic (SAC), Deep Deterministic Policy Gradient (DDPG) and Twin Delayed DDPG (TD3).
 
@@ -160,9 +160,6 @@ All tutorial scripts are included inside _Assets/DeepUnity/Tutorials_ folder, co
 
 ###### _These crawlers are training to scrape over the internet_
 ![crawlers](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/crawlers.gif?raw=true)
-
-###### _Walkers are joining all other training parties_
-<video src="Assets/DeepUnity/Documentation/walker.mp4" width="640" height="480" controls></video>
 
 ###### _Disney Robots are on the way_
 ![robot](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/robot.gif?raw=true)

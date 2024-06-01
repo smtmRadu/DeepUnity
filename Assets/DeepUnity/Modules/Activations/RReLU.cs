@@ -10,7 +10,7 @@ namespace DeepUnity.Activations
     /// and on inference the slope is (<paramref name="lower"/> + <paramref name="upper"/>) / 2.
     /// </summary>
     [Serializable]
-    public class RReLU : IModule, IActivation
+    public sealed class RReLU : IModule, IActivation
     {
         [SerializeField] private float lower = 0.1249999999776482582f;
         [SerializeField] private float upper = 0.329999999776482582f;

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using DeepUnity.Models;
+using UnityEngine.UIElements;
 
 
 namespace DeepUnity.Tutorials
@@ -20,7 +21,6 @@ namespace DeepUnity.Tutorials
         [SerializeField] private float weightDecay = 0.01f;
         [SerializeField] private int batch_size = 64;
         [SerializeField] private bool augment_data = false;
-        [SerializeField] private float augment_strength = 1f;
         [SerializeField] private float maxNorm = 0.5f;
         [SerializeField] private PerformanceGraph accuracyGraph;
         [SerializeField] private PerformanceGraph lossGraph;
@@ -33,51 +33,42 @@ namespace DeepUnity.Tutorials
 
         public void Start()
         {
-
-
             if (network == null)
             {
                 network = new Sequential(
 
-                         new Conv2D(1, 4, 3),
+                         new ZeroPad2D(1),
+                         new Conv2D(1, 32, 3),
                          new ReLU(),
                          new MaxPool2D(2),
-                         
-                         new Conv2D(4, 8, 3),
+                         //new BatchNorm2D(32),
+                         new Dropout(0.35f),
+
+                         new ZeroPad2D(1),
+                         new Conv2D(32, 64, 3),
                          new ReLU(),
                          new MaxPool2D(2),
-                        
+                         //new BatchNorm2D(64),
+                         new Dropout(0.35f),
 
-                         // Block ===============================================================
-                         new Reshape(new int[] {8, 5, 5}, new int[] { 8, 25 }),
-                         new Permute(-1, -2),
-                         new ResidualConnection.Fork(),
-                         new Attention(8, 8),
-                         new ResidualConnection.Join(),
-                         new Reshape(new int[] {25, 8}, new int[] {200}),
-                         new RMSNorm(),
+                         new ZeroPad2D(1),
+                         new Conv2D(64, 128, 3),
+                         new ReLU(),
+                         new MaxPool2D(2),
+                         //new BatchNorm2D(128),
+                         new Dropout(0.35f),
 
-                         new ResidualConnection.Fork(),
-                         new Dense(200, 200),
-                         new RMSNorm(),
-                         new PReLU(),
-                         // new Dropout(0.1f),
-                         new ResidualConnection.Join(),
-                         
-                         // Block ================================================================
-
-                         new Dense(200, 200),                
-                         new RMSNorm(),
-                         new PReLU(),                        
-                         new Dense(200, 10),
-
-                         new Softmax()).CreateAsset(name);
+                         new Flatten(),
+                         new Dense(1152, 256),
+                         new LayerNorm(256),
+                         new ReLU(),
+                         new Dense(256, 10),
+                         new Softmax()).CreateAsset(name); 
             }
 
             network.Device = Device.GPU;
 
             print(network.Predict(Tensor.Random01(1, 28, 28)));
-
 
             Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out train, out _, DatasetSettings.LoadTrainOnly);
             Debug.Log("MNIST Dataset loaded.");
@@ -142,10 +133,10 @@ namespace DeepUnity.Tutorials
 
         public Tensor AugmentImage(Tensor image)
         {
-            Tensor tex = Utils.ImageProcessing.Zoom(image, Utils.Random.Range(0.7f * augment_strength, 1.4f * augment_strength));
-            tex = Utils.ImageProcessing.Rotate(tex, Utils.Random.Range(-60f * augment_strength, 60f * augment_strength));
-            tex = Utils.ImageProcessing.Offset(tex, Utils.Random.Range(-5f * augment_strength, 5f * augment_strength), Utils.Random.Range(-5f * augment_strength, 5f * augment_strength));
-            tex = Utils.ImageProcessing.Noise(tex, Utils.Random.Range(0.05f * augment_strength, 0.15f * augment_strength), Utils.Random.Range(0.20f * augment_strength, 0.30f * augment_strength));
+            Tensor tex = Utils.ImageProcessing.Zoom(image, Utils.Random.Range(0.8f, 1.2f));
+            tex = Utils.ImageProcessing.Rotate(tex, Utils.Random.Range(-10, 10));
+            tex = Utils.ImageProcessing.Offset(tex, Utils.Random.Range(-3, 3), Utils.Random.Range(-3, 3));
+            tex = Utils.ImageProcessing.Noise(tex, Utils.Random.Range(0.01f, 0.05f), Utils.Random.Range(0.01f, 0.1f));
             return tex;
         }
     }

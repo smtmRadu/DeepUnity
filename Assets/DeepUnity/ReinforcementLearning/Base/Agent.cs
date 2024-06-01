@@ -13,7 +13,10 @@ using UnityEngine;
 namespace DeepUnity.ReinforcementLearning
 {
     /// <summary>
-    /// Note that the Agent Learning behavior is disabled on build.
+    /// The base class for RL agents. You have to: <br></br>
+    /// <b>1.</b> Override the <see cref="CollectObservations(StateVector)"/> method. <br></br>
+    /// <b>2.</b> Override the <see cref="OnActionReceived(ActionBuffer)"/> method. <br></br>
+    /// <b>3.</b> Create a reward function using <see cref="AddReward(float)"/> or <see cref="SetReward(float)"/> method. <br></br>
     /// </summary>
     [DisallowMultipleComponent, RequireComponent(typeof(DecisionRequester))]
     public abstract class Agent : MonoBehaviour
@@ -580,7 +583,7 @@ namespace DeepUnity.ReinforcementLearning
 
 
                 int arTp = serializedObject.FindProperty("archType").enumValueIndex;
-                if (arTp == (int)ArchitectureType.MLP)
+                if (arTp == (int)ArchitectureType.MLP || arTp == (int)ArchitectureType.LnMLP)
                 {
                     EditorGUILayout.LabelField("Observations");
 

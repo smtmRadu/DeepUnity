@@ -5,12 +5,6 @@ using UnityEngine;
 
 namespace DeepUnity
 {
-    /// <summary>
-    /// Notes:
-    /// 1. Do not use TensorGPU (it was experimental).
-    /// 2. CamSensor requires a different architecture containing Conv2D modules in order for max efficiency.
-    /// 
-    /// </summary>
     public static class DeepUnityMeta
     {
         internal readonly static ComputeShader TensorCS;
@@ -89,7 +83,7 @@ namespace DeepUnity
         
         [Tooltip("[Xavier Glorot] N(0, s) where s = sqrt(2 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation functions.")]
         Xavier_Normal,
-        [Tooltip("[Xavier Gloro] U(-k, k) where k = sqrt(6 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation functions.")]
+        [Tooltip("[Xavier Glorot] U(-k, k) where k = sqrt(6 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation functions.")]
         Xavier_Uniform,
 
         [Tooltip("[Yann LeCun] N(0, s) where s = sqrt(1 / fan_in). Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
@@ -260,6 +254,8 @@ namespace DeepUnity
     {
         [Tooltip("Multilayer Perceptron")]
         MLP,
+        [Tooltip("Multilayer Perceptron with Normalization Layers")]
+        LnMLP,
         [Tooltip("Convolutional Neural Network")]
         CNN,
         [Tooltip("Recurrent Neural Network")]

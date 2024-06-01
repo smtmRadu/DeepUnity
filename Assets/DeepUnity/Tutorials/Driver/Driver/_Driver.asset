@@ -1,0 +1,134 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
+  m_Name: _Driver
+  m_EditorClassIdentifier: 
+  version: 104
+  behaviourName: Driver
+  assetCreated: 1
+  observationSize: 42
+  stackedInputs: 1
+  continuousDim: 3
+  discreteDim: 0
+  config: {fileID: 11400000, guid: 8705b8638162cda489838efce2fc4e2b, type: 2}
+  vNetwork: {fileID: 11400000, guid: c4939ee2c10a1db4e8f488b1902e9f64, type: 2}
+  q1Network: {fileID: 11400000, guid: 19c9059a73073a54e9f2d38c335feec0, type: 2}
+  q2Network: {fileID: 11400000, guid: 29614d316c1b69449a3fc02533cd32f8, type: 2}
+  muNetwork: {fileID: 11400000, guid: 56e0a62ea82f87a4799f917ed1bd2459, type: 2}
+  sigmaNetwork: {fileID: 11400000, guid: 69f2d36e73c3ee445b993b14ff2823e1, type: 2}
+  discreteNetwork: {fileID: 0}
+  inferenceDevice: 0
+  trainingDevice: 1
+  targetFPS: 50
+  clipping: 5
+  normalize: 0
+  observationsNormalizer:
+    step: 0
+    mean:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 2a000000
+    m2:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 2a000000
+  rewardsNormalizer:
+    step: 0
+    R: 0
+    mean: 0
+    m2: 0
+  stochasticity: 0
+  standardDeviationValue: 1.99
+  standardDeviationScale: 1.5
+  noiseValue: 0.1

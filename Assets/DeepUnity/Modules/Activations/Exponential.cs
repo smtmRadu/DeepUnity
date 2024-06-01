@@ -10,8 +10,10 @@ namespace DeepUnity.Activations
     /// where * = any shape.
     /// </summary>
     [Serializable]
-    public class Exponential : IModule, IActivation
+    public sealed class Exponential : IModule, IActivation
     {
+
+        private Tensor OutputCache { get; set; }
         /// <summary>
         /// <b>Applies the Exponential activation function. </b><br></br>
         /// Input: (*) <br></br>
@@ -20,7 +22,7 @@ namespace DeepUnity.Activations
         /// </summary>
         public Exponential() { }
 
-        protected Tensor OutputCache { get; set; }
+       
 
         public Tensor Predict(Tensor x)
         {

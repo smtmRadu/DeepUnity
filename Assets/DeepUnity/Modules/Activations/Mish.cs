@@ -4,10 +4,10 @@ using DeepUnity.Modules;
 namespace DeepUnity.Activations
 {
     [Serializable]
-    public class Mish : IModule, IActivation
+    public sealed class Mish : IModule, IActivation
     {
 
-        protected Tensor InputCache { get; set; }
+        private Tensor InputCache { get; set; }
         public Tensor Predict(Tensor x)
         {
             return x.Select(x =>

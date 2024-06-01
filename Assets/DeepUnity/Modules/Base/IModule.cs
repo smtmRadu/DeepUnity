@@ -28,6 +28,7 @@ namespace DeepUnity.Modules
         public LazyDense lazydense = null;
         public MultiheadAttention multiheadattention = null;
         public AttentionV2 attentionv2 = null;
+        public KANLayer kanlayer = null;
               
         // Normalization
         public BatchNorm1D batchnorm1d = null;
@@ -79,6 +80,8 @@ namespace DeepUnity.Modules
         public LogSoftmax logsoftmax = null;
         public RReLU rrelu = null;
         public SELU selu = null;
+        public SiLU silu = null;
+
 
         // Learnable Activations
         public PReLU prelu = null;
@@ -278,6 +281,14 @@ namespace DeepUnity.Modules
             {
                 permute = permuteModule;
             }
+            else if (module is SiLU siluModule)
+            {
+                silu = siluModule;
+            }
+            else if (module is KANLayer kanlayerModule)
+            {
+                kanlayer = kanlayerModule;
+            }
             else
                 throw new Exception($"Unhandled module type while wrapping ({module.GetType().Name}).");
         }
@@ -474,6 +485,14 @@ namespace DeepUnity.Modules
             else if (typeof(Permute).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.permute;
+            }
+            else if (typeof(SiLU).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.silu;
+            }
+            else if (typeof(KANLayer).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.kanlayer;
             }
             else
                 throw new Exception($"Unhandled module type while unwrapping ({moduleWrapper.name}).");

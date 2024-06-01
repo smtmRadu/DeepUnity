@@ -32,6 +32,7 @@ namespace DeepUnity.Modules
 
         [SerializeField] private int num_features;
         [SerializeField] private float momentum;
+        [SerializeField] private float epsilon;
 
         // Learnable parameters
         [SerializeField] private Tensor runningMean;
@@ -61,11 +62,13 @@ namespace DeepUnity.Modules
         /// </summary>
         /// <param name="num_channels">The number of input's channels (C).</param>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
-        public BatchNorm2D(int num_channels, float momentum = 0.9f)
+        public BatchNorm2D(int num_channels, float eps = 1e-5f, float momentum = 0.9f)
         {
+            throw new NotImplementedException("Untested layer");
             if (num_channels < 1)
                 throw new ArgumentException($"BatchNorm2D layer cannot have num_channels < 1. (received: {num_channels})");
 
+            this.epsilon = eps;
             this.num_features = num_channels;
             this.momentum = momentum;
 
@@ -108,7 +111,7 @@ namespace DeepUnity.Modules
                             for (int w = 0; w < width; w++)
                             {
                                 expanded_mean[b, c, h, w] = runningMean[c];
-                                expanded_std[b, c, h, w] = MathF.Sqrt(runningVar[c] + Utils.EPSILON);
+                                expanded_std[b, c, h, w] = MathF.Sqrt(runningVar[c] + epsilon);
                                 expanded_gamma[b, c, h, w] = gamma[c];
                                 expanded_beta[b, c, h, w] = beta[c];
                             }
@@ -134,7 +137,7 @@ namespace DeepUnity.Modules
                         for (int w = 0; w < width; w++)
                         {
                             expanded_mean[c, h, w] = runningMean[c];
-                            expanded_std[c, h, w] = MathF.Sqrt(runningVar[c] + Utils.EPSILON);
+                            expanded_std[c, h, w] = MathF.Sqrt(runningVar[c] + epsilon);
                             expanded_gamma[c, h, w] = gamma[c];
                             expanded_beta[c, h, w] = beta[c];
                         }
@@ -227,11 +230,11 @@ namespace DeepUnity.Modules
 
             var dLdxHat = dLdY * expanded_gamma; // [batch, C, H, W]
 
-            var dLdVarB = Tensor.Sum(
-                         dLdxHat * xCentered * (-1f / 2f) * (std.Square() + Utils.EPSILON).Pow(-3f / 2f),
+            var dLdVarB = Tensor.Mean(
+                         dLdxHat * xCentered * (-1f / 2f) * (std.Square() + epsilon).Pow(-3f / 2f),
                          axis: 0,
                          keepDim: true).Expand(0, m);
-            var dLdMuB = Tensor.Sum(
+            var dLdMuB = Tensor.Mean(
                          dLdxHat * -1f / std + dLdVarB * -2f * xCentered / m,
                          axis: 0,
                          keepDim: true).Expand(0, m);
@@ -240,8 +243,8 @@ namespace DeepUnity.Modules
 
             if(RequiresGrad)
             {
-                var dLdGamma = Tensor.Sum(dLdY * xHat, 0).Mean(-1).Mean(-1);
-                var dLdBeta = Tensor.Sum(dLdY, 0).Mean(-1).Mean(-1);
+                var dLdGamma = Tensor.Mean(dLdY * xHat, 0).Mean(-1).Mean(-1);
+                var dLdBeta = Tensor.Mean(dLdY, 0).Mean(-1).Mean(-1);
 
                 Tensor.CopyTo(gammaGrad + dLdGamma, gammaGrad);
                 Tensor.CopyTo(betaGrad + dLdBeta, betaGrad);
@@ -253,7 +256,7 @@ namespace DeepUnity.Modules
 
         public object Clone()
         {
-            BatchNorm2D bnclone = new BatchNorm2D(num_features, momentum);
+            BatchNorm2D bnclone = new BatchNorm2D(num_features, epsilon, momentum);
             bnclone.Device = Device;
             bnclone.RequiresGrad = RequiresGrad;
             bnclone.gamma = (Tensor)gamma.Clone();

@@ -8,12 +8,12 @@ namespace DeepUnity.Tutorials
     public class Driver : Agent
     {
 
-        [Header("Attributes - No additional observations")]
+      
         private CarController carController;
 
         List<GameObject> checkPoints = new List<GameObject>();
 
-
+        [Header("Attributes - No additional observations, no normalization.")]
         public float maxMotorTorque = 1000f;
         public float maxSteerAngle = 35f;
         public float breakPower = 1000000f;
@@ -71,14 +71,14 @@ namespace DeepUnity.Tutorials
         {
             if(other.CompareTag("Goal"))
             {
-                AddReward(+0.5f);
+                AddReward(+0.1f);
 
                 checkPoints.Add(other.gameObject);
                 other.gameObject.SetActive(false);
             }
             else if(other.CompareTag("Target"))
             {
-                AddReward(+1f);
+                AddReward(+0.15f);
                 EndEpisode();
             }
         }

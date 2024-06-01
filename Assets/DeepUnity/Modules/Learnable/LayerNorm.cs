@@ -38,12 +38,17 @@ namespace DeepUnity.Modules
         /// where  B = batch_size and H = in_features.<br />
         /// <b>Applies normalization over the last dimension (H) of the input.</b> 
         /// </summary>
-        public LayerNorm()
+        /// <param name="elementwise_affine">Train gamma and beta parameters.</param>
+        public LayerNorm(int num_features, bool elementwise_affine = true)
         {
-            gamma = Tensor.Ones(1);
-            beta = Tensor.Zeros(1);
-            gammaGrad = Tensor.Zeros(1);
-            betaGrad = Tensor.Zeros(1);
+            if (elementwise_affine)
+            {
+                // gamma & beta are affine learnable params
+                gamma = Tensor.Ones(num_features);
+                beta = Tensor.Zeros(num_features);
+                gammaGrad = Tensor.Zeros(num_features);
+                betaGrad = Tensor.Zeros(num_features);
+            }         
         }
         public Tensor Predict(Tensor input)
         {
@@ -51,6 +56,7 @@ namespace DeepUnity.Modules
                 throw new InputException($"Input ({input.Shape.ToCommaSeparatedString()}) received is invalid for LayerNorm. Make sure is of shape (B, H) or (H).");
 
             int feature_size = input.Size(-1);
+            bool isBatched = input.Rank == 2;
 
             Tensor mu = input.Mean(-1, keepDim: true).Expand(-1, feature_size);
             
@@ -58,7 +64,12 @@ namespace DeepUnity.Modules
             xCentered = input - mu;
             xHat = xCentered / (std + Utils.EPSILON);
 
-            return gamma[0] * xHat + beta[0];
+            if(gamma == null) // no affine params
+                return xHat;
+
+            Tensor expanded_gamma = isBatched ? gamma.Unsqueeze(0).Expand(0, input.Size(0)) : gamma;
+            Tensor expanded_beta = isBatched ? beta.Unsqueeze(0).Expand(0, input.Size(0)) : beta;
+            return expanded_gamma * xHat + expanded_beta;
         }
 
         public Tensor Forward(Tensor input)
@@ -71,20 +82,20 @@ namespace DeepUnity.Modules
 
             bool isBatched = dLdY.Rank == 2;
             int m = isBatched ? dLdY.Size(0) : 1;
+            Tensor expanded_gamma = isBatched ? gamma.Unsqueeze(0).Expand(0, m) : gamma;
 
-            Tensor dLdxHat = dLdY * gamma[0];
+            Tensor dLdxHat = gamma == null ? dLdY : dLdY * expanded_gamma;
             Tensor dLdVar = dLdxHat * xCentered * (-1f / 2f) * Tensor.Pow(std.Square() + Utils.EPSILON, -3f / 2f);
             Tensor dLdMu = dLdxHat * -1f / std + dLdVar * -2f * xCentered / m;
             Tensor dLdX = dLdxHat * 1f / std + dLdVar * 2f * xCentered / m + dLdMu * (1f / m);
             
-            if(RequiresGrad)
+            if(RequiresGrad && gamma != null)
             {
-                Tensor dLdGamma = Tensor.Mean(dLdY + xCentered, 0);
-                Tensor dLdBeta = Tensor.Mean(dLdY, 0);
+                Tensor dLdGamma = dLdY * xCentered;
+                Tensor dLdBeta = dLdY;
 
                 Tensor.CopyTo(gammaGrad + dLdGamma.Mean(0), gammaGrad);
                 Tensor.CopyTo(betaGrad + dLdBeta.Mean(0), betaGrad);
-
             }
 
             return dLdX;
@@ -92,17 +103,31 @@ namespace DeepUnity.Modules
 
         public object Clone()
         {
-            LayerNorm laynorm = new LayerNorm();
-            laynorm.Device = Device;
-            laynorm.RequiresGrad = RequiresGrad;
-            laynorm.gamma = (Tensor)gamma.Clone();
-            laynorm.beta = (Tensor)beta.Clone();
-            laynorm.gammaGrad = (Tensor)gammaGrad.Clone();
-            laynorm.betaGrad = (Tensor)betaGrad.Clone();
-            return laynorm;
+            if (gamma != null)
+            {
+                LayerNorm laynorm = new LayerNorm(gamma.Size(0));
+                laynorm.Device = Device;
+                laynorm.RequiresGrad = RequiresGrad;
+                laynorm.gamma = (Tensor)gamma.Clone();
+                laynorm.beta = (Tensor)beta.Clone();
+                laynorm.gammaGrad = (Tensor)gammaGrad.Clone();
+                laynorm.betaGrad = (Tensor)betaGrad.Clone();
+                return laynorm;
+            }
+            else
+            {
+                LayerNorm laynorm = new LayerNorm(0, false);
+                laynorm.Device = Device;
+                laynorm.RequiresGrad = RequiresGrad;
+                return laynorm;
+            }
+            
         }
         public Parameter[] Parameters()
         {
+            if (gamma == null)
+                return new Parameter[0];
+
             if (gammaGrad == null)
                 OnAfterDeserialize();
 
@@ -121,6 +146,8 @@ namespace DeepUnity.Modules
             // This function is actually having 2 workers on serialization.
             // If shape int[] was not deserialized, we need to break this worker.
             // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
+            if (gamma == null)
+                return;
 
             if (gamma.Shape == null)
                 return;

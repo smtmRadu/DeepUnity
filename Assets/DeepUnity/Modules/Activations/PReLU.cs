@@ -9,11 +9,13 @@ namespace DeepUnity.Activations
     /// Parametric ReLU activation. It is recommended to not use weight decay with PReLU.
     /// </summary>
     [Serializable]
-    public class PReLU : ILearnable, IModule, IActivation
+    public sealed class PReLU : ILearnable, IActivation
     {
         [SerializeField] public Device Device { get; set; } = Device.CPU;
         [SerializeField] public bool RequiresGrad { get; set; } = true;
         private Tensor InputCache { get; set; }
+
+        [SerializeField] private bool inPlace = false;
 
         [SerializeField] private Tensor alpha;
         [NonSerialized] private Tensor alphaGrad;
@@ -22,16 +24,26 @@ namespace DeepUnity.Activations
         /// Parametric ReLU activation. It is recommended to not use weight decay with PReLU.
         /// </summary>
         /// <param name="init_value">The initial value of the learnable parameter.</param>
-        public PReLU(float init_value = 0.25f)
+        public PReLU(float init_value = 0.25f, bool in_place = false)
         {
+            this.inPlace  = in_place;
             alpha = Tensor.Constant(init_value);
             alphaGrad = Tensor.Zeros(1);
         }
         private PReLU() { }
 
-        public Tensor Predict(Tensor input)
+        public Tensor Predict(Tensor x)
         {
-            return input.Select(x => MathF.Max(0, x) + alpha[0] * MathF.Min(0, x));
+            if(inPlace)
+            {
+                for (int i = 0; i < x.Count(); i++)
+                {
+                    x[i] = MathF.Max(0, x[i]) + alpha[0] * MathF.Min(0, x[i]);
+                }
+                return x;
+            }
+            else
+                return x.Select(x => MathF.Max(0, x) + alpha[0] * MathF.Min(0, x));
         }
 
         public Tensor Forward(Tensor input)
@@ -77,7 +89,7 @@ namespace DeepUnity.Activations
         }
         public object Clone()
         {
-            var pr = new PReLU(alpha[0]);
+            var pr = new PReLU(alpha[0], inPlace);
             pr.Device = Device;
             pr.RequiresGrad = RequiresGrad;
             return pr;

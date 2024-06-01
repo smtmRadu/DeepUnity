@@ -1,5 +1,6 @@
 using System;
 using DeepUnity.Modules;
+using UnityEngine;
 
 namespace DeepUnity.Activations
 {
@@ -10,24 +11,39 @@ namespace DeepUnity.Activations
     /// where * = any shape.
     /// </summary>
     [Serializable]
-    public class Sigmoid : IModule, IActivation
+    public sealed class Sigmoid : IModule, IActivation
     {
+        [SerializeField] private bool inPlace = false;
+        private Tensor OutputCache { get; set; }
+
         /// <summary>
         /// <b>Applies the Logistic Sigmoid activation function. </b><br></br>
         /// Input: (*) <br></br>
         /// Output: (*) <br></br>
         /// where * = any shape.
         /// </summary>
-        public Sigmoid() { }
+        public Sigmoid(bool in_place = false) 
+        {
+            this.inPlace = in_place;
+        }
 
-        protected Tensor OutputCache { get; set; }
+     
         public Tensor Predict(Tensor x)
         {
-            return x.Select(x =>
+            if(inPlace)
             {
-                float sigmoid = 1f / (1f + MathF.Exp(-x));
-                return sigmoid;
-            });
+                for (int i = 0; i < x.Count(); i++)
+                {
+                    x[i] = 1f / (1f + MathF.Exp(-x[i]));
+                }
+                return x;
+            }
+            else
+                return x.Select(x =>
+                {
+                    float sigmoid = 1f / (1f + MathF.Exp(-x));
+                    return sigmoid;
+                });
         }
 
         public Tensor Forward(Tensor x)
@@ -42,6 +58,6 @@ namespace DeepUnity.Activations
             return dLdY * (-OutputCache + 1f);
         }
 
-        public object Clone() => new Sigmoid();
+        public object Clone() => new Sigmoid(inPlace);
     }
 }
