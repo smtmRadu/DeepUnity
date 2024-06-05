@@ -38,43 +38,48 @@ namespace DeepUnity.Tutorials
 
         private int batch_index = 0;
 
-        const int latent_dim = 64;
+        const int latent_dim = 100;
         const int size = 512; // 1024 original
-        const float dropout = 0.2f; // 0.3f original
+        const float dropout = 0.3f; // 0.3f original
         private void Start()
         {
-            InitType wInit = InitType.Kaiming_Uniform;
-            InitType bInit = InitType.Zeros;
+            InitType wInit = InitType.LeCun_Uniform;
+            InitType bInit = InitType.LeCun_Uniform;
             if (D == null)
             {
                 D = new Sequential(
                     new Flatten(),
 
                     new Dense(784, size, weight_init:wInit, bias_init:bInit),
-                    new LeakyReLU(),
-                    new Dropout(dropout),
+                    new ReLU(true),
+                    new Dropout(dropout, true),
                 
-                    new Dense(size, size/4, weight_init: wInit, bias_init: bInit),
-                    new LeakyReLU(),
-                    new Dropout(dropout),
+                    new Dense(size, size/2, weight_init: wInit, bias_init: bInit),
+                   new ReLU(true),
+                    new Dropout(dropout, true),
 
-                    new Dense(size / 4, 1, weight_init: wInit, bias_init: bInit),
-                    new Sigmoid()
+                    new Dense(size / 2, size/4, weight_init: wInit, bias_init: bInit),
+               new ReLU(true),
+                    new Dropout(dropout, true),
+
+                    new Dense(size/4, size/2, weight_init:wInit, bias_init:bInit),
+                    new Sigmoid(true)
                     ).CreateAsset("discriminator");
             }
             if (G == null)
             {
                 G = new Sequential(
                     new Dense(latent_dim, size / 4, weight_init: wInit, bias_init: bInit),
-                    new LeakyReLU(),
+                    new ReLU(true),
 
                     new Dense(size / 4, size / 2, weight_init: wInit, bias_init: bInit),
-                    new LeakyReLU(),
+                    new ReLU(true),
+
                     new Dense(size / 2, size, weight_init: wInit, bias_init: bInit),
-                    new LeakyReLU(),
+                    new ReLU(true),
 
                     new Dense(size, 784, weight_init: wInit, bias_init: bInit),
-                    new Tanh(),
+                    new Sigmoid(true),
 
                     new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 })
                     ).CreateAsset("generator");
@@ -82,8 +87,8 @@ namespace DeepUnity.Tutorials
 
             G.Device = Device.GPU;
             D.Device = Device.GPU;
-            d_optim = new Adam(D.Parameters(), lr);
-            g_optim = new Adam(G.Parameters(), lr);
+            d_optim = new Adam(D.Parameters(), lr, eps:1e-8f);
+            g_optim = new Adam(G.Parameters(), lr, eps:1e-8f);
 
             List<(Tensor, Tensor)> data;
             Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out data, out _, DatasetSettings.LoadTrainOnly);

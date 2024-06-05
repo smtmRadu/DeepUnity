@@ -140,7 +140,7 @@ namespace DeepUnity.Modules
             // When training (only on mini-batch training), we cache the values for backprop also
             var mean = Tensor.Mean(input, 0, keepDim: true); // mini-batch means      [1, features_mean]
             var variance_biased = Tensor.Var(input, 0, correction: 0, keepDim: true); // zero-corrected mini-batch variances  [1, features_mean]
-
+            var variance_unbiased = input.Var(0, correction: 1); // corrected variance
 
             // normalize and cache
             std = (variance_biased + epsilon).Sqrt().Expand(0, batch_size);
@@ -148,8 +148,7 @@ namespace DeepUnity.Modules
             xHat = xCentered / std;
 
 
-            // compute running mean and var
-            var variance_unbiased = input.Var(0, correction: 1); // corrected variance
+            // compute running mean and var     
             runningMean = runningMean * momentum + mean.Squeeze(0) * (1f - momentum);
             runningVar = runningVar * momentum + variance_unbiased * (1f - momentum);
 
@@ -169,7 +168,7 @@ namespace DeepUnity.Modules
             var dLdxHat = gamma == null ? dLdY : dLdY * gamma.Unsqueeze(0).Expand(0, m); // [batch, outs]
 
             var dLdVarB = Tensor.Mean(
-                         dLdxHat * xCentered * (-1f / 2f) * (std.Pow(2f) + epsilon).Pow(-3f / 2f),
+                         dLdxHat * xCentered * (-1f / 2f) * (std.Square() + epsilon).Pow(-3f / 2f),
                          axis: 0,
                          keepDim: true).Expand(0, m);
             var dLdMuB = Tensor.Mean(
@@ -177,7 +176,7 @@ namespace DeepUnity.Modules
                          axis: 0,
                          keepDim: true).Expand(0, m);
 
-            var dLdX = dLdxHat * 1f / std + dLdVarB * 2f * xCentered / m + dLdMuB * (1f / m);
+            var dLdX = dLdxHat / std + dLdVarB * 2f * xCentered / m + dLdMuB * (1f / m);
 
             if(RequiresGrad && gamma != null)
             {
@@ -238,6 +237,8 @@ namespace DeepUnity.Modules
             // This function is actually having 2 workers on serialization.
             // If shape int[] was not deserialized, we need to break this worker.
             // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
+            if (gamma == null)
+                return;
 
             if (gamma.Shape == null)
                 return;

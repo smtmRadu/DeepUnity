@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Unity.Burst;
 using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity
 {
+    /// <summary>
+    /// Any method like Reshape, Transpose etc. keeps the tensor continguous.
+    /// </summary>
     [Serializable]
     public class Tensor : IEquatable<Tensor>, IEquatable<TensorGPU>, ICloneable
     {
@@ -275,7 +277,7 @@ namespace DeepUnity
                 {
                     for (int x = 0; x < width; x++)
                     {
-                        t[z, y, x] = cube[z, y, z];
+                        t[z, y, x] = cube[z, y, x];
                     }
                 }
             }
@@ -1229,7 +1231,7 @@ namespace DeepUnity
             return Constant(result);
         }
         /// <summary>
-        /// Pads the last two dimensions of the given tensor. <br></br>
+        /// Pads the last two dimensions of the given matrix. <br></br>
         /// Input: <b>(B, C, H, W)</b> or <b>(C, H, W) or <b>(H, W)</b></b><br></br>
         ///
         /// where B = batch_size, C = channels, H = height, W = width.
@@ -1331,7 +1333,7 @@ namespace DeepUnity
             throw new ArgumentException("Unhandled padding mode");          
         }
         /// <summary>
-        /// Pads the last dimension of the given tensor. <br></br>
+        /// Pads the last dimension of the given vector. <br></br>
         /// Input: <b>(B, C, H, W)</b><br></br>
         ///
         /// where B = batch_size, C = channels, H = height, W = width.
@@ -1749,7 +1751,7 @@ namespace DeepUnity
             Tensor y = Zeros(n);
             for (int i = 0; i < n / 2; i++)
             {
-                float t = MathF.Cos(2 * MathF.PI * i / n) + MathF.Sin(2 * MathF.PI * i / n);
+                float t = MathF.Cos(2f * MathF.PI * i / n) + MathF.Sin(2f * MathF.PI * i / n);
                 y[i] = (ifftEven[i] + t * ifftOdd[i]) / n;
                 y[i + n / 2] = (ifftEven[i] - t * ifftOdd[i]) / n;
             }
@@ -1969,14 +1971,16 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
-        /// All tensors must have the same shape. <br></br>
-        /// If <b>axis == null</b>, all tensors are stacked on a new dimension (unsequeezed on axis 0 then concatenated on axis 0) <br></br>
-        /// E.g.: <br></br>
+        ///  <br></br>
+        /// If <b>axis == null</b>, all tensors are stacked on a new dimension (unsqueezed on axis 0 then concatenated on axis 0) <br></br>
+        /// <br></br>Examples: <br></br>
         /// Cat(axis: 0,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (8,3) <br></br>
         /// Cat(axis: 1,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (2,12) <br></br>
         /// Car(axis: 1,    tensors: {(2,3)} => output (2,3) <br></br>
         /// Cat(axis: null, tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (4,2,3) <br></br>
         /// Cat(axis: null, tensors: {(2,3)} => output (1,2,3) <br></br>
+        /// <br></br>
+        /// <em>All tensors must have the same shape.</em>
         /// </summary>
         public static Tensor Concat(int? axis, params Tensor[] tensors)
         {
@@ -4217,7 +4221,7 @@ namespace DeepUnity
             }     
         }
         /// <summary>
-        /// Squeezes the tensor in place.
+        /// Squeezes the tensor in-place.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>

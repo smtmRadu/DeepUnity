@@ -16,12 +16,11 @@ namespace DeepUnity.Tutorials
         public void Start()
         {
             network = new Sequential(
-              
                 new Dense(512, 64),
                 new ReLU(),
                 new Dropout(0.1f),
                 new Dense(64, 64, device: Device.GPU),
-                new LayerNorm(64),
+                new LayerNorm1D(64),
                 new ReLU(),
                 new Dense(64, 32)).CreateAsset("TutorialModel");
             

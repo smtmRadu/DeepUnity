@@ -144,7 +144,7 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     return new IModule[] {
                         new Dense(inputs * stack, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
-                        new LayerNorm(hidUnits),
+                        new LayerNorm1D(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
                 }
@@ -152,10 +152,10 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     return new IModule[] {
                         new Dense(inputs * stack, hidUnits, weight_init: INIT_W, bias_init: INIT_B),
-                        new LayerNorm(hidUnits),
+                        new LayerNorm1D(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, hidUnits, weight_init: INIT_W, bias_init : INIT_B),
-                        new LayerNorm(hidUnits),
+                        new LayerNorm1D(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
                 }
@@ -163,13 +163,13 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     return new IModule[] {
                         new Dense(inputs * stack, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
-                        new LayerNorm(hidUnits),
+                        new LayerNorm1D(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, hidUnits, weight_init: INIT_W, bias_init : INIT_B),
-                        new LayerNorm(hidUnits),
+                        new LayerNorm1D(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
-                        new LayerNorm(hidUnits),
+                        new LayerNorm1D(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
                 }
@@ -258,7 +258,7 @@ namespace DeepUnity.ReinforcementLearning
                     return new IModule[] {
                         new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
                         new Attention(inputs, hidUnits),
-                        new LastSequenceElementModule(),
+                        new LastSequence1DElementModule(),
                         new Dense(hidUnits, outputs)};
                 }
                 if (layers == 2)
@@ -266,7 +266,7 @@ namespace DeepUnity.ReinforcementLearning
                     return new IModule[] {
                         new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
                         new Attention(inputs, hidUnits),
-                        new LastSequenceElementModule(),
+                        new LastSequence1DElementModule(),
                         new Dense (hidUnits, hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, outputs)};
@@ -276,7 +276,7 @@ namespace DeepUnity.ReinforcementLearning
                     return new IModule[] {
                         new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
                         new Attention(inputs, hidUnits),
-                        new LastSequenceElementModule(),
+                        new LastSequence1DElementModule(),
                         new Dense(hidUnits, hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, hidUnits),

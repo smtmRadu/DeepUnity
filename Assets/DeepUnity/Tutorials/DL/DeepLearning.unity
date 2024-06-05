@@ -1344,19 +1344,19 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1539047894}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 45ec7b8831bf73c4bbed236ccf4948d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  network: {fileID: 11400000, guid: 33b30e424a3326c44913e5d142542e9e, type: 2}
+  network: {fileID: 11400000, guid: 587aa50fe03dbcd489fd93c15d1a69e8, type: 2}
   name: MNIST
   lr: 0.001
-  epochs: 100
+  epochs: 2
   weightDecay: 0
-  batch_size: 64
+  batch_size: 100
   augment_data: 1
-  maxNorm: 0.5
+  maxNorm: 0
   accuracyGraph:
     graph:
       serializedVersion: 2
@@ -1389,7 +1389,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5eb36009ab4e4094db676f56eb66ed1c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  net: {fileID: 11400000, guid: 319a6bc4ba560384bb71bf48e71ac482, type: 2}
+  net: {fileID: 11400000, guid: 587aa50fe03dbcd489fd93c15d1a69e8, type: 2}
   performanceGraph:
     graph:
       serializedVersion: 2
@@ -1795,7 +1795,7 @@ MonoBehaviour:
   image: {fileID: 998186862}
   digitPredictionText: {fileID: 2101666738}
   softmaxOutputText: {fileID: 1459484847}
-  network: {fileID: 11400000, guid: b5d48a9e416e0544a9d46d5a067600c2, type: 2}
+  network: {fileID: 11400000, guid: 587aa50fe03dbcd489fd93c15d1a69e8, type: 2}
   brushRadius: 2
   brushStrength: 0.02
 --- !u!1 &1820971845
@@ -1816,7 +1816,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1820971846
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1928,7 +1928,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1823018699
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2241,7 +2241,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1946006905
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2257,7 +2257,7 @@ MonoBehaviour:
   canvas: {fileID: 1823018698}
   D: {fileID: 0}
   G: {fileID: 0}
-  batch_size: 64
+  batch_size: 100
   lr: 0.0002
   perform: 1
   G_graph:

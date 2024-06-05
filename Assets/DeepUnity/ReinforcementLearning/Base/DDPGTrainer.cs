@@ -46,7 +46,7 @@ namespace DeepUnity.ReinforcementLearning
             Q_targ.Device = model.trainingDevice;
             Mu_targ.Device = model.trainingDevice;
 
-            // Set random actions initialliy
+            // Use random actions initialliy
             model.stochasticity = Stochasticity.Random; // random until reaching 'UpdateAfter' steps
 
             if (hp.updateAfter < hp.minibatchSize * 5)

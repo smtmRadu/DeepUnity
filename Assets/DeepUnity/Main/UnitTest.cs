@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine.UI;
 using DeepUnity.Optimizers;
 using DeepUnity.Modules;
+using System.Linq;
 
 
 namespace DeepUnity.Tutorials
@@ -20,8 +21,6 @@ namespace DeepUnity.Tutorials
 
         private void Start()
         {
-
-            
             // Tensor a = Tensor.Random01(2, 3, 4);
             // 
             // print(a);

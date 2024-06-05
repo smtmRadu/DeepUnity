@@ -1,3 +1,4 @@
+
 using System;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
@@ -10,6 +11,7 @@ namespace DeepUnity.Modules
     /// Input: <b>(B, C, H, W)</b> on training and <b>(B, C, H, W)</b> or <b>(C, H, W)</b> on inference.<br></br>
     /// Output: <b>(B, C, H, W)</b> on training and <b>(B, C, H, W)</b> or <b>(C, H, W)</b> on inference.<br></br>
     /// where B = batch_size, C = channel_size, H = height and W = width. <br></br>
+    /// <b>Normalizes the input over (B, H, W) axes.</b>
     /// <br></br>
     /// <br></br>
     /// <em>TIPS:<br></br>
@@ -26,6 +28,7 @@ namespace DeepUnity.Modules
         // https://arxiv.org/pdf/1502.03167.pdf
         [SerializeField] public Device Device { get; set; } = Device.CPU;
         [SerializeField] public bool RequiresGrad { get; set; } = true;
+        private bool UseAffine { get => gamma != null; }
         private Tensor xCentered { get; set; }
         private Tensor std { get; set; }
         private Tensor xHat { get; set; }
@@ -49,6 +52,7 @@ namespace DeepUnity.Modules
         /// Input: <b>(B, C, H, W)</b> on training and <b>(B, C, H, W)</b> or <b>(C, H, W)</b> on inference.<br></br>
         /// Output: <b>(B, C, H, W)</b> on training and <b>(B, C, H, W)</b> or <b>(C, H, W)</b> on inference.<br></br>
         /// where B = batch_size, C = channel_size, H = height and W = width. <br></br>
+        /// <b>Normalizes the input over (B, H, W) axes.</b>
         /// <br></br>
         /// <br></br>
         /// <em>TIPS:<br></br>
@@ -62,9 +66,9 @@ namespace DeepUnity.Modules
         /// </summary>
         /// <param name="num_channels">The number of input's channels (C).</param>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
-        public BatchNorm2D(int num_channels, float eps = 1e-5f, float momentum = 0.9f)
+        /// <param name="affine">Train affine parameters for shift and scale.</param>
+        public BatchNorm2D(int num_channels, float eps = 1e-5f, float momentum = 0.9f, bool affine = true)
         {
-            throw new NotImplementedException("Untested layer");
             if (num_channels < 1)
                 throw new ArgumentException($"BatchNorm2D layer cannot have num_channels < 1. (received: {num_channels})");
 
@@ -72,10 +76,14 @@ namespace DeepUnity.Modules
             this.num_features = num_channels;
             this.momentum = momentum;
 
-            gamma = Tensor.Ones(num_channels);
-            beta = Tensor.Zeros(num_channels);
-            gammaGrad = Tensor.Zeros(num_channels);
-            betaGrad = Tensor.Zeros(num_channels);
+            if(affine)
+            {
+                gamma = Tensor.Ones(num_channels);
+                beta = Tensor.Zeros(num_channels);
+                gammaGrad = Tensor.Zeros(num_channels);
+                betaGrad = Tensor.Zeros(num_channels);
+            }
+            
 
             runningVar = Tensor.Ones(num_channels);
             runningMean = Tensor.Zeros(num_channels);
@@ -99,8 +107,8 @@ namespace DeepUnity.Modules
                 int batch_size = input.Size(0);
                 Tensor expanded_mean = Tensor.Zeros(batch_size, num_features, height, width);
                 Tensor expanded_std = Tensor.Zeros(batch_size, num_features, height, width);
-                Tensor expanded_gamma = Tensor.Zeros(batch_size, num_features, height, width);
-                Tensor expanded_beta = Tensor.Zeros(batch_size, num_features, height, width);
+                Tensor expanded_gamma = UseAffine ? Tensor.Zeros(batch_size, num_features, height, width) : null;
+                Tensor expanded_beta = UseAffine ? Tensor.Zeros(batch_size, num_features, height, width) : null ;
 
                 Parallel.For(0, batch_size, b =>
                 {
@@ -112,25 +120,29 @@ namespace DeepUnity.Modules
                             {
                                 expanded_mean[b, c, h, w] = runningMean[c];
                                 expanded_std[b, c, h, w] = MathF.Sqrt(runningVar[c] + epsilon);
-                                expanded_gamma[b, c, h, w] = gamma[c];
-                                expanded_beta[b, c, h, w] = beta[c];
+                                if(UseAffine)
+                                {
+                                    expanded_gamma[b, c, h, w] = gamma[c];
+                                    expanded_beta[b, c, h, w] = beta[c];
+                                }
+                                
                             }
                         }
                     }
                 });
-                var input_centered = (input - expanded_mean) / expanded_std;
-                var output = expanded_gamma * input_centered + expanded_beta;
 
-                return output;
+                var input_centered = (input - expanded_mean) / expanded_std;
+
+                return UseAffine ? expanded_gamma * input_centered + expanded_beta : input_centered;
             }
             else
             {
                 Tensor expanded_mean = Tensor.Zeros(num_features, height, width);
                 Tensor expanded_std = Tensor.Zeros(num_features, height, width);
-                Tensor expanded_gamma = Tensor.Zeros(num_features, height, width);
-                Tensor expanded_beta = Tensor.Zeros(num_features, height, width);
-
-                for (int c = 0; c < num_features; c++)
+                Tensor expanded_gamma = UseAffine ? Tensor.Zeros(num_features, height, width) : null;
+                Tensor expanded_beta =  UseAffine ? Tensor.Zeros(num_features, height, width) : null;
+               
+                Parallel.For(0, num_features, c =>
                 {
                     for (int h = 0; h < height; h++)
                     {
@@ -138,16 +150,19 @@ namespace DeepUnity.Modules
                         {
                             expanded_mean[c, h, w] = runningMean[c];
                             expanded_std[c, h, w] = MathF.Sqrt(runningVar[c] + epsilon);
-                            expanded_gamma[c, h, w] = gamma[c];
-                            expanded_beta[c, h, w] = beta[c];
+
+                            if(UseAffine)
+                            {
+                                expanded_gamma[c, h, w] = gamma[c];
+                                expanded_beta[c, h, w] = beta[c];
+                            }
+                          
                         }
                     }
-                }
-
+                });
                 var input_centered = (input - expanded_mean) / expanded_std;
-                var output = expanded_gamma * input_centered + expanded_beta;
 
-                return output;
+                return UseAffine ? expanded_gamma * input_centered + expanded_beta : input_centered;
             }
 
         }
@@ -167,13 +182,14 @@ namespace DeepUnity.Modules
             int width = input.Size(-1);
 
             // When training (only on mini-batch training), we cache the values for backprop also
-            var batch_mean = input.Mean(0,true).Mean(2, true).Mean(3, true); // mini-batch means      [1, channels, 1, 1]
-            var batch_var_unbiased = input.Var(0).Mean(1).Mean(1); // [channels]
-            var batch_std_biased = input.Std(0, correction: 0, true).Mean(2, true).Mean(3, true); // [1, channels, 1, 1]
+            var batch_mean = Mean_BHW(input); // mini-batch means      [1, channels, 1, 1]
+            var batch_var_unbiased = Var_BHW(input, correction:1); // [channels]
+            var batch_std_biased = Var_BHW(input, correction:0).Sqrt(); // [1, channels, 1, 1]
             Tensor expanded_mean = Tensor.Zeros(batch_size, num_features, height, width);
             Tensor expanded_std_biased = Tensor.Zeros(batch_size, num_features, height, width);
-            Tensor expanded_gamma = Tensor.Zeros(batch_size, num_features, height, width);
-            Tensor expanded_beta = Tensor.Zeros(batch_size, num_features, height, width);
+            Tensor expanded_gamma = UseAffine ? Tensor.Zeros(batch_size, num_features, height, width) : null;
+            Tensor expanded_beta = UseAffine ? Tensor.Zeros(batch_size, num_features, height, width) : null;
+
 
             // for (64, 1, 28, 28) i get the same performance when using parallel vs 1 thread. Su keep it parallel :D
             Parallel.For(0, batch_size, b =>
@@ -186,12 +202,18 @@ namespace DeepUnity.Modules
                         {
                             expanded_mean[b, c, h, w] = batch_mean[0, c, 0, 0];
                             expanded_std_biased[b, c, h, w] = batch_std_biased[0, c, 0, 0];
-                            expanded_gamma[b, c, h, w] = gamma[c];
-                            expanded_beta[b, c, h, w] = beta[c];
+
+                            if(UseAffine)
+                            {
+                                expanded_gamma[b, c, h, w] = gamma[c];
+                                expanded_beta[b, c, h, w] = beta[c];
+                            }
+                           
                         }
                     }
                 }
             });
+
 
             // normalize and cache
             xCentered = input - expanded_mean;
@@ -200,10 +222,9 @@ namespace DeepUnity.Modules
 
             // compute running mean and var          
             runningMean = runningMean * momentum + batch_mean.Reshape(num_features) * (1f - momentum);
-            runningVar = runningVar * momentum + batch_var_unbiased * (1f - momentum);
+            runningVar = runningVar * momentum + batch_var_unbiased.Reshape(num_features) * (1f - momentum);
 
-            Tensor y = expanded_gamma * xHat + expanded_beta;
-            return y;
+            return UseAffine ? expanded_gamma * xHat + expanded_beta : xHat;
         }
         public Tensor Backward(Tensor dLdY)
         {
@@ -211,24 +232,33 @@ namespace DeepUnity.Modules
             int chan = dLdY.Size(1);
             int heig = dLdY.Size(2);
             int widt = dLdY.Size(3);
-            // differentiation on https://arxiv.org/pdf/1502.03167.pdf page 4
-            Tensor expanded_gamma = Tensor.Zeros(m, num_features, heig, widt);
 
-            Parallel.For(0, m, b =>
+            Tensor dLdxHat;
+
+            if (!UseAffine)
+                dLdxHat = dLdY;
+            else
             {
-                for (int c = 0; c < chan; c++)
+                // differentiation on https://arxiv.org/pdf/1502.03167.pdf page 4
+                Tensor expanded_gamma = Tensor.Zeros(m, num_features, heig, widt);
+
+                Parallel.For(0, m, b =>
                 {
-                    for (int h = 0; h < heig; h++)
+                    for (int c = 0; c < chan; c++)
                     {
-                        for (int w = 0; w < widt; w++)
+                        for (int h = 0; h < heig; h++)
                         {
-                            expanded_gamma[b,c,h,w] = gamma[c]; 
+                            for (int w = 0; w < widt; w++)
+                            {
+                                expanded_gamma[b, c, h, w] = gamma[c];
+                            }
                         }
                     }
-                }
-            });
+                });
 
-            var dLdxHat = dLdY * expanded_gamma; // [batch, C, H, W]
+                dLdxHat = dLdY * expanded_gamma; // [B, C, H, W]
+            }
+            
 
             var dLdVarB = Tensor.Mean(
                          dLdxHat * xCentered * (-1f / 2f) * (std.Square() + epsilon).Pow(-3f / 2f),
@@ -239,9 +269,9 @@ namespace DeepUnity.Modules
                          axis: 0,
                          keepDim: true).Expand(0, m);
 
-            var dLdX = dLdxHat * 1f / std + dLdVarB * 2f * xCentered / m + dLdMuB * (1f / m);
+            var dLdX = dLdxHat / std + dLdVarB * 2f * xCentered / m + dLdMuB * (1f / m);
 
-            if(RequiresGrad)
+            if(RequiresGrad && UseAffine)
             {
                 var dLdGamma = Tensor.Mean(dLdY * xHat, 0).Mean(-1).Mean(-1);
                 var dLdBeta = Tensor.Mean(dLdY, 0).Mean(-1).Mean(-1);
@@ -259,16 +289,24 @@ namespace DeepUnity.Modules
             BatchNorm2D bnclone = new BatchNorm2D(num_features, epsilon, momentum);
             bnclone.Device = Device;
             bnclone.RequiresGrad = RequiresGrad;
-            bnclone.gamma = (Tensor)gamma.Clone();
-            bnclone.beta = (Tensor)beta.Clone();
-            bnclone.gammaGrad = (Tensor)gammaGrad.Clone();
-            bnclone.betaGrad = (Tensor)betaGrad.Clone();
+
+            if (UseAffine)
+            {
+                bnclone.gamma = (Tensor)gamma.Clone();
+                bnclone.beta = (Tensor)beta.Clone();
+                bnclone.gammaGrad = (Tensor)gammaGrad.Clone();
+                bnclone.betaGrad = (Tensor)betaGrad.Clone();
+            }
+           
             bnclone.runningMean = (Tensor)runningMean.Clone();
             bnclone.runningVar = (Tensor)runningVar.Clone();
             return bnclone;
         }
         public Parameter[] Parameters()
         {
+            if(!UseAffine)
+                return new Parameter[0];
+            
             if (gammaGrad == null)
                 OnAfterDeserialize();
 
@@ -277,7 +315,60 @@ namespace DeepUnity.Modules
 
             return new Parameter[] { g, b };
         }
-
+        public Tensor Var_BHW(Tensor tensor4d, int correction)
+        {
+            Tensor var_023 = Tensor.Zeros(1, tensor4d.Size(1), 1, 1);
+            int channels = tensor4d.Size(1);
+            int batch_size = tensor4d.Size(0);
+            int height = tensor4d.Size(2);
+            int width = tensor4d.Size(3);
+            Parallel.For(0, channels, c =>
+            {
+                float sum = 0f;
+                float sumSqr = 0f;
+                for (int b = 0; b < batch_size; b++)
+                {
+                    for (int h = 0; h < height; h++)
+                    {
+                        for (int w = 0; w < width; w++)
+                        {
+                            float elem = tensor4d[b, c, h, w];
+                            sum += elem;
+                            sumSqr += elem * elem;
+                        }
+                    }
+                }
+                int elems = batch_size * height * width;
+                float vr = (sumSqr - (sum * sum) / elems) / (elems - correction);
+                var_023[0, c, 0, 0] = vr;
+            });
+            return var_023;
+        }
+        public Tensor Mean_BHW(Tensor tensor4d)
+        {
+            Tensor mean_023 = Tensor.Zeros(1, tensor4d.Size(1), 1, 1);
+            int channels = tensor4d.Size(1);
+            int batch_size = tensor4d.Size(0);
+            int height = tensor4d.Size(2);
+            int width = tensor4d.Size(3);
+            Parallel.For(0, channels, c =>
+            {
+                float sum = 0f;
+                for (int b = 0; b < batch_size; b++)
+                {
+                    for (int h = 0; h < height; h++)
+                    {
+                        for (int w = 0; w < width; w++)
+                        {
+                            sum += tensor4d[b, c, h, w];
+                        }
+                    }
+                }
+                int elems = batch_size * height * width;
+                mean_023[0, c, 0, 0] = sum / elems;
+            });
+            return mean_023;
+        }
         public void OnBeforeSerialize()
         {
 
@@ -287,6 +378,9 @@ namespace DeepUnity.Modules
             // This function is actually having 2 workers on serialization.
             // If shape int[] was not deserialized, we need to break this worker.
             // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
+
+            if (gamma == null)
+                return;
 
             if (gamma.Shape == null)
                 return;

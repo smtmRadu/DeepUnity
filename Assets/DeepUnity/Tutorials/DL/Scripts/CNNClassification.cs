@@ -36,34 +36,30 @@ namespace DeepUnity.Tutorials
             if (network == null)
             {
                 network = new Sequential(
-
-                         new ZeroPad2D(1),
-                         new Conv2D(1, 32, 3),
-                         new ReLU(),
-                         new MaxPool2D(2),
-                         //new BatchNorm2D(32),
-                         new Dropout(0.35f),
-
-                         new ZeroPad2D(1),
-                         new Conv2D(32, 64, 3),
-                         new ReLU(),
-                         new MaxPool2D(2),
-                         //new BatchNorm2D(64),
-                         new Dropout(0.35f),
-
-                         new ZeroPad2D(1),
-                         new Conv2D(64, 128, 3),
-                         new ReLU(),
-                         new MaxPool2D(2),
-                         //new BatchNorm2D(128),
-                         new Dropout(0.35f),
-
-                         new Flatten(),
-                         new Dense(1152, 256),
-                         new LayerNorm(256),
-                         new ReLU(),
-                         new Dense(256, 10),
-                         new Softmax()).CreateAsset(name); 
+                          new ZeroPad2D(1),
+                          new Conv2D(1, 32, 3),
+                          new BatchNorm2D(32),
+                          new ReLU(true),
+                          new MaxPool2D(2),
+                          
+                          new ZeroPad2D(1),
+                          new Conv2D(32, 64, 3),
+                          new BatchNorm2D(64),
+                          new ReLU(true),
+                          new MaxPool2D(2),
+                          
+                          new ZeroPad2D(1),
+                          new Conv2D(64, 128, 3),
+                          new BatchNorm2D(128),
+                          new ReLU(true),
+                          new MaxPool2D(2),
+                          
+                          new Flatten(),
+                          new LazyDense(256),
+                          new LayerNorm1D(256),
+                          new ReLU(true),
+                          new Dense(256, 10),
+                          new Softmax()).CreateAsset(name); 
             }
 
             network.Device = Device.GPU;
@@ -99,7 +95,7 @@ namespace DeepUnity.Tutorials
                 Utils.Shuffle(train);
                 scheduler.Step();
 
-                print($"Epoch {epochIndex++} | LR: {scheduler.CurrentLR}%");
+                print($"Epoch {epochIndex++} | LR: {scheduler.CurrentLR}");
             }
 
 

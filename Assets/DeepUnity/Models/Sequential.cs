@@ -61,7 +61,7 @@ namespace DeepUnity.Models
         }
 
         /// <summary>
-        /// Get all <see cref="Parameter"/>s of this model, consisting of Theta and ThetaGrad.
+        /// Get all <see cref="Parameter"/>s of this model, consisting of <see cref="Parameter.param"/> and <see cref="Parameter.g"/>.
         /// </summary>
         /// <returns></returns>
         public override Parameter[] Parameters()

@@ -51,10 +51,10 @@ namespace DeepUnity.Tutorials
             {
                 net = new Sequential(
                  new Dense(2, hiddenSize, weight_init: init_w, bias_init:init_b),
-                 new BatchNorm1D(hiddenSize),
+                 new RMSNorm1D(hiddenSize),
                  new Tanh(),
                  new Dense(hiddenSize, hiddenSize, weight_init: init_w, bias_init: init_b),
-                 new BatchNorm1D(hiddenSize),
+                 new RMSNorm1D(hiddenSize),
                  new Tanh(),
                  new Dense(hiddenSize, 1, weight_init: init_w, bias_init: init_b)
                  );

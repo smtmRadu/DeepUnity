@@ -1,5 +1,5 @@
-using System.Threading.Tasks;
 using System;
+using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
 
@@ -11,7 +11,7 @@ namespace DeepUnity.Modules
         [SerializeField] public Device Device { get; set; } = Device.CPU;
         [SerializeField] public bool RequiresGrad { get; set; } = true;
         private Tensor InputCache { get; set; }
-       
+        private IModule padder { get; set; }
         private int GetOutChannels { get => kernels.Size(-4); }
         private int GetInChannels { get => kernels.Size(-3); }
         private int GetKernelHeight { get => kernels.Size(-2); }
@@ -71,6 +71,10 @@ namespace DeepUnity.Modules
 
             kernels = Parameter.Create(new int[] { out_channels, in_channels, kernel_shape.Item1, kernel_shape.Item2 }, fanIn, fanOut, weight_init);
             biases = Parameter.Create(new int[] { out_channels }, fanIn, fanOut, bias_init);
+
+            // Reduce size (groups = 1), see pytorch initmode https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html
+            kernels /= 3f;
+            biases /= 3f;
 
             kernelsGrad = Tensor.Zeros(kernels.Shape);
             biasesGrad = Tensor.Zeros(biases.Shape);
@@ -260,33 +264,37 @@ namespace DeepUnity.Modules
                         Tensor.Zeros(batchSize, inputChannels, inputHeight, inputWidth) :
                         Tensor.Zeros(inputChannels, inputHeight, inputWidth);
 
-                // Compute the gradients of the weights - valid correlation(x,loss)      
-                Parallel.For(0, outputChannels, oc =>
+                if(RequiresGrad)
                 {
-                    Parallel.For(0, inputChannels, ic =>
+                    // Compute the gradients of the weights - valid correlation(x,loss)      
+                    Parallel.For(0, outputChannels, oc =>
                     {
-                        for (int kh = 0; kh < kernelHeight; kh++)
+                        Parallel.For(0, inputChannels, ic =>
                         {
-                            for (int kw = 0; kw < kernelWidth; kw++)
+                            for (int kh = 0; kh < kernelHeight; kh++)
                             {
-                                float sum = 0f;
-
-                                for (int b = 0; b < batchSize; b++)
+                                for (int kw = 0; kw < kernelWidth; kw++)
                                 {
-                                    for (int j = 0; j < outputHeight; j++)
+                                    float sum = 0f;
+
+                                    for (int b = 0; b < batchSize; b++)
                                     {
-                                        for (int i = 0; i < outputWidth; i++)
+                                        for (int j = 0; j < outputHeight; j++)
                                         {
-                                            sum += InputCache[b, ic, j + kh, i + kw] * loss[b, oc, j, i];
+                                            for (int i = 0; i < outputWidth; i++)
+                                            {
+                                                sum += InputCache[b, ic, j + kh, i + kw] * loss[b, oc, j, i];
+                                            }
                                         }
                                     }
+
+                                    kernelsGrad[oc, ic, kh, kw] = sum / grad_scale;
                                 }
-                               
-                                kernelsGrad[oc, ic, kh, kw] = sum / grad_scale;
                             }
-                        }                                                 
-                    });                                                                     
-                });
+                        });
+                    });
+                }
+                
                 
                 // Compute the gradient of the input - full convolution(loss, kernels) (no pad involved, just checkings)
                 Parallel.For(0, batchSize, b =>
@@ -423,7 +431,6 @@ namespace DeepUnity.Modules
             
         }
 
-
         public Parameter[] Parameters()
         {
             if (kernelsGrad == null)
@@ -453,7 +460,6 @@ namespace DeepUnity.Modules
             // do not check if gamma is != null...
             kernelsGrad = Tensor.Zeros(kernels.Shape);
             biasesGrad = Tensor.Zeros(biases.Shape);
-
         }
         public object Clone()
         {
@@ -464,7 +470,6 @@ namespace DeepUnity.Modules
             conv.biases = (Tensor)biases.Clone();
             conv.kernelsGrad = (Tensor)kernelsGrad.Clone();
             conv.biasesGrad = (Tensor)biasesGrad.Clone();
-
             return conv;
         }
 
