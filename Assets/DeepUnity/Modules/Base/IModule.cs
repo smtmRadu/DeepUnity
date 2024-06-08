@@ -24,12 +24,16 @@ namespace DeepUnity.Modules
         public Dense dense = null;      
         public DenseGPU densegpu = null;
         public RNNCell rnncell = null;
-        public Attention attention = null;
-        public LazyDense lazydense = null;
+        public Attention attention = null;      
         public MultiheadAttention multiheadattention = null;
         public AttentionV2 attentionv2 = null;
         public KANLayer kanlayer = null;
-              
+
+        // Lazy 
+        public LazyConv2D lazyconv2d = null;
+        public LazyDense lazydense = null;
+        public LazyBatchNorm1D lazybatchnorm1d = null;
+
         // Non-Learnable
         public Dropout dropout = null;      
         public Flatten flatten = null;
@@ -42,8 +46,7 @@ namespace DeepUnity.Modules
         public Permute permute = null;
 
         // 2D
-        public BatchNorm2D batchnorm2d = null;
-        public LazyBatchNorm1D lazybatchnorm1d = null;
+        public BatchNorm2D batchnorm2d = null;        
         public Conv2D conv2d = null;
         public AvgPool2D avgpool2d = null;
         public MaxPool2D maxpool2d = null;    
@@ -296,6 +299,10 @@ namespace DeepUnity.Modules
             {
                 relu6 = relu6Module;
             }
+            else if (module is LazyConv2D lazyconv2dModule)
+            {
+                lazyconv2d = lazyconv2dModule;
+            }
             else
                 throw new Exception($"Unhandled module type while wrapping ({module.GetType().Name}).");
         }
@@ -508,6 +515,10 @@ namespace DeepUnity.Modules
             else if (typeof(ReLU6).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.relu6;
+            }
+            else if (typeof(LazyConv2D).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.lazyconv2d;
             }
             else
                 throw new Exception($"Unhandled module type while unwrapping ({moduleWrapper.name}).");

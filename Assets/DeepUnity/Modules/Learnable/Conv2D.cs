@@ -8,19 +8,20 @@ namespace DeepUnity.Modules
     [Serializable]
     public class Conv2D : ILearnable, IModule
     {
-        [SerializeField] public Device Device { get; set; } = Device.CPU;
-        [SerializeField] public bool RequiresGrad { get; set; } = true;
+        public Device Device { get; set; } = Device.CPU;
+        public bool RequiresGrad { get; set; } = true;
         private Tensor InputCache { get; set; }
-        private IModule padder { get; set; }
+
         private int GetOutChannels { get => kernels.Size(-4); }
         private int GetInChannels { get => kernels.Size(-3); }
         private int GetKernelHeight { get => kernels.Size(-2); }
         private int GetKernelWidth { get => kernels.Size(-1); }
 
+        [SerializeField] private bool bias = true;
         [SerializeField] private Tensor kernels;
         [SerializeField] private Tensor biases;
-        [NonSerialized] public Tensor kernelsGrad;
-        [NonSerialized] public Tensor biasesGrad;
+        [NonSerialized]  private Tensor kernelsGrad;
+        [NonSerialized]  private Tensor biasesGrad;
 
 
         /// <summary>
@@ -39,8 +40,8 @@ namespace DeepUnity.Modules
         /// <param name="kernel_size"></param>
         /// <param name="gamma_init">Initializer used for weights.</param>
         /// <param name="beta_init">Initializer used for biases.</param>
-        public Conv2D(int in_channels, int out_channels, int kernel_size, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = Device.CPU)
-            : this(in_channels, out_channels, (kernel_size, kernel_size), weight_init, bias_init, device) { }
+        public Conv2D(int in_channels, int out_channels, int kernel_size, bool bias = true, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = Device.CPU)
+            : this(in_channels, out_channels, (kernel_size, kernel_size), bias, weight_init, bias_init, device) { }
 
         /// <summary>
         /// Input: (<b>B</b>, <b>C_in</b>, <b>H_in</b>, <b>W_in</b>) or (<b>C_in</b>, <b>H_in</b>, <b>W_in</b>) for unbatched input.<br/>
@@ -53,7 +54,7 @@ namespace DeepUnity.Modules
         /// H_out = H_in - kernel_size + 1 <br></br> 
         /// W_out = W_in - kernel_size + 1
         /// </summary>
-        public Conv2D(int in_channels, int out_channels,(int, int) kernel_shape, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = Device.CPU)
+        public Conv2D(int in_channels, int out_channels,(int, int) kernel_shape, bool bias = true, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = Device.CPU)
         {
             if (in_channels < 1)
                 throw new ArgumentException("Cannot have less than 1 input channels.");
@@ -65,19 +66,22 @@ namespace DeepUnity.Modules
                 throw new ArgumentException("Cannot have less than 2 kernel size.");
 
             this.Device = device;
-
+            this.bias = bias;
             int fanIn = in_channels * kernel_shape.Item1 * kernel_shape.Item2;
             int fanOut = out_channels;
 
             kernels = Parameter.Create(new int[] { out_channels, in_channels, kernel_shape.Item1, kernel_shape.Item2 }, fanIn, fanOut, weight_init);
-            biases = Parameter.Create(new int[] { out_channels }, fanIn, fanOut, bias_init);
-
             // Reduce size (groups = 1), see pytorch initmode https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html
             kernels /= 3f;
-            biases /= 3f;
-
             kernelsGrad = Tensor.Zeros(kernels.Shape);
-            biasesGrad = Tensor.Zeros(biases.Shape);
+
+            if(bias)
+            {
+                biases = Parameter.Create(new int[] { out_channels }, fanIn, fanOut, bias_init);
+                biases /= 3f;
+                biasesGrad = Tensor.Zeros(biases.Shape);
+            }
+            
         }
 
         private Conv2D() { }
@@ -120,15 +124,15 @@ namespace DeepUnity.Modules
                     Tensor.Zeros(batchSize, outputChannels, outputHeight, outputWidth);
 
 
-                Parallel.For(0, batchSize, b =>
+                Parallel.For(0, batchSize, (Action<int>)(b =>
                 {
-                    Parallel.For(0, outputChannels, oc =>
+                    Parallel.For(0, outputChannels, (Action<int>)(oc =>
                     {
                         for (int h = 0; h < outputHeight; h++)
                         {
                             for (int w = 0; w < outputWidth; w++)
                             {
-                                float sum = biases[oc];
+                                float sum = this.bias ? biases[oc] : 0f;
 
                                 for (int ic = 0; ic < inputChannels; ic++)
                                 {
@@ -144,8 +148,8 @@ namespace DeepUnity.Modules
                                 output[b, oc, h, w] = sum; // summation over input channels
                             }
                         }
-                    });
-                });
+                    }));
+                }));
 
 
                 return output;
@@ -169,8 +173,8 @@ namespace DeepUnity.Modules
                 gammaBuffer.SetData(kernels.ToArray());
                 cs.SetBuffer(0, "gamma", gammaBuffer);
 
-                ComputeBuffer betaBuffer = new ComputeBuffer(biases.Count(), 4);
-                betaBuffer.SetData(biases.ToArray());
+                ComputeBuffer betaBuffer = new ComputeBuffer(bias ? biases.Count() : GetOutChannels, 4);
+                betaBuffer.SetData(bias ? biases.ToArray() : new float[GetOutChannels]);
                 cs.SetBuffer(0, "beta", betaBuffer);
 
                 ComputeBuffer outputBuffer = new ComputeBuffer(batch_size * C_out * H_out * W_out, 4);
@@ -234,7 +238,8 @@ namespace DeepUnity.Modules
 
             float grad_scale = batchSize * inputChannels * outputChannels * kernelHeight * kernelWidth * inputHeight * inputWidth; ; // * outputWidth * outputHeight;
             
-            if(RequiresGrad)
+            // BIases are computed on CPU because is faster. The bias vector is too small in comparison with other stuff.
+            if(bias && RequiresGrad)
             {
                 // Bias grad
                 Parallel.For(0, outputChannels, oc =>
@@ -437,8 +442,11 @@ namespace DeepUnity.Modules
                 OnAfterDeserialize();
 
             var k = new Parameter(kernels, kernelsGrad);
-            var b = new Parameter(biases, biasesGrad);
 
+            if(!bias)
+                return new Parameter[] { k };
+
+            var b = new Parameter(biases, biasesGrad);
             return new Parameter[] { k, b };
         }
         public virtual void OnBeforeSerialize()
@@ -450,7 +458,7 @@ namespace DeepUnity.Modules
             // This function is actually having 2 workers on serialization.
             // If shape int[] was not deserialized, we need to break this worker.
             // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
-
+            
             if (kernels.Shape == null)
                 return;
 
@@ -459,7 +467,9 @@ namespace DeepUnity.Modules
 
             // do not check if gamma is != null...
             kernelsGrad = Tensor.Zeros(kernels.Shape);
-            biasesGrad = Tensor.Zeros(biases.Shape);
+
+            if (bias)
+                biasesGrad = Tensor.Zeros(biases.Shape);
         }
         public object Clone()
         {
@@ -467,9 +477,14 @@ namespace DeepUnity.Modules
             conv.RequiresGrad = RequiresGrad;
             conv.Device = Device;
             conv.kernels = (Tensor)kernels.Clone();
-            conv.biases = (Tensor)biases.Clone();
             conv.kernelsGrad = (Tensor)kernelsGrad.Clone();
-            conv.biasesGrad = (Tensor)biasesGrad.Clone();
+
+            if(bias)
+            {
+                conv.biases = (Tensor)biases.Clone();
+                conv.biasesGrad = (Tensor)biasesGrad.Clone();
+            }
+
             return conv;
         }
 

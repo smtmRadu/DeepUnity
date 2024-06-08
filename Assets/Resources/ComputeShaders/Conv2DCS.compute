@@ -57,7 +57,7 @@ void Forward(int3 id : SV_DispatchThreadID)
     {
         for (int ic = 0; ic < in_channels; ic++)
         {
-            float sum = beta[id.z] / in_channels; 
+            float sum = beta[id.z] / in_channels; // do not modify this / in_channels. Because is continuous addition over it we don t wanna add biases all the time.
             for (int j = 0; j < kernel_height; j++)
             {
                 for (int i = 0; i < kernel_width; i++)

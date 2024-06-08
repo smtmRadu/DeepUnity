@@ -29,6 +29,7 @@ namespace DeepUnity.Tutorials
 
         int batch_index = 0;
 
+        public float kld_weight = 0.01f;
         public float noise_prob = 0.1f;
         public float noise_size = 0.1f;
 
@@ -38,33 +39,35 @@ namespace DeepUnity.Tutorials
             Utils.Shuffle(train);
             train_batches = Utils.Split(train, batchSize);
 
+            var w_init = InitType.Kaiming_Uniform;
+            var b_init = InitType.Zeros;
             if (vae == null)
             {
                 vae = new VariationalAutoencoder(
                     new IModule[] {
                             new Flatten(),
-                            new Dense(784, 512, device: Device.GPU),
+                            new Dense(784, 512, true, w_init,b_init, device: Device.GPU),
                             new ReLU(),
-                            new Dense(512, 256, device: Device.GPU),
+                            new Dense(512, 256, true, w_init,b_init,device: Device.GPU),
                             new ReLU(),
-                            new Dense(256, 10, device: Device.CPU),
+                            new Dense(256, 8,true, w_init,b_init, device: Device.CPU),
                             new ReLU() },
-                            10,
+                            8,
                     new IModule[] {
-                            new Dense(10, 256, device: Device.CPU),
+                            new Dense(8, 256, true, w_init,b_init,device: Device.CPU),
                             new ReLU(),
-                            new Dense(256, 512, device: Device.GPU),
-                             new ReLU(),
-                            new Dense(512, 784, device: Device.GPU),
+                            new Dense(256, 512, true, w_init,b_init,device: Device.GPU),
+                            new ReLU(),
+                            new Dense(512, 784,true, w_init,b_init, device: Device.GPU),
                             new Sigmoid(),
                             new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 }) }
-                           ).CreateAsset("vae_denoiser");
+                           , kld_weight:kld_weight).CreateAsset("vae_denoiser");
             }
 
 
             Parameter[] parameters = vae.Parameters();
 
-            optim = new Adam(parameters, lr);
+            optim = new Adam(parameters, lr, amsgrad:true);
 
             displays = new();
             for (int i = 0; i < canvas.transform.childCount; i++)
@@ -92,20 +95,21 @@ namespace DeepUnity.Tutorials
                 {
                     batch_index = 0;
                     Utils.Shuffle(train);
+                    train_batches = Utils.Split(train, batchSize);
                 }
 
                 float loss_value = 0f;
 
                 var batch = train_batches[batch_index];
 
-                Tensor input = Tensor.Concat(null, batch.Select(x => x.Item1).ToArray());
-                input = Utils.ImageProcessing.Noise(input, Utils.Random.Range(0, noise_prob), Utils.Random.Range(0, noise_size));
+                Tensor image = Tensor.Concat(null, batch.Select(x => x.Item1).ToArray());
+                Tensor noise_input = Utils.Vision.Noise(image, Utils.Random.Range(0, noise_prob), Utils.Random.Range(0, noise_size));
 
-                Tensor decoded = vae.Forward(input);
-                Loss bce = Loss.BCE(decoded, input);
+                Tensor decoded = vae.Forward(noise_input);
+                Loss bce = Loss.BCE(decoded, image);
                 loss_value += bce.Item;
                 vae.Backward(bce.Gradient);
-                optim.ClipGradNorm(1f);
+                optim.ClipGradNorm(1);
                 optim.Step();
 
                 // print($"Batch: {batch_index} | Loss: {loss_value}");
@@ -121,7 +125,7 @@ namespace DeepUnity.Tutorials
                 for (int i = 0; i < displays.Count / 2; i++)
                 {
                     var sample = Utils.Random.Sample(train).Item1;
-                    sample = Utils.ImageProcessing.Noise(sample, Utils.Random.Range(0, noise_prob), Utils.Random.Range(0, noise_size));
+                    sample = Utils.Vision.Noise(sample, Utils.Random.Range(0, noise_prob), Utils.Random.Range(0, noise_size));
                     var tex1 = displays[i].texture as Texture2D;
                     tex1.SetPixels(Utils.TensorToColorArray(sample));
                     tex1.Apply();

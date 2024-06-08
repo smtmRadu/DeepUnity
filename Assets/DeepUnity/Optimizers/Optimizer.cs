@@ -25,11 +25,11 @@ namespace DeepUnity.Optimizers
         /// </summary>
         protected int t;
 
-        protected Optimizer(Parameter[] parameters, float lr, float eps, float weightDecay)
+        protected Optimizer(Parameter[] parameters, float lr, float eps, float weight_decay)
         {
             this.parameters = parameters;
             gamma = lr;
-            lambda = weightDecay;
+            lambda = weight_decay;
             epsilon = eps;
             t = 0;
         }

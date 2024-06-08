@@ -135,10 +135,10 @@ namespace DeepUnity.Tutorials
 
         public Tensor AugmentImage(Tensor image)
         {
-            Tensor tex = Utils.ImageProcessing.Zoom(image, Utils.Random.Range(0.7f, 1.4f));
-            tex = Utils.ImageProcessing.Rotate(tex, Utils.Random.Range(-60f, 60f));
-            tex = Utils.ImageProcessing.Offset(tex, Utils.Random.Range(-5f, 5f), Utils.Random.Range(-5f, 5f));
-            tex = Utils.ImageProcessing.Noise(tex, Utils.Random.Range(0.05f, 0.15f), Utils.Random.Range(0.20f, 0.30f));
+            Tensor tex = Utils.Vision.Zoom(image, Utils.Random.Range(0.7f, 1.4f));
+            tex = Utils.Vision.Rotate(tex, Utils.Random.Range(-60f, 60f));
+            tex = Utils.Vision.Offset(tex, Utils.Random.Range(-5f, 5f), Utils.Random.Range(-5f, 5f));
+            tex = Utils.Vision.Noise(tex, Utils.Random.Range(0.05f, 0.15f), Utils.Random.Range(0.20f, 0.30f));
             return tex;
         }
     }

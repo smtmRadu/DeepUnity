@@ -2,8 +2,6 @@ using System;
 using UnityEngine;
 using DeepUnity.Modules;
 using UnityEditor;
-using System.Runtime.Serialization.Formatters.Binary;
-using System.IO;
 
 namespace DeepUnity.Models
 {
@@ -83,7 +81,7 @@ namespace DeepUnity.Models
 #endif
         }
         /// <summary>
-        /// Creates a Unity asset instance of this network in <em>Assets</em> folder with the specified <paramref name="name"/>. <br></br>
+        /// Creates a Unity asset instance of this network in <em>Assets</em> folder with the specified <paramref name="name"/>.<br></br>
         /// <br></br>
         /// <em>If already exists, this method creates a new instance called '[behaviour_name]_v[x]'</em>
         /// </summary>

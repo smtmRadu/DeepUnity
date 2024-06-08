@@ -1,4 +1,4 @@
-/*using DeepUnity.Modules;
+using DeepUnity.Modules;
 using System;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
@@ -16,15 +16,16 @@ namespace DeepUnity.Layers
     /// B = batch_size <br></br>
     /// C_in = in_channels <br></br> 
     /// C_out = out_channels, <br></br>
-    /// H_out = (H_in - 1) * kernel_height + (kernel_height - 1) + 1<br></br> 
-    /// W_out = (W_in - 1) * kernel_width + (kernel_width - 1) + 1
+    /// H_out = H_in + kernel_height - 1<br></br> 
+    /// W_out = W_in + kernel_width - 1 
     /// </summary>
     [Serializable]
-    public class Conv2DTranspose : ILearnable, IModule
+    public class ConvTranspose2D : ILearnable, IModule
     {
-        [SerializeField] public Device Device { get; set; } = Device.CPU;
+        public Device Device { get; set; } = Device.CPU;
+        public bool RequiresGrad { get; set; } = true;
         private Tensor InputCache { get; set; }
-
+        private bool UseBias { get => biases != null; }
         private int GetOutChannels { get => kernels.Size(-3); }
         private int GetInChannels { get => kernels.Size(-4); }
         private int GetKernelHeight { get => kernels.Size(-2); }
@@ -43,54 +44,16 @@ namespace DeepUnity.Layers
         /// B = batch_size <br></br>
         /// C_in = in_channels <br></br> 
         /// C_out = out_channels, <br></br>
-        /// H_out = (H_in - 1) * kernel_height + (kernel_height - 1) + 1<br></br> 
-        /// W_out = (W_in - 1) * kernel_width + (kernel_width - 1) + 1
+        /// H_out = H_in + kernel_height - 1<br></br> 
+        /// W_out = W_in + kernel_width - 1 
         /// </summary>
         /// <param name="input_shape">(C_in, H, W)</param>
         /// <param name="out_channels">C_out</param>
         /// <param name="kernel_size"></param>
         /// <param name="gamma_init">Initializer used for weights.</param>
         /// <param name="beta_init">Initializer used for biases.</param>
-        public Conv2DTranspose(int in_channels, int out_channels, int kernel_size, Device device = Device.CPU)
+        public ConvTranspose2D(int in_channels, int out_channels, (int,int) kernel_shape, bool bias = true, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = Device.CPU)
         {
-            throw new NotImplementedException("The ConvTranspose2D layer was not implemented yet.");
-
-            if (in_channels < 1)
-                throw new ArgumentException("Cannot have less than 1 input channels.");
-
-            if (out_channels < 1)
-                throw new ArgumentException("Cannot have less than 1 output channel.");
-
-            if (kernel_size < 2)
-                throw new ArgumentException("Cannot have less than 2 kernel size.");
-
-            this.Device = device;
-
-            float k = 1f / (out_channels * kernel_size * kernel_size);
-            k = Mathf.Sqrt(k);
-            kernels = Tensor.RandomRange((-k, k), in_channels, out_channels, kernel_size, kernel_size);
-            biases = Tensor.RandomRange((-k, k), out_channels);
-            kernelsGrad = Tensor.Zeros(kernels.Shape);
-            biasesGrad = Tensor.Zeros(biases.Shape);
-        }
-        /// <summary>
-        /// Input: (<b>B</b>, <b>C_in</b>, <b>H_in</b>, <b>W_in</b>) or (<b>C_in</b>, <b>H_in</b>, <b>W_in</b>) for unbatched input.<br/>
-        /// Output: <b>(B, C_out, H_out, W_out)</b> or <b>(C_out, H_out, W_out)</b> for unbatched input.<br></br>
-        /// <br></br>
-        /// where <br></br>
-        /// B = batch_size <br></br>
-        /// C_in = in_channels <br></br> 
-        /// C_out = out_channels, <br></br>
-        /// H_out = (H_in - 1) * kernel_height + (kernel_height - 1) + 1<br></br> 
-        /// W_out = (W_in - 1) * kernel_width + (kernel_width - 1) + 1
-        /// </summary>
-        /// <param name="input_shape">(C_in, H, W)</param>
-        /// <param name="gamma_init">Initializer used for weights.</param>
-        /// <param name="beta_init">Initializer used for biases.</param>
-        public Conv2DTranspose(int in_channels, int out_channels, (int, int) kernel_shape, Device device = Device.CPU)
-        {
-            throw new NotImplementedException("The ConvTranspose2D layer was not implemented yet.");
-
             if (in_channels < 1)
                 throw new ArgumentException("Cannot have less than 1 input channels.");
 
@@ -102,15 +65,39 @@ namespace DeepUnity.Layers
 
             this.Device = device;
 
-            float k = 1f / (out_channels * kernel_shape.Item1 * kernel_shape.Item2);
-            k = Mathf.Sqrt(k);
-            kernels = Tensor.RandomRange((-k, k), in_channels, out_channels, kernel_shape.Item1, kernel_shape.Item2);
-            biases = Tensor.RandomRange((-k, k), out_channels);
+            int fanIn = in_channels * kernel_shape.Item1 * kernel_shape.Item2;
+            int fanOut = out_channels;
+            kernels = Parameter.Create(new int[] { in_channels, out_channels, kernel_shape.Item1, kernel_shape.Item2 }, fanIn, fanOut, weight_init);
+            // Reduce size (groups = 1), see pytorch initmode https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html
+            kernels /= 3f;   
             kernelsGrad = Tensor.Zeros(kernels.Shape);
-            biasesGrad = Tensor.Zeros(biases.Shape);
+
+            if(bias)
+            {
+                biases = Parameter.Create(new int[] { out_channels }, fanIn, fanOut, bias_init);
+                biases /= 3f;
+                biasesGrad = Tensor.Zeros(biases.Shape);
+            }
+        
         }
+        /// <summary>
+        /// Input: (<b>B</b>, <b>C_in</b>, <b>H_in</b>, <b>W_in</b>) or (<b>C_in</b>, <b>H_in</b>, <b>W_in</b>) for unbatched input.<br/>
+        /// Output: <b>(B, C_out, H_out, W_out)</b> or <b>(C_out, H_out, W_out)</b> for unbatched input.<br></br>
+        /// <br></br>
+        /// where <br></br>
+        /// B = batch_size <br></br>
+        /// C_in = in_channels <br></br> 
+        /// C_out = out_channels, <br></br>
+        /// H_out = H_in + kernel_height - 1<br></br> 
+        /// W_out = W_in + kernel_width - 1 
+        /// </summary>
+        /// <param name="input_shape">(C_in, H, W)</param>
+        /// <param name="gamma_init">Initializer used for weights.</param>
+        /// <param name="beta_init">Initializer used for biases.</param>
+        public ConvTranspose2D(int in_channels, int out_channels, int kernel_size, bool bias = true, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = Device.CPU)
+         : this(in_channels, out_channels, (kernel_size, kernel_size), bias, weight_init, bias_init, device) { }
 
-
+        private ConvTranspose2D() { }
 
 
         /// <param name="input">(B, C_in, H, W)</param>
@@ -134,43 +121,43 @@ namespace DeepUnity.Layers
                 int kernelHeight = GetKernelHeight;
                 int kernelWidth = GetKernelWidth;
 
-                int outputHeight = inputHeight * kernelHeight;
-                int outputWidth = inputWidth * kernelWidth;
+                int outputHeight = inputHeight + kernelHeight - 1;
+                int outputWidth =  inputWidth  + kernelWidth  - 1;
 
                 // Initialize output tensor
                 Tensor output = input.Rank == 3 ?
                     Tensor.Zeros(outputChannels, outputHeight, outputWidth) :
                     Tensor.Zeros(batch_size, outputChannels, outputHeight, outputWidth);
 
-                // Perform transposed convolution
+                // Perform transposed convolution - full convolution(x, weights)
                 Parallel.For(0, batch_size, b =>
                 {
                     Parallel.For(0, outputChannels, oc =>
                     {
-                        for (int h = 0; h < outputHeight; h++)
+                        for (int oh = 0; oh < outputHeight; oh++)
                         {
-                            for (int w = 0; w < outputWidth; w++)
+                            for (int ow = 0; ow < outputWidth; ow++)
                             {
-                                float sum = 0f;
+                                float sum = biases[oc];
 
                                 for (int ic = 0; ic < inputChannels; ic++)
                                 {
-                                    for (int j = 0; j < kernelHeight; j++)
+                                    for (int kh = 0; kh < kernelHeight; kh++)
                                     {
-                                        for (int i = 0; i < kernelWidth; i++)
+                                        for (int kw = 0; kw < kernelWidth; kw++)
                                         {
-                                            int inputH = h - j;
-                                            int inputW = w - i;
+                                            int ih = oh + kh - kernelHeight + 1;
+                                            int iw = ow + kw - kernelWidth + 1;
 
-                                            if (inputH >= 0 && inputH < inputHeight && inputW >= 0 && inputW < inputWidth)
+                                            if (ih >= 0 && ih < inputHeight && iw >= 0 && iw < inputWidth)
                                             {
-                                                sum += input[b, ic, inputH, inputW] * kernels[oc, ic, j, i];
+                                                sum += input[b, ic, ih, iw] * kernels[ic, oc, kernelHeight - kh - 1, kernelWidth - kw - 1];
                                             }
                                         }
                                     }
                                 }
 
-                                output[b, oc, h, w] = sum;
+                                output[b, oc, oh, ow] = sum;
                             }
                         }
                     });
@@ -184,10 +171,10 @@ namespace DeepUnity.Layers
                 int H_in = input.Size(-2);
                 int W_in = input.Size(-1);
                 int C_out = GetOutChannels;
-                int H_out = H_in - GetKernelHeight + 1;
-                int W_out = W_in - GetKernelWidth + 1;
+                int H_out = H_in + GetKernelHeight - 1;
+                int W_out = W_in + GetKernelWidth  - 1;
 
-                ComputeShader cs = DeepUnityMeta.Conv2DCS;
+                ComputeShader cs = DeepUnityMeta.ConvTranpose2DCS;
 
                 ComputeBuffer inputBuffer = new ComputeBuffer(input.Count(), 4);
                 inputBuffer.SetData(input.ToArray());
@@ -197,8 +184,8 @@ namespace DeepUnity.Layers
                 gammaBuffer.SetData(kernels.ToArray());
                 cs.SetBuffer(0, "gamma", gammaBuffer);
 
-                ComputeBuffer betaBuffer = new ComputeBuffer(biases.Count(), 4);
-                betaBuffer.SetData(biases.ToArray());
+                ComputeBuffer betaBuffer = new ComputeBuffer(UseBias ? biases.Count():GetOutChannels, 4);
+                betaBuffer.SetData(UseBias ? biases.ToArray() : new float[GetOutChannels]);
                 cs.SetBuffer(0, "beta", betaBuffer);
 
                 ComputeBuffer outputBuffer = new ComputeBuffer(batch_size * C_out * H_out * W_out, 4);
@@ -236,7 +223,6 @@ namespace DeepUnity.Layers
 
 
         /// <param name="input">(B, C_in, H, W)</param>
-        /// <returns></returns>
         public Tensor Forward(Tensor input)
         {
             InputCache = Tensor.Identity(input);
@@ -251,21 +237,26 @@ namespace DeepUnity.Layers
             bool isBatched = loss.Rank == 4;
             int batch_size = isBatched ? loss.Size(-4) : 1;
 
-
-            return null;
+            throw new NotImplementedException();
         }
 
 
 
         public object Clone()
         {
-            var conv = new Conv2DTranspose(GetInChannels, GetOutChannels, kernel_shape: (GetKernelHeight, GetKernelWidth), device: Device);
-            conv.kernels = (Tensor)kernels.Clone();
-            conv.biases = (Tensor)biases.Clone();
-            conv.kernelsGrad = (Tensor)kernelsGrad.Clone();
-            conv.biasesGrad = (Tensor)biasesGrad.Clone();
+            var convt = new ConvTranspose2D();
+            convt.kernels = (Tensor)kernels.Clone();
+           
+            convt.kernelsGrad = (Tensor)kernelsGrad.Clone();
 
-            return conv;
+            if (UseBias)
+            {
+                convt.biases = (Tensor)biases.Clone();
+                convt.biasesGrad = (Tensor)biasesGrad.Clone();
+            }
+           
+
+            return convt;
         }
         public Parameter[] Parameters()
         {
@@ -273,8 +264,12 @@ namespace DeepUnity.Layers
                 OnAfterDeserialize();
 
             var k = new Parameter(kernels, kernelsGrad);
-            var b = new Parameter(biases, biasesGrad);
 
+            if (!UseBias)
+                return new Parameter[] { k };
+
+
+            var b = new Parameter(biases, biasesGrad);
             return new Parameter[] { k, b };
         }
         public virtual void OnBeforeSerialize()
@@ -295,9 +290,10 @@ namespace DeepUnity.Layers
 
             // do not check if gamma is != null...
             kernelsGrad = Tensor.Zeros(kernels.Shape);
-            biasesGrad = Tensor.Zeros(biases.Shape);
+
+            if(UseBias)
+                biasesGrad = Tensor.Zeros(biases.Shape);
 
         }
     }
 }
-*/

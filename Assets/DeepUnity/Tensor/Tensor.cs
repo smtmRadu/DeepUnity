@@ -17,6 +17,9 @@ namespace DeepUnity
         [ViewOnly, SerializeField] private float[] data;
         [ViewOnly, SerializeField] private int[] shape;
 
+        /// <summary>
+        /// Read-Only
+        /// </summary>
         public int Rank
         {
             get
@@ -29,6 +32,9 @@ namespace DeepUnity
                     return 0;
             }
         }
+        /// <summary>
+        /// Read-Only
+        /// </summary>
         public int[] Shape
         {
             get => shape.ToArray();         

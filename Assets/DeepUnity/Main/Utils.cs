@@ -5,8 +5,10 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
+
 
 namespace DeepUnity
 {
@@ -330,14 +332,14 @@ namespace DeepUnity
         }
 
         /// <summary>
-        /// An easy way to augment your training data. You can input batch images as well.
+        /// An easy way to modify images. You can input batch images as well.
         /// </summary>
-        public static class ImageProcessing
+        public static class Vision
         {
             public static Tensor Resize(Tensor image, float scale)
             {
-                int width = Mathf.FloorToInt(image.Size(-1) * scale);
-                int height = Mathf.FloorToInt(image.Size(-2) * scale);
+                int width  = (int)MathF.Floor(image.Size(-1) * scale);
+                int height = (int)MathF.Floor(image.Size(-2) * scale);
                 int channels = image.Rank >= 3 ? image.Size(-3) : 1;
                 int batch_size = image.Rank == 4 ? image.Size(-4) : 1;
 
@@ -346,8 +348,7 @@ namespace DeepUnity
                 newShape[newShape.Length - 2] = height;
                 Tensor scaled = Tensor.Zeros(newShape);
 
-
-                for (int b = 0; b < batch_size; b++)
+                Parallel.For(0, batch_size, b =>
                 {
                     for (int c = 0; c < channels; c++)
                     {
@@ -363,7 +364,7 @@ namespace DeepUnity
                             }
                         }
                     }
-                }
+                });
 
                 return scaled;
             }
@@ -378,8 +379,7 @@ namespace DeepUnity
 
                 Vector2 pivot = new Vector2(width * 0.5f, height * 0.5f); // Center pivot point
 
-
-                for (int b = 0; b < batch_size; b++)
+                Parallel.For(0, batch_size, b =>
                 {
                     for (int c = 0; c < channels; c++)
                     {
@@ -389,8 +389,8 @@ namespace DeepUnity
                             {
                                 float value = image[b, c, y, x];
                                 float radianAngle = angle * Mathf.Deg2Rad;
-                                float cos = Mathf.Cos(radianAngle);
-                                float sin = Mathf.Sin(radianAngle);
+                                float cos = MathF.Cos(radianAngle);
+                                float sin = MathF.Sin(radianAngle);
 
                                 // Calculate coordinates relative to the pivot
                                 float xOffset = x - pivot.x;
@@ -400,14 +400,14 @@ namespace DeepUnity
                                 float x0 = xOffset * cos - yOffset * sin + pivot.x;
                                 float y0 = xOffset * sin + yOffset * cos + pivot.y;
 
-                                x0 = Mathf.Clamp(x0, 0, width - 1);
-                                y0 = Mathf.Clamp(y0, 0, height - 1);
+                                x0 = Math.Clamp(x0, 0, width - 1);
+                                y0 = Math.Clamp(y0, 0, height - 1);
 
-                                rotated[b, c, y, x] = image[Mathf.FloorToInt(y0), Mathf.FloorToInt(x0)];
+                                rotated[b, c, y, x] = image[(int)MathF.Round(y0), (int)MathF.Round(x0)];
                             }
                         }
                     }
-                }
+                });
 
                 return rotated;
             }
@@ -428,28 +428,28 @@ namespace DeepUnity
                 float centerX = width / 2f;
                 float centerY = height / 2f;
 
-                for (int b = 0; b < batch_size; b++)
+                Parallel.For(0, batch_size, b =>
                 {
                     for (int c = 0; c < channels; c++)
                     {
-                        for (int x = 0; x < width; x++)
+                        for (int y = 0; y < height; y++)
                         {
-                            for (int y = 0; y < height; y++)
+                            for (int x = 0; x < width; x++)
                             {
                                 float offsetX = (x - centerX) / zoomFactor;
                                 float offsetY = (y - centerY) / zoomFactor;
 
-                                int originalX = Mathf.RoundToInt(centerX + offsetX);
-                                int originalY = Mathf.RoundToInt(centerY + offsetY);
+                                int originalX = (int)MathF.Round(centerX + offsetX);
+                                int originalY = (int)MathF.Round(centerY + offsetY);
 
-                                originalX = Mathf.Clamp(originalX, 0, width - 1);
-                                originalY = Mathf.Clamp(originalY, 0, height - 1);
+                                originalX = Math.Clamp(originalX, 0, width - 1);
+                                originalY = Math.Clamp(originalY, 0, height - 1);
 
                                 zoomed[b, c, y, x] = image[b, c, originalY, originalX];
                             }
                         }
                     }
-                }
+                });
 
                 return zoomed;
             }
@@ -462,7 +462,7 @@ namespace DeepUnity
 
                 Tensor offsetImage = Tensor.Zeros(image.Shape);
 
-                for (int b = 0; b < batch_size; b++)
+                Parallel.For(0, batch_size, b =>
                 {
                     for (int c = 0; c < channels; c++)
                     {
@@ -470,13 +470,13 @@ namespace DeepUnity
                         {
                             for (int destY = 0; destY < height; destY++)
                             {
-                                int srcX = Mathf.Clamp(destX - Mathf.FloorToInt(x), 0, width - 1);
-                                int srcY = Mathf.Clamp(destY - Mathf.FloorToInt(y), 0, height - 1);
+                                int srcX = (int)Math.Clamp(destX - (int)MathF.Floor(x), 0f, width - 1f);
+                                int srcY = (int)Math.Clamp(destY - (int)MathF.Floor(y), 0f, height - 1f);
                                 offsetImage[b, c, destY, destX] = image[b, c, srcY, srcX];
                             }
                         }
                     }
-                }
+                });
 
                 return offsetImage;
             }
@@ -489,26 +489,26 @@ namespace DeepUnity
 
                 Tensor noisyImage = Tensor.Zeros(image.Shape);
 
-                for (int b = 0; b < batch_size; b++)
+                Parallel.For(0, batch_size, b =>
                 {
                     for (int c = 0; c < channels; c++)
                     {
-                        for (int x = 0; x < width; x++)
+                        for (int y = 0; y < height; y++)
                         {
-                            for (int y = 0; y < height; y++)
+                            for (int x = 0; x < width; x++)
                             {
                                 float pixel = image[b, c, y, x];
-                                if (UnityEngine.Random.value < noise_prob)
+                                if (Random.Value < noise_prob)
                                 {
-                                    float intensity = UnityEngine.Random.Range(-noise_size, noise_size);
+                                    float intensity = Random.Range(-noise_size, noise_size);
                                     pixel += intensity;
-                                    pixel = Mathf.Clamp01(pixel); // Ensure the pixel value is in [0, 1] range
+                                    pixel = Math.Clamp(pixel, 0f, 1f); 
                                 }
                                 noisyImage[b, c, y, x] = pixel;
                             }
                         }
                     }
-                }
+                });
 
                 return noisyImage;
             }
@@ -523,7 +523,7 @@ namespace DeepUnity
 
                 Tensor maskedImage = Tensor.Zeros(image.Shape);
 
-                for (int b = 0; b < batch_size; b++)
+                Parallel.For(0, batch_size, b =>
                 {
                     for (int c = 0; c < channels; c++)
                     {
@@ -537,7 +537,7 @@ namespace DeepUnity
                             }
                         }
                     }
-                }
+                });
 
                 return maskedImage;
             }
@@ -557,7 +557,7 @@ namespace DeepUnity
 
                 int halfKernel = kernel_size / 2;
 
-                for (int ba = 0; ba < batch_size; ba++)
+                Parallel.For(0, batch_size, ba =>
                 {
                     for (int c = 0; c < channels; c++)
                     {
@@ -587,7 +587,7 @@ namespace DeepUnity
                             }
                         }
                     }
-                }
+                });
 
                 return blurredImage;
             }

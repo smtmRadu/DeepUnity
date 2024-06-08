@@ -9,6 +9,7 @@ using UnityEngine.UI;
 using DeepUnity.Models;
 using Unity.Properties;
 using System;
+using UnityEditor.PackageManager.UI;
 
 namespace DeepUnity.Tutorials
 {
@@ -26,6 +27,7 @@ namespace DeepUnity.Tutorials
         [Button("SaveNetworks")]
         [SerializeField] private int batch_size = 64;
         [SerializeField] private float lr = 2e-4f;
+        [SerializeField] private float maxNorm = 1F;
         [SerializeField] private WhatToDo perform = WhatToDo.Train;
 
         public PerformanceGraph G_graph = new PerformanceGraph();
@@ -40,26 +42,29 @@ namespace DeepUnity.Tutorials
 
         const int latent_dim = 100;
         const int size = 512; // 1024 original
-        const float dropout = 0.3f; // 0.3f original
+        const float dropout = 0.5f; // 0.3f original
         private void Start()
         {
-            InitType wInit = InitType.LeCun_Uniform;
-            InitType bInit = InitType.LeCun_Uniform;
+            InitType wInit = InitType.Kaiming_Uniform;
+            InitType bInit = InitType.Zeros;
             if (D == null)
             {
                 D = new Sequential(
                     new Flatten(),
 
                     new Dense(784, size, weight_init:wInit, bias_init:bInit),
-                    new ReLU(true),
+                    //new BatchNorm1D(size),
+                    new ReLU(true),           
                     new Dropout(dropout, true),
                 
                     new Dense(size, size/2, weight_init: wInit, bias_init: bInit),
-                   new ReLU(true),
+                    //new BatchNorm1D(size / 2),
+                    new ReLU(true),                  
                     new Dropout(dropout, true),
 
                     new Dense(size / 2, size/4, weight_init: wInit, bias_init: bInit),
-               new ReLU(true),
+                    //new BatchNorm1D(size / 4),
+                    new ReLU(true),
                     new Dropout(dropout, true),
 
                     new Dense(size/4, size/2, weight_init:wInit, bias_init:bInit),
@@ -70,12 +75,15 @@ namespace DeepUnity.Tutorials
             {
                 G = new Sequential(
                     new Dense(latent_dim, size / 4, weight_init: wInit, bias_init: bInit),
+                    //new BatchNorm1D(size/4),
                     new ReLU(true),
 
                     new Dense(size / 4, size / 2, weight_init: wInit, bias_init: bInit),
+                    // new BatchNorm1D(size / 2),
                     new ReLU(true),
 
                     new Dense(size / 2, size, weight_init: wInit, bias_init: bInit),
+                    //new BatchNorm1D(size),
                     new ReLU(true),
 
                     new Dense(size, 784, weight_init: wInit, bias_init: bInit),
@@ -133,7 +141,7 @@ namespace DeepUnity.Tutorials
                 // Train Discriminator------------------------------------------------------------------
                 var z = Tensor.RandomNormal(batch_size, latent_dim);
                 var Gz = G.Predict(z); // fake
-
+                d_optim.ClipGradNorm(maxNorm);
                 d_optim.ZeroGrad();
 
                 var Dx = D.Forward(x); // pred-real
@@ -158,7 +166,7 @@ namespace DeepUnity.Tutorials
                 DGz = D.Forward(Gz); // pred-fake 
                 loss = Loss.BCE(DGz, Tensor.Ones(DGz.Shape)); //(maximize realism)
                 G.Backward(D.Backward(loss.Gradient));
-
+                g_optim.ClipGradNorm(maxNorm);
                 g_optim.Step();
                 D.RequiresGrad = true;
                 G_graph.Append(loss.Item);
@@ -177,24 +185,15 @@ namespace DeepUnity.Tutorials
             if (displays.Count == 0)
                 return;
 
-            G.Device = Device.CPU;
+            var z = Tensor.RandomNormal(displays.Count, latent_dim);
+            var samples = G.Predict(z).Split(0, 1);
 
-            foreach (var dis in displays)
+            for (int i = 0; i < displays.Count; i++)
             {
-                if (dis == null)
-                    continue;
-
-                if (!dis.enabled)
-                    continue;
-
-                var z = Tensor.RandomNormal(1, latent_dim);
-                var sample = G.Predict(z).Squeeze(0);
-                Texture2D display = dis.texture as Texture2D;
-                display.SetPixels(Utils.TensorToColorArray(sample));
+                Texture2D display = displays[i].texture as Texture2D;
+                display.SetPixels(Utils.TensorToColorArray(samples[i].Squeeze(0)));
                 display.Apply();
             }
-
-            G.Device = Device.GPU;
         }
 
         public void SaveNetworks()

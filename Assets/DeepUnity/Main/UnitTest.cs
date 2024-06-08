@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using UnityEngine.UI;
 using DeepUnity.Optimizers;
 using DeepUnity.Modules;
-using System.Linq;
 
 
 namespace DeepUnity.Tutorials
@@ -21,13 +20,9 @@ namespace DeepUnity.Tutorials
 
         private void Start()
         {
-            // Tensor a = Tensor.Random01(2, 3, 4);
-            // 
-            // print(a);
-            // Flatten flt = new Flatten();
-            // var output = flt.Forward(a);
-            // print(output);
-            // print(flt.Backward(output));
+            Tensor x = Tensor.Random01(1);
+            print(x);
+            print(x.Size(-1));
         }
         // private void Start()
         // {

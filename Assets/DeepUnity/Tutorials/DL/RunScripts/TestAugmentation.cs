@@ -43,10 +43,10 @@ namespace DeepUnity.Tutorials
         {
             Tensor orgTex = Tensor.Constant(originalTexture.GetPixels(), (1, 28, 28));
 
-            Tensor newTexture = Utils.ImageProcessing.Zoom(orgTex, zoom_fac);
-            newTexture = Utils.ImageProcessing.Rotate(newTexture, rot_angle);
-            newTexture = Utils.ImageProcessing.Offset(newTexture, x_offset, y_offset);
-            newTexture = Utils.ImageProcessing.Noise(newTexture, noise_prob, noise_size);
+            Tensor newTexture = Utils.Vision.Zoom(orgTex, zoom_fac);
+            newTexture = Utils.Vision.Rotate(newTexture, rot_angle);
+            newTexture = Utils.Vision.Offset(newTexture, x_offset, y_offset);
+            newTexture = Utils.Vision.Noise(newTexture, noise_prob, noise_size);
 
             // Create a new texture for image2.sprite
             Texture2D newImage2Texture = new Texture2D(newTexture.Size(-1), newTexture.Size(-2));

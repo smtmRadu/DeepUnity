@@ -12,10 +12,10 @@ namespace DeepUnity.Modules
         [SerializeField] public bool RequiresGrad { get; set; } = true;
 
         private TensorGPU gpu_InputCache { get; set; } = null;
-        private bool UseBias { get => bias != null; }
 
-        [SerializeField] private TensorGPU weight;
-        [SerializeField] private TensorGPU bias;
+        [SerializeField] private bool bias = true;
+        [SerializeField] private TensorGPU weights;
+        [SerializeField] private TensorGPU biases;
         [NonSerialized]  private TensorGPU weightGrad;
         [NonSerialized]  private TensorGPU biasGrad;
 
@@ -39,13 +39,13 @@ namespace DeepUnity.Modules
             if (out_features < 1)
                 throw new ArgumentException("Out_features cannot be less than 1.");
 
-            weight = Parameter.CreateOnGPU(new int[] { out_features, in_features }, in_features, out_features, weight_init);
-            weightGrad = TensorGPU.Zeros(weight.Shape);
+            weights = Parameter.CreateOnGPU(new int[] { out_features, in_features }, in_features, out_features, weight_init);
+            weightGrad = TensorGPU.Zeros(weights.Shape);
 
             if (use_bias)
             {
-                bias = Parameter.CreateOnGPU(new int[] { out_features }, in_features, out_features, bias_init);
-                biasGrad = TensorGPU.Zeros(bias.Shape);
+                biases = Parameter.CreateOnGPU(new int[] { out_features }, in_features, out_features, bias_init);
+                biasGrad = TensorGPU.Zeros(biases.Shape);
             }
         }
         public DenseGPU() { }
@@ -56,8 +56,8 @@ namespace DeepUnity.Modules
             if (input.Rank > 3)
                 throw new ArgumentException($"Input must have the shape as (H_in), (B, H_in), (L, H_in) or (B, L, H_in), and the received input is ({input.Shape.ToCommaSeparatedString()})");
 
-            if (input.Size(-1) != weight.Size(-1))
-                throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the Dense Layer features_num ({weight.Size(-1)}).");
+            if (input.Size(-1) != weights.Size(-1))
+                throw new ShapeException($"Input features ({input.Size(-1)}) does not match with the Dense Layer features_num ({weights.Size(-1)}).");
 
 
 
@@ -75,15 +75,15 @@ namespace DeepUnity.Modules
             {
                 throw new ArgumentException("DenseGPU was not optimized for rank 3 tensors");
 
-                TensorGPU transposedWeights = TensorGPU.Transpose(weight, 0, 1);
+                TensorGPU transposedWeights = TensorGPU.Transpose(weights, 0, 1);
                 TensorGPU.Unsqueeze_(transposedWeights, 0);
 
 
                 TensorGPU output = TensorGPU.BatchedMatMul(gpu_InputCache, transposedWeights);
 
-                if (UseBias)
+                if (bias)
                 {
-                    TensorGPU expandedBiases = TensorGPU.Identity(bias);
+                    TensorGPU expandedBiases = TensorGPU.Identity(biases);
 
                     TensorGPU.Unsqueeze_(expandedBiases, 0);
                     TensorGPU.Unsqueeze_(expandedBiases, 0);
@@ -108,15 +108,15 @@ namespace DeepUnity.Modules
 
             bool isBatched = input.Rank == 2;
             int batch_size = isBatched ? input.Size(-2) : 1;
-            int H_in = weight.Size(1);
-            int H_out = weight.Size(0);
+            int H_in = weights.Size(1);
+            int H_out = weights.Size(0);
             ComputeShader cs = DeepUnityMeta.DenseCS;
 
             cs.SetBuffer(0, "input", gpu_InputCache.data);
-            cs.SetBuffer(0, "gamma", weight.data);
+            cs.SetBuffer(0, "gamma", weights.data);
             ComputeBuffer biasBuff = null;
-            if(UseBias)
-                cs.SetBuffer(0, "beta", bias.data);
+            if(bias)
+                cs.SetBuffer(0, "beta", biases.data);
             else
             {
                 biasBuff = new ComputeBuffer(H_out, 4);
@@ -147,8 +147,8 @@ namespace DeepUnity.Modules
         public Tensor Forward(Tensor input) => Predict(input);
         public Tensor Backward(Tensor loss)
         {
-            if (loss.Size(-1) != weight.Size(0))
-                throw new ArgumentException($"Hidden features of the loss ({loss.Size(-1)}) doesn't correspond to the hidden features returned by the dense layer ({weight.Size(0)}).");
+            if (loss.Size(-1) != weights.Size(0))
+                throw new ArgumentException($"Hidden features of the loss ({loss.Size(-1)}) doesn't correspond to the hidden features returned by the dense layer ({weights.Size(0)}).");
 
             if (loss.Rank == 3)
             {
@@ -177,8 +177,8 @@ namespace DeepUnity.Modules
             {
                 bool isBatched = loss.Rank == 2;
                 int batch_size = isBatched ? loss.Size(-2) : 1;
-                int H_in = weight.Size(1);
-                int H_out = weight.Size(0);
+                int H_in = weights.Size(1);
+                int H_out = weights.Size(0);
 
                 // dLoss w.r.t theta
                          
@@ -187,7 +187,7 @@ namespace DeepUnity.Modules
                 cs.SetBuffer(1, "gamma_grad", weightGrad.data);
 
                 ComputeBuffer biasGradBuff = null;
-                if (UseBias)
+                if (bias)
                 {
                     cs.SetBuffer(1, "beta_grad", biasGrad.data);
                 }
@@ -214,7 +214,7 @@ namespace DeepUnity.Modules
             }
             
 
-            TensorGPU gpu_inputGrad = TensorGPU.MatMul(gpu_loss, weight);
+            TensorGPU gpu_inputGrad = TensorGPU.MatMul(gpu_loss, weights);
             Tensor inputGradOnCPU = Tensor.Identity(gpu_inputGrad);
 
             gpu_inputGrad.Dispose();
@@ -229,9 +229,9 @@ namespace DeepUnity.Modules
             if (weightGrad == null)
                 OnAfterDeserialize();
 
-            return UseBias ?
-                new Parameter[] { new Parameter(weight, weightGrad), new Parameter(bias, biasGrad) } :
-                new Parameter[] { new Parameter(weight, weightGrad) };
+            return bias ?
+                new Parameter[] { new Parameter(weights, weightGrad), new Parameter(biases, biasGrad) } :
+                new Parameter[] { new Parameter(weights, weightGrad) };
         }
         public object Clone()
         {
@@ -239,12 +239,12 @@ namespace DeepUnity.Modules
 
             dense.Device = Device;
             dense.RequiresGrad = RequiresGrad;
-            dense.weight = (TensorGPU)weight.Clone();
+            dense.weights = (TensorGPU)weights.Clone();
             dense.weightGrad = (TensorGPU)weightGrad.Clone();
 
-            if (UseBias)
+            if (bias)
             {
-                dense.bias = (TensorGPU)bias.Clone();
+                dense.biases = (TensorGPU)biases.Clone();
                 dense.biasGrad = (TensorGPU)biasGrad.Clone();
             }
 
@@ -259,20 +259,20 @@ namespace DeepUnity.Modules
             // This function is actually having 2 workers on serialization.
             // If shape int[] was not deserialized, we need to break this worker.
             // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
-            if (weight == null)
+            if (weights == null)
                 return;
 
-            if (weight.Shape == null)
+            if (weights.Shape == null)
                 return;
 
-            if (weight.Shape.Length == 0)
+            if (weights.Shape.Length == 0)
                 return;
 
             // do not check if gamma is != null...
-            weightGrad = TensorGPU.Zeros(weight.Shape);
+            weightGrad = TensorGPU.Zeros(weights.Shape);
 
-            if (UseBias)
-                biasGrad = TensorGPU.Zeros(bias.Shape);
+            if (bias)
+                biasGrad = TensorGPU.Zeros(biases.Shape);
 
         }
 

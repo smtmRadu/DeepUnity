@@ -16,14 +16,13 @@ namespace DeepUnity.Modules
     [Serializable]
     public class Dense : ILearnable, IModule
     {
-        [SerializeField] public Device Device { get; set; } = Device.CPU;
-        [SerializeField] public bool RequiresGrad { get; set; } = true;
-
+        public Device Device { get; set; } = Device.CPU;
+        public bool RequiresGrad { get; set; } = true;
         private Tensor InputCache { get; set; }
-        private bool UseBias { get => biases != null; }
 
-        [SerializeField] private Tensor weights;
-        [SerializeField] private Tensor biases;
+        [SerializeField] private bool bias = true;
+        [SerializeField] public Tensor weights;
+        [SerializeField] public Tensor biases;
         [NonSerialized]  private Tensor weightsGrad;
         [NonSerialized]  private Tensor biasesGrad;
 
@@ -38,18 +37,19 @@ namespace DeepUnity.Modules
         /// <param name="weight_init">Initializer used for weights.</param>
         /// <param name="bias_init">Initializer used for biases.</param>
         /// <param name="device">Computation device used. Recommended <see cref="Device.GPU"/> for large <see cref="Dense"/> layers with <b>in_features</b> &amp; <b>out_features > 64</b>.</param>
-        public Dense(int in_features, int out_features, bool use_bias = true, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = default)
+        public Dense(int in_features, int out_features, bool bias = true, InitType weight_init = InitType.LeCun_Uniform, InitType bias_init = InitType.LeCun_Uniform, Device device = default)
         {
             if (in_features < 1)
                 throw new ArgumentException("In_features cannot be less than 1.");
             if (out_features < 1)
                 throw new ArgumentException("Out_features cannot be less than 1.");
 
+            this.bias = bias;
             this.Device = device;
             weights = Parameter.Create(new int[] { out_features, in_features }, in_features, out_features, weight_init);
             weightsGrad = Tensor.Zeros(weights.Shape);
 
-            if(use_bias)
+            if(bias)
             {
                 biases = Parameter.Create(new int[] { out_features }, in_features, out_features, bias_init);
                 biasesGrad = Tensor.Zeros(biases.Shape);
@@ -70,7 +70,7 @@ namespace DeepUnity.Modules
             {
                 Tensor y = Tensor.BatchedMatMul(input, weights.Transpose(0, 1).Unsqueeze(0).Expand(0, input.Size(0)), Device);
 
-                if (UseBias)
+                if (bias)
                     y += ExpandedBiases(y.Shape);
 
                 return y;              
@@ -98,8 +98,8 @@ namespace DeepUnity.Modules
                 weightsBuffer.SetData(weights.ToArray());
                 cs.SetBuffer(0, "gamma", weightsBuffer);
 
-                ComputeBuffer biasesBuffer = new ComputeBuffer(UseBias ? biases.Count() : H_out, 4);
-                biasesBuffer.SetData(UseBias ? biases.ToArray() : new float[H_out]);
+                ComputeBuffer biasesBuffer = new ComputeBuffer(bias ? biases.Count() : H_out, 4);
+                biasesBuffer.SetData(bias ? biases.ToArray() : new float[H_out]);
                 cs.SetBuffer(0, "beta", biasesBuffer);
 
                 ComputeBuffer outputBuffer = new ComputeBuffer(batch_size * H_out, 4);
@@ -147,7 +147,7 @@ namespace DeepUnity.Modules
                     wsGrad = wsGrad.Sum(0);
                     Tensor.CopyTo(wsGrad, weightsGrad);
 
-                    if (UseBias)
+                    if (bias)
                     {
                         Tensor bGrad = loss.Mean(0).Sum(0);
                         Tensor.CopyTo(bGrad, biasesGrad);
@@ -185,7 +185,7 @@ namespace DeepUnity.Modules
                     ComputeGradients(InputCache, loss, isBatched, batch_size, out weights_grad, out biases_grad);
 
                     Tensor.CopyTo(weightsGrad + weights_grad, weightsGrad);
-                    if (UseBias)
+                    if (bias)
                         Tensor.CopyTo(biasesGrad + biases_grad, biasesGrad);
                 }
                 else
@@ -208,8 +208,8 @@ namespace DeepUnity.Modules
                     weightsGradBuffer.SetData(weightsGrad.ToArray());
                     cs.SetBuffer(1, "gamma_grad", weightsGradBuffer);
 
-                    ComputeBuffer biasesGradBuffer = new ComputeBuffer(UseBias ? biasesGrad.Count() : H_out, 4);
-                    biasesGradBuffer.SetData(UseBias ? biasesGrad.ToArray() : new float[H_out]);
+                    ComputeBuffer biasesGradBuffer = new ComputeBuffer(bias ? biasesGrad.Count() : H_out, 4);
+                    biasesGradBuffer.SetData(bias ? biasesGrad.ToArray() : new float[H_out]);
                     cs.SetBuffer(1, "beta_grad", biasesGradBuffer);
 
                     cs.SetInt("batch_size", batch_size);
@@ -222,7 +222,7 @@ namespace DeepUnity.Modules
                         1);
 
                     Tensor.CopyTo(Tensor.Constant(weightsGradBuffer, weightsGrad.Shape), weightsGrad);
-                    if (UseBias)
+                    if (bias)
                         Tensor.CopyTo(Tensor.Constant(biasesGradBuffer, biases.Shape), biasesGrad);
 
                     lossBuffer.Release();
@@ -257,31 +257,31 @@ namespace DeepUnity.Modules
             //  (n, m) * (m, p) = (n, p)
             if (isBatched)
             {
-                Parallel.For(0, B_size, b =>
+                Parallel.For(0, B_size, (Action<int>)(b =>
                 {
                     for (int hout = 0; hout < H_out; hout++)
                     {
-                        float sum = UseBias ? biases[hout] : 0f;
+                        float sum = this.bias ? biases[hout] : 0f;
                         for (int hin = 0; hin < H_in; hin++)
                         {
                             sum += x[b, hin] * weights[hout, hin];
                         }
                         y[b, hout] = sum;
                     }
-                });
+                }));
             }
             else
             {
                 //Tests show that even only on 64 hid units it might perform better without multithread, so keep it like this indefinetely..
-                Parallel.For(0, H_out, hout =>
+                Parallel.For(0, H_out, (Action<int>)(hout =>
                 {
-                    float sum = UseBias ? biases[hout] : 0f;
+                    float sum = this.bias ? biases[hout] : 0f;
                     for (int hin = 0; hin < H_in; hin++)
                     {
                         sum += x[hin] * weights[hout, hin];
                     }
                     y[hout] = sum;
-                });
+                }));
             }
 
             return y;
@@ -292,12 +292,12 @@ namespace DeepUnity.Modules
             int H_in = weights.Size(-1);
 
             Tensor wg = Tensor.Zeros(H_out, H_in);
-            Tensor bg = UseBias ? Tensor.Zeros(H_out) : null;
+            Tensor bg = bias ? Tensor.Zeros(H_out) : null;
 
             // lossT * input = (H_out, B) * (B, H_in)
             if (isBatched)
             {
-                Parallel.For(0, H_in, hin =>
+                Parallel.For(0, H_in, (Action<int>)(hin =>
                 {
                     for (int hout = 0; hout < H_out; hout++)
                     {
@@ -309,7 +309,7 @@ namespace DeepUnity.Modules
                         wg[hout, hin] = mm / B_size;
                     }
 
-                    if (hin == 0 && UseBias)  //// here check for bias usage..............
+                    if (hin == 0 && this.bias)  //// here check for bias usage..............
                     {
                         for (int hout = 0; hout < H_out; hout++)
                         {
@@ -322,19 +322,19 @@ namespace DeepUnity.Modules
                         }
                     }
 
-                });
+                }));
             }
             else
             {
-                Parallel.For(0, H_out, hout =>
+                Parallel.For(0, H_out, (Action<int>)(hout =>
                 {
                     for (int hin = 0; hin < H_in; hin++)
                     {
                         wg[hout, hin] = x[hin] * loss[hout];
                     }
-                    if(UseBias)
+                    if(this.bias)
                         bg[hout] = loss[hout];
-                });
+                }));
             }
 
             weights_grad = wg;
@@ -376,7 +376,7 @@ namespace DeepUnity.Modules
             if (weightsGrad == null)
                 OnAfterDeserialize();
 
-            return UseBias ? 
+            return bias ? 
                 new Parameter[] { new Parameter(weights, weightsGrad), new Parameter(biases, biasesGrad) } : 
                 new Parameter[] { new Parameter(weights, weightsGrad) };
         }
@@ -387,7 +387,7 @@ namespace DeepUnity.Modules
             dense.weights = (Tensor)weights.Clone();          
             dense.weightsGrad = (Tensor)weightsGrad.Clone();
 
-            if(UseBias)
+            if(bias)
             {
                 dense.biases = (Tensor)biases.Clone();
                 dense.biasesGrad = (Tensor)biasesGrad.Clone();
@@ -416,7 +416,7 @@ namespace DeepUnity.Modules
             // do not check if gamma is != null...
             weightsGrad = Tensor.Zeros(weights.Shape);
 
-            if(UseBias)
+            if(bias)
                 biasesGrad = Tensor.Zeros(biases.Shape);
 
         }

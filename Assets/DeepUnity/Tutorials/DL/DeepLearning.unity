@@ -883,7 +883,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   perform: 1
   lr: 0.001
-  batchSize: 64
+  batchSize: 100
   graph:
     graph:
       serializedVersion: 2
@@ -896,6 +896,7 @@ MonoBehaviour:
     mean: 0
   canvas: {fileID: 1823018698}
   vae: {fileID: 0}
+  kld_weight: 0.001
   noise_prob: 0.75
   noise_size: 0.75
 --- !u!4 &1255005309
@@ -1321,7 +1322,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1539047896
 Transform:
   m_ObjectHideFlags: 0
@@ -1384,7 +1385,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1539047894}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5eb36009ab4e4094db676f56eb66ed1c, type: 3}
   m_Name: 
@@ -1816,7 +1817,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1820971846
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1928,7 +1929,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1823018699
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2259,6 +2260,7 @@ MonoBehaviour:
   G: {fileID: 0}
   batch_size: 100
   lr: 0.0002
+  maxNorm: 1
   perform: 1
   G_graph:
     graph:

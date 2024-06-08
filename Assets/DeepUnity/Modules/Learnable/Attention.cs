@@ -307,9 +307,9 @@ namespace DeepUnity.Modules
             d = embed_dim;
             this.mask = mask;
 
-            W_Q = new Dense(input_size, embed_dim, use_bias: false, weight_init, device: device);
-            W_K = new Dense(input_size, embed_dim, use_bias: false, weight_init, device: device);
-            W_V = new Dense(input_size, embed_dim, use_bias: false, weight_init, device: device);
+            W_Q = new Dense(input_size, embed_dim, bias: false, weight_init, device: device);
+            W_K = new Dense(input_size, embed_dim, bias: false, weight_init, device: device);
+            W_V = new Dense(input_size, embed_dim, bias: false, weight_init, device: device);
             softmax = new Softmax();
         }
         private AttentionV2() { }

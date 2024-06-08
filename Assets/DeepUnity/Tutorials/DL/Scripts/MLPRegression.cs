@@ -50,20 +50,22 @@ namespace DeepUnity.Tutorials
             if (net == null)
             {
                 net = new Sequential(
-                 new Dense(2, hiddenSize, weight_init: init_w, bias_init:init_b),
-                 new RMSNorm1D(hiddenSize),
-                 new Tanh(),
-                 new Dense(hiddenSize, hiddenSize, weight_init: init_w, bias_init: init_b),
-                 new RMSNorm1D(hiddenSize),
-                 new Tanh(),
-                 new Dense(hiddenSize, 1, weight_init: init_w, bias_init: init_b)
-                 );
-            }
+                 new Dense(2, hiddenSize, weight_init: init_w, bias_init: init_b),
 
+                 new Tanh(),
+                 new LazyBatchNorm1D(),
+                 new Dense(hiddenSize, hiddenSize, weight_init: init_w, bias_init: init_b),
+
+                 new Tanh(),
+                 new RMSNorm1D(hiddenSize, affine: false),
+                 new Dense(hiddenSize, 1, weight_init: init_w, bias_init: init_b)
+                 ).CreateAsset("some_ass"); //xd
+            }
             net.Device = device;
             net.Predict(Tensor.Random01(2));
 
-            optimizer = new Adam(net.Parameters(), lr: learningRate);
+
+            optimizer = new RAdam(net.Parameters(), lr: learningRate);
             scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
 
 
