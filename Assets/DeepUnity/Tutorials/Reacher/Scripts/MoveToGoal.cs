@@ -1,8 +1,10 @@
 using UnityEngine;
 using DeepUnity.ReinforcementLearning;
+using DeepUnity;
 
 public class MoveToGoal : Agent
 {
+    [Button("SetDefaultHP")]
     public float speed = 10f;
     public Transform target;
     public float norm_scale = 8f;
@@ -107,6 +109,18 @@ public class MoveToGoal : Agent
             SetReward(-1f);
             EndEpisode();
         }
+    }
+
+    public void SetDefaultHP()
+    {
+        model.config.actorLearningRate = 1e-3f;
+        model.config.criticLearningRate = 1e-3f;
+        model.config.batchSize = 128;
+        model.config.bufferSize = 2048;
+        model.standardDeviationValue = 2;
+        model.config.timescale = 50;
+
+        print("Config changed for Balance ball");
     }
 }
 

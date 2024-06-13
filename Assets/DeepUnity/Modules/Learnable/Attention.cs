@@ -321,7 +321,7 @@ namespace DeepUnity.Modules
             Tensor K = W_K.Predict(input);
             Tensor V = W_V.Predict(input);
 
-            var sdpa = Tensor.BatchedMatMul(Q, K.Transpose(-1, -2), device: Device) / Mathf.Sqrt(d);
+            var sdpa = Tensor.BatchedMatMul(Q, K.Transpose(-1, -2), device: Device) / MathF.Sqrt(d);
             if (mask) CausalMask(sdpa);
             sdpa = softmax.Predict(sdpa);
             return Tensor.BatchedMatMul(sdpa, V, device: Device);
@@ -334,7 +334,7 @@ namespace DeepUnity.Modules
             KCache = W_K.Forward(input);
             VCache = W_V.Forward(input);
 
-            var sdpa = Tensor.BatchedMatMul(QCache, KCache.Transpose(-1, -2), device: Device) / Mathf.Sqrt(d);
+            var sdpa = Tensor.BatchedMatMul(QCache, KCache.Transpose(-1, -2), device: Device) / MathF.Sqrt(d);
             if (mask) CausalMask(sdpa);
             sdpa = softmax.Forward(sdpa);
             PostSoftmaxCache = sdpa;

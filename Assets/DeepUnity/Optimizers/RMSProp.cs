@@ -11,8 +11,17 @@ namespace DeepUnity.Optimizers
         private readonly Tensor[] v;
         private readonly Tensor[] b;
         private readonly Tensor[] gAve;
-
-        public RMSProp(Parameter[] parameters, float lr = 0.01f, float alpha = 0.99f, float eps = 1e-7f, float weightDecay = 0f, float momentum = 0f, bool centered = false) : base(parameters, lr, eps, weightDecay)
+        /// <summary>
+        /// RMSprop optimizer.
+        /// </summary>
+        /// <param name="parameters"></param>
+        /// <param name="lr"></param>
+        /// <param name="alpha">smoothing constant</param>
+        /// <param name="eps"></param>
+        /// <param name="weight_decay"></param>
+        /// <param name="momentum"></param>
+        /// <param name="centered">the gradient is normalized by an estimation of its variance</param>
+        public RMSProp(Parameter[] parameters, float lr = 0.01f, float alpha = 0.99f, float eps = 1e-7f, float weight_decay = 0f, float momentum = 0f, bool centered = false) : base(parameters, lr, eps, weight_decay)
         {
             this.alpha = alpha;
             mu = momentum;

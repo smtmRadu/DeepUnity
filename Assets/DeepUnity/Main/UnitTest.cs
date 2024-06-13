@@ -20,9 +20,7 @@ namespace DeepUnity.Tutorials
 
         private void Start()
         {
-            Tensor x = Tensor.Random01(1);
-            print(x);
-            print(x.Size(-1));
+
         }
         // private void Start()
         // {

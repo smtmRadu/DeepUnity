@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using Unity.VisualScripting;
 using UnityEngine;
 
@@ -88,7 +89,7 @@ namespace DeepUnity.Modules
             runningVar = Tensor.Ones(num_features);
             runningMean = Tensor.Zeros(num_features);
         }
-
+        private BatchNorm1D() { }
         public Tensor Predict(Tensor input)
         {
             if (input.Rank > 2)
@@ -108,7 +109,7 @@ namespace DeepUnity.Modules
                 var e_std = Tensor.Expand(Tensor.Unsqueeze((runningVar + epsilon).Sqrt(), 0), 0, batch_size);
                 var input_centered = (input - e_mean) / e_std;
                 
-                if (!affine) // not affine
+                if (!affine) 
                     return input_centered;
 
                 var e_gamma = Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size);
@@ -121,7 +122,7 @@ namespace DeepUnity.Modules
             {
                 var input_centered = (input - runningMean) / ((runningVar + epsilon).Sqrt());
 
-                if(!affine) // not affine
+                if(!affine) 
                     return input_centered;
 
                 var output = gamma * input_centered + beta;
@@ -154,11 +155,10 @@ namespace DeepUnity.Modules
             runningMean = runningMean * momentum + mean.Squeeze(0) * (1f - momentum);
             runningVar = runningVar * momentum + variance_unbiased * (1f - momentum);
 
-            // no affine
+
             if (!affine)
                 return xHat;
 
-            // affine ON
             return Tensor.Expand(Tensor.Unsqueeze(gamma, 0), 0, batch_size) * xHat + Tensor.Expand(Tensor.Unsqueeze(beta, 0), 0, batch_size);
         }
         public Tensor Backward(Tensor dLdY)
@@ -167,7 +167,7 @@ namespace DeepUnity.Modules
 
             // differentiation on https://arxiv.org/pdf/1502.03167.pdf page 4
 
-            var dLdxHat = gamma == null ? dLdY : dLdY * gamma.Unsqueeze(0).Expand(0, m); // [batch, outs]
+            var dLdxHat = affine ? dLdY * gamma.Unsqueeze(0).Expand(0, m) : dLdY; // [batch, outs]
 
             var dLdVarB = Tensor.Mean(
                          dLdxHat * xCentered * (-1f / 2f) * (std.Square() + epsilon).Pow(-3f / 2f),
@@ -193,31 +193,27 @@ namespace DeepUnity.Modules
             return dLdX;
         }
 
+
         public object Clone()
         {
-            if(affine)
+            BatchNorm1D bnclone = new BatchNorm1D();
+            bnclone.Device = Device;
+            bnclone.RequiresGrad = RequiresGrad;
+            bnclone.affine = affine;
+            bnclone.num_features = num_features;
+            bnclone.momentum = momentum;
+            bnclone.epsilon = epsilon;
+            if (affine)
             {
-                BatchNorm1D bnclone = new BatchNorm1D(num_features, epsilon, momentum);
-                bnclone.Device = Device;
-                bnclone.RequiresGrad = RequiresGrad;
                 bnclone.gamma = (Tensor)gamma.Clone();
                 bnclone.beta = (Tensor)beta.Clone();
                 bnclone.gammaGrad = (Tensor)gammaGrad.Clone();
                 bnclone.betaGrad = (Tensor)betaGrad.Clone();
-                bnclone.runningMean = (Tensor)runningMean.Clone();
-                bnclone.runningVar = (Tensor)runningVar.Clone();
-                return bnclone;
             }
-            else
-            {
-                BatchNorm1D bnclone = new BatchNorm1D(1, epsilon, momentum, false);
-                bnclone.Device = Device;
-                bnclone.RequiresGrad = RequiresGrad;
-                bnclone.runningMean = (Tensor)runningMean.Clone();
-                bnclone.runningVar = (Tensor)runningVar.Clone();
-                return bnclone;
-            }
-           
+
+            bnclone.runningMean = (Tensor)runningMean.Clone();
+            bnclone.runningVar = (Tensor)runningVar.Clone();
+            return bnclone;          
         }
         public Parameter[] Parameters()
         {

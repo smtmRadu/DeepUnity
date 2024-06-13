@@ -70,7 +70,7 @@ namespace DeepUnity.Tutorials
             Debug.Log("MNIST Dataset loaded.");
 
            
-            optim = new AdamW(network.Parameters(), lr: lr, weightDecay: weightDecay, amsgrad: true);
+            optim = new AdamW(network.Parameters(), lr: lr, weight_decay: weightDecay, amsgrad: true);
             scheduler = new LinearLR(optim, total_iters: epochs);
             accuracyGraph = new PerformanceGraph();
             lossGraph = new PerformanceGraph();

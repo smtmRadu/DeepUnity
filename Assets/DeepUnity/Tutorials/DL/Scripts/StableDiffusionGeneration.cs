@@ -15,7 +15,7 @@ namespace DeepUnity.Tutorials
         private void Start()
         {
             betas = GenerateBetas(50);
-            alphas = -betas + 1;
+            alphas = 1f - betas;
             alphasBar = Tensor.CumProd(alphas, 0);
             
             // I'm not sure but should i scale the images in range (-1, 1)?

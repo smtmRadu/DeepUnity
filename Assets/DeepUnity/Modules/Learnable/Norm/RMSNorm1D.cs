@@ -52,6 +52,7 @@ namespace DeepUnity.Modules
             rmsnorm.epsilon = this.epsilon;
             rmsnorm.Device = Device;
             rmsnorm.RequiresGrad = RequiresGrad;
+            rmsnorm.affine = affine;
             if (affine)
             {
                 rmsnorm.gamma = (Tensor)gamma.Clone();
@@ -99,7 +100,7 @@ namespace DeepUnity.Modules
             if (RequiresGrad && affine)
             {
                 Tensor dLdGamma = dLdY * xHat / rmsNorm;
-                gammaGrad += isBatched ? dLdGamma.Mean(0) : dLdGamma;
+                Tensor.CopyTo(gammaGrad + (isBatched ? dLdGamma.Mean(0) : dLdGamma), gammaGrad);
             }
 
             if (!affine) // no affine

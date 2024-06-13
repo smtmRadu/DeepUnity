@@ -87,7 +87,7 @@ namespace DeepUnity.Modules
             else
             {
                 int H_in = weights.Size(-1);
-                int H_out = biases.Size(-1);
+                int H_out = weights.Size(-2);
                 ComputeShader cs = DeepUnityMeta.DenseCS;
 
                 ComputeBuffer inputBuffer = new ComputeBuffer(input.Count(), 4);
@@ -191,7 +191,7 @@ namespace DeepUnity.Modules
                 else
                 {
                     int H_in = weights.Size(-1);
-                    int H_out = biases.Size(-1);
+                    int H_out = weights.Size(-2);
 
                     // dLoss w.r.t theta
                     ComputeShader cs = DeepUnityMeta.DenseCS;
@@ -384,6 +384,8 @@ namespace DeepUnity.Modules
         {
             var dense = new Dense();
             dense.Device = Device;
+            dense.RequiresGrad = RequiresGrad;
+            dense.bias = bias;
             dense.weights = (Tensor)weights.Clone();          
             dense.weightsGrad = (Tensor)weightsGrad.Clone();
 

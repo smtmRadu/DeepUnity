@@ -101,7 +101,7 @@ namespace DeepUnity
 
         #region Create
         /// <summary>
-        /// Default hidden Tensor Constructor. Equivalent to Zeros
+        /// Default hidden <see cref="Tensor"/> constructor. Equivalent to <see cref="Zeros(int[])"/>.
         /// </summary>
         /// <param name="shape"></param>
         /// <exception cref="ShapeException"></exception>
@@ -455,7 +455,7 @@ namespace DeepUnity
             Tensor t = new(shape);
             for (int i = 0; i < t.data.Length; i++)
             {
-                t.data[i] = Utils.Random.Value;
+                t.data[i] = Utils.Random.ValueUnsafe;
             }
             return t;
         }
@@ -470,7 +470,7 @@ namespace DeepUnity
             Tensor t = new(shape);
             for (int i = 0; i < t.data.Length; i++)
             {
-                t.data[i] = Utils.Random.Normal();
+                t.data[i] = Utils.Random.Normal(threadsafe: false);
             }
             return t;
         }
@@ -485,7 +485,7 @@ namespace DeepUnity
             Tensor t = new(shape);
             for (int i = 0; i < t.data.Length; i++)
             {
-                t.data[i] = Utils.Random.Normal(mean_sd.Item1, mean_sd.Item2);
+                t.data[i] = Utils.Random.Normal(mean_sd.Item1, mean_sd.Item2, threadsafe:false);
             }
             return t;
         }
@@ -572,6 +572,7 @@ namespace DeepUnity
 
             return result;
         }
+
         /// <summary>
         /// Elements addition by <paramref name="right"/> value.
         /// </summary>
@@ -628,14 +629,52 @@ namespace DeepUnity
 
             return result;
         }
+        
+
         /// <summary>
         /// Elements addition by <paramref name="left"/> value.
         /// </summary>
         public static Tensor operator +(float left, Tensor right) => right + left;
         /// <summary>
+        /// Elements subtraction by <paramref name="right"/> value.
+        /// </summary>
+        public static Tensor operator -(float left, Tensor right)
+        {
+            Tensor result = Identity(right);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = left - right.data[i];
+            }
+
+            return result;
+        }
+        /// <summary>
         /// Elements multiplication by <paramref name="left"/> value.
         /// </summary>
         public static Tensor operator *(float left, Tensor right) => right * left;
+        /// <summary>
+        /// Elements subtraction by <paramref name="right"/> value.
+        /// </summary>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <returns></returns>
+        public static Tensor operator /(float left, Tensor right)
+        {
+            Tensor result = Identity(right);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = left / right.data[i];
+            }
+
+            return result;
+        }
+
+
+        /// <summary>
+        /// Elements multiplication by <paramref name="left"/> value.
+        /// </summary>
         /// <summary>
         /// Element-wise addition.
         /// </summary>
@@ -999,7 +1038,7 @@ namespace DeepUnity
                 return result;
             }
             else
-            {
+            {             
                 int left_rank = left.Rank;
                 int right_rank = right.Rank;
 
@@ -1031,7 +1070,7 @@ namespace DeepUnity
                 else
                     result = new(CreateShape(left.Rank, J, K, N, P));
 
-
+               
                 ComputeShader cs = DeepUnityMeta.TensorCS;
 
                 ComputeBuffer leftData = new(left.data.Length, 4);
@@ -1089,7 +1128,7 @@ namespace DeepUnity
                 leftData.Release();
                 rightData.Release();
                 resultData.Release();
-
+                
 
                 // The result keeps the smallest rank
 
@@ -3825,6 +3864,86 @@ namespace DeepUnity
                     throw new Exception("Unhandled norm type.");
             }
         }
+        /// <summary>
+        /// Computes the trace of a 2D tensor.
+        /// </summary>
+        /// <param name="axis"></param>
+        /// <returns><see cref="Tensor"/> of shape (1)</returns>
+        public static Tensor Trace(Tensor tensor)
+        {
+            if (!(tensor.Rank == 2 || tensor.Rank == 1))
+                throw new ArgumentException($"Tensor must have rank 2 or 1 (received {tensor.Rank})");
+
+            if (tensor.Width != tensor.Height)
+                throw new ArgumentException($"Tensor received must be a square matrix (received shape ({tensor.Shape.ToCommaSeparatedString()}))");
+            Tensor tr = Zeros(1);
+            for (int i = 0; i < tensor.Width; i++)
+            {
+                tr[0] += tensor[i, i];
+            }
+            return tr;
+
+        }
+        /// <summary>
+        /// Returns the lower triangular part of the matrix 2D tensor (allows also batched input), the other elements of the result tensor out are set to zero.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="diagonal"></param>
+        /// <returns></returns>
+        public static Tensor Tril(Tensor tensor, int diagonal = 0)
+        {
+            if (tensor.Rank < 2)
+                throw new ArgumentException($"Tensor rank must be higher than 1 (received shape {tensor.shape.ToCommaSeparatedString()} and rank {tensor.Rank})");
+
+            Tensor tril = Tensor.Zeros(tensor.shape);
+
+            for (int b = 0; b < tril.Batch; b++)
+            {
+                for (int c = 0; c < tril.Channels; c++)
+                {
+                    for (int h = 0; h < tril.Height; h++)
+                    {
+                        for (int w = 0; w < tril.Width; w++)
+                        {
+                            if(h >= w - diagonal)
+                                tril[b, c, h, w] = tensor[b, c, h, w];
+                        }
+                    }
+                }
+            }
+
+            return tril;
+        }
+        /// <summary>
+        /// Returns the upper triangular part of the matrix 2D tensor (allows also batched input), the other elements of the result tensor out are set to zero.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="diagonal"></param>
+        /// <returns></returns>
+        public static Tensor Triu(Tensor tensor, int diagonal = 0)
+        {
+            if (tensor.Rank < 2)
+                throw new ArgumentException($"Tensor rank must be higher than 1 (received shape {tensor.shape.ToCommaSeparatedString()} and rank {tensor.Rank})");
+
+            Tensor triu = Tensor.Zeros(tensor.shape);
+
+            for (int b = 0; b < triu.Batch; b++)
+            {
+                for (int c = 0; c < triu.Channels; c++)
+                {
+                    for (int h = 0; h < triu.Height; h++)
+                    {
+                        for (int w = 0; w < triu.Width; w++)
+                        {
+                            if (h <= w - diagonal)
+                                triu[b, c, h, w] = tensor[b, c, h, w];
+                        }
+                    }
+                }
+            }
+
+            return triu;
+        }
         #endregion Statics
 
 
@@ -4009,6 +4128,18 @@ namespace DeepUnity
         public Tensor Norm(NormType norm = NormType.EuclideanL2, float eps = 1E-12f)
         {
             return Norm(this, norm, eps);
+        }
+        public Tensor Trace()
+        {
+            return Trace(this);
+        }
+        public Tensor Tril(int diagonal = 0)
+        {
+            return Tril(this, diagonal);
+        }
+        public Tensor Triu(int diagonal = 0)
+        {
+            return Triu(this, diagonal);
         }
         #endregion Instance
 

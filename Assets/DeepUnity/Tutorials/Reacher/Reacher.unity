@@ -974,9 +974,9 @@ MonoBehaviour:
   discreteActions: 5
   archType: 0
   numLayers: 2
-  hidUnits: 40
+  hidUnits: 32
   activation: 1
-  model: {fileID: 11400000, guid: fc51b2ed4e3a94e4d8ab0dde6d24a58e, type: 2}
+  model: {fileID: 11400000, guid: 62233fcbf4075e848936bfdb0d0e1bee, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0
@@ -1109,16 +1109,6 @@ MonoBehaviour:
     current: 0
     mean: 0
   entropy:
-    graph:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    steps: 0
-    current: 0
-    mean: 0
-  learningRate:
     graph:
       serializedVersion: 2
       m_Curve: []

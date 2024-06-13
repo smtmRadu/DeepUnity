@@ -43,29 +43,28 @@ namespace DeepUnity.Tutorials
         private int epoch = 0;
         private int i = 0;
 
-        public InitType init_w = InitType.LeCun_Normal;
-        public InitType init_b = InitType.LeCun_Normal;
+        public InitType init_w = InitType.Xavier_Uniform;
+        public InitType init_b = InitType.Xavier_Uniform;
         public void Start()
         {
             if (net == null)
             {
                 net = new Sequential(
-                 new Dense(2, hiddenSize, weight_init: init_w, bias_init: init_b),
+                 new LazyDense(hiddenSize, false, weight_init: init_w, bias_init: init_b),
+                //new LazyBatchNorm1D(),
+                new Swish(true),
+                 new LazyDense(hiddenSize, false, weight_init: init_w, bias_init: init_b),
+                //new LazyBatchNorm1D(),
+                new Swish(true),
 
-                 new Tanh(),
-                 new LazyBatchNorm1D(),
-                 new Dense(hiddenSize, hiddenSize, weight_init: init_w, bias_init: init_b),
-
-                 new Tanh(),
-                 new RMSNorm1D(hiddenSize, affine: false),
                  new Dense(hiddenSize, 1, weight_init: init_w, bias_init: init_b)
-                 ).CreateAsset("some_ass"); //xd
+                 );//.CreateAsset("some_ass"); //xd
             }
-            net.Device = device;
+            
             net.Predict(Tensor.Random01(2));
+            net.Device = device;
 
-
-            optimizer = new RAdam(net.Parameters(), lr: learningRate);
+            optimizer = new SGD(net.Parameters(), momentum: 0);
             scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
 
 

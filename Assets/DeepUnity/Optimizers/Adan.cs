@@ -18,16 +18,15 @@ namespace DeepUnity.Optimizers
 
         /// <summary>
         /// ADAptive Nesterov momentum optimizer.<br></br>
-        /// Paper uses lr = 1e-2, with weight decay in [1e-3, 1e-2] range, and 3e-4 in RL with 0 weight decay.
         /// </summary>
         /// <param name="parameters"></param>
         /// <param name="lr"></param>
         /// <param name="beta1"></param>
         /// <param name="beta2"></param>
         /// <param name="beta3"></param>
-        /// <param name="weightDecay"></param>
-        public Adan(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.02f, float beta2 = 0.08f, float beta3 = 0.01f, float eps = 1e-7f, float weightDecay = 0f)
-            : base(parameters, lr, eps, weightDecay)
+        /// <param name="weight_decay"></param>
+        public Adan(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.02f, float beta2 = 0.08f, float beta3 = 0.01f, float eps = 1e-7f, float weight_decay = 0f)
+            : base(parameters, lr, eps, weight_decay)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;
@@ -57,7 +56,7 @@ namespace DeepUnity.Optimizers
                 if (t == 1)
                 {
                     m[i] = parameters[i].g.Clone() as Tensor;
-                    n[i] = parameters[i].g.Pow(2f);
+                    n[i] = parameters[i].g.Square();
                     // v[i] = 0 by default from init
                 }
 
@@ -68,15 +67,13 @@ namespace DeepUnity.Optimizers
 
                 m[i] = (1 - beta1) * m[i] + beta1 * parameters[i].g;
                 v[i] = (1 - beta2) * v[i] + beta2 * (parameters[i].g - gOld[i]);
-                n[i] = (1 - beta3) * n[i] + beta3 * (parameters[i].g + (1f - beta2) * (parameters[i].g - gOld[i])).Pow(2);
+                n[i] = (1 - beta3) * n[i] + beta3 * (parameters[i].g + (1f - beta2) * (parameters[i].g - gOld[i])).Square();
                 Tensor eta = Tensor.Fill(gamma, n[i].Shape) / (n[i].Sqrt() + epsilon);
 
                 // Update theta
                 Tensor.CopyTo((lambda * eta + 1f).Pow(-1f) * (parameters[i].param - eta * (m[i] + (1f - beta2) * v[i])), parameters[i].param);
 
-
-                gOld[i] = parameters[i].g.Clone() as Tensor;
-
+                Tensor.CopyTo(parameters[i].g, gOld[i]);
             });
         }
     }

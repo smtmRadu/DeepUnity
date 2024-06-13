@@ -12,6 +12,7 @@ namespace DeepUnity
         internal readonly static ComputeShader Conv2DCS;
         internal readonly static ComputeShader RNNCellCS;
         internal readonly static ComputeShader ConvTranpose2DCS;
+        // internal readonly static ComputeShader MatMulFP16CS;
 
         internal readonly static int THREADS_NUM = 256;
         internal readonly static Lazy<ParallelOptions> MULTITHREADS_8 = new Lazy<ParallelOptions>(() => new ParallelOptions { MaxDegreeOfParallelism = 8 });
@@ -27,6 +28,7 @@ namespace DeepUnity
                 Conv2DCS = Resources.Load<ComputeShader>("ComputeShaders/Conv2DCS");
                 RNNCellCS = Resources.Load<ComputeShader>("ComputeShaders/RNNCellCS");
                 ConvTranpose2DCS = Resources.Load<ComputeShader>("ComputeShaders/ConvTranpose2DCS");
+                // MatMulFP16CS = Resources.Load<ComputeShader>("ComputeShaders/MatMulFP16CS");
 
                 if (TensorCS == null)
                     throw new Exception("The Compute Shader scripts were moved from Resources/ComputeShaders folder. Please move them back or modify this script that finds them by adjusting the path.");
@@ -262,6 +264,12 @@ namespace DeepUnity
         RNN,
         [Tooltip("Self-Attention Neural Network")]
         ATT
+    }
+
+    public enum FloatingPointPrecision
+    {
+        FP32,
+        FP16
     }
 }
 

@@ -267,7 +267,7 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     Tensor cactionBatch;
                     Tensor cprobBatch;
-                    model.ContinuousPredict(stateBatch, out cactionBatch, out cprobBatch);
+                    model.ContinuousEval(stateBatch, out cactionBatch, out cprobBatch);
                     Tensor[] continuousActionsBatch = Tensor.Split(cactionBatch, 0, 1);
                     Tensor[] continuousProbsBatch = Tensor.Split(cprobBatch, 0, 1);
 
@@ -288,7 +288,7 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     Tensor dactionBatch;
                     Tensor dprobBatch;
-                    model.DiscretePredict(stateBatch, out dactionBatch, out dprobBatch);
+                    model.DiscreteEval(stateBatch, out dactionBatch, out dprobBatch);
                     Tensor[] discreteActionsBatch = Tensor.Split(dactionBatch, 0, 1);
                     Tensor[] discreteProbsBatch = Tensor.Split(dprobBatch, 0, 1);
 

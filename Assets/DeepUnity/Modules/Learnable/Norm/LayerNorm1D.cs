@@ -103,20 +103,20 @@ namespace DeepUnity.Modules
             int m = isBatched ? dLdY.Size(0) : 1;
             Tensor expanded_gamma = isBatched ? gamma.Unsqueeze(0).Expand(0, m) : gamma;
 
-            Tensor dLdxHat = gamma == null ? dLdY : dLdY * expanded_gamma;
+            Tensor dLdxHat = affine ? dLdY : dLdY * expanded_gamma;
             Tensor dLdVar = dLdxHat * xCentered * (-1f / 2f) * Tensor.Pow(std.Square() + epsilon, -3f / 2f);
             Tensor dLdMu = dLdxHat * -1f / std + dLdVar * -2f * xCentered / m;
-            Tensor dLdX = dLdxHat * 1f / std + dLdVar * 2f * xCentered / m + dLdMu * (1f / m);
+            Tensor dLdX = dLdxHat / std + dLdVar * 2f * xCentered / m + dLdMu * (1f / m);
             
             if(RequiresGrad && affine)
             {
                 Tensor dLdGamma = dLdY * xCentered;
-                Tensor.CopyTo(gammaGrad + dLdGamma.Mean(0), gammaGrad);
+                Tensor.CopyTo(gammaGrad + (isBatched ? dLdGamma.Mean(0) : dLdGamma), gammaGrad);
 
                 if(bias)
                 {
                     Tensor dLdBeta = dLdY;
-                    Tensor.CopyTo(betaGrad + dLdBeta.Mean(0), betaGrad);
+                    Tensor.CopyTo(betaGrad + (isBatched ? dLdBeta.Mean(0): dLdBeta), betaGrad);
                 }
                 
             }
@@ -128,6 +128,8 @@ namespace DeepUnity.Modules
         {
             LayerNorm1D laynorm = new LayerNorm1D();
             laynorm.epsilon = epsilon;
+            laynorm.affine = affine;
+            laynorm.bias = bias;
             laynorm.Device = Device;
             laynorm.RequiresGrad = RequiresGrad;
             if(affine)

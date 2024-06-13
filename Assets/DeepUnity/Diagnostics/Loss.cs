@@ -105,7 +105,7 @@ namespace DeepUnity
                     case LossType.CE:
                         return -targets * Tensor.Log(predicts + Utils.EPSILON);
                     case LossType.BCE:
-                        return - (targets * Tensor.Log(predicts + Utils.EPSILON) + (-targets + 1f) * Tensor.Log(-predicts + 1f + Utils.EPSILON));
+                        return - (targets * Tensor.Log(predicts + Utils.EPSILON) + (1f - targets) * Tensor.Log(1f - predicts + Utils.EPSILON));
 
                     case LossType.HE:
                         return predicts.Zip(targets, (p, t) => MathF.Max(0f, 1f - p * t));
@@ -132,7 +132,7 @@ namespace DeepUnity
                     case LossType.CE:
                         return -targets / (predicts + Utils.EPSILON);
                     case LossType.BCE:
-                        return (predicts - targets) / (predicts * (-predicts + 1f) + Utils.EPSILON);
+                        return (predicts - targets) / (predicts * (1f - predicts) + Utils.EPSILON);
 
                     case LossType.HE:
                         return predicts.Zip(targets, (p, t) => 1f - p * t > 0f ? -t : 0f);

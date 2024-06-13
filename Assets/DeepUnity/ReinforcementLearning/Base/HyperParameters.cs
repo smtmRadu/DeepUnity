@@ -85,7 +85,7 @@ namespace DeepUnity.ReinforcementLearning
         [MinMax(1, 128)] public int updateInterval = 64;
 
         [Tooltip("[Typicall range > Batch Size] Number of steps collected before updating the policy. In this timeframe, the actions will be purely random.")]
-        [Min(64)] public int updateAfter = 1024;
+        [Min(64)] public int updateAfter = 10_240;
 
         [Tooltip("[Typical range: 1 - 8] Number of mini-batches sampled on policy model update. This can be increased while also increasing updateEvery.")]
         [MinMax(1, 8)] public int updatesNum = 1;

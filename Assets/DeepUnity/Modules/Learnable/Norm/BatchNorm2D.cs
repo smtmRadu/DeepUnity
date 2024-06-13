@@ -89,7 +89,7 @@ namespace DeepUnity.Modules
             runningVar = Tensor.Ones(num_channels);
             runningMean = Tensor.Zeros(num_channels);
         }
-
+        private BatchNorm2D() { }
         public Tensor Predict(Tensor input)
         {
             if (input.Rank < 3)
@@ -287,9 +287,13 @@ namespace DeepUnity.Modules
 
         public object Clone()
         {
-            BatchNorm2D bnclone = new BatchNorm2D(num_features, epsilon, momentum);
+            BatchNorm2D bnclone = new BatchNorm2D();
             bnclone.Device = Device;
             bnclone.RequiresGrad = RequiresGrad;
+            bnclone.affine = affine;
+            bnclone.num_features = num_features;
+            bnclone.momentum = momentum;
+            bnclone.epsilon = epsilon;
 
             if (affine)
             {

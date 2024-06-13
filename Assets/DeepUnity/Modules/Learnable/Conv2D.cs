@@ -476,6 +476,7 @@ namespace DeepUnity.Modules
             var conv = new Conv2D();
             conv.RequiresGrad = RequiresGrad;
             conv.Device = Device;
+            conv.bias = bias;
             conv.kernels = (Tensor)kernels.Clone();
             conv.kernelsGrad = (Tensor)kernelsGrad.Clone();
 

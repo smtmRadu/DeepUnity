@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using DeepUnity.Modules;
 using Unity.VisualScripting;
 using UnityEngine;
@@ -68,8 +69,12 @@ namespace DeepUnity.Activations
                 Tensor[] batchElems_sm = outputCache.Split(0, 1);
                 Tensor[] batchElems_loss = dLdY.Split(0, 1);
                 Tensor[] batchElems_inputGrad = new Tensor[batchElems_sm.Length];
-                for (int i = 0; i < batchElems_loss.Length; i++)
+
+                Parallel.For(0, batchElems_loss.Length, i =>
+                {
                     batchElems_inputGrad[i] = RecursiveLoRBackward(batchElems_loss[i].Squeeze(0), batchElems_sm[i].Squeeze(0));
+                });
+                
                 return Tensor.Concat(null, batchElems_inputGrad);
             }
             if (dLdY.Rank == 2)
@@ -77,8 +82,12 @@ namespace DeepUnity.Activations
                 Tensor[] seqElems_sm = outputCache.Split(0, 1);
                 Tensor[] seqElems_loss = dLdY.Split(0, 1);
                 Tensor[] seqElems_inputGrad = new Tensor[seqElems_sm.Length];
-                for (int i = 0; i < seqElems_loss.Length; i++)
+
+                Parallel.For(0, seqElems_loss.Length, i =>
+                {
                     seqElems_inputGrad[i] = RecursiveLoRBackward(seqElems_loss[i].Squeeze(0), seqElems_sm[i].Squeeze(0));
+                });
+
                 return Tensor.Concat(null, seqElems_inputGrad);
             }
             else // Case one vector
@@ -91,8 +100,8 @@ namespace DeepUnity.Activations
                 {
                     for (int i = 0; i < H; i++)
                     {
-                        float delta = i == j ? 1 : 0;
-                        jacobian_softmax[j, i] += outputCache[i] * (delta - outputCache[j]);
+                        float kdelta = i == j ? 1 : 0;
+                        jacobian_softmax[j, i] += outputCache[i] * (kdelta - outputCache[j]);
                     }
                 }
 

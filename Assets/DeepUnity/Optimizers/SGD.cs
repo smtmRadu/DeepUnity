@@ -9,7 +9,7 @@ namespace DeepUnity.Optimizers
         private readonly bool nesterov;
         private readonly bool maximize;
 
-        private readonly Tensor[] b;
+        private readonly Tensor[] m;
 
         public SGD(Parameter[] parameters, float lr = 0.01f, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false) 
             : base(parameters, lr, 0, weightDecay)
@@ -19,12 +19,15 @@ namespace DeepUnity.Optimizers
             this.nesterov = nesterov;
             this.maximize = maximize;
 
-            b = new Tensor[parameters.Length];
-
-            for (int i = 0; i < parameters.Length; i++)
+            if(mu != 0)
             {
-                b[i] = Tensor.Zeros(parameters[i].param.Shape);
-            }
+                m = new Tensor[parameters.Length];
+
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    m[i] = Tensor.Zeros(parameters[i].param.Shape);
+                }
+            }          
         }
 
         public override void Step()
@@ -36,20 +39,21 @@ namespace DeepUnity.Optimizers
                 if (lambda != 0)
                     Tensor.CopyTo(parameters[i].g + lambda * parameters[i].param, parameters[i].g);
                 
-
+                
                 if (mu != 0)
                 {
                     if (t > 1)
-                        b[i] = mu * b[i] + (1f - tau) * parameters[i].g;
+                        Tensor.CopyTo(mu * m[i] + (1f - tau) * parameters[i].g, m[i]);
                     else
-                        b[i] = parameters[i].g.Clone() as Tensor;
-
+                        Tensor.CopyTo(parameters[i].g, m[i]);
+                        
+                
                     if (nesterov)
-                        Tensor.CopyTo(parameters[i].g + mu * b[i], parameters[i].g);
+                        Tensor.CopyTo(parameters[i].g + mu * m[i], parameters[i].g);
                     else
-                        Tensor.CopyTo(b[i], parameters[i].g);
+                        Tensor.CopyTo(m[i], parameters[i].g);
                 }
-
+                
                 if (maximize)
                     Tensor.CopyTo(parameters[i].param + gamma * parameters[i].g, parameters[i].param);
                 else

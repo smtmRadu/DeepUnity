@@ -19,7 +19,7 @@ namespace DeepUnity.Optimizers
         private readonly Tensor[] v;
         private readonly Tensor[] vHatMax;
 
-        public AdamW(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-7f, float weightDecay = 0.01f, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weightDecay)
+        public AdamW(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-7f, float weight_decay = 0.01f, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weight_decay)
         {
             this.amsgrad = amsgrad;
             this.maximize = maximize;

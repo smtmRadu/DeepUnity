@@ -10,7 +10,7 @@ using DeepUnity.Activations;
 namespace DeepUnity.ReinforcementLearning
 
 {
-    internal class TD3Trainer : DeepUnityTrainer
+    internal sealed class TD3Trainer : DeepUnityTrainer
     {
         private static Sequential Qtarg1;
         private static Sequential Qtarg2;

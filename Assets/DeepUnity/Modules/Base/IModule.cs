@@ -33,6 +33,7 @@ namespace DeepUnity.Modules
         public LazyConv2D lazyconv2d = null;
         public LazyDense lazydense = null;
         public LazyBatchNorm1D lazybatchnorm1d = null;
+        public LazyBatchNorm2D lazybatchnorm2d = null;
 
         // Non-Learnable
         public Dropout dropout = null;      
@@ -81,7 +82,7 @@ namespace DeepUnity.Modules
         public LogSoftmax logsoftmax = null;
         public RReLU rrelu = null;
         public SELU selu = null;
-        public SiLU silu = null;
+        public Swish swish = null;
         public ReLU6 relu6 = null;
         
 
@@ -283,9 +284,9 @@ namespace DeepUnity.Modules
             {
                 permute = permuteModule;
             }
-            else if (module is SiLU siluModule)
+            else if (module is Swish siluModule)
             {
-                silu = siluModule;
+                swish = siluModule;
             }
             else if (module is KANLayer kanlayerModule)
             {
@@ -302,6 +303,10 @@ namespace DeepUnity.Modules
             else if (module is LazyConv2D lazyconv2dModule)
             {
                 lazyconv2d = lazyconv2dModule;
+            }
+            else if (module is LazyBatchNorm2D lazybatchnorm2dModule)
+            {
+                lazybatchnorm2d = lazybatchnorm2dModule;
             }
             else
                 throw new Exception($"Unhandled module type while wrapping ({module.GetType().Name}).");
@@ -500,9 +505,9 @@ namespace DeepUnity.Modules
             {
                 module = moduleWrapper.permute;
             }
-            else if (typeof(SiLU).Name.Equals(moduleWrapper.name))
+            else if (typeof(Swish).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.silu;
+                module = moduleWrapper.swish;
             }
             else if (typeof(KANLayer).Name.Equals(moduleWrapper.name))
             {
@@ -519,6 +524,10 @@ namespace DeepUnity.Modules
             else if (typeof(LazyConv2D).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.lazyconv2d;
+            }
+            else if (typeof(LazyBatchNorm2D).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.lazybatchnorm2d;
             }
             else
                 throw new Exception($"Unhandled module type while unwrapping ({moduleWrapper.name}).");

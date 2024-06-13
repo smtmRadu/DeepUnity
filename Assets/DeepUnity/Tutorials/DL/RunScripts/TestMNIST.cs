@@ -76,7 +76,7 @@ namespace DeepUnity.Tutorials
             }
 
             network.Device = Device.GPU;
-            optim = new Adam(network.Parameters(),  lr: lr, weightDecay: weightDecay);
+            optim = new Adam(network.Parameters(),  lr: lr, weight_decay: weightDecay);
             scheduler = new StepLR(optim, schedulerStepSize, schedulerDecay);
             accuracyGraph = new PerformanceGraph();
             lossGraph = new PerformanceGraph();

@@ -1,0 +1,143 @@
+// It seems that unity Compute Buffers doesn't allow a stride of 2, only multiples of 4.
+// A workaround for that is to use a stride of 4 and a count /2. But from tests, the improvements
+// of fp16 are not that big of a deal.
+
+RWStructuredBuffer<half> data1;
+int w1 = 1; // width of tensor1
+int h1 = 1; // ...
+int c1 = 1; // ...
+int b1 = 1; // ...
+int r1 = 0; // rank of tensor 1
+
+RWStructuredBuffer<half> data2;
+int w2 = 1; // width of tensor2
+int h2 = 1; // ...
+int c2 = 1; // ...
+int b2 = 1; // ...
+int r2 = 0; // rank of tensor 2
+
+RWStructuredBuffer<half> result;
+int wr = 1; // width of result tensor
+int hr = 1; // ...
+int cr = 1; // ...
+int br = 1; // ...
+int rr = 0; // rank of result tensor
+
+int axisToDim(int axis, int rank)
+{
+    if (axis > rank)
+    {
+        // Problem error
+        return 3;
+    }
+    
+    if (rank == 0 && (axis == 0 || axis == -1))
+        return 3;
+
+    if (axis >= 0)
+        return 4 - rank + axis;
+    else
+        return 4 + axis;
+}
+void data1_set(int b, int c, int h, int w, half value)
+{
+    data1[b * c1 * h1 * w1 + c * h1 * w1 + h * w1 + w] = value;
+}
+half data1_get(int b, int c, int h, int w)
+{
+    return data1[b * c1 * h1 * w1 + c * h1 * w1 + h * w1 + w];
+}
+void data2_set(int b, int c, int h, int w, half value)
+{
+    data2[b * c2 * h2 * w2 + c * h2 * w2 + h * w2 + w] = value;
+}
+half data2_get(int b, int c, int h, int w)
+{
+    return data2[b * c2 * h2 * w2 + c * h2 * w2 + h * w2 + w];
+}
+void result_set(int b, int c, int h, int w, half value)
+{
+    result[b * cr * hr * wr + c * hr * wr + h * wr + w] = value;
+}
+half result_get(int b, int c, int h, int w)
+{
+    return result[b * cr * hr * wr + c * hr * wr + h * wr + w];
+}
+
+// Each #kernel tells which function to compile; you can have many kernels
+// Special operations
+#pragma kernel MatMul
+[numthreads(8, 8, 8)]
+void MatMul(int3 id : SV_DispatchThreadID)
+{
+    // id.x = p , id.y = n, id.z = k
+    
+    // input [J x 1 x N x M] * other [K x M x P]
+    // out [J x K x N x P]
+    
+    // make sure if id is inside the matrix
+    if (id.x >= wr || id.y >= hr || id.z >= cr)
+        return;
+    
+    if (r2 == 1)
+    {
+        for (int j = 0; j < br; j++)
+        {
+            half sum = 0.0f;
+            for (int m = 0; m < w1; m++)
+            {
+                half l = data1_get(j, 0, id.y, m);
+                half r = data2_get(0, id.z, 0, m);
+                sum += l * r;
+            }
+        
+            result_set(j, id.z, 0, id.y, sum);
+        }
+    }
+    else if (r1 == 1)
+    {
+        for (int j = 0; j < br; j++)
+        {
+            half sum = 0.0f;
+            for (int m = 0; m < w1; m++)
+            {
+                half l = data1_get(j, 0, 0, m);
+                half r = data2_get(0, id.z, m, id.x);
+                sum += l * r;
+            }
+        
+            result_set(j, id.z, 0, id.x, sum);
+        }
+    }
+    else
+    {
+        for (int j = 0; j < br; j++)
+        {
+            half sum = 0.0f;
+            for (int m = 0; m < w1; m++)
+            {
+                sum += data1_get(j, 0, id.y, m) * data2_get(0, id.z, m, id.x);
+            }
+        
+            result_set(j, id.z, id.y, id.x, sum);
+        }
+    }
+}
+
+#pragma kernel BatchedMatMul
+[numthreads(8, 8, 8)]
+void BatchedMatMul(int3 id : SV_DispatchThreadID)
+{
+    // id.x = b , id.y = n, id.z = p
+    // input [B x N x M] * other [B x M x P]
+    if (id.x >= cr || id.y >= hr || id.z >= wr)
+        return;
+    
+    half sum = 0.0f;
+    for (int m = 0; m < w1; m++)
+    {
+        sum += data1_get(0, id.x, id.y, m) * data2_get(0, id.x, m, id.z);
+    }
+    result_set(0, id.x, id.y, id.z, sum);
+    
+}

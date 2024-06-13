@@ -203,63 +203,84 @@ namespace DeepUnity.ReinforcementLearning
                 }
                 throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
             }
-            static IModule[] CreateCNN(int width, int height, int channels, int outputs, int layers, int hidUnits, NonLinearity activ)
+            static IModule[] CreateCNN(int width, int height, int channels, int outputs, int layers, int hidunits, NonLinearity activ)
             {
+                InitType INIT_W = activ == NonLinearity.Relu ? InitType.Kaiming_Uniform : InitType.Xavier_Uniform;
+                InitType INIT_B = InitType.Zeros;
 
-                int conv_hout = height - 3 + 1;
-                int conv_wout = width - 3 + 1;
-                int pool_hout = (int)MathF.Floor((conv_hout - 2f) / 2f + 1);
-                int pool_wout = (int)MathF.Floor((conv_wout - 2f) / 2f + 1);
                 if (layers == 1)
                 {
                     return new IModule[]
                     {
-                        new Conv2D(channels, 1, 3),
-                        new MaxPool2D(2),
-                        new Flatten(),
+                        new LazyConv2D(channels * 3, kernel_size: 3, weight_init : INIT_W, bias_init : INIT_B),
                         HiddenActivation(activ),
-                        new Dense(pool_hout * pool_wout, outputs)
+                        new AvgPool2D(2),
+
+                        new Flatten(),
+                        new LazyDense(hidunits, weight_init : INIT_W, bias_init : INIT_B),
+                        HiddenActivation(activ),
+                        new LazyDense(outputs, weight_init : INIT_W, bias_init : INIT_B)
                     };
                 }
                 if (layers == 2)
                 {
                     return new IModule[]
                    {
-                        new Conv2D(channels, 1, 3),
-                        new MaxPool2D(2),
+                        new LazyConv2D(channels * 2, kernel_size: 3, weight_init : INIT_W, bias_init : INIT_B),
+                        HiddenActivation(activ),
+                        new AvgPool2D(2),
+
+                        new LazyConv2D(channels * 4, kernel_size: 3, weight_init : INIT_W, bias_init : INIT_B),
+                        HiddenActivation(activ),
+                        new AvgPool2D(2),
+
                         new Flatten(),
+                        new LazyDense(hidunits, weight_init : INIT_W, bias_init : INIT_B),
                         HiddenActivation(activ),
-                        new Dense(pool_hout * pool_wout, hidUnits),
+                        new LazyDense(hidunits, weight_init : INIT_W, bias_init : INIT_B),
                         HiddenActivation(activ),
-                        new Dense(hidUnits, outputs),
+                        new LazyDense(outputs, weight_init : INIT_W, bias_init : INIT_B)
                    };
                 }
                 if (layers == 3)
                 {
                     return new IModule[]
                     {
-                        new Conv2D(channels, 1, 3),
-                        new MaxPool2D(2),
+                        new LazyConv2D(channels * 2, kernel_size: 3, weight_init : INIT_W, bias_init : INIT_B),
+                        HiddenActivation(activ),
+                        new AvgPool2D(2),
+
+                        new LazyConv2D(channels * 4, kernel_size: 3, weight_init : INIT_W, bias_init : INIT_B),
+                        HiddenActivation(activ),
+                        new AvgPool2D(2),
+
+                        new LazyConv2D(channels * 8, kernel_size: 3, weight_init : INIT_W, bias_init : INIT_B),
+                        HiddenActivation(activ),
+                        new AvgPool2D(2),
+
                         new Flatten(),
+                        new LazyDense(hidunits, weight_init : INIT_W, bias_init : INIT_B),
                         HiddenActivation(activ),
-                        new Dense(pool_hout * pool_wout, hidUnits),
+                        new LazyDense(hidunits, weight_init : INIT_W, bias_init : INIT_B),
                         HiddenActivation(activ),
-                        new Dense(hidUnits, hidUnits),
+                        new LazyDense(hidunits, weight_init : INIT_W, bias_init : INIT_B),
                         HiddenActivation(activ),
-                        new Dense(hidUnits, outputs),
+                        new LazyDense(outputs, weight_init : INIT_W, bias_init : INIT_B)
                     };
                 }
                 throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
             }
             static IModule[] CreateATT(int inputs, int stack, int outputs, int layers, int hidUnits, NonLinearity activ)
             {
+                InitType INIT_W = activ == NonLinearity.Relu ? InitType.Kaiming_Uniform : InitType.Xavier_Uniform;
+                InitType INIT_B = InitType.Zeros;
                 if (layers == 1)
                 {
                     return new IModule[] {
                         new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
                         new Attention(inputs, hidUnits),
                         new LastSequence1DElementModule(),
-                        new Dense(hidUnits, outputs)};
+                        new Dense(hidUnits, outputs, weight_init : INIT_W, bias_init : INIT_B)};
                 }
                 if (layers == 2)
                 {
@@ -267,9 +288,9 @@ namespace DeepUnity.ReinforcementLearning
                         new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
                         new Attention(inputs, hidUnits),
                         new LastSequence1DElementModule(),
-                        new Dense (hidUnits, hidUnits),
+                        new Dense (hidUnits, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
                         HiddenActivation(activ),
-                        new Dense(hidUnits, outputs)};
+                        new Dense(hidUnits, outputs, weight_init : INIT_W, bias_init : INIT_B)};
                 }
                 if (layers == 3)
                 {
@@ -277,11 +298,11 @@ namespace DeepUnity.ReinforcementLearning
                         new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
                         new Attention(inputs, hidUnits),
                         new LastSequence1DElementModule(),
-                        new Dense(hidUnits, hidUnits),
+                        new Dense(hidUnits, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
                         HiddenActivation(activ),
-                        new Dense(hidUnits, hidUnits),
+                        new Dense(hidUnits, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
                         HiddenActivation(activ),
-                        new Dense(hidUnits, outputs)};
+                        new Dense(hidUnits, outputs, weight_init : INIT_W, bias_init : INIT_B)};
                 }
                 throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
             }
@@ -344,6 +365,13 @@ namespace DeepUnity.ReinforcementLearning
 
                 if (DISCRETE_ACTIONS_NUM > 0)
                     discreteNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softmax() }).ToArray());
+
+                Tensor input = Tensor.Ones(VISUAL_INPUT_CHANNELS, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_WIDTH);
+                vNetwork.Predict(input);
+                muNetwork?.Predict(input);
+                sigmaNetwork?.Predict(input);
+                discreteNetwork?.Predict(input);
+            
             }
             else if (ARCHITECTURE == ArchitectureType.ATT)
             {
@@ -371,7 +399,7 @@ namespace DeepUnity.ReinforcementLearning
         /// Output: <paramref name="action"/> - <em>aₜ</em> |  <see cref="Tensor"/>  (<em>Continuous Actions</em>)  or <see cref="Tensor"/>  (<em>Batch</em>, <em>Continuous Actions</em>)<br></br>
         /// Extra Output: <paramref name="probs"/> - <em>πθ(aₜ|sₜ)</em> | <see cref="Tensor"/>  (<em>Continuous Actions</em>) or <see cref="Tensor"/> (<em>Batch</em>, <em>Continuous Actions</em>)
         /// </summary>
-        public void ContinuousPredict(Tensor state, out Tensor action, out Tensor probs)
+        public void ContinuousEval(Tensor state, out Tensor action, out Tensor probs)
         {
             if (!IsUsingContinuousActions)
             {
@@ -387,27 +415,23 @@ namespace DeepUnity.ReinforcementLearning
                 case Stochasticity.FixedStandardDeviation:
                     mu = muNetwork.Predict(state);
                     sigma = Tensor.Fill(standardDeviationValue, mu.Shape);
-                    action = mu.Select(x => Utils.Random.Normal(x, standardDeviationValue));
+                    action = mu.Select(x => Utils.Random.Normal(x, standardDeviationValue, threadsafe: false));
                     probs = Tensor.Probability(action, mu, sigma);
                     break;
                 case Stochasticity.TrainebleStandardDeviation:
                     mu = muNetwork.Predict(state);
                     sigma = sigmaNetwork.Predict(state) * standardDeviationScale;
-                    action = mu.Zip(sigma, (x, y) => Utils.Random.Normal(x, y));
+                    action = mu.Zip(sigma, (x, y) => Utils.Random.Normal(x, y, threadsafe: false));
                     probs = Tensor.Probability(action, mu, sigma);
                     break;
                 case Stochasticity.ActiveNoise:
-                    mu = muNetwork.Predict(state);
-                    // Check openai spinningup documentation They fkin forgot to say that the e~N std is configurable (i don't think they forgot to clip also, maybe no clipping involved)
-                    Tensor xi = Tensor.RandomNormal((0, noiseValue), mu.Shape);
-                    action = (mu + xi).Clip(-1f, 1f);
+                    mu = muNetwork.Predict(state);                  
+                    action = (mu + Tensor.RandomNormal((0, noiseValue), mu.Shape)).Clip(-1f, 1f);// Check openai spinningup documentation. They fkin forgot to say that the e~N std is configurable (i don't think they forgot to clip also, maybe no clipping involved)
                     probs = null;
                     break;
                 case Stochasticity.Random:
-                    bool isBatched = state.Rank == 2; /// well here we'll see for how long with remain like this.
-                    action = isBatched ?
-                        Tensor.RandomRange((-1f, 1f), state.Size(0), continuousDim) :
-                        Tensor.RandomRange((-1f, 1f), continuousDim);
+                    bool isBatched = state.Rank == 2; 
+                    action = Tensor.RandomRange((-1f, 1f), isBatched ? new int[] { state.Size(0), continuousDim } : new int[] { continuousDim });
                     probs = null;
                     break;
                 default:
@@ -453,7 +477,7 @@ namespace DeepUnity.ReinforcementLearning
         /// Output: <paramref name="action"/> - <em>aₜ</em> |  Tensor (<em>Discrete Actions</em>) (one hot embedding)<br></br>
         /// Extra Output: <paramref name="phi"/> - <em>φₜ</em> | Tensor (<em>Discrete Actions</em>)
         /// </summary>
-        public void DiscretePredict(Tensor state, out Tensor action, out Tensor phi)
+        public void DiscreteEval(Tensor state, out Tensor action, out Tensor phi)
         {
 
             if (!IsUsingDiscreteActions)
@@ -532,6 +556,8 @@ namespace DeepUnity.ReinforcementLearning
         /// <returns></returns>
         public static AgentBehaviour CreateOrLoadAsset(string name, int stateSize, int stackedInputs, int widthSize, int heightSize, int channelSize, int continuousActions, int discreteActions, int numLayers, int hidUnits, ArchitectureType aType, NonLinearity nonlinearity)
         {
+            if (stateSize == 0 && (aType == ArchitectureType.CNN || aType  == ArchitectureType.ATT))
+                stateSize = 1;
 #if UNITY_EDITOR
             var instance = UnityEditor.AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/_{name}.asset");
 

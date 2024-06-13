@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using DeepUnity.Modules;
 using UnityEngine;
 
@@ -14,12 +15,12 @@ namespace DeepUnity.Activations
     public sealed class GELU : IModule, IActivation
     {
         [SerializeField] private bool inPlace = false;
-        private static float sqrt2OverPI = 0.79788456080286535587989211986876f;
+        private const float sqrt_2overPI = 0.79788456080286535587989211986876f;
         private Tensor InputCache { get; set; }
 
 
         /// <summary>
-        /// <b>Applies the GELU activation function using a negative slope of <paramref name="alpha"/>. </b><br></br>
+        /// <b>Applies the GELU activation function. </b><br></br>
         /// Input: (*) <br></br>
         /// Output: (*) <br></br>
         /// where * = any shape. 
@@ -34,20 +35,21 @@ namespace DeepUnity.Activations
         {
             if(inPlace)
             {
-                float tanh_;
-                for (int i = 0; i < x.Count(); i++)
+                Parallel.For(0, x.Count(), i =>
                 {
-                    tanh_ = Utils.Hyperbolics.Tanh(sqrt2OverPI * (x[i] + 0.044715f * x[i] * x[i] * x[i]));
+                   float tanh_ = Utils.Hyperbolics.Tanh(sqrt_2overPI * (x[i] + 0.044715f * MathF.Pow(x[i],3f)));
                     x[i] = 0.5f * x[i] * (1f + tanh_);
-                }
+                });
                 return x;
             }
-            return x.Select(x =>
+
+            Tensor output = Tensor.Zeros(x.Shape);
+            Parallel.For(0, x.Count(), i =>
             {
-                float tanh_ = Utils.Hyperbolics.Tanh(sqrt2OverPI * (x + 0.044715f * x * x * x));
-                float gelu = 0.5f * x * (1f + tanh_);
-                return gelu;
+                float tanh_ = Utils.Hyperbolics.Tanh(sqrt_2overPI * (x[i] + 0.044715f * MathF.Pow(x[i], 3f)));
+                output[i] = 0.5f * x[i] * (1f + tanh_);
             });
+            return output;
         }
 
         public Tensor Forward(Tensor x)
@@ -58,14 +60,16 @@ namespace DeepUnity.Activations
 
         public Tensor Backward(Tensor dLdY)
         {
-            return dLdY * InputCache.Select(x =>
+            Tensor inputGrad = Tensor.Zeros(dLdY.Shape);
+            Parallel.For(0, InputCache.Count(), i =>
             {
-                float _elem = sqrt2OverPI * (x + 0.044715f * x * x * x);
+                float _elem = sqrt_2overPI * (InputCache[i] + 0.044715f * MathF.Pow(InputCache[i], 3f));
                 float sech_ = Utils.Hyperbolics.Sech(_elem);
                 float tanh_ = Utils.Hyperbolics.Tanh(_elem);
-                float dgelu = 0.5f * (1f + tanh_) + 0.5f * x * sech_ * sech_;
-                return dgelu;
+                float dgelu = 0.5f * (1f + tanh_) + 0.5f * InputCache[i] * sech_ * sech_;
+                inputGrad[i] = dLdY[i] * dgelu;
             });
+            return inputGrad;
         }
 
         public object Clone() => new GELU(in_place:inPlace);

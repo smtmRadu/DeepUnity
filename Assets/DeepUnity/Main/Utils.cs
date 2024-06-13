@@ -14,6 +14,9 @@ namespace DeepUnity
 {
     public static class Utils
     {
+        /// <summary>
+        /// A very small number for numerical stability. (1E-8)
+        /// </summary>
         public const float EPSILON = 1e-8f;
         private static System.Random RNG = new System.Random(DateTime.Now.Millisecond);
 
@@ -594,11 +597,21 @@ namespace DeepUnity
         }
 
         /// <summary>
-/// A thread-safe way to extract random numbers.
+/// A thread-safe way to sample random numbers.
 /// </summary>
         public static class Random
         {        
-            // -- On tests, extracting numbers threadsafely is just 2 times less efficient than checking if we are on the main thread --//
+            // -- On tests, sampling numbers threadsafely is just 2 times less efficient than checking if we are on the main thread --//
+            /// <summary>
+            /// Set the seed of the RNG. If not set, the seed is taken from the current time in ms.
+            /// </summary>
+            public static int Seed
+            {
+                set
+                {
+                    RNG = new System.Random(value);
+                }
+            }
             /// <summary>
             /// Returns a float value in range [0, 1] thread-safely (range is inclusive).
             /// </summary>
@@ -624,6 +637,48 @@ namespace DeepUnity
                     }
                 } 
             }        
+            /// <summary>
+            /// Returns a float value in range [0, 1] non-safely (range is inclusive)
+            /// </summary>
+            public static float ValueUnsafe
+            {
+                get
+                {
+                    lock (RNG)
+                    {
+                        double d = 0;
+                        int i = 0;
+
+                        do
+                        {
+                            d = RNG.NextDouble();
+                            i = RNG.Next(2);
+                        } while (i == 1 && d > 0);
+
+                        return (float)(d + i);
+
+                        //return (float)RNG.NextDouble();
+                    }
+                }
+            }
+            /// <summary>
+            /// Returns a float value in range [0, 1) thread-safely (range is exclusive)
+            /// </summary>
+            public static float ValueExclusive
+            {
+                get
+                {
+                    lock(RNG)
+                        return (float)RNG.NextDouble();
+                }
+            }
+            /// <summary>
+            /// Returns a float value in range [0, 1) non-safely (range is exclusive)
+            /// </summary>
+            public static float ValueExclusiveUnsafe
+            {
+                get=> (float) RNG.NextDouble();
+            }
             public static Vector2 OnUnitCircle
             {
                 get
@@ -682,7 +737,7 @@ namespace DeepUnity
             /// <returns></returns>
             public static float Range(float minInclusive, float maxInclusive) => Value * (maxInclusive - minInclusive) + minInclusive;
             /// <summary>
-            /// Returns an integer value in range [<paramref name="minInclusive"/>, <paramref name="maxExclusive"/>) (range in exclusive on the right handside)
+            /// Returns an integer value in range [<paramref name="minInclusive"/>, <paramref name="maxExclusive"/>) thread-safely. (range in exclusive on the right handside)
             /// </summary>
             /// <param name="minInclusive"></param>
             /// <param name="maxExclusive"></param>
@@ -695,7 +750,7 @@ namespace DeepUnity
                 }
             }
             /// <summary>
-            /// Samples a random element in the collection given the probs. If probs is null, uniform distribution of probabilities is applied. 
+            /// Samples a random element thread-safely in the collection given the probs. If probs is null, uniform distribution of probabilities is applied. 
             /// </summary>
             public static T Sample<T>(in IEnumerable<T> collection,in IEnumerable<float> probs = null)
             {
@@ -737,7 +792,7 @@ namespace DeepUnity
                 throw new Exception($"Probs must always sum 1. (received {probs.Sum()})");
             }
             /// <summary>
-            /// Samples multiple elements in the given collection.
+            /// Samples multiple elements thread-safely in the given collection. 
             /// </summary>
             /// <typeparam name="T"></typeparam>
             /// <param name="no_samples"></param>
@@ -781,21 +836,34 @@ namespace DeepUnity
             }
             public static bool Bernoulli(float p = 0.5f) => Value < p;
             /// <summary>
-            /// Returns a sample from normal distribution.
+            /// Returns a sample thread-safely from normal distribution.
             /// </summary>
             /// <param name="mean"></param>
             /// <param name="stddev"></param>
             /// <returns></returns>
-            public static float Normal(float mean = 0f, float stddev = 1f)
+            public static float Normal(float mean = 0f, float stddev = 1f, bool threadsafe = true)
             {
-                // x1 must be > 0 to avoid log(0)
-                float x1;
-                lock (RNG)
-                    x1 = (float)(1.0 - RNG.NextDouble());
-                float x2 = Value;
+                if(threadsafe)
+                {
+                    // x1 must be > 0 to avoid log(0)
+                    float x1;
+                    lock (RNG)
+                        x1 = (float)(1.0 - RNG.NextDouble());
+                    float x2 = Value; // here is a bit strange, the algorithm doesn't says that x2 [0,1] or (0,1] or (0,1) or [0, 1)
 
-                var entropy = MathF.Sqrt(-2.0f * MathF.Log(x1)) * MathF.Cos(2.0f * MathF.PI * x2);
-                return entropy * stddev + mean;
+                    var entropy = MathF.Sqrt(-2.0f * MathF.Log(x1)) * MathF.Cos(2.0f * MathF.PI * x2);
+                    return entropy * stddev + mean;
+                }
+                else
+                {
+                    // x1 must be > 0 to avoid log(0) !!
+                    float x1 = (float)(1.0f - RNG.NextDouble());
+                    float x2 = (float)RNG.NextDouble(); // i let it in [0, 1) to be faster
+
+                    var entropy = MathF.Sqrt(-2.0f * MathF.Log(x1)) * MathF.Cos(2.0f * MathF.PI * x2);
+                    return entropy * stddev + mean;
+                }
+                
             }
         }
     }

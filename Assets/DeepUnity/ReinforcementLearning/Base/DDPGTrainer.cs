@@ -8,7 +8,19 @@ using System.Threading.Tasks;
 
 namespace DeepUnity.ReinforcementLearning
 {
-    internal class DDPGTrainer : DeepUnityTrainer
+    /// <summary>
+    /// DDPG paper hyperparam:
+    /// Adam, lr -> 1e-4 & 1e-3 for actor and critic
+    /// WD for Q = 1e-2
+    /// gamma = .99
+    /// tau = 1e-3
+    /// actor ends with tanh (as we do)
+    /// relu activations
+    /// batch-size = 64
+    /// buffer = 1e6
+    /// Ornstein-Uhlenbeck process -> theta = 0.15, sigma= 0.2
+    /// </summary>
+    internal sealed class DDPGTrainer : DeepUnityTrainer
     {
         private Sequential Q_targ;
         private Sequential Mu_targ;
@@ -24,11 +36,10 @@ namespace DeepUnity.ReinforcementLearning
             {
                 model.muNetwork.Modules = model.muNetwork.Modules.Concat(new IModule[] { new Tanh() }).ToArray();
                 model.Save();
-            }
-               
+            }             
 
             // Initialize optimizers
-            optim_q1 = new Adam(model.q1Network.Parameters(), hp.criticLearningRate, weightDecay: 0.0F);
+            optim_q1 = new Adam(model.q1Network.Parameters(), hp.criticLearningRate, weight_decay: 0.0F);
             optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate);
 
             // Initialize schedulers
@@ -115,7 +126,6 @@ namespace DeepUnity.ReinforcementLearning
                 Tensor stateBatch = Tensor.Concat(null, minibatch.Select(x => x.state).ToArray());             
                 Tensor actionBatch = Tensor.Concat(null, minibatch.Select(x => x.action_continuous).ToArray());
 
-
                 Tensor yBatch;
                 ComputeQTargets(minibatch, out yBatch);
                 UpdateQFunctions(stateBatch, actionBatch, yBatch);
@@ -140,7 +150,7 @@ namespace DeepUnity.ReinforcementLearning
 
             for (int b = 0; b < batch.Length; b++)
             {
-                // y(r,s',d) = r + Ɣ(1 - d) * Qφt(s',μ(s'))
+                // y(r,s',d) = r + Ɣ(1 - d) * Qφt(s',μθt(s'))
 
                 float r = batch[b].reward[0];
                 float d = batch[b].done[0];
@@ -163,26 +173,28 @@ namespace DeepUnity.ReinforcementLearning
            
             optim_q1.ZeroGrad();
             model.q1Network.Backward(loss.Gradient);
+            optim_q1.ClipGradNorm(0.5f);
             optim_q1.Step();
         }
         private void UpdatePolicy(Tensor states)
         {
-            model.q1Network.RequiresGrad = false;
-
             // ObjectiveLoss = 1/|B| Σb Q(s, μ(s))
             Tensor mu_s = model.muNetwork.Forward(states);
             Tensor q_s_mu_s = model.q1Network.Forward(Pairify(states, mu_s));
             actorLoss += -q_s_mu_s.Average();
 
-            Tensor lossGrad = -Tensor.Ones(q_s_mu_s.Shape); //  (grad of Mean() is 1/n but the framework already takes it as mean)
+            Tensor lossGrad = Tensor.Fill(-1f, q_s_mu_s.Shape); //  (grad of Mean() is 1/n but the framework already takes it as mean)
+            model.q1Network.RequiresGrad = false;
             Tensor qinput_grad = model.q1Network.Backward(lossGrad); //phi params are 'fixed'
+            model.q1Network.RequiresGrad = true;
             Tensor mu_grad = ExtractActionFromStateAction(qinput_grad, states.Size(-1), mu_s.Size(-1));
 
             optim_mu.ZeroGrad();
             model.muNetwork.Backward(mu_grad); //gradient ascent
+            optim_mu.ClipGradNorm(0.5f);
             optim_mu.Step();
 
-            model.q1Network.RequiresGrad = true;
+           
         }
         private void UpdateTargetNetworks()
         {
@@ -205,9 +217,6 @@ namespace DeepUnity.ReinforcementLearning
                 Tensor.CopyTo((1f - hp.tau) * phi_targ[i] + hp.tau * phi[i], phi_targ[i]);
             }
         }
-
-
-
 
         /// <summary>
         /// Note that this must be changed if i plan to allow different input shape than vectorized. (e.g. cnns)

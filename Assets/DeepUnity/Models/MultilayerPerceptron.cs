@@ -5,6 +5,7 @@ using System;
 using UnityEngine;
 using DeepUnity.Activations;
 using DeepUnity.Modules;
+
 namespace DeepUnity.Models
 {
     public class MultilayerPerceptron : Model<MultilayerPerceptron, Tensor>, ISerializationCallbackReceiver
@@ -22,28 +23,26 @@ namespace DeepUnity.Models
         /// <param name="hiddenActivation"></param>
         /// <param name="outputActivation"></param>
         /// <exception cref="ArgumentException"></exception>
-        public MultilayerPerceptron(int inputs, int outputs, int numLayers, int hidUnits, IActivation hiddenActivation = null, IActivation outputActivation = null)
+        public MultilayerPerceptron(int[] layers, IActivation hiddenActivation = default, IActivation outputActivation = default)
         {
-            if (numLayers < 1)
-                throw new ArgumentException("Num layers must be > 0");
+            if (layers.Length < 2)
+                throw new ArgumentException("sizes must have at least two sizes");
 
-            if (hidUnits < 1)
-                throw new ArgumentException("Hid units must be > 0");
+            if (layers.Contains(0))
+                throw new ArgumentException("sizes cannot contain values of 0");
 
             if (hiddenActivation == null)
                 hiddenActivation = new Tanh();
 
             List<IModule> mds = new();
-            mds.Add(new Dense(inputs, hidUnits));
-            mds.Add(hiddenActivation.Clone() as IModule);
-
-            for (int i = 0; i < numLayers - 1; i++)
+            for (int i = 0; i < layers.Length - 3; i++)
             {
-                mds.Add(new Dense(hidUnits, hidUnits));
+                mds.Add(new Dense(layers[i], layers[i + 1]));
                 mds.Add(hiddenActivation.Clone() as IModule);
             }
 
-            mds.Add(new Dense(hidUnits, outputs));
+            mds.Add(new Dense(layers[layers.Length-2], layers[layers.Length-1]));
+
             if (outputActivation != null)
                 mds.Add(outputActivation.Clone() as IModule);
 

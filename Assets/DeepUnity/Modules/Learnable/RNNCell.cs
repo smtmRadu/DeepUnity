@@ -432,6 +432,8 @@ namespace DeepUnity.Modules
             var rnncell = new RNNCell();
             rnncell.Device = Device;
             rnncell.RequiresGrad = RequiresGrad;
+            rnncell.nonlinearity = nonlinearity;
+            rnncell.onReturn = onReturn;
             rnncell.InputCache = new();
             rnncell.HiddenCache = new();
             rnncell.ActivationCache = new();

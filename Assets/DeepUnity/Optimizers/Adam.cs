@@ -14,10 +14,8 @@ namespace DeepUnity.Optimizers
         private float beta1_t = 1f; // beta1^t caching
         private float beta2_t = 1f; // beta2^t caching
 
-        // 1st momentum buffer
+        // CPU
         private readonly Tensor[] m;
-
-        // 2nd momentum buffer 
         private readonly Tensor[] v;
         private readonly Tensor[] vHatMax;
 
@@ -28,7 +26,18 @@ namespace DeepUnity.Optimizers
 
         private readonly bool AreThereGPUParams = false;
 
-        public Adam(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-7f, float weightDecay = 0f, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weightDecay)
+        /// <summary>
+        /// Adam optimizer.
+        /// </summary>
+        /// <param name="parameters"></param>
+        /// <param name="lr"></param>
+        /// <param name="beta1"></param>
+        /// <param name="beta2"></param>
+        /// <param name="eps">Value for numerical stability</param>
+        /// <param name="weight_decay">If > 0, it is better to use <see cref="AdamW"/>.</param>
+        /// <param name="amsgrad">Use AMSGrad version.</param>
+        /// <param name="maximize">If true, gradients are added to the parameters on <see cref="Step()"/>.</param>
+        public Adam(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-7f, float weight_decay = 0f, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weight_decay)
         {
             this.amsgrad = amsgrad;
             this.maximize = maximize;
@@ -93,14 +102,15 @@ namespace DeepUnity.Optimizers
                     if (lambda != 0)
                         Tensor.CopyTo(parameters[i].g + lambda * parameters[i].param, parameters[i].g);
 
-                    m[i] = beta1 * m[i] + (1f - beta1) * parameters[i].g;
-                    v[i] = beta2 * v[i] + (1f - beta2) * parameters[i].g.Pow(2f);
+                    Tensor.CopyTo(beta1 * m[i] + (1f - beta1) * parameters[i].g, m[i]);
+                    Tensor.CopyTo(beta2 * v[i] + (1f - beta2) * parameters[i].g.Square(), v[i]);
+
                     Tensor mHat = m[i] / (1f - beta1_t);
                     Tensor vHat = v[i] / (1f - beta2_t);
 
                     if (amsgrad)
                     {
-                        vHatMax[i] = Tensor.Maximum(vHatMax[i], vHat);
+                        Tensor.CopyTo(Tensor.Maximum(vHatMax[i], vHat), vHatMax[i]);
                         Tensor.CopyTo(parameters[i].param - gamma * mHat / (vHatMax[i].Sqrt() + epsilon), parameters[i].param);
                     }
                     else

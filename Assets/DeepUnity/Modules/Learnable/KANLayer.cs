@@ -19,7 +19,7 @@ namespace DeepUnity.Modules
         /// <summary>
         /// The basis activation
         /// </summary>
-        [SerializeField] private IActivation b { get; set; } = new SiLU();
+        [SerializeField] private IActivation b { get; set; } = new Swish();
 
         /// <summary>
         /// x Cache.
@@ -59,11 +59,11 @@ namespace DeepUnity.Modules
         /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br />
         /// where  B = batch_size and H = in_features.<br />
         /// 
-        /// <br></br><i>If <paramref name="activation"/> = null, basis activation <em>b(x)</em> will be <see cref="SiLU"/>.</i>
+        /// <br></br><i>If <paramref name="activation"/> = null, basis activation <em>b(x)</em> will be <see cref="Swish"/>.</i>
         /// </summary>
         /// <param name="in_features"></param>
         /// <param name="out_features"></param>
-        /// <param name="base_activation">If null, <see cref="SiLU"/> is used.</param>
+        /// <param name="base_activation">If null, <see cref="Swish"/> is used.</param>
         /// <param name="spline_order">the order of piecewise polynomial</param>
         /// <param name="scale_base">The scale of the </param>
         public KANLayer(int in_features, int out_features, int grid_size = 5, int spline_order = 3, IActivation activation = null, Device device = default)
@@ -72,7 +72,7 @@ namespace DeepUnity.Modules
                 throw new ArgumentException("Spline order cannot be less than 2");
 
             this.Device = device;
-            activation = activation ?? new SiLU();
+            activation = activation ?? new Swish();
             b = activation.Clone() as IActivation;
             basis_activation = b.GetType().Name;
 

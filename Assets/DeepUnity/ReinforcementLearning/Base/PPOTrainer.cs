@@ -19,6 +19,11 @@ namespace DeepUnity.ReinforcementLearning
     /// 1. Softmax activation on discrete head may "explode"
     internal sealed class PPOTrainer : DeepUnityTrainer
     {
+        //Internal PPO Config
+        const float epsilon = 1e-5F; // PPO openAI eps they use :D, but in Andrychowicz, et al. (2021) they use tf default 1e-7
+        const float valueWD = 0.0F; // Value net weight decay (AdamW)
+        const bool amsGrad = false;
+
         public Optimizer optim_v { get; set; }   
         public Optimizer optim_mu { get; set; }
         public Optimizer optim_sigma { get; set; }
@@ -32,24 +37,22 @@ namespace DeepUnity.ReinforcementLearning
 
 
             // Initialize Optimizers & Schedulers
-            int total_epochs = (int)hp.maxSteps / hp.bufferSize * hp.numEpoch; // THIS IS FOR PPO, but for now i will let it for SAC as well
-            const float epsilon = 1e-5F; // PPO openAI eps they use :D, but in Andrychowicz, et al. (2021) they use tf default 1e-7
-            const float vNetL2Regularization = 0.0F;
-            optim_v = new Adam(model.vNetwork.Parameters(), hp.criticLearningRate, eps: epsilon, weightDecay: vNetL2Regularization);
+            int total_epochs = (int)hp.maxSteps / hp.bufferSize * hp.numEpoch; // THIS IS FOR PPO, but for now i will let it for SAC as well       
+            optim_v = new AdamW(model.vNetwork.Parameters(), hp.criticLearningRate, eps: epsilon, weight_decay: valueWD, amsgrad:amsGrad);
             optim_v.Scheduler = new LinearLR(optim_v, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
 
             if (model.IsUsingContinuousActions)
             {
-                optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon);
+                optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad);
                 optim_mu.Scheduler = new LinearLR(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
 
-                optim_sigma = new Adam(model.sigmaNetwork.Parameters(), hp.actorLearningRate, eps: epsilon);
+                optim_sigma = new Adam(model.sigmaNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad);
                 optim_sigma.Scheduler = new LinearLR(optim_sigma, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
             }
 
             if (model.IsUsingDiscreteActions)
             {
-                optim_discrete = new Adam(model.discreteNetwork.Parameters(), hp.actorLearningRate, eps: epsilon);
+                optim_discrete = new Adam(model.discreteNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad);
                 optim_discrete.Scheduler = new LinearLR(optim_discrete, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
             }
 
@@ -118,60 +121,101 @@ namespace DeepUnity.ReinforcementLearning
             if (model.discreteNetwork != null)
                 model.discreteNetwork.Device = model.trainingDevice;
 
+            
+
             for (int epoch_index = 0; epoch_index < hp.numEpoch; epoch_index++)
             {
                 // shuffle the dataset
                 if (hp.batchSize != hp.bufferSize) // epoch_index > 0 && => because we do advantages normalization
                     train_data.Shuffle();
 
-                // unpack & split train_data into minibatches
-                List<Tensor[]> states_batches = Utils.Split(train_data.States, hp.batchSize);
-                List<Tensor[]> advantages_batches = Utils.Split(train_data.Advantages, hp.batchSize);
-                List<Tensor[]> value_targets_batches = Utils.Split(train_data.ValueTargets, hp.batchSize);
-                List<Tensor[]> cont_act_batches = Utils.Split(train_data.ContinuousActions, hp.batchSize);
-                List<Tensor[]> cont_probs_batches = Utils.Split(train_data.ContinuousProbabilities, hp.batchSize);
-                List<Tensor[]> disc_act_batches = Utils.Split(train_data.DiscreteActions, hp.batchSize);
-                List<Tensor[]> disc_probs_batches = Utils.Split(train_data.DiscreteProbabilities, hp.batchSize);
+                // unpack & split train_data into minibatches (parallel is faster)
+                LinkedList<Task<Tensor[]>> tasks = new LinkedList<Task<Tensor[]>>();
+
+                Task<Tensor[]> statesTask = Task.Run(() =>
+                    Utils.Split(train_data.States, hp.batchSize).Select(x => Tensor.Concat(null, x)).ToArray()
+                );
+                tasks.AddLast(statesTask);
+                Task<Tensor[]> advantagesTask = Task.Run(() =>
+                    Utils.Split(train_data.Advantages, hp.batchSize).Select(x => Tensor.Concat(null, x)).ToArray()
+                );
+                tasks.AddLast(advantagesTask);
+                Task<Tensor[]> valueTargetsTask = Task.Run(() =>
+                    Utils.Split(train_data.ValueTargets, hp.batchSize).Select(x => Tensor.Concat(null, x)).ToArray()
+                );
+                tasks.AddLast(valueTargetsTask);
+                Task<Tensor[]> contActTask   = null;
+                Task<Tensor[]> contProbsTask = null;
+                Task<Tensor[]> discActTask   = null;
+                Task<Tensor[]> discProbsTask = null;
+                if (model.IsUsingContinuousActions)
+                {
+                    contActTask = Task.Run(() =>
+                        Utils.Split(train_data.ContinuousActions, hp.batchSize).Select(x => Tensor.Concat(null, x)).ToArray()
+                    );
+
+                    contProbsTask = Task.Run(() =>
+                        Utils.Split(train_data.ContinuousProbabilities, hp.batchSize).Select(x => Tensor.Concat(null, x)).ToArray()
+                    );
+                    tasks.AddLast(contActTask);
+                    tasks.AddLast(contProbsTask);
+                }
+                
+
+                if(model.IsUsingDiscreteActions)
+                {
+                    discActTask = Task.Run(() =>
+                                        Utils.Split(train_data.DiscreteActions, hp.batchSize).Select(x => Tensor.Concat(null, x)).ToArray()
+                                    );
+
+                    discProbsTask = Task.Run(() =>
+                        Utils.Split(train_data.DiscreteProbabilities, hp.batchSize).Select(x => Tensor.Concat(null, x)).ToArray()
+                    );
+                    tasks.AddLast(discActTask);
+                    tasks.AddLast(discProbsTask);
+                }
+
+                Task.WaitAll(tasks.ToArray());
+                Tensor[] states_batches = statesTask.Result;
+                Tensor[] advantages_batches = advantagesTask.Result;
+                Tensor[] value_targets_batches = valueTargetsTask.Result;
+                Tensor[] cont_act_batches = model.IsUsingContinuousActions ? contActTask.Result : null;
+                Tensor[] cont_probs_batches = model.IsUsingContinuousActions ? contProbsTask.Result : null;
+                Tensor[] disc_act_batches = model.IsUsingDiscreteActions ? discActTask.Result : null;
+                Tensor[] disc_probs_batches = model.IsUsingDiscreteActions ? discProbsTask.Result : null;
 
 
                 // θ new. New probabilities of the policy used for early stopping/rollback
-                Tensor cont_probs_new = null;
-                Tensor cont_probs_old = null;
-                Tensor disc_probs_new = null;
-                Tensor disc_probs_old = null;
+                Tensor cont_probs_new_kle = null;
+                Tensor cont_probs_old_kle = null;
+                Tensor disc_probs_new_kle = null;
+                Tensor disc_probs_old_kle = null;
 
-                for (int b = 0; b < states_batches.Count; b++)
+                for (int b = 0; b < states_batches.Length; b++)
                 {
-                    Tensor states_batch = Tensor.Concat(null, states_batches[b]);
-                    Tensor advantages_batch = Tensor.Concat(null, advantages_batches[b]);
-                    Tensor value_targets_batch = Tensor.Concat(null, value_targets_batches[b]);
+                    Tensor normalized_advantages = hp.normalizeAdvantages ? NormalizeAdvantages(advantages_batches[b]) : advantages_batches[b];// Advantage normalization is shit when applied on small batches
 
-                    if (hp.normalizeAdvantages)
-                        advantages_batch = NormalizeAdvantages(advantages_batch); // Advantage normalization is shit when applied on small batches
-
-                    UpdateValueNetwork(states_batch, value_targets_batch);
+                    UpdateValueNetwork(states_batches[b], value_targets_batches[b]);
 
                     if (model.IsUsingContinuousActions)
                     {
-                        Tensor cont_act_batch = Tensor.Concat(null, cont_act_batches[b]);
-                        cont_probs_old = Tensor.Concat(null, cont_probs_batches[b]);
+                        cont_probs_old_kle = cont_probs_batches[b];
                         UpdateContinuousNetwork(
-                            states_batch,
-                            advantages_batch,
-                            cont_act_batch,
-                            cont_probs_old,
-                            out cont_probs_new);
+                            states_batches[b],
+                            normalized_advantages,
+                            cont_act_batches[b],
+                            cont_probs_batches[b],
+                            out cont_probs_new_kle);
                     }
                     if (model.IsUsingDiscreteActions)
                     {
-                        Tensor disc_act_batch = Tensor.Concat(null, disc_act_batches[b]);
-                        disc_probs_old = Tensor.Concat(null, disc_probs_batches[b]);
+                        disc_probs_old_kle = disc_probs_batches[b];
                         UpdateDiscreteNetwork(
-                            states_batch,
-                            advantages_batch,
-                            disc_act_batch,
-                            disc_probs_old,
-                            out disc_probs_new);
+                            states_batches[b],
+                            normalized_advantages,
+                            disc_act_batches[b],
+                            disc_probs_batches[b],
+                            out disc_probs_new_kle);
                     }
 
                 }
@@ -180,8 +224,8 @@ namespace DeepUnity.ReinforcementLearning
                 if (hp.KLDivergence != KLType.Off)
                 {
                     // Though even if i should stop for them separatelly (i mean i can let for one to continue the training if kl is small) i will let it simple..
-                    float kldiv_cont = model.IsUsingContinuousActions ? ComputeKLDivergence(cont_probs_new, cont_probs_old) : 0;
-                    float kldiv_disc = model.IsUsingDiscreteActions ? ComputeKLDivergence(disc_probs_new, disc_probs_old) : 0;
+                    float kldiv_cont = model.IsUsingContinuousActions ? ComputeKLDivergence(cont_probs_new_kle, cont_probs_old_kle) : 0;
+                    float kldiv_disc = model.IsUsingDiscreteActions ? ComputeKLDivergence(disc_probs_new_kle, disc_probs_old_kle) : 0;
 
                     if (kldiv_cont > hp.targetKL || kldiv_disc > hp.targetKL)
                     {
@@ -262,7 +306,7 @@ namespace DeepUnity.ReinforcementLearning
             float surrogateItem = LClip.Abs().Average();
             if (float.IsNaN(surrogateItem))
             {
-                ConsoleMessage.Warning($"PPO LCLIP batch containing NaN values was skipped. Consider clipping the observations strongly");
+                ConsoleMessage.Warning($"PPO LCLIP batch containing NaN values was skipped. Consider clipping the observations");
                 return;
             }
             actorLoss += surrogateItem;
@@ -367,7 +411,6 @@ namespace DeepUnity.ReinforcementLearning
                 return;
             }
             actorLoss += surrogateItem;
-
 
             // Computing ∂-LClip / ∂πθ(a|s)
             Tensor dmindx = Tensor.Zeros(batch_size, discrete_actions_num);
@@ -488,12 +531,12 @@ namespace DeepUnity.ReinforcementLearning
         /// </summary>
         private static Tensor NormalizeAdvantages(Tensor advantages)
         {
-            float std = advantages.Std(0, 0)[0]; // note that we use biased estimator
+            float std = advantages.Std(0, correction: 0)[0]; // note that we use biased estimator
             float mean = advantages.Mean(0)[0];
             return (advantages - mean) / (std + Utils.EPSILON);
-
         }
     }
+
 #if UNITY_EDITOR
     [CustomEditor(typeof(PPOTrainer), true), CanEditMultipleObjects]
     sealed class CustomPPOTrainerEditor : Editor

@@ -55,7 +55,7 @@ namespace DeepUnity.Activations
 
         public Tensor Backward(Tensor dLdY)
         {
-            return dLdY * (-OutputCache + 1f);
+            return dLdY * (1f - OutputCache);
         }
 
         public object Clone() => new Sigmoid(inPlace);

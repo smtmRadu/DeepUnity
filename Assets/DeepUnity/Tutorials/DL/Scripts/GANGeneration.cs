@@ -41,8 +41,8 @@ namespace DeepUnity.Tutorials
         private int batch_index = 0;
 
         const int latent_dim = 100;
-        const int size = 512; // 1024 original
-        const float dropout = 0.5f; // 0.3f original
+        const int size = 256; // 1024 original
+        const float dropout = 0.3f; // 0.3f original
         private void Start()
         {
             InitType wInit = InitType.Kaiming_Uniform;
@@ -53,21 +53,21 @@ namespace DeepUnity.Tutorials
                     new Flatten(),
 
                     new Dense(784, size, weight_init:wInit, bias_init:bInit),
-                    //new BatchNorm1D(size),
-                    new ReLU(true),           
+                    new RMSNorm1D(size),
+                    new Swish(true),           
                     new Dropout(dropout, true),
                 
                     new Dense(size, size/2, weight_init: wInit, bias_init: bInit),
-                    //new BatchNorm1D(size / 2),
-                    new ReLU(true),                  
+                    new RMSNorm1D(size/2),
+                    new Swish(true),
                     new Dropout(dropout, true),
 
                     new Dense(size / 2, size/4, weight_init: wInit, bias_init: bInit),
-                    //new BatchNorm1D(size / 4),
-                    new ReLU(true),
+                    new RMSNorm1D(size / 4),
+                    new Swish(true),
                     new Dropout(dropout, true),
 
-                    new Dense(size/4, size/2, weight_init:wInit, bias_init:bInit),
+                    new Dense(size/4, 1, weight_init:wInit, bias_init:bInit),
                     new Sigmoid(true)
                     ).CreateAsset("discriminator");
             }
@@ -75,19 +75,19 @@ namespace DeepUnity.Tutorials
             {
                 G = new Sequential(
                     new Dense(latent_dim, size / 4, weight_init: wInit, bias_init: bInit),
-                    //new BatchNorm1D(size/4),
-                    new ReLU(true),
+                    new RMSNorm1D(size / 4),
+                    new Swish(true),
 
                     new Dense(size / 4, size / 2, weight_init: wInit, bias_init: bInit),
-                    // new BatchNorm1D(size / 2),
-                    new ReLU(true),
+                    new RMSNorm1D(size / 2),
+                    new Swish(true),
 
                     new Dense(size / 2, size, weight_init: wInit, bias_init: bInit),
-                    //new BatchNorm1D(size),
-                    new ReLU(true),
+                    new RMSNorm1D(size),
+                    new Swish(true),
 
                     new Dense(size, 784, weight_init: wInit, bias_init: bInit),
-                    new Sigmoid(true),
+                    new Tanh(true),
 
                     new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 })
                     ).CreateAsset("generator");
@@ -95,8 +95,8 @@ namespace DeepUnity.Tutorials
 
             G.Device = Device.GPU;
             D.Device = Device.GPU;
-            d_optim = new Adam(D.Parameters(), lr, eps:1e-8f);
-            g_optim = new Adam(G.Parameters(), lr, eps:1e-8f);
+            d_optim = new Adam(D.Parameters(), lr, eps:1e-8f, amsgrad:true);
+            g_optim = new Adam(G.Parameters(), lr, eps:1e-8f, amsgrad:true);
 
             List<(Tensor, Tensor)> data;
             Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out data, out _, DatasetSettings.LoadTrainOnly);
@@ -138,28 +138,29 @@ namespace DeepUnity.Tutorials
 
                 var x = Tensor.Concat(null, Utils.GetRange(dataset, batch_index, batch_size).ToArray()); // real
 
-                // Train Discriminator------------------------------------------------------------------
+                // GAN LOSS
+                // // Train Discriminator------------------------------------------------------------------
                 var z = Tensor.RandomNormal(batch_size, latent_dim);
-                var Gz = G.Predict(z); // fake
-                d_optim.ClipGradNorm(maxNorm);
+                var Gz = G.Predict(z); // fake       
                 d_optim.ZeroGrad();
-
+                
                 var Dx = D.Forward(x); // pred-real
                 Loss loss = Loss.BCE(Dx, Tensor.Ones(Dx.Shape));
                 D.Backward(loss.Gradient);
-
+                
                 var DGz = D.Forward(Gz); // pred-fake
                 Loss loss2 = Loss.BCE(DGz, Tensor.Zeros(DGz.Shape));
                 D.Backward(loss2.Gradient);
 
+                d_optim.ClipGradNorm(maxNorm);
                 d_optim.Step();
                 D_graph.Append(loss.Item + loss2.Item);
                 // -----------------------------------------------------------------------------------------------------
-
+                
                 // Train Generator ------------------------------------------------------------------
                 z = Tensor.RandomNormal(batch_size, latent_dim);
                 Gz = G.Forward(z);
-
+                
                 D.RequiresGrad = false;
                 g_optim.ZeroGrad();
                 
@@ -170,7 +171,20 @@ namespace DeepUnity.Tutorials
                 g_optim.Step();
                 D.RequiresGrad = true;
                 G_graph.Append(loss.Item);
-                // -----------------------------------------------------------------------------------------------------
+                // // -----------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
 
                 batch_index += batch_size;
 

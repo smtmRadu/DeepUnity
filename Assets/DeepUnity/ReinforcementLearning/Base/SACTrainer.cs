@@ -15,7 +15,7 @@ namespace DeepUnity.ReinforcementLearning
     // Actually q networks are receiving both squashed and unsquashed inputs
 
     // OpenAI SAC trains critic without an aditional value function
-    internal class SACTrainer : DeepUnityTrainer
+    internal sealed class SACTrainer : DeepUnityTrainer
     {
         // Q target networks
         private static Sequential Qtarg1;
@@ -37,8 +37,8 @@ namespace DeepUnity.ReinforcementLearning
 
             // Init optimizers
             const float QnetsL2Reg = 0.0F;
-            optim_q1 = new Adam(model.q1Network.Parameters(), hp.criticLearningRate, weightDecay: QnetsL2Reg);
-            optim_q2 = new Adam(model.q2Network.Parameters(), hp.criticLearningRate, weightDecay: QnetsL2Reg);
+            optim_q1 = new Adam(model.q1Network.Parameters(), hp.criticLearningRate, weight_decay: QnetsL2Reg);
+            optim_q2 = new Adam(model.q2Network.Parameters(), hp.criticLearningRate, weight_decay: QnetsL2Reg);
             optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate);
             optim_sigma = new Adam(model.sigmaNetwork.Parameters(), hp.actorLearningRate);
 
@@ -149,7 +149,7 @@ namespace DeepUnity.ReinforcementLearning
 
             Tensor aTildePrime;     // ã => actions newly sampled from πθ(•|s)
             Tensor piTildePrime;    // (B, CONTINUOUS_ACTIONS)
-            model.ContinuousPredict(sPrime, out aTildePrime, out piTildePrime);
+            model.ContinuousEval(sPrime, out aTildePrime, out piTildePrime);
 
             Tensor pair_sPrime_aTildePrime = StateActionPair(sPrime, aTildePrime);
             Tensor Qtarg1_sPrime_aTildePrime = Qtarg1.Predict(pair_sPrime_aTildePrime); // (B, 1)
@@ -224,7 +224,7 @@ namespace DeepUnity.ReinforcementLearning
 
             // Check appendinx C
             // log πθ(ãθ(s) |s) = log μ(u|s) - E [log (1 - tanh^2(u))]
-            Tensor logPiaTildeS = Tensor.Log(muDist) - Tensor.Sum(Tensor.Log(-u.Tanh().Pow(2f) + 1), -1, true); // (B, 1)
+            Tensor logPiaTildeS = Tensor.Log(muDist) - Tensor.Sum(Tensor.Log(1f - u.Tanh().Square()), -1, true); // (B, 1)
 
             Tensor pair_states_aTildeS = StateActionPair(states, aTildeS);
             Tensor Q1s_aTildeS = model.q1Network.Forward(pair_states_aTildeS);
@@ -248,7 +248,7 @@ namespace DeepUnity.ReinforcementLearning
             // we need only A from this tensor, so we extract it separately
             Tensor dminQ1Q2_daTildeS = ExtractActionFromStateAction(dminQ1Q2_ds_aTildeS, states.Size(-1), aTildeS.Size(-1));
 
-            Tensor dminQ1Q2_du = dminQ1Q2_daTildeS * (-tanh_u.Pow(2f) + 1);
+            Tensor dminQ1Q2_du = dminQ1Q2_daTildeS * (1f - tanh_u.Square());
             Tensor dminQ1Q2_dMu = dminQ1Q2_du;// * 1f;
             Tensor dminQ1Q2_dSigma = dminQ1Q2_du * ksi;
 
@@ -264,7 +264,7 @@ namespace DeepUnity.ReinforcementLearning
             // ∇ log πθ(a|s) = dlog μ(u|s)/du - dlog (1 - tanh^2(u))/du = (u - mu)/sigma^2 - (-2 * tanh(u) * sech^2(u) / (1 - tanh^2(u)))
 
             Tensor dLogMuDist_du = (u - mu) / sigma.Pow(2f); // https://observablehq.com/@herbps10/distributions-and-their-gradients
-            Tensor dLog_1mTanh2u_du = -2f * tanh_u * u.Sech().Pow(2f) / (-tanh_u.Pow(2f) + 1f); // Wolfram Alpha? maybe..
+            Tensor dLog_1mTanh2u_du = -2f * tanh_u * u.Sech().Pow(2f) / (1f - tanh_u.Pow(2f)); // Wolfram Alpha? maybe..
 
             Tensor dAlphaLogPi_aTildeS_s_du = hp.alpha * (dLogMuDist_du - dLog_1mTanh2u_du);
             Tensor dAlphaLogPiaTildeS_s_dMu = dAlphaLogPi_aTildeS_s_du; // * 1f;

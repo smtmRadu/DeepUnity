@@ -40,9 +40,9 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("Architecture type")]
         [SerializeField, HideInInspector] private ArchitectureType archType = ArchitectureType.MLP;
         [Tooltip("Number of hidden layers")]
-        [SerializeField, Min(1), HideInInspector] private int numLayers = 2;
+        [SerializeField, MinMax(1, 3), HideInInspector] private int numLayers = 2;
         [Tooltip("Number of units in a hidden layer in the model.")]
-        [SerializeField, Min(32), HideInInspector] private int hidUnits = 64;
+        [SerializeField, MinMax(32, 512), HideInInspector] private int hidUnits = 64;
         [Tooltip("The hidden activation used. Tanh yields a more stable policy (less prone to NaN appeareance), but ReLU is more efficient.")]
         [SerializeField, HideInInspector] private NonLinearity activation = NonLinearity.Tanh;
 
@@ -310,8 +310,8 @@ namespace DeepUnity.ReinforcementLearning
                     Timestep.state = LastState; // no need to clone because the timestep was already reset at this point
                 // OBSERVATION PROCESS ------------------------------------------------------------------
 
-                model.ContinuousPredict(Timestep.state, out Timestep.action_continuous, out Timestep.prob_continuous);
-                model.DiscretePredict(Timestep.state, out Timestep.action_discrete, out Timestep.prob_discrete);
+                model.ContinuousEval(Timestep.state, out Timestep.action_continuous, out Timestep.prob_continuous);
+                model.DiscreteEval(Timestep.state, out Timestep.action_discrete, out Timestep.prob_discrete);
             }
 
             // Run agent's actions and clip them
@@ -481,8 +481,7 @@ namespace DeepUnity.ReinforcementLearning
                 string cumReward = $"Cumulative Reward [{script.EpisodeCumulativeReward}]";
                 EditorGUILayout.HelpBox(cumReward, MessageType.None);
 
-                // Draw buffer           
-
+                // Draw buffer  
                 if (DeepUnityTrainer.Instance.GetType() == typeof(PPOTrainer))
                 {
                     int buff_count = DeepUnityTrainer.MemoriesCount;
@@ -555,7 +554,7 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     script.BakeModel();
                 }
-
+                int arTp = serializedObject.FindProperty("archType").enumValueIndex;
                 // Create a Rect for the second field with a specific width
                 Rect propertyFieldRect = GUILayoutUtility.GetRect(0, EditorGUIUtility.singleLineHeight);
                 propertyFieldRect.width = 50; // Adjust the width as needed
@@ -569,12 +568,16 @@ namespace DeepUnity.ReinforcementLearning
                 EditorGUILayout.Space();
 
                 EditorGUILayout.BeginHorizontal();
+
                 GUILayout.Label("Num Layers", GUILayout.Width(EditorGUIUtility.labelWidth / 1.65f));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("numLayers"), GUIContent.none, GUILayout.Width(20f));
+
                 GUILayout.Label("Hidden Units", GUILayout.Width(EditorGUIUtility.labelWidth / 1.55f));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("hidUnits"), GUIContent.none, GUILayout.Width(30f));
+
                 GUILayout.Label("Activation", GUILayout.Width(EditorGUIUtility.labelWidth / 1.9f));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("activation"), GUIContent.none, GUILayout.Width(50f));
+
                 EditorGUILayout.EndHorizontal();
 
 
@@ -582,7 +585,7 @@ namespace DeepUnity.ReinforcementLearning
 
 
 
-                int arTp = serializedObject.FindProperty("archType").enumValueIndex;
+                
                 if (arTp == (int)ArchitectureType.MLP || arTp == (int)ArchitectureType.LnMLP)
                 {
                     EditorGUILayout.LabelField("Observations");
