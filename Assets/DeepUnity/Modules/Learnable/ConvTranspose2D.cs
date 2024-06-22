@@ -4,6 +4,17 @@ using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
 
+/// Conv
+/// forward -> valid_correlation (input, weights)
+/// backward -> w_grad -> valid_correlation (input, loss)
+/// backward -> x_grad -> full_convolution (loss, weights) (weights get rotated)
+
+/// ConvTranspose
+/// forward -> full_convolution (input, weights)  (weights get rotated)
+/// backward -> w_grad -> valid_correlation (loss, input)
+/// backward -> x_grad -> valid_correlation (loss, weights) 
+
+
 namespace DeepUnity.Layers
 {
     // https://www.youtube.com/watch?v=Lakz2MoHy6o
@@ -25,14 +36,14 @@ namespace DeepUnity.Layers
         public Device Device { get; set; } = Device.CPU;
         public bool RequiresGrad { get; set; } = true;
         private Tensor InputCache { get; set; }
-        private bool UseBias { get => biases != null; }
         private int GetOutChannels { get => kernels.Size(-3); }
         private int GetInChannels { get => kernels.Size(-4); }
         private int GetKernelHeight { get => kernels.Size(-2); }
         private int GetKernelWidth { get => kernels.Size(-1); }
 
-        [SerializeField] private Tensor kernels;
-        [SerializeField] private Tensor biases;
+        [SerializeField] private bool bias;
+        [SerializeField] public Tensor kernels;
+        [SerializeField] public Tensor biases;
         [NonSerialized] private Tensor kernelsGrad;
         [NonSerialized] private Tensor biasesGrad;
 
@@ -64,7 +75,7 @@ namespace DeepUnity.Layers
                 throw new ArgumentException("Cannot have less than 2 kernel size.");
 
             this.Device = device;
-
+            this.bias = bias;
             int fanIn = in_channels * kernel_shape.Item1 * kernel_shape.Item2;
             int fanOut = out_channels;
             kernels = Parameter.Create(new int[] { in_channels, out_channels, kernel_shape.Item1, kernel_shape.Item2 }, fanIn, fanOut, weight_init);
@@ -138,7 +149,7 @@ namespace DeepUnity.Layers
                         {
                             for (int ow = 0; ow < outputWidth; ow++)
                             {
-                                float sum = biases[oc];
+                                float sum = bias ? biases[oc] : 0f;
 
                                 for (int ic = 0; ic < inputChannels; ic++)
                                 {
@@ -184,8 +195,8 @@ namespace DeepUnity.Layers
                 gammaBuffer.SetData(kernels.ToArray());
                 cs.SetBuffer(0, "gamma", gammaBuffer);
 
-                ComputeBuffer betaBuffer = new ComputeBuffer(UseBias ? biases.Count():GetOutChannels, 4);
-                betaBuffer.SetData(UseBias ? biases.ToArray() : new float[GetOutChannels]);
+                ComputeBuffer betaBuffer = new ComputeBuffer(bias ? biases.Count():GetOutChannels, 4);
+                betaBuffer.SetData(bias ? biases.ToArray() : new float[GetOutChannels]);
                 cs.SetBuffer(0, "beta", betaBuffer);
 
                 ComputeBuffer outputBuffer = new ComputeBuffer(batch_size * C_out * H_out * W_out, 4);
@@ -235,9 +246,116 @@ namespace DeepUnity.Layers
         public Tensor Backward(Tensor loss)
         {
             bool isBatched = loss.Rank == 4;
-            int batch_size = isBatched ? loss.Size(-4) : 1;
+            int batchSize = isBatched ? loss.Size(-4) : 1;
 
-            throw new NotImplementedException();
+            int kernelHeight = GetKernelHeight;
+            int kernelWidth = GetKernelWidth;
+
+            int inputChannels = InputCache.Size(-3);
+            int inputHeight = InputCache.Size(-2);
+            int inputWidth = InputCache.Size(-1);
+
+            int outputChannels = kernels.Size(-4);
+            int outputHeight = inputHeight - kernelHeight + 1;
+            int outputWidth = inputWidth - kernelWidth + 1;
+
+            float grad_scale = batchSize * inputChannels * outputChannels * kernelHeight * kernelWidth * inputHeight * inputWidth; ; // * outputWidth * outputHeight;
+
+            // BIases are computed on CPU because is faster. The bias vector is too small in comparison with other stuff.
+            if (bias && RequiresGrad)
+            {
+                // Bias grad
+                Parallel.For(0, outputChannels, oc =>
+                {
+                    float sum = 0f;
+
+                    for (int b = 0; b < batchSize; b++)
+                    {
+                        for (int h = 0; h < outputHeight; h++)
+                        {
+                            for (int w = 0; w < outputWidth; w++)
+                                sum += loss[b, oc, h, w];
+                        }
+                    }
+
+                    biasesGrad[oc] += sum / grad_scale;
+                });
+            }
+
+            
+            if (Device == Device.CPU)
+            {
+                Tensor inputGrad = InputCache.Rank == 3 ?
+                    Tensor.Zeros(inputChannels, inputHeight, inputWidth) :
+                    Tensor.Zeros(batchSize, inputChannels, inputHeight, inputWidth);
+
+
+                if (RequiresGrad)
+                {
+                    // Compute the gradients of the weights - valid correlation(loss, x)      
+                    Parallel.For(0, outputChannels, oc =>
+                    {
+                        Parallel.For(0, inputChannels, ic =>
+                        {
+                            for (int kh = 0; kh < kernelHeight; kh++)
+                            {
+                                for (int kw = 0; kw < kernelWidth; kw++)
+                                {
+                                    float sum = 0f;
+
+                                    for (int b = 0; b < batchSize; b++)
+                                    {
+                                        for (int j = 0; j < outputHeight; j++)
+                                        {
+                                            for (int i = 0; i < outputWidth; i++)
+                                            {
+                                                sum += InputCache[b, ic, j + kh, i + kw] * loss[b, oc, j, i];
+                                            }
+                                        }
+                                    }
+
+                                    kernelsGrad[oc, ic, kh, kw] = sum / grad_scale;
+                                }
+                            }
+                        });
+                    });
+                }
+
+                // Input grad -> valid correlation(loss, weights)
+                Parallel.For(0, batchSize, (Action<int>)(b =>
+                {
+                    Parallel.For(0, inputChannels, (Action<int>)(ic =>
+                    {
+                        for (int ih = 0; ih < inputHeight; ih++)
+                        {
+                            for (int iw = 0; iw < inputWidth; iw++)
+                            {
+                                float sum = this.bias ? biases[ic] : 0f;
+
+                                for (int oc = 0; oc < outputChannels; oc++)
+                                {
+                                    for (int kh = 0; kh < kernelHeight; kh++)
+                                    {
+                                        for (int kw = 0; kw < kernelWidth; kw++)
+                                        {
+                                            
+                                            sum += loss[b, oc, ih + kh, iw + kw] * kernels[oc, ic, kh, kw]; // kernel is rotated by 180d
+                                            
+                                        }
+                                    }
+                                }
+
+                                inputGrad[b, ic, ih, iw] = sum / grad_scale; // summation over input channels
+                            }
+                        }
+                    }));
+                }));
+
+
+                return inputGrad;
+            }
+            else
+                throw new NotImplementedException();
         }
 
 
@@ -245,11 +363,11 @@ namespace DeepUnity.Layers
         public object Clone()
         {
             var convt = new ConvTranspose2D();
-            convt.kernels = (Tensor)kernels.Clone();
-           
+            convt.bias = bias;
+            convt.kernels = (Tensor)kernels.Clone();        
             convt.kernelsGrad = (Tensor)kernelsGrad.Clone();
 
-            if (UseBias)
+            if (bias)
             {
                 convt.biases = (Tensor)biases.Clone();
                 convt.biasesGrad = (Tensor)biasesGrad.Clone();
@@ -265,7 +383,7 @@ namespace DeepUnity.Layers
 
             var k = new Parameter(kernels, kernelsGrad);
 
-            if (!UseBias)
+            if (!bias)
                 return new Parameter[] { k };
 
 
@@ -291,7 +409,7 @@ namespace DeepUnity.Layers
             // do not check if gamma is != null...
             kernelsGrad = Tensor.Zeros(kernels.Shape);
 
-            if(UseBias)
+            if(bias)
                 biasesGrad = Tensor.Zeros(biases.Shape);
 
         }

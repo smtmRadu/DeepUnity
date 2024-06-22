@@ -13,7 +13,7 @@ namespace DeepUnity.Modules
     /// <b>Applies normalization over the last dimension (H) of the input.</b> 
     /// </summary>
     [Serializable]
-    public class LayerNorm1D : ILearnable, IModule
+    public class LayerNorm : ILearnable, IModule
     {
         // Epsilon should be 1e-5f as default, but i keep it on default 1e-8f
         // Just a good reference paper to learn from, i made this just by adapting batchnorm layer.
@@ -42,7 +42,7 @@ namespace DeepUnity.Modules
         /// </summary>
         /// <param name="affine">Train gamma and beta parameters (elementwise-affine).</param>
         /// <param name="bias">If using affine parameters, do you want to train the shift?</param>
-        public LayerNorm1D(int num_features, float eps = 1e-5f, bool affine = true, bool bias = true)
+        public LayerNorm(int num_features, float eps = 1e-5f, bool affine = true, bool bias = true)
         {
             this.affine = affine;
             this.bias = bias;
@@ -61,7 +61,7 @@ namespace DeepUnity.Modules
                
             }         
         }
-        private LayerNorm1D() { }
+        private LayerNorm() { }
         public Tensor Predict(Tensor input)
         {
             if (input.Rank > 2)
@@ -126,7 +126,7 @@ namespace DeepUnity.Modules
 
         public object Clone()
         {
-            LayerNorm1D laynorm = new LayerNorm1D();
+            LayerNorm laynorm = new LayerNorm();
             laynorm.epsilon = epsilon;
             laynorm.affine = affine;
             laynorm.bias = bias;

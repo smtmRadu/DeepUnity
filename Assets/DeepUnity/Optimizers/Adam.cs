@@ -37,7 +37,7 @@ namespace DeepUnity.Optimizers
         /// <param name="weight_decay">If > 0, it is better to use <see cref="AdamW"/>.</param>
         /// <param name="amsgrad">Use AMSGrad version.</param>
         /// <param name="maximize">If true, gradients are added to the parameters on <see cref="Step()"/>.</param>
-        public Adam(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-7f, float weight_decay = 0f, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weight_decay)
+        public Adam(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8F, float weight_decay = 0f, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weight_decay)
         {
             this.amsgrad = amsgrad;
             this.maximize = maximize;

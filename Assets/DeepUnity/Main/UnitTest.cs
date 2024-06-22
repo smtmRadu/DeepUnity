@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using UnityEngine.UI;
 using DeepUnity.Optimizers;
 using DeepUnity.Modules;
+using DeepUnity.Layers;
+using Unity.VisualScripting.Antlr3.Runtime;
 
 
 namespace DeepUnity.Tutorials
@@ -20,8 +22,50 @@ namespace DeepUnity.Tutorials
 
         private void Start()
         {
+            // ConvTranspose2D conv = new ConvTranspose2D(2, 3, 3);
+            // 
+            // Tensor input = Tensor.Random01(3, 2, 8, 8);
+            // Tensor target = Tensor.Random01(3, 3, 10, 10);
+            // 
+            // var optim = new Adam(conv.Parameters());
+            // for (int i = 0; i < 100; i++)
+            // {
+            // 
+            //     Loss mse = Loss.MSE(conv.Forward(input), target);
+            //     print(mse.Item);
+            //     optim.ZeroGrad();
+            //     conv.Backward(mse.Gradient);
+            //     optim.Step();
+            // }
+
+            ConvTranspose2D convt = new ConvTranspose2D(2, 3, 3);
+            Tensor input = Tensor.Random01(3, 2, 8, 8);
+
+            print(convt.Predict(input));
+            convt.Device = Device.GPU;
+            print(convt.Predict(input));
 
         }
+
+        // private void Start()
+        // {
+        //     Conv2D conv = new Conv2D(2, 3, 3);
+        // 
+        //     Tensor target = Tensor.Random01(3, 3, 10, 10);
+        //     Tensor input = Tensor.Random01(3, 2, 12, 12);
+        // 
+        //     var optim = new Adam(conv.Parameters());
+        //     for (int i = 0; i < 100; i++)
+        //     {
+        // 
+        //         Loss mse = Loss.MSE(conv.Forward(input), target);
+        //         print(mse.Item);
+        //         optim.ZeroGrad();
+        //         conv.Backward(mse.Gradient);
+        //         optim.Step();
+        //     }
+        // 
+        // }
         // private void Start()
         // {
         //     net = new Sequential(

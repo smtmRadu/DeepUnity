@@ -20,7 +20,7 @@ namespace DeepUnity.ReinforcementLearning
         public Tensor[] DiscreteProbabilities { get => frames.Select(x => x.prob_discrete).ToArray(); }
         public Tensor[] ValueTargets { get => frames.Select(x => x.v_target).ToArray(); }
         public Tensor[] Advantages { get => frames.Select(x => x.advantage).ToArray(); }
-
+        public Tensor[] Goals { get => frames.Select(x => x.goal).ToArray(); }
 
 
         public ExperienceBuffer(int alloc_size)
@@ -79,6 +79,10 @@ namespace DeepUnity.ReinforcementLearning
                 temp = frames[i].done;
                 frames[i].done = frames[r].done;
                 frames[r].done = temp;
+
+                temp = frames[i].goal;
+                frames[i].goal = frames[r].goal;
+                frames[r].goal = temp;
             }
         }
         /// <summary>
@@ -95,16 +99,18 @@ namespace DeepUnity.ReinforcementLearning
         /// </summary>
         /// <param name="agentMemory"></param>
         /// <param name="buffer_size"></param>
-        public void TryAppend(MemoryBuffer agentMemory, int buffer_size)
+        public void TryAppend(IEnumerable<TimestepTuple> timestep, int buffer_size)
         {
-            foreach (var frm in agentMemory.frames)
+            foreach (var item in timestep)
             {
                 if (Count == buffer_size)
                     return;
 
-                frames.Add(frm.Clone() as TimestepTuple);
+                frames.Add(item.Clone() as TimestepTuple);
             }
+            
         }
+
         public void Clear()
         {
             frames.Clear();

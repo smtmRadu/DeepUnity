@@ -19,7 +19,7 @@ namespace DeepUnity.Optimizers
         private readonly Tensor[] v;
         private readonly Tensor[] vHatMax;
 
-        public AdamW(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-7f, float weight_decay = 0.01f, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weight_decay)
+        public AdamW(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8F, float weight_decay = 0.01f, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weight_decay)
         {
             this.amsgrad = amsgrad;
             this.maximize = maximize;
@@ -56,8 +56,9 @@ namespace DeepUnity.Optimizers
 
                 Tensor.CopyTo(parameters[i].param - gamma * lambda * parameters[i].param, parameters[i].param);
 
-                m[i] = beta1 * m[i] + (1f - beta1) * parameters[i].g;
-                v[i] = beta2 * v[i] + (1f - beta2) * parameters[i].g.Pow(2f);
+                Tensor.CopyTo(beta1 * m[i] + (1f - beta1) * parameters[i].g, m[i]);
+                Tensor.CopyTo(beta2 * v[i] + (1f - beta2) * parameters[i].g.Square(), v[i]);
+
                 Tensor mHat = m[i] / (1f - beta1_t);
                 Tensor vHat = v[i] / (1f - beta2_t);
 

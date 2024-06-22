@@ -19,9 +19,9 @@ namespace DeepUnity.Activations
         private Tensor OutputCache { get; set; }
         /// <summary>
         /// <b>Applies the Sparsemax function over the last input's dimension H (axis: -1).</b> <br></br>
-        /// Input: <b>(B, K)</b> or <b>(K)</b> for unbatched input <br></br>
-        /// Output: <b>(B, K)</b> or <b>(K)</b> for unbatched input <br></br>
-        /// where * = any shape and K = features_num
+        /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input <br></br>
+        /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input <br></br>
+        /// where * = any shape and H = features_num
         /// </summary>
         public Sparsemax()
         {

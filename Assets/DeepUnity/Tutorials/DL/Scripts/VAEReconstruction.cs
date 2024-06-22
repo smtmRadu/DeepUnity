@@ -46,7 +46,7 @@ namespace DeepUnity.Tutorials
                     encoder: new IModule[]
                     {
                          new Flatten(),
-                         new Dense(784, 256, device: Device.GPU, weight_init:wInit , bias_init: bInit),
+                         new Dense(784, 256, weight_init:wInit , bias_init: bInit),
                          new Tanh(),
                          new Dense(256, latent_space , weight_init:wInit , bias_init: bInit),
                          new Tanh(),
@@ -56,7 +56,7 @@ namespace DeepUnity.Tutorials
                     {
                         new Dense(latent_space , 256, weight_init:wInit , bias_init: bInit),
                         new Tanh(),               
-                        new Dense(256, 784, device: Device.GPU, weight_init: wInit , bias_init:bInit),
+                        new Dense(256, 784,  weight_init: wInit , bias_init:bInit),
                         new Sigmoid(),
                         new Reshape(new int[] {784}, new int[] {1, 28, 28})
                     },
@@ -65,7 +65,7 @@ namespace DeepUnity.Tutorials
             
             optim = new Adam(vae.Parameters(), lr);
 
-
+            vae.Device = Device.GPU;
 
             displays = new();
             for (int i = 0; i < canvas.transform.childCount; i++)

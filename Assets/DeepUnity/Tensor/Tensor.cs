@@ -1,10 +1,12 @@
-﻿using System;
+﻿using DeepUnity.Sensors;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.Animations;
 
 namespace DeepUnity
 {
@@ -406,7 +408,6 @@ namespace DeepUnity
             }
             return outs;
         }
-
         /// <summary>
         /// Returns a tensor filled with zeros with the given <paramref name="shape"/>.
         /// </summary>
@@ -2345,6 +2346,22 @@ namespace DeepUnity
             Tensor[] slices = Split(tensor, axis, 1);
             Utils.Shuffle(slices);
             return Concat(axis, slices);
+        }
+
+        public static (Tensor, Tensor) PairwiseShuffle(Tensor tensor1, Tensor tensor2, int axis)
+        {
+            if (tensor1.shape.SequenceEqual(tensor2.shape))
+                throw new ArgumentException($"The tensors must have similar shapes in order to be shuffled pairwise! (({tensor1.shape.ToCommaSeparatedString()}) and ({tensor2.shape.ToCommaSeparatedString()}))");
+
+
+            HandleAxis(tensor1, ref axis);
+
+           
+            Tensor[] slices1 = Split(tensor1, axis, 1);
+            Tensor[] slices2 = Split(tensor1, axis, 1);
+
+            Utils.PairwiseShuffle(slices1, slices2);
+            return (Concat(axis, slices1), Concat(axis, slices2));
         }
         /// <summary>
         /// Computes the sum along the speficied axis.

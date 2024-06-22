@@ -144,7 +144,7 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     return new IModule[] {
                         new Dense(inputs * stack, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
-                        new LayerNorm1D(hidUnits),
+                        new LayerNorm(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
                 }
@@ -152,10 +152,10 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     return new IModule[] {
                         new Dense(inputs * stack, hidUnits, weight_init: INIT_W, bias_init: INIT_B),
-                        new LayerNorm1D(hidUnits),
+                        new LayerNorm(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, hidUnits, weight_init: INIT_W, bias_init : INIT_B),
-                        new LayerNorm1D(hidUnits),
+                        new LayerNorm(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
                 }
@@ -163,13 +163,13 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     return new IModule[] {
                         new Dense(inputs * stack, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
-                        new LayerNorm1D(hidUnits),
+                        new LayerNorm(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, hidUnits, weight_init: INIT_W, bias_init : INIT_B),
-                        new LayerNorm1D(hidUnits),
+                        new LayerNorm(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
-                        new LayerNorm1D(hidUnits),
+                        new LayerNorm(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
                 }

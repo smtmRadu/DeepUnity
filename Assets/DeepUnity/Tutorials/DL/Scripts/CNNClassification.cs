@@ -39,25 +39,25 @@ namespace DeepUnity.Tutorials
                           new ZeroPad2D(1),
                           new Conv2D(1, 32, 3),
                           new BatchNorm2D(32),
-                          new ReLU(true),
+                          new LeakyReLU(in_place: true),
                           new MaxPool2D(2),
                           
                           new ZeroPad2D(1),
                           new Conv2D(32, 64, 3),
                           new BatchNorm2D(64),
-                          new ReLU(true),
+                          new LeakyReLU(in_place: true),
                           new MaxPool2D(2),
                           
                           new ZeroPad2D(1),
                           new Conv2D(64, 128, 3),
                           new BatchNorm2D(128),
-                          new ReLU(true),
+                          new LeakyReLU(in_place: true),
                           new MaxPool2D(2),
                           
                           new Flatten(),
                           new LazyDense(256),
-                          new LayerNorm1D(256),
-                          new ReLU(true),
+                          new RMSNorm(),
+                          new LeakyReLU(in_place: true),
                           new Dense(256, 10),
                           new Softmax()).CreateAsset(name); 
             }
@@ -123,7 +123,7 @@ namespace DeepUnity.Tutorials
             accuracyGraph.Append(acc);
             lossGraph.Append(loss.Item);
 
-            Debug.Log($"Epoch: {epochIndex} | Batch: {batch_index++}/{train_batches.Count} | Acc: {acc * 100f}% | Loss: {loss.Item}");
+            Debug.Log($"Epoch: {epochIndex} | Batch: {batch_index++}/{train_batches.Count} | Acc: {acc * 100f}% | Loss: {loss.Item} | Lr: {scheduler.CurrentLR}");
         }
 
 

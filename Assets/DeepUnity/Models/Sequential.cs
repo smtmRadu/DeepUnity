@@ -130,8 +130,8 @@ namespace DeepUnity.Models
         {
             var cloned_modules = Modules.Select(x => (IModule)x.Clone()).ToArray();
             var net = new Sequential(cloned_modules);
-            return net;
-        }
+            return net; 
+        } 
     }
 
     // If you turn this ON you will not see the param updates in the inspector

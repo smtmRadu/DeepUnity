@@ -10,7 +10,7 @@ using DeepUnity.Activations;
 namespace DeepUnity.ReinforcementLearning
 
 {
-    internal sealed class TD3Trainer : DeepUnityTrainer
+    internal sealed class TD3Trainer : DeepUnityTrainer, IOffPolicy
     {
         private static Sequential Qtarg1;
         private static Sequential Qtarg2;
@@ -84,7 +84,7 @@ namespace DeepUnity.ReinforcementLearning
                     if (agent_mem.Count == 0)
                         continue;
 
-                    train_data.TryAppend(agent_mem, hp.replayBufferSize);
+                    train_data.TryAppend(agent_mem.frames, hp.replayBufferSize);
                     agent_mem.Clear();
                 }
 

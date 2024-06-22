@@ -28,6 +28,9 @@ namespace DeepUnity.Modules
         public MultiheadAttention multiheadattention = null;
         public AttentionV2 attentionv2 = null;
         public KANLayer kanlayer = null;
+        public LayerNorm layernorm = null;
+        public RMSNorm rmsnorm = null;
+        public BatchNorm batchnorm = null;
 
         // Lazy 
         public LazyConv2D lazyconv2d = null;
@@ -55,10 +58,7 @@ namespace DeepUnity.Modules
         public MirrorPad2D mirrorpad2d = null;
         public Dropout2D dropout2d = null;
 
-        // 1D
-        public LayerNorm1D layernorm1d = null;
-        public RMSNorm1D rmsnorm1d = null;
-        public BatchNorm1D batchnorm1d = null;
+        // 1D   
         public AvgPool1D avgpool1d = null;
         public MaxPool1D maxpool1d = null;     
         public ZeroPad1D zeropad1d = null;
@@ -100,13 +100,13 @@ namespace DeepUnity.Modules
             {
                 dense = denseModule;
             }
-            else if (module is BatchNorm1D batchnorm1dModule)
+            else if (module is BatchNorm batchnorm1dModule)
             {
-                batchnorm1d = batchnorm1dModule;
+                batchnorm = batchnorm1dModule;
             }
-            else if (module is LayerNorm1D layernorm1dModule)
+            else if (module is LayerNorm layernorm1dModule)
             {
-                layernorm1d = layernorm1dModule;
+                layernorm = layernorm1dModule;
             }
             else if (module is ReLU reluModule)
             {
@@ -220,9 +220,9 @@ namespace DeepUnity.Modules
             {
                 selu = seluModule;
             }
-            else if (module is RMSNorm1D rmsnorm1dModule)
+            else if (module is RMSNorm rmsnorm1dModule)
             {
-                rmsnorm1d = rmsnorm1dModule;
+                rmsnorm = rmsnorm1dModule;
             }
             else if (module is ZeroPad2D zeropad2DModule)
             {
@@ -321,13 +321,13 @@ namespace DeepUnity.Modules
             {
                 module = moduleWrapper.dense;
             }
-            else if (typeof(BatchNorm1D).Name.Equals(moduleWrapper.name))
+            else if (typeof(BatchNorm).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.batchnorm1d;
+                module = moduleWrapper.batchnorm;
             }
-            else if (typeof(LayerNorm1D).Name.Equals(moduleWrapper.name))
+            else if (typeof(LayerNorm).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.layernorm1d;
+                module = moduleWrapper.layernorm;
             }
             else if (typeof(ReLU).Name.Equals(moduleWrapper.name))
             {
@@ -441,9 +441,9 @@ namespace DeepUnity.Modules
             {
                 module = moduleWrapper.selu;
             }
-            else if (typeof(RMSNorm1D).Name.Equals(moduleWrapper.name))
+            else if (typeof(RMSNorm).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.rmsnorm1d;
+                module = moduleWrapper.rmsnorm;
             }
             else if (typeof(ZeroPad2D).Name.Equals(moduleWrapper.name))
             {

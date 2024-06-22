@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using Unity.VisualScripting;
 using UnityEngine;
 
@@ -22,7 +21,7 @@ namespace DeepUnity.Modules
     /// </em>
     /// </summary>
     [Serializable]
-    public class BatchNorm1D : ILearnable, IModule
+    public class BatchNorm : ILearnable, IModule
     {
         // https://arxiv.org/pdf/1502.03167.pdf
         [SerializeField] public Device Device { get; set; } = Device.CPU;
@@ -67,7 +66,7 @@ namespace DeepUnity.Modules
         /// <param name="num_features">Input's last axis dimension (H).</param>
         /// <param name="momentum">Small batch size (0.9 - 0.99), Big batch size (0.6 - 0.85). Best momentum value is <b>m</b> where <b>m = batch.size / dataset.size</b></param>
         /// <param name="affine">Do you use gamma and beta affine parameters?</param>       
-        public BatchNorm1D(int num_features, float eps = 1e-5f, float momentum = 0.9f, bool affine = true)
+        public BatchNorm(int num_features, float eps = 1e-5f, float momentum = 0.9f, bool affine = true)
         {
             if (num_features < 1)
                 throw new ArgumentException($"BatchNorm layer cannot have num_features < 1. (Received arg: {num_features})");
@@ -89,7 +88,7 @@ namespace DeepUnity.Modules
             runningVar = Tensor.Ones(num_features);
             runningMean = Tensor.Zeros(num_features);
         }
-        private BatchNorm1D() { }
+        private BatchNorm() { }
         public Tensor Predict(Tensor input)
         {
             if (input.Rank > 2)
@@ -196,7 +195,7 @@ namespace DeepUnity.Modules
 
         public object Clone()
         {
-            BatchNorm1D bnclone = new BatchNorm1D();
+            BatchNorm bnclone = new BatchNorm();
             bnclone.Device = Device;
             bnclone.RequiresGrad = RequiresGrad;
             bnclone.affine = affine;
@@ -251,7 +250,6 @@ namespace DeepUnity.Modules
             // do not check if gamma is != null...
             gammaGrad = Tensor.Zeros(gamma.Shape);
             betaGrad = Tensor.Zeros(beta.Shape);
-
         }
 
         // TIPS for improvement

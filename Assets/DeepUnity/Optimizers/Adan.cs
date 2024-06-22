@@ -25,7 +25,7 @@ namespace DeepUnity.Optimizers
         /// <param name="beta2"></param>
         /// <param name="beta3"></param>
         /// <param name="weight_decay"></param>
-        public Adan(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.02f, float beta2 = 0.08f, float beta3 = 0.01f, float eps = 1e-7f, float weight_decay = 0f)
+        public Adan(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.02f, float beta2 = 0.08f, float beta3 = 0.01f, float eps = 1e-8f, float weight_decay = 0f)
             : base(parameters, lr, eps, weight_decay)
         {
             this.beta1 = beta1;
@@ -52,7 +52,6 @@ namespace DeepUnity.Optimizers
 
             System.Threading.Tasks.Parallel.For(0, parameters.Length, i =>
             {
-
                 if (t == 1)
                 {
                     m[i] = parameters[i].g.Clone() as Tensor;
@@ -65,14 +64,13 @@ namespace DeepUnity.Optimizers
                     v[i] = parameters[i].g - gOld[i];
                 }
 
-                m[i] = (1 - beta1) * m[i] + beta1 * parameters[i].g;
-                v[i] = (1 - beta2) * v[i] + beta2 * (parameters[i].g - gOld[i]);
-                n[i] = (1 - beta3) * n[i] + beta3 * (parameters[i].g + (1f - beta2) * (parameters[i].g - gOld[i])).Square();
-                Tensor eta = Tensor.Fill(gamma, n[i].Shape) / (n[i].Sqrt() + epsilon);
+                m[i] = (1f - beta1) * m[i] + beta1 * parameters[i].g;
+                v[i] = (1f - beta2) * v[i] + beta2 * (parameters[i].g - gOld[i]);
+                n[i] = (1f - beta3) * n[i] + beta3 * (parameters[i].g + (1f - beta2) * (parameters[i].g - gOld[i])).Square();
+                Tensor eta = gamma / (n[i].Sqrt() + epsilon);
 
                 // Update theta
-                Tensor.CopyTo((lambda * eta + 1f).Pow(-1f) * (parameters[i].param - eta * (m[i] + (1f - beta2) * v[i])), parameters[i].param);
-
+                Tensor.CopyTo((1f + lambda * eta).Pow(-1f) * (parameters[i].param - eta * (m[i] + (1f - beta2) * v[i])), parameters[i].param);
                 Tensor.CopyTo(parameters[i].g, gOld[i]);
             });
         }

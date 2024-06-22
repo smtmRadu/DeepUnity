@@ -29,6 +29,7 @@ namespace DeepUnity.Tutorials
         [SerializeField] private float lr = 2e-4f;
         [SerializeField] private float maxNorm = 1F;
         [SerializeField] private WhatToDo perform = WhatToDo.Train;
+        public bool WriteLoss = true;
 
         public PerformanceGraph G_graph = new PerformanceGraph();
         public PerformanceGraph D_graph = new PerformanceGraph();
@@ -41,7 +42,7 @@ namespace DeepUnity.Tutorials
         private int batch_index = 0;
 
         const int latent_dim = 100;
-        const int size = 256; // 1024 original
+        const int size = 1024; // 1024 original
         const float dropout = 0.3f; // 0.3f original
         private void Start()
         {
@@ -53,18 +54,18 @@ namespace DeepUnity.Tutorials
                     new Flatten(),
 
                     new Dense(784, size, weight_init:wInit, bias_init:bInit),
-                    new RMSNorm1D(size),
-                    new Swish(true),           
+                    new RMSNorm(),
+                    new ReLU(true),           
                     new Dropout(dropout, true),
                 
                     new Dense(size, size/2, weight_init: wInit, bias_init: bInit),
-                    new RMSNorm1D(size/2),
-                    new Swish(true),
+                    new RMSNorm(),
+                     new ReLU(true),
                     new Dropout(dropout, true),
 
                     new Dense(size / 2, size/4, weight_init: wInit, bias_init: bInit),
-                    new RMSNorm1D(size / 4),
-                    new Swish(true),
+                    new RMSNorm(),
+                     new ReLU(true),
                     new Dropout(dropout, true),
 
                     new Dense(size/4, 1, weight_init:wInit, bias_init:bInit),
@@ -75,19 +76,19 @@ namespace DeepUnity.Tutorials
             {
                 G = new Sequential(
                     new Dense(latent_dim, size / 4, weight_init: wInit, bias_init: bInit),
-                    new RMSNorm1D(size / 4),
-                    new Swish(true),
+                    new RMSNorm(),
+                     new ReLU(true),
 
                     new Dense(size / 4, size / 2, weight_init: wInit, bias_init: bInit),
-                    new RMSNorm1D(size / 2),
-                    new Swish(true),
+                    new RMSNorm(),
+                    new ReLU(true),
 
                     new Dense(size / 2, size, weight_init: wInit, bias_init: bInit),
-                    new RMSNorm1D(size),
-                    new Swish(true),
+                    new RMSNorm(),
+                     new ReLU(true),
 
                     new Dense(size, 784, weight_init: wInit, bias_init: bInit),
-                    new Tanh(true),
+                    new Sigmoid(true),
 
                     new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 })
                     ).CreateAsset("generator");
@@ -95,8 +96,8 @@ namespace DeepUnity.Tutorials
 
             G.Device = Device.GPU;
             D.Device = Device.GPU;
-            d_optim = new Adam(D.Parameters(), lr, eps:1e-8f, amsgrad:true);
-            g_optim = new Adam(G.Parameters(), lr, eps:1e-8f, amsgrad:true);
+            d_optim = new AdamW(D.Parameters(), lr, amsgrad:true);
+            g_optim = new AdamW(G.Parameters(), lr, amsgrad:true);
 
             List<(Tensor, Tensor)> data;
             Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out data, out _, DatasetSettings.LoadTrainOnly);
@@ -154,7 +155,7 @@ namespace DeepUnity.Tutorials
 
                 d_optim.ClipGradNorm(maxNorm);
                 d_optim.Step();
-                D_graph.Append(loss.Item + loss2.Item);
+                if(WriteLoss) D_graph.Append(loss.Item + loss2.Item);
                 // -----------------------------------------------------------------------------------------------------
                 
                 // Train Generator ------------------------------------------------------------------
@@ -170,7 +171,7 @@ namespace DeepUnity.Tutorials
                 g_optim.ClipGradNorm(maxNorm);
                 g_optim.Step();
                 D.RequiresGrad = true;
-                G_graph.Append(loss.Item);
+                if (WriteLoss)  G_graph.Append(loss.Item);
                 // // -----------------------------------------------------------------------------------------------------
 
 

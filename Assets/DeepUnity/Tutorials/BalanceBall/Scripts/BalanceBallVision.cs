@@ -6,6 +6,7 @@ namespace DeepUnity.Tutorials
 {
     public class BalanceBallVision : Agent
     {
+        [Header("This is the balance ball environment but trained with CNN for visual top-down observation.")]
         [Button("SetDefaultHP")]
         [SerializeField] Rigidbody ball;
         [SerializeField] const float rotationSpeed = 1f;
@@ -19,7 +20,7 @@ namespace DeepUnity.Tutorials
         public override void CollectObservations(out Tensor stateTensor)
         {
             var pixels = cam.GetPixels();
-            Tensor image = Tensor.Constant(pixels, (1, 16, 16));
+            Tensor image = Tensor.Constant(pixels, (3, 16, 16));
             stateTensor = image;
         }
 
@@ -36,27 +37,6 @@ namespace DeepUnity.Tutorials
             if (ball.gameObject.transform.position.y < transform.position.y)
                 EndEpisode();
         }
-
-        public override void Heuristic(ActionBuffer actionBuffer)
-        {
-            float xRot = 0f;
-            float zRot = 0f;
-
-            if (Input.GetKey(KeyCode.D))
-                xRot = 1f;
-            else if (Input.GetKey(KeyCode.A))
-                xRot = -1f;
-
-            if (Input.GetKey(KeyCode.W))
-                zRot = 1f;
-            else if (Input.GetKey(KeyCode.S))
-                zRot = -1f;
-
-            actionBuffer.ContinuousActions[0] = xRot;
-            actionBuffer.ContinuousActions[1] = zRot;
-        }
-
-
 
         // This exist because balance ball is the best env for testing out. (in 1 minute it must get around 273 mean steps)
         public void SetDefaultHP()

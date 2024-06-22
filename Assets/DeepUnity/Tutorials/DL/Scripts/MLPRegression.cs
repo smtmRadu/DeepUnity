@@ -60,7 +60,7 @@ namespace DeepUnity.Tutorials
                  new Dense(hiddenSize, 1, weight_init: init_w, bias_init: init_b)
                  );//.CreateAsset("some_ass"); //xd
             }
-            
+
             net.Predict(Tensor.Random01(2));
             net.Device = device;
 
@@ -109,7 +109,7 @@ namespace DeepUnity.Tutorials
             Loss loss = Loss.MSE(trainPrediction, trainYbatches[i]);
             TrainLossGraph.Append(loss.Item);
             optimizer.ZeroGrad();
-            net.Backward(loss.Gradient);        
+            net.Backward(loss.Gradient);
             optimizer.Step();
 
 

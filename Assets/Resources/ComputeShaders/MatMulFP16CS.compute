@@ -1,6 +1,6 @@
 // It seems that unity Compute Buffers doesn't allow a stride of 2, only multiples of 4.
 // A workaround for that is to use a stride of 4 and a count /2. But from tests, the improvements
-// of fp16 are not that big of a deal.
+// of fp16 are not that big of a deal... SO DO NOT RETRY THIS, IT WILL REMAIN EXPERIMENTAL
 
 RWStructuredBuffer<half> data1;
 int w1 = 1; // width of tensor1

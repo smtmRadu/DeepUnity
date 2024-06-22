@@ -199,7 +199,7 @@ Camera:
   far clip plane: 1000
   field of view: 1
   orthographic: 1
-  orthographic size: 1.09
+  orthographic size: 1.5
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
@@ -434,8 +434,8 @@ MonoBehaviour:
   numLayers: 2
   hidUnits: 32
   activation: 1
-  model: {fileID: 11400000, guid: 68f667366a024bc4da253e238d1fec36, type: 2}
-  behaviourType: 2
+  model: {fileID: 11400000, guid: 7413de1e6975bba4c833d5c2cd268587, type: 2}
+  behaviourType: 1
   onEpisodeEnd: 2
   useSensors: 0
   ball: {fileID: 1198115738}
@@ -1014,15 +1014,15 @@ MonoBehaviour:
   spaceSize: 0
   spaceHeight: 16
   spaceWidth: 16
-  spaceChannels: 1
+  spaceChannels: 3
   stackedInputs: 1
   continuousActions: 2
   discreteActions: 0
   archType: 2
-  numLayers: 1
-  hidUnits: 32
-  activation: 1
-  model: {fileID: 11400000, guid: 092f5f9d29fcb0c46885402a5566f76c, type: 2}
+  numLayers: 2
+  hidUnits: 64
+  activation: 0
+  model: {fileID: 11400000, guid: c0b3c9714f90ffb4abcd50ef1aff5578, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0

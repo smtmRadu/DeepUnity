@@ -16,6 +16,7 @@ namespace DeepUnity.Tutorials
         public WhatToDo perform = WhatToDo.Train;
         public float lr = 1e-3f;
         public int batchSize = 32;
+        public int epochs = 10;
         public PerformanceGraph graph = new PerformanceGraph();
         public GameObject canvas;
         private List<RawImage> displays;
@@ -23,12 +24,13 @@ namespace DeepUnity.Tutorials
         [SerializeField] VariationalAutoencoder vae;
 
         Optimizer optim;
+        LRScheduler scheduler;
 
         List<(Tensor, Tensor)> train = new();
         List<(Tensor, Tensor)[]> train_batches;
 
         int batch_index = 0;
-
+        
         public float kld_weight = 0.01f;
         public float noise_prob = 0.1f;
         public float noise_size = 0.1f;
@@ -40,34 +42,45 @@ namespace DeepUnity.Tutorials
             train_batches = Utils.Split(train, batchSize);
 
             var w_init = InitType.Kaiming_Uniform;
-            var b_init = InitType.Zeros;
+            var b_init = InitType.Kaiming_Uniform;
             if (vae == null)
             {
                 vae = new VariationalAutoencoder(
                     new IModule[] {
                             new Flatten(),
-                            new Dense(784, 512, true, w_init,b_init, device: Device.GPU),
-                            new ReLU(),
-                            new Dense(512, 256, true, w_init,b_init,device: Device.GPU),
-                            new ReLU(),
-                            new Dense(256, 8,true, w_init,b_init, device: Device.CPU),
+                            new Dense(784, 512, true, w_init,b_init),
+                            new RMSNorm(),
+                             new LeakyReLU(in_place:true),
+                            new Dense(512, 256, true, w_init,b_init),
+                            new RMSNorm(),
+                             new LeakyReLU(in_place:true),
+                            new Dense(256, 128, true, w_init,b_init),
+                             new RMSNorm(),
+                             new LeakyReLU(in_place:true),
+                            new Dense(128, 8,true, w_init,b_init),
                             new ReLU() },
                             8,
                     new IModule[] {
-                            new Dense(8, 256, true, w_init,b_init,device: Device.CPU),
-                            new ReLU(),
-                            new Dense(256, 512, true, w_init,b_init,device: Device.GPU),
-                            new ReLU(),
-                            new Dense(512, 784,true, w_init,b_init, device: Device.GPU),
-                            new Sigmoid(),
+                            new Dense(8, 128, true, w_init,b_init),
+                             new RMSNorm(),
+                             new LeakyReLU(in_place:true),
+                            new Dense(128, 256, true, w_init,b_init),
+                             new RMSNorm(),
+                             new LeakyReLU(in_place:true),
+                            new Dense(256, 512, true, w_init,b_init),
+                             new RMSNorm(),
+                            new LeakyReLU(in_place:true),
+                            new Dense(512, 784,true, w_init,b_init),
+                            new Sigmoid(true),
                             new Reshape(new int[] { 784 }, new int[] { 1, 28, 28 }) }
                            , kld_weight:kld_weight).CreateAsset("vae_denoiser");
             }
 
+            vae.Device = Device.GPU;
+            optim = new Adam(vae.Parameters(), lr, amsgrad:true);
+            scheduler = new LinearLR(optim, 1, 0.2f, epochs);
 
-            Parameter[] parameters = vae.Parameters();
 
-            optim = new Adam(parameters, lr, amsgrad:true);
 
             displays = new();
             for (int i = 0; i < canvas.transform.childCount; i++)
@@ -96,6 +109,7 @@ namespace DeepUnity.Tutorials
                     batch_index = 0;
                     Utils.Shuffle(train);
                     train_batches = Utils.Split(train, batchSize);
+                    scheduler.Step();
                 }
 
                 float loss_value = 0f;

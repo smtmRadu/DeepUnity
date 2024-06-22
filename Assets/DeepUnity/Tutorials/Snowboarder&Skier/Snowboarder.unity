@@ -2321,7 +2321,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 643162791}
   m_LocalRotation: {x: 0.1564345, y: 0, z: 0, w: 0.98768836}
-  m_LocalPosition: {x: 408, y: 114, z: -374}
+  m_LocalPosition: {x: 408, y: 113.94, z: -374}
   m_LocalScale: {x: 1000, y: 1, z: 1000}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4855,7 +4855,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1434806348}
   m_LocalRotation: {x: 0.22854622, y: 0.4175722, z: -0.109367475, w: 0.87260467}
-  m_LocalPosition: {x: -3.9, y: 874.2, z: -2673}
+  m_LocalPosition: {x: 54.3, y: 251.8, z: -782}
   m_LocalScale: {x: 0.14999999, y: 0.14999996, z: 0.14999999}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4874,7 +4874,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0d33621d1d903a74cb966409687d6e55, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  objectToFollow: {fileID: 0}
+  objectToFollow: {fileID: 2062456658}
   smoothness: 0.3
 --- !u!81 &1434806351
 AudioListener:
@@ -6978,6 +6978,11 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 2.0233257, y: 0.5607627, z: 20.656275}
   m_Center: {x: -0.010574698, y: 0.07329574, z: -6.0654984}
+--- !u!4 &2062456658 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 904760368030300986, guid: 0fa31cb108647da40b0d9a0b9e580161, type: 3}
+  m_PrefabInstance: {fileID: 1451232019}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &2072155166 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 8615688948003550407, guid: 0fa31cb108647da40b0d9a0b9e580161, type: 3}

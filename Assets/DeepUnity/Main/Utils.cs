@@ -73,6 +73,57 @@ namespace DeepUnity
             }
         }
         /// <summary>
+        /// Shuffles the elements of the given arrays using the same randomizer.
+        /// </summary>
+        /// <exception cref="ArgumentException"></exception>
+        public static void PairwiseShuffle<T>(T[] array1, T[] array2)
+        {
+            if (array1.Length != array2.Length)
+                throw new ArgumentException("The two lists must have the same length");
+            lock (RNG)
+            {
+                for (int i = array1.Length - 1; i > 0; i--)
+                {
+                    int r = RNG.Next(i + 1);
+                    T temp = array1[i];
+                    array1[i] = array1[r];
+                    array1[r] = temp;
+
+                    T temp2 = array2[i];
+                    array2[i] = array2[r];
+                    array2[r] = temp2;
+                }
+            }
+        }
+        /// <summary>
+        /// Shuffles the elements of the given lists using the same randomizer.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list1"></param>
+        /// <param name="list2"></param>
+        /// <exception cref="ArgumentException"></exception>
+        public static void PairwiseShuffle<T>(List<T> list1, List<T> list2)
+        {
+            if (list1.Count != list2.Count)
+                throw new ArgumentException("The two lists must have the same length");
+
+            lock (RNG)
+            {
+                for (int i = list1.Count - 1; i > 0; i--)
+                {
+                    int r = RNG.Next(i + 1);
+
+                    T temp = list1[i];
+                    list1[i] = list1[r];
+                    list1[r] = temp;
+
+                    T temp2 = list2[i];
+                    list2[i] = list2[r];
+                    list2[r] = temp2;
+                }
+            }
+        }
+        /// <summary>
         /// Debug some info in a unique file created on desktop automatically named 'DeepUnity-Debug.txt'.
         /// </summary>
         /// <param name="text"></param>

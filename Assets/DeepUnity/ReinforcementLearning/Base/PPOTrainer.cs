@@ -17,7 +17,7 @@ namespace DeepUnity.ReinforcementLearning
     /// </summary>
     /// What may cause NaN values:
     /// 1. Softmax activation on discrete head may "explode"
-    internal sealed class PPOTrainer : DeepUnityTrainer
+    internal sealed class PPOTrainer : DeepUnityTrainer, IOnPolicy
     {
         //Internal PPO Config
         const float epsilon = 1e-5F; // PPO openAI eps they use :D, but in Andrychowicz, et al. (2021) they use tf default 1e-7
@@ -83,7 +83,7 @@ namespace DeepUnity.ReinforcementLearning
                         continue;
 
                     ComputeGAE_andVtargets(agent_memory, hp.gamma, hp.lambda, hp.horizon, model.vNetwork);
-                    train_data.TryAppend(agent_memory, hp.bufferSize);
+                    train_data.TryAppend(agent_memory.frames, hp.bufferSize);
                     // if (hp.debug) Utils.DebugInFile(agent_memory.ToString());
                     agent_memory.Clear();
                 }

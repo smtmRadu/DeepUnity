@@ -142,7 +142,7 @@ namespace DeepUnity
             if (predictions.Rank > 2 || targets.Rank > 2)
                 throw new ArgumentException("Prediction and targets must be of shape (B, H) or (H) for unbatched input.");
 
-            Tensor errors = Tensor.Pow(predictions - targets, 2);
+            Tensor errors = Tensor.Square(predictions - targets);
 
             if (predictions.Rank == 2) // batched
                 errors = Tensor.Mean(errors, 0);

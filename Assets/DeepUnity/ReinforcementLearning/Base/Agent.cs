@@ -72,6 +72,10 @@ namespace DeepUnity.ReinforcementLearning
         /// </summary>
         public float EpisodeCumulativeReward { get; private set; } = 0f;
         private int EpisodeFixedFramesCount { get; set; } = -1;
+        /// <summary>
+        /// A trigger that checks if the agent is using HER. It sets to true automatically when calling <see cref="HindsightExperienceReplay.SetGoal(Agent)"/>.
+        /// </summary>
+        public bool IsUsingHER { get; set; } = false;
 
         public virtual void Awake()
         {
@@ -268,6 +272,11 @@ namespace DeepUnity.ReinforcementLearning
             // These checkups applies also for Manual and Inference..
             if (Timestep?.done[0] == 1)
             {
+                if(IsUsingHER && behaviourType == BehaviourType.Learn)
+                {
+                    DeepUnityTrainer.Instance.train_data.TryAppend(HindsightExperienceReplay.SampleSubgoals(this), model.config.replayBufferSize);
+                }
+
                 StatesBuffer.ResetToZero(); // For Stacked inputs reset to 0 all sequence
                 LastState = null;// On Next episode (on timestep 0) there will be no last state
 

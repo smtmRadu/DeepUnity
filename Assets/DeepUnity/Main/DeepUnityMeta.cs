@@ -27,7 +27,7 @@ namespace DeepUnity
                 DenseCS = Resources.Load<ComputeShader>("ComputeShaders/DenseCS");
                 Conv2DCS = Resources.Load<ComputeShader>("ComputeShaders/Conv2DCS");
                 RNNCellCS = Resources.Load<ComputeShader>("ComputeShaders/RNNCellCS");
-                ConvTranpose2DCS = Resources.Load<ComputeShader>("ComputeShaders/ConvTranpose2DCS");
+                ConvTranpose2DCS = Resources.Load<ComputeShader>("ComputeShaders/ConvTranspose2DCS");
                 // MatMulFP16CS = Resources.Load<ComputeShader>("ComputeShaders/MatMulFP16CS");
 
                 if (TensorCS == null)
@@ -270,6 +270,17 @@ namespace DeepUnity
     {
         FP32,
         FP16
+    }
+
+    /// <summary>
+    /// Replay strategy <b>S</b> used in HER (Hindsight Experience Replay).
+    /// </summary>
+    public enum ReplayStrategy
+    {
+        Final,
+        Future,
+        Episode,
+        Random
     }
 }
 

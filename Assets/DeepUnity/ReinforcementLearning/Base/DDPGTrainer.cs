@@ -20,8 +20,14 @@ namespace DeepUnity.ReinforcementLearning
     /// buffer = 1e6
     /// Ornstein-Uhlenbeck process -> theta = 0.15, sigma= 0.2
     /// </summary>
-    internal sealed class DDPGTrainer : DeepUnityTrainer
+    internal sealed class DDPGTrainer : DeepUnityTrainer, IOffPolicy
     {
+        //Internal PPO Config
+        const float epsilon = 1e-7F; 
+        const float valueWD = 0.01F; // Value net weight decay (AdamW)
+        const bool amsGrad = false;
+
+
         private Sequential Q_targ;
         private Sequential Mu_targ;
 
@@ -39,8 +45,8 @@ namespace DeepUnity.ReinforcementLearning
             }             
 
             // Initialize optimizers
-            optim_q1 = new Adam(model.q1Network.Parameters(), hp.criticLearningRate, weight_decay: 0.0F);
-            optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate);
+            optim_q1 = new AdamW(model.q1Network.Parameters(), hp.criticLearningRate, weight_decay: valueWD, amsgrad:amsGrad);
+            optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate, amsgrad: amsGrad);
 
             // Initialize schedulers
             optim_q1.Scheduler = new LinearLR(optim_q1, start_factor: 1f, end_factor: 0f, total_iters: (int)hp.maxSteps * hp.updatesNum / hp.updateInterval);
@@ -87,7 +93,7 @@ namespace DeepUnity.ReinforcementLearning
                     if (agent_mem.Count == 0)
                         continue;
 
-                    train_data.TryAppend(agent_mem, hp.replayBufferSize);
+                    train_data.TryAppend(agent_mem.frames, hp.replayBufferSize);
                     agent_mem.Clear();
                 }
                 
@@ -148,18 +154,18 @@ namespace DeepUnity.ReinforcementLearning
             Tensor muTarg_sPrime = Mu_targ.Predict(sPrime);
             Tensor qTarg_Prime = Q_targ.Predict(Pairify(sPrime, muTarg_sPrime)); // (B, 1)
 
-            for (int b = 0; b < batch.Length; b++)
+            Parallel.For(0, batch.Length, b =>
             {
                 // y(r,s',d) = r + Ɣ(1 - d) * Qφt(s',μθt(s'))
 
                 float r = batch[b].reward[0];
                 float d = batch[b].done[0];
                 float qt_ = qTarg_Prime[b, 0];
-
+                print(d);
                 float y = r + hp.gamma * (1f - d) * qt_;
 
                 batch[b].q_target = Tensor.Constant(y);
-            }
+            });
 
             criticTargets = Tensor.Concat(null, batch.Select(x => x.q_target).ToArray());
         }
@@ -221,7 +227,7 @@ namespace DeepUnity.ReinforcementLearning
         /// <summary>
         /// Note that this must be changed if i plan to allow different input shape than vectorized. (e.g. cnns)
         /// </summary>
-        private static Tensor ExtractActionFromStateAction(Tensor stateActionBatch, int state_size, int action_size)
+        public static Tensor ExtractActionFromStateAction(Tensor stateActionBatch, int state_size, int action_size)
         {
             int batch_size = stateActionBatch.Size(0);
             Tensor actions = Tensor.Zeros(batch_size, action_size);
@@ -234,7 +240,13 @@ namespace DeepUnity.ReinforcementLearning
             });
             return actions;
         }
-        private static Tensor Pairify(Tensor stateBatch, Tensor actionBatch)
+        /// <summary>
+        /// Concatenates s and a. \\\/
+        /// </summary>
+        /// <param name="stateBatch"></param>
+        /// <param name="actionBatch"></param>
+        /// <returns></returns>
+        public static Tensor Pairify(Tensor stateBatch, Tensor actionBatch)
         {
             int batch_size = stateBatch.Size(0);
             int state_size = stateBatch.Size(-1);

@@ -12,9 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5970f7530cba1f0499a4a3dbe7d27f96, type: 3}
   m_Name: Config
   m_EditorClassIdentifier: 
-  trainer: 2
+  trainer: 0
   maxSteps: 2000000000
-  learningRate: 0.0003
+  actorLearningRate: 0.0003
+  criticLearningRate: 0.0003
   gamma: 0.99
   LRSchedule: 0
   batchSize: 512
@@ -24,7 +25,8 @@ MonoBehaviour:
   beta: 0.005
   epsilon: 0.2
   lambda: 0.96
-  gradClipNorm: 0.5
+  maxNorm: 0.5
+  valueCoeff: 0.5
   KLDivergence: 0
   targetKL: 0.015
   normalizeAdvantages: 1
@@ -35,7 +37,6 @@ MonoBehaviour:
   updatesNum: 1
   alpha: 0.2
   tau: 0.005
-  activeNoise: 0.1
   noiseClip: 0.5
   policyDelay: 2
   debug: 0

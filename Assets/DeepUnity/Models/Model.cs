@@ -24,7 +24,7 @@ namespace DeepUnity.Models
         [SerializeField] public abstract bool RequiresGrad { set; }
 
         /// <summary>
-        /// Forwards the input without caching it on the layers.
+        /// <b>Evaluation Mode</b>. Forwards the input without caching it on the layers. 
         /// </summary>
         /// <param name="input"></param>
         /// <returns></returns>

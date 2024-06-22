@@ -15,7 +15,7 @@ namespace DeepUnity.ReinforcementLearning
     // Actually q networks are receiving both squashed and unsquashed inputs
 
     // OpenAI SAC trains critic without an aditional value function
-    internal sealed class SACTrainer : DeepUnityTrainer
+    internal sealed class SACTrainer : DeepUnityTrainer, IOffPolicy
     {
         // Q target networks
         private static Sequential Qtarg1;
@@ -90,7 +90,7 @@ namespace DeepUnity.ReinforcementLearning
                     if (agent_mem.Count == 0)
                         continue;
 
-                    train_data.TryAppend(agent_mem, hp.replayBufferSize);
+                    train_data.TryAppend(agent_mem.frames, hp.replayBufferSize);
                     agent_mem.Clear();
                 }
 

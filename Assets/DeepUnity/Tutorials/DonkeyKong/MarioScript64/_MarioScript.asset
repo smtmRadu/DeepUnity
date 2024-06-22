@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
   m_Name: _MarioScript
   m_EditorClassIdentifier: 
-  version: 0
+  version: 7
   behaviourName: MarioScript
   assetCreated: 1
   observationSize: 204
@@ -26,9 +26,10 @@ MonoBehaviour:
   muNetwork: {fileID: 0}
   sigmaNetwork: {fileID: 0}
   discreteNetwork: {fileID: 11400000, guid: 4d134670f3425e34e95e00dda4c9af26, type: 2}
-  targetFPS: 50
   inferenceDevice: 0
   trainingDevice: 1
+  targetFPS: 50
+  clipping: 5
   normalize: 0
   observationsNormalizer:
     step: 0
@@ -446,12 +447,12 @@ MonoBehaviour:
       - 0
       - 0
       shape: cc000000
-  clipping: 5
   rewardsNormalizer:
     step: 0
     R: 0
     mean: 0
     m2: 0
-  standardDeviation: 1
+  stochasticity: 0
   standardDeviationValue: 1
   standardDeviationScale: 1.5
+  noiseValue: 0

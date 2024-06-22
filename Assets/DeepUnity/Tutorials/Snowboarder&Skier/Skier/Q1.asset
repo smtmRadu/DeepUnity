@@ -12,11 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ffdd4f9587b2d8846a37ba5240ae14b2, type: 3}
   m_Name: Q1
   m_EditorClassIdentifier: 
-  version: 62
+  version: 72
   assetCreated: 1
   serializedModules:
   - name: Dense
     dense:
+      bias: 1
       weights:
         data:
         - 0.08687542
@@ -11223,6 +11224,14 @@ MonoBehaviour:
         - 0
         - 0
         shape: 40000000
+    densegpu:
+      bias: 1
+      weights:
+        serialized_data: []
+        shape: 
+      biases:
+        serialized_data: []
+        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -11240,6 +11249,7 @@ MonoBehaviour:
         shape: 
     attention:
       d: 0
+      mask: 0
       W_Q:
         data: []
         shape: 
@@ -11249,77 +11259,126 @@ MonoBehaviour:
       W_V:
         data: []
         shape: 
+    multiheadattention:
+      attention_heads: []
+      W_O:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+    attentionv2:
+      d: 0
+      mask: 0
+      W_Q:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_K:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_V:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      softmax:
+        temperature: 0
+    kanlayer:
+      splineOrder: 0
+      basis_activation: 
+      weight_base:
+        data: []
+        shape: 
+      weight_base_grad:
+        data: []
+        shape: 
+      weight_spline:
+        data: []
+        shape: 
+      weight_spline_grad:
+        data: []
+        shape: 
+      c:
+        data: []
+        shape: 
+      c_grad:
+        data: []
+        shape: 
+    lazyconv2d:
+      Conv2D:
+        bias: 1
+        kernels:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      initialized: 0
     lazydense:
-      weights:
-        data: []
-        shape: 
-      biases:
-        data: []
-        shape: 
-      isInitialized: 0
-      out_features: 0
-      weightInit: 0
-      biasInit: 0
-    batchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    batchnorm2d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
+      Dense:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      initialized: 0
     lazybatchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    layernorm:
-      gamma:
-        data:
-        - 1
-        shape: 01000000
-      beta:
-        data:
-        - 0
-        shape: 01000000
-    rmsnorm:
-      gamma:
-        data:
-        - 1
-        shape: 01000000
+      BatchNorm1D:
+        affine: 1
+        num_features: 0
+        momentum: 0
+        epsilon: 0
+        runningMean:
+          data: []
+          shape: 
+        runningVar:
+          data: []
+          shape: 
+        gamma:
+          data: []
+          shape: 
+        beta:
+          data: []
+          shape: 
+      initialized: 0
+    lazybatchnorm2d:
+      BatchNorm2D:
+        affine: 1
+        num_features: 0
+        momentum: 0
+        epsilon: 0
+        runningMean:
+          data: []
+          shape: 
+        runningVar:
+          data: []
+          shape: 
+        gamma:
+          data: []
+          shape: 
+        beta:
+          data: []
+          shape: 
+      initialized: 0
     dropout:
+      inPlace: 0
       dropout: 0
     flatten:
       startAxis: -3
@@ -11328,13 +11387,34 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 1230368050
-      linearProjection:
+      residualConnectionHash: 2091868786
+    residualconnectionjoin:
+      residualConnectionHash: 2091868786
+    squeeze:
+      axis: 0
+    unsqueeze:
+      axis: 0
+    permute:
+      axes: 
+    batchnorm2d:
+      affine: 1
+      num_features: 0
+      momentum: 0
+      epsilon: 0
+      runningMean:
         data: []
         shape: 
-    residualconnectionjoin:
-      residualConnectionHash: 1230368050
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     conv2d:
+      bias: 1
       kernels:
         data: []
         shape: 
@@ -11350,20 +11430,68 @@ MonoBehaviour:
       padding: 0
       padding_mode: 0
     zeropad2d:
-      padding: 0
+      hPadding: 0
+      wPadding: 0
     mirrorpad2d:
       padding: 0
+    dropout2d:
+      inPlace: 0
+      dropout: 0
+    layernorm1d:
+      affine: 1
+      bias: 1
+      epsilon: 0.00001
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    rmsnorm1d:
+      affine: 1
+      epsilon: 0.00001
+      gamma:
+        data: []
+        shape: 
+    batchnorm1d:
+      affine: 1
+      num_features: 0
+      momentum: 0
+      epsilon: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     zeropad1d:
       padding: 0
     mirrorpad1d:
       padding: 0
+    relu:
+      inPlace: 0
+    tanh:
+      inPlace: 0
     softmax:
       temperature: 0
     leakyrelu:
+      inPlace: 0
       alpha: 0
+    sigmoid:
+      inPlace: 0
     softplus:
       beta: 0
-      psi: 0
+      psi:
+        data: []
+        shape: 
+      scaleTrainable: 0
+      inPlace: 0
     elu:
       alpha: 0
     threshold:
@@ -11372,20 +11500,36 @@ MonoBehaviour:
     hardtanh:
       min_value: -1
       max_value: 1
-    rrelu:
-      lower: 0
-      upper: 0
+    gelu:
+      inPlace: 0
     prelu:
+      inPlace: 0
       alpha:
         data: []
         shape: 
+    rrelu:
+      lower: 0
+      upper: 0
+    swish:
+      inPlace: 0
+    relu6:
+      inPlace: 0
   - name: Tanh
     dense:
+      bias: 1
       weights:
         data: []
         shape: 
       biases:
         data: []
+        shape: 
+    densegpu:
+      bias: 1
+      weights:
+        serialized_data: []
+        shape: 
+      biases:
+        serialized_data: []
         shape: 
     rnncell:
       nonlinearity: 0
@@ -11404,6 +11548,7 @@ MonoBehaviour:
         shape: 
     attention:
       d: 0
+      mask: 0
       W_Q:
         data: []
         shape: 
@@ -11413,77 +11558,126 @@ MonoBehaviour:
       W_V:
         data: []
         shape: 
+    multiheadattention:
+      attention_heads: []
+      W_O:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+    attentionv2:
+      d: 0
+      mask: 0
+      W_Q:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_K:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_V:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      softmax:
+        temperature: 0
+    kanlayer:
+      splineOrder: 0
+      basis_activation: 
+      weight_base:
+        data: []
+        shape: 
+      weight_base_grad:
+        data: []
+        shape: 
+      weight_spline:
+        data: []
+        shape: 
+      weight_spline_grad:
+        data: []
+        shape: 
+      c:
+        data: []
+        shape: 
+      c_grad:
+        data: []
+        shape: 
+    lazyconv2d:
+      Conv2D:
+        bias: 1
+        kernels:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      initialized: 0
     lazydense:
-      weights:
-        data: []
-        shape: 
-      biases:
-        data: []
-        shape: 
-      isInitialized: 0
-      out_features: 0
-      weightInit: 0
-      biasInit: 0
-    batchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    batchnorm2d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
+      Dense:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      initialized: 0
     lazybatchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    layernorm:
-      gamma:
-        data:
-        - 1
-        shape: 01000000
-      beta:
-        data:
-        - 0
-        shape: 01000000
-    rmsnorm:
-      gamma:
-        data:
-        - 1
-        shape: 01000000
+      BatchNorm1D:
+        affine: 1
+        num_features: 0
+        momentum: 0
+        epsilon: 0
+        runningMean:
+          data: []
+          shape: 
+        runningVar:
+          data: []
+          shape: 
+        gamma:
+          data: []
+          shape: 
+        beta:
+          data: []
+          shape: 
+      initialized: 0
+    lazybatchnorm2d:
+      BatchNorm2D:
+        affine: 1
+        num_features: 0
+        momentum: 0
+        epsilon: 0
+        runningMean:
+          data: []
+          shape: 
+        runningVar:
+          data: []
+          shape: 
+        gamma:
+          data: []
+          shape: 
+        beta:
+          data: []
+          shape: 
+      initialized: 0
     dropout:
+      inPlace: 0
       dropout: 0
     flatten:
       startAxis: -3
@@ -11492,13 +11686,34 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -1093293452
-      linearProjection:
+      residualConnectionHash: -927073278
+    residualconnectionjoin:
+      residualConnectionHash: -927073278
+    squeeze:
+      axis: 0
+    unsqueeze:
+      axis: 0
+    permute:
+      axes: 
+    batchnorm2d:
+      affine: 1
+      num_features: 0
+      momentum: 0
+      epsilon: 0
+      runningMean:
         data: []
         shape: 
-    residualconnectionjoin:
-      residualConnectionHash: -1093293452
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     conv2d:
+      bias: 1
       kernels:
         data: []
         shape: 
@@ -11514,20 +11729,68 @@ MonoBehaviour:
       padding: 0
       padding_mode: 0
     zeropad2d:
-      padding: 0
+      hPadding: 0
+      wPadding: 0
     mirrorpad2d:
       padding: 0
+    dropout2d:
+      inPlace: 0
+      dropout: 0
+    layernorm1d:
+      affine: 1
+      bias: 1
+      epsilon: 0.00001
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    rmsnorm1d:
+      affine: 1
+      epsilon: 0.00001
+      gamma:
+        data: []
+        shape: 
+    batchnorm1d:
+      affine: 1
+      num_features: 0
+      momentum: 0
+      epsilon: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     zeropad1d:
       padding: 0
     mirrorpad1d:
       padding: 0
+    relu:
+      inPlace: 0
+    tanh:
+      inPlace: 0
     softmax:
       temperature: 0
     leakyrelu:
+      inPlace: 0
       alpha: 0
+    sigmoid:
+      inPlace: 0
     softplus:
       beta: 0
-      psi: 0
+      psi:
+        data: []
+        shape: 
+      scaleTrainable: 0
+      inPlace: 0
     elu:
       alpha: 0
     threshold:
@@ -11536,15 +11799,23 @@ MonoBehaviour:
     hardtanh:
       min_value: -1
       max_value: 1
-    rrelu:
-      lower: 0
-      upper: 0
+    gelu:
+      inPlace: 0
     prelu:
+      inPlace: 0
       alpha:
         data: []
         shape: 
+    rrelu:
+      lower: 0
+      upper: 0
+    swish:
+      inPlace: 0
+    relu6:
+      inPlace: 0
   - name: Dense
     dense:
+      bias: 1
       weights:
         data:
         - -0.17883085
@@ -15711,6 +15982,14 @@ MonoBehaviour:
         - 0
         - 0
         shape: 40000000
+    densegpu:
+      bias: 1
+      weights:
+        serialized_data: []
+        shape: 
+      biases:
+        serialized_data: []
+        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -15728,6 +16007,7 @@ MonoBehaviour:
         shape: 
     attention:
       d: 0
+      mask: 0
       W_Q:
         data: []
         shape: 
@@ -15737,77 +16017,126 @@ MonoBehaviour:
       W_V:
         data: []
         shape: 
+    multiheadattention:
+      attention_heads: []
+      W_O:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+    attentionv2:
+      d: 0
+      mask: 0
+      W_Q:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_K:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_V:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      softmax:
+        temperature: 0
+    kanlayer:
+      splineOrder: 0
+      basis_activation: 
+      weight_base:
+        data: []
+        shape: 
+      weight_base_grad:
+        data: []
+        shape: 
+      weight_spline:
+        data: []
+        shape: 
+      weight_spline_grad:
+        data: []
+        shape: 
+      c:
+        data: []
+        shape: 
+      c_grad:
+        data: []
+        shape: 
+    lazyconv2d:
+      Conv2D:
+        bias: 1
+        kernels:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      initialized: 0
     lazydense:
-      weights:
-        data: []
-        shape: 
-      biases:
-        data: []
-        shape: 
-      isInitialized: 0
-      out_features: 0
-      weightInit: 0
-      biasInit: 0
-    batchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    batchnorm2d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
+      Dense:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      initialized: 0
     lazybatchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    layernorm:
-      gamma:
-        data:
-        - 1
-        shape: 01000000
-      beta:
-        data:
-        - 0
-        shape: 01000000
-    rmsnorm:
-      gamma:
-        data:
-        - 1
-        shape: 01000000
+      BatchNorm1D:
+        affine: 1
+        num_features: 0
+        momentum: 0
+        epsilon: 0
+        runningMean:
+          data: []
+          shape: 
+        runningVar:
+          data: []
+          shape: 
+        gamma:
+          data: []
+          shape: 
+        beta:
+          data: []
+          shape: 
+      initialized: 0
+    lazybatchnorm2d:
+      BatchNorm2D:
+        affine: 1
+        num_features: 0
+        momentum: 0
+        epsilon: 0
+        runningMean:
+          data: []
+          shape: 
+        runningVar:
+          data: []
+          shape: 
+        gamma:
+          data: []
+          shape: 
+        beta:
+          data: []
+          shape: 
+      initialized: 0
     dropout:
+      inPlace: 0
       dropout: 0
     flatten:
       startAxis: -3
@@ -15816,13 +16145,34 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 878012342
-      linearProjection:
+      residualConnectionHash: 1953796992
+    residualconnectionjoin:
+      residualConnectionHash: 1953796992
+    squeeze:
+      axis: 0
+    unsqueeze:
+      axis: 0
+    permute:
+      axes: 
+    batchnorm2d:
+      affine: 1
+      num_features: 0
+      momentum: 0
+      epsilon: 0
+      runningMean:
         data: []
         shape: 
-    residualconnectionjoin:
-      residualConnectionHash: 878012342
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     conv2d:
+      bias: 1
       kernels:
         data: []
         shape: 
@@ -15838,20 +16188,68 @@ MonoBehaviour:
       padding: 0
       padding_mode: 0
     zeropad2d:
-      padding: 0
+      hPadding: 0
+      wPadding: 0
     mirrorpad2d:
       padding: 0
+    dropout2d:
+      inPlace: 0
+      dropout: 0
+    layernorm1d:
+      affine: 1
+      bias: 1
+      epsilon: 0.00001
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    rmsnorm1d:
+      affine: 1
+      epsilon: 0.00001
+      gamma:
+        data: []
+        shape: 
+    batchnorm1d:
+      affine: 1
+      num_features: 0
+      momentum: 0
+      epsilon: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     zeropad1d:
       padding: 0
     mirrorpad1d:
       padding: 0
+    relu:
+      inPlace: 0
+    tanh:
+      inPlace: 0
     softmax:
       temperature: 0
     leakyrelu:
+      inPlace: 0
       alpha: 0
+    sigmoid:
+      inPlace: 0
     softplus:
       beta: 0
-      psi: 0
+      psi:
+        data: []
+        shape: 
+      scaleTrainable: 0
+      inPlace: 0
     elu:
       alpha: 0
     threshold:
@@ -15860,20 +16258,36 @@ MonoBehaviour:
     hardtanh:
       min_value: -1
       max_value: 1
-    rrelu:
-      lower: 0
-      upper: 0
+    gelu:
+      inPlace: 0
     prelu:
+      inPlace: 0
       alpha:
         data: []
         shape: 
+    rrelu:
+      lower: 0
+      upper: 0
+    swish:
+      inPlace: 0
+    relu6:
+      inPlace: 0
   - name: Tanh
     dense:
+      bias: 1
       weights:
         data: []
         shape: 
       biases:
         data: []
+        shape: 
+    densegpu:
+      bias: 1
+      weights:
+        serialized_data: []
+        shape: 
+      biases:
+        serialized_data: []
         shape: 
     rnncell:
       nonlinearity: 0
@@ -15892,6 +16306,7 @@ MonoBehaviour:
         shape: 
     attention:
       d: 0
+      mask: 0
       W_Q:
         data: []
         shape: 
@@ -15901,77 +16316,126 @@ MonoBehaviour:
       W_V:
         data: []
         shape: 
+    multiheadattention:
+      attention_heads: []
+      W_O:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+    attentionv2:
+      d: 0
+      mask: 0
+      W_Q:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_K:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_V:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      softmax:
+        temperature: 0
+    kanlayer:
+      splineOrder: 0
+      basis_activation: 
+      weight_base:
+        data: []
+        shape: 
+      weight_base_grad:
+        data: []
+        shape: 
+      weight_spline:
+        data: []
+        shape: 
+      weight_spline_grad:
+        data: []
+        shape: 
+      c:
+        data: []
+        shape: 
+      c_grad:
+        data: []
+        shape: 
+    lazyconv2d:
+      Conv2D:
+        bias: 1
+        kernels:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      initialized: 0
     lazydense:
-      weights:
-        data: []
-        shape: 
-      biases:
-        data: []
-        shape: 
-      isInitialized: 0
-      out_features: 0
-      weightInit: 0
-      biasInit: 0
-    batchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    batchnorm2d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
+      Dense:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      initialized: 0
     lazybatchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    layernorm:
-      gamma:
-        data:
-        - 1
-        shape: 01000000
-      beta:
-        data:
-        - 0
-        shape: 01000000
-    rmsnorm:
-      gamma:
-        data:
-        - 1
-        shape: 01000000
+      BatchNorm1D:
+        affine: 1
+        num_features: 0
+        momentum: 0
+        epsilon: 0
+        runningMean:
+          data: []
+          shape: 
+        runningVar:
+          data: []
+          shape: 
+        gamma:
+          data: []
+          shape: 
+        beta:
+          data: []
+          shape: 
+      initialized: 0
+    lazybatchnorm2d:
+      BatchNorm2D:
+        affine: 1
+        num_features: 0
+        momentum: 0
+        epsilon: 0
+        runningMean:
+          data: []
+          shape: 
+        runningVar:
+          data: []
+          shape: 
+        gamma:
+          data: []
+          shape: 
+        beta:
+          data: []
+          shape: 
+      initialized: 0
     dropout:
+      inPlace: 0
       dropout: 0
     flatten:
       startAxis: -3
@@ -15980,13 +16444,34 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -1445649160
-      linearProjection:
+      residualConnectionHash: -2131643050
+    residualconnectionjoin:
+      residualConnectionHash: -2131643050
+    squeeze:
+      axis: 0
+    unsqueeze:
+      axis: 0
+    permute:
+      axes: 
+    batchnorm2d:
+      affine: 1
+      num_features: 0
+      momentum: 0
+      epsilon: 0
+      runningMean:
         data: []
         shape: 
-    residualconnectionjoin:
-      residualConnectionHash: -1445649160
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     conv2d:
+      bias: 1
       kernels:
         data: []
         shape: 
@@ -16002,20 +16487,68 @@ MonoBehaviour:
       padding: 0
       padding_mode: 0
     zeropad2d:
-      padding: 0
+      hPadding: 0
+      wPadding: 0
     mirrorpad2d:
       padding: 0
+    dropout2d:
+      inPlace: 0
+      dropout: 0
+    layernorm1d:
+      affine: 1
+      bias: 1
+      epsilon: 0.00001
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    rmsnorm1d:
+      affine: 1
+      epsilon: 0.00001
+      gamma:
+        data: []
+        shape: 
+    batchnorm1d:
+      affine: 1
+      num_features: 0
+      momentum: 0
+      epsilon: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     zeropad1d:
       padding: 0
     mirrorpad1d:
       padding: 0
+    relu:
+      inPlace: 0
+    tanh:
+      inPlace: 0
     softmax:
       temperature: 0
     leakyrelu:
+      inPlace: 0
       alpha: 0
+    sigmoid:
+      inPlace: 0
     softplus:
       beta: 0
-      psi: 0
+      psi:
+        data: []
+        shape: 
+      scaleTrainable: 0
+      inPlace: 0
     elu:
       alpha: 0
     threshold:
@@ -16024,15 +16557,23 @@ MonoBehaviour:
     hardtanh:
       min_value: -1
       max_value: 1
-    rrelu:
-      lower: 0
-      upper: 0
+    gelu:
+      inPlace: 0
     prelu:
+      inPlace: 0
       alpha:
         data: []
         shape: 
+    rrelu:
+      lower: 0
+      upper: 0
+    swish:
+      inPlace: 0
+    relu6:
+      inPlace: 0
   - name: Dense
     dense:
+      bias: 1
       weights:
         data:
         - -0.007663445
@@ -16104,6 +16645,14 @@ MonoBehaviour:
         data:
         - 0
         shape: 01000000
+    densegpu:
+      bias: 1
+      weights:
+        serialized_data: []
+        shape: 
+      biases:
+        serialized_data: []
+        shape: 
     rnncell:
       nonlinearity: 0
       onReturn: 0
@@ -16121,6 +16670,7 @@ MonoBehaviour:
         shape: 
     attention:
       d: 0
+      mask: 0
       W_Q:
         data: []
         shape: 
@@ -16130,77 +16680,126 @@ MonoBehaviour:
       W_V:
         data: []
         shape: 
+    multiheadattention:
+      attention_heads: []
+      W_O:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+    attentionv2:
+      d: 0
+      mask: 0
+      W_Q:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_K:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      W_V:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      softmax:
+        temperature: 0
+    kanlayer:
+      splineOrder: 0
+      basis_activation: 
+      weight_base:
+        data: []
+        shape: 
+      weight_base_grad:
+        data: []
+        shape: 
+      weight_spline:
+        data: []
+        shape: 
+      weight_spline_grad:
+        data: []
+        shape: 
+      c:
+        data: []
+        shape: 
+      c_grad:
+        data: []
+        shape: 
+    lazyconv2d:
+      Conv2D:
+        bias: 1
+        kernels:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      initialized: 0
     lazydense:
-      weights:
-        data: []
-        shape: 
-      biases:
-        data: []
-        shape: 
-      isInitialized: 0
-      out_features: 0
-      weightInit: 0
-      biasInit: 0
-    batchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    batchnorm2d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
+      Dense:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      initialized: 0
     lazybatchnorm1d:
-      num_features: 0
-      momentum: 0
-      runningMean:
-        data: []
-        shape: 
-      runningVar:
-        data: []
-        shape: 
-      gamma:
-        data: []
-        shape: 
-      beta:
-        data: []
-        shape: 
-    layernorm:
-      gamma:
-        data:
-        - 1
-        shape: 01000000
-      beta:
-        data:
-        - 0
-        shape: 01000000
-    rmsnorm:
-      gamma:
-        data:
-        - 1
-        shape: 01000000
+      BatchNorm1D:
+        affine: 1
+        num_features: 0
+        momentum: 0
+        epsilon: 0
+        runningMean:
+          data: []
+          shape: 
+        runningVar:
+          data: []
+          shape: 
+        gamma:
+          data: []
+          shape: 
+        beta:
+          data: []
+          shape: 
+      initialized: 0
+    lazybatchnorm2d:
+      BatchNorm2D:
+        affine: 1
+        num_features: 0
+        momentum: 0
+        epsilon: 0
+        runningMean:
+          data: []
+          shape: 
+        runningVar:
+          data: []
+          shape: 
+        gamma:
+          data: []
+          shape: 
+        beta:
+          data: []
+          shape: 
+      initialized: 0
     dropout:
+      inPlace: 0
       dropout: 0
     flatten:
       startAxis: -3
@@ -16209,13 +16808,34 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 525656634
-      linearProjection:
+      residualConnectionHash: 1380952600
+    residualconnectionjoin:
+      residualConnectionHash: 1380952600
+    squeeze:
+      axis: 0
+    unsqueeze:
+      axis: 0
+    permute:
+      axes: 
+    batchnorm2d:
+      affine: 1
+      num_features: 0
+      momentum: 0
+      epsilon: 0
+      runningMean:
         data: []
         shape: 
-    residualconnectionjoin:
-      residualConnectionHash: 525656634
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     conv2d:
+      bias: 1
       kernels:
         data: []
         shape: 
@@ -16231,20 +16851,68 @@ MonoBehaviour:
       padding: 0
       padding_mode: 0
     zeropad2d:
-      padding: 0
+      hPadding: 0
+      wPadding: 0
     mirrorpad2d:
       padding: 0
+    dropout2d:
+      inPlace: 0
+      dropout: 0
+    layernorm1d:
+      affine: 1
+      bias: 1
+      epsilon: 0.00001
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
+    rmsnorm1d:
+      affine: 1
+      epsilon: 0.00001
+      gamma:
+        data: []
+        shape: 
+    batchnorm1d:
+      affine: 1
+      num_features: 0
+      momentum: 0
+      epsilon: 0
+      runningMean:
+        data: []
+        shape: 
+      runningVar:
+        data: []
+        shape: 
+      gamma:
+        data: []
+        shape: 
+      beta:
+        data: []
+        shape: 
     zeropad1d:
       padding: 0
     mirrorpad1d:
       padding: 0
+    relu:
+      inPlace: 0
+    tanh:
+      inPlace: 0
     softmax:
       temperature: 0
     leakyrelu:
+      inPlace: 0
       alpha: 0
+    sigmoid:
+      inPlace: 0
     softplus:
       beta: 0
-      psi: 0
+      psi:
+        data: []
+        shape: 
+      scaleTrainable: 0
+      inPlace: 0
     elu:
       alpha: 0
     threshold:
@@ -16253,10 +16921,17 @@ MonoBehaviour:
     hardtanh:
       min_value: -1
       max_value: 1
-    rrelu:
-      lower: 0
-      upper: 0
+    gelu:
+      inPlace: 0
     prelu:
+      inPlace: 0
       alpha:
         data: []
         shape: 
+    rrelu:
+      lower: 0
+      upper: 0
+    swish:
+      inPlace: 0
+    relu6:
+      inPlace: 0

@@ -27,8 +27,8 @@ namespace DeepUnity.Modules
         /// <param name="dropout"> Low value: weak dropout | High value: strong dropout</param>
         public Dropout(float dropout = 0.5f, bool in_place = false)
         {
-            if (dropout < Utils.EPSILON || dropout > 1f - Utils.EPSILON)
-                throw new ArgumentException("Dropout value must be in range (0,1) when creating a Dropout layer module.");
+            if (dropout < 0f || dropout > 1f)
+                throw new ArgumentException("Dropout value must be in range [0,1] when creating a Dropout layer module.");
 
             this.inPlace = in_place;
             this.dropout = dropout;
@@ -43,6 +43,14 @@ namespace DeepUnity.Modules
         }
         public Tensor Forward(Tensor input)
         {
+            if (dropout == 0)
+            {
+                if (inPlace)
+                    return input;
+                else
+                    return input.Clone() as Tensor;
+            }
+
             float scale = 1f / (1f - dropout);
             if(inPlace)
             {
@@ -62,6 +70,9 @@ namespace DeepUnity.Modules
         }
         public Tensor Backward(Tensor loss)
         {
+            if (dropout == 0)
+                return loss;
+
             return loss.Zip(OutputCache, (l, i) => i != 0f ? l : 0f);
         }
 

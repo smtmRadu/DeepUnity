@@ -8,7 +8,7 @@ namespace DeepUnity.Modules
     {
         [SerializeField] public Device Device { get => BatchNorm1D.Device; set { if (BatchNorm1D != null) BatchNorm1D.Device = value; } }
         [SerializeField] public bool RequiresGrad { get => BatchNorm1D.RequiresGrad; set { if (BatchNorm1D != null) BatchNorm1D.RequiresGrad = value; } }
-        [SerializeField] BatchNorm1D BatchNorm1D;
+        [SerializeField] BatchNorm BatchNorm1D;
         [SerializeField] private bool initialized = false;
         private float epsilon { get; set; }
         private float momentum { get; set; }
@@ -27,7 +27,7 @@ namespace DeepUnity.Modules
         {
             if (!initialized)
             {
-                BatchNorm1D = new BatchNorm1D(input.Size(-1), epsilon, momentum, affine);
+                BatchNorm1D = new BatchNorm(input.Size(-1), epsilon, momentum, affine);
                 initialized = true;
             }
                
@@ -39,7 +39,7 @@ namespace DeepUnity.Modules
         {
             if (!initialized)
             {
-                BatchNorm1D = new BatchNorm1D(input.Size(-1), epsilon, momentum, affine);
+                BatchNorm1D = new BatchNorm(input.Size(-1), epsilon, momentum, affine);
                 initialized = true;
             }
 

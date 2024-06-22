@@ -18,8 +18,8 @@ namespace DeepUnity.Modules
         private int GetKernelWidth { get => kernels.Size(-1); }
 
         [SerializeField] private bool bias = true;
-        [SerializeField] private Tensor kernels;
-        [SerializeField] private Tensor biases;
+        [SerializeField] public Tensor kernels;
+        [SerializeField] public Tensor biases;
         [NonSerialized]  private Tensor kernelsGrad;
         [NonSerialized]  private Tensor biasesGrad;
 

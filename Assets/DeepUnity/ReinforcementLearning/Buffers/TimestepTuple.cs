@@ -51,7 +51,10 @@ namespace DeepUnity.ReinforcementLearning
         /// </summary>
         public Tensor q_target;
 
-
+        /// <summary>
+        /// (normalized) goal
+        /// </summary>
+        public Tensor goal;
         public TimestepTuple(int index)
         {
             this.index = index;
@@ -77,7 +80,8 @@ namespace DeepUnity.ReinforcementLearning
 
             clone.advantage = advantage;
             clone.v_target = v_target;
-            clone.q_target = q_target;         
+            clone.q_target = q_target;
+            clone.goal = goal;
 
             return clone;
         }

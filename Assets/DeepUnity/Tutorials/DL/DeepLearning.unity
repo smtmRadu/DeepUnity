@@ -380,7 +380,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   perform: 1
   lr: 0.001
-  batchSize: 128
+  batchSize: 64
   graph:
     graph:
       serializedVersion: 2
@@ -884,6 +884,7 @@ MonoBehaviour:
   perform: 1
   lr: 0.001
   batchSize: 100
+  epochs: 10
   graph:
     graph:
       serializedVersion: 2
@@ -895,7 +896,7 @@ MonoBehaviour:
     current: 0
     mean: 0
   canvas: {fileID: 1823018698}
-  vae: {fileID: 0}
+  vae: {fileID: 11400000, guid: 985ee25ecd5ed2c4694c8a757402fbdd, type: 2}
   kld_weight: 0.001
   noise_prob: 0.75
   noise_size: 0.75
@@ -1350,11 +1351,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45ec7b8831bf73c4bbed236ccf4948d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  network: {fileID: 11400000, guid: 587aa50fe03dbcd489fd93c15d1a69e8, type: 2}
+  network: {fileID: 11400000, guid: c01e21c854d60e14cb03fd7b7a2b1b07, type: 2}
   name: MNIST
-  lr: 0.001
-  epochs: 2
-  weightDecay: 0
+  lr: 0.0003
+  epochs: 10
+  weightDecay: 0.008
   batch_size: 100
   augment_data: 1
   maxNorm: 0
@@ -1390,7 +1391,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5eb36009ab4e4094db676f56eb66ed1c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  net: {fileID: 11400000, guid: 587aa50fe03dbcd489fd93c15d1a69e8, type: 2}
+  net: {fileID: 11400000, guid: c01e21c854d60e14cb03fd7b7a2b1b07, type: 2}
   performanceGraph:
     graph:
       serializedVersion: 2
@@ -1796,7 +1797,7 @@ MonoBehaviour:
   image: {fileID: 998186862}
   digitPredictionText: {fileID: 2101666738}
   softmaxOutputText: {fileID: 1459484847}
-  network: {fileID: 11400000, guid: 587aa50fe03dbcd489fd93c15d1a69e8, type: 2}
+  network: {fileID: 11400000, guid: c01e21c854d60e14cb03fd7b7a2b1b07, type: 2}
   brushRadius: 2
   brushStrength: 0.02
 --- !u!1 &1820971845
@@ -1817,7 +1818,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1820971846
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1929,7 +1930,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1823018699
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2242,7 +2243,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1946006905
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2256,12 +2257,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   canvas: {fileID: 1823018698}
-  D: {fileID: 0}
-  G: {fileID: 0}
+  D: {fileID: 11400000, guid: c3139e38ce736ca42965bb10da7bba4c, type: 2}
+  G: {fileID: 11400000, guid: cb01380394d00af4b98e6cd54e8fb89a, type: 2}
   batch_size: 100
-  lr: 0.0003
+  lr: 0.0002
   maxNorm: 1
   perform: 1
+  WriteLoss: 1
   G_graph:
     graph:
       serializedVersion: 2
