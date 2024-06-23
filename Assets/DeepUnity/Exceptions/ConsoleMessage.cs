@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Reflection;
 
 namespace DeepUnity
 {
@@ -27,8 +28,21 @@ namespace DeepUnity
         public static void Error(string message)
         {
             Debug.Log($"<color=red><b>[ERROR]</b> {message}.</color>");
-        }    
-        
+        }
+
+
+        /// <summary>
+        /// Clears all Debug Console messages (Editor-Only).
+        /// </summary>
+        public static void ClearLog()
+        {
+#if UNITY_EDITOR
+            var assembly = Assembly.GetAssembly(typeof(UnityEditor.Editor));
+            var type = assembly.GetType("UnityEditor.LogEntries");
+            var method = type.GetMethod("Clear");
+            method.Invoke(new object(), null);
+#endif
+        }
     }
 
 }

@@ -187,8 +187,8 @@ namespace DeepUnity.ReinforcementLearning
 
             optim_q1.ZeroGrad();
             optim_q2.ZeroGrad();
-            model.q1Network.Backward(q1Loss.Gradient * 0.5f);
-            model.q2Network.Backward(q2Loss.Gradient * 0.5f);
+            model.q1Network.Backward(q1Loss.Grad * 0.5f);
+            model.q2Network.Backward(q2Loss.Grad * 0.5f);
             optim_q1.Step();
             optim_q2.Step();
         }

@@ -8,7 +8,7 @@ namespace DeepUnity.Modules
     /// The parameter of a learnable layer. 
     /// It's defined by <b>theta</b> and it's gradient <b>g</b>.
     /// </summary>
-    public class Parameter
+    public class Parameter : ICloneable
     {
         public Tensor param;
         public Tensor g;
@@ -115,8 +115,6 @@ namespace DeepUnity.Modules
                     throw new NotImplementedException("Unhandled initialization type!");
             }
         }
-
-
         public static TensorGPU CreateOnGPU(int[] shape, int fan_in, int fan_out, InitType initializer)
         {
             switch (initializer)
@@ -175,6 +173,15 @@ namespace DeepUnity.Modules
                 default:
                     throw new NotImplementedException("Unhandled initialization type!");
             }
+        }
+
+        public object Clone()
+        {
+            if(Device == Device.CPU)
+                return new Parameter(param.Clone() as Tensor, g.Clone() as Tensor);
+
+            return new Parameter(paramGPU.Clone() as Tensor, gGPU.Clone() as Tensor);
+
         }
     }
 }

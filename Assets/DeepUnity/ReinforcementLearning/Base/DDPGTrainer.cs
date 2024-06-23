@@ -22,7 +22,7 @@ namespace DeepUnity.ReinforcementLearning
     /// </summary>
     internal sealed class DDPGTrainer : DeepUnityTrainer, IOffPolicy
     {
-        //Internal PPO Config
+        //Internal DDPG Config
         const float epsilon = 1e-7F; 
         const float valueWD = 0.01F; // Value net weight decay (AdamW)
         const bool amsGrad = false;
@@ -178,7 +178,7 @@ namespace DeepUnity.ReinforcementLearning
             criticLoss += loss.Item;
            
             optim_q1.ZeroGrad();
-            model.q1Network.Backward(loss.Gradient);
+            model.q1Network.Backward(loss.Grad);
             optim_q1.ClipGradNorm(0.5f);
             optim_q1.Step();
         }

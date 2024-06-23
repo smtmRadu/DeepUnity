@@ -1,5 +1,6 @@
 # DeepUnity
-![version](https://img.shields.io/badge/version-v0.9.9.7-blue)
+![version](https://img.shields.io/badge/version-v0.9.9.8-blue)
+[Reference Paper](https://github.com/smtmRadu/Policy-Gradient-Methods-Insights-and-Optimization-Strategies)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using state-of-the-art algorithms.
 
@@ -41,7 +42,7 @@ public class Tutorial : MonoBehaviour
         Loss loss = Loss.MSE(yHat, y);
 
         optim.ZeroGrad();
-        network.Backward(loss.Gradient);
+        network.Backward(loss.Grad);
         optim.Step();
 
         print($"Epoch: {Time.frameCount} - Train Loss: {loss.Item}");
@@ -166,9 +167,6 @@ All tutorial scripts are included inside _Assets/DeepUnity/Tutorials_ folder, co
 ###### _Disney Robots are on the way_
 ![robot](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/robot.gif?raw=true)
 
-
-
-_A paper describing how to implement deep neural nets, PPO, SAC, DDPG and TD3 from scratch will be released this spring..._
 
 
 

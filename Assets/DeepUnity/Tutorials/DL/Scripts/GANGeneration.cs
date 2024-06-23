@@ -7,9 +7,6 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using DeepUnity.Models;
-using Unity.Properties;
-using System;
-using UnityEditor.PackageManager.UI;
 
 namespace DeepUnity.Tutorials
 {
@@ -147,11 +144,11 @@ namespace DeepUnity.Tutorials
                 
                 var Dx = D.Forward(x); // pred-real
                 Loss loss = Loss.BCE(Dx, Tensor.Ones(Dx.Shape));
-                D.Backward(loss.Gradient);
+                D.Backward(loss.Grad);
                 
                 var DGz = D.Forward(Gz); // pred-fake
                 Loss loss2 = Loss.BCE(DGz, Tensor.Zeros(DGz.Shape));
-                D.Backward(loss2.Gradient);
+                D.Backward(loss2.Grad);
 
                 d_optim.ClipGradNorm(maxNorm);
                 d_optim.Step();
@@ -167,7 +164,7 @@ namespace DeepUnity.Tutorials
                 
                 DGz = D.Forward(Gz); // pred-fake 
                 loss = Loss.BCE(DGz, Tensor.Ones(DGz.Shape)); //(maximize realism)
-                G.Backward(D.Backward(loss.Gradient));
+                G.Backward(D.Backward(loss.Grad));
                 g_optim.ClipGradNorm(maxNorm);
                 g_optim.Step();
                 D.RequiresGrad = true;

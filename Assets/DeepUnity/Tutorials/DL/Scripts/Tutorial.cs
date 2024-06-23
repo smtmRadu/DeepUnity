@@ -35,7 +35,7 @@ namespace DeepUnity.Tutorials
             Loss loss = Loss.MSE(yHat, y);
 
             optim.ZeroGrad();
-            network.Backward(loss.Gradient);
+            network.Backward(loss.Grad);
             optim.Step();
 
             print($"Epoch: {Time.frameCount} - Train Loss: {loss.Item}");

@@ -122,7 +122,7 @@ namespace DeepUnity.Tutorials
                 Tensor decoded = vae.Forward(noise_input);
                 Loss bce = Loss.BCE(decoded, image);
                 loss_value += bce.Item;
-                vae.Backward(bce.Gradient);
+                vae.Backward(bce.Grad);
                 optim.ClipGradNorm(1);
                 optim.Step();
 

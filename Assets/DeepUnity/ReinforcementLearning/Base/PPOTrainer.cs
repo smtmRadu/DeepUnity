@@ -20,7 +20,7 @@ namespace DeepUnity.ReinforcementLearning
     internal sealed class PPOTrainer : DeepUnityTrainer, IOnPolicy
     {
         //Internal PPO Config
-        const float epsilon = 1e-5F; // PPO openAI eps they use :D, but in Andrychowicz, et al. (2021) they use tf default 1e-7
+        const float epsilon = 1e-5F; // PPO openAI eps they use :D, but in Andrychowicz et al. (2021) they use TF default 1e-7
         const float valueWD = 0.0F; // Value net weight decay (AdamW)
         const bool amsGrad = false;
 
@@ -29,6 +29,12 @@ namespace DeepUnity.ReinforcementLearning
         public Optimizer optim_sigma { get; set; }
         public Optimizer optim_discrete { get; set; }
 
+        // Cache networks for KLE-Rollback. In case it is used.
+        private Tensor[] v_kle_cache { get; set; }
+        private Tensor[] mu_kle_cache { get; set; }
+        private Tensor[] sigma_kle_cache { get; set; }
+        private Tensor[] disc_kle_cache { get; set; }
+       
         protected override void Initialize()
         {    
             // MEAN Tanh module is removed in PPO
@@ -191,6 +197,28 @@ namespace DeepUnity.ReinforcementLearning
                 Tensor disc_probs_new_kle = null;
                 Tensor disc_probs_old_kle = null;
 
+                // Cache params[t-1] in case kl_div > d_targ
+                if(hp.KLDivergence == KLEType.Rollback)
+                {
+                    LinkedList<Task> tasks_kle = new();
+
+                    tasks_kle.AddLast(Task.Run(() => v_kle_cache = model.vNetwork.Parameters().Select(x => x.param.Clone() as Tensor).ToArray()));
+                    if(model.IsUsingContinuousActions)
+                    {
+                        tasks_kle.AddLast(Task.Run(() => mu_kle_cache = model.muNetwork.Parameters().Select(x => x.param.Clone() as Tensor).ToArray()));
+
+                        if(model.stochasticity == Stochasticity.TrainebleStandardDeviation)
+                            tasks_kle.AddLast(Task.Run(() => sigma_kle_cache = model.sigmaNetwork.Parameters().Select(x => x.param.Clone() as Tensor).ToArray()));
+         
+                    }
+                    if(model.IsUsingDiscreteActions)
+                    {
+                        tasks_kle.AddLast(Task.Run(() => disc_kle_cache = model.sigmaNetwork.Parameters().Select(x => x.param.Clone() as Tensor).ToArray()));
+                    }
+
+                    Task.WaitAll(tasks_kle.ToArray());
+                }
+
                 for (int b = 0; b < states_batches.Length; b++)
                 {
                     Tensor normalized_advantages = hp.normalizeAdvantages ? NormalizeAdvantages(advantages_batches[b]) : advantages_batches[b];// Advantage normalization is shit when applied on small batches
@@ -221,7 +249,7 @@ namespace DeepUnity.ReinforcementLearning
                 }
 
                 // Check KL Divergence based on the last Minibatch (see [3])
-                if (hp.KLDivergence != KLType.Off)
+                if (hp.KLDivergence != KLEType.Off)
                 {
                     // Though even if i should stop for them separatelly (i mean i can let for one to continue the training if kl is small) i will let it simple..
                     float kldiv_cont = model.IsUsingContinuousActions ? ComputeKLDivergence(cont_probs_new_kle, cont_probs_old_kle) : 0;
@@ -229,12 +257,60 @@ namespace DeepUnity.ReinforcementLearning
 
                     if (kldiv_cont > hp.targetKL || kldiv_disc > hp.targetKL)
                     {
-                        // ConsoleMessage.Info($"<b>Early Stopping</b> triggered (KL_continuous: {kldiv_cont} | KL_discrete{kldiv_disc}) ({hp.KLDivergence})");
-                        break;
+                        // ConsoleMessage.Info($"<b>KLE-{hp.KLDivergence}</b> triggered in epoch {epoch_index + 1}/{hp.numEpoch}\n [KL_continuous: {kldiv_cont} | KL_discrete: {kldiv_disc}) | KL_target: {hp.targetKL}]");
+                        
+                        if (hp.KLDivergence == KLEType.Stop)
+                            break;
+                        else if (hp.KLDivergence == KLEType.Rollback)
+                        {
+                            LinkedList<Task> tasks_kle = new();
+
+                            tasks_kle.AddLast(Task.Run(() =>
+                            {
+                                foreach (var (cache, current) in v_kle_cache.Zip(model.vNetwork.Parameters(), (x, y) => (x, y.param)))
+                                {
+                                    Tensor.CopyTo(cache, current);
+                                }
+                            }));
+                           
+                            if (model.IsUsingContinuousActions)
+                            {
+                                tasks_kle.AddLast(Task.Run(() =>
+                                {
+                                    foreach (var (cache, current) in mu_kle_cache.Zip(model.muNetwork.Parameters(), (x, y) => (x, y.param)))
+                                    {
+                                        Tensor.CopyTo(cache, current);
+                                    }
+                                }));
+                                if (model.stochasticity == Stochasticity.TrainebleStandardDeviation)
+                                    tasks_kle.AddLast(Task.Run(() =>
+                                    {
+                                        foreach (var (cache, current) in sigma_kle_cache.Zip(model.sigmaNetwork.Parameters(), (x, y) => (x, y.param)))
+                                        {
+                                            Tensor.CopyTo(cache, current);
+                                        }
+                                    }));
+                                                        
+                            }
+                            if (model.IsUsingDiscreteActions)
+                            {
+                                tasks_kle.AddLast(Task.Run(() =>
+                                {
+                                    foreach (var (cache, current) in disc_kle_cache.Zip(model.discreteNetwork.Parameters(), (x, y) => (x, y.param)))
+                                    {
+                                        Tensor.CopyTo(cache, current);
+                                    }
+                                }));
+                            }
+
+                            Task.WaitAll(tasks_kle.ToArray());
+                            break;
+                        }
+                        else
+                            throw new NotImplementedException("Unhandles KLE type");
                     }
                     // for rollback is the same but we need to cache the old state of the network and it is costly....
                 }
-
 
                 // Step LR schedulers after each epoch (this allows selection at runtime)
                 if (hp.LRSchedule)
@@ -272,7 +348,7 @@ namespace DeepUnity.ReinforcementLearning
                 criticLoss += lossItem;
 
             optim_v.ZeroGrad();
-            model.vNetwork.Backward(mse.Gradient * hp.valueCoeff);
+            model.vNetwork.Backward(mse.Grad * hp.valueCoeff);
             optim_v.ClipGradNorm(hp.maxNorm);
             optim_v.Step();
 

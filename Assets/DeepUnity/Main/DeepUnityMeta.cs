@@ -200,14 +200,14 @@ namespace DeepUnity
         Micro,
     }
 
-    public enum KLType
+    public enum KLEType
     {
-        [Tooltip("No calculation of Kullback-Leibler Divergence")]
+        [Tooltip("No Early Stopping")]
         Off,
-        [Tooltip("Use of early stopping.")]
-        KLE_Stop,
-        // [Tooltip("If KLD > KL_target, the policy is rollbacked to the old state.")] // disabled because it doesn t worth to cache the old state of the network.. it consumes resources.
-        // KLE_Rollback
+        [Tooltip("Early Stopping")]
+        Stop,
+        [Tooltip("Early Stopping + Rollback")]
+        Rollback
     }
 
     public enum UseSensorsType

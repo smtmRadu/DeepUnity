@@ -119,7 +119,7 @@ namespace DeepUnity
         /// <summary>
         /// Returns the <see cref="Loss"/>(pred, targ) partial derivative with respect to the pred.
         /// </summary>
-        public Tensor Gradient { get
+        public Tensor Grad { get
             {
                 switch (lossType)
                 {

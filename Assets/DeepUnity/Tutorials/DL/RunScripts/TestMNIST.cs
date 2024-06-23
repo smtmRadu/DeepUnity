@@ -121,7 +121,7 @@ namespace DeepUnity.Tutorials
             Loss loss = Loss.CE(prediction, target);
 
             optim.ZeroGrad();
-            network.Backward(loss.Gradient);
+            network.Backward(loss.Grad);
             optim.ClipGradNorm(0.5f);
             optim.Step();
 

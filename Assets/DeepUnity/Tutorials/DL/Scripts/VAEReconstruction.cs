@@ -104,7 +104,7 @@ namespace DeepUnity.Tutorials
                 Loss loss = Loss.BCE(decoded, input);
 
                 optim.ZeroGrad();
-                vae.Backward(loss.Gradient);
+                vae.Backward(loss.Grad);
                 optim.ClipGradNorm(gradClipNorm);
                 optim.Step();
 

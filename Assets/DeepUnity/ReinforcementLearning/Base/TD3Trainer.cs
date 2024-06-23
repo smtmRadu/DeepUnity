@@ -180,9 +180,6 @@ namespace DeepUnity.ReinforcementLearning
         }
         private void UpdateQFunctions(Tensor states, Tensor actions, Tensor y)
         {
-            model.q1Network.RequiresGrad = false;
-            model.q1Network.RequiresGrad = false;
-
             // Update Q functions          
             // ∇φ = (Qφ(s,a) - y(r,s',d)^2
             Tensor stateActionPair = Pairify(states, actions);
@@ -195,13 +192,10 @@ namespace DeepUnity.ReinforcementLearning
 
             optim_q1.ZeroGrad();
             optim_q2.ZeroGrad();
-            model.q1Network.Backward(q1Loss.Gradient);
-            model.q2Network.Backward(q2Loss.Gradient);
+            model.q1Network.Backward(q1Loss.Grad);
+            model.q2Network.Backward(q2Loss.Grad);
             optim_q1.Step();
             optim_q2.Step();
-
-            model.q1Network.RequiresGrad = true;
-            model.q1Network.RequiresGrad = true;
         }
         private void UpdatePolicy(Tensor states)
         {

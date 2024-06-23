@@ -109,7 +109,7 @@ namespace DeepUnity.Tutorials
             Loss loss = Loss.MSE(trainPrediction, trainYbatches[i]);
             TrainLossGraph.Append(loss.Item);
             optimizer.ZeroGrad();
-            net.Backward(loss.Gradient);
+            net.Backward(loss.Grad);
             optimizer.Step();
 
 

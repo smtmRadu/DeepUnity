@@ -63,10 +63,10 @@ namespace DeepUnity.ReinforcementLearning
         [MinMax(0.5f, 1f)] public float valueCoeff = 0.5f;
 
         [Tooltip("Use of KLE")]
-        public KLType KLDivergence = KLType.Off;
+        public KLEType KLDivergence = KLEType.Off;
 
         [Tooltip("Kullback-Leibler divergence target value")]
-        [MinMax(0.015f, 0.15f)] public float targetKL = 0.015f;
+        [MinMax(0.001f, 0.15f)] public float targetKL = 0.015f;
 
         [Tooltip("Normalize the advantages at minibatch level. Might improve convergence for relative large minibatches, but might cause harm when minibatches are small.")]
         public bool normalizeAdvantages = true;
@@ -169,7 +169,7 @@ namespace DeepUnity.ReinforcementLearning
 
             if (script.trainer == TrainerType.PPO)
             {
-                if (script.KLDivergence == (int)KLType.Off)
+                if (script.KLDivergence == (int)KLEType.Off)
                     dontDrawMe.Add("targetKL");
 
                 dontDrawMe.Add("replayBufferSize");
