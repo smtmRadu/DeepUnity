@@ -6865,8 +6865,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   cameras:
   - {fileID: 1037323659}
-  - {fileID: 1275166840}
   - {fileID: 619033746}
+  - {fileID: 1275166840}
 --- !u!4 &2010638556
 Transform:
   m_ObjectHideFlags: 0

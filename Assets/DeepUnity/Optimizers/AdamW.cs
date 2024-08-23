@@ -18,7 +18,17 @@ namespace DeepUnity.Optimizers
         // 2nd momentum buffer 
         private readonly Tensor[] v;
         private readonly Tensor[] vHatMax;
-
+        /// <summary>
+        /// Adam optimizer with decoupled weight decay.
+        /// </summary>
+        /// <param name="parameters"></param>
+        /// <param name="lr"></param>
+        /// <param name="beta1"></param>
+        /// <param name="beta2"></param>
+        /// <param name="eps"></param>
+        /// <param name="weight_decay"></param>
+        /// <param name="amsgrad"></param>
+        /// <param name="maximize"></param>
         public AdamW(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8F, float weight_decay = 0.01f, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weight_decay)
         {
             this.amsgrad = amsgrad;

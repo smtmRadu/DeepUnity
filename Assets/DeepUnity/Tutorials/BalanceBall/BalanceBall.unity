@@ -434,8 +434,8 @@ MonoBehaviour:
   numLayers: 2
   hidUnits: 32
   activation: 1
-  model: {fileID: 11400000, guid: 7413de1e6975bba4c833d5c2cd268587, type: 2}
-  behaviourType: 1
+  model: {fileID: 11400000, guid: 02e48a759a59a8e40a296829ee49b59f, type: 2}
+  behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0
   ball: {fileID: 1198115738}
@@ -754,8 +754,8 @@ Camera:
   m_GameObject: {fileID: 1159018014}
   m_Enabled: 1
   serializedVersion: 2
-  m_ClearFlags: 1
-  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_ClearFlags: 2
+  m_BackGroundColor: {r: 0.21568629, g: 0.2784314, b: 0.30980393, a: 0}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0

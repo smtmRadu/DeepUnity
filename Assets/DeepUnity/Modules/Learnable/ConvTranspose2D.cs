@@ -15,7 +15,7 @@ using UnityEngine;
 /// backward -> x_grad -> valid_correlation (loss, weights) 
 
 
-namespace DeepUnity.Layers
+namespace DeepUnity.Modules
 {
     // https://www.youtube.com/watch?v=Lakz2MoHy6o
     // https://github.com/TheIndependentCode/Neural-Network/blob/master/convolutional.py

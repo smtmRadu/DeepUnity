@@ -4,9 +4,6 @@ using System.Collections.Generic;
 using UnityEngine.UI;
 using DeepUnity.Optimizers;
 using DeepUnity.Modules;
-using DeepUnity.Layers;
-using Unity.VisualScripting.Antlr3.Runtime;
-
 
 namespace DeepUnity.Tutorials
 {
@@ -37,7 +34,7 @@ namespace DeepUnity.Tutorials
             //     conv.Backward(mse.Gradient);
             //     optim.Step();
             // }
-
+          
             ConvTranspose2D convt = new ConvTranspose2D(2, 3, 3);
             Tensor input = Tensor.Random01(3, 2, 8, 8);
 

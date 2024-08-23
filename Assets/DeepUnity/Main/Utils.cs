@@ -413,7 +413,7 @@ namespace DeepUnity
                                 float x0 = x / scale;
                                 float y0 = y / scale;
 
-                                float pix = image[(int)y0 / image.Size(-2), (int)x0 / image.Size(-1)];
+                                float pix = image[b, c, (int)y0 / image.Size(-2), (int)x0 / image.Size(-1)];
                                 scaled[b, c, y, x] = pix;
                             }
                         }
@@ -457,7 +457,7 @@ namespace DeepUnity
                                 x0 = Math.Clamp(x0, 0, width - 1);
                                 y0 = Math.Clamp(y0, 0, height - 1);
 
-                                rotated[b, c, y, x] = image[(int)MathF.Round(y0), (int)MathF.Round(x0)];
+                                rotated[b, c, y, x] = image[b, c, (int)MathF.Round(y0), (int)MathF.Round(x0)];
                             }
                         }
                     }

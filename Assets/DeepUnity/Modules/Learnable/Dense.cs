@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
-using System.Linq;
+
 namespace DeepUnity.Modules
 {
     // DO NOT TRY TO UNDERSTAND Dense implementation because was over-optimized (cause is the most used layer) and the code became unreadable

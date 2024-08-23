@@ -11,6 +11,16 @@ namespace DeepUnity.Optimizers
 
         private readonly Tensor[] m;
 
+        /// <summary>
+        /// Stochastic Gradient Descent.
+        /// </summary>
+        /// <param name="parameters"></param>
+        /// <param name="lr"></param>
+        /// <param name="momentum"></param>
+        /// <param name="weightDecay"></param>
+        /// <param name="dampening">Reduces the effect of momentum.</param>
+        /// <param name="nesterov"></param>
+        /// <param name="maximize"></param>
         public SGD(Parameter[] parameters, float lr = 0.01f, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false) 
             : base(parameters, lr, 0, weightDecay)
         {
