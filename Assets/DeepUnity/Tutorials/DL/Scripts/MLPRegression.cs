@@ -64,7 +64,7 @@ namespace DeepUnity.Tutorials
             net.Predict(Tensor.Random01(2));
             net.Device = device;
 
-            optimizer = new AdaBelief(net.Parameters(), amsgrad:true, weight_decay:0.1f);
+            optimizer = new AdEMAMix(net.Parameters());
             scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
 
 
