@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Threading.Tasks;
 using DeepUnity.Modules;
 namespace DeepUnity.Optimizers
@@ -8,6 +9,7 @@ namespace DeepUnity.Optimizers
         private readonly float beta2;
         private readonly bool amsgrad;
         private readonly bool maximize;
+        private readonly bool fused;
 
         private float beta1_t = 1f; // beta1^t caching
         private float beta2_t = 1f;
@@ -19,7 +21,7 @@ namespace DeepUnity.Optimizers
         private readonly Tensor[] v;
         private readonly Tensor[] vHatMax;
         /// <summary>
-        /// Adam optimizer with decoupled weight decay.
+        /// Adam optimizer with decoupled weight decay. If training on larger batch sizes, use a beta_2 between [0.95, 0.99].
         /// </summary>
         /// <param name="parameters"></param>
         /// <param name="lr"></param>
@@ -29,12 +31,14 @@ namespace DeepUnity.Optimizers
         /// <param name="weight_decay"></param>
         /// <param name="amsgrad"></param>
         /// <param name="maximize"></param>
-        public AdamW(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8F, float weight_decay = 0.01f, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weight_decay)
+        /// <param name="fused"> Either to use a fused call for adam or not. It might be faster.</param>
+        public AdamW(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8F, float weight_decay = 0.01f, bool amsgrad = false, bool maximize = false, bool fused = false) : base(parameters, lr, eps, weight_decay)
         {
             this.amsgrad = amsgrad;
             this.maximize = maximize;
             this.beta1 = beta1;
             this.beta2 = beta2;
+            this.fused = fused;
 
             m = new Tensor[parameters.Length];
             v = new Tensor[parameters.Length];
@@ -61,6 +65,25 @@ namespace DeepUnity.Optimizers
 
             Parallel.For(0, parameters.Length, i =>
             {
+                if(fused)
+                {
+                    Tensor.FusedAdamW(
+                        param: parameters[i].param,
+                        g: parameters[i].g,
+                        m: m[i],
+                        v: v[i],
+                        vMax: amsgrad ? vHatMax[i] : null,
+
+                        gamma: gamma,
+                        betas: (beta1, beta2),
+                        betas_t: (beta1_t, beta2_t),
+                        lambda: lambda,
+                        eps: epsilon,
+                        maximize: maximize,
+                        amsgrad: amsgrad);
+                    return;
+                }
+                 
                 if (maximize)
                     Tensor.CopyTo(-parameters[i].g, parameters[i].g);
 
@@ -82,4 +105,12 @@ namespace DeepUnity.Optimizers
             });
         }
     }
+
+    // 3 dense model test (128 hidden size)
+    // amsgrad = 2.22s
+    // amsgrad + fused = 2.19
+    // amsgrad + fused + parallel = 2.08s
+
+
+
 }

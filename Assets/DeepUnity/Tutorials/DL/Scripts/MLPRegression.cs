@@ -47,6 +47,7 @@ namespace DeepUnity.Tutorials
         public InitType init_b = InitType.Xavier_Uniform;
         public void Start()
         {
+            // todo: fused Q,K,V dense in Attention implementation.
             if (net == null)
             {
                 net = new Sequential(
@@ -54,6 +55,7 @@ namespace DeepUnity.Tutorials
                 //new LazyBatchNorm1D(),
                 new Swish(true),
                  new LazyDense(hiddenSize, false, weight_init: init_w, bias_init: init_b),
+                 // new RMSNorm(hiddenSize, elementwise_affine:false),
                 //new LazyBatchNorm1D(),
                 new Swish(true),
 
@@ -64,7 +66,7 @@ namespace DeepUnity.Tutorials
             net.Predict(Tensor.Random01(2));
             net.Device = device;
 
-            optimizer = new AdEMAMix(net.Parameters());
+            optimizer = new AdamW(net.Parameters(), fused:false, amsgrad:true);
             scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
 
 

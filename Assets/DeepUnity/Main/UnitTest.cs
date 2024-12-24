@@ -19,6 +19,8 @@ namespace DeepUnity.Tutorials
 
         private void Start()
         {
+
+            // Tensor.FusedAdamW(null, null, null, null, null,1,(1,1),(1,1),1,1, true, true);
             // ConvTranspose2D conv = new ConvTranspose2D(2, 3, 3);
             // 
             // Tensor input = Tensor.Random01(3, 2, 8, 8);
@@ -35,12 +37,12 @@ namespace DeepUnity.Tutorials
             //     optim.Step();
             // }
           
-            ConvTranspose2D convt = new ConvTranspose2D(2, 3, 3);
-            Tensor input = Tensor.Random01(3, 2, 8, 8);
-
-            print(convt.Predict(input));
-            convt.Device = Device.GPU;
-            print(convt.Predict(input));
+            // ConvTranspose2D convt = new ConvTranspose2D(2, 3, 3);
+            // Tensor input = Tensor.Random01(3, 2, 8, 8);
+            // 
+            // print(convt.Predict(input));
+            // convt.Device = Device.GPU;
+            // print(convt.Predict(input));
 
         }
 

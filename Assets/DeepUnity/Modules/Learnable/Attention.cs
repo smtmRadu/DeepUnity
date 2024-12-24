@@ -301,11 +301,19 @@ namespace DeepUnity.Modules
         private Tensor KCache { get; set; }
         private Tensor VCache { get; set; }
 
-        public AttentionV2(int input_size, int embed_dim, bool mask = false, InitType weight_init = InitType.LeCun_Uniform, Device device = Device.CPU)
+        /// <summary>
+        /// This implementation must be adapted in order to have a single dense that generates Q, K, V.. and not 3. This is gonna be way more faster.
+        /// </summary>
+        /// <param name="input_size"></param>
+        /// <param name="embed_dim"></param>
+        /// <param name="causal_mask"></param>
+        /// <param name="weight_init"></param>
+        /// <param name="device"></param>
+        public AttentionV2(int input_size, int embed_dim, bool causal_mask = false, InitType weight_init = InitType.LeCun_Uniform, Device device = Device.CPU)
         {
             // H and d have the same dimension
             d = embed_dim;
-            this.mask = mask;
+            this.mask = causal_mask;
 
             W_Q = new Dense(input_size, embed_dim, bias: false, weight_init, device: device);
             W_K = new Dense(input_size, embed_dim, bias: false, weight_init, device: device);

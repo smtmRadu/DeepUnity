@@ -1,5 +1,5 @@
 # DeepUnity (2022.3.43f1 lts)
-![version](https://img.shields.io/badge/version-v0.9.9.9-blue)
+![version](https://img.shields.io/badge/version-v0.9.9.11-blue)
 [Reference Paper](https://github.com/smtmRadu/Policy-Gradient-Methods-Insights-and-Optimization-Strategies)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using state-of-the-art algorithms.
@@ -24,11 +24,11 @@ public class Tutorial : MonoBehaviour
     {
         network = new Sequential(
             new Dense(512, 256, device: Device.GPU),
-            new ReLU(),
+            new Swish(),
             new Dropout(0.1f),
             new Dense(256, 64, device: Device.GPU),
-            new LayerNorm(64),
             new Swish(),
+            new LayerNorm(64),
             new Dense(64, 32)).CreateAsset("TutorialModel");
         
         optim = new AdamW(network.Parameters());
@@ -163,6 +163,9 @@ All tutorial scripts are included inside _Assets/DeepUnity/Tutorials_ folder, co
 
 ###### _These crawlers are training to scrape over the internet_
 ![crawlers](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/crawlers.gif?raw=true)
+
+##### _And not only the crawlers_
+![humanoid](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/humanoid.gif?raw=true)
 
 ###### _Disney Robots are on the way_
 ![robot](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/robot.gif?raw=true)

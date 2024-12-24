@@ -7,6 +7,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using DeepUnity.Models;
+using System.Drawing;
 
 namespace DeepUnity.Tutorials
 {
@@ -51,17 +52,17 @@ namespace DeepUnity.Tutorials
                     new Flatten(),
 
                     new Dense(784, size, weight_init:wInit, bias_init:bInit),
-                    new RMSNorm(),
+                    new RMSNorm(size),
                     new ReLU(true),           
                     new Dropout(dropout, true),
                 
                     new Dense(size, size/2, weight_init: wInit, bias_init: bInit),
-                    new RMSNorm(),
+                    new RMSNorm(size / 2),
                      new ReLU(true),
                     new Dropout(dropout, true),
 
                     new Dense(size / 2, size/4, weight_init: wInit, bias_init: bInit),
-                    new RMSNorm(),
+                    new RMSNorm(size / 4),
                      new ReLU(true),
                     new Dropout(dropout, true),
 
@@ -73,15 +74,15 @@ namespace DeepUnity.Tutorials
             {
                 G = new Sequential(
                     new Dense(latent_dim, size / 4, weight_init: wInit, bias_init: bInit),
-                    new RMSNorm(),
+                    new RMSNorm(size / 4),
                      new ReLU(true),
 
                     new Dense(size / 4, size / 2, weight_init: wInit, bias_init: bInit),
-                    new RMSNorm(),
+                    new RMSNorm(size / 2),
                     new ReLU(true),
 
                     new Dense(size / 2, size, weight_init: wInit, bias_init: bInit),
-                    new RMSNorm(),
+                    new RMSNorm(size),
                      new ReLU(true),
 
                     new Dense(size, 784, weight_init: wInit, bias_init: bInit),

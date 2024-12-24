@@ -56,7 +56,7 @@ namespace DeepUnity.Tutorials
                           
                           new Flatten(),
                           new LazyDense(256),
-                          new RMSNorm(),
+                          new RMSNorm(256),
                           new LeakyReLU(in_place: true),
                           new Dense(256, 10),
                           new Softmax()).CreateAsset(name); 

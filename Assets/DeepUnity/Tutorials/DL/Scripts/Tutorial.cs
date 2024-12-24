@@ -20,7 +20,7 @@ namespace DeepUnity.Tutorials
                 new ReLU6(),
                 new Dropout(0.1f),
                 new Dense(64, 64, device: Device.GPU),
-                new RMSNorm(),
+                new RMSNorm(64),
                 new ReLU(),
                 new Dense(64, 32)).CreateAsset("TutorialModel");
             
