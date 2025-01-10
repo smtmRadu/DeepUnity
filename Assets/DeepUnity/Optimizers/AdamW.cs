@@ -10,6 +10,8 @@ namespace DeepUnity.Optimizers
         private readonly bool amsgrad;
         private readonly bool maximize;
         private readonly bool fused;
+        private readonly bool cautious; // check https://arxiv.org/pdf/2411.16085 for cautious optimizers
+        // note that cautious fused adamw cannot be implemented because each param is modified individually.
 
         private float beta1_t = 1f; // beta1^t caching
         private float beta2_t = 1f;
@@ -32,13 +34,26 @@ namespace DeepUnity.Optimizers
         /// <param name="amsgrad"></param>
         /// <param name="maximize"></param>
         /// <param name="fused"> Either to use a fused call for adam or not. It might be faster.</param>
-        public AdamW(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8F, float weight_decay = 0.01f, bool amsgrad = false, bool maximize = false, bool fused = false) : base(parameters, lr, eps, weight_decay)
+        /// <param name="cautious">Either use cautious version of AdamW or not (Cautious Optimizers: Improving Training with One Line of Code).<br></br> <b> It is not available for fused AdamW</b></param>
+        public AdamW(
+            Parameter[] parameters, 
+            float lr = 0.001f, 
+            float beta1 = 0.9f, 
+            float beta2 = 0.999f, 
+            float eps = 1e-8f, 
+            float weight_decay = 0.01f, 
+            bool amsgrad = false, 
+            bool cautious = false, 
+            bool maximize = false, 
+            bool fused = false) 
+            : base(parameters, lr, eps, weight_decay)
         {
             this.amsgrad = amsgrad;
             this.maximize = maximize;
             this.beta1 = beta1;
             this.beta2 = beta2;
             this.fused = fused;
+            this.cautious = cautious;
 
             m = new Tensor[parameters.Length];
             v = new Tensor[parameters.Length];
@@ -87,7 +102,9 @@ namespace DeepUnity.Optimizers
                 if (maximize)
                     Tensor.CopyTo(-parameters[i].g, parameters[i].g);
 
-                Tensor.CopyTo(parameters[i].param - gamma * lambda * parameters[i].param, parameters[i].param);
+                // apply decoupled wd
+                if(!cautious)
+                    Tensor.CopyTo(parameters[i].param - gamma * lambda * parameters[i].param, parameters[i].param);
 
                 Tensor.CopyTo(beta1 * m[i] + (1f - beta1) * parameters[i].g, m[i]);
                 Tensor.CopyTo(beta2 * v[i] + (1f - beta2) * parameters[i].g.Square(), v[i]);
@@ -97,11 +114,34 @@ namespace DeepUnity.Optimizers
 
                 if (amsgrad)
                 {
-                    vHatMax[i] = Tensor.Maximum(vHatMax[i], vHat);
-                    Tensor.CopyTo(parameters[i].param - gamma * mHat / (vHatMax[i].Sqrt() + epsilon), parameters[i].param);
+                    if(cautious) // same as without ams grad but vhatmax takes place of vhat
+                    {
+                        vHatMax[i] = Tensor.Maximum(vHatMax[i], vHat); 
+                        Tensor u_t = mHat / (vHatMax[i].Sqrt() + epsilon);
+                        Tensor phi_t = (u_t * parameters[i].g).Select(x => x >= 0 ? x : 0f); // alginment mask
+                        Tensor gamma_scaled = Tensor.Fill(gamma, phi_t.Shape) * (phi_t.Count() / (phi_t.Norm(NormType.NonZeroL0)[0] + 1f));
+                        Tensor.CopyTo(parameters[i].param - gamma_scaled * (phi_t * u_t + lambda * parameters[i].g), parameters[i].param);
+
+                    }
+                    else
+                    {
+                        vHatMax[i] = Tensor.Maximum(vHatMax[i], vHat);
+                        Tensor.CopyTo(parameters[i].param - gamma * mHat / (vHatMax[i].Sqrt() + epsilon), parameters[i].param);
+                    }       
                 }
                 else
-                    Tensor.CopyTo(parameters[i].param - gamma * mHat / (vHat.Sqrt() + epsilon), parameters[i].param);            
+                {
+                    if(cautious)
+                    {
+                        Tensor u_t = mHat / (vHat.Sqrt() + epsilon);
+                        Tensor phi_t = (u_t * parameters[i].g).Select(x => x >= 0 ? x : 0f); // alginment mask
+                        Tensor gamma_scaled = Tensor.Fill(gamma, phi_t.Shape) * (phi_t.Count() / (phi_t.Norm(NormType.NonZeroL0)[0] + 1f));
+                        Tensor.CopyTo(parameters[i].param - gamma_scaled * (phi_t * u_t + lambda * parameters[i].g), parameters[i].param);
+                    }
+                    else
+                        Tensor.CopyTo(parameters[i].param - gamma * mHat / (vHat.Sqrt() + epsilon), parameters[i].param);
+                }
+                             
             });
         }
     }

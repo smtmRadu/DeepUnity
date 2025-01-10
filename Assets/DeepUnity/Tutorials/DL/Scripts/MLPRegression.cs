@@ -66,7 +66,7 @@ namespace DeepUnity.Tutorials
             net.Predict(Tensor.Random01(2));
             net.Device = device;
 
-            optimizer = new AdamW(net.Parameters(), fused:false, amsgrad:true);
+            optimizer = new AdamW(net.Parameters());
             scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
 
 

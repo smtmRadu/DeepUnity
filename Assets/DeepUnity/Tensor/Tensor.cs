@@ -3894,7 +3894,7 @@ namespace DeepUnity
            
         }
         /// <summary>
-        /// Computes the norm of the tensor.
+        /// Computes the norm of the tensor, of any shape.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="norm"></param>

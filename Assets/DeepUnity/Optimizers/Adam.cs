@@ -27,7 +27,7 @@ namespace DeepUnity.Optimizers
         private readonly bool AreThereGPUParams = false;
 
         /// <summary>
-        /// Adam optimizer.
+        /// Adam optimizer. This version has no long-term support, so use AdamW for the newest features.
         /// </summary>
         /// <param name="parameters"></param>
         /// <param name="lr"></param>
