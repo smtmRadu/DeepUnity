@@ -1,12 +1,11 @@
-﻿using DeepUnity.Sensors;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Drawing.Printing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
-using UnityEngine.Animations;
 
 namespace DeepUnity
 {
@@ -2325,13 +2324,18 @@ namespace DeepUnity
         public static Tensor[] Split(Tensor tensor, int axis, int split_size)
         {
             HandleAxis(tensor, ref axis);
-
             Dim dim = AxisToDim(tensor, axis);
             int[] stackShape = new int[] { tensor.Batch, tensor.Channels, tensor.Height, tensor.Width };
             List<Tensor> slices = new();
-
             int dimLength = stackShape[(int)dim];
             int dimPos = 0;
+
+            if (split_size < 1)
+                throw new ArgumentException("Number of chunks must be positive.");
+            if (split_size > dimLength)
+                throw new ArgumentException("Number of chunks exceeds dimension length.");
+
+
             while (dimPos < dimLength)
             {
                 int dimCopySize = Math.Min(split_size, dimLength - dimPos);
@@ -2373,6 +2377,69 @@ namespace DeepUnity
             }
 
             return slices.ToArray();
+        }
+        /// <summary>
+        /// Attempts to split a tensor into <paramref name="num_chunks"/>.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <param name="num_chunks"></param>
+        /// <returns></returns>
+        public static Tensor[] Chunk(Tensor tensor, int axis, int num_chunks)
+        {
+            HandleAxis(tensor, ref axis);
+            Dim dim = AxisToDim(tensor, axis);
+            int[] stackShape = new int[] { tensor.Batch, tensor.Channels, tensor.Height, tensor.Width };
+            List<Tensor> chunks_ = new();
+            int dimLength = stackShape[(int)dim];
+
+            if (num_chunks <= 0)
+                throw new ArgumentException("Number of chunks must be positive.");
+            if (num_chunks > dimLength)
+                throw new ArgumentException("Number of chunks exceeds dimension length.");
+
+            int chunk_dim = (int)Math.Ceiling((double)dimLength / num_chunks);
+            int start = 0;
+            for (int i = 0; i < num_chunks; i++)
+            {
+                int current_split_size = (dimLength - start) > chunk_dim ? chunk_dim : dimLength - start;
+                int[] chunkShape = stackShape.ToArray();
+                chunkShape[(int)dim] = current_split_size;
+                Tensor slice = new(CreateShape(tensor.Rank, chunkShape[0], chunkShape[1], chunkShape[2], chunkShape[3]));
+                
+                for (int l = 0; l < slice.Batch; l++)
+                {
+                    for (int k = 0; k < slice.Channels; k++)
+                    {
+                        for (int j = 0; j < slice.Height; j++)
+                        {
+                            for (int m = 0; m < slice.Width; m++)
+                            {
+                                switch (dim)
+                                {
+                                    case Dim.width:
+                                        slice[l, k, j, m] = tensor[l, k, j, start + m];
+                                        break;
+                                    case Dim.height:
+                                        slice[l, k, j, m] = tensor[l, k, start + j, m];
+                                        break;
+                                    case Dim.channel:
+                                        slice[l, k, j, m] = tensor[l, start + k, j, m];
+                                        break;
+                                    case Dim.batch:
+                                        slice[l, k, j, m] = tensor[start + l, k, j, m];
+                                        break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                chunks_.Add(slice);
+                start += current_split_size;
+            }
+
+            return chunks_.ToArray();
         }
         /// <summary>
         /// Shuffles the elements along the specified axis.
@@ -4045,6 +4112,10 @@ namespace DeepUnity
         public Tensor[] Split(int axis, int split_size)
         {
             return Split(this, axis, split_size);
+        }
+        public Tensor[] Chunk(int axis, int num_chunks)
+        {
+            return Chunk(this, axis, num_chunks);
         }
         public Tensor Shuffle(int axis)
         {

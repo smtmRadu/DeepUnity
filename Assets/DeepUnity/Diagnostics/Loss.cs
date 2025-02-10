@@ -117,7 +117,7 @@ namespace DeepUnity
             }
         }
         /// <summary>
-        /// Returns the <see cref="Loss"/>(pred, targ) partial derivative with respect to the pred.
+        /// Returns the partial derivative of the <see cref="Loss"/>(pred, targ) w.r.t. the prediction `y`.
         /// </summary>
         public Tensor Grad { get
             {

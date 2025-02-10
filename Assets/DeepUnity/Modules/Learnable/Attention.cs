@@ -24,13 +24,13 @@ namespace DeepUnity.Modules
     /// where B = batch_size, L = sequence_length, H = num_features and D = embed_dim.<br></br>
     /// <b>Placed after the non-linear activation function.</b> <br></br>
     /// </summary>
-    [Serializable]
+    [Serializable, Obsolete("Deprecated. Use MultiheadAttention instead.")]
     public class Attention : ILearnable, IModule
     {
         [SerializeField] public Device Device { get; set; } = Device.CPU;
         [SerializeField] public bool RequiresGrad { get; set; } = true;
         [SerializeField] private int d;
-        [SerializeField] private bool mask;
+        [SerializeField] private bool is_causal;
 
         [SerializeField] private Tensor W_Q;
         [SerializeField] private Tensor W_K;
@@ -61,7 +61,7 @@ namespace DeepUnity.Modules
         {
             // H and d have the same dimension
             d = embed_dim;
-            this.mask = mask;
+            this.is_causal = mask;
             this.Device = device;
             int H = input_size;
 
@@ -120,7 +120,7 @@ namespace DeepUnity.Modules
                 V.Push(Tensor.MatMul(x, W_V, Device)); // (L, D)
                 Tensor sdpa = Tensor.MatMul(Q.Peek(), K.Peek().Transpose(0, 1), Device); //(L, D) * (D, L) = (L, L)
                 sdpa /= MathF.Sqrt(d); // (L, L)
-                if (mask) CausalMask(sdpa);
+                if (is_causal) CausalMask(sdpa);
                 SoftmaxCache.Push(new Softmax());
                 sdpa = SoftmaxCache.Peek().Forward(sdpa); // (L, L)
                 PostSoftmaxCache.Push(sdpa); // no need for clone because concat makes a copy
@@ -266,7 +266,7 @@ namespace DeepUnity.Modules
     }
 
     // It seems like the old implementation is faster for larger batchsizes > 32.
-    [Serializable]
+    [Serializable, Obsolete("Deprecated. Use MultiheadAttention instead.")]
     public class AttentionV2 : ILearnable, IModule
     {
         [SerializeField] public Device Device

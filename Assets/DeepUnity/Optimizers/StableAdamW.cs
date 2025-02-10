@@ -28,7 +28,7 @@ namespace DeepUnity.Optimizers
         /// <param name="weight_decay"></param>
         /// <param name="amsgrad"></param>
         /// <param name="maximize"></param>
-        public StableAdamW(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-6F, float weight_decay = 0.01f) : base(parameters, lr, eps, weight_decay)
+        public StableAdamW(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.99f, float eps = 1e-6F, float weight_decay = 0.01f) : base(parameters, lr, eps, weight_decay)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;
