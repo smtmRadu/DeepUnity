@@ -1,5 +1,5 @@
 # DeepUnity (2022.3.43f1 lts)
-![version](https://img.shields.io/badge/version-v0.9.9.13-blue)
+![version](https://img.shields.io/badge/version-v0.9.9.14-blue)
 [Reference Paper](https://github.com/smtmRadu/Policy-Gradient-Methods-Insights-and-Optimization-Strategies)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using state-of-the-art algorithms.

@@ -84,7 +84,7 @@ namespace DeepUnity.Modules
         public SELU selu = null;
         public Swish swish = null;
         public ReLU6 relu6 = null;
-        
+        public Rish rish = null;
 
 
 
@@ -308,6 +308,10 @@ namespace DeepUnity.Modules
             {
                 lazybatchnorm2d = lazybatchnorm2dModule;
             }
+            else if (module is Rish rishModule)
+            {
+                rish = rishModule;
+            }
             else
                 throw new Exception($"Unhandled module type while wrapping ({module.GetType().Name}).");
         }
@@ -528,6 +532,10 @@ namespace DeepUnity.Modules
             else if (typeof(LazyBatchNorm2D).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.lazybatchnorm2d;
+            }
+            else if (typeof(Rish).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.rish;
             }
             else
                 throw new Exception($"Unhandled module type while unwrapping ({moduleWrapper.name}).");

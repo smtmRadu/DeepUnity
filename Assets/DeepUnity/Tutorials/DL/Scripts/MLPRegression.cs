@@ -53,15 +53,18 @@ namespace DeepUnity.Tutorials
                 net = new Sequential(
                  new LazyDense(hiddenSize, false, weight_init: init_w, bias_init: init_b),
                 //new LazyBatchNorm1D(),
-                new Swish(true),
+                new Rish(),
                  new LazyDense(hiddenSize, false, weight_init: init_w, bias_init: init_b),
                  // new RMSNorm(hiddenSize, elementwise_affine:false),
                 //new LazyBatchNorm1D(),
-                new Swish(true),
+                new Rish(),
 
                  new Dense(hiddenSize, 1, weight_init: init_w, bias_init: init_b)
                  );//.CreateAsset("some_ass"); //xd
             }
+
+            // rish : 2.0 s
+            // swish: 1.99 s
 
             net.Predict(Tensor.Random01(2));
             net.Device = device;

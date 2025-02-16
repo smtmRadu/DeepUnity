@@ -349,6 +349,14 @@ namespace DeepUnity
         {
             return Math.Clamp(value, min, max);
         }
+        public static float DiracDelta(float value)
+        {
+            return value == 0 ? float.MaxValue : 0;
+        }
+        public static float Sigmoid(float value)
+        {
+            return 1.0f / (1.0f + MathF.Exp(-value));
+        }
 
         /// <summary>
         /// A class that contains all hyberbolic functions

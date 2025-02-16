@@ -25,8 +25,13 @@ namespace DeepUnity.ReinforcementLearning
 
         public Tensor Normalize(Tensor tuple)
         {
+            if (step == 0)
+                throw new ApplicationException("When using Running Normalizer, `Update` first then `Normalize`.");
+
             if (step <= 1)
-                return Tensor.Identity(tuple);
+                return Tensor.Ones(tuple.Shape); 
+            // rather than returning the identity of the tuple (that might have unstably large numbers, 
+            // better return a stable form of ones. Why not zeros? (running zeros through the network will end up in zeroes, with the except of some activation functions).
 
             Tensor variance = m2 / (step - 1);
 
