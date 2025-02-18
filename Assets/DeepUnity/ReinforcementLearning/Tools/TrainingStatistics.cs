@@ -16,18 +16,18 @@ namespace DeepUnity.ReinforcementLearning
         private static bool MainSaved = false;
         private TrainingStatistics Instance;
 
-        [ViewOnly, Tooltip("When the simulation started.")]
+        [ViewOnly, Tooltip("When the simulation started. (real-time)")]
         public string startedAt = " - ";
-        [ViewOnly, Tooltip("When the simulation ended.")]
+        [ViewOnly, Tooltip("When the simulation ended. (real-time)")]
         public string finishedAt = " - ";
-        [ViewOnly, Tooltip("How much time passed in real time since the start of the training simulation.")]
-        public string trainingSessionTime = " - ";
-        [ViewOnly, Tooltip("Total time spent on inference in total.")]
-        public string inferenceTime = " - ";
-        [ViewOnly, Tooltip("Total time spent on policy update.")]
-        public string policyUpdateTime = " - ";
-        [ViewOnly, Tooltip("How much time takes a policy update iteration.")]
-        public string policyUpdateTimePerIteration = " - ";
+        [ViewOnly, Tooltip("How much time passed since the start of the training simulation. (real-time)")]
+        public string timeOnSession = " - ";   
+        [ViewOnly, Tooltip("Total time spent on policy update. (real-time)")]
+        public string timeOnPolicyUpdate = " - ";
+        [ViewOnly, Tooltip("How much time took the last policy update iteration. (real-time)")]
+        public string timeOnLastPolicyUpdateIter = " - ";
+        [ViewOnly, Tooltip("Cumulated time on inference in total. (~real-time)")]
+        public string cumulatedInferenceTime = " - ";
 
         [Space(20)]
         [ViewOnly, Tooltip("Total number of episodes runned by all parallel agents.")]
@@ -102,7 +102,7 @@ namespace DeepUnity.ReinforcementLearning
             stepCount = DeepUnityTrainer.Instance.currentSteps;
             parallelAgents = DeepUnityTrainer.Instance.parallelAgents.Count;
             inferenceSecondsElapsed += Time.fixedDeltaTime;
-            inferenceTime = $"{(int)(Math.Ceiling(inferenceSecondsElapsed * DeepUnityTrainer.Instance.parallelAgents.Count) / 3600)} hrs : {(int)(Math.Ceiling(inferenceSecondsElapsed * DeepUnityTrainer.Instance.parallelAgents.Count) % 3600 / 60)} min : {(int)(Math.Ceiling(inferenceSecondsElapsed * DeepUnityTrainer.Instance.parallelAgents.Count) % 60)} sec";
+            cumulatedInferenceTime = $"{(int)(Math.Ceiling(inferenceSecondsElapsed * DeepUnityTrainer.Instance.parallelAgents.Count) / 3600)} hrs : {(int)(Math.Ceiling(inferenceSecondsElapsed * DeepUnityTrainer.Instance.parallelAgents.Count) % 3600 / 60)} min : {(int)(Math.Ceiling(inferenceSecondsElapsed * DeepUnityTrainer.Instance.parallelAgents.Count) % 60)} sec";
 
 
             if (DeepUnityTrainer.Instance.updateIterations > iterations)
@@ -120,10 +120,10 @@ namespace DeepUnity.ReinforcementLearning
             iterations++;
 
             TimeSpan timeElapsed = DateTime.Now - DeepUnityTrainer.Instance.timeWhenTheTrainingStarted;
-            trainingSessionTime = $"{(int)timeElapsed.TotalHours} hrs : {(int)timeElapsed.TotalMinutes % 60} min : {(int)timeElapsed.TotalSeconds % 60} sec";
+            timeOnSession = $"{(int)timeElapsed.TotalHours} hrs : {(int)timeElapsed.TotalMinutes % 60} min : {(timeElapsed.TotalSeconds % 60).ToString("0.00")} sec";
             policyUpdateSecondsElapsed += (float)DeepUnityTrainer.Instance.updateBenchmarkClock.Elapsed.TotalSeconds;
-            policyUpdateTime = $"{(int)(Math.Ceiling(policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(policyUpdateSecondsElapsed) % 3600 / 60)} min : {(int)(Math.Ceiling(policyUpdateSecondsElapsed) % 60)} sec";
-            policyUpdateTimePerIteration = $"{(int)DeepUnityTrainer.Instance.updateBenchmarkClock.Elapsed.TotalHours} hrs : {(int)DeepUnityTrainer.Instance.updateBenchmarkClock.Elapsed.TotalMinutes % 60} min : {(int)DeepUnityTrainer.Instance.updateBenchmarkClock.Elapsed.TotalSeconds % 60}.{DeepUnityTrainer.Instance.updateBenchmarkClock.ElapsedMilliseconds % 1000} sec";
+            timeOnPolicyUpdate = $"{(int)(Math.Ceiling(policyUpdateSecondsElapsed) / 3600)} hrs : {(int)(Math.Ceiling(policyUpdateSecondsElapsed) % 3600 / 60)} min : {(Math.Ceiling(policyUpdateSecondsElapsed) % 60).ToString("0.00")} sec";
+            timeOnLastPolicyUpdateIter = $"{(int)DeepUnityTrainer.Instance.updateBenchmarkClock.Elapsed.TotalHours} hrs : {(int)DeepUnityTrainer.Instance.updateBenchmarkClock.Elapsed.TotalMinutes % 60} min : {(DeepUnityTrainer.Instance.updateBenchmarkClock.Elapsed.TotalSeconds % 60).ToString("0.00")} sec";
 
             actorLoss.Append(DeepUnityTrainer.Instance.actorLoss);
             criticLoss.Append(DeepUnityTrainer.Instance.criticLoss);
@@ -190,11 +190,11 @@ namespace DeepUnity.ReinforcementLearning
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Finished at: " + finishedAt + @"</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Training Session Time: " + trainingSessionTime + @"</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Training Session Time: " + timeOnSession + @"</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Time: {inferenceTime}        [Device: {ab.inferenceDevice}]</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Inference Time: {cumulatedInferenceTime}        [Device: {ab.inferenceDevice}]</text>");
             y += 20;
-            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Update Time: {policyUpdateTime}        [Per iteration: {policyUpdateTimePerIteration}]        [Device: {ab.trainingDevice}]</text>");
+            svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Update Time: {timeOnPolicyUpdate}        [Per iteration: {timeOnLastPolicyUpdateIter}]        [Device: {ab.trainingDevice}]</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Episode Count: {episodeCount}</text>");
             y += 20;

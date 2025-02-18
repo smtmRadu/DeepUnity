@@ -38,7 +38,6 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.44657898, g: 0.4964133, b: 0.5748178, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -148,13 +147,13 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 313441237}
+  serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: -0, z: -0, w: 0.7071068}
   m_LocalPosition: {x: 0, y: 3.3, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 818223963}
-  m_RootOrder: -1
   m_LocalEulerAnglesHint: {x: 90, y: 90, z: 0}
 --- !u!81 &313441239
 AudioListener:
@@ -301,13 +300,13 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 586911802}
+  serializedVersion: 2
   m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
   m_LocalPosition: {x: 0, y: 3, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
 --- !u!1 &723759391 stripped
 GameObject:
@@ -434,7 +433,7 @@ MonoBehaviour:
   numLayers: 2
   hidUnits: 32
   activation: 1
-  model: {fileID: 11400000, guid: 02e48a759a59a8e40a296829ee49b59f, type: 2}
+  model: {fileID: 11400000, guid: ee31539dd15577c4dba9b84cd31198c3, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0
@@ -495,10 +494,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   startedAt: ' - '
   finishedAt: ' - '
-  trainingSessionTime: ' - '
-  inferenceTime: ' - '
-  policyUpdateTime: ' - '
-  policyUpdateTimePerIteration: ' - '
+  timeOnSession: ' - '
+  timeOnPolicyUpdate: ' - '
+  timeOnLastPolicyUpdateIter: ' - '
+  cumulatedInferenceTime: ' - '
   episodeCount: 0
   stepCount: 0
   iterations: 0
@@ -576,6 +575,7 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 818223962}
+  serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
@@ -585,7 +585,6 @@ Transform:
   - {fileID: 1370465046}
   - {fileID: 723759392}
   m_Father: {fileID: 0}
-  m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &925996405
 PrefabInstance:
@@ -693,6 +692,7 @@ RenderTexture:
   m_UseDynamicScale: 0
   m_BindMS: 0
   m_EnableCompatibleFormat: 1
+  m_EnableRandomWrite: 0
   m_TextureSettings:
     serializedVersion: 2
     m_FilterMode: 0
@@ -729,13 +729,13 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1159018014}
+  serializedVersion: 2
   m_LocalRotation: {x: 0.10335732, y: -0, z: -0, w: 0.9946443}
   m_LocalPosition: {x: 0, y: 3.31, z: -7.9}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1265864093}
-  m_RootOrder: -1
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 11.865, y: 0, z: 0}
 --- !u!81 &1159018016
 AudioListener:
@@ -890,16 +890,15 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1265864092}
+  serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 1159018015}
   - {fileID: 742690633}
   - {fileID: 1198115735}
   m_Father: {fileID: 0}
-  m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1369886811
 PrefabInstance:
@@ -1041,10 +1040,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   startedAt: ' - '
   finishedAt: ' - '
-  trainingSessionTime: ' - '
-  inferenceTime: ' - '
-  policyUpdateTime: ' - '
-  policyUpdateTimePerIteration: ' - '
+  timeOnSession: ' - '
+  timeOnPolicyUpdate: ' - '
+  timeOnLastPolicyUpdateIter: ' - '
+  cumulatedInferenceTime: ' - '
   episodeCount: 0
   stepCount: 0
   iterations: 0
@@ -1315,3 +1314,11 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 1370465047}
   m_SourcePrefab: {fileID: 100100000, guid: 21d76b183ef818740a5fcb147a81dcab, type: 3}
+--- !u!1660057539 &9223372036854775807
+SceneRoots:
+  m_ObjectHideFlags: 0
+  m_Roots:
+  - {fileID: 586911804}
+  - {fileID: 1159018015}
+  - {fileID: 1265864093}
+  - {fileID: 818223963}

@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using UnityEngine.UI;
 using DeepUnity.Optimizers;
 using DeepUnity.Modules;
-using Unity.VisualScripting;
 
 namespace DeepUnity.Tutorials
 {
@@ -23,13 +22,6 @@ namespace DeepUnity.Tutorials
         private Tensor x, y;
         private void Start()
         {
-            mha = new MultiheadAttention(64, 8, device:Device.GPU);
-
-            x = Tensor.RandomNormal(32, 10, 64);
-            y = Tensor.Random01(32, 10, 64);
-
-            optim = new Adam(mha.Parameters());
-
             // Tensor.FusedAdamW(null, null, null, null, null,1,(1,1),(1,1),1,1, true, true);
             // ConvTranspose2D conv = new ConvTranspose2D(2, 3, 3);
             // 
@@ -46,7 +38,7 @@ namespace DeepUnity.Tutorials
             //     conv.Backward(mse.Gradient);
             //     optim.Step();
             // }
-          
+
             // ConvTranspose2D convt = new ConvTranspose2D(2, 3, 3);
             // Tensor input = Tensor.Random01(3, 2, 8, 8);
             // 

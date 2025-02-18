@@ -22,6 +22,7 @@ namespace DeepUnity.ReinforcementLearning
         //Internal PPO Config
         const float epsilon = 1e-5F; // PPO openAI eps they use :D, but in Andrychowicz et al. (2021) they use TF default 1e-7
         const float valueWD = 0.0F; // Value net weight decay (AdamW)
+        const bool fused = true;
         const bool amsGrad = false;
 
         public Optimizer optim_v { get; set; }   
@@ -44,21 +45,21 @@ namespace DeepUnity.ReinforcementLearning
 
             // Initialize Optimizers & Schedulers
             int total_epochs = (int)hp.maxSteps / hp.bufferSize * hp.numEpoch; // THIS IS FOR PPO, but for now i will let it for SAC as well       
-            optim_v = new AdamW(model.vNetwork.Parameters(), hp.criticLearningRate, eps: epsilon, weight_decay: valueWD, amsgrad:amsGrad);
+            optim_v = new AdamW(model.vNetwork.Parameters(), hp.criticLearningRate, eps: epsilon, weight_decay: valueWD, amsgrad:amsGrad, fused:true);
             optim_v.Scheduler = new LinearLR(optim_v, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
 
             if (model.IsUsingContinuousActions)
             {
-                optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad);
+                optim_mu = new AdamW(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay:0F, fused:true);
                 optim_mu.Scheduler = new LinearLR(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
 
-                optim_sigma = new Adam(model.sigmaNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad);
+                optim_sigma = new AdamW(model.sigmaNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay: 0F, fused: true);
                 optim_sigma.Scheduler = new LinearLR(optim_sigma, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
             }
 
             if (model.IsUsingDiscreteActions)
             {
-                optim_discrete = new Adam(model.discreteNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad);
+                optim_discrete = new AdamW(model.discreteNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay: 0F, fused: true);
                 optim_discrete.Scheduler = new LinearLR(optim_discrete, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
             }
 

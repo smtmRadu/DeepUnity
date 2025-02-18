@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing.Printing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -13,7 +12,7 @@ namespace DeepUnity
     /// Any method like Reshape, Transpose etc. keeps the tensor continguous.
     /// </summary>
     [Serializable]
-    public class Tensor : IEquatable<Tensor>, IEquatable<TensorGPU>, ICloneable
+    public partial class Tensor : IEquatable<Tensor>, IEquatable<TensorGPU>, ICloneable
     {
         [ViewOnly, SerializeField] private float[] data;
         [ViewOnly, SerializeField] private int[] shape;
@@ -1802,46 +1801,7 @@ namespace DeepUnity
             }
             return y;
         }
-        /// <summary>
-        /// A fused implementation for AdamW as an optimization (+5%) that avoids tensor creations.
-        /// </summary>
-        /// <param name="param"></param>
-        /// <param name="g"></param>
-        /// <param name="m"></param>
-        /// <param name="v"></param>
-        /// <param name="vMax"></param>
-        /// <param name="gamma"></param>
-        /// <param name="betas"></param>
-        /// <param name="betas_t"></param>
-        /// <param name="lambda"></param>
-        /// <param name="eps"></param>
-        /// <param name="maximize"></param>
-        /// <param name="amsgrad"></param>
-        public static void FusedAdamW(Tensor param, Tensor g, Tensor m, Tensor v, Tensor vMax, float gamma, (float, float) betas, (float, float) betas_t, float lambda, float eps, bool maximize, bool amsgrad)
-        {
-            // let this parallel, tests were made
-            Parallel.For(0, param.data.Length, i =>
-            {
-                if (maximize)
-                    g.data[i] = -g.data[i];
 
-                param.data[i] = param.data[i] - gamma * lambda * param.data[i];
-
-                m.data[i] = betas.Item1 * m.data[i] + (1f - betas.Item1) * g.data[i];
-                v.data[i] = betas.Item2 * v.data[i] + (1f - betas.Item2) * g.data[i] * g.data[i];
-
-                float mhat = m.data[i] / (1f - betas_t.Item1);
-                float vhat = v.data[i] / (1f - betas_t.Item2);
-
-                if (amsgrad)
-                {
-                    vMax.data[i] = Math.Max(vMax.data[i], vhat);
-                    param.data[i] = param.data[i] - gamma * mhat / (MathF.Sqrt(vMax.data[i]) + eps);
-                }
-                else
-                    param.data[i] = param.data[i] - gamma * mhat / (MathF.Sqrt(vhat) + eps);
-            });
-        }
         #endregion Special
 
 
@@ -1888,7 +1848,6 @@ namespace DeepUnity
         /// <exception cref="ArgumentException">Thrown if the number of dimensions does not match or dims contains invalid indices.</exception>
         public static Tensor Permute(Tensor tensor, params int[] axes)
         {
-           
             if (axes.Length != tensor.shape.Length)
                 throw new ArgumentException($"Number of dimensions to permute ({axes.Length}) must match the number of tensor dimensions ({tensor.shape.Length}).");
 
@@ -2440,6 +2399,72 @@ namespace DeepUnity
             }
 
             return chunks_.ToArray();
+        }
+        /// <summary>
+        /// Shifts the elements by `<paramref name="shifts"/>` times on the specified axis.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <param name="axis"></param>
+        /// <param name="shifts"></param>
+        /// <returns></returns>
+        public static Tensor Roll(Tensor tensor, int axis, int shifts)
+        {
+            HandleAxis(tensor, ref axis);
+
+            if (shifts == 0)
+                return Identity(tensor);
+           
+            int batch = tensor.Batch;
+            int channels = tensor.Channels;
+            int height = tensor.Height;
+            int width = tensor.Width;
+
+            Dim dimIndex = AxisToDim(tensor, axis);
+
+            Tensor result = new(tensor.shape);
+            int newL, newK, newJ, newI;
+            shifts = -shifts;
+            for (int l = 0; l < batch; l++)
+            {
+                for (int k = 0; k < channels; k++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            newL = l;
+                            newK = k;
+                            newJ = j;
+                            newI = i;
+
+                            switch (dimIndex)
+                            {
+                                case Dim.width:
+                                    newI = (i + shifts) % width;
+                                    if (newI < 0) newI += width;
+                                    break;
+                                case Dim.height:
+                                    newJ = (j + shifts) % height;
+                                    if (newJ < 0) newJ += height;
+                                    break;
+                                case Dim.channel:
+                                    newK = (k + shifts) % channels;
+                                    if (newK < 0) newK += channels;
+                                    break;
+                                case Dim.batch:
+                                    newL = (l + shifts) % batch;
+                                    if (newL < 0) newL += batch;
+                                    break;
+                            }
+
+                            result[l, k, j, i] = tensor[newL, newK, newJ, newI];
+                        }
+                    }
+                }
+            }
+            
+
+            return result;
         }
         /// <summary>
         /// Shuffles the elements along the specified axis.
@@ -4116,6 +4141,10 @@ namespace DeepUnity
         public Tensor[] Chunk(int axis, int num_chunks)
         {
             return Chunk(this, axis, num_chunks);
+        }
+        public Tensor Roll(int axis, int shifts)
+        {
+            return Roll(this, axis, shifts);
         }
         public Tensor Shuffle(int axis)
         {

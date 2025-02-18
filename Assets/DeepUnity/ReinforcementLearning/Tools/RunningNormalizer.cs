@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace DeepUnity.ReinforcementLearning
 {
+    
     /// <summary>
     /// All inputs are normalized using the following formula:
     /// x = (x - mu) / variance.
@@ -29,12 +30,13 @@ namespace DeepUnity.ReinforcementLearning
                 throw new ApplicationException("When using Running Normalizer, `Update` first then `Normalize`.");
 
             if (step <= 1)
-                return Tensor.Ones(tuple.Shape); 
+                return Tensor.Ones(tuple.Shape);
             // rather than returning the identity of the tuple (that might have unstably large numbers, 
             // better return a stable form of ones. Why not zeros? (running zeros through the network will end up in zeroes, with the except of some activation functions).
 
+            return Tensor.FusedRunningNormalize(tuple, mean, m2, step); // maybe faster on large num_envs
             Tensor variance = m2 / (step - 1);
-
+            
             // Var equal 0 it is replaced with 1.
             variance = variance.Select(x =>
             {
@@ -42,7 +44,7 @@ namespace DeepUnity.ReinforcementLearning
                     return 1;
                 return x;
             });
-
+            
             if (tuple.Rank < 2)
                 return (tuple - mean) / variance;
             else if (tuple.Rank == 2)
@@ -56,20 +58,34 @@ namespace DeepUnity.ReinforcementLearning
         }
         public void Update(Tensor tuple)
         {
-            if (tuple.Rank == 2)
+            if(tuple.Rank == 1)
             {
-                var tuples = tuple.Split(0, 1);
-                foreach (var item in tuples)
-                {
-                    Update(item);
-                }
-                return;
+                step++;
+                Tensor delta1 = tuple - mean;
+                mean += delta1 / step;
+                Tensor delta2 = tuple - mean;
+                m2 += delta1 * delta2;
             }
-            step++;
-            Tensor delta1 = tuple - mean;
-            mean += delta1 / step;
-            Tensor delta2 = tuple - mean;
-            m2 += delta1 * delta2;
+            else if (tuple.Rank == 2)
+            {
+                int batch_size = tuple.Size(0);
+                Tensor batch_mean = tuple.Mean(0); // (H)
+                Tensor batch_variance = tuple.Var(0, correction: 0);
+
+                Tensor delta1 = batch_mean - mean;
+                mean = (mean * step + batch_mean * batch_size) / (step + batch_size);
+                Tensor delta2 = batch_variance - mean;
+
+                m2 += batch_variance * batch_size
+                    + delta1.Pow(2f) * step * batch_size / (step + batch_size);
+
+                step += batch_size;
+            }
+            else
+            {
+                throw new ShapeException("Cannot Normalize batch of Rank higher than 2.");
+            }
+            
         }
     }
 }
