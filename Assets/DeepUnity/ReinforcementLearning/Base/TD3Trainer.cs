@@ -35,9 +35,9 @@ namespace DeepUnity.ReinforcementLearning
             optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate);
 
             // Initialize schedulers
-            optim_q1.Scheduler = new LinearLR(optim_q1, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
-            optim_q2.Scheduler = new LinearLR(optim_q2, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
-            optim_mu.Scheduler = new LinearLR(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
+            optim_q1.Scheduler = new LinearAnnealing(optim_q1, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
+            optim_q2.Scheduler = new LinearAnnealing(optim_q2, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
+            optim_mu.Scheduler = new LinearAnnealing(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
 
             // Initialize target networks
             Qtarg1 = model.q1Network.Clone() as Sequential;

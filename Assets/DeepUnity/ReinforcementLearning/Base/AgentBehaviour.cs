@@ -101,11 +101,37 @@ namespace DeepUnity.ReinforcementLearning
 
            
            
-            static IActivation HiddenActivation(NonLinearity activ) => activ == NonLinearity.Relu ? new ReLU(in_place:true) : new Tanh(in_place:true);
-
+            static IActivation HiddenActivation(NonLinearity activ)
+            {
+                switch(activ)
+                {
+                    case NonLinearity.Relu:
+                        return new ReLU(in_place: true);
+                    case NonLinearity.Tanh:
+                        return new Tanh(in_place: true);
+                    case NonLinearity.Rish:
+                        return new Rish(in_place: true);
+                    default:
+                        throw new ArgumentException("Unhandles hidden activation");
+                }
+            }
+            static InitType WeightInitialization(NonLinearity activ)
+            {
+                switch (activ)
+                {
+                    case NonLinearity.Relu:
+                        return InitType.Kaiming_Uniform;
+                    case NonLinearity.Tanh:
+                        return InitType.Xavier_Uniform;
+                    case NonLinearity.Rish:
+                        return InitType.Kaiming_Uniform;
+                    default:
+                        throw new ArgumentException("Unhandles hidden activation");
+                }
+            }
             static IModule[] CreateMLP(int inputs, int stack, int outputs, int layers, int hidUnits, NonLinearity activ)
             {
-                InitType INIT_W = activ == NonLinearity.Relu ? InitType.Kaiming_Uniform : InitType.Xavier_Uniform;
+                InitType INIT_W = WeightInitialization(activ);
                 InitType INIT_B = InitType.Zeros;
                 if (layers == 1)
                 {
@@ -138,7 +164,7 @@ namespace DeepUnity.ReinforcementLearning
             }
             static IModule[] CreateLnMLP(int inputs, int stack, int outputs, int layers, int hidUnits, NonLinearity activ)
             {
-                InitType INIT_W = activ == NonLinearity.Relu ? InitType.Kaiming_Uniform : InitType.Xavier_Uniform;
+                InitType INIT_W = WeightInitialization(activ);
                 InitType INIT_B = InitType.Zeros;
                 if (layers == 1)
                 {
@@ -205,7 +231,7 @@ namespace DeepUnity.ReinforcementLearning
             }
             static IModule[] CreateCNN(int width, int height, int channels, int outputs, int layers, int hidunits, NonLinearity activ)
             {
-                InitType INIT_W = activ == NonLinearity.Relu ? InitType.Kaiming_Uniform : InitType.Xavier_Uniform;
+                InitType INIT_W = WeightInitialization(activ);
                 InitType INIT_B = InitType.Zeros;
 
                 if (layers == 1)
@@ -272,7 +298,7 @@ namespace DeepUnity.ReinforcementLearning
             }
             static IModule[] CreateATT(int inputs, int stack, int outputs, int layers, int hidUnits, NonLinearity activ)
             {
-                InitType INIT_W = activ == NonLinearity.Relu ? InitType.Kaiming_Uniform : InitType.Xavier_Uniform;
+                InitType INIT_W = WeightInitialization(activ);
                 InitType INIT_B = InitType.Zeros;
                 if (layers == 1)
                 {

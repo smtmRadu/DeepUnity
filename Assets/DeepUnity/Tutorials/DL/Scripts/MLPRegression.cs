@@ -13,8 +13,9 @@ namespace DeepUnity.Tutorials
         public Sequential net;
         public PerformanceGraph TrainLossGraph = new PerformanceGraph();
         public PerformanceGraph ValidLossGraph = new PerformanceGraph();
+        public PerformanceGraph LRGraph = new PerformanceGraph();
         public Optimizer optimizer;
-        public StepLR scheduler;
+        public Scheduler scheduler;
         public float learningRate = 0.001f;
         public int hiddenSize = 64;
         public int trainingSamples = 1024;
@@ -69,8 +70,8 @@ namespace DeepUnity.Tutorials
             net.Predict(Tensor.Random01(2));
             net.Device = device;
 
-            optimizer = new Adam(net.Parameters());
-            scheduler = new StepLR(optimizer, scheduler_step_size, scheduler_gamma);
+            optimizer = new StableAdamW(net.Parameters());
+            // scheduler = new CosineAnnealingWithWarmup(optimizer, 500, 100, 0f);
 
 
             trainPoints = new Vector3[trainingSamples];
@@ -101,7 +102,7 @@ namespace DeepUnity.Tutorials
             {
 
                 Debug.Log($"Epoch {++epoch}");
-                scheduler.Step();
+                // scheduler.Step();
                 i = 0;
                 //net.Save();
                 if (epoch == timerStopEpoch)
@@ -116,7 +117,8 @@ namespace DeepUnity.Tutorials
             optimizer.ZeroGrad();
             net.Backward(loss.Grad);
             optimizer.Step();
-
+            // LRGraph.Append(scheduler.CurrentLR * 100f);
+            // scheduler.Step();
 
             // Compute test accuracy
             var testPrediction = net.Predict(validationInputs);

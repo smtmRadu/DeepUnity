@@ -24,7 +24,7 @@ namespace DeepUnity.Tutorials
         [SerializeField] VariationalAutoencoder vae;
 
         Optimizer optim;
-        LRScheduler scheduler;
+        Scheduler scheduler;
 
         List<(Tensor, Tensor)> train = new();
         List<(Tensor, Tensor)[]> train_batches;
@@ -78,7 +78,7 @@ namespace DeepUnity.Tutorials
 
             vae.Device = Device.GPU;
             optim = new Adam(vae.Parameters(), lr, amsgrad:true);
-            scheduler = new LinearLR(optim, 1, 0.2f, epochs);
+            scheduler = new LinearAnnealing(optim, 1, 0.2f, epochs);
 
 
 

@@ -5,7 +5,7 @@ namespace DeepUnity
     /// <summary>
     /// https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.StepLR.html
     /// </summary>
-    public class StepLR : LRScheduler
+    public class StepAnnealing : Scheduler
     {  
         private readonly int stepSize;
         private readonly float decay;
@@ -19,7 +19,7 @@ namespace DeepUnity
         /// <param name="step_size">Period of learning rate decay.</param>
         /// <param name="gamma">Multiplicative factor of learning rate decay.</param>
         /// <param name="last_epoch">The index of last epoch. </param>
- 	    public StepLR(Optimizer optimizer, int step_size, float gamma = 0.1f, int last_epoch = -1)
+ 	    public StepAnnealing(Optimizer optimizer, int step_size, float gamma = 0.1f, int last_epoch = -1)
             : base(optimizer, last_epoch)
         {
             if (step_size <= 0)

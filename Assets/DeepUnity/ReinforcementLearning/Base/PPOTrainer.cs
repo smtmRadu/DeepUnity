@@ -15,14 +15,13 @@ namespace DeepUnity.ReinforcementLearning
     /// [2] https://link.springer.com/article/10.1007/BF00992696
     /// [3] https://ieeexplore.ieee.org/document/9520424
     /// </summary>
-    /// What may cause NaN values:
-    /// 1. Softmax activation on discrete head may "explode"
+
     internal sealed class PPOTrainer : DeepUnityTrainer, IOnPolicy
     {
         //Internal PPO Config
+        //Note that AdamW+Clipping was changed to StableAdamW. On tests it is way better than what was previously used.
         const float epsilon = 1e-5F; // PPO openAI eps they use :D, but in Andrychowicz et al. (2021) they use TF default 1e-7
         const float valueWD = 0.0F; // Value net weight decay (AdamW)
-        const bool fused = true;
         const bool amsGrad = false;
 
         public Optimizer optim_v { get; set; }   
@@ -45,22 +44,26 @@ namespace DeepUnity.ReinforcementLearning
 
             // Initialize Optimizers & Schedulers
             int total_epochs = (int)hp.maxSteps / hp.bufferSize * hp.numEpoch; // THIS IS FOR PPO, but for now i will let it for SAC as well       
-            optim_v = new AdamW(model.vNetwork.Parameters(), hp.criticLearningRate, eps: epsilon, weight_decay: valueWD, amsgrad:amsGrad, fused:true);
-            optim_v.Scheduler = new LinearLR(optim_v, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+            // optim_v = new AdamW(model.vNetwork.Parameters(), hp.criticLearningRate, eps: epsilon, weight_decay: valueWD, amsgrad:amsGrad, fused:true);
+            optim_v = new StableAdamW(model.vNetwork.Parameters(), hp.criticLearningRate, eps: epsilon, weight_decay: valueWD, fused: true);
+            optim_v.Scheduler = new LinearAnnealing(optim_v, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
 
             if (model.IsUsingContinuousActions)
             {
-                optim_mu = new AdamW(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay:0F, fused:true);
-                optim_mu.Scheduler = new LinearLR(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+                //optim_mu = new AdamW(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay:0F, fused:true);
+                optim_mu = new StableAdamW(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon,weight_decay: 0F, fused:true);
+                optim_mu.Scheduler = new LinearAnnealing(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
 
-                optim_sigma = new AdamW(model.sigmaNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay: 0F, fused: true);
-                optim_sigma.Scheduler = new LinearLR(optim_sigma, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+                // optim_sigma = new AdamW(model.sigmaNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay: 0F, fused: true);
+                optim_sigma = new StableAdamW(model.sigmaNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, weight_decay: 0F, fused: true);
+                optim_sigma.Scheduler = new LinearAnnealing(optim_sigma, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
             }
 
             if (model.IsUsingDiscreteActions)
             {
-                optim_discrete = new AdamW(model.discreteNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay: 0F, fused: true);
-                optim_discrete.Scheduler = new LinearLR(optim_discrete, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+                // optim_discrete = new AdamW(model.discreteNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay: 0F, fused: true);
+                optim_discrete = new StableAdamW(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, weight_decay: 0F, fused: true);
+                optim_discrete.Scheduler = new LinearAnnealing(optim_discrete, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
             }
 
 
@@ -350,7 +353,7 @@ namespace DeepUnity.ReinforcementLearning
 
             optim_v.ZeroGrad();
             model.vNetwork.Backward(mse.Grad * hp.valueCoeff);
-            optim_v.ClipGradNorm(hp.maxNorm);
+            // optim_v.ClipGradNorm(hp.maxNorm);
             optim_v.Step();
 
 
@@ -435,7 +438,7 @@ namespace DeepUnity.ReinforcementLearning
             Tensor dmLClip_dMu = dmLClip_dPi * dPi_dMu;
             optim_mu.ZeroGrad();
             model.muNetwork.Backward(dmLClip_dMu);
-            optim_mu.ClipGradNorm(hp.maxNorm);
+            // optim_mu.ClipGradNorm(hp.maxNorm);
             optim_mu.Step();
 
             if (model.stochasticity == Stochasticity.TrainebleStandardDeviation)
@@ -451,7 +454,7 @@ namespace DeepUnity.ReinforcementLearning
 
                 optim_sigma.ZeroGrad();
                 model.sigmaNetwork.Backward(dmLClip_dSigma);
-                optim_sigma.ClipGradNorm(hp.maxNorm);
+                // optim_sigma.ClipGradNorm(hp.maxNorm);
                 optim_sigma.Step();
             }
 
@@ -534,7 +537,7 @@ namespace DeepUnity.ReinforcementLearning
 
             optim_discrete.ZeroGrad();
             model.discreteNetwork.Backward(dmLClip_dPhi);
-            optim_discrete.ClipGradNorm(hp.maxNorm);
+            // optim_discrete.ClipGradNorm(hp.maxNorm);
             optim_discrete.Step();
         }
         /// <summary>

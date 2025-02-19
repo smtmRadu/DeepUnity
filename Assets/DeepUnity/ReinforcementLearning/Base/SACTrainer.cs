@@ -43,10 +43,10 @@ namespace DeepUnity.ReinforcementLearning
             optim_sigma = new Adam(model.sigmaNetwork.Parameters(), hp.actorLearningRate);
 
             // Init schedulers
-            optim_q1.Scheduler = new LinearLR(optim_q1, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
-            optim_q2.Scheduler = new LinearLR(optim_q2, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
-            optim_mu.Scheduler = new LinearLR(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
-            optim_sigma.Scheduler = new LinearLR(optim_sigma, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
+            optim_q1.Scheduler = new LinearAnnealing(optim_q1, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
+            optim_q2.Scheduler = new LinearAnnealing(optim_q2, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
+            optim_mu.Scheduler = new LinearAnnealing(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
+            optim_sigma.Scheduler = new LinearAnnealing(optim_sigma, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
 
             // Init target networks
             Qtarg1 = model.q1Network.Clone() as Sequential;

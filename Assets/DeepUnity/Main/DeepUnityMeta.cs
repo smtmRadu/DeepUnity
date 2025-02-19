@@ -242,7 +242,8 @@ namespace DeepUnity
     public enum NonLinearity
     {
         Tanh,
-        Relu
+        Relu, // Fast end efficient
+        Rish // Costly to compute but captures better (note that I just invented this activation and I didn't test it out).
     }
     public enum HiddenStates
     {

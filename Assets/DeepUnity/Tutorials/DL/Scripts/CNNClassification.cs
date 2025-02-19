@@ -25,7 +25,7 @@ namespace DeepUnity.Tutorials
         [SerializeField] private PerformanceGraph accuracyGraph;
         [SerializeField] private PerformanceGraph lossGraph;
         Optimizer optim;
-        LRScheduler scheduler;
+        Scheduler scheduler;
         List<(Tensor, Tensor)> train = new();
         List<(Tensor, Tensor)[]> train_batches;
         int epochIndex = 1;
@@ -71,7 +71,7 @@ namespace DeepUnity.Tutorials
 
            
             optim = new AdamW(network.Parameters(), lr: lr, weight_decay: weightDecay, amsgrad: true);
-            scheduler = new LinearLR(optim, total_iters: epochs);
+            scheduler = new LinearAnnealing(optim, total_iters: epochs);
             accuracyGraph = new PerformanceGraph();
             lossGraph = new PerformanceGraph();
             Utils.Shuffle(train);
