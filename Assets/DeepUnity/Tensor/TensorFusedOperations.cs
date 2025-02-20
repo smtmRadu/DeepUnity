@@ -67,15 +67,19 @@ namespace DeepUnity
         /// <param name="mean"></param>
         /// <param name="variance"></param>
         /// <returns></returns>
-        public static Tensor FusedRunningNormalize(Tensor x, Tensor mean, Tensor m2, int step)
+        public static Tensor FusedRunningNormalize(Tensor x, Tensor mean, Tensor m2, float eps, int step)
         {
             Tensor output = new Tensor(x.shape);
             int dim = x.Size(-1);
-            if(x.Rank == 1)
+            if(x.Rank == 0)
+            {
+                output.data[0] = (x.data[0] - mean.data[0]) / MathF.Sqrt(m2.data[0] / (step - 1) + eps);
+            }
+            else if(x.Rank == 1)
             {
                 for (int i = 0; i < dim; i++)
                 {
-                    output.data[i] = (m2.data[i] - mean.data[i]) / (step - 1);
+                    output.data[i] = (x.data[i] - mean.data[i]) / MathF.Sqrt(m2.data[i] / (step - 1) + eps);
                 }
             }
             else if(x.Rank == 2)
@@ -85,7 +89,7 @@ namespace DeepUnity
                 {
                     for (int i = 0; i < dim; i++)
                     {
-                        output[b, i] = (m2.data[i] - mean.data[i]) / (step - 1);
+                        output[b, i] = (x[b, i] - mean.data[i]) / MathF.Sqrt(m2.data[i] / (step - 1) + eps);
                     }
                 });
             }

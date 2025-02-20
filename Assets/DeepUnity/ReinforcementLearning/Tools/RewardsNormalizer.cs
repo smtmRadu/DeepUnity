@@ -4,45 +4,54 @@ using UnityEngine;
 namespace DeepUnity.ReinforcementLearning
 {
     /// <summary>
-    /// https://openreview.net/pdf?id=r1etN1rtPB check appendix A 2
+    /// https://openreview.net/pdf?id=r1etN1rtPB
+    /// https://gymnasium.farama.org/v0.29.0/_modules/gymnasium/wrappers/normalize/
     /// </summary>
     [Serializable]
     public class RewardsNormalizer
     {
-        [SerializeField] private int step;
-        [SerializeField] private float R;
-        [SerializeField] private float mean;
-        [SerializeField] private float m2;
-        [SerializeField] readonly float discount = 0.99f;
-        [SerializeField] readonly float clip = 5f;
-        public RewardsNormalizer(float gamma = 0.99f, float clip = 5f)
-        {
-            R = 0f;
-            step = 0;
-            mean = 0f;
-            m2 = 0f;
-            discount = gamma;
-            this.clip = clip;
+        [SerializeField] private float gamma = 0.99f;
+        [SerializeField] private RunningNormalizer returnsNormalizer = new RunningNormalizer(1, 1e-8f); // this is actually the one that must be serialized and hold info
+
+        private Tensor returns = Tensor.Zeros(1, 1); // this holds along the episodes, no matter the sesion
+        private int last_recorded_timestep = -1; // At the beggining of each training session (even if is a continuation of a previous one) this starts like this.
+        public RewardsNormalizer(float gamma = 0.99f, float eps = 1e-8f)
+        { 
+            this.gamma = gamma;
+            this.returns = Tensor.Zeros(1);
+            this.returnsNormalizer = new RunningNormalizer(1, eps); 
         }
 
-
-        public float ScaleReward(float r_t)
+        /// <param name="reward">Reward of agent `i`.</param>
+        /// <param name="done">Done of agent `i`.</param>
+        /// <param name="ag_env_idx">Index `i` of agent in Trainer pool.</param>
+        /// <param name="shared_timestep">Index of global shared step `t` of all agents in the training.</param>
+        /// <returns></returns>
+        public float Normalize(float reward, float done, int ag_env_idx, int shared_timestep)
         {
-            R = discount * R + r_t;
+            // Adapt to the training dimensionality.
+            if(DeepUnityTrainer.Instance.parallelAgents.Count > 1)
+            {
+                returns = Tensor.Zeros(DeepUnityTrainer.Instance.parallelAgents.Count, 1);
+            }
+            
+            if(last_recorded_timestep != shared_timestep)
+            {
+                if (last_recorded_timestep != -1) // Do not update when the training just started.
+                    returnsNormalizer.Update(returns);
 
-            Update(R); // In paper might be a mistake since it updates with R
-            float std = MathF.Sqrt(m2 / (step - 1) + 1e-10f);
+                last_recorded_timestep = shared_timestep;
+            }
 
-            return Math.Clamp(r_t / std, -clip, clip);
+            returns[ag_env_idx] = returns[ag_env_idx] * gamma * (1f - done) + reward;
+
+            if (returnsNormalizer.Step == 0) // safe if step is 0, it just returns identity
+                return reward;
+            else
+                return reward / (returnsNormalizer.M2[0] / (returnsNormalizer.Step - 1) + returnsNormalizer.Epsilon);
+
         }
-        private void Update(float x)
-        {
-            step++;
-            float delta1 = x - mean;
-            mean += delta1 / step;
-            float delta2 = x - mean;
-            m2 += delta1 * delta2;
-        }
+
     }
 }
 

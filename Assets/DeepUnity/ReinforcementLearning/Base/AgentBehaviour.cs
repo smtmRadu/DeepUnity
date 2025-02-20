@@ -1,13 +1,11 @@
 ﻿using DeepUnity.Activations;
 using DeepUnity.Models;
 using DeepUnity.Modules;
-using DeepUnity.Optimizers;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
@@ -58,16 +56,16 @@ namespace DeepUnity.ReinforcementLearning
         [Range(30, 100)]
         public int targetFPS = 50;
 
-        [Range(1f, 10f), SerializeField, Tooltip("Observations are clipped [after normarlization] in range [-clip, clip]. \n Rewards (per timestep) are clipped in range [-clip, clip]. \nNote that using a low clipping (c > 5) may induce instability on large number of inputs.")]
+        [Range(1f, 10f), SerializeField, Tooltip("Observations are clipped [after normarlization] in range [-clip, clip]. \n Rewards (per timestep) are clipped in range [-clip, clip]. \nNote that using a high clipping value (c > 5) may induce instability on large number of inputs.")]
         public float clipping = 5f;
 
-        [SerializeField, Tooltip("Auto-normalize input observations and rewards for a stable training.")]
+        [SerializeField, Tooltip("Auto-normalize input observations and rewards for a stable training. Use only in cases where is hard for you to normalize them, it is better to normalize manually (if possible).")]
         public bool normalize = false;
 
         [ViewOnly, SerializeField, Tooltip("Observations normalizer.")]
         public RunningNormalizer observationsNormalizer;    
 
-        [HideInInspector, SerializeField, ToolboxItem("Rewards normalizer")]
+        [ViewOnly, SerializeField, ToolboxItem("Rewards normalizer")]
         public RewardsNormalizer rewardsNormalizer;
 
         [Header("Exploration in Continuous Action space")]
@@ -942,6 +940,7 @@ namespace DeepUnity.ReinforcementLearning
             if (!script.normalize)
             {
                 dontDrawMe.Add("observationsNormalizer");
+                dontDrawMe.Add("rewardsNormalizer");
             }
 
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());

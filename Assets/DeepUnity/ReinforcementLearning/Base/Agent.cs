@@ -1,9 +1,7 @@
-﻿using DeepUnity.Activations;
-using DeepUnity.Sensors;
+﻿using DeepUnity.Sensors;
 using System;
 using System.Collections.Generic;
 using System.Text;
-using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 
@@ -68,7 +66,7 @@ namespace DeepUnity.ReinforcementLearning
         /// </summary>
         public int EpisodeStepCount { get; private set; } = 0;
         /// <summary>
-        /// The cumulated reward in the current episode.
+        /// The cumulated reward in the current episode (raw).
         /// </summary>
         public float EpisodeCumulativeReward { get; private set; } = 0f;
         private int EpisodeFixedFramesCount { get; set; } = -1;
@@ -250,7 +248,7 @@ namespace DeepUnity.ReinforcementLearning
             if (EpisodeStepCount == DecisionRequester.maxStep && DecisionRequester.maxStep != 0)
                 EndEpisode();
 
-            if (Timestep?.done[0] == 1)
+            if (Timestep?.done[0] == 1f)
                 OnEpisodeEnd?.Invoke(this, EventArgs.Empty);
 
             EpisodeCumulativeReward += Timestep.reward[0];
@@ -262,10 +260,20 @@ namespace DeepUnity.ReinforcementLearning
             {            
                 Timestep.nextState = LastState.Clone() as Tensor;
 
+                // Reward Scale
+                if (model.normalize)
+                {
+                    Timestep.reward[0] = model.rewardsNormalizer.Normalize(
+                                            Timestep.reward[0],
+                                            Timestep.done[0],
+                                            DeepUnityTrainer.Instance.parallelAgents.IndexOf(this),
+                                            DeepUnityTrainer.Instance.FixedFrameCount);
+                }
+
                 // Reward Clip
                 Timestep.reward[0] = Math.Clamp(Timestep.reward[0], -model.clipping, model.clipping);
-                // Reward Scale - there was a problem with the rewards normalizer (idk why), but anyways they should not be normalized online because we can use off-policy alogorithms like SAC. Just use a constant bro to scale it
-                // Timestep.reward[0] = model.rewardsNormalizer.ScaleReward(Timestep.reward[0]);
+                
+
                 Memory.Add(Timestep);              
             }
 
