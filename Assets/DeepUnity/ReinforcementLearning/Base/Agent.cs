@@ -1,6 +1,7 @@
 ﻿using DeepUnity.Sensors;
 using System;
 using System.Collections.Generic;
+using System.Drawing.Printing;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
@@ -109,6 +110,9 @@ namespace DeepUnity.ReinforcementLearning
                 return;
             }
 
+            if(model.rewardsNormalizer.gamma != model.config.gamma)
+                model.rewardsNormalizer.gamma = model.config.gamma;
+
 
             // Check Decision Requester
             DecisionRequester = GetComponent<DecisionRequester>();
@@ -123,7 +127,7 @@ namespace DeepUnity.ReinforcementLearning
             InitBuffers();
             switch (onEpisodeEnd)
             {
-                case OnEpisodeEndType.Nothing:
+                case OnEpisodeEndType.NothingHappens:
                     PositionReseter = null;
                     break;
                 case OnEpisodeEndType.ResetAgent:
@@ -509,17 +513,47 @@ namespace DeepUnity.ReinforcementLearning
                     sb.Append(" / ");
                     sb.Append(script.model.config.bufferSize);
                     sb.Append($"] \n[");
-                    for (float i = 1.25f; i <= 100f; i += 1.25f)
+                    // This one is perfect.
+                    for (int i = 2; i <= 100f; i += 2)
                     {
-                        if (i == 47.5f)
+                        if (i == 46)
                             sb.Append($"{bufferFillPercentage.ToString("00.0")}%");
-                        else if (i > 47.5f && i <= 53.75f)
+                        else if (i > 46 && i <= 56)
                             continue;
                         else if (i <= bufferFillPercentage)
-                            sb.Append("▮");
+                            sb.Append("█");
+                        else if (i <= bufferFillPercentage + 2)
+                            sb.Append("▓");
+                        else if (i <= bufferFillPercentage + 4)
+                            sb.Append("▒");
                         else
-                            sb.Append("▯");
+                            sb.Append("░");
                     }
+                    // This one is too short
+                    // for (float i = 2.5f; i <= 100f; i += 2.5f)
+                    // {
+                    //     if (i == 47.5f)
+                    //         sb.Append($"{bufferFillPercentage.ToString("00.0")}%");
+                    //     else if (i > 47.5f && i <= 55f)
+                    //         continue;
+                    //     else if (i <= bufferFillPercentage)
+                    //         sb.Append("█");
+                    //     else
+                    //         sb.Append("░");
+                    // }
+            
+                    // This one is too long
+                    // for (float i = 1.25f; i <= 100f; i += 1.25f)
+                    // {
+                    //     if (i == 47.5f)
+                    //         sb.Append($"{bufferFillPercentage.ToString("00.0")}%");
+                    //     else if (i > 47.5f && i <= 53.75f)
+                    //         continue;
+                    //     else if (i <= bufferFillPercentage)
+                    //         sb.Append("▮");
+                    //     else
+                    //         sb.Append("▯");
+                    // }
                     sb.Append("]");
                     EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
                     EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
@@ -536,16 +570,16 @@ namespace DeepUnity.ReinforcementLearning
                     sb.Append(" / ");
                     sb.Append(script.model.config.replayBufferSize);
                     sb.Append($"] \n[");
-                    for (float i = 1.25f; i <= 100f; i += 1.25f)
+                    for (int i = 2; i <= 100f; i += 2)
                     {
-                        if (i == 47.5f)
+                        if (i == 46)
                             sb.Append($"{bufferFillPercentage.ToString("00.0")}%");
-                        else if (i > 47.5f && i <= 53.75f)
+                        else if (i > 46 && i <= 56)
                             continue;
                         else if (i <= bufferFillPercentage)
-                            sb.Append("▮");
+                            sb.Append("█");
                         else
-                            sb.Append("▯");
+                            sb.Append("░");
                     }
                     sb.Append("]");
                     EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
@@ -696,3 +730,53 @@ namespace DeepUnity.ReinforcementLearning
     }
 #endif
 }
+
+
+// Legacy bar progress (too hard to compute)
+// for (int i = 2; i <= 100; i += 2)
+// {
+//     
+//     if (i == 46)
+//     {
+//         sb.Append($"{bufferFillPercentage.ToString("00.0")}%");
+//         continue;
+//     }
+//     else if (i > 46 && i <= 56)
+//     {
+//         continue;
+//     }
+// 
+//     char block;
+//     if (i <= bufferFillPercentage)
+//         block = '█';
+//     else if (i <= bufferFillPercentage + 2)
+//         block = '▓';
+//     else if (i <= bufferFillPercentage + 4)
+//         block = '▒';
+//     else
+//         block = '░';
+// 
+//     if (i >= 40 && i < 46 && bufferFillPercentage >= 46)
+//     {
+//         int distance = 46 - i;
+//         if (distance == 2)
+//             block = '░';
+//         else if (distance == 4)
+//             block = '▒';
+//         else if (distance >= 6)
+//             block = '▓';
+//     }
+// 
+//     if (i > 56 && i <= 62 && bufferFillPercentage >= 56)
+//     {
+//         int distance = i - 56; .
+//         if (distance == 2)
+//             block = '░';
+//         else if (distance == 4)
+//             block = '▒';
+//         else if (distance >= 6)
+//             block = '▓';
+//     }
+// 
+//     sb.Append(block);
+// }

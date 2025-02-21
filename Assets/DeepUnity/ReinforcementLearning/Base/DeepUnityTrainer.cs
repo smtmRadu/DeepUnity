@@ -18,7 +18,8 @@ namespace DeepUnity.ReinforcementLearning
         public static int MemoriesCount { get => Instance.parallelAgents.Sum(x => x.Memory.Count); }
         
         /// <summary>
-        /// The total number or Fixed Updates since the start of the game. (ReadOnly)
+        /// The total number or Fixed Updates since the start of the game. (ReadOnly) <br>  </br>
+        /// Consider this is not equivalent to the global step, because agents can take decisions at different intervals of frames.
         /// </summary>
         public int FixedFrameCount { get; private set; } = 0;
 

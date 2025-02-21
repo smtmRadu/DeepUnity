@@ -46,7 +46,7 @@ namespace DeepUnity.ReinforcementLearning
 
         [Header("Behaviour Configurations")]
         
-        [SerializeField, Tooltip("Network forward progapation is runned on this device when the agents interfere with the environment.")]
+        [SerializeField, Tooltip("Network forward progapation is runned on this device when the agents interfere with the environment. (including Learning behaviour)")]
         public Device inferenceDevice = Device.CPU;
 
         [SerializeField, Tooltip("Network computation is runned on this device when training on batches. It is highly recommended to be set on GPU if it is available.")]
@@ -599,7 +599,7 @@ namespace DeepUnity.ReinforcementLearning
             newAgBeh.continuousDim = continuousActions;
             newAgBeh.discreteDim = discreteActions;
             newAgBeh.observationsNormalizer = new RunningNormalizer(stateSize * stackedInputs);
-            newAgBeh.rewardsNormalizer = new RewardsNormalizer();
+            newAgBeh.rewardsNormalizer = new RewardsNormalizer(); // the gamma is updated afterwards
             newAgBeh.assetCreated = true;
 
             // Create the asset
@@ -860,7 +860,7 @@ namespace DeepUnity.ReinforcementLearning
 
             TryReassignReference_EditorOnly();
             Save();
-            ConsoleMessage.Info($"<b>[OVERWRITE]</b> Agent behaviour <b><i>{behaviourName}</i></b> was overriden with new weights from desktop");
+            ConsoleMessage.Info($"<b>[OVERWRITE]</b> Agent behaviour <b><i>{behaviourName}</i></b> was overriden with the new weights from Desktop");
             // well this complete reassignation.. a lot of stuff going on i'm to lazy to implement it for now.
         }
     }
@@ -868,7 +868,7 @@ namespace DeepUnity.ReinforcementLearning
     [UnityEditor.CustomEditor(typeof(AgentBehaviour), true), UnityEditor.CanEditMultipleObjects]
     sealed class CustomAgentBehaviourEditor : UnityEditor.Editor
     {
-        const string updateButtonMessage = "A version of this behavior is available on the desktop. \nPress this button to update this policy with the weights of that version.";
+        const string updateButtonMessage = "A version of this behavior is available on the desktop. \nPRESS to update the policy with the weights of that version.";
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -942,6 +942,11 @@ namespace DeepUnity.ReinforcementLearning
                 dontDrawMe.Add("observationsNormalizer");
                 dontDrawMe.Add("rewardsNormalizer");
             }
+            else if(script.config != null && script.rewardsNormalizer.gamma != script.config.gamma) // this is done here for automatic update, but i also change it on deepunity trainer.
+            {
+                script.rewardsNormalizer.gamma = script.config.gamma;
+            }
+                
 
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
             serializedObject.ApplyModifiedProperties();

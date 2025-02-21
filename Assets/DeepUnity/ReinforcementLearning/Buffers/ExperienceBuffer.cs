@@ -6,7 +6,7 @@ using Unity.VisualScripting;
 namespace DeepUnity.ReinforcementLearning
 {
     /// <summary>
-    /// The common buffer of the agents that holds all experiences across all parallel environments
+    /// The common buffer of the agents that holds all experiences across all parallel environments.
     /// </summary>
     public class ExperienceBuffer
     {
@@ -22,10 +22,13 @@ namespace DeepUnity.ReinforcementLearning
         public Tensor[] Advantages { get => frames.Select(x => x.advantage).ToArray(); }
         public Tensor[] Goals { get => frames.Select(x => x.goal).ToArray(); }
 
-
-        public ExperienceBuffer(int alloc_size)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="initial_alloc_size">Just initial allocation, the buffer can receive any number of timeframes.</param>
+        public ExperienceBuffer(int initial_alloc_size)
         {
-            frames = new List<TimestepTuple>(alloc_size);
+            frames = new List<TimestepTuple>(initial_alloc_size);
         }
         public void Shuffle()
         {

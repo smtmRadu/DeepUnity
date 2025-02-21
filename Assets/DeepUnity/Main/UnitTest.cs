@@ -22,6 +22,8 @@ namespace DeepUnity.Tutorials
         private Tensor x, y;
         private void Start()
         {
+            x = Tensor.Zeros(1, 1);
+            print(x.ToString());
             // Tensor.FusedAdamW(null, null, null, null, null,1,(1,1),(1,1),1,1, true, true);
             // ConvTranspose2D conv = new ConvTranspose2D(2, 3, 3);
             // 

@@ -175,7 +175,7 @@ namespace DeepUnity
     public enum OnEpisodeEndType
     {
         [Tooltip("When the episode ends, OnEpisodeBegin() method is called.")]
-        Nothing,
+        NothingHappens,
         [Tooltip("When the episode ends, agent's transforms and rigidbodies are reinitialized. OnEpisodeBegin() is called afterwards.")]
         ResetAgent,
         [Tooltip("When the episode ends, environment's transforms and rigidbodies (including the agent) are reinitialized. OnEpisodeBegin() is called afterwards.")]

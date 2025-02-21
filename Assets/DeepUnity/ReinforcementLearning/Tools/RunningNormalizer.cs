@@ -5,8 +5,8 @@ namespace DeepUnity.ReinforcementLearning
 {
     
     /// <summary>
-    /// All inputs are normalized using the following formula:
-    /// x = (x - mu) / std.
+    /// Inputs are normalized using the following formula:
+    /// x = (x - mu) / sqrt(var + eps).
     /// </summary>
     [Serializable]
     public class RunningNormalizer
@@ -34,10 +34,10 @@ namespace DeepUnity.ReinforcementLearning
         public Tensor StdEps => Tensor.Sqrt(m2 /  (step - 1) + eps);
         public RunningNormalizer(int size, float eps = 1e-8f)
         {
-            step = 0;
+            this.step = 0;
             this.eps = eps;
-            mean = Tensor.Zeros(size);
-            m2 = Tensor.Zeros(size);
+            this.mean = Tensor.Zeros(size);
+            this.m2 = Tensor.Zeros(size);
         }
 
         public Tensor Normalize(Tensor x)
