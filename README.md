@@ -153,11 +153,6 @@ public class MoveToGoal : Agent
 
 - The previous built app, along with the trained weights in .json format are now disposable (remove them and replace the build with a new one).
 
-###### _Base Agent class - order of execution for event functions_
-![agentclass](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/agentclass.png?raw=true)
-
-All tutorial scripts are included inside _Assets/DeepUnity/Tutorials_ folder, containing all features provided by the framework and RL environments inspired from ML-Agents examples (note that not all of them have trained models attached).
-
 ###### _Sorter agent whose task is to visit the tiles in ascending order_
 ![sorter](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/sorter.gif?raw=true)
 
@@ -167,4 +162,4 @@ All tutorial scripts are included inside _Assets/DeepUnity/Tutorials_ folder, co
 ##### _And not only the crawlers_
 ![humanoid](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/humanoid.gif?raw=true)
 
-
+All tutorial scripts are included inside _Assets/DeepUnity/Tutorials_ folder, containing all features provided by the framework and RL environments inspired from ML-Agents examples (note that not all of them have trained models attached).

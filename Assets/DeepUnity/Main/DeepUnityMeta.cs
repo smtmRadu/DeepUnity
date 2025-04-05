@@ -190,6 +190,8 @@ namespace DeepUnity
         TrainebleStandardDeviation,
         [Tooltip("Zero-mean Gaussian noise is added over the actions. Used for deterministic policies (TD3, DDPG)")]
         ActiveNoise,
+        [Tooltip("Ornstein-Uhlenbeck noise is added over the actions. Used in DPPG.")]
+        OUNoise,
         [Tooltip("Actions are drawn from an uniform distribution. Used at the beginning in off-policy algorithms (SAC, DDPG, TD3)")]
         Random
     }
@@ -243,7 +245,7 @@ namespace DeepUnity
     {
         Tanh,
         Relu, // Fast end efficient
-        Rish // Costly to compute but captures better (note that I just invented this activation and I didn't test it out).
+        Swish // Costly to compute but captures better (note that I just invented this activation and I didn't test it out).
     }
     public enum HiddenStates
     {

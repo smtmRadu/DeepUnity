@@ -12,9 +12,9 @@ namespace DeepUnity.ReinforcementLearning
 {
     internal sealed class TD3Trainer : DeepUnityTrainer, IOffPolicy
     {
-        private static Sequential Qtarg1;
-        private static Sequential Qtarg2;
-        private static Sequential Pitarg;
+        private static Sequential q1TargNetwork;
+        private static Sequential q2TargNetwork;
+        private static Sequential muTargNetwork;
 
         public Optimizer optim_q1 { get; set; }
         public Optimizer optim_q2 { get; set; }
@@ -25,6 +25,7 @@ namespace DeepUnity.ReinforcementLearning
         private int qFunctionUpdates = 0; // used to track num of phi steps to check for policy delay
         protected override void Initialize()
         {
+            // In TD3 Mu net must have tanh activation.
             if (model.muNetwork.Modules.Last().GetType() != typeof(Tanh))
                 model.muNetwork.Modules = model.muNetwork.Modules.Concat(new IModule[] { new Tanh() }).ToArray();
 
@@ -40,16 +41,20 @@ namespace DeepUnity.ReinforcementLearning
             optim_mu.Scheduler = new LinearAnnealing(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
 
             // Initialize target networks
-            Qtarg1 = model.q1Network.Clone() as Sequential;
-            Qtarg2 = model.q2Network.Clone() as Sequential;
-            Pitarg = model.muNetwork.Clone() as Sequential;
+            q1TargNetwork = model.q1Network.Clone() as Sequential;
+            q2TargNetwork = model.q2Network.Clone() as Sequential;
+            muTargNetwork = model.muNetwork.Clone() as Sequential;
+
+            q1TargNetwork.RequiresGrad = false;
+            q2TargNetwork.RequiresGrad = false;
+            muTargNetwork.RequiresGrad = false;
 
             // Set devices
             model.muNetwork.Device = model.inferenceDevice;
 
-            Qtarg1.Device = model.trainingDevice;
-            Qtarg2.Device = model.trainingDevice;
-            Pitarg.Device = model.trainingDevice;
+            q1TargNetwork.Device = model.trainingDevice;
+            q2TargNetwork.Device = model.trainingDevice;
+            muTargNetwork.Device = model.trainingDevice;
             model.q1Network.Device = model.trainingDevice;
             model.q2Network.Device = model.trainingDevice;
 
@@ -92,7 +97,7 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     model.stochasticity = Stochasticity.ActiveNoise;
 
-                    actorLoss = 0;
+                    // actorLoss = 0;
                     criticLoss = 0;
 
                     updateBenchmarkClock = Stopwatch.StartNew();
@@ -100,7 +105,7 @@ namespace DeepUnity.ReinforcementLearning
                     updateBenchmarkClock.Stop();
 
                     updateIterations++;
-                    actorLoss /= hp.updatesNum;
+                    // actorLoss /= hp.updatesNum;
                     criticLoss /= hp.updatesNum;
                     entropy = model.noiseValue;
                     currentSteps += new_experiences_collected / decision_freq;
@@ -151,18 +156,18 @@ namespace DeepUnity.ReinforcementLearning
        
         public void ComputeTargetActions(Tensor sPrime, out Tensor aPrime_sPrime)
         {
-            Tensor muTarg_sPrime = Pitarg.Predict(sPrime);
-            Tensor xi = Tensor.RandomNormal((0, model.noiseValue), muTarg_sPrime.Shape).Clip(-hp.noiseClip, hp.noiseClip);
+            Tensor muTarg_sPrime = muTargNetwork.Predict(sPrime);
+            Tensor eps = Tensor.RandomNormal(mean_sd:(0, hp.targetNoise), shape:muTarg_sPrime.Shape).Clip(-hp.noiseClip, hp.noiseClip);
 
-            aPrime_sPrime = (muTarg_sPrime + xi).Clip(-1f, 1f);
+            aPrime_sPrime = (muTarg_sPrime + eps).Clip(-1f, 1f);
         }
         private void ComputeQTargets(TimestepTuple[] batch, Tensor sPrime, Tensor aPrime_sPrime, out Tensor y)
         {
-            Tensor paired_sPrime_aPrime = Pairify(sPrime, aPrime_sPrime);
-            Tensor Qtarg1_sPrime_aTildePrime = Qtarg1.Predict(paired_sPrime_aPrime); // (B, 1)
-            Tensor Qtarg2_sPrime_aTildePrime = Qtarg2.Predict(paired_sPrime_aPrime); // (B, 1)
+            Tensor paired_sPrime_aPrimesPrime = Pairify(sPrime, aPrime_sPrime); // (s', a'(s'))
+            Tensor Qtarg1_sPrime_aTildePrime = q1TargNetwork.Predict(paired_sPrime_aPrimesPrime); // (B, 1)
+            Tensor Qtarg2_sPrime_aTildePrime = q2TargNetwork.Predict(paired_sPrime_aPrimesPrime); // (B, 1)
 
-            for (int b = 0; b < batch.Length; b++)
+            Parallel.For(0, batch.Length, b =>
             {
                 // y(r,s',d) = r + Ɣ(1 - d)[min(Q1t(s',ã'), Q2t(s',ã'))]
 
@@ -174,7 +179,7 @@ namespace DeepUnity.ReinforcementLearning
                 float y_ = r + hp.gamma * (1f - d) * MathF.Min(Qt1_sa, Qt2_sa);
 
                 batch[b].q_target = Tensor.Constant(y_);
-            }
+            });
 
             y = Tensor.Concat(null, batch.Select(x => x.q_target).ToArray());
         }
@@ -199,10 +204,11 @@ namespace DeepUnity.ReinforcementLearning
         }
         private void UpdatePolicy(Tensor states)
         {
+            actorLoss = 0; // put it here because of the policy delay, so the loss holds
             // ObjectiveLoss = 1/|B| Σ Q1(s, mu(s))
             Tensor mu_s = model.muNetwork.Forward(states);
             Tensor q1_s_mu_s = model.q1Network.Forward(Pairify(states, mu_s));
-            actorLoss += q1_s_mu_s.Average();
+            actorLoss += q1_s_mu_s.Average() / hp.updatesNum;
 
             Tensor objectiveLossGrad = -Tensor.Ones(q1_s_mu_s.Shape); // gradient ascent (grad of Mean()) -> mean is computed already on each layer (mean of the batch)
             Tensor s_mu_s_grad = model.q1Network.Backward(objectiveLossGrad);
@@ -218,9 +224,9 @@ namespace DeepUnity.ReinforcementLearning
             Tensor[] phi1 = model.q1Network.Parameters().Select(x => x.param).ToArray();
             Tensor[] phi2 = model.q2Network.Parameters().Select(x => x.param).ToArray();
 
-            Tensor[] theta_targ = Pitarg.Parameters().Select(x => x.param).ToArray();
-            Tensor[] phi_targ1 = Qtarg1.Parameters().Select(x => x.param).ToArray();
-            Tensor[] phi_targ2 = Qtarg2.Parameters().Select(x => x.param).ToArray();
+            Tensor[] theta_targ = muTargNetwork.Parameters().Select(x => x.param).ToArray();
+            Tensor[] phi_targ1 = q1TargNetwork.Parameters().Select(x => x.param).ToArray();
+            Tensor[] phi_targ2 = q2TargNetwork.Parameters().Select(x => x.param).ToArray();
 
             // We update the target q functions and theta softly...
             // OpenAI algorithm uses polyak = 0.995, the same thing with using τ = 0.005

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -14,7 +14,7 @@ namespace DeepUnity.ReinforcementLearning
         [Header("Training Configuration")]
 
         [Tooltip("Algorithm used in training the agent. Note that defaults are for PPO.")]
-        public TrainerType trainer = TrainerType.PPO;
+        [ViewOnly] public TrainerType trainer = TrainerType.PPO;
 
         [Tooltip("[Typical range: 1e5 - 1e7] The maximum length in steps of this training session.")]
         [Min(10_000f)] public long maxSteps = 2_000_000_000;
@@ -35,17 +35,17 @@ namespace DeepUnity.ReinforcementLearning
 
         [Header("Specific Configuration")] // https://github.com/yosider/ml-agents-1/blob/master/docs/Training-PPO.md
 
-        [Tooltip("[Typical range: (Continuous) 512 - 5120, (Discrete) 32 - 512] Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer size.")]
-        [MinMax(64, 5120)] public int batchSize = 512;
-
         [Tooltip("[Typical range: 2048 - 409600] Number of experiences to collect before updating the policy model. Corresponds to how many experiences should be collected before we do any learning or updating of the model. This should be multiple times larger than batch size. Typically a larger buffer size corresponds to more stable training updates.")]
         [MinMax(2048, 409600)] public int bufferSize = 10240; // Do not exagerate with this, keep it at a max of 1M.
 
-        [Tooltip("[Typical range: 64 - 2048] How many steps of experience to collect per-agent before adding it to the experience buffer.")]
-        [MinMax(32, 4096)] public int horizon = 256;
+        [Tooltip("[Typical range: (Continuous) 512 - 5120, (Discrete) 32 - 512] Number of experiences in each iteration of gradient descent. This should always be multiple times smaller than buffer size.")]
+        [MinMax(64, 5120)] public int batchSize = 512;
 
         [Tooltip("[Typical range: 3 - 10] Number of epochs per buffer.")]
         [MinMax(3, 20)] public int numEpoch = 8;
+
+        [Tooltip("[Typical range: (-1, meaning +∞), (Capped) 64 - 2048] After how many steps into the future the rewards are no longer considered. If -1, all future steps till episode end are considered (capped horizon might be a little faster on smaller batch-sizes, in my implementation, if smaller than 32, it is considered -1).")]
+        [MinMax(-1, 4096)] public int horizon = -1;
 
         [Tooltip("[Typical range: 1e-4 - 1e-2] Entropy regularization for trainable standard deviation. Also used for Shannon entropy in discrete action space.")]
         [MinMax(0f, 0.01f)] public float beta = 5e-3f;
@@ -56,11 +56,11 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("[Typical range: 0.92 - 0.98] GAE factor.")]
         [MinMax(0.9f, 1f)] public float lambda = 0.96f;
 
-        [Tooltip("[Typical range: 0 - 0.5] Global Gradient Clipping max norm value. Set to 0 to turn off.")]
-        [MinMax(0f, 0.5f)] public float maxNorm = 0.5f;
-
         [Tooltip("[Typical range: 0.5 - 1] Value loss function coefficient")]
         [MinMax(0.5f, 1f)] public float valueCoeff = 0.5f;
+
+        [ViewOnly, Tooltip("[Typical range: 0 - 1.0] Global Gradient Clipping max norm value. Set to 0 to turn off. For now it is disabled because we use StableAdamW as a relacement for AdamW+GradientClipping.")]
+        [MinMax(-1f, 1f)] public float maxNorm = 0.5f;
 
         [Tooltip("Use of KLE")]
         public KLEType KLDivergence = KLEType.Off;
@@ -76,16 +76,16 @@ namespace DeepUnity.ReinforcementLearning
         [Header("Specific Configuration")]
 
         [Tooltip("[Typical range: 50000 - 1000000] The maximum capacity to hold experices. When getting fullfilled, the old experiences are removed to enable new space.")]
-        [Min(50000)] public int replayBufferSize = 1_000_000;
+        [MinMax(50_000, 5_000_000)] public int replayBufferSize = 1_000_000;
 
         [Tooltip("[Typical range: 32 - 1024] The number of samples in the minibatch when performing a policy or Q update.")]
         [MinMax(32, 1024)] public int minibatchSize = 64;
 
         [Tooltip("[Typicall range: 1 - 128] Number of steps taken before updating the policy. Doesn't count for parallel agents, this considers only 1 decision.")]
-        [MinMax(1, 128)] public int updateInterval = 64;
+        [MinMax(1, 128)] public int updateInterval = 50;
 
         [Tooltip("[Typicall range > Batch Size] Number of steps collected before updating the policy. In this timeframe, the actions will be purely random.")]
-        [Min(64)] public int updateAfter = 10_240;
+        [Min(64)] public int updateAfter = 1024;
 
         [Tooltip("[Typical range: 1 - 8] Number of mini-batches sampled on policy model update. This can be increased while also increasing updateEvery.")]
         [MinMax(1, 8)] public int updatesNum = 1;
@@ -100,8 +100,11 @@ namespace DeepUnity.ReinforcementLearning
 
         // TD3/DDPG specific
 
-        [Tooltip("The clip applied to the active noise.")]
-        public float noiseClip = 0.5f;
+        [Tooltip("The clip applied to the active noise. (clip epsilon)")]
+        [MinMax(0.001f, 2f)] public float noiseClip = 0.5f;
+
+        [Tooltip("Noise used for computing target actions. (sigma)")]
+        [MinMax(0.001f, 3f)] public float targetNoise = 0.2f;
 
         [Tooltip("Policy will only be updated once every policy_delay times for each update of the Q-networks.")]
         [MinMax(0, 10)] public int policyDelay = 2;
@@ -183,7 +186,9 @@ namespace DeepUnity.ReinforcementLearning
 
                 dontDrawMe.Add("activeNoise");
                 dontDrawMe.Add("noiseClip");
+                dontDrawMe.Add("targetNoise");
                 dontDrawMe.Add("policyDelay");
+
             }
             else if (script.trainer == TrainerType.SAC)
             {
@@ -202,6 +207,7 @@ namespace DeepUnity.ReinforcementLearning
                 dontDrawMe.Add("normalizeAdvantages");
 
                 dontDrawMe.Add("noiseClip");
+                dontDrawMe.Add("targetNoise");
                 dontDrawMe.Add("policyDelay");
             }
             else if (script.trainer == TrainerType.TD3)
@@ -241,6 +247,7 @@ namespace DeepUnity.ReinforcementLearning
 
                 dontDrawMe.Add("alpha");
                 dontDrawMe.Add("noiseClip");
+                dontDrawMe.Add("targetNoise");
                 dontDrawMe.Add("policyDelay");
             }
             else

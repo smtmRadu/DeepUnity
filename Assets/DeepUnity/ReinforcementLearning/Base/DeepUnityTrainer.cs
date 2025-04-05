@@ -181,7 +181,14 @@ namespace DeepUnity.ReinforcementLearning
 
                 Instance.parallelAgents = new();
                 Instance.hp = agent.model.config;
-                Instance.train_data = new ExperienceBuffer(Instance.hp.trainer == TrainerType.PPO ? Instance.hp.bufferSize : Instance.hp.replayBufferSize / 10); // basically this might be full but i will let it like this
+                Instance.train_data = new ExperienceBuffer(Instance.hp.trainer switch
+                {
+                    TrainerType.PPO => Instance.hp.bufferSize,
+                    TrainerType.SAC => Instance.hp.replayBufferSize,
+                    TrainerType.TD3 => Instance.hp.replayBufferSize,
+                    TrainerType.DDPG => Instance.hp.replayBufferSize,
+                    _ => throw new NotSupportedException("Unhandled Trainer Type in initializing the train_data buffer")
+                });
                 Instance.model = agent.model;
                 Instance.Initialize();
             }

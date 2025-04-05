@@ -543,6 +543,21 @@ MonoBehaviour:
     steps: 0
     current: 0
     mean: 0
+  performanceGraph2:
+    graph:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    steps: 0
+    current: 0
+    mean: 0
+  mu: 0
+  sigma: 0.1
+  theta: 0.15
+  dt: 0.0001
+  x0: 0
 --- !u!4 &173192359
 Transform:
   m_ObjectHideFlags: 0

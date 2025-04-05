@@ -4,6 +4,8 @@ using DeepUnity.Modules;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.Eventing.Reader;
+using System.Drawing.Printing;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -45,7 +47,7 @@ namespace DeepUnity.ReinforcementLearning
 
 
         [Header("Behaviour Configurations")]
-        
+
         [SerializeField, Tooltip("Network forward progapation is runned on this device when the agents interfere with the environment. (including Learning behaviour)")]
         public Device inferenceDevice = Device.CPU;
 
@@ -59,16 +61,16 @@ namespace DeepUnity.ReinforcementLearning
         [Range(1f, 10f), SerializeField, Tooltip("Observations are clipped [after normarlization] in range [-clip, clip]. \n Rewards (per timestep) are clipped in range [-clip, clip]. \nNote that using a high clipping value (c > 5) may induce instability on large number of inputs.")]
         public float clipping = 5f;
 
-        [SerializeField, Tooltip("Auto-normalize input observations and rewards for a stable training. Use only in cases where is hard for you to normalize them, it is better to normalize manually (if possible).")]
+        [SerializeField, Tooltip("Auto-normalize input observations and rewards for a stable training. Use only in cases where is hard for you to normalize them, it is better to normalize manually (if possible). For now, compatible only with on-policy algorithms (e.g. PPO).")]
         public bool normalize = false;
 
         [ViewOnly, SerializeField, Tooltip("Observations normalizer.")]
-        public RunningNormalizer observationsNormalizer;    
+        public RunningNormalizer observationsNormalizer;
 
         [ViewOnly, SerializeField, ToolboxItem("Rewards normalizer")]
         public RewardsNormalizer rewardsNormalizer;
 
-        [Header("Exploration in Continuous Action space")]
+        [Header("Exploration in Continuous Action spaces")]
         [SerializeField, Tooltip("The Continuous Actions form of exploration.")]
         public Stochasticity stochasticity = Stochasticity.FixedStandardDeviation;
         [Tooltip("Modify this value to change the exploration/exploitation ratio.")]
@@ -82,10 +84,12 @@ namespace DeepUnity.ReinforcementLearning
         [SerializeField, Min(0f)]
         public float noiseValue = 0.1f;
 
-
+        [NonSerialized] private OUNoise ouNoise = null; // it initializes at runtime based on the hyperparams and agents. We have separate OUNoise for each parallel agent.
 
         public bool IsUsingContinuousActions { get => continuousDim > 0; }
         public bool IsUsingDiscreteActions { get => discreteDim > 0; }
+
+       
 
         const string VALUE_NET_NAMING_CONVENTION = "V";
         const string Q1_NET_NAMING_CONVENTION = "Q1";
@@ -107,8 +111,8 @@ namespace DeepUnity.ReinforcementLearning
                         return new ReLU(in_place: true);
                     case NonLinearity.Tanh:
                         return new Tanh(in_place: true);
-                    case NonLinearity.Rish:
-                        return new Rish(in_place: true);
+                    case NonLinearity.Swish:
+                        return new Swish(in_place: true);
                     default:
                         throw new ArgumentException("Unhandles hidden activation");
                 }
@@ -121,7 +125,7 @@ namespace DeepUnity.ReinforcementLearning
                         return InitType.Kaiming_Uniform;
                     case NonLinearity.Tanh:
                         return InitType.Xavier_Uniform;
-                    case NonLinearity.Rish:
+                    case NonLinearity.Swish:
                         return InitType.Kaiming_Uniform;
                     default:
                         throw new ArgumentException("Unhandles hidden activation");
@@ -338,7 +342,7 @@ namespace DeepUnity.ReinforcementLearning
                 vNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                 if (CONTINUOUS_ACTIONS_NUM > 0)
                 {
-                    muNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Tanh() }).ToArray());
+                    muNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                     sigmaNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
                     q1Network = new Sequential(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                     q2Network = new Sequential(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
@@ -352,7 +356,7 @@ namespace DeepUnity.ReinforcementLearning
                 vNetwork = new Sequential(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                 if (CONTINUOUS_ACTIONS_NUM > 0)
                 {
-                    muNetwork = new Sequential(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Tanh() }).ToArray());
+                    muNetwork = new Sequential(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                     sigmaNetwork = new Sequential(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
                     q1Network = new Sequential(CreateLnMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                     q2Network = new Sequential(CreateLnMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
@@ -368,7 +372,7 @@ namespace DeepUnity.ReinforcementLearning
 
                 if (CONTINUOUS_ACTIONS_NUM > 0)
                 {
-                    muNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Tanh() }).ToArray());
+                    muNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                     sigmaNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
                     q1Network = new Sequential(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                     q2Network = new Sequential(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
@@ -383,7 +387,7 @@ namespace DeepUnity.ReinforcementLearning
 
                 if (CONTINUOUS_ACTIONS_NUM > 0)
                 {
-                    muNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Tanh() }).ToArray());
+                    muNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                     sigmaNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
                 }
 
@@ -403,7 +407,7 @@ namespace DeepUnity.ReinforcementLearning
 
                 if (CONTINUOUS_ACTIONS_NUM > 0)
                 {
-                    muNetwork = new Sequential(CreateATT(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Tanh() }).ToArray());
+                    muNetwork = new Sequential(CreateATT(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                     sigmaNetwork = new Sequential(CreateATT(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
                     q1Network = new Sequential(CreateATT((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                     q2Network = new Sequential(CreateATT((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
@@ -420,7 +424,7 @@ namespace DeepUnity.ReinforcementLearning
 
         /// <summary>
         /// Input: <paramref name="state"/> - <em>sₜ</em> | <see cref="Tensor"/> (<em>Observations</em>) or <see cref="Tensor"/>  (<em>Batch</em>, <em>Observations</em>)<br></br>
-        /// Output: <paramref name="action"/> - <em>aₜ</em> |  <see cref="Tensor"/>  (<em>Continuous Actions</em>)  or <see cref="Tensor"/>  (<em>Batch</em>, <em>Continuous Actions</em>)<br></br>
+        /// Output: <paramref name="action"/> - <em>aₜ</em> |  <see cref="Tensor"/>  (<em>Continuous Actions</em>)  or <see cref="Tensor"/>  (<em>Batch</em>, <em>Continuous Actions</em>) (unsquashed)<br></br> 
         /// Extra Output: <paramref name="probs"/> - <em>πθ(aₜ|sₜ)</em> | <see cref="Tensor"/>  (<em>Continuous Actions</em>) or <see cref="Tensor"/> (<em>Batch</em>, <em>Continuous Actions</em>)
         /// </summary>
         public void ContinuousEval(Tensor state, out Tensor action, out Tensor probs)
@@ -451,6 +455,17 @@ namespace DeepUnity.ReinforcementLearning
                 case Stochasticity.ActiveNoise:
                     mu = muNetwork.Predict(state);                  
                     action = (mu + Tensor.RandomNormal((0, noiseValue), mu.Shape)).Clip(-1f, 1f);// Check openai spinningup documentation. They fkin forgot to say that the e~N std is configurable (i don't think they forgot to clip also, maybe no clipping involved)
+                    probs = null;
+                    break;
+                case Stochasticity.OUNoise:
+                    mu = muNetwork.Predict(state);
+                    int num_agents_ = mu.Rank > 1 ? mu.Size(0) : 1;
+                    int num_actions_ = mu.Size(-1);
+                    if (ouNoise == null || ouNoise.sigma != this.noiseValue) // allow auto adapting of noise scale at runtime.
+                        ouNoise = new OUNoise(size: num_actions_ * num_agents_, sigma: this.noiseValue, dt: 1f / this.targetFPS);
+
+                    var eps = num_agents_ == 1 ? ouNoise.Sample() : ouNoise.Sample().Reshape(num_agents_, num_actions_);
+                    action = (mu + eps).Clip(-1f, 1f);
                     probs = null;
                     break;
                 case Stochasticity.Random:
@@ -487,6 +502,10 @@ namespace DeepUnity.ReinforcementLearning
                     sigmaBatch = sigmaNetwork.Forward(stateBatch) * standardDeviationScale;
                     break;
                 case Stochasticity.ActiveNoise:
+                    muBatch = muNetwork.Forward(stateBatch);
+                    sigmaBatch = null;
+                    break;
+                case Stochasticity.OUNoise:
                     muBatch = muNetwork.Forward(stateBatch);
                     sigmaBatch = null;
                     break;
@@ -916,6 +935,11 @@ namespace DeepUnity.ReinforcementLearning
                     dontDrawMe.Add("standardDeviationValue");
                     dontDrawMe.Add("standardDeviationScale");
                 }
+                else if(script.stochasticity == Stochasticity.OUNoise)
+                {
+                    dontDrawMe.Add("standardDeviationValue");
+                    dontDrawMe.Add("standardDeviationScale");
+                }
                 else if(script.stochasticity == Stochasticity.Random)
                 {
                     dontDrawMe.Add("standardDeviationValue");
@@ -946,7 +970,14 @@ namespace DeepUnity.ReinforcementLearning
             {
                 script.rewardsNormalizer.gamma = script.config.gamma;
             }
-                
+
+            // In the future I need to change this, and store raw and normaized values separately in the off policy algs buffers
+            if(script.normalize == true && script.config != null && script.config.trainer != TrainerType.PPO)
+            {
+                EditorGUILayout.HelpBox("'Normalize' is not yet compatible but with PPO.", MessageType.Warning);
+
+            }
+
 
             DrawPropertiesExcluding(serializedObject, dontDrawMe.ToArray());
             serializedObject.ApplyModifiedProperties();

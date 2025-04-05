@@ -774,7 +774,7 @@ namespace DeepUnity
             Tensor result = new(left.shape);
             for (int i = 0; i < result.data.Length; i++)
             {
-                result.data[i] = left.data[i] > right.data[i] ? 1 : 0;
+                result.data[i] = left.data[i] > right.data[i] ? 1f : 0f;
             }
 
             return result;
@@ -794,7 +794,7 @@ namespace DeepUnity
             Tensor result = new(left.shape);
             for (int i = 0; i < result.data.Length; i++)
             {
-                result.data[i] = left.data[i] < right.data[i] ? 1 : 0;
+                result.data[i] = left.data[i] < right.data[i] ? 1f : 0f;
             }
 
             return result;
@@ -815,7 +815,7 @@ namespace DeepUnity
 
             for (int i = 0; i < result.data.Length; i++)
             {
-                result.data[i] = left.data[i] >= right.data[i] ? 1 : 0;
+                result.data[i] = left.data[i] >= right.data[i] ? 1f : 0f;
             }
 
             return result;
@@ -836,7 +836,7 @@ namespace DeepUnity
 
             for (int i = 0; i < result.data.Length; i++)
             {
-                result.data[i] = left.data[i] <= right.data[i] ? 1 : 0;
+                result.data[i] = left.data[i] <= right.data[i] ? 1f : 0f;
             }
 
             return result;
@@ -3952,6 +3952,22 @@ namespace DeepUnity
             return result;
         }
         /// <summary>
+        /// Computes the tensor values passed through the ReLU function.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        public static Tensor ReLU(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Max(0f, tensor.data[i]);
+            }
+
+            return result;
+        }
+        /// <summary>
         /// Computes the tensor values passed through the hyperbolic tangent function.
         /// </summary>
         /// <param name="tensor"></param>
@@ -3984,6 +4000,38 @@ namespace DeepUnity
 
             return result;
            
+        }
+        /// <summary>
+        /// Computes the tensor values passed through the sigmoid activation function.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        public static Tensor Sigmoid(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = 1.0f /  (1 + MathF.Exp(-tensor.data[i]));
+            }
+
+            return result;
+        }
+        /// <summary>
+        /// Computes the tensor values passed through the softplus activation function.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        public static Tensor Softplus(Tensor tensor)
+        {
+            Tensor result = new(tensor.shape);
+
+            for (int i = 0; i < result.data.Length; i++)
+            {
+                result.data[i] = MathF.Log(1 + MathF.Exp(tensor.data[i]));
+            }
+
+            return result;
         }
         /// <summary>
         /// Computes the norm of the tensor, of any shape.
@@ -4281,6 +4329,18 @@ namespace DeepUnity
         public Tensor Sech()
         {
             return Sech(this);
+        }
+        public Tensor ReLU()
+        {
+            return ReLU(this);
+        }
+        public Tensor Sigmoid()
+        {
+            return Sigmoid(this);
+        }
+        public Tensor Softplus()
+        {
+            return Softplus(this);
         }
         public Tensor Norm(NormType norm = NormType.EuclideanL2, float eps = 1E-12f)
         {

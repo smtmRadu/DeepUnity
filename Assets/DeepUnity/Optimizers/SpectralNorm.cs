@@ -18,7 +18,7 @@ namespace DeepUnity.Optimizers
         /// Usage example: <br></br><br></br>
         /// optim.<b><i>SpectralNorm()</i></b> <br></br>
         /// net.<b>Forward()</b> <br></br>
-        /// net.<b>Backward(loss.Gradient)</b> <br></br>
+        /// net.<b>Backward(loss.Grad)</b> <br></br>
         /// optim.<b><i>SpectralDenorm()</i></b> <br></br>
         /// optim.<b>Step</b>()
         /// </summary>

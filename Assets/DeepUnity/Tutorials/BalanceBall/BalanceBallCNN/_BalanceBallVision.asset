@@ -33,6 +33,7 @@ MonoBehaviour:
   normalize: 0
   observationsNormalizer:
     step: 0
+    eps: 0
     mean:
       data:
       - 0
@@ -42,10 +43,16 @@ MonoBehaviour:
       - 0
       shape: 01000000
   rewardsNormalizer:
-    step: 0
-    R: 0
-    mean: 0
-    m2: 0
+    gamma: 0.99
+    returnsNormalizer:
+      step: 0
+      eps: 0
+      mean:
+        data: []
+        shape: 
+      m2:
+        data: []
+        shape: 
   stochasticity: 0
   standardDeviationValue: 1.82
   standardDeviationScale: 1.5

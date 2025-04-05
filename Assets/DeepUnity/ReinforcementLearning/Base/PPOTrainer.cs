@@ -36,8 +36,7 @@ namespace DeepUnity.ReinforcementLearning
         private Tensor[] disc_kle_cache { get; set; }
        
         protected override void Initialize()
-        {    
-            // MEAN Tanh module is removed in PPO
+        {
             if (model.IsUsingContinuousActions && model.muNetwork.Modules.Last().GetType() == typeof(Tanh))
                 model.muNetwork.Modules = model.muNetwork.Modules.Take(model.muNetwork.Modules.Length - 1).ToArray();
 
@@ -579,32 +578,52 @@ namespace DeepUnity.ReinforcementLearning
 
             // Vw_s = Tensor.FilterNaN(Vw_s, 0); it happpen in some cases to get NaN in the first timestep and then all are gonna be NaN
 
-
-            // Generalized Advantage Estimation
-            Parallel.For(0, T, timestep =>
+            if(HORIZON < 32)
             {
-                float discount = 1f;
-                float Ahat_t = 0f;
-                for (int t = timestep; t < MathF.Min(t + HORIZON, T); t++)
+                float gae = 0f;
+                for (int t = T - 1; t >=0; t--)
                 {
                     float r_t = frames[t].reward[0];
                     float V_st = Vw_s[t];
+                    float done = frames[t].done[0];
                     float V_next_st = frames[t].done[0] == 1 ? 0 : Vw_s[t + 1];  // if the state is terminal, next value is set to 0.
 
-                    float delta_t = r_t + GAMMA * V_next_st - V_st;
-                    Ahat_t += discount * delta_t;
-                    discount *= GAMMA * LAMBDA;
-
-                    if (frames[t].done[0] == 1)
-                        break;
+                    float delta = r_t + GAMMA * V_next_st * (1f - done) - V_st;
+                    gae = delta + GAMMA * LAMBDA * (1f - done) * gae;
+                    frames[t].advantage = Tensor.Constant(gae);
+                    frames[t].v_target = Tensor.Constant(gae + V_st);
+                    
                 }
+            }
+            else
+            {
+                // Generalized Advantage Estimation
+                Parallel.For(0, T, timestep =>
+                {
+                    float discount = 1f;
+                    float Ahat_t = 0f;
+                    for (int t = timestep; t < MathF.Min(t + HORIZON, T); t++)
+                    {
+                        float r_t = frames[t].reward[0];
+                        float V_st = Vw_s[t];
+                        float V_next_st = frames[t].done[0] == 1 ? 0 : Vw_s[t + 1];  // if the state is terminal, next value is set to 0.
 
-                // Vtarg[t] = GAE(gamma, lambda, t) + V[t]
-                float Vtarget_t = Ahat_t + Vw_s[timestep];
+                        float delta_t = r_t + GAMMA * V_next_st - V_st;
+                        Ahat_t += discount * delta_t;
+                        discount *= GAMMA * LAMBDA;
 
-                frames[timestep].v_target = Tensor.Constant(Vtarget_t);
-                frames[timestep].advantage = Tensor.Constant(Ahat_t);
-            });
+                        if (frames[t].done[0] == 1)
+                            break;
+                    }
+
+                    // Vtarg[t] = GAE(gamma, lambda, t) + V[t]
+                    float Vtarget_t = Ahat_t + Vw_s[timestep];
+
+                    frames[timestep].v_target = Tensor.Constant(Vtarget_t);
+                    frames[timestep].advantage = Tensor.Constant(Ahat_t);
+                });
+            }
+            
         }
         /// <summary>
         /// This method normalizes the advantages for a minibatch

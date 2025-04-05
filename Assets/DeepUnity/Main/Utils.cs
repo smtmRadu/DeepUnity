@@ -353,6 +353,10 @@ namespace DeepUnity
         {
             return value == 0 ? float.MaxValue : 0;
         }
+        public static float KroneckerDelta(float a, float b)
+        {
+            return a == b ? 1 : 0;
+        }
         public static float Sigmoid(float value)
         {
             return 1.0f / (1.0f + MathF.Exp(-value));
@@ -662,13 +666,14 @@ namespace DeepUnity
         {        
             // -- On tests, sampling numbers threadsafely is just 2 times less efficient than checking if we are on the main thread --//
             /// <summary>
-            /// Set the seed of the RNG. If not set, the seed is taken from the current time in ms.
+            /// Set the seed of the RNG, including UnityEngine's generator. If not set, the seed is taken from the current time in ms.
             /// </summary>
             public static int Seed
             {
                 set
                 {
                     RNG = new System.Random(value);
+                    UnityEngine.Random.InitState(value);
                 }
             }
             /// <summary>
