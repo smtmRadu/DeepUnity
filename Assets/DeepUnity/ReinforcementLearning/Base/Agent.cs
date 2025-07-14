@@ -503,7 +503,8 @@ namespace DeepUnity.ReinforcementLearning
                 EditorGUILayout.HelpBox(cumReward, MessageType.None);
 
                 // Draw buffer  
-                if (DeepUnityTrainer.Instance.GetType() == typeof(PPOTrainer))
+                if (DeepUnityTrainer.Instance.GetType() == typeof(PPOTrainer) ||
+                    DeepUnityTrainer.Instance.GetType() == typeof(VPGTrainer))
                 {
                     int buff_count = DeepUnityTrainer.MemoriesCount;
                     float bufferFillPercentage = buff_count / ((float)script.model.config.bufferSize) * 100f;

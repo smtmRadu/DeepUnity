@@ -16,7 +16,7 @@ namespace DeepUnity.Optimizers
         private readonly Tensor[] m;
         private readonly Tensor[] u;
 
-        public Adamax(Parameter[] parameters, float lr = 0.002f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-7f, float weight_decay = 0f) : base(parameters, lr, eps, weight_decay)
+        public Adamax(Parameter[] parameters, float lr = 0.002f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-7f, float weight_decay = 0f) : base(parameters, lr, eps, weight_decay, false)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;

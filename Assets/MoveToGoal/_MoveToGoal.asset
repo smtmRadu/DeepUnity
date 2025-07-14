@@ -1,0 +1,67 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
+  m_Name: _MoveToGoal
+  m_EditorClassIdentifier: 
+  version: 6
+  behaviourName: MoveToGoal
+  assetCreated: 1
+  observationSize: 4
+  stackedInputs: 1
+  continuousDim: 2
+  discreteDim: 0
+  config: {fileID: 11400000, guid: b6554c059c5b2724eb6c2273ed5bfcce, type: 2}
+  vNetwork: {fileID: 11400000, guid: 03966bc5187badb4e8459981f6017e45, type: 2}
+  q1Network: {fileID: 11400000, guid: 6946d28cc6b99494e89084dd3c76ad36, type: 2}
+  q2Network: {fileID: 11400000, guid: d743e03efbced894c8c451a75365ef9a, type: 2}
+  muNetwork: {fileID: 11400000, guid: ec35163d39fcb974fb430807affc62fd, type: 2}
+  sigmaNetwork: {fileID: 11400000, guid: a3b115a7da5494048beea2af640ef19b, type: 2}
+  discreteNetwork: {fileID: 0}
+  inferenceDevice: 0
+  trainingDevice: 1
+  targetFPS: 50
+  clipping: 5
+  normalize: 0
+  observationsNormalizer:
+    step: 0
+    eps: 0.00000001
+    mean:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 04000000
+    m2:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 04000000
+  rewardsNormalizer:
+    gamma: 0.99
+    returnsNormalizer:
+      step: 0
+      eps: 0.00000001
+      mean:
+        data:
+        - 0
+        shape: 01000000
+      m2:
+        data:
+        - 0
+        shape: 01000000
+  stochasticity: 0
+  standardDeviationValue: 2
+  standardDeviationScale: 1.5
+  noiseValue: 0.1

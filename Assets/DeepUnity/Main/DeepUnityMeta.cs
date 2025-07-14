@@ -231,7 +231,9 @@ namespace DeepUnity
         [Tooltip("Twin Delayed Deep Deterministic Policy Gradient")]
         TD3,
         [Tooltip("Deep Deterministic Policy Gradient")]
-        DDPG
+        DDPG,
+        [Tooltip("Vanilla Policy Gradient")]
+        VPG,
     }
 
     public enum TimescaleAdjustmentType

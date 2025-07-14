@@ -21,7 +21,7 @@ namespace DeepUnity.Optimizers
         private readonly Tensor[] v;
 
         public RAdam(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8f, float weightDecay = 0f, bool decoupled_weight_decay = false)
-            : base(parameters, lr, eps, weightDecay)
+            : base(parameters, lr, eps, weightDecay, false)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;

@@ -1,6 +1,7 @@
-using System.Diagnostics;
+
 using System.Threading.Tasks;
 using DeepUnity.Modules;
+
 namespace DeepUnity.Optimizers
 {
     public sealed class AdamW : Optimizer
@@ -8,7 +9,6 @@ namespace DeepUnity.Optimizers
         private readonly float beta1;
         private readonly float beta2;
         private readonly bool amsgrad;
-        private readonly bool maximize;
         private readonly bool fused;
         private readonly bool cautious; // check https://arxiv.org/pdf/2411.16085 for cautious optimizers
         // note that cautious fused adamw cannot be implemented because each param is modified individually.
@@ -46,7 +46,7 @@ namespace DeepUnity.Optimizers
             bool cautious = false, 
             bool maximize = false, 
             bool fused = false) 
-            : base(parameters, lr, eps, weight_decay)
+            : base(parameters, lr, eps, weight_decay,maximize)
         {
             this.amsgrad = amsgrad;
             this.maximize = maximize;

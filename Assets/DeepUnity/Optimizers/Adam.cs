@@ -9,7 +9,6 @@ namespace DeepUnity.Optimizers
         private readonly float beta1;
         private readonly float beta2;
         private readonly bool amsgrad;
-        private readonly bool maximize;
 
         private float beta1_t = 1f; // beta1^t caching
         private float beta2_t = 1f; // beta2^t caching
@@ -37,10 +36,9 @@ namespace DeepUnity.Optimizers
         /// <param name="weight_decay">If > 0, it is better to use <see cref="AdamW"/>.</param>
         /// <param name="amsgrad">Use AMSGrad version.</param>
         /// <param name="maximize">If true, gradients are added to the parameters on <see cref="Step()"/>.</param>
-        public Adam(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8F, float weight_decay = 0f, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weight_decay)
+        public Adam(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8F, float weight_decay = 0f, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weight_decay, maximize)
         {
             this.amsgrad = amsgrad;
-            this.maximize = maximize;
             this.beta1 = beta1;
             this.beta2 = beta2;
 

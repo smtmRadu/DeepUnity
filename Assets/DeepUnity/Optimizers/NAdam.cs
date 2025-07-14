@@ -23,7 +23,7 @@ namespace DeepUnity.Optimizers
 
 
 
-        public Nadam(Parameter[] parameters, float lr = 0.002f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8f, float weightDecay = 0f, float momentum_decay = 0.004f, bool decoupled_weight_decay = false) : base(parameters, lr, eps, weightDecay)
+        public Nadam(Parameter[] parameters, float lr = 0.002f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8f, float weightDecay = 0f, float momentum_decay = 0.004f, bool decoupled_weight_decay = false) : base(parameters, lr, eps, weightDecay,false)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;

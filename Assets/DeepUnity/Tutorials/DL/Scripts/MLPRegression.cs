@@ -70,7 +70,7 @@ namespace DeepUnity.Tutorials
             net.Predict(Tensor.Random01(2));
             net.Device = device;
 
-            optimizer = new StableAdamW(net.Parameters());
+            optimizer = new Muon(net.Parameters());
             // scheduler = new CosineAnnealingWithWarmup(optimizer, 500, 100, 0f);
 
 

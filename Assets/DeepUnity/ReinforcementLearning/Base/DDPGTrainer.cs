@@ -84,7 +84,6 @@ namespace DeepUnity.ReinforcementLearning
             if (new_experiences_collected < hp.updateInterval * decision_freq)
                 return;
 
-
             // if the buffer will be full after this collection, let's clear the old values
             if (train_data.Count > hp.replayBufferSize)
                 train_data.frames.RemoveRange(0, train_data.Count / 3); // If buffer is full, remove old third
@@ -198,9 +197,7 @@ namespace DeepUnity.ReinforcementLearning
 
             optim_mu.ZeroGrad();
             model.muNetwork.Backward(dLdA); //gradient ascent
-            optim_mu.Step();
-
-            
+            optim_mu.Step();     
         }
         private void UpdateTargetNetworks()
         {
@@ -209,19 +206,19 @@ namespace DeepUnity.ReinforcementLearning
             Tensor[] theta = model.muNetwork.Parameters().Select(x => x.param).ToArray();
             Tensor[] theta_targ = muTargNetwork.Parameters().Select(x => x.param).ToArray();
 
-            for (int i = 0; i < theta.Length; i++)
+            Parallel.For(0, theta.Length, i =>
             {
                 Tensor.CopyTo((1f - hp.tau) * theta_targ[i] + hp.tau * theta[i], theta_targ[i]);
-            }
-
-
+            });
+            
+            
             Tensor[] phi = model.q1Network.Parameters().Select(x => x.param).ToArray();
             Tensor[] phi_targ = qTargNetwork.Parameters().Select(x => x.param).ToArray();
-            
-            for (int i = 0; i < phi.Length; i++)
+
+            Parallel.For(0, phi.Length, i =>
             {
                 Tensor.CopyTo((1f - hp.tau) * phi_targ[i] + hp.tau * phi[i], phi_targ[i]);
-            }
+            });
         }
 
         /// <summary>

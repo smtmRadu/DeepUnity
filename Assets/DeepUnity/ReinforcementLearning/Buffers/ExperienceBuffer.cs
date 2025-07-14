@@ -98,7 +98,7 @@ namespace DeepUnity.ReinforcementLearning
             return Count == buffer_size;
         }
         /// <summary>
-        /// Try to add agent's memory to the training data by the limit of the buffer_size. If is already full, the append fails.
+        /// Try to add agent's memory to the training data by the limit of the buffer_size. If is already full, the append fails w/o warning.
         /// </summary>
         /// <param name="agentMemory"></param>
         /// <param name="buffer_size"></param>
@@ -146,7 +146,7 @@ namespace DeepUnity.ReinforcementLearning
                 sb.Append("\n");
 
                 if (frames[i].done[0] == 1)
-                    sb.Append("\n");
+                    sb.Append("===DONE===\n");
             }
             sb.AppendLine("}");
             return sb.ToString();

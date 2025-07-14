@@ -530,7 +530,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1ce1f756688e66a40b8a98fa736039d3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  device: 1
+  device: 0
   net: {fileID: 11400000, guid: 587aa50fe03dbcd489fd93c15d1a69e8, type: 2}
   canvas: {fileID: 1012927895}
   performanceGraph:

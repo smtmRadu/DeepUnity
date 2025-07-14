@@ -29,7 +29,7 @@ namespace DeepUnity.Optimizers
         /// <summary>
         /// THE ADEMAMIX OPTIMIZER: BETTER, FASTER, OLDER https://arxiv.org/pdf/2409.03137 Matteo Pagliardini et al. 2024
         /// </summary>
-        public AdEMAMix(Parameter[] parameters, float lr = 1e-3f, float beta1 = 0.9f, float beta2 = 0.999f, float beta3 = 0.9999f, float alpha = 5f, float eps = 1e-8F, float weight_decay = 0) : base(parameters, lr, eps, weight_decay)
+        public AdEMAMix(Parameter[] parameters, float lr = 1e-3f, float beta1 = 0.9f, float beta2 = 0.999f, float beta3 = 0.9999f, float alpha = 5f, float eps = 1e-8F, float weight_decay = 0) : base(parameters, lr, eps, weight_decay, false)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;

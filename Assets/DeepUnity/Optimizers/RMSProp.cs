@@ -21,7 +21,7 @@ namespace DeepUnity.Optimizers
         /// <param name="weight_decay"></param>
         /// <param name="momentum"></param>
         /// <param name="centered">the gradient is normalized by an estimation of its variance</param>
-        public RMSProp(Parameter[] parameters, float lr = 0.01f, float alpha = 0.99f, float eps = 1e-7f, float weight_decay = 0f, float momentum = 0f, bool centered = false) : base(parameters, lr, eps, weight_decay)
+        public RMSProp(Parameter[] parameters, float lr = 0.01f, float alpha = 0.99f, float eps = 1e-7f, float weight_decay = 0f, float momentum = 0f, bool centered = false) : base(parameters, lr, eps, weight_decay, false)
         {
             this.alpha = alpha;
             mu = momentum;

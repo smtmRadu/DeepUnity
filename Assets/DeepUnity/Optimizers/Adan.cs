@@ -26,7 +26,7 @@ namespace DeepUnity.Optimizers
         /// <param name="beta3"></param>
         /// <param name="weight_decay"></param>
         public Adan(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.02f, float beta2 = 0.08f, float beta3 = 0.01f, float eps = 1e-8f, float weight_decay = 0f)
-            : base(parameters, lr, eps, weight_decay)
+            : base(parameters, lr, eps, weight_decay, false)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;

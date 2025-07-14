@@ -21,16 +21,22 @@ namespace DeepUnity.Optimizers
         /// </summary>
         protected float epsilon;
         /// <summary>
+        /// either maximize or minimize loss.
+        /// </summary>
+        protected bool maximize;
+        /// <summary>
         /// step counter
         /// </summary>
         protected int t;
 
-        protected Optimizer(Parameter[] parameters, float lr, float eps, float weight_decay)
+
+        protected Optimizer(Parameter[] parameters, float lr, float eps, float weight_decay, bool maximize)
         {
             this.parameters = parameters;
             gamma = lr;
             lambda = weight_decay;
             epsilon = eps;
+            this.maximize = maximize;
             t = 0;
         }
         public abstract void Step();

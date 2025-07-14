@@ -4141,6 +4141,20 @@ namespace DeepUnity
 
             return triu;
         }
+        /// <summary>
+        /// Returns the tensor with the values rounded to integers.
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        public static Tensor Int(Tensor tensor)
+        {
+            Tensor intTensor = new(tensor.shape);
+            for (int i = 0; i < intTensor.data.Length; i++)
+            {
+                intTensor.data[i] = (int)tensor.data[i];
+            }
+            return intTensor;
+        }
         #endregion Statics
 
 
@@ -4357,6 +4371,10 @@ namespace DeepUnity
         public Tensor Triu(int diagonal = 0)
         {
             return Triu(this, diagonal);
+        }
+        public Tensor Int()
+        {
+            return Int(this);
         }
         #endregion Instance
 

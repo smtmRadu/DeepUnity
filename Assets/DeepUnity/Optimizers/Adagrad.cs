@@ -10,7 +10,7 @@ namespace DeepUnity.Optimizers
         private readonly Tensor[] state_sum;
 
         public Adagrad(Parameter[] parameters, float lr = 0.01f, float lrDecay = 0f, float eps = 1e-7f, float weightDecay = 0f)
-            : base(parameters, lr, eps, weightDecay)
+            : base(parameters, lr, eps, weightDecay, false)
         {
             eta = lrDecay;
 

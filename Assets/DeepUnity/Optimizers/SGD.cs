@@ -7,7 +7,6 @@ namespace DeepUnity.Optimizers
         private readonly float mu;
         private readonly float tau;
         private readonly bool nesterov;
-        private readonly bool maximize;
 
         private readonly Tensor[] m;
 
@@ -22,12 +21,11 @@ namespace DeepUnity.Optimizers
         /// <param name="nesterov"></param>
         /// <param name="maximize"></param>
         public SGD(Parameter[] parameters, float lr = 0.01f, float momentum = 0.9f, float weightDecay = 0f, float dampening = 0f, bool nesterov = false, bool maximize = false) 
-            : base(parameters, lr, 0, weightDecay)
+            : base(parameters, lr, 0, weightDecay, maximize)
         {
             this.mu = momentum;
             this.tau = dampening;
             this.nesterov = nesterov;
-            this.maximize = maximize;
 
             if(mu != 0)
             {

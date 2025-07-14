@@ -5,6 +5,7 @@ using DeepUnity;
 public class MoveToGoal : Agent
 {
     [Button("SetDefaultHP")]
+    [Header("5 discrete or 2 continuous actions")]
     public float speed = 10f;
     public Transform target;
     public float norm_scale = 8f;

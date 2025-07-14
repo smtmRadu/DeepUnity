@@ -10,7 +10,6 @@ namespace DeepUnity.Optimizers
     {
         private readonly float beta1;
         private readonly float beta2;
-        private readonly bool maximize;
         private readonly bool fused;
         private float beta1_t = 1f; // beta1^t caching
         private float beta2_t = 1f;
@@ -40,7 +39,7 @@ namespace DeepUnity.Optimizers
             float eps = 1e-6F, 
             float weight_decay = 0.01f,
             bool maximize = false,
-            bool fused = false) : base(parameters, lr, eps, weight_decay)
+            bool fused = false) : base(parameters, lr, eps, weight_decay, maximize)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;

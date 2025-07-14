@@ -6,6 +6,7 @@ using DeepUnity.Optimizers;
 using DeepUnity.Modules;
 using DeepUnity.Activations;
 using DeepUnity.ReinforcementLearning;
+using Unity.VisualScripting;
 
 namespace DeepUnity.Tutorials
 {
@@ -27,11 +28,13 @@ namespace DeepUnity.Tutorials
 
         private void Start()
         {
-            Tensor x = Tensor.Random01(10);
-            Tensor y = x.Clone() as Tensor;
-            print(x);
-            y[0] = 10;
-            print(y);
+            Embedding emb = new Embedding(100_00, 2, max_norm:1f);
+
+            var input = Tensor.Constant(new float[] { 10, 12 });
+
+            var outp = emb.Predict(input);
+            print(outp);
+
         }
     }
 

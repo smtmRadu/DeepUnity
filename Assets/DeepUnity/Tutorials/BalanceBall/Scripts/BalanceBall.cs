@@ -56,12 +56,13 @@ namespace DeepUnity.Tutorials
         public void SetDefaultHP()
         {
             Utils.Random.Seed = 0;
+            model.config.trainer = TrainerType.VPG;
             model.config.actorLearningRate = 1e-3f;
             model.config.criticLearningRate = 1e-3f;
             model.config.batchSize = 128;
             model.config.bufferSize = 2048;
             model.standardDeviationValue = 2;
-            model.config.timescale = 50;
+            model.config.timescale = 10;
 
             print("Config changed for Balance ball");
         }

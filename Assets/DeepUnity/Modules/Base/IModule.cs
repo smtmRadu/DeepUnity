@@ -31,6 +31,7 @@ namespace DeepUnity.Modules
         public LayerNorm layernorm = null;
         public RMSNorm rmsnorm = null;
         public BatchNorm batchnorm = null;
+        public Embedding embedding = null;
 
         // Lazy 
         public LazyConv2D lazyconv2d = null;
@@ -312,6 +313,10 @@ namespace DeepUnity.Modules
             {
                 rish = rishModule;
             }
+            else if(module is Embedding embeddingModule)
+            {
+                embedding = embeddingModule;
+            }
             else
                 throw new Exception($"Unhandled module type while wrapping ({module.GetType().Name}).");
         }
@@ -536,6 +541,10 @@ namespace DeepUnity.Modules
             else if (typeof(Rish).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.rish;
+            }
+            else if(typeof(Embedding).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.embedding;
             }
             else
                 throw new Exception($"Unhandled module type while unwrapping ({moduleWrapper.name}).");

@@ -1,6 +1,6 @@
 using DeepUnity.Modules;
 using System.Threading.Tasks;
-using Unity.VisualScripting;
+
 namespace DeepUnity.Optimizers
 {
     // https://arxiv.org/pdf/2302.06675.pdf
@@ -13,7 +13,7 @@ namespace DeepUnity.Optimizers
         private readonly Tensor[] m;
 
         public Lion(Parameter[] parameters, float lr = 1e-3f, float beta1 = 0.9f, float beta2 = 0.99f, float weightDecay = 0f, bool cautious = false)
-            : base(parameters, lr, 0, weightDecay)
+            : base(parameters, lr, 0, weightDecay, false)
         {
             this.beta1 = beta1;
             this.beta2 = beta2;

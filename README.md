@@ -1,5 +1,5 @@
 # DeepUnity (2022.3.43f1 lts)
-![version](https://img.shields.io/badge/version-v0.9.10.1-blue)
+![version](https://img.shields.io/badge/version-v0.9.10.3-blue)
 [Reference Paper](https://github.com/smtmRadu/Policy-Gradient-Methods-Insights-and-Optimization-Strategies)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using state-of-the-art algorithms.
@@ -28,7 +28,7 @@ public class Tutorial : MonoBehaviour
             new Dropout(0.1f),
             new Dense(256, 64, device: Device.GPU),
             new Swish(),
-            new LayerNorm(64),
+            new RMSNorm(64),
             new Dense(64, 32)).CreateAsset("TutorialModel");
         
         optim = new AdamW(network.Parameters());
@@ -50,16 +50,10 @@ public class Tutorial : MonoBehaviour
     }
 }
 ```
-###### _Digits generated with a GAN trained on MNIST dataset._
-![digits](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/gan.gif?raw=true)
 
-###### _Image reconstruction with a VAE trained on MNIST dataset. (original - first line, reconstructed - second line)_
-![digits](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/reconstruction.gif?raw=true)
-
-###### _Digit recognition with a ConvNet trained on MNIST dataset (390k params)._
-![digits](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/digit.gif?raw=true)
 
 ## Reinforcement Learning
+
 In order to work with Reinforcement Learning tools, you must create a 2D or 3D agent using Unity provided GameObjects and Components. The setup flow works similary to ML Agents, so you must create a new behaviour script (e.g. _ReachGoal_) that must inherit the **Agent** class. Attach the new behaviour script to the agent GameObject (automatically **DecisionRequester** script is attached too) [Optionally, a **TrainingStatistics** script can be attached]. Choose the space size and number of continuous/discrete actions, then override the following methods in the behavior script:
 - _CollectObservations()_
 - _OnActionReceived()_
@@ -134,8 +128,9 @@ public class MoveToGoal : Agent
 ![reacher](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/reacher.gif?raw=true)
 
 
+<details>
+<summary> Tips </summary>
 
-### Tips 
 - **Parallel training** is one option to use your device at maximum efficiency. After inserting your agent inside an Environment GameObject, you can duplicate that environment several times along the scene before starting the training session; this method is necessary for multi-agent co-op or adversarial training. Note that DeepUnity dynamically adapts the timescale of the simulation to get the maximum efficiency out of your machine.
 
 - In order to properly get use of _AddReward()_ and _EndEpisode()_ consult the diagram below. These methods work well being called inside _OnTriggerXXX()_ or _OnCollisionXXX()_, as well as inside _OnActionReceived()_ rightafter actions are performed. 
@@ -146,13 +141,16 @@ public class MoveToGoal : Agent
 
 - The following MonoBehaviour methods: **Awake()**, **Start()**, **FixedUpdate()**, **Update()** and **LateUpdate()** are virtual. If neccesary, in order to override them, call the their **base** each time, respecting the logic of the diagram below.
 
+</details>
+
+***
 ### Training on built application for faster inference
 - Training inside the Editor is a bit more cumbersome comparing to the built version. Building the application and open it up to start up the training enables faster inference, and the framework was adapted for this.
 
 - Whenever you want to stop the training, close the .exe file. The trained behavior is automatically saved and serialized in .json format on your desktop. Go back in Unity and check your behavior asset, and press on the newly button to overwrite the editor behavior with the trained weights from .json.
 
 - The previous built app, along with the trained weights in .json format are now disposable (remove them and replace the build with a new one).
-
+***
 ###### _Sorter agent whose task is to visit the tiles in ascending order_
 ![sorter](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/sorter.gif?raw=true)
 
@@ -162,4 +160,4 @@ public class MoveToGoal : Agent
 ##### _And not only the crawlers_
 ![humanoid](https://github.com/smtmRadu/DeepUnity/blob/main/Assets/DeepUnity/Documentation/humanoid.gif?raw=true)
 
-All tutorial scripts are included inside _Assets/DeepUnity/Tutorials_ folder, containing all features provided by the framework and RL environments inspired from ML-Agents examples (note that not all of them have trained models attached).
+All tutorial's scripts are included inside _Assets/DeepUnity/Tutorials_ folder, containing all the features provided by the framework and RL environments inspired from ML-Agents examples (note that not all of them have trained models attached).

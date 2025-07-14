@@ -14,7 +14,7 @@ namespace DeepUnity.ReinforcementLearning
         [Header("Training Configuration")]
 
         [Tooltip("Algorithm used in training the agent. Note that defaults are for PPO.")]
-        [ViewOnly] public TrainerType trainer = TrainerType.PPO;
+        public TrainerType trainer = TrainerType.PPO;
 
         [Tooltip("[Typical range: 1e5 - 1e7] The maximum length in steps of this training session.")]
         [Min(10_000f)] public long maxSteps = 2_000_000_000;
@@ -246,6 +246,27 @@ namespace DeepUnity.ReinforcementLearning
                 dontDrawMe.Add("normalizeAdvantages");
 
                 dontDrawMe.Add("alpha");
+                dontDrawMe.Add("noiseClip");
+                dontDrawMe.Add("targetNoise");
+                dontDrawMe.Add("policyDelay");
+            }
+            else if (script.trainer == TrainerType.VPG)
+            {
+                if (script.KLDivergence == (int)KLEType.Off)
+                    dontDrawMe.Add("targetKL");
+
+                dontDrawMe.Add("replayBufferSize");
+                dontDrawMe.Add("minibatchSize");
+                dontDrawMe.Add("updateInterval");
+                dontDrawMe.Add("updateAfter");
+                dontDrawMe.Add("updatesNum");
+                dontDrawMe.Add("alpha");
+                dontDrawMe.Add("saveReplayBuffer");
+                dontDrawMe.Add("tau");
+
+                dontDrawMe.Add("epsilon");
+
+                dontDrawMe.Add("activeNoise");
                 dontDrawMe.Add("noiseClip");
                 dontDrawMe.Add("targetNoise");
                 dontDrawMe.Add("policyDelay");

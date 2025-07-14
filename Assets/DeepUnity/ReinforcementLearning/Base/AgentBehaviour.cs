@@ -780,6 +780,26 @@ namespace DeepUnity.ReinforcementLearning
                 if (!muNetwork)
                     whatIsMissing.Add("Mu Network");
             }
+            else if(trainer == TrainerType.VPG)
+            {
+                if (!vNetwork)
+                    whatIsMissing.Add("Value Network");
+
+                if (IsUsingContinuousActions)
+                {
+                    if (!muNetwork)
+                        whatIsMissing.Add("Mu Network");
+
+                    if (!sigmaNetwork)
+                        whatIsMissing.Add("Sigma Network");
+                }
+
+                if (IsUsingDiscreteActions)
+                {
+                    if (!discreteNetwork)
+                        whatIsMissing.Add("Discrete Network");
+                }
+            }
             else
                 throw new NotImplementedException();
             return whatIsMissing;

@@ -34,7 +34,7 @@ namespace DeepUnity.Optimizers
         /// <param name="decoupled_wd">Whether or not the WD is decoupled.</param>
         /// <param name="amsgrad"></param>
         /// <param name="maximize"></param>
-        public AdaBelief(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8F, float weight_decay = 0f, bool decoupled_wd = true, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weight_decay)
+        public AdaBelief(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8F, float weight_decay = 0f, bool decoupled_wd = true, bool amsgrad = false, bool maximize = false) : base(parameters, lr, eps, weight_decay, maximize)
         {
             this.amsgrad = amsgrad;
             this.maximize = maximize;
