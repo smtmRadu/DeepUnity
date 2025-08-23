@@ -12,7 +12,6 @@ namespace DeepUnity.Optimizers
         private readonly float beta3;
         private readonly float alpha;
         private readonly bool amsgrad;
-        private readonly bool maximize;
         private readonly bool decoupledWd;
 
         private float beta1_t = 1f; // beta1^t caching

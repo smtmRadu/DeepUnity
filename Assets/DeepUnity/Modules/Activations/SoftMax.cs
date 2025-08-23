@@ -38,7 +38,7 @@ namespace DeepUnity.Activations
         public Tensor Predict(Tensor input)
         {
             int iRank = input.Rank;
-            if (iRank == 0 || iRank == 4)
+            if (iRank == 0)
                 throw new ShapeException($"Softmax input must be of shape (H), (B, H), (L, H) or (B, L, H) (received ({input.Shape.ToCommaSeparatedString()})).");
 
             // softmax(x[i]) = e^x[i] / sum{j:1->H}(e^x[j]])
@@ -90,7 +90,7 @@ namespace DeepUnity.Activations
 
                 return Tensor.Concat(null, seqElems_inputGrad);
             }
-            else // Case one vector
+            else if (dLdY.Rank == 1)
             {
                 int H = outputCache.Size(-1);
 
@@ -107,6 +107,8 @@ namespace DeepUnity.Activations
 
                 return Tensor.MatMul(dLdY, jacobian_softmax);
             }
+            else
+                throw new ArgumentException("Backward not allowed for Rank4 input.");
             
         }
 

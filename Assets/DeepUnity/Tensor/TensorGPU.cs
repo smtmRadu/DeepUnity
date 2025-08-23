@@ -20,7 +20,7 @@ namespace DeepUnity
             UnityEditor.EditorApplication.playModeStateChanged += DeallocateTensors;
         }
         private readonly static Lazy<Dictionary<TensorGPU, TensorGPU>> AllocatedTensors = new Lazy<Dictionary<TensorGPU, TensorGPU>>();
-        private readonly static int MAX_ALLOC_TENSORS = 256;
+        private readonly static int MAX_ALLOC_TENSORS = 1024;
 
         private static void DeallocateTensors(UnityEditor.PlayModeStateChange state)
         {
@@ -308,14 +308,15 @@ namespace DeepUnity
                 size *= item;
             }
 
-            if (size > 4_194_304) // hardcoded like this because 4096x4096 max allowed matrix, on 8192 it crashes
-                throw new NotSupportedException("Tensor dimensions is too large on initialization (cannot surpass 4,194,304 units).");
+
+            // if (size > 4_194_304) // hardcoded like this because 4096x4096 max allowed matrix, on 8192 it crashes
+            //     throw new NotSupportedException("Tensor dimensions is too large on initialization (cannot surpass 4,194,304 units).");
 
           
 
 
             this.shape = shape.ToArray();
-            this.data = new ComputeBuffer(size, 4);
+            this.data = new ComputeBuffer(size, 4, type: ComputeBufferType.Structured);
 
             ComputeShader cs = DeepUnityMeta.TensorCS;
 
@@ -324,6 +325,7 @@ namespace DeepUnity
             cs.Dispatch(kernel, 1, 1, 1);
 
 #if UNITY_EDITOR
+
             AllocatedTensors.Value.Add(this, this);
 
             if (AllocatedTensors.Value.Count > MAX_ALLOC_TENSORS)

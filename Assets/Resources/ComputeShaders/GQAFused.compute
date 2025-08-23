@@ -1,0 +1,57 @@
+﻿RWStructuredBuffer<float> X; // (B,L,E)
+StructuredBuffer<float> W_QKV; // (E + 2*E*Hkv/Hq,  E) row‑major
+StructuredBuffer<float> W_O;
+StructuredBuffer<float> Q_Norm;
+StructuredBuffer<float> K_Norm;
+StructuredBuffer<float> rope_sin; // (L, D/2)
+StructuredBuffer<float> rope_cos; // (L, D/2)
+StructuredBuffer<float> Mask; // (B,L,L)
+RWStructuredBuffer<float> Y; // (B,L,E)
+
+int batch_size;
+int seq_len;
+int embedding_size;
+float expansion_factor;
+int head_dim;
+int num_heads_q;
+int num_heads_v;
+
+
+// constants
+int B, L, E, Hq, Hkv, D;
+float scale; // 1 / sqrt(D)
+int causal; // 0|1
+int rope; // 0|1
+// add to the cbuffer or individual SetInt calls
+int useMask; // 0 = no attention mask, 1 = mask present
+
+// helpers
+uint x_idx(uint b, uint l, uint e)
+{
+    return ((b * L) + l) * E + e;
+}
+uint w_idx(uint row, uint col)
+{
+    return row * E + col;
+}
+
+#pragma kernel QKV_Proj
+[numthreads(8,8,8)]
+void QKV_Proj(int3 id : SV_DispatchThreadID)
+{
+    
+}
+
+#pragma kernel QK_Norm
+[numthreads(1,1,1)]
+void QK_Norm(int3 id : SV_DispatchThreadID)
+{
+    
+}
+
+#pragma kernel QK_Rope
+[numthreads(1, 1, 1)]
+void QK_Rope(int3 id : SV_DispatchThreadID)
+{
+    
+}

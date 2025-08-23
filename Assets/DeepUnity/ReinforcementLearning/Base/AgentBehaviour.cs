@@ -298,42 +298,6 @@ namespace DeepUnity.ReinforcementLearning
                 }
                 throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
             }
-            static IModule[] CreateATT(int inputs, int stack, int outputs, int layers, int hidUnits, NonLinearity activ)
-            {
-                InitType INIT_W = WeightInitialization(activ);
-                InitType INIT_B = InitType.Zeros;
-                if (layers == 1)
-                {
-                    return new IModule[] {
-                        new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
-                        new Attention(inputs, hidUnits),
-                        new LastSequence1DElementModule(),
-                        new Dense(hidUnits, outputs, weight_init : INIT_W, bias_init : INIT_B)};
-                }
-                if (layers == 2)
-                {
-                    return new IModule[] {
-                        new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
-                        new Attention(inputs, hidUnits),
-                        new LastSequence1DElementModule(),
-                        new Dense (hidUnits, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
-                        HiddenActivation(activ),
-                        new Dense(hidUnits, outputs, weight_init : INIT_W, bias_init : INIT_B)};
-                }
-                if (layers == 3)
-                {
-                    return new IModule[] {
-                        new Reshape(new int[]{ inputs * stack}, new int[]{stack, inputs}),
-                        new Attention(inputs, hidUnits),
-                        new LastSequence1DElementModule(),
-                        new Dense(hidUnits, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
-                        HiddenActivation(activ),
-                        new Dense(hidUnits, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
-                        HiddenActivation(activ),
-                        new Dense(hidUnits, outputs, weight_init : INIT_W, bias_init : INIT_B)};
-                }
-                throw new ArgumentException("Unhandled numLayers outside range 1 - 3");
-            }
             //------------------ NETWORK INITIALIZATION ----------------//
 
 
@@ -400,22 +364,6 @@ namespace DeepUnity.ReinforcementLearning
                 sigmaNetwork?.Predict(input);
                 discreteNetwork?.Predict(input);
             
-            }
-            else if (ARCHITECTURE == ArchitectureType.ATT)
-            {
-                vNetwork = new Sequential(CreateATT(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
-
-                if (CONTINUOUS_ACTIONS_NUM > 0)
-                {
-                    muNetwork = new Sequential(CreateATT(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
-                    sigmaNetwork = new Sequential(CreateATT(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
-                    q1Network = new Sequential(CreateATT((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
-                    q2Network = new Sequential(CreateATT((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
-                }
-
-                if (DISCRETE_ACTIONS_NUM > 0)
-                    discreteNetwork = new Sequential(CreateATT(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softmax() }).ToArray());
-
             }
             else
                 throw new NotImplementedException("Unhandled ArchType");

@@ -23,15 +23,13 @@ namespace DeepUnity.Modules
         // Learnable
         public Dense dense = null;      
         public DenseGPU densegpu = null;
-        public RNNCell rnncell = null;
-        public Attention attention = null;      
-        public MultiheadAttention multiheadattention = null;
-        public AttentionV2 attentionv2 = null;
-        public KANLayer kanlayer = null;
+        public RNNCell rnncell = null;   
+        public GroupedQueryAttention groupedqueryattention = null;
         public LayerNorm layernorm = null;
         public RMSNorm rmsnorm = null;
         public BatchNorm batchnorm = null;
         public Embedding embedding = null;
+        public GatedLinearUnit gatedlinearunit = null;
 
         // Lazy 
         public LazyConv2D lazyconv2d = null;
@@ -49,6 +47,7 @@ namespace DeepUnity.Modules
         public Squeeze squeeze = null;
         public Unsqueeze unsqueeze = null;
         public Permute permute = null;
+        public RotaryPositionalEmbeddings rotarypositionalembeddings = null;
 
         // 2D
         public BatchNorm2D batchnorm2d = null;        
@@ -189,10 +188,6 @@ namespace DeepUnity.Modules
             {
                 rnncell = rnncellModule;
             }
-            else if (module is Attention attentionModule)
-            {
-                attention = attentionModule;
-            }
             else if(module is Sparsemax sparsemaxModule)
             {
                 sparsemax = sparsemaxModule;
@@ -257,17 +252,13 @@ namespace DeepUnity.Modules
             {
                 batchnorm2d = batchnorm2dModule;
             }
-            else if (module is MultiheadAttention multiheadattentionModule)
+            else if (module is GroupedQueryAttention multiheadattentionModule)
             {
-                multiheadattention = multiheadattentionModule;
+                groupedqueryattention = multiheadattentionModule;
             }
             else if(module is LastSequence1DElementModule lastSequenceElementModule)
             {
                 lastsequence1delementmodule = lastSequenceElementModule;
-            }
-            else if (module is AttentionV2 attentionv2Module)
-            {
-                attentionv2 = attentionv2Module;
             }
             else if(module is DenseGPU denseGPUModule)
             {
@@ -288,10 +279,6 @@ namespace DeepUnity.Modules
             else if (module is Swish siluModule)
             {
                 swish = siluModule;
-            }
-            else if (module is KANLayer kanlayerModule)
-            {
-                kanlayer = kanlayerModule;
             }
             else if (module is Dropout2D dropout2dModule)
             {
@@ -316,6 +303,14 @@ namespace DeepUnity.Modules
             else if(module is Embedding embeddingModule)
             {
                 embedding = embeddingModule;
+            }
+            else if(module is RotaryPositionalEmbeddings ropeModule)
+            {
+                rotarypositionalembeddings = ropeModule;
+            }
+            else if(module is GatedLinearUnit gluModule)
+            {
+                gatedlinearunit = gluModule;
             }
             else
                 throw new Exception($"Unhandled module type while wrapping ({module.GetType().Name}).");
@@ -418,10 +413,6 @@ namespace DeepUnity.Modules
             {
                 module = moduleWrapper.rnncell;
             }
-            else if (typeof(Attention).Name.Equals(moduleWrapper.name))
-            {
-                module = moduleWrapper.attention;
-            }
             else if (typeof(Sparsemax).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.sparsemax;
@@ -486,17 +477,13 @@ namespace DeepUnity.Modules
             {
                 module = moduleWrapper.batchnorm2d;
             }
-            else if (typeof(MultiheadAttention).Name.Equals(moduleWrapper.name))
+            else if (typeof(GroupedQueryAttention).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.multiheadattention;
+                module = moduleWrapper.groupedqueryattention;
             }
             else if (typeof(LastSequence1DElementModule).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.lastsequence1delementmodule;
-            }
-            else if (typeof(AttentionV2).Name.Equals(moduleWrapper.name))
-            {
-                module = moduleWrapper.attentionv2;
             }
             else if (typeof(DenseGPU).Name.Equals(moduleWrapper.name))
             {
@@ -517,10 +504,6 @@ namespace DeepUnity.Modules
             else if (typeof(Swish).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.swish;
-            }
-            else if (typeof(KANLayer).Name.Equals(moduleWrapper.name))
-            {
-                module = moduleWrapper.kanlayer;
             }
             else if (typeof(Dropout2D).Name.Equals(moduleWrapper.name))
             {
@@ -545,6 +528,14 @@ namespace DeepUnity.Modules
             else if(typeof(Embedding).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.embedding;
+            }
+            else if(typeof(RotaryPositionalEmbeddings).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.rotarypositionalembeddings;
+            }
+            else if(typeof(GatedLinearUnit).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.gatedlinearunit;
             }
             else
                 throw new Exception($"Unhandled module type while unwrapping ({moduleWrapper.name}).");

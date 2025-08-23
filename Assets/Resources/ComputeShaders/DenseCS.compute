@@ -1,10 +1,10 @@
 // For stupid future me: if you ever have errors with the compute shader, always check your fuckin' getter functions motherfucker
 // they can access even outside the allocated memory
 // btw, if some operations from gpu doesn't equal perfectly with the cpu operations, that's not my fault, idk how the gpu approximates the value, maybe some floating point arithmetic goes brr...
-RWStructuredBuffer<float> gamma; // weights
+StructuredBuffer<float> gamma; // weights
 RWStructuredBuffer<float> gamma_grad;
 
-RWStructuredBuffer<float> beta; // biases
+StructuredBuffer<float> beta; // biases
 RWStructuredBuffer<float> beta_grad;
 
 RWStructuredBuffer<float> input;
@@ -15,7 +15,7 @@ RWStructuredBuffer<float> loss;
 int batch_size;
 int in_features;
 int out_features;
-
+bool use_bias;
 
 float gamma_get(int h, int w)
 {
@@ -63,7 +63,7 @@ void Forward(int3 id : SV_DispatchThreadID)
     if (id.x >= out_features || id.y >= batch_size)
         return;
     
-    float sum = beta_get(id.x);
+    float sum = use_bias ? beta_get(id.x) : 0.0;
     for (int m = 0; m < in_features; m++)
     {
         sum += input_get(id.y, m) * gamma_get(id.x, m); // transposed_gamma_get(m, id.x);
@@ -95,6 +95,7 @@ void ComputeGradients(int3 id : SV_DispatchThreadID)
         {
             sum += loss_get(m, id.y); //transposed_loss_get(id.y, m);
         }
-        beta_grad_add(id.y, sum / batch_size);
+        if (use_bias)
+            beta_grad_add(id.y, sum / batch_size);
     }
 }

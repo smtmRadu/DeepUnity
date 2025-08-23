@@ -43,6 +43,9 @@ namespace DeepUnity.Modules
         {
             switch (initializer)
             {
+                case InitType.Zeros:
+                    return Tensor.Zeros(shape);
+
                 case InitType.Kaiming_Normal:
                     float sigmaHE = MathF.Sqrt(2f / fan_in);
                     return Tensor.RandomNormal((0, sigmaHE), shape);
@@ -88,8 +91,7 @@ namespace DeepUnity.Modules
 
                 case InitType.Ones:
                     return Tensor.Ones(shape);
-                case InitType.Zeros:
-                    return Tensor.Zeros(shape);
+
                 case InitType.Orthogonal:
                     if (shape.Length != 2) throw new ArgumentException("Orthogonal initialization can be used only for 2 dimensional parameter tensors.");
                     /// A = QR

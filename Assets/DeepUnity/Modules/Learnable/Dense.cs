@@ -6,6 +6,7 @@ using Unity.VisualScripting;
 namespace DeepUnity.Modules
 {
     // DO NOT TRY TO UNDERSTAND Dense implementation because was over-optimized (cause is the most used layer) and the code became unreadable
+    // also the gradients are initialized on the fly only when needed because this layer is used only for inference sometimes.
     // https://www.youtube.com/watch?v=tMjdQLylyGI&t=602s
     // https://proceedings.mlr.press/v9/glorot10a/glorot10a.pdf (251 - 253)
     /// <summary>
@@ -47,12 +48,12 @@ namespace DeepUnity.Modules
             this.bias = bias;
             this.Device = device;
             weights = Parameter.Create(new int[] { out_features, in_features }, in_features, out_features, weight_init);
-            weightsGrad = Tensor.Zeros(weights.Shape);
+            weightsGrad = null; //Tensor.Zeros(weights.Shape);
 
             if(bias)
             {
                 biases = Parameter.Create(new int[] { out_features }, in_features, out_features, bias_init);
-                biasesGrad = Tensor.Zeros(biases.Shape);
+                biasesGrad = null; // Tensor.Zeros(biases.Shape);
             }
            
         }
@@ -98,9 +99,14 @@ namespace DeepUnity.Modules
                 weightsBuffer.SetData(weights.ToArray());
                 cs.SetBuffer(0, "gamma", weightsBuffer);
 
-                ComputeBuffer biasesBuffer = new ComputeBuffer(bias ? biases.Count() : H_out, 4);
-                biasesBuffer.SetData(bias ? biases.ToArray() : new float[H_out]);
-                cs.SetBuffer(0, "beta", biasesBuffer);
+                ComputeBuffer biasesBuffer = null;
+                if (bias)
+                {
+                    biasesBuffer = new ComputeBuffer(bias ? biases.Count() : H_out, 4);
+                    biasesBuffer.SetData(bias ? biases.ToArray() : new float[H_out]);
+                    cs.SetBuffer(0, "beta", biasesBuffer);
+                }
+                
 
                 ComputeBuffer outputBuffer = new ComputeBuffer(batch_size * H_out, 4);
                 // outputBuffer.SetData(zero_values); // we do not need this because the values are set (not added) to the rw structrured buffer.
@@ -109,6 +115,7 @@ namespace DeepUnity.Modules
                 cs.SetInt("batch_size", batch_size);
                 cs.SetInt("in_features", H_in);
                 cs.SetInt("out_features", H_out);
+                cs.SetBool("use_bias", bias);
 
                 cs.Dispatch(0,
                     (H_out + 31) / 32,
@@ -121,7 +128,7 @@ namespace DeepUnity.Modules
 
                 inputBuffer.Release();
                 weightsBuffer.Release();
-                biasesBuffer.Release();
+                biasesBuffer?.Release();
                 outputBuffer.Release();
 
                 return result;
@@ -137,8 +144,15 @@ namespace DeepUnity.Modules
         {
             if (loss.Size(-1) != weights.Size(0))
                 throw new ArgumentException($"Hidden features of the loss ({loss.Size(-1)}) doesn't correspond to the hidden features returned by the dense layer ({weights.Size(0)}).");
-            
-            if(loss.Rank == 3)
+
+            if (weightsGrad == null)
+            {
+                weightsGrad = Tensor.Zeros(weights.Shape);
+                if (bias)
+                    biasesGrad = Tensor.Zeros(biases.Shape);
+            }
+
+            if (loss.Rank == 3)
             {
                 if(RequiresGrad)
                 {
@@ -208,9 +222,14 @@ namespace DeepUnity.Modules
                     weightsGradBuffer.SetData(weightsGrad.ToArray());
                     cs.SetBuffer(1, "gamma_grad", weightsGradBuffer);
 
-                    ComputeBuffer biasesGradBuffer = new ComputeBuffer(bias ? biasesGrad.Count() : H_out, 4);
-                    biasesGradBuffer.SetData(bias ? biasesGrad.ToArray() : new float[H_out]);
-                    cs.SetBuffer(1, "beta_grad", biasesGradBuffer);
+                    ComputeBuffer biasesGradBuffer = null;
+                    if (bias)
+                    {
+                        biasesGradBuffer = new ComputeBuffer(bias ? biasesGrad.Count() : H_out, 4);
+                        biasesGradBuffer.SetData(bias ? biasesGrad.ToArray() : new float[H_out]);
+                        cs.SetBuffer(1, "beta_grad", biasesGradBuffer);
+                    }
+                    
 
                     cs.SetInt("batch_size", batch_size);
                     cs.SetInt("in_features", H_in);
@@ -228,7 +247,7 @@ namespace DeepUnity.Modules
                     lossBuffer.Release();
                     inputCacheBuffer.Release();
                     weightsGradBuffer.Release();
-                    biasesGradBuffer.Release();
+                    biasesGradBuffer?.Release();
                 }
 
             }
@@ -374,7 +393,11 @@ namespace DeepUnity.Modules
         public Parameter[] Parameters()
         {
             if (weightsGrad == null)
-                OnAfterDeserialize();
+            {
+                weightsGrad = Tensor.Zeros(weights.Shape);
+                if (bias)
+                    biasesGrad = Tensor.Zeros(biases.Shape);
+            }
 
             return bias ? 
                 new Parameter[] { new Parameter(weights, weightsGrad), new Parameter(biases, biasesGrad) } : 
@@ -386,13 +409,18 @@ namespace DeepUnity.Modules
             dense.Device = Device;
             dense.RequiresGrad = RequiresGrad;
             dense.bias = bias;
-            dense.weights = (Tensor)weights.Clone();          
-            dense.weightsGrad = (Tensor)weightsGrad.Clone();
+
+
+
+            dense.weights = (Tensor)weights.Clone();     
+            if(weightsGrad != null)
+                dense.weightsGrad = (Tensor)weightsGrad.Clone();
 
             if(bias)
             {
                 dense.biases = (Tensor)biases.Clone();
-                dense.biasesGrad = (Tensor)biasesGrad.Clone();
+                if (biasesGrad != null) 
+                    dense.biasesGrad = (Tensor)biasesGrad.Clone();
             }
             
             return dense;

@@ -12,6 +12,12 @@ namespace DeepUnity
         internal readonly static ComputeShader Conv2DCS;
         internal readonly static ComputeShader RNNCellCS;
         internal readonly static ComputeShader ConvTranpose2DCS;
+        
+        internal readonly static ComputeShader GQAFusedCS;
+
+        internal readonly static ComputeShader GQAInferenceCS;
+        internal readonly static ComputeShader GLUInferenceCS;
+        internal readonly static ComputeShader LmHeadInferenceCS;
         // internal readonly static ComputeShader MatMulFP16CS;
 
         internal readonly static int THREADS_NUM = 256;
@@ -28,6 +34,12 @@ namespace DeepUnity
                 Conv2DCS = Resources.Load<ComputeShader>("ComputeShaders/Conv2DCS");
                 RNNCellCS = Resources.Load<ComputeShader>("ComputeShaders/RNNCellCS");
                 ConvTranpose2DCS = Resources.Load<ComputeShader>("ComputeShaders/ConvTranspose2DCS");
+                
+                GQAFusedCS = Resources.Load<ComputeShader>("ComputeShaders/GQAFusedCS");
+
+                GQAInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/GQAInferenceCS");
+                GLUInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/GLUInferenceCS");
+                LmHeadInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/LmHeadInferenceCS");
                 // MatMulFP16CS = Resources.Load<ComputeShader>("ComputeShaders/MatMulFP16CS");
 
                 if (TensorCS == null)
@@ -68,29 +80,29 @@ namespace DeepUnity
         {
             _clock = Stopwatch.StartNew();
         }
-        public static TimeSpan Stop()
+        public static TimeSpan Stop(string tag = "TIMER")
         {
             _clock.Stop();
-            ConsoleMessage.Info("[TIMER] : " + _clock.Elapsed);
+            ConsoleMessage.Info($"[{tag}] : " + _clock.Elapsed);
             return _clock.Elapsed;
         }
     }
    
     public enum InitType
     {
-        [Tooltip("[Kaiming He] N(0, s) where s = sqrt(2 / fan_in). Works well with ReLU / LeakyReLU activation functions.")]
+        [Tooltip("N(0, s) where s = sqrt(2 / fan_in). Works well with ReLU / LeakyReLU activation functions.")]
         Kaiming_Uniform,
-        [Tooltip("[Kaiming He] U(-k, k) where k = sqrt(6 / fan_in). Works well with ReLU / LeakyReLU  activation functions.")]
+        [Tooltip("U(-k, k) where k = sqrt(6 / fan_in). Works well with ReLU / LeakyReLU  activation functions.")]
         Kaiming_Normal, 
         
-        [Tooltip("[Xavier Glorot] N(0, s) where s = sqrt(2 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation functions.")]
+        [Tooltip("N(0, s) where s = sqrt(2 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation functions.")]
         Xavier_Normal,
-        [Tooltip("[Xavier Glorot] U(-k, k) where k = sqrt(6 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation functions.")]
+        [Tooltip("U(-k, k) where k = sqrt(6 / (fan_in + fan_out)). Works well with Tanh / Sigmoid activation functions.")]
         Xavier_Uniform,
 
-        [Tooltip("[Yann LeCun] N(0, s) where s = sqrt(1 / fan_in). Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
+        [Tooltip("N(0, s) where s = sqrt(1 / fan_in). Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
         LeCun_Normal,
-        [Tooltip("[Yann LeCun] U(-k, k) where k = sqrt(3 / fan_in).  Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
+        [Tooltip("U(-k, k) where k = sqrt(3 / fan_in).  Works well for activation differentiable in z = 0. (Tanh / Sigmoid)")]
         LeCun_Uniform,
 
         [Tooltip("N(0, 1).")]

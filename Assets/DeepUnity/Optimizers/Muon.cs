@@ -1,10 +1,5 @@
 using DeepUnity.Modules;
 using System;
-using System.Diagnostics;
-using System.Threading.Tasks;
-using Unity.VisualScripting;
-using UnityEngine.Rendering;
-using static UnityEditor.Experimental.GraphView.GraphView;
 namespace DeepUnity.Optimizers
 {
     /// <summary>
@@ -86,7 +81,7 @@ namespace DeepUnity.Optimizers
                 }
             }
         }
-        public static Tensor NewtonSchultz5(Tensor G, int steps=5, float a = 3.4445f, float b = -4.775f, float c = 2.0315f, float eps=1e-7F)
+        public static Tensor NewtonSchultz(Tensor G, int steps=5, float a = 3.4445f, float b = -4.775f, float c = 2.0315f, float eps=1e-7F)
         {
             if (G.Rank != 2)
                 throw new ArgumentException("G must be a 2D tensor to perform Newton-Schultz operation.");
@@ -135,18 +130,10 @@ namespace DeepUnity.Optimizers
                 else  // Muon optimization
                 {
                     Tensor.CopyTo(this.mu * B[i] + parameters[i].g, B[i]);
-                    var O_t = NewtonSchultz5(G: B[i], steps: this.ns_steps, a: this.a, b: this.b, c: this.c, eps: this.epsilon);
-                    Tensor.CopyTo(parameters[i].param - gamma * O_t, parameters[i].param);
+                    var O_t = NewtonSchultz(G: B[i], steps: this.ns_steps, a: this.a, b: this.b, c: this.c, eps: this.epsilon);
+                    Tensor.CopyTo(fromTensor:parameters[i].param - gamma * O_t, toTensor:parameters[i].param);
                 }
             }
         }
     }
-
-    // 3 dense model test (128 hidden size)
-    // amsgrad = 2.22s
-    // amsgrad + fused = 2.19
-    // amsgrad + fused + parallel = 2.08s
-
-
-
 }

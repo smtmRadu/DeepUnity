@@ -1,0 +1,177 @@
+﻿StructuredBuffer<float> X;
+StructuredBuffer<float> W_QKV;
+RWStructuredBuffer<float> QKV;
+
+RWStructuredBuffer<float> Q;
+RWStructuredBuffer<float> K;
+RWStructuredBuffer<float> AttentionWeights;
+RWStructuredBuffer<float> V;
+RWStructuredBuffer<float> AttendedValues; // B, sequence_length_v, inner_embedding dim
+
+
+StructuredBuffer<float> W_O; // inner_embedding_dim, embedding_dim
+RWStructuredBuffer<float> O; // B, sequence_length_v, embedding_dim
+
+uint embedding_dim;
+uint inner_embedding_dim;
+uint qkv_proj_dim;
+
+uint batch_size;
+uint sequence_length_q;
+uint sequence_length_k;
+uint sequence_length_v;
+uint num_heads_q;
+uint num_heads_kv;
+uint head_dim;
+float scale; // 1 / sqrt(head_dim)
+
+// helpers --------------------------------------------------------------------
+uint X_index(uint b, uint l, uint e)
+{
+    return ((b * sequence_length_q + l) * embedding_dim + e);
+}
+uint W_QKV_index(uint e, uint p)
+{
+    return e * qkv_proj_dim + p;
+}
+uint QKV_index(uint b, uint l, uint p)
+{
+    return ((b * sequence_length_q + l) * qkv_proj_dim + p);
+}
+uint O_index(uint b, uint l, uint e)
+{
+    return ((b * sequence_length_q + l) * embedding_dim + e);
+}
+uint W_O_index(uint ie, uint e)
+{
+    return ie * embedding_dim + e;
+}
+
+uint Q_index(uint b, uint l, uint h, uint d)
+{ 
+    return (((b * sequence_length_q + l) * num_heads_q + h) * head_dim + d);
+}
+uint K_index(uint b, uint l, uint hkv, uint d)
+{ 
+    return (((b * sequence_length_k + l) * num_heads_kv + hkv) * head_dim + d);
+}
+uint AttnWeights_index(uint b, uint hq, uint i, uint j)
+{ 
+    return ((((b * num_heads_q + hq) * sequence_length_k) + i) * sequence_length_k + j);
+}
+uint V_index(uint b, uint l, uint hkv, uint d)
+{ 
+    return (((b * sequence_length_k + l) * num_heads_kv + hkv) * head_dim + d);
+}
+uint AttendedValues_index(uint b, uint l, uint hq, uint d)
+{ 
+    return (((b * sequence_length_q + l) * num_heads_q + hq) * head_dim + d);
+}
+// ---------------------------------------------------------------------------
+
+#pragma kernel QKVProj
+[numthreads(1, 4, 64)]
+void QKVProj(uint3 id : SV_DispatchThreadID)
+{
+    // Matrix multiplication: X [B, L, E] * W_QKV [E, qkv_proj_dim] = QKVProj [B, L, qkv_proj_dim]
+    
+    uint batch_idx = id.x;
+    uint seq_idx = id.y;
+    uint proj_idx = id.z;
+    
+    // Bounds checking
+    if (batch_idx >= batch_size || seq_idx >= sequence_length_q || proj_idx >= qkv_proj_dim)
+        return;
+    
+    float sum = 0.0f;
+    
+    // Sum over embedding dimension
+    for (uint e = 0; e < embedding_dim; e++)
+    {
+        sum += X[X_index(batch_idx, seq_idx, e)] * W_QKV[W_QKV_index(e, proj_idx)];
+    }
+    
+    QKV[QKV_index(batch_idx, seq_idx, proj_idx)] = sum;
+}
+
+#pragma kernel ComputeAttentionScores
+[numthreads(32, 32, 1)]
+void ComputeAttentionScores(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= sequence_length_q || id.y >= sequence_length_k)
+        return;
+    uint g = id.z;
+    if (g >= batch_size * num_heads_q)
+        return;
+
+    uint b = g / num_heads_q;
+    uint hq = g % num_heads_q;
+
+    uint group_size = num_heads_q / num_heads_kv;
+    uint hkv = hq / group_size;
+
+    float dot = 0.0f;
+    for (uint d = 0; d < head_dim; ++d)
+    {
+        dot += Q[Q_index(b, id.y, hq, d)] * K[K_index(b, id.x, hkv, d)];
+    }
+    AttentionWeights[AttnWeights_index(b, hq, id.y, id.x)] = dot * scale;
+}
+
+
+#pragma kernel AttendValues
+[numthreads(32, 32, 1)]
+void AttendValues(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= head_dim || id.y >= sequence_length_q)
+        return;
+    uint g = id.z;
+    if (g >= batch_size * num_heads_q)
+        return;
+
+    uint b = g / num_heads_q;
+    uint hq = g % num_heads_q;
+
+    uint group_size = num_heads_q / num_heads_kv;
+    uint hkv = hq / group_size;
+
+    float acc = 0.0f;
+    for (uint j = 0; j < sequence_length_v; ++j)
+    {
+        float w = AttentionWeights[AttnWeights_index(b, hq, id.y, j)];
+        float vv = V[V_index(b, j, hkv, id.x)];
+        acc += w * vv;
+    }
+    AttendedValues[AttendedValues_index(b, id.y, hq, id.x)] = acc;
+}
+
+
+#pragma kernel OProj
+[numthreads(1, 4, 64)]
+void OProj(uint3 id : SV_DispatchThreadID)
+{
+    // Matrix multiplication: AttendedValues [B, L, num_heads_q * head_dim] * W_O [inner_embedding_dim, embedding_dim] = O [B, L, embedding_dim]
+    // AttendedValues is stored as [B, seq_len_v, num_heads_q, head_dim] but we treat it as flattened [B, seq_len_v, inner_embedding_dim]
+    
+    uint batch_idx = id.x;
+    uint seq_idx = id.y;
+    uint emb_idx = id.z;
+    
+    // Bounds checking
+    if (batch_idx >= batch_size || seq_idx >= sequence_length_q || emb_idx >= embedding_dim)
+        return;
+    
+    float sum = 0.0f;
+    
+    // Sum over inner embedding dimension (num_heads_q * head_dim)
+    for (uint ie = 0; ie < inner_embedding_dim; ie++)
+    {
+        // Map linear index ie to (head, dim) coordinates
+        uint hq = ie / head_dim;
+        uint d = ie % head_dim;
+        
+        sum += AttendedValues[AttendedValues_index(batch_idx, seq_idx, hq, d)] * W_O[W_O_index(ie, emb_idx)];
+    }
+    
+    O[O_index(batch_idx, seq_idx, emb_idx)] = sum;
+}

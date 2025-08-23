@@ -13,18 +13,18 @@ namespace DeepUnity.Modules
     /// <b>Applies root mean square normalization over the last dimension (H) of the input.</b> 
     /// </summary>
     [Serializable]
-    public class RMSNorm : IModule
+    public class RMSNorm : IModule, ILearnable
     {
         [SerializeField] public Device Device { get; set; } = Device.CPU;
         [SerializeField] public bool RequiresGrad { get; set; } = true;
 
-        [SerializeField] private float epsilon = 1e-8f;
+        [SerializeField] private float epsilon = 1e-6f;
         [SerializeField] private bool affine = true;
-        [SerializeField] private Tensor gamma;
+        [SerializeField] public Tensor gamma;
         [SerializeField] private Tensor gammaGrad;
 
         private Tensor xHat { get; set; }
-        private Tensor rms_x { get; set; }
+        private Tensor ms_x { get; set; }
 
         /// <summary>
         /// Applies x/(√rms(x) + e) * γ. <br />
@@ -35,7 +35,7 @@ namespace DeepUnity.Modules
         /// <b>Applies root mean square normalization over the last dimension (H) of the input.</b> 
         /// </summary>
         /// <param name="affine">Train gamma and beta parameters (elementwise-affine).</param>
-        public RMSNorm(int num_features, float eps = 1e-10f, bool elementwise_affine=true)
+        public RMSNorm(int num_features, float eps = 1e-6f, bool elementwise_affine=true)
         {
             this.epsilon  = eps; 
             this.affine = elementwise_affine;
@@ -43,7 +43,7 @@ namespace DeepUnity.Modules
             if(elementwise_affine)
             {
                 gamma = Tensor.Ones(num_features);
-                gammaGrad = Tensor.Zeros(num_features);
+                gammaGrad = null;  //Tensor.Zeros(num_features);
             }
         }
         private RMSNorm() { }
@@ -56,7 +56,8 @@ namespace DeepUnity.Modules
             if(affine)
             {
                 rmsnorm.gamma = this.gamma.Clone() as Tensor;
-                rmsnorm.gammaGrad = this.gammaGrad.Clone() as Tensor;
+                if(gammaGrad != null)
+                    rmsnorm.gammaGrad = this.gammaGrad.Clone() as Tensor;
             }
            
             return rmsnorm;
@@ -70,13 +71,13 @@ namespace DeepUnity.Modules
 
             bool isBatched = input.Rank == 2;
 
-            rms_x = input.Square().Mean(-1, keepDim: true).Expand(-1, input.Size(-1));
-            xHat = input / Tensor.Sqrt(rms_x + epsilon);
+            ms_x = input.Square().Mean(-1, keepDim: true).Expand(-1, input.Size(-1));
+            xHat = input / Tensor.Sqrt(ms_x + epsilon);
 
             if (!affine)
                 return xHat;
 
-            Tensor expanded_gamma = isBatched ? gamma.Unsqueeze(0).Expand(0, input.Size(0)) : gamma;
+            Tensor expanded_gamma = isBatched? gamma.Unsqueeze(0).Expand(0, input.Size(0)) : gamma;
             return xHat * expanded_gamma;
 
         }
@@ -92,9 +93,12 @@ namespace DeepUnity.Modules
             int feature_size = dLdY.Size(-1);
             int m = isBatched ? dLdY.Size(0) : 1;
 
+            if (gammaGrad == null)
+                gammaGrad = Tensor.Zeros(gamma.Shape);
+
             if(!affine)
             {
-                Tensor dLdX_ = dLdY * (epsilon + rms_x * (1f - 1f / feature_size)) / (rms_x + epsilon).Pow(1.5f);
+                Tensor dLdX_ = dLdY * (epsilon + ms_x * (1f - 1f / feature_size)) / (ms_x + epsilon).Pow(1.5f);
                 return dLdX_;
             }
             
@@ -102,11 +106,39 @@ namespace DeepUnity.Modules
             Tensor expanded_gamma = affine ? (isBatched ? gamma.Unsqueeze(0).Expand(0, m) : gamma) : Tensor.Ones(dLdY.Size(-1));
             Tensor dLdGamma = dLdY * xHat;
             Tensor.CopyTo(gammaGrad + (isBatched ? dLdGamma.Mean(0) : dLdGamma), gammaGrad);
-            Tensor dLdX = dLdY * expanded_gamma * (epsilon + rms_x * (1f - 1f / feature_size)) / (rms_x + epsilon).Pow(1.5f);
+            Tensor dLdX = dLdY * expanded_gamma * (epsilon + ms_x * (1f - 1f / feature_size)) / (ms_x + epsilon).Pow(1.5f);
             return dLdX;
             
 
             
+        }
+        public void OnBeforeSerialize()
+        {
+
+        }
+        public void OnAfterDeserialize()
+        {
+            // This function is actually having 2 workers on serialization.
+            // If shape int[] was not deserialized, we need to break this worker.
+            // In case the shape wasn't already deserialized, we need to stop this worker and let the other instantiate everything.
+
+            if (gamma.Shape == null)
+                return;
+
+            // do not check if gamma is != null...
+            gammaGrad = Tensor.Zeros(gamma.Shape);
+
+        }
+
+        public Parameter[] Parameters()
+        {
+            if (gammaGrad == null)
+                gammaGrad = Tensor.Zeros(gammaGrad.Shape);
+
+            if (gammaGrad == null)
+                OnAfterDeserialize();
+
+            return new Parameter[] { new Parameter(gamma, gammaGrad)};
         }
 
     }

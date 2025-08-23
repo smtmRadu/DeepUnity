@@ -1,0 +1,46 @@
+StructuredBuffer<float> weights; // [V, H] -> index(v,h) = v*hidden_size + h
+StructuredBuffer<float> input; // [B, L, H] -> index(b,l,h) = ((b*seq_len)+l)*hidden_size + h
+RWStructuredBuffer<float> output; // [B, L, V] -> index(b,l,v) = ((b*seq_len)+l)*vocab_size + v
+
+int batch_size;
+int seq_len;
+int hidden_size;
+int vocab_size;
+
+
+
+float W(int v, int h)
+{
+    return weights[v * hidden_size + h];
+}
+float X(int b, int l, int h)
+{
+    return input[((b * seq_len) + l) * hidden_size + h];
+}
+void Y_set(int b, int l, int v, float val)
+{
+    output[((b * seq_len) + l) * vocab_size + v] = val;
+}
+
+#pragma kernel Predict
+// Use 2D: x -> vocab id, y -> token index in the B*L "token stream".
+[numthreads(32, 8, 1)]
+void Predict(uint3 id : SV_DispatchThreadID)
+{
+    uint v = id.x;
+    uint t = id.y; // token index in [0, B*L)
+    if (v >= vocab_size || t >= (batch_size * seq_len))
+        return;
+
+    uint b = t / seq_len;
+    uint l = t % seq_len;
+
+    float sum = 0.0;
+    // naive dot(X[b,l,:], W[v,:])
+    [loop]
+    for (int h = 0; h < hidden_size; ++h)
+    {
+        sum += X(b, l, h) * W(v, h);
+    }
+    Y_set(b, l, v, sum);
+}

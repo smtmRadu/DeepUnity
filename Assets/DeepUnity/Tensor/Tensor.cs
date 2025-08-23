@@ -1175,10 +1175,10 @@ namespace DeepUnity
                 throw new ArgumentException($"Tensors must have compatible shapes for batched matrix multiplication (Left[{left.Shape.ToCommaSeparatedString()}] doesn't match Right[{right.Shape.ToCommaSeparatedString()}]).");
 
             if (left.Rank > 3 || right.Rank > 3)
-                throw new ArgumentException($"Maximum allowed rank is 3");
+                throw new ArgumentException($"Maximum allowed rank is 3 (received left={left.Rank}, right={right.Rank})");
 
             if (left.Rank < 2 || right.Rank < 2)
-                throw new ArgumentException($"Minimum allowed rank is 2");
+                throw new ArgumentException($"Minimum allowed rank is 2 (received left={left.Rank}, right={right.Rank})");
 
             int C = left.Channels;
             int N = left.Height;
@@ -2019,18 +2019,17 @@ namespace DeepUnity
         /// If <b>axis == null</b>, all tensors are stacked on a new dimension (unsqueezed on axis 0 then concatenated on axis 0) <br></br>
         /// <br></br>Examples: <br></br>
         /// Cat(axis: 0,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (8,3) <br></br>
-        /// Cat(axis: 1,    tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (2,12) <br></br>
+        /// Cat(axis: 1,    tensors: {(2,3),(2,5),(2,4),(2,3)}) => output (2,14) <br></br>
         /// Car(axis: 1,    tensors: {(2,3)} => output (2,3) <br></br>
         /// Cat(axis: null, tensors: {(2,3),(2,3),(2,3),(2,3)}) => output (4,2,3) <br></br>
         /// Cat(axis: null, tensors: {(2,3)} => output (1,2,3) <br></br>
         /// <br></br>
-        /// <em>All tensors must have the same shape.</em>
+        /// <em>All tensors must have the same dimensions (except the concatenation axis).</em>
         /// </summary>
         public static Tensor Concat(int? axis, params Tensor[] tensors)
         {
             if (tensors == null || tensors.Length == 0)
                 throw new ArgumentException("At least one tensor must be provided for concatenation");
-
 
             if (tensors.Length == 1)
             {
@@ -2040,90 +2039,117 @@ namespace DeepUnity
                     return Identity(tensors[0]);
             }
 
+            // Handle the null axis case (stacking on new dimension)
+            if (axis == null)
+            {
+                // First, unsqueeze all tensors on axis 0 to add a new dimension
+                Tensor[] unsqueezedTensors = new Tensor[tensors.Length];
+                for (int i = 0; i < tensors.Length; i++)
+                {
+                    unsqueezedTensors[i] = tensors[i].Unsqueeze(0);
+                }
+
+                // Then concatenate along axis 0 (the new dimension)
+                return Concat(0, unsqueezedTensors);
+            }
+
+            // Normal concatenation case
+            int concatAxis = axis.Value;
+            HandleAxis(tensors[0], ref concatAxis);
+            Dim dim = AxisToDim(tensors[0], concatAxis);
+
+            // Validate tensor compatibility - all dimensions except concatenation axis must match
             for (int i = 1; i < tensors.Length; i++)
             {
                 if (tensors[i] == null)
                 {
                     throw new ArgumentException($"Tensors argument contains a null tensor on index {i}.");
                 }
-                if (!tensors[i - 1].shape.SequenceEqual(tensors[i].shape))
+
+                if (tensors[i].shape.Length != tensors[0].shape.Length)
                 {
-                    throw new ArgumentException($"Tensors must have the same shape in order to be joined ([{tensors[i - 1].shape.ToCommaSeparatedString()}] != [{tensors[i].shape.ToCommaSeparatedString()}])");
+                    throw new ArgumentException($"All tensors must have the same number of dimensions");
                 }
-            }
 
-            int no_slices = tensors.Length;
-            Tensor slice = tensors[0];
-            int[] shapex = null;
-            Dim dim;
-
-            
-
-            if (axis == null)
-            {
-                int axisIndex = (int)AxisToDim(tensors[0], 0) - 1;
-
-                if (axisIndex < 0)
-                    throw new ArgumentException("Cannot join tensors along the fifth dimension because the limit of a tensor shape is 4.");
-                dim = (Dim) axisIndex;// if axis is null, we join the tensors on the extra dimension
-                
-            }
-            else
-            {
-                int ax = axis.Value;
-                HandleAxis(tensors[0], ref ax);
-                dim = AxisToDim(tensors[0], ax);
-            }
-               
-            switch (dim)
-            {
-                case Dim.width:
-                    shapex = CreateShape(slice.Rank, slice.Batch, slice.Channels, slice.Height, slice.Width * no_slices);
-                    break;
-                case Dim.height:
-                    shapex = CreateShape(slice.Rank, slice.Batch, slice.Channels, slice.Height * no_slices, slice.Width);
-                    break;
-                case Dim.channel:
-                    shapex = CreateShape(slice.Rank, slice.Batch, slice.Channels * no_slices, slice.Height, slice.Width);
-                    break;
-                case Dim.batch:
-                    shapex = CreateShape(slice.Rank, slice.Batch * no_slices, slice.Channels, slice.Height, slice.Width);
-                    break;
-            }
-            Tensor result = new(shapex);
-
-            for (int s = 0; s < no_slices; s++)
-            {
-                for (int l = 0; l < slice.Batch; l++)
+                // Check all dimensions except the concatenation axis
+                for (int d = 0; d < tensors[0].shape.Length; d++)
                 {
-                    for (int k = 0; k < slice.Channels; k++)
+                    if (d != concatAxis && tensors[i].shape[d] != tensors[0].shape[d])
                     {
-                        for (int j = 0; j < slice.Height; j++)
-                        {
-                            for (int i = 0; i < slice.Width; i++)
-                            {
-                                switch (dim)
-                                {
-                                    case Dim.width:
-                                        result[l, k, j, s * slice.Width + i] = tensors[s][l, k, j, i];
-                                        break;
-                                    case Dim.height:
-                                        result[l, k, s * slice.Height + j, i] = tensors[s][l, k, j, i];
-                                        break;
-                                    case Dim.channel:
-                                        result[l, s * slice.Channels + k, j, i] = tensors[s][l, k, j, i];
-                                        break;
-                                    case Dim.batch:
-                                        result[s * slice.Batch + l, k, j, i] = tensors[s][l, k, j, i];
-                                        break;
-                                }
-
-                            }
-                        }
+                        throw new ArgumentException($"Tensors must have the same shape except along the concatenation axis. " +
+                            $"Tensor 0 shape: [{tensors[0].shape.ToCommaSeparatedString()}], " +
+                            $"Tensor {i} shape: [{tensors[i].shape.ToCommaSeparatedString()}]");
                     }
                 }
             }
 
+            // Calculate the total size along the concatenation axis
+            int totalConcatSize = 0;
+            for (int i = 0; i < tensors.Length; i++)
+            {
+                totalConcatSize += tensors[i].shape[concatAxis];
+            }
+
+            // Create the result shape
+            int[] shapex = null;
+            Tensor firstTensor = tensors[0];
+
+            switch (dim)
+            {
+                case Dim.width:
+                    shapex = CreateShape(firstTensor.Rank, firstTensor.Batch, firstTensor.Channels, firstTensor.Height, totalConcatSize);
+                    break;
+                case Dim.height:
+                    shapex = CreateShape(firstTensor.Rank, firstTensor.Batch, firstTensor.Channels, totalConcatSize, firstTensor.Width);
+                    break;
+                case Dim.channel:
+                    shapex = CreateShape(firstTensor.Rank, firstTensor.Batch, totalConcatSize, firstTensor.Height, firstTensor.Width);
+                    break;
+                case Dim.batch:
+                    shapex = CreateShape(firstTensor.Rank, totalConcatSize, firstTensor.Channels, firstTensor.Height, firstTensor.Width);
+                    break;
+            }
+
+            Tensor result = new(shapex);
+
+            // Keep track of the offset along the concatenation axis
+            int offset = 0;
+
+            for (int s = 0; s < tensors.Length; s++)
+            {
+                Tensor currentTensor = tensors[s];
+
+                for (int l = 0; l < currentTensor.Batch; l++)
+                {
+                    for (int k = 0; k < currentTensor.Channels; k++)
+                    {
+                        for (int j = 0; j < currentTensor.Height; j++)
+                        {
+                            for (int i = 0; i < currentTensor.Width; i++)
+                            {
+                                switch (dim)
+                                {
+                                    case Dim.width:
+                                        result[l, k, j, offset + i] = currentTensor[l, k, j, i];
+                                        break;
+                                    case Dim.height:
+                                        result[l, k, offset + j, i] = currentTensor[l, k, j, i];
+                                        break;
+                                    case Dim.channel:
+                                        result[l, offset + k, j, i] = currentTensor[l, k, j, i];
+                                        break;
+                                    case Dim.batch:
+                                        result[offset + l, k, j, i] = currentTensor[l, k, j, i];
+                                        break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Update offset for next tensor
+                offset += currentTensor.shape[concatAxis];
+            }
 
             return result;
         }
@@ -4155,6 +4181,123 @@ namespace DeepUnity
             }
             return intTensor;
         }
+        /// <summary>
+        /// Extracts a slice from the tensor along a specified axis.
+        /// </summary>
+        /// <param name="tensor">The input tensor.</param>
+        /// <param name="axis">The axis along which to slice.</param>
+        /// <param name="startInclusive">The starting index (inclusive). Can be negative.</param>
+        /// <param name="endExclusive">The ending index (exclusive). Can be negative.</param>
+        /// <param name="step">The step size. Can be negative for reverse slicing.</param>
+        /// <returns>A new tensor containing the sliced data.</returns>
+        public static Tensor Slice(Tensor tensor, int axis, int startInclusive, int endExclusive, int step = 1)
+        {
+            if (tensor == null)
+                throw new ArgumentNullException(nameof(tensor));
+            if (step == 0)
+                throw new ArgumentException("Step cannot be zero.", nameof(step));
+
+            HandleAxis(tensor, ref axis); 
+            int dimSize = tensor.shape[axis];
+            if (dimSize == 0)
+                throw new ArgumentException("Cannot slice along an axis of size 0.");
+
+            if (startInclusive < 0) startInclusive = Math.Max(0, dimSize + startInclusive);
+            if (endExclusive < 0) endExclusive = Math.Max(0, dimSize + endExclusive);
+
+            startInclusive = Math.Max(0, Math.Min(dimSize, startInclusive));
+            endExclusive = Math.Max(0, Math.Min(dimSize, endExclusive));
+
+            if ((step > 0 && startInclusive >= endExclusive) || (step < 0 && startInclusive <= endExclusive))
+            {
+                int[] newShape = (int[])tensor.shape.Clone();
+                newShape[axis] = 0;
+                return Zeros(newShape);
+            }
+
+            int slicedDimSize = 0;
+            if (step > 0)
+            {
+                slicedDimSize = (endExclusive - startInclusive + step - 1) / step; 
+            }
+            else 
+            {
+                slicedDimSize = (startInclusive - endExclusive - step - 1) / (-step); 
+            }
+            slicedDimSize = Math.Max(0, slicedDimSize); 
+
+            int[] resultShape = (int[])tensor.shape.Clone();
+            resultShape[axis] = slicedDimSize;
+            Tensor result = Zeros(resultShape);
+
+            Dim dimEnum = AxisToDim(tensor, axis);
+
+            int batch = tensor.Batch;
+            int channels = tensor.Channels;
+            int height = tensor.Height;
+            int width = tensor.Width;
+
+            for (int l = 0; l < batch; l++)
+            {
+                for (int k = 0; k < channels; k++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        for (int i = 0; i < width; i++)
+                        {
+                            int originalIndexAlongAxis = -1;
+                            switch (dimEnum)
+                            {
+                                case Dim.width: originalIndexAlongAxis = i; break;
+                                case Dim.height: originalIndexAlongAxis = j; break;
+                                case Dim.channel: originalIndexAlongAxis = k; break;
+                                case Dim.batch: originalIndexAlongAxis = l; break;
+                            }
+
+                            bool isInSlice = false;
+                            int resultIndexAlongAxis = -1;
+
+                            if (step > 0)
+                            {
+                                if (originalIndexAlongAxis >= startInclusive &&
+                                    originalIndexAlongAxis < endExclusive &&
+                                    (originalIndexAlongAxis - startInclusive) % step == 0)
+                                {
+                                    isInSlice = true;
+                                    resultIndexAlongAxis = (originalIndexAlongAxis - startInclusive) / step;
+                                }
+                            }
+                            else 
+                            {
+                                if (originalIndexAlongAxis <= startInclusive &&
+                                    originalIndexAlongAxis > endExclusive &&
+                                    (startInclusive - originalIndexAlongAxis) % (-step) == 0)
+                                {
+                                    isInSlice = true;
+                                    resultIndexAlongAxis = (startInclusive - originalIndexAlongAxis) / (-step);
+                                }
+                            }
+
+                            if (isInSlice)
+                            {
+                                int resultL = l, resultK = k, resultJ = j, resultI = i;
+                                switch (dimEnum)
+                                {
+                                    case Dim.width: resultI = resultIndexAlongAxis; break;
+                                    case Dim.height: resultJ = resultIndexAlongAxis; break;
+                                    case Dim.channel: resultK = resultIndexAlongAxis; break;
+                                    case Dim.batch: resultL = resultIndexAlongAxis; break;
+                                }
+
+                                result[resultL, resultK, resultJ, resultI] = tensor[l, k, j, i];
+                            }
+                        }
+                    }
+                }
+            }
+
+            return result;
+        }
         #endregion Statics
 
 
@@ -4375,6 +4518,10 @@ namespace DeepUnity
         public Tensor Int()
         {
             return Int(this);
+        } 
+        public Tensor Slice(int axis, int startInclusive, int endExclusive, int step)
+        {
+            return Slice(this, axis, startInclusive, endExclusive, step);
         }
         #endregion Instance
 
