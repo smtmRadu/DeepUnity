@@ -1,5 +1,6 @@
-using System.Threading.Tasks;
 using DeepUnity.Modules;
+using System.Threading.Tasks;
+using UnityEngine;
 namespace DeepUnity.Optimizers
 {
     /// <summary>
@@ -7,23 +8,23 @@ namespace DeepUnity.Optimizers
     /// </summary>
     public sealed class AdEMAMix : Optimizer
     {
-        private readonly float beta1;
-        private readonly float beta2;
-        private readonly float beta3;
-        private readonly float alpha;
-        private readonly bool amsgrad;
-        private readonly bool decoupledWd;
+        [SerializeField]private float beta1;
+        [SerializeField]private float beta2;
+        [SerializeField]private float beta3;
+        [SerializeField]private float alpha;
+        [SerializeField]private bool amsgrad;
+        [SerializeField] private bool decoupledWd;
 
-        private float beta1_t = 1f; // beta1^t caching
-        private float beta2_t = 1f;
+        [SerializeField]private float beta1_t = 1f; // beta1^t caching
+        [SerializeField] private float beta2_t = 1f;
 
         // 1st momentum buffer
-        private readonly Tensor[] m1;
+        [SerializeField] private Tensor[] m1;
 
         // 2nd momentum buffer 
-        private readonly Tensor[] m2;
+        [SerializeField] private Tensor[] m2;
 
-        private readonly Tensor[] nu;
+        [SerializeField] private Tensor[] nu;
 
         /// <summary>
         /// THE ADEMAMIX OPTIMIZER: BETTER, FASTER, OLDER https://arxiv.org/pdf/2409.03137 Matteo Pagliardini et al. 2024

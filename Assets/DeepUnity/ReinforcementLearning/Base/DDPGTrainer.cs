@@ -2,9 +2,11 @@
 using DeepUnity.Models;
 using DeepUnity.Modules;
 using DeepUnity.Optimizers;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using UnityEngine;
 
 namespace DeepUnity.ReinforcementLearning
 {
@@ -30,7 +32,7 @@ namespace DeepUnity.ReinforcementLearning
 
         private int new_experiences_collected = 0;
 
-        protected override void Initialize()
+        protected override void Initialize(string[] optimizer_states)
         {
             // DDPG policy must have tanh on mu net.
             if (model.muNetwork.Modules.Last().GetType() != typeof(Tanh))
@@ -261,6 +263,17 @@ namespace DeepUnity.ReinforcementLearning
                 }
             });
             return pair;
+        }
+
+        protected override string[] SerializeOptimizerStates()
+        {
+            List<string> states = new List<string>();
+            states.Add(JsonUtility.ToJson(optim_q1, true));
+            states.Add(JsonUtility.ToJson(optim_mu, true));
+            
+            
+
+            return states.ToArray();
         }
     }
 

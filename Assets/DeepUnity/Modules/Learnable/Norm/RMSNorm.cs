@@ -6,11 +6,11 @@ namespace DeepUnity.Modules
 {
     // https://pytorch.org/docs/stable/generated/torch.nn.RMSNorm.html
     /// <summary>
+    /// <b>Applies root mean square normalization over the last dimension (H) of the input:</b> x/<b>RMS</b>(x) • γ, where <b>RMS</b>(x) = √(1/n • ∑x² + ε) <br />
     /// <b>Placed before the non-linear activation function. </b>    <br />
     /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br />
     /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br />
-    /// where  B = batch_size and H = in_features.<br />
-    /// <b>Applies root mean square normalization over the last dimension (H) of the input.</b> 
+    /// where B = batch_size and H = in_features.<br />
     /// </summary>
     [Serializable]
     public class RMSNorm : IModule, ILearnable
@@ -27,14 +27,12 @@ namespace DeepUnity.Modules
         private Tensor ms_x { get; set; }
 
         /// <summary>
-        /// Applies x/(√rms(x) + e) * γ. <br />
+        /// <b>Applies root mean square normalization over the last dimension (H) of the input:</b> x/<b>RMS</b>(x) • γ, where <b>RMS</b>(x) = √(ε + 1/n • ∑x²) <br />
         /// <b>Placed before the non-linear activation function. </b>    <br />
         /// Input: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br />
         /// Output: <b>(B, H)</b> or <b>(H)</b> for unbatched input.<br />
-        /// where  B = batch_size and H = in_features.<br />
-        /// <b>Applies root mean square normalization over the last dimension (H) of the input.</b> 
+        /// where B = batch_size and H = in_features.<br />
         /// </summary>
-        /// <param name="affine">Train gamma and beta parameters (elementwise-affine).</param>
         public RMSNorm(int num_features, float eps = 1e-6f, bool elementwise_affine=true)
         {
             this.epsilon  = eps; 
@@ -72,7 +70,7 @@ namespace DeepUnity.Modules
             bool isBatched = input.Rank == 2;
 
             ms_x = input.Square().Mean(-1, keepDim: true).Expand(-1, input.Size(-1));
-            xHat = input / Tensor.Sqrt(ms_x + epsilon);
+            xHat = input * Tensor.RSqrt(ms_x + epsilon);
 
             if (!affine)
                 return xHat;

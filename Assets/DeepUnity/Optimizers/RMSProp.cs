@@ -1,16 +1,17 @@
 using DeepUnity.Modules;
+using UnityEngine;
 namespace DeepUnity.Optimizers
 {
     // https://pytorch.org/docs/stable/generated/torch.optim.RMSprop.html
     public class RMSProp : Optimizer
     {
-        private readonly float alpha;
-        private readonly float mu;
-        private readonly bool centered;
+        [SerializeField]private float alpha;
+        [SerializeField]private float mu;
+        [SerializeField] private bool centered;
 
-        private readonly Tensor[] v;
-        private readonly Tensor[] b;
-        private readonly Tensor[] gAve;
+        [SerializeField]private Tensor[] v;
+        [SerializeField]private Tensor[] b;
+        [SerializeField] private Tensor[] gAve;
         /// <summary>
         /// RMSprop optimizer.
         /// </summary>

@@ -966,13 +966,13 @@ MonoBehaviour:
   spaceWidth: 256
   spaceChannels: 3
   stackedInputs: 1
-  continuousActions: 2
-  discreteActions: 0
+  continuousActions: 0
+  discreteActions: 5
   archType: 0
   numLayers: 2
   hidUnits: 32
-  activation: 0
-  model: {fileID: 11400000, guid: 8e725f22cd35aaf4eaf620d2ed2ba311, type: 2}
+  activation: 2
+  model: {fileID: 11400000, guid: a90dec32343a8ab42b3fb377440ca7c7, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0

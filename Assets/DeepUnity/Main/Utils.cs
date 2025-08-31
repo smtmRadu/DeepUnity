@@ -362,6 +362,15 @@ namespace DeepUnity
             return 1.0f / (1.0f + MathF.Exp(-value));
         }
 
+        public static float[] ReadWeights(string path, int numWeights)
+        {
+            float[] weights = new float[numWeights];
+            byte[] bytes = File.ReadAllBytes(path); // read file at once
+            Buffer.BlockCopy(bytes, 0, weights, 0, bytes.Length);
+
+            return weights;
+        }
+
         /// <summary>
         /// A class that contains all hyberbolic functions
         /// </summary>

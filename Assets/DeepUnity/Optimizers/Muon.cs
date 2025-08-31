@@ -1,5 +1,6 @@
 using DeepUnity.Modules;
 using System;
+using UnityEngine;
 namespace DeepUnity.Optimizers
 {
     /// <summary>
@@ -12,24 +13,24 @@ namespace DeepUnity.Optimizers
     /// </summary>
     public sealed class Muon : Optimizer
     {
-
+        
         /// MUON PARAMS
-        private readonly int ns_steps=5;
-        private readonly float a;
-        private readonly float b;
-        private readonly float c;
-        private readonly float mu;
-        private readonly Tensor[] B;
+        [SerializeField] private int ns_steps=5;
+        [SerializeField] private float a;
+        [SerializeField] private float b;
+        [SerializeField] private float c;
+        [SerializeField] private float mu;
+        [SerializeField] private Tensor[] B;
 
         /// ADAMW PARAMS
-        private readonly float adam_beta1;
-        private readonly float adam_beta2;
-        private readonly float adam_lr_ratio;
-        private float beta1_t = 1f; // beta1^t caching
-        private float beta2_t = 1f;
+        [SerializeField]private readonly float adam_beta1;
+        [SerializeField]private readonly float adam_beta2;
+        [SerializeField]private readonly float adam_lr_ratio;
+        [SerializeField]private float beta1_t = 1f; // beta1^t caching
+        [SerializeField] private float beta2_t = 1f;
 
-        private readonly Tensor[] m;
-        private readonly Tensor[] v;
+        [SerializeField]private readonly Tensor[] m;
+        [SerializeField] private readonly Tensor[] v;
 
 
         /// <summary>

@@ -59,11 +59,11 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("[Typical range: 0.5 - 1] Value loss function coefficient")]
         [MinMax(0.5f, 1f)] public float valueCoeff = 0.5f;
 
-        [ViewOnly, Tooltip("[Typical range: 0 - 1.0] Global Gradient Clipping max norm value. Set to 0 to turn off. For now it is disabled because we use StableAdamW as a relacement for AdamW+GradientClipping.")]
+        [Tooltip("[Typical range: 0 - 1.0] Global Gradient Clipping max norm value. Set to 0 to turn off. For now it is disabled because we use StableAdamW as a relacement for AdamW+GradientClipping.")]
         [MinMax(-1f, 1f)] public float maxNorm = 0.5f;
 
         [Tooltip("Use of KLE")]
-        public KLEType KLDivergence = KLEType.Off;
+        public EarlyStopType earlyStopping = EarlyStopType.Off;
 
         [Tooltip("Kullback-Leibler divergence target value")]
         [MinMax(0.001f, 0.15f)] public float targetKL = 0.015f;
@@ -172,7 +172,7 @@ namespace DeepUnity.ReinforcementLearning
 
             if (script.trainer == TrainerType.PPO)
             {
-                if (script.KLDivergence == (int)KLEType.Off)
+                if (script.earlyStopping == (int)EarlyStopType.Off)
                     dontDrawMe.Add("targetKL");
 
                 dontDrawMe.Add("replayBufferSize");
@@ -252,7 +252,7 @@ namespace DeepUnity.ReinforcementLearning
             }
             else if (script.trainer == TrainerType.VPG)
             {
-                if (script.KLDivergence == (int)KLEType.Off)
+                if (script.earlyStopping == (int)EarlyStopType.Off)
                     dontDrawMe.Add("targetKL");
 
                 dontDrawMe.Add("replayBufferSize");

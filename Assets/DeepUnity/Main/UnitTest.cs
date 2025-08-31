@@ -1,4 +1,5 @@
 ﻿
+using DeepUnity.Activations;
 using DeepUnity.Models;
 using DeepUnity.Modules;
 using DeepUnity.Optimizers;
@@ -39,16 +40,23 @@ namespace DeepUnity.Tutorials
         }
         Gemma3ForCausalLM gemma_model;
         GemmaTokenizerFast gemma_tokenizer;
+
         private void Start()
         {
-            gemma_model = new Gemma3ForCausalLM();
-            gemma_tokenizer = new GemmaTokenizerFast();
-            print(gemma_model.ParameterCount());
+            Dense x = new Dense(10, 10);
+            AdamW optim = new AdamW(parameters: x.Parameters(),lr: 1e-4f, amsgrad:true);
+
+            
+            string json = JsonUtility.ToJson(optim);
+
+            print(json);
+
+            //print(gemma_model.ParameterCount());
 
 
-            string input = "What's the capital of France?";
-
-            gemma_model.Generate(input, gemma_tokenizer);
+            // string input = "What's the capital of France?";
+            // 
+            // gemma_model.Generate(input, gemma_tokenizer);
 
             //TestGemma();
             //TestGemmaTokenizer();
@@ -173,11 +181,11 @@ namespace DeepUnity.Tutorials
             string str = "Hello there martin, here's your special delight zone!";
             var tokenizer = new GemmaTokenizerFast();
             var enc = tokenizer.Encode(str);
-
-            print(tokenizer.token2id.ElementAt(993));
-            print(str);
-            print(enc);
-            print(tokenizer.Decode(enc.Item1)[0]);
+           
+            // print(tokenizer.token2id.ElementAt(993));
+            // print(str);
+            // print(enc);
+            // print(tokenizer.Decode(enc.Item1)[0]);
         }
         private void TestGQA()
         {

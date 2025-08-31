@@ -2,7 +2,11 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Xml.Linq;
+using Unity.VisualScripting;
+using UnityEditor;
 using UnityEngine;
 
 namespace DeepUnity.ReinforcementLearning
@@ -36,6 +40,7 @@ namespace DeepUnity.ReinforcementLearning
         [ViewOnly] public float actorLoss;
         [ViewOnly] public float criticLoss;
         [ViewOnly] public float entropy;
+        [ViewOnly] public string optimStatesPath;
 
 
         public readonly DateTime timeWhenTheTrainingStarted = DateTime.Now;
@@ -106,6 +111,8 @@ namespace DeepUnity.ReinforcementLearning
             {
                 autosaveSecondsElapsed = 0f;
                 model.Save();
+                Instance.SaveOptimStates();
+               
             }
             autosaveSecondsElapsed += Time.fixedDeltaTime;
 
@@ -140,7 +147,20 @@ namespace DeepUnity.ReinforcementLearning
             GUI.Label(new Rect(10, 10, 800, 60), _runtimeStatsText, _runtimeStatsStyle);
         }
 
-        protected abstract void Initialize();
+        protected abstract void Initialize(string[] optimizer_states);
+        protected abstract string[] SerializeOptimizerStates();
+        private void SaveOptimStates()
+        {
+            if (Instance.optimStatesPath != null)
+            {
+                string[] optim_states = Instance.SerializeOptimizerStates();
+                for (int i = 0; i < optim_states.Length; i++)
+                {
+                    File.WriteAllText(Instance.optimStatesPath + $"{Instance.GetType().Name.ToLower()}_optim_state_{i}.json", optim_states[i]);
+                }
+            }
+            ConsoleMessage.Info($"<b>[AUTOSAVE]</b> Optimizer states <b><i>{Instance.model.behaviourName}</i></b> saved");
+        }
         protected abstract void OnBeforeFixedUpdate();
         IEnumerator DrawDotsToLearningText()
         {
@@ -194,7 +214,31 @@ namespace DeepUnity.ReinforcementLearning
                     _ => throw new NotSupportedException("Unhandled Trainer Type in initializing the train_data buffer")
                 });
                 Instance.model = agent.model;
-                Instance.Initialize();
+                string[] optimizer_states = null;
+#if UNITY_EDITOR
+                Instance.optimStatesPath = AssetDatabase.GetAssetPath(agent.model.config);
+                Instance.optimStatesPath = Path.GetDirectoryName(Instance.optimStatesPath).Replace("\\", "/") + "/OptimStates/";
+                if (!Directory.Exists(Instance.optimStatesPath))
+                {
+                    Directory.CreateDirectory(Instance.optimStatesPath);
+                    File.WriteAllText(Instance.optimStatesPath + "info.txt", "• This folder contains the optim states' saves from previous training sessions of this agent.\n" +
+                        "• These are usefull for continuing the agent training in a different session as they hold gradients' momentums.\n" +
+                        "• It is recommended to remove these files (rare situations) if the agent receives modifications (e.g. different input distribution).\n");
+                }
+                string[] files_names = Directory.GetFiles(Instance.optimStatesPath, "*.json");
+                files_names = files_names.Where(x => x.Contains(Instance.GetType().Name.ToLower())).ToArray();
+                List<string> file_contents = new();
+                foreach (var file in files_names)
+                {
+                    string json = File.ReadAllText(file);
+                    file_contents.Add(json);
+                }
+                optimizer_states = file_contents.Count > 0 ? file_contents.ToArray() : null;
+                if(optimizer_states != null)
+                    UnityEngine.Debug.Log($"<color=#57f542><b>[INFO]</b> Optimizer states <b><i>{Instance.model.behaviourName}</i></b> loaded. </color>");
+#endif
+
+                Instance.Initialize(optimizer_states);
             }
 
             // Assign common attributes to all agents (based on the last agent that subscribes - this one is actually the first in the Hierarchy)
@@ -208,16 +252,29 @@ namespace DeepUnity.ReinforcementLearning
             Instance.parallelAgents.Add(agent);
         }
 #if UNITY_EDITOR
-        private static void Autosave(UnityEditor.PlayModeStateChange state) => Instance.model.Save();
-#endif
-        private void OnApplicationQuit() => Instance.model.Save();
+        private static void Autosave(UnityEditor.PlayModeStateChange state)
+        {
+            Instance.model.Save();
 
+            if(state == PlayModeStateChange.ExitingPlayMode || state == PlayModeStateChange.ExitingEditMode)
+                Instance.SaveOptimStates(); // this is removed from here because the script will write down the values of the optimizer even before initializing from the files.
+            // we can also make this part to be ommited once then it is fine.
+            
+        }
+#endif
+        private void OnApplicationQuit()
+        {
+            Instance.model.Save();
+            Instance.SaveOptimStates();
+        }
         protected static void EndTrainingSession(string reason)
         {
             if (!Instance.ended)
             {
                 ConsoleMessage.Info("Training Session Ended! " + reason);
                 Instance.model.Save();
+                Instance.SaveOptimStates();
+                
 #if UNITY_EDITOR
                 UnityEditor.EditorApplication.isPlaying = false;
 #endif

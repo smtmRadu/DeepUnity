@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using DeepUnity.Models;
 using DeepUnity.Activations;
 using DeepUnity.Optimizers;
+using UnityEngine;
 
 namespace DeepUnity.ReinforcementLearning
 {
@@ -35,7 +36,7 @@ namespace DeepUnity.ReinforcementLearning
         private Tensor[] sigma_kle_cache { get; set; }
         private Tensor[] disc_kle_cache { get; set; }
        
-        protected override void Initialize()
+        protected override void Initialize(string[] optimizer_states)
         {
             if (model.IsUsingContinuousActions && model.muNetwork.Modules.Last().GetType() == typeof(Tanh))
                 model.muNetwork.Modules = model.muNetwork.Modules.Take(model.muNetwork.Modules.Length - 1).ToArray();
@@ -43,25 +44,52 @@ namespace DeepUnity.ReinforcementLearning
 
             // Initialize Optimizers & Schedulers
             int total_epochs = (int)hp.maxSteps / hp.bufferSize * hp.numEpoch; // THIS IS FOR PPO, but for now i will let it for SAC as well       
-            // optim_v = new AdamW(model.vNetwork.Parameters(), hp.criticLearningRate, eps: epsilon, weight_decay: valueWD, amsgrad:amsGrad, fused:true);
-            optim_v = new StableAdamW(model.vNetwork.Parameters(), hp.criticLearningRate, eps: epsilon, weight_decay: valueWD, fused: true);
-            optim_v.Scheduler = new LinearAnnealing(optim_v, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
+            if (optimizer_states == null)
+                optim_v = new AdamW(model.vNetwork.Parameters(), hp.criticLearningRate, eps: epsilon, weight_decay: valueWD, amsgrad: amsGrad, fused: true);
+            else
+            {
+                optim_v = JsonUtility.FromJson<AdamW>(optimizer_states[0]);
+                optim_v.parameters = model.vNetwork.Parameters();
+            }
+                
+           optim_v.Scheduler = new LinearAnnealing(optim_v, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
 
             if (model.IsUsingContinuousActions)
             {
-                //optim_mu = new AdamW(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay:0F, fused:true);
-                optim_mu = new StableAdamW(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon,weight_decay: 0F, fused:true);
+                if(optimizer_states == null)
+                    optim_mu = new AdamW(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay:0F, fused:true);
+                else
+                {
+                    optim_mu = JsonUtility.FromJson<AdamW>(optimizer_states[1]);
+                    optim_mu.parameters = model.muNetwork.Parameters();
+                }
+                    
                 optim_mu.Scheduler = new LinearAnnealing(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
 
-                // optim_sigma = new AdamW(model.sigmaNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay: 0F, fused: true);
-                optim_sigma = new StableAdamW(model.sigmaNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, weight_decay: 0F, fused: true);
+                
+                if(optimizer_states == null)
+                    optim_sigma = new AdamW(model.sigmaNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay: 0F, fused: true);
+                else
+                {
+                    optim_sigma = JsonUtility.FromJson<AdamW>(optimizer_states[2]);
+                    optim_sigma.parameters = model.sigmaNetwork.Parameters();
+                }
+                    
                 optim_sigma.Scheduler = new LinearAnnealing(optim_sigma, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
             }
 
             if (model.IsUsingDiscreteActions)
             {
-                // optim_discrete = new AdamW(model.discreteNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay: 0F, fused: true);
-                optim_discrete = new StableAdamW(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, weight_decay: 0F, fused: true);
+                if(optimizer_states == null)
+                {
+                    optim_discrete = new AdamW(model.discreteNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay: 0F, fused: true);
+                }
+                else
+                {
+                    optim_discrete = JsonUtility.FromJson<AdamW>(optimizer_states[optimizer_states.Length - 1]);
+                    optim_discrete.parameters = model.discreteNetwork.Parameters();
+                }
+                    //optim_discrete = new StableAdamW(model.discreteNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, weight_decay: 0F, fused: true);
                 optim_discrete.Scheduler = new LinearAnnealing(optim_discrete, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
             }
 
@@ -201,7 +229,7 @@ namespace DeepUnity.ReinforcementLearning
                 Tensor disc_probs_old_kle = null;
 
                 // Cache params[t-1] in case kl_div > d_targ
-                if(hp.KLDivergence == KLEType.Rollback)
+                if(hp.earlyStopping == EarlyStopType.Rollback)
                 {
                     LinkedList<Task> tasks_kle = new();
 
@@ -252,7 +280,7 @@ namespace DeepUnity.ReinforcementLearning
                 }
 
                 // Check KL Divergence based on the last Minibatch (see [3])
-                if (hp.KLDivergence != KLEType.Off)
+                if (hp.earlyStopping != EarlyStopType.Off)
                 {
                     // Though even if i should stop for them separatelly (i mean i can let for one to continue the training if kl is small) i will let it simple..
                     float kldiv_cont = model.IsUsingContinuousActions ? ComputeKLDivergence(cont_probs_new_kle, cont_probs_old_kle) : 0;
@@ -262,9 +290,9 @@ namespace DeepUnity.ReinforcementLearning
                     {
                         // ConsoleMessage.Info($"<b>KLE-{hp.KLDivergence}</b> triggered in epoch {epoch_index + 1}/{hp.numEpoch}\n [KL_continuous: {kldiv_cont} | KL_discrete: {kldiv_disc}) | KL_target: {hp.targetKL}]");
                         
-                        if (hp.KLDivergence == KLEType.Stop)
+                        if (hp.earlyStopping == EarlyStopType.Stop)
                             break;
-                        else if (hp.KLDivergence == KLEType.Rollback)
+                        else if (hp.earlyStopping == EarlyStopType.Rollback)
                         {
                             LinkedList<Task> tasks_kle = new();
 
@@ -352,7 +380,7 @@ namespace DeepUnity.ReinforcementLearning
 
             optim_v.ZeroGrad();
             model.vNetwork.Backward(mse.Grad * hp.valueCoeff);
-            // optim_v.ClipGradNorm(hp.maxNorm);
+            optim_v.ClipGradNorm(hp.maxNorm);
             optim_v.Step();
 
 
@@ -453,7 +481,7 @@ namespace DeepUnity.ReinforcementLearning
 
                 optim_sigma.ZeroGrad();
                 model.sigmaNetwork.Backward(dmLClip_dSigma);
-                // optim_sigma.ClipGradNorm(hp.maxNorm);
+                optim_sigma.ClipGradNorm(hp.maxNorm);
                 optim_sigma.Step();
             }
 
@@ -536,7 +564,7 @@ namespace DeepUnity.ReinforcementLearning
 
             optim_discrete.ZeroGrad();
             model.discreteNetwork.Backward(dmLClip_dPhi);
-            // optim_discrete.ClipGradNorm(hp.maxNorm);
+            optim_discrete.ClipGradNorm(hp.maxNorm);
             optim_discrete.Step();
         }
         /// <summary>
@@ -633,6 +661,25 @@ namespace DeepUnity.ReinforcementLearning
             float std = advantages.Std(0, correction: 0)[0]; // note that we use biased estimator
             float mean = advantages.Mean(0)[0];
             return (advantages - mean) / (std + Utils.EPSILON);
+        }
+
+        protected override string[] SerializeOptimizerStates()
+        {
+            List<string> states = new List<string>();
+            states.Add(JsonUtility.ToJson(optim_v, true));
+
+            if(model.IsUsingContinuousActions)
+            {
+                states.Add(JsonUtility.ToJson(optim_mu, true));
+                states.Add(JsonUtility.ToJson(optim_sigma, true));
+            }
+
+            if(model.IsUsingDiscreteActions)
+            {
+                states.Add(JsonUtility.ToJson(optim_discrete, true));
+            }
+
+            return states.ToArray();
         }
     }
 

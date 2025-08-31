@@ -1,3 +1,6 @@
+using System;
+using System.Threading.Tasks;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity
@@ -9,14 +12,37 @@ namespace DeepUnity
             private int hidden_size;
             private int intermediate_size;
             public ComputeBuffer weights;
-
-            public Gemma3MLP(int hidden_size, int intermediate_size)
+            public bool IsInitialized { get; private set; } = false;
+            public Gemma3MLP(int hidden_size, int intermediate_size, string layer_params_path)
             {
                 this.hidden_size = hidden_size;
                 this.intermediate_size = intermediate_size;
 
                 //weights = TensorGPU.Ones(hidden_size * intermediate_size * 3);
                 weights = new ComputeBuffer(hidden_size * intermediate_size * 3, 4);
+                if (!string.IsNullOrEmpty(layer_params_path))
+                {
+                    _ = LoadWeightsAsync(layer_params_path);
+                }
+            }
+
+            private async Task LoadWeightsAsync(string path)
+            {
+                Task<float[]>[] tasks = new Task<float[]>[3];
+                tasks[0] = Task.Run(() => Utils.ReadWeights(path + "/mlp_gate_proj.bin", hidden_size * intermediate_size));
+                tasks[1] = Task.Run(() => Utils.ReadWeights(path + "/mlp_up_proj.bin", hidden_size * intermediate_size));
+                tasks[2] = Task.Run(() => Utils.ReadWeights(path + "/mlp_down_proj.bin", hidden_size * intermediate_size));
+
+                float[][] results = await Task.WhenAll(tasks);
+                float[] flat = new float[hidden_size * intermediate_size * 3];
+                int partLength = hidden_size * intermediate_size;
+                Array.Copy(results[0], 0, flat, 0, partLength);
+                Array.Copy(results[1], 0, flat, partLength, partLength);
+                Array.Copy(results[2], 0, flat, 2 * partLength, partLength);
+                weights.SetData(flat);
+
+                IsInitialized = true;
+                // ConsoleMessage.Info($"Loaded {path}/mlp");
             }
             ~Gemma3MLP() 
             {

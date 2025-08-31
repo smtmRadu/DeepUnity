@@ -12,7 +12,7 @@ namespace DeepUnity
                 HIDDEN_SIZE = 640,
                 MLP_INTERMEDIATE_SIZE = 2048,
                 
-                NUM_LAYERS = 18,
+                NUM_LAYERS = 3,
                 CONTEXT_LENGTH = 32768, // they say is 128K, the code says 32768.. fuck off.
                 ROPE_THETA = 1_000_000,
                 HEAD_DIM = 256,

@@ -1,13 +1,14 @@
 using DeepUnity.Modules;
+using UnityEngine;
 namespace DeepUnity.Optimizers
 {
     public class Adadelta : Optimizer
         {
 
-            private readonly float rho;
+        [SerializeField] private float rho;
 
-            private readonly Tensor[] v; // sqr avg
-            private readonly Tensor[] u; // accumulate variables
+        [SerializeField] private  Tensor[] v; // sqr avg
+            [SerializeField] private  Tensor[] u; // accumulate variables
             public Adadelta(Parameter[] parameters, float lr = 1f, float rho = 0.9f, float eps = 1e-7f, float weight_decay = 0f) : base(parameters, lr, eps, weight_decay, false)
             {
                 this.rho = rho;

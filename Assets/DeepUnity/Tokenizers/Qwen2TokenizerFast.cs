@@ -17,7 +17,10 @@ namespace DeepUnity
         public override (Tensor, Tensor) Encode(string input, bool add_special_tokens = true,bool truncation = false,int max_length = 512)
         {
             if (input is null) throw new ArgumentNullException(nameof(input));
-
+            if (!IsReady)
+            {
+                throw new ArgumentException("Tokenizer loaded asynchronously and not yet initialized. Check 'tokenizer.IsInitialized' before using the tokenizer.");
+            }
             int n = input.Length;
             Span<char> text = n <= 32_768 ? stackalloc char[n] : new char[n];
             for (int i = 0; i < n; i++)

@@ -4,7 +4,6 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Assertions;
 
-
 namespace DeepUnity.Modules
 {
     /// <summary>
@@ -86,7 +85,6 @@ namespace DeepUnity.Modules
             }
         }
         private Embedding() { }
-
         public Tensor Predict(Tensor input)
         {
             if(input.Rank > 3)

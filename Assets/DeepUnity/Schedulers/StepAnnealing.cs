@@ -5,6 +5,8 @@ namespace DeepUnity
     /// <summary>
     /// https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.StepLR.html
     /// </summary>
+
+    [System.Serializable]
     public class StepAnnealing : Scheduler
     {  
         private readonly int stepSize;

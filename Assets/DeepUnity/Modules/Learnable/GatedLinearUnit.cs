@@ -28,7 +28,7 @@ namespace DeepUnity
             switch(this.activation)
             {
                 case "swish" or "silu":
-                    _activation = new Swish();
+                    _activation = new Silu();
                     break;
                 case "gelu":
                     _activation = new GELU();

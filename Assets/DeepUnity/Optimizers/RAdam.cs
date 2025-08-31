@@ -1,24 +1,25 @@
 using DeepUnity.Modules;
 using System;
+using UnityEngine;
 namespace DeepUnity.Optimizers
 {
     // https://pytorch.org/docs/stable/generated/torch.optim.RAdam.html#torch.optim.RAdam
     public class RAdam : Optimizer
     {
-        private readonly float beta1;
-        private readonly float beta2;
-        private readonly bool decoupledWeightDecay;
+        [SerializeField]private float beta1;
+        [SerializeField]private float beta2;
+        [SerializeField] private bool decoupledWeightDecay;
 
 
-        private float beta1_t = 1f; // beta1^t caching
-        private float beta2_t = 1f; // beta2^t caching
-        private readonly float rho_inf;
+        [SerializeField]private float beta1_t = 1f; // beta1^t caching
+        [SerializeField]private float beta2_t = 1f; // beta2^t caching
+        [SerializeField] private float rho_inf;
 
         // 1st momentum buffer
-        private readonly Tensor[] m;
+        [SerializeField] private Tensor[] m;
 
         // 2nd momentum buffer 
-        private readonly Tensor[] v;
+        [SerializeField] private Tensor[] v;
 
         public RAdam(Parameter[] parameters, float lr = 0.001f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8f, float weightDecay = 0f, bool decoupled_weight_decay = false)
             : base(parameters, lr, eps, weightDecay, false)

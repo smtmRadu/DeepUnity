@@ -1,5 +1,6 @@
-using System.Threading.Tasks;
 using DeepUnity.Modules;
+using System.Threading.Tasks;
+using UnityEngine;
 namespace DeepUnity.Optimizers
 {
     /// <summary>
@@ -7,20 +8,19 @@ namespace DeepUnity.Optimizers
     /// </summary>
     public sealed class AdaBelief : Optimizer
     {
-        private readonly float beta1;
-        private readonly float beta2;
-        private readonly bool amsgrad;
-        private readonly bool maximize;
-        private readonly bool decoupledWd;
+        [SerializeField]private float beta1;
+        [SerializeField]private float beta2;
+        [SerializeField]private bool amsgrad;
+        [SerializeField] private bool decoupledWd;
 
-        private float beta1_t = 1f; // beta1^t caching
-        private float beta2_t = 1f;
+        [SerializeField]private float beta1_t = 1f; // beta1^t caching
+        [SerializeField] private float beta2_t = 1f;
 
         // 1st momentum buffer
-        private readonly Tensor[] m;
+        [SerializeField] private Tensor[] m;
 
         // 2nd momentum buffer 
-        private readonly Tensor[] s;
+        [SerializeField] private Tensor[] s;
 
         /// <summary>
         /// AdaBelief optimizer, with [decoupled] weight decay.(https://arxiv.org/pdf/2010.07468)

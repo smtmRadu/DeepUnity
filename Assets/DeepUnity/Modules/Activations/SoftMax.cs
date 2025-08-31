@@ -17,6 +17,7 @@ namespace DeepUnity.Activations
     [Serializable]
     public sealed class Softmax : IModule, IActivation
     {
+        [SerializeField] private bool is_safe = true; //pt default softmax is safe
         [SerializeField] private float temperature = 1f;
         private Tensor OutputCache { get; set; }
 
@@ -26,12 +27,13 @@ namespace DeepUnity.Activations
         /// Output: <b>(B, H)</b>, <b>(H)</b> or  <b>(B, L, H)</b>, <b>(L, H)</b> for sequential input <br></br>
         /// where * = any shape and H = features_num
         /// </summary>
-        public Softmax(float temperature = 1f) 
+        public Softmax(float temperature = 1f, bool is_safe = true) 
         {
             if (temperature <= 0f)
                 throw new ArgumentException("Temperature cannot be less or equal with 0");
 
             this.temperature = temperature;
+            this.is_safe = is_safe;
         }
 
        
@@ -42,11 +44,28 @@ namespace DeepUnity.Activations
                 throw new ShapeException($"Softmax input must be of shape (H), (B, H), (L, H) or (B, L, H) (received ({input.Shape.ToCommaSeparatedString()})).");
 
             // softmax(x[i]) = e^x[i] / sum{j:1->H}(e^x[j]])
-            Tensor exp = Tensor.Exp(input / temperature);
-            Tensor exp_sum = Tensor.Sum(exp, -1, true);
-            exp_sum = Tensor.Expand(exp_sum, -1, exp.Size(-1));
-            Tensor y = exp / exp_sum;
-            return y;
+            
+            
+
+            if(is_safe)
+            {
+                Tensor z = input / temperature;
+                Tensor max_ = z.Max(-1, keepDim: true).Expand(-1, z.Size(-1));
+                Tensor exp = Tensor.Exp(z - max_);
+                Tensor exp_sum = Tensor.Sum(exp, -1, true);
+                exp_sum = Tensor.Expand(exp_sum, -1, exp.Size(-1));
+                Tensor y = exp / exp_sum;
+                return y;
+            }
+            else
+            {
+                Tensor exp = Tensor.Exp(input / temperature);
+                Tensor exp_sum = Tensor.Sum(exp, -1, true);
+                exp_sum = Tensor.Expand(exp_sum, -1, exp.Size(-1));
+                Tensor y = exp / exp_sum;
+                return y;
+            }
+                
         }
         public Tensor Forward(Tensor input)
         {
@@ -92,27 +111,38 @@ namespace DeepUnity.Activations
             }
             else if (dLdY.Rank == 1)
             {
-                int H = outputCache.Size(-1);
-
-                Tensor jacobian_softmax = Tensor.Zeros(H, H);
-
-                for (int j = 0; j < H; j++)
+                // slow method
+                if(false)
                 {
-                    for (int i = 0; i < H; i++)
-                    {
-                        float kdelta = i == j ? 1 : 0;
-                        jacobian_softmax[j, i] += outputCache[i] * (kdelta - outputCache[j]);
-                    }
-                }
+                    int H = outputCache.Size(-1);
 
-                return Tensor.MatMul(dLdY, jacobian_softmax);
+                    Tensor jacobian_softmax = Tensor.Zeros(H, H);
+
+                    for (int j = 0; j < H; j++)
+                    {
+                        for (int i = 0; i < H; i++)
+                        {
+                            float kdelta = i == j ? 1 : 0;
+                            jacobian_softmax[j, i] += outputCache[i] * (kdelta - outputCache[j]);
+                        }
+                    }
+
+                    return Tensor.MatMul(dLdY, jacobian_softmax);
+                }
+                // fast method
+                else
+                {
+                    Tensor dot = Tensor.Dot(dLdY, outputCache);
+                    Tensor tmp = dLdY - dot[0];
+                    return tmp * outputCache;
+                }
             }
             else
                 throw new ArgumentException("Backward not allowed for Rank4 input.");
             
         }
 
-        public object Clone() => new Softmax(temperature);
+        public object Clone() => new Softmax(temperature, is_safe);
     }
 
 }

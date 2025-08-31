@@ -5,6 +5,7 @@ namespace DeepUnity.Optimizers
     /// <summary>
     /// https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.LinearLR.html#torch.optim.lr_scheduler.LinearLR
     /// </summary>
+    [System.Serializable]
     public class CosineAnnealingWithWarmup : Scheduler
     {
         private readonly int totalIters;

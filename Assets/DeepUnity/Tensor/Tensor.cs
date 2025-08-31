@@ -17,6 +17,7 @@ namespace DeepUnity
         [ViewOnly, SerializeField] private float[] data;
         [ViewOnly, SerializeField] private int[] shape;
 
+        public float[] Data => data;
         /// <summary>
         /// Read-Only
         /// </summary>

@@ -5,7 +5,7 @@ namespace DeepUnity
 {
     public class GemmaTokenizerFast : Tokenizer
     {
-        public GemmaTokenizerFast(string path_to_vocab_file = "Assets/DeepUnity/Tokenizers/GemmaTokenizerFast.json") : base(path_to_vocab_file)
+        public GemmaTokenizerFast(string path_to_vocab_file = "Assets/DeepUnity/Tokenizers/GemmaTokenizerFast.json", bool load_async=true) : base(path_to_vocab_file, load_async)
         {
             EOS_TOKEN_ID = 1;
             PAD_TOKEN_ID = 0;
@@ -15,7 +15,10 @@ namespace DeepUnity
         public override (Tensor, Tensor) Encode(string input, bool add_special_tokens = true, bool truncation = false, int max_length = 512)
         {
             if (input is null) throw new ArgumentNullException(nameof(input));
-
+            if (!IsReady)
+            {
+                throw new ArgumentException("Tokenizer loaded asynchronously and not yet initialized. Check 'tokenizer.IsInitialized' before using the tokenizer.");
+            }
             if (add_special_tokens)
                 input = "<bos>" + input;
 

@@ -1,13 +1,13 @@
 using DeepUnity.Modules;
+using UnityEngine;
 namespace DeepUnity.Optimizers
 {
     // https://pytorch.org/docs/stable/generated/torch.optim.Adagrad.html
     public class Adagrad : Optimizer
     {
 
-        private readonly float eta;
-
-        private readonly Tensor[] state_sum;
+        [SerializeField] private  float eta;
+        [SerializeField] private  Tensor[] state_sum;
 
         public Adagrad(Parameter[] parameters, float lr = 0.01f, float lrDecay = 0f, float eps = 1e-7f, float weightDecay = 0f)
             : base(parameters, lr, eps, weightDecay, false)

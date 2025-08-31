@@ -81,19 +81,30 @@ namespace DeepUnity
 
             // lm_head = TensorGPU.Zeros(model.embed_tokens.embeddings.Shape);// new ComputeBuffer(model.embed_tokens.embeddings.Count(), 4);
             lm_head = new ComputeBuffer(model.embed_tokens.embeddings.Shape[0] * model.embed_tokens.embeddings.Shape[1], 4, ComputeBufferType.Structured);
-             //Debug.Log("LmHead loaded to gpu!");
+            //Debug.Log("LmHead loaded to gpu!");
+
+#if UNITY_EDITOR
             UnityEditor.EditorApplication.playModeStateChanged += DeallocQwen;
+
+#endif
             // in_features: Qwen3Config.HIDDEN_SIZE,
             // out_features: Qwen3Config.VOCAB_SIZE,
             // weight_init: InitType.Zeros,
             // bias: false, device: Device.GPU);
         }
 
-        // ~Qwen3ForCausalLM()
-        // {
-        //     Debug.Log("Lm head disposed from within");
-        //     lm_head.Dispose();
-        // }
+        ~Qwen3ForCausalLM()
+        {
+            foreach (var item in model.layers)
+            {
+                item.mlp.weights_Cb.Release();
+            }
+
+            lm_head.Release();
+            Debug.Log("Qwen3 released from gpu");
+        }
+
+#if UNITY_EDITOR
         private void DeallocQwen(UnityEditor.PlayModeStateChange state)
         {
             if (state == UnityEditor.PlayModeStateChange.ExitingPlayMode)
@@ -107,6 +118,7 @@ namespace DeepUnity
                 Debug.Log("Qwen3 released from gpu");
             }
         }
+#endif
         public int ParameterCount()
         {
             int @params  = model.ParameterCount();

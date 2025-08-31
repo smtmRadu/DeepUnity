@@ -8,13 +8,13 @@ namespace DeepUnity.Optimizers
     /// </summary>
     public class Adamax : Optimizer
     {
-        [SerializeField] private readonly float beta1;
-        [SerializeField] private readonly float beta2;
+        [SerializeField] private float beta1;
+        [SerializeField] private float beta2;
 
         [SerializeField] private float beta1_t = 1f; // beta1^t caching
 
-        private readonly Tensor[] m;
-        private readonly Tensor[] u;
+        [SerializeField] private Tensor[] m;
+        [SerializeField] private Tensor[] u;
 
         public Adamax(Parameter[] parameters, float lr = 0.002f, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-7f, float weight_decay = 0f) : base(parameters, lr, eps, weight_decay, false)
         {

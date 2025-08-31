@@ -59,8 +59,6 @@ public class MoveToGoal : Agent
             }
         }
 
-        
-
         AddReward(-0.001f);
     }
     public override void Heuristic(ActionBuffer actionsOut)

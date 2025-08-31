@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -13,12 +14,10 @@ namespace DeepUnity
         internal readonly static ComputeShader RNNCellCS;
         internal readonly static ComputeShader ConvTranpose2DCS;
         
-        internal readonly static ComputeShader GQAFusedCS;
 
         internal readonly static ComputeShader GQAInferenceCS;
         internal readonly static ComputeShader GLUInferenceCS;
         internal readonly static ComputeShader LmHeadInferenceCS;
-        // internal readonly static ComputeShader MatMulFP16CS;
 
         internal readonly static int THREADS_NUM = 256;
         internal readonly static Lazy<ParallelOptions> MULTITHREADS_8 = new Lazy<ParallelOptions>(() => new ParallelOptions { MaxDegreeOfParallelism = 8 });
@@ -35,13 +34,11 @@ namespace DeepUnity
                 RNNCellCS = Resources.Load<ComputeShader>("ComputeShaders/RNNCellCS");
                 ConvTranpose2DCS = Resources.Load<ComputeShader>("ComputeShaders/ConvTranspose2DCS");
                 
-                GQAFusedCS = Resources.Load<ComputeShader>("ComputeShaders/GQAFusedCS");
 
                 GQAInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/GQAInferenceCS");
                 GLUInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/GLUInferenceCS");
                 LmHeadInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/LmHeadInferenceCS");
-                // MatMulFP16CS = Resources.Load<ComputeShader>("ComputeShaders/MatMulFP16CS");
-
+  
                 if (TensorCS == null)
                     throw new Exception("The Compute Shader scripts were moved from Resources/ComputeShaders folder. Please move them back or modify this script that finds them by adjusting the path.");
 
@@ -66,13 +63,18 @@ namespace DeepUnity
                 // cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
                 // ConvTranpose2DCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
             }
-            catch 
-            {
-                ConsoleMessage.Error("Compute Shader files where not found! Make sure DeepUnity framework files were not modified or deleted.");          
+            catch(Exception e) {
+            
+                
+                ConsoleMessage.Error($"{e}. Compute Shader files where not found! Make sure DeepUnity framework files were not modified or deleted.");          
             }
         }
- 	   
+
+
+        
     }
+
+
     public static class Benckmark
     {
         static Stopwatch _clock;
@@ -214,7 +216,7 @@ namespace DeepUnity
         Micro,
     }
 
-    public enum KLEType
+    public enum EarlyStopType
     {
         [Tooltip("No Early Stopping")]
         Off,
@@ -259,7 +261,7 @@ namespace DeepUnity
     {
         Tanh,
         Relu, // Fast end efficient
-        Swish // Costly to compute but captures better (note that I just invented this activation and I didn't test it out).
+        Silu
     }
     public enum HiddenStates
     {

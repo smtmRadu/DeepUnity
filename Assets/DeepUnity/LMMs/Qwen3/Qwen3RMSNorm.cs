@@ -49,7 +49,7 @@ namespace DeepUnity
                         {
                             for (int e = 0; e < emb_dim; e++)
                             {
-                                y[l, e] = x_norm[l, e] * gamma[e];
+                                y[b, l, e] = x_norm[b, l, e] * gamma[e];
                             }
                         }
 

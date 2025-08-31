@@ -1,10 +1,11 @@
 using System;
+using UnityEngine;
 
 namespace DeepUnity.Optimizers
 {
     public partial class Optimizer
     {
-        private Lazy<Scheduler> _scheduler;
+        [SerializeField] private Lazy<Scheduler> _scheduler;
 
         /// <summary>
         /// The learning rate scheduler of <see cref="this"/> optimizer. You can also keep the scheduler object separate, but 
@@ -16,6 +17,7 @@ namespace DeepUnity.Optimizers
     /// <summary>
     /// Base class for all learning rate schedulers.
     /// </summary>
+    [System.Serializable]
     public abstract class Scheduler
     {
         protected readonly Optimizer optimizer;

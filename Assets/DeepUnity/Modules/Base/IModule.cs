@@ -82,7 +82,7 @@ namespace DeepUnity.Modules
         public LogSoftmax logsoftmax = null;
         public RReLU rrelu = null;
         public SELU selu = null;
-        public Swish swish = null;
+        public Silu silu = null;
         public ReLU6 relu6 = null;
         public Rish rish = null;
 
@@ -276,9 +276,9 @@ namespace DeepUnity.Modules
             {
                 permute = permuteModule;
             }
-            else if (module is Swish siluModule)
+            else if (module is Silu siluModule)
             {
-                swish = siluModule;
+                silu = siluModule;
             }
             else if (module is Dropout2D dropout2dModule)
             {
@@ -501,9 +501,9 @@ namespace DeepUnity.Modules
             {
                 module = moduleWrapper.permute;
             }
-            else if (typeof(Swish).Name.Equals(moduleWrapper.name))
+            else if (typeof(Silu).Name.Equals(moduleWrapper.name))
             {
-                module = moduleWrapper.swish;
+                module = moduleWrapper.silu;
             }
             else if (typeof(Dropout2D).Name.Equals(moduleWrapper.name))
             {

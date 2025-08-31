@@ -1,27 +1,29 @@
-
 using System.Threading.Tasks;
 using DeepUnity.Modules;
+using UnityEngine;
 
 namespace DeepUnity.Optimizers
 {
+    [System.Serializable]
     public sealed class AdamW : Optimizer
     {
-        private readonly float beta1;
-        private readonly float beta2;
-        private readonly bool amsgrad;
-        private readonly bool fused;
-        private readonly bool cautious; // check https://arxiv.org/pdf/2411.16085 for cautious optimizers
+       
+        [SerializeField] private float beta1;
+        [SerializeField] private float beta2;
+        [SerializeField] private bool amsgrad;
+        [SerializeField] private bool fused;
+        [SerializeField] private bool cautious; // check https://arxiv.org/pdf/2411.16085 for cautious optimizers
         // note that cautious fused adamw cannot be implemented because each param is modified individually.
-
-        private float beta1_t = 1f; // beta1^t caching
-        private float beta2_t = 1f;
-
+        
+        [SerializeField] private float beta1_t = 1f; // beta1^t caching
+        [SerializeField] private float beta2_t = 1f;
+        
         // 1st momentum buffer
-        private readonly Tensor[] m;
-
+        [SerializeField] private Tensor[] m;
+        
         // 2nd momentum buffer 
-        private readonly Tensor[] v;
-        private readonly Tensor[] vHatMax;
+        [SerializeField] private Tensor[] v;
+        [SerializeField] private Tensor[] vHatMax;
         /// <summary>
         /// Adam optimizer with decoupled weight decay. If training on larger batch sizes, use a beta_2 between [0.95, 0.99].
         /// </summary>
@@ -45,7 +47,7 @@ namespace DeepUnity.Optimizers
             bool amsgrad = false, 
             bool cautious = false, 
             bool maximize = false, 
-            bool fused = false) 
+            bool fused = true) 
             : base(parameters, lr, eps, weight_decay,maximize)
         {
             this.amsgrad = amsgrad;
@@ -151,6 +153,6 @@ namespace DeepUnity.Optimizers
     // amsgrad + fused = 2.19
     // amsgrad + fused + parallel = 2.08s
 
-
+    
 
 }

@@ -1,14 +1,15 @@
 using DeepUnity.Modules;
+using UnityEngine;
 namespace DeepUnity.Optimizers
 {
     // https://pytorch.org/docs/stable/generated/torch.optim.SGD.html
     public class SGD : Optimizer
     {
-        private readonly float mu;
-        private readonly float tau;
-        private readonly bool nesterov;
+        [SerializeField] private float mu;
+        [SerializeField]private float tau;
+        [SerializeField]private bool nesterov;
 
-        private readonly Tensor[] m;
+        [SerializeField] private Tensor[] m;
 
         /// <summary>
         /// Stochastic Gradient Descent.

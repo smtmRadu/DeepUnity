@@ -26,13 +26,13 @@ namespace DeepUnity.Modules
         private bool is_causal;
         private bool qk_norm;
 
-
+        public bool IsInitialized { get; private set; } = false;
 
         [SerializeField] public RotaryPositionalEmbeddings rope;
         public ComputeBuffer W_QKV;
         public ComputeBuffer W_O;
-        [SerializeField] public Gemma3RMSNorm q_rmsn;
-        [SerializeField] public Gemma3RMSNorm k_rmsn;
+        [SerializeField] public Gemma3RMSNorm q_norm;
+        [SerializeField] public Gemma3RMSNorm k_norm;
         [SerializeField] private Softmax softmax;
 
         private bool _buildKVCache = false;  // Backing field
@@ -90,23 +90,15 @@ namespace DeepUnity.Modules
             int num_heads_q,
             int? num_heads_kv = null,
             float expansion_factor = 1f,
-            bool is_causal = false,
-            float dropout = 0.0f,
-            bool qk_norm = false,
             float qk_norm_eps = 1e-6f,
-            bool use_rope = false,
-            int rope_max_seq_len = 4096,
-            int rope_theta = 10_000,
             InitType weight_init = InitType.LeCun_Normal,
-            Device device = Device.CPU)
+            Device device = Device.CPU,
+            RotaryPositionalEmbeddings rope = null,
+            string layer_params_path = null)
         {
             if (embed_dim % num_heads_q != 0)
                 throw new ArgumentException("embed_dim must be divisible by num_heads_q.");
 
-            if(dropout > 0)
-            {
-                throw new ArgumentException("This is an inference module, dropout is not permitted");
-            }
 
             this.embedding_dim = embed_dim;
             this.inner_embedding_dim = (int)(embedding_dim * expansion_factor);
@@ -119,32 +111,58 @@ namespace DeepUnity.Modules
             if (num_heads_q % num_heads_kv != 0)
                 throw new ArgumentException("num_heads_q must be an integer multiple of num_heads_kv for GQA.");
 
-
+            this.is_causal = true;
             this.head_dim = this.inner_embedding_dim / num_heads_q;
-            this.is_causal = is_causal;
 
             qkv_proj_dim = this.inner_embedding_dim + 2 * (this.inner_embedding_dim * this.num_heads_kv / num_heads_q);
 
             W_QKV = new ComputeBuffer(this.embedding_dim * qkv_proj_dim, 4, ComputeBufferType.Structured);
             W_O = new ComputeBuffer(this.inner_embedding_dim * this.embedding_dim, 4, ComputeBufferType.Structured);
 
-            if (qk_norm)
-            {
-                this.qk_norm = true;
-                // line 182 https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py
-                this.q_rmsn = new Gemma3RMSNorm(this.head_dim, eps: qk_norm_eps);
-                this.k_rmsn = new Gemma3RMSNorm(this.head_dim, eps: qk_norm_eps);
-            }
+            this.qk_norm = true;
+            // line 182 https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py
+            this.q_norm = new Gemma3RMSNorm(this.head_dim, eps: qk_norm_eps, layer_params_path + "/self_attn_q_norm.bin");
+            this.k_norm = new Gemma3RMSNorm(this.head_dim, eps: qk_norm_eps, layer_params_path + "/self_attn_k_norm.bin");
+            
             softmax = new Softmax();
-            rope = use_rope ? new RotaryPositionalEmbeddings(this.head_dim,
-                                                                rope_max_seq_len,
-                                                                rope_theta) : null;
+            this.rope = rope;
+
+            if (!string.IsNullOrEmpty(layer_params_path))
+            {
+                _ = LoadWeightsAsync(layer_params_path);
+            }
         }
         private Gemma3GQA() { }
         ~Gemma3GQA()
         {
            W_O.Release();
            W_QKV.Release();
+        }
+
+        private async Task LoadWeightsAsync(string path)
+        {
+            Task<float[]>[] tasks = new Task<float[]>[4];
+            tasks[0] = Task.Run(() => Utils.ReadWeights(path + "/self_attn_q_proj.bin", embedding_dim * inner_embedding_dim));
+            tasks[1] = Task.Run(() => Utils.ReadWeights(path + "/self_attn_k_proj.bin", embedding_dim * this.inner_embedding_dim * this.num_heads_kv / num_heads_q));
+            tasks[2] = Task.Run(() => Utils.ReadWeights(path + "/self_attn_v_proj.bin", embedding_dim * this.inner_embedding_dim * this.num_heads_kv / num_heads_q));
+            tasks[3] = Task.Run(() => Utils.ReadWeights(path + "/self_attn_o_proj.bin", this.inner_embedding_dim * embedding_dim));
+
+            float[][] results = await Task.WhenAll(tasks);
+            float[] flat_qkv = new float[this.embedding_dim * qkv_proj_dim];
+            Array.Copy(results[0], 0, flat_qkv, 
+                0, 
+                embedding_dim * inner_embedding_dim);
+            Array.Copy(results[1], 0, flat_qkv, 
+                embedding_dim * inner_embedding_dim, 
+                embedding_dim * this.inner_embedding_dim * this.num_heads_kv / num_heads_q);
+            Array.Copy(results[2], 0, flat_qkv, 
+                embedding_dim * inner_embedding_dim + embedding_dim * this.inner_embedding_dim * this.num_heads_kv / num_heads_q,
+                embedding_dim * this.inner_embedding_dim * this.num_heads_kv / num_heads_q);
+            W_QKV.SetData(flat_qkv);
+            W_O.SetData(results[3]);
+
+            IsInitialized = true;
+            // ConsoleMessage.Info($"Loaded {path}/self_attn");
         }
         public Tensor Predict(Tensor x)
         {
@@ -252,12 +270,12 @@ namespace DeepUnity.Modules
                         {
                             for (int h = 0; h < this.num_heads_q; h++)
                             {
-                                Q[b, l, h, e] *= q_rmsn.gamma[e];
+                                Q[b, l, h, e] *= q_norm.gamma[e];
                             }
 
                             for (int h = 0; h < this.num_heads_kv; h++)
                             {
-                                K[b, l, h, e] *= k_rmsn.gamma[e];
+                                K[b, l, h, e] *= k_norm.gamma[e];
                             }
                         }
                     }

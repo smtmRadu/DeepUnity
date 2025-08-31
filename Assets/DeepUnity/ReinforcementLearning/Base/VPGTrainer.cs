@@ -1,12 +1,13 @@
-﻿using System;
+﻿using DeepUnity.Activations;
+using DeepUnity.Models;
+using DeepUnity.Optimizers;
+using System;
 using System.Collections.Generic;
-using UnityEditor;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
-using DeepUnity.Models;
-using DeepUnity.Activations;
-using DeepUnity.Optimizers;
+using UnityEditor;
+using UnityEngine;
 
 namespace DeepUnity.ReinforcementLearning
 {
@@ -28,7 +29,7 @@ namespace DeepUnity.ReinforcementLearning
         private Tensor[] sigma_kle_cache { get; set; }
         private Tensor[] disc_kle_cache { get; set; }
 
-        protected override void Initialize()
+        protected override void Initialize(string[] optimizer_states)
         {
             if (model.IsUsingContinuousActions && model.muNetwork.Modules.Last().GetType() == typeof(Tanh))
                 model.muNetwork.Modules = model.muNetwork.Modules.Take(model.muNetwork.Modules.Length - 1).ToArray();
@@ -179,7 +180,7 @@ namespace DeepUnity.ReinforcementLearning
                 Tensor disc_probs_old_kle = null;
 
                 // Cache params[t-1] in case kl_div > d_targ
-                if (hp.KLDivergence == KLEType.Rollback)
+                if (hp.earlyStopping == EarlyStopType.Rollback)
                 {
                     LinkedList<Task> tasks_kle = new();
 
@@ -226,7 +227,7 @@ namespace DeepUnity.ReinforcementLearning
                 }
 
                 // Check KL Divergence based on the last Minibatch (see [3])
-                if (hp.KLDivergence != KLEType.Off)
+                if (hp.earlyStopping != EarlyStopType.Off)
                 {
                     // Though even if i should stop for them separatelly (i mean i can let for one to continue the training if kl is small) i will let it simple..
                     float kldiv_cont = model.IsUsingContinuousActions ? ComputeKLDivergence(cont_probs_new_kle, cont_probs_old_kle) : 0;
@@ -236,9 +237,9 @@ namespace DeepUnity.ReinforcementLearning
                     {
                         // ConsoleMessage.Info($"<b>KLE-{hp.KLDivergence}</b> triggered in epoch {epoch_index + 1}/{hp.numEpoch}\n [KL_continuous: {kldiv_cont} | KL_discrete: {kldiv_disc}) | KL_target: {hp.targetKL}]");
 
-                        if (hp.KLDivergence == KLEType.Stop)
+                        if (hp.earlyStopping == EarlyStopType.Stop)
                             break;
-                        else if (hp.KLDivergence == KLEType.Rollback)
+                        else if (hp.earlyStopping == EarlyStopType.Rollback)
                         {
                             LinkedList<Task> tasks_kle = new();
 
@@ -547,6 +548,25 @@ namespace DeepUnity.ReinforcementLearning
             float std = advantages.Std(0, correction: 0)[0]; // note that we use biased estimator
             float mean = advantages.Mean(0)[0];
             return (advantages - mean) / (std + Utils.EPSILON);
+        }
+
+        protected override string[] SerializeOptimizerStates()
+        {
+            List<string> states = new List<string>();
+            states.Add(JsonUtility.ToJson(optim_v, true));
+
+            if (model.IsUsingContinuousActions)
+            {
+                states.Add(JsonUtility.ToJson(optim_mu, true));
+                states.Add(JsonUtility.ToJson(optim_sigma, true));
+            }
+
+            if (model.IsUsingDiscreteActions)
+            {
+                states.Add(JsonUtility.ToJson(optim_discrete, true));
+            }
+
+            return states.ToArray();
         }
     }
 

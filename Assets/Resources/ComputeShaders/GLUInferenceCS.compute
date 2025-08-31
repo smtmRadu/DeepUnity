@@ -1,7 +1,7 @@
 ﻿static const uint QWEN3_MLP_INTERMEDIATE = 3072u;
-static const uint GEMMA3_MLP_INTERMEDIATE = 640 * 3;
+static const uint GEMMA3_MLP_INTERMEDIATE = 2048u;
 
-StructuredBuffer<float> weights;
+StructuredBuffer<float> weights; // gate + up + down (joined in this order)
 RWStructuredBuffer<float> input;
 RWStructuredBuffer<float> intermediate;
 groupshared float inter[QWEN3_MLP_INTERMEDIATE]; // cannot be shared across kernels!!!

@@ -1,16 +1,16 @@
 using DeepUnity.Modules;
 using System.Threading.Tasks;
+using UnityEngine;
 
 namespace DeepUnity.Optimizers
 {
     // https://arxiv.org/pdf/2302.06675.pdf
     public class Lion : Optimizer
     {
-        private readonly bool cautious; // check https://arxiv.org/pdf/2411.16085 for cautious optimizers
-        private readonly float beta1;
-        private readonly float beta2;
-
-        private readonly Tensor[] m;
+        [SerializeField] private bool cautious; // check https://arxiv.org/pdf/2411.16085 for cautious optimizers
+        [SerializeField] private float beta1;
+        [SerializeField] private float beta2;
+        [SerializeField] private Tensor[] m;
 
         public Lion(Parameter[] parameters, float lr = 1e-3f, float beta1 = 0.9f, float beta2 = 0.99f, float weightDecay = 0f, bool cautious = false)
             : base(parameters, lr, 0, weightDecay, false)

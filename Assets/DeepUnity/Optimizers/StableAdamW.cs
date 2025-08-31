@@ -1,5 +1,6 @@
-﻿using System.Threading.Tasks;
-using DeepUnity.Modules;
+﻿using DeepUnity.Modules;
+using System.Threading.Tasks;
+using UnityEngine;
 namespace DeepUnity.Optimizers
 {
 
@@ -8,17 +9,17 @@ namespace DeepUnity.Optimizers
     // https://optimi.benjaminwarner.dev/optimizers/stableadamw/
     public sealed class StableAdamW : Optimizer
     {
-        private readonly float beta1;
-        private readonly float beta2;
-        private readonly bool fused;
-        private float beta1_t = 1f; // beta1^t caching
-        private float beta2_t = 1f;
+        [SerializeField]private float beta1;
+        [SerializeField]private float beta2;
+        [SerializeField]private bool fused;
+        [SerializeField]private float beta1_t = 1f; // beta1^t caching
+        [SerializeField] private float beta2_t = 1f;
 
         // 1st momentum buffer
-        private readonly Tensor[] m;
+        [SerializeField] private Tensor[] m;
 
         // 2nd momentum buffer 
-        private readonly Tensor[] v;
+        [SerializeField] private Tensor[] v;
 
         /// <summary>
         /// StableAdamW is a drop-in replacement for AdamW and uses the same hyperparameters, with one exception: StableAdamW removes the need for gradient clipping.

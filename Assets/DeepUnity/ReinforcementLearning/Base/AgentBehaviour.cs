@@ -4,8 +4,6 @@ using DeepUnity.Modules;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics.Eventing.Reader;
-using System.Drawing.Printing;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -111,8 +109,8 @@ namespace DeepUnity.ReinforcementLearning
                         return new ReLU(in_place: true);
                     case NonLinearity.Tanh:
                         return new Tanh(in_place: true);
-                    case NonLinearity.Swish:
-                        return new Swish(in_place: true);
+                    case NonLinearity.Silu:
+                        return new Silu(in_place: true);
                     default:
                         throw new ArgumentException("Unhandles hidden activation");
                 }
@@ -125,7 +123,7 @@ namespace DeepUnity.ReinforcementLearning
                         return InitType.Kaiming_Uniform;
                     case NonLinearity.Tanh:
                         return InitType.Xavier_Uniform;
-                    case NonLinearity.Swish:
+                    case NonLinearity.Silu:
                         return InitType.Kaiming_Uniform;
                     default:
                         throw new ArgumentException("Unhandles hidden activation");
@@ -172,7 +170,7 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     return new IModule[] {
                         new Dense(inputs * stack, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
-                        new LayerNorm(hidUnits),
+                        new RMSNorm(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
                 }
@@ -180,10 +178,10 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     return new IModule[] {
                         new Dense(inputs * stack, hidUnits, weight_init: INIT_W, bias_init: INIT_B),
-                        new LayerNorm(hidUnits),
+                        new RMSNorm(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, hidUnits, weight_init: INIT_W, bias_init : INIT_B),
-                        new LayerNorm(hidUnits),
+                        new RMSNorm(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
                 }
@@ -191,13 +189,13 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     return new IModule[] {
                         new Dense(inputs * stack, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
-                        new LayerNorm(hidUnits),
+                        new RMSNorm(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, hidUnits, weight_init: INIT_W, bias_init : INIT_B),
-                        new LayerNorm(hidUnits),
+                        new RMSNorm(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, hidUnits, weight_init : INIT_W, bias_init : INIT_B),
-                        new LayerNorm(hidUnits),
+                        new RMSNorm(hidUnits),
                         HiddenActivation(activ),
                         new Dense(hidUnits, outputs, weight_init: INIT_W, bias_init : INIT_B)};
                 }

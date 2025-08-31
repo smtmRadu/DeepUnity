@@ -1,11 +1,13 @@
-﻿using System;
+﻿using DeepUnity.Activations;
+using DeepUnity.Models;
+using DeepUnity.Optimizers;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using UnityEditor;
 using System.Threading.Tasks;
-using DeepUnity.Models;
-using DeepUnity.Activations;
-using DeepUnity.Optimizers;
+using UnityEditor;
+using UnityEngine;
 
 namespace DeepUnity.ReinforcementLearning
 {
@@ -27,7 +29,7 @@ namespace DeepUnity.ReinforcementLearning
 
 
 
-        protected override void Initialize()
+        protected override void Initialize(string[] optimizer_states)
         {
             if (model.IsUsingContinuousActions && model.muNetwork.Modules.Last().GetType() == typeof(Tanh))
                 model.muNetwork.Modules = model.muNetwork.Modules.Take(model.muNetwork.Modules.Length - 1).ToArray();
@@ -35,9 +37,24 @@ namespace DeepUnity.ReinforcementLearning
 
             // Init optimizers
             const float QnetsL2Reg = 0.0F;
-            optim_q1q2 = new Adam(model.q1Network.Parameters().Concat(model.q2Network.Parameters()).ToArray(), lr:hp.criticLearningRate, weight_decay:-QnetsL2Reg);
-            optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate);
-            optim_sigma = new Adam(model.sigmaNetwork.Parameters(), hp.actorLearningRate);
+            if(optimizer_states == null)
+            {
+                optim_q1q2 = new AdamW(model.q1Network.Parameters().Concat(model.q2Network.Parameters()).ToArray(), lr: hp.criticLearningRate, weight_decay: -QnetsL2Reg);
+                optim_mu = new AdamW(model.muNetwork.Parameters(), hp.actorLearningRate);
+                optim_sigma = new AdamW(model.sigmaNetwork.Parameters(), hp.actorLearningRate);
+            }
+            else
+            {
+                optim_q1q2 = JsonUtility.FromJson<AdamW>(optimizer_states[0]);
+                optim_q1q2.parameters = model.q1Network.Parameters();
+
+                optim_mu = JsonUtility.FromJson<AdamW>(optimizer_states[1]);
+                optim_mu.parameters = model.muNetwork.Parameters();
+
+                optim_sigma = JsonUtility.FromJson<AdamW>(optimizer_states[2]);
+                optim_sigma.parameters = model.sigmaNetwork.Parameters();
+            }
+
 
             // Init schedulers
             optim_q1q2.Scheduler = new LinearAnnealing(optim_q1q2, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
@@ -348,6 +365,18 @@ namespace DeepUnity.ReinforcementLearning
                 }
             });
             return pair;
+        }
+
+        protected override string[] SerializeOptimizerStates()
+        {
+            List<string> states = new List<string>();
+            states.Add(JsonUtility.ToJson(optim_q1q2, true));
+            states.Add(JsonUtility.ToJson(optim_mu, true));
+            states.Add(JsonUtility.ToJson(optim_sigma, true));
+
+
+
+            return states.ToArray();
         }
 
     }

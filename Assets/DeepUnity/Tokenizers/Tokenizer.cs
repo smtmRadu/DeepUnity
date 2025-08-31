@@ -20,54 +20,101 @@ namespace DeepUnity
         protected int PAD_TOKEN_ID;
 
         protected TrieNode token2id_trie;
+        
         public Dictionary<string, int> token2id = new();
         public Dictionary<int, string> id2token = new();
-        protected readonly int _maxTokenLength;
+        protected int _maxTokenLength;
 
-        public Tokenizer(string path_to_vocab_json)
+        public bool IsReady { get; private set; } = false;
+
+        /// <summary>
+        /// Base class for a BinaryPairEncoding (BPE) Tokenizer. 
+        /// </summary>
+        /// <param name="path_to_vocab_json"></param>
+        /// <param name="load_async">Either to initialize the tokenizer async or not. Default: true</param>
+        /// <exception cref="ArgumentException"></exception>
+        public Tokenizer(string path_to_vocab_json, bool load_async = true)
         {
-            // parallel reading makes it slower
             if (!File.Exists(path_to_vocab_json))
                 throw new ArgumentException(nameof(path_to_vocab_json));
 
-            foreach (var line in File.ReadLines(path_to_vocab_json))
+            if (load_async)
             {
-                var trimmed = line.Trim(); 
+                _ = LoadAsync(path_to_vocab_json);
+                return;
+            }
+            else
+            {
+                // Sync loading
+                string content = File.ReadAllText(path_to_vocab_json);
+                ProcessContent(content);
+            }      
+        }
 
-                if (!trimmed.Contains(":"))
-                    continue;
+        public async Task LoadAsync(string path_to_vocab_json)
+        {
+            string content = await Task.Run(() => File.ReadAllText(path_to_vocab_json));
+            await Task.Run(() => ProcessContent(content));
+            ConsoleMessage.Info("Tokenizer loaded async");
+        }
 
-                var parts = trimmed.Split(new[] { ':' }, 2);
-                if (parts.Length < 2)
-                    continue;
+        private void ProcessContent(string content)
+        {
+            ReadOnlySpan<char> span = content.AsSpan();
 
-                string token = parts[0].Trim().Trim('"');
-                string numberPart = parts[1].Trim().TrimEnd(',').Trim();
-
-                if (int.TryParse(numberPart, out int tokenId))
+            while (!span.IsEmpty)
+            {
+                int lineEnd = span.IndexOf('\n');
+                ReadOnlySpan<char> line = lineEnd == -1 ? span : span.Slice(0, lineEnd);
+                int colonIndex = line.IndexOf(':');
+                if (colonIndex > 0)
                 {
-                    token2id[token] = tokenId;
-                    id2token[tokenId] = token;
+                    ReadOnlySpan<char> tokenPart = line.Slice(0, colonIndex);
+                    ReadOnlySpan<char> valuePart = line.Slice(colonIndex + 1);
+
+                    int firstQuote = tokenPart.IndexOf('"');
+                    int lastQuote = tokenPart.LastIndexOf('"');
+                    if (firstQuote >= 0 && lastQuote > firstQuote)
+                    {
+                        ReadOnlySpan<char> tokenSpan = tokenPart.Slice(firstQuote + 1, lastQuote - firstQuote - 1);
+
+                        valuePart = valuePart.Trim();
+                        if (valuePart.EndsWith(","))
+                            valuePart = valuePart.Slice(0, valuePart.Length - 1);
+                        valuePart = valuePart.Trim();
+
+                        if (int.TryParse(valuePart, out int tokenId))
+                        {
+                            string token = tokenSpan.ToString();
+                            token2id[token] = tokenId;
+                            id2token[tokenId] = token;
+                        }
+                    }
                 }
+
+                span = lineEnd == -1 ? ReadOnlySpan<char>.Empty : span.Slice(lineEnd + 1);
             }
 
-            // fastest tokenization possible with Trie.
-            //this part builds the trie
+            BuildTrie();
+            
+        }
+
+        private void BuildTrie()
+        {
             token2id_trie = new TrieNode();
-
-            foreach ((string token, int id) in token2id)
+            foreach (var kvp in token2id)
             {
-                _maxTokenLength = Math.Max(_maxTokenLength, token.Length);
+                _maxTokenLength = Math.Max(_maxTokenLength, kvp.Key.Length);
                 TrieNode root = token2id_trie;
-
-                foreach (char ch in token)
+                foreach (char ch in kvp.Key)
                 {
                     if (!root.Next.TryGetValue(ch, out TrieNode nxt))
                         root.Next[ch] = nxt = new TrieNode();
                     root = nxt;
                 }
-                root.TokenId = id;
+                root.TokenId = kvp.Value;
             }
+            IsReady = true;
         }
 
 
@@ -88,6 +135,10 @@ namespace DeepUnity
         /// <exception cref="NotImplementedException"></exception>
         public (Tensor, Tensor) Encode(List<string> inputs, bool add_special_tokens=true, bool truncation = false, int max_length = 512, string padding_side = "right")
         {
+            if (!IsReady)
+            {
+                throw new ArgumentException("Tokenizer loaded asynchronously and not yet initialized. Check 'tokenizer.IsInitialized' before using the tokenizer.");
+            }
             Tensor[] input_ids = new Tensor[inputs.Count];
             Tensor[] attn_masks = new Tensor[inputs.Count];
 

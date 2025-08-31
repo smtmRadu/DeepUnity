@@ -1,33 +1,36 @@
 using DeepUnity.Modules;
+using UnityEngine;
 
 namespace DeepUnity.Optimizers
 {
     // Note that parameters and gradients value should not be reassigned elsewhere, only the values of the tensors inside.
     // Note that LazyLayers parameters must be infered before initializing the optimizer.
+    [System.Serializable]
     public abstract partial class Optimizer
     {
-        protected Parameter[] parameters;
+        public Parameter[] parameters;
 
+        
         /// <summary>
         /// learning rate
         /// </summary>
-        public float gamma;
+        [SerializeField] public float gamma;
         /// <summary>
         /// regularization strength
         /// </summary>
-        protected float lambda;
+        [SerializeField] protected float lambda;
         /// <summary>
         /// numerical stability value
         /// </summary>
-        protected float epsilon;
+        [SerializeField] protected float epsilon;
         /// <summary>
         /// either maximize or minimize loss.
         /// </summary>
-        protected bool maximize;
+        [SerializeField] protected bool maximize;
         /// <summary>
         /// step counter
         /// </summary>
-        protected int t;
+        [SerializeField] protected int t;
 
 
         protected Optimizer(Parameter[] parameters, float lr, float eps, float weight_decay, bool maximize)
@@ -53,7 +56,7 @@ namespace DeepUnity.Optimizers
                 else
                     TensorGPU.Zero_(param.gGPU);
             }
-        }   
+        }
 
     }
 }

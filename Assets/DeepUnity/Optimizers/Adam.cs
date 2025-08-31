@@ -1,29 +1,30 @@
+using DeepUnity.Modules;
 using System.Linq;
 using System.Threading.Tasks;
-using DeepUnity.Modules;
+using UnityEngine;
 namespace DeepUnity.Optimizers
 {
     // https://arxiv.org/pdf/1412.6980.pdf also adamax algorithm is there, though i extended it with pytorch doc.
     public sealed class Adam : Optimizer
     {
-        private readonly float beta1;
-        private readonly float beta2;
-        private readonly bool amsgrad;
+        [SerializeField]  private float beta1;
+        [SerializeField] private float beta2;
+        [SerializeField] private bool amsgrad;
 
-        private float beta1_t = 1f; // beta1^t caching
-        private float beta2_t = 1f; // beta2^t caching
+        [SerializeField] private float beta1_t = 1f; // beta1^t caching
+        [SerializeField] private float beta2_t = 1f; // beta2^t caching
 
         // CPU
-        private readonly Tensor[] m;
-        private readonly Tensor[] v;
-        private readonly Tensor[] vHatMax;
+        [SerializeField]private Tensor[] m;
+        [SerializeField]private Tensor[] v;
+        [SerializeField] private Tensor[] vHatMax;
 
         // GPU
         private readonly TensorGPU[] gpu_m;
         private readonly TensorGPU[] gpu_v;
         private readonly TensorGPU[] gpu_vHatMax;
 
-        private readonly bool AreThereGPUParams = false;
+        [SerializeField] private bool AreThereGPUParams = false;
 
         /// <summary>
         /// Adam optimizer. This version has no long-term support, so use AdamW for the newest features.

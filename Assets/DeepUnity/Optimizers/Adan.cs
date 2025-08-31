@@ -1,4 +1,5 @@
 using DeepUnity.Modules;
+using UnityEngine;
 namespace DeepUnity.Optimizers
 {
     // The implementation is took from the paper https://arxiv.org/pdf/2208.06677.pdf
@@ -6,15 +7,15 @@ namespace DeepUnity.Optimizers
     // lr = sqrt(batch_size / 256) * 6.25e-3 for lr scale depending on the batch sizes (check what Adan authors did for details in appendix)
     public class Adan : Optimizer
     {
-        private readonly float beta1;
-        private readonly float beta2;
-        private readonly float beta3;
+        [SerializeField]private float beta1;
+        [SerializeField]private float beta2;
+        [SerializeField] private float beta3;
 
-        private readonly Tensor[] m;
-        private readonly Tensor[] v;
-        private readonly Tensor[] n;
+        [SerializeField]private Tensor[] m;
+        [SerializeField]private Tensor[] v;
+        [SerializeField] private Tensor[] n;
 
-        private readonly Tensor[] gOld;
+        [SerializeField] private Tensor[] gOld;
 
         /// <summary>
         /// ADAptive Nesterov momentum optimizer.<br></br>
