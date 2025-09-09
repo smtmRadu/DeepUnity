@@ -1,4 +1,5 @@
 using DeepUnity.Modules;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
@@ -39,7 +40,7 @@ namespace DeepUnity
 
             public Tensor Predict(Tensor input_ids, Tensor attention_mask = null)
             {
-                Tensor hid = embed_tokens.Predict(input_ids);
+                Tensor hid = embed_tokens.Predict(input_ids) * MathF.Sqrt(Qwen3Config.HIDDEN_SIZE);
 
                 foreach (var layer in layers)
                 {

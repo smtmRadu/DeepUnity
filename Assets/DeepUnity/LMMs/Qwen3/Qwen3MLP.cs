@@ -53,6 +53,8 @@ namespace DeepUnity
                 cs.SetInt("seq_len", seq_len);
 
                 cs.Dispatch(kGate, (this.intermediate_size + 63) / 64, (seq_len + 3) / 4, batch_size);
+
+ 
                 cs.Dispatch(kDown, (this.hidden_size + 63) / 64, (seq_len + 3) / 4, batch_size);
 
                 Tensor yT = Tensor.Constant(xBuff, x.Shape);

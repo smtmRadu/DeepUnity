@@ -45,7 +45,10 @@ namespace DeepUnity.ReinforcementLearning
             // Initialize Optimizers & Schedulers
             int total_epochs = (int)hp.maxSteps / hp.bufferSize * hp.numEpoch; // THIS IS FOR PPO, but for now i will let it for SAC as well       
             if (optimizer_states == null)
+            {
                 optim_v = new AdamW(model.vNetwork.Parameters(), hp.criticLearningRate, eps: epsilon, weight_decay: valueWD, amsgrad: amsGrad, fused: true);
+                optim_v.description = $"({optim_v.GetType().Name}) V Network Optimizer";
+            }
             else
             {
                 optim_v = JsonUtility.FromJson<AdamW>(optimizer_states[0]);
@@ -57,7 +60,11 @@ namespace DeepUnity.ReinforcementLearning
             if (model.IsUsingContinuousActions)
             {
                 if(optimizer_states == null)
-                    optim_mu = new AdamW(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay:0F, fused:true);
+                {
+                    optim_mu = new AdamW(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay: 0F, fused: true);
+                    optim_mu.description = $"({optim_mu.GetType().Name}) Mu Network Optimizer";
+                }
+                    
                 else
                 {
                     optim_mu = JsonUtility.FromJson<AdamW>(optimizer_states[1]);
@@ -68,7 +75,10 @@ namespace DeepUnity.ReinforcementLearning
 
                 
                 if(optimizer_states == null)
+                {
                     optim_sigma = new AdamW(model.sigmaNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay: 0F, fused: true);
+                    optim_sigma.description = $"({optim_sigma.GetType().Name}) Sigma Network Optimizer";
+                }
                 else
                 {
                     optim_sigma = JsonUtility.FromJson<AdamW>(optimizer_states[2]);
@@ -83,6 +93,7 @@ namespace DeepUnity.ReinforcementLearning
                 if(optimizer_states == null)
                 {
                     optim_discrete = new AdamW(model.discreteNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay: 0F, fused: true);
+                    optim_discrete.description = $"({optim_discrete.GetType().Name}) Discrete Network Optimizer";
                 }
                 else
                 {

@@ -20,7 +20,6 @@ namespace DeepUnity
             UnityEditor.EditorApplication.playModeStateChanged += DeallocateTensors;
         }
         private readonly static Lazy<Dictionary<TensorGPU, TensorGPU>> AllocatedTensors = new Lazy<Dictionary<TensorGPU, TensorGPU>>();
-        private readonly static int MAX_ALLOC_TENSORS = 1024;
 
         private static void DeallocateTensors(UnityEditor.PlayModeStateChange state)
         {
@@ -33,6 +32,7 @@ namespace DeepUnity
                     foreach (var item in AllocatedTensors.Value)
                     {
                         item.Value.data.Release();
+                        item.Value.valueAtIndex?.Release();
                        
                     }
                     AllocatedTensors.Value.Clear();
@@ -317,22 +317,22 @@ namespace DeepUnity
 
             this.shape = shape.ToArray();
             this.data = new ComputeBuffer(size, 4, type: ComputeBufferType.Structured);
-
-            ComputeShader cs = DeepUnityMeta.TensorCS;
-
-            int kernel = cs.FindKernel("Zeros");
-            cs.SetBuffer(kernel, "result", this.data);
-            cs.Dispatch(kernel, 1, 1, 1);
-
+            this.data.SetData(new float[size]);
+            // ComputeShader cs = DeepUnityMeta.TensorCS;
+            // 
+            // int kernel = cs.FindKernel("Zeros");
+            // cs.SetBuffer(kernel, "result", this.data);
+            // cs.Dispatch(kernel, 1, 1, 1);
+           
 #if UNITY_EDITOR
 
             AllocatedTensors.Value.Add(this, this);
 
-            if (AllocatedTensors.Value.Count > MAX_ALLOC_TENSORS)
-            {
-                ConsoleMessage.Error($"Cannot allocate more than {MAX_ALLOC_TENSORS} TensorGPUs at the same time. Make sure there are no memory leaks and all unused TensorGPUs are Disposed!");
-                UnityEditor.EditorApplication.isPlaying = false;
-             }
+            // if (AllocatedTensors.Value.Count > MAX_ALLOC_TENSORS)
+            // {
+            //     ConsoleMessage.Error($"Cannot allocate more than {MAX_ALLOC_TENSORS} TensorGPUs at the same time. Make sure there are no memory leaks and all unused TensorGPUs are Disposed!");
+            //     UnityEditor.EditorApplication.isPlaying = false;
+            // }
 #endif
         }
         public static TensorGPU Identity(TensorGPU other)

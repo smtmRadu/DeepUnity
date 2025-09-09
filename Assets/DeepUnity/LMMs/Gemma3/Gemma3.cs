@@ -1,8 +1,7 @@
 using DeepUnity.Gemma3Modelling;
-using DeepUnity.Models;
 using DeepUnity.Modules;
+using System;
 using System.Collections.Generic;
-using System.Drawing.Printing;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -26,7 +25,8 @@ namespace DeepUnity
             public Embedding embed_tokens;
             public List<Gemma3DecoderLayer> layers;
             public Gemma3RMSNorm norm;
-            public RotaryPositionalEmbeddings rope;
+            public RotaryPositionalEmbeddings rotary_emb;
+            public RotaryPositionalEmbeddings rotary_emb_local;
             public bool IsInitialized { get 
                 {
                     if (!IsEmbeddingInitialized)
@@ -36,7 +36,7 @@ namespace DeepUnity
 
                     foreach (var layer in layers)
                     {
-                        if(!layer.gqa.IsInitialized)
+                        if(!layer.self_attn.IsInitialized)
                             return false;
                         if(!layer.mlp.IsInitialized)
                             return false;
@@ -59,11 +59,14 @@ namespace DeepUnity
                 this.bos_idx = Gemma3Config.BOS_IDX;
                 this.pad_idx = Gemma3Config.PAD_IDX;
                 this.vocab_size = Gemma3Config.VOCAB_SIZE;
-                rope = new RotaryPositionalEmbeddings(
+                rotary_emb = new RotaryPositionalEmbeddings(
                     Gemma3Config.HEAD_DIM,
-                    Gemma3Config.CONTEXT_LENGTH,
-                    Gemma3Config.ROPE_THETA); // use only 1 rope module shared by all layers.
-
+                    max_seq_len:Gemma3Config.MAX_POSITION_EMBEDDINGS,
+                    theta:Gemma3Config.ROPE_THETA); // use only 1 rope module shared by all layers.
+                rotary_emb_local = new RotaryPositionalEmbeddings(
+                    Gemma3Config.HEAD_DIM,
+                    max_seq_len: Gemma3Config.MAX_POSITION_EMBEDDINGS,
+                    theta: Gemma3Config.ROPE_LOCAL_BASE_FREQUENCY);
                 this.embed_tokens = new Embedding(
                     Gemma3Config.VOCAB_SIZE,
                     Gemma3Config.HIDDEN_SIZE,
@@ -77,7 +80,11 @@ namespace DeepUnity
                 this.layers = new();
                 for (int i = 0; i < Gemma3Config.NUM_LAYERS; i++)
                 {
-                    layers.Add(new Gemma3DecoderLayer(i, rope, params_path));
+                    layers.Add(
+                        new Gemma3DecoderLayer(
+                            i, 
+                            Gemma3Config.layer_types[i] == GemmaLayerType.SlidingWindowAttention? rotary_emb_local : rotary_emb, 
+                            params_path));
                 }
                 
                 this.norm = new Gemma3RMSNorm(Gemma3Config.HIDDEN_SIZE, Gemma3Config.RMS_EPS, params_path + "/norm.bin"); //new RMSNorm(Qwen3Modeling.Qwen3Config.HIDDEN_SIZE, Qwen3Modeling.Qwen3Config.RMS_EPS, elementwise_affine: true);
@@ -124,12 +131,15 @@ namespace DeepUnity
 
             public Tensor Predict(Tensor input_ids, Tensor attention_mask = null)
             {
-                Tensor hid = embed_tokens.Predict(input_ids);
-                Debug.Log("Embeddings: " + hid);
-                foreach (var layer in layers)
+                
+                Tensor hid = embed_tokens.Predict(input_ids) * MathF.Sqrt(Gemma3Config.HIDDEN_SIZE); // input embeddings are normalized by sqrt(model_size) in hf transformers.
+
+                // Debug.Log("Embeddings: " + hid);
+
+                for (int i = 0; i < layers.Count; i++)
                 {
-                    hid = layer.Predict(hid, attention_mask);
-                    Debug.Log("Layer output: " + hid);
+                    hid = layers[i].Predict(hid, attention_mask);
+                    // Debug.Log($"Layer {i} output: " + hid);
                 }
                 return norm.Predict(hid);
             }
@@ -178,8 +188,8 @@ namespace DeepUnity
             foreach (var item in model.layers)
             {
                 item.mlp.weights.Release();
-                item.gqa.W_QKV.Release();
-                item.gqa.W_O.Release();
+                item.self_attn.W_QKV.Release();
+                item.self_attn.W_O.Release();
             }
 
             lm_head.Release();
@@ -194,8 +204,8 @@ namespace DeepUnity
                 foreach (var item in model.layers)
                 {
                     item.mlp.weights.Release();
-                    item.gqa.W_QKV.Release();
-                    item.gqa.W_O.Release();  
+                    item.self_attn.W_QKV.Release();
+                    item.self_attn.W_O.Release();  
                 }
 
                 lm_head.Release();
@@ -228,8 +238,10 @@ namespace DeepUnity
             //Benckmark.Stop("Layers");
 
 
-            // Benckmark.Start(); // lm head takes 0.01645s per 1 token.
 
+
+            // ========================================================== LM Head forward ============================================================== //
+            // Benckmark.Start(); // lm head takes 0.01645s per 1 token.
             ComputeShader lm_head_cs = DeepUnityMeta.LmHeadInferenceCS;
             int k = lm_head_cs.FindKernel("Predict");
 
@@ -239,7 +251,7 @@ namespace DeepUnity
             lm_head_input.SetData(hid.ToArray());
             lm_head_cs.SetBuffer(k, "input", lm_head_input);
 
-            ComputeBuffer lm_head_output = new ComputeBuffer(hid.Count(), 4);
+            ComputeBuffer lm_head_output = new ComputeBuffer(batch_size * seq_len * vocab_size, 4);
             lm_head_cs.SetBuffer(k, "output", lm_head_output);
 
             lm_head_cs.SetInt("batch_size", batch_size);
@@ -249,8 +261,8 @@ namespace DeepUnity
 
             lm_head_cs.Dispatch(k, (vocab_size + 31) / 32, (batch_size * seq_len + 7) / 8, 1);
             Tensor output_probs = is_batched ?
-                Tensor.Constant(lm_head_output, batch_size, seq_len, hidden_size) :
-                Tensor.Constant(lm_head_output, seq_len, hidden_size);
+                Tensor.Constant(lm_head_output, batch_size, seq_len, vocab_size) :
+                Tensor.Constant(lm_head_output, seq_len, vocab_size);
 
             lm_head_output.Release();
             lm_head_input.Release();
@@ -262,7 +274,7 @@ namespace DeepUnity
         {
             foreach (var item in model.layers)
             {
-                item.gqa.BuildKVCache = true;
+                item.self_attn.BuildKVCache = true;
             }
             List<int> reponse_ids = new List<int>();
             (Tensor, Tensor) x = tokenizer.Encode(prompt);

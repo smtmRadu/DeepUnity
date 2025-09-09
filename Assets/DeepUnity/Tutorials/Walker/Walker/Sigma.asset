@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ffdd4f9587b2d8846a37ba5240ae14b2, type: 3}
   m_Name: Sigma
   m_EditorClassIdentifier: 
-  version: 24
+  version: 76
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -8759,23 +8759,7 @@ MonoBehaviour:
       r_biases:
         data: []
         shape: 
-    attention:
-      d: 0
-      is_causal: 0
-      W_Q:
-        data: []
-        shape: 
-      W_K:
-        data: []
-        shape: 
-      W_V:
-        data: []
-        shape: 
-    multiheadattention:
-      embedding_dim: 0
-      num_heads: 0
-      head_dim: 0
-      is_causal: 0
+    groupedqueryattention:
       W_QKV:
         bias: 1
         weights:
@@ -8792,61 +8776,30 @@ MonoBehaviour:
         biases:
           data: []
           shape: 
+      q_rmsn:
+        epsilon: 0.000001
+        affine: 1
+        gamma:
+          data: []
+          shape: 
+        gammaGrad:
+          data: []
+          shape: 
+      k_rmsn:
+        epsilon: 0.000001
+        affine: 1
+        gamma:
+          data: []
+          shape: 
+        gammaGrad:
+          data: []
+          shape: 
       drop:
         inPlace: 0
         dropout: 0
       softmax:
+        is_safe: 0
         temperature: 0
-    attentionv2:
-      d: 0
-      mask: 0
-      W_Q:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      W_K:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      W_V:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      softmax:
-        temperature: 0
-    kanlayer:
-      splineOrder: 0
-      basis_activation: 
-      weight_base:
-        data: []
-        shape: 
-      weight_base_grad:
-        data: []
-        shape: 
-      weight_spline:
-        data: []
-        shape: 
-      weight_spline_grad:
-        data: []
-        shape: 
-      c:
-        data: []
-        shape: 
-      c_grad:
-        data: []
-        shape: 
     layernorm:
       affine: 1
       bias: 1
@@ -8858,7 +8811,7 @@ MonoBehaviour:
         data: []
         shape: 
     rmsnorm:
-      epsilon: 0.00000001
+      epsilon: 0.000001
       affine: 1
       gamma:
         data: []
@@ -8883,6 +8836,32 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    gatedlinearunit:
+      activation: swish
+      up_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      gate_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      down_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
     lazyconv2d:
       Conv2D:
         bias: 1
@@ -8951,9 +8930,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 1313165350
+      residualConnectionHash: -1489406632
     residualconnectionjoin:
-      residualConnectionHash: 1313165350
+      residualConnectionHash: -1489406632
     squeeze:
       axis: 0
     unsqueeze:
@@ -9010,6 +8989,7 @@ MonoBehaviour:
     tanh:
       inPlace: 0
     softmax:
+      is_safe: 0
       temperature: 0
     leakyrelu:
       inPlace: 0
@@ -9041,7 +9021,7 @@ MonoBehaviour:
     rrelu:
       lower: 0
       upper: 0
-    swish:
+    silu:
       inPlace: 0
     relu6:
       inPlace: 0
@@ -9079,23 +9059,7 @@ MonoBehaviour:
       r_biases:
         data: []
         shape: 
-    attention:
-      d: 0
-      is_causal: 0
-      W_Q:
-        data: []
-        shape: 
-      W_K:
-        data: []
-        shape: 
-      W_V:
-        data: []
-        shape: 
-    multiheadattention:
-      embedding_dim: 0
-      num_heads: 0
-      head_dim: 0
-      is_causal: 0
+    groupedqueryattention:
       W_QKV:
         bias: 1
         weights:
@@ -9112,61 +9076,30 @@ MonoBehaviour:
         biases:
           data: []
           shape: 
+      q_rmsn:
+        epsilon: 0.000001
+        affine: 1
+        gamma:
+          data: []
+          shape: 
+        gammaGrad:
+          data: []
+          shape: 
+      k_rmsn:
+        epsilon: 0.000001
+        affine: 1
+        gamma:
+          data: []
+          shape: 
+        gammaGrad:
+          data: []
+          shape: 
       drop:
         inPlace: 0
         dropout: 0
       softmax:
+        is_safe: 0
         temperature: 0
-    attentionv2:
-      d: 0
-      mask: 0
-      W_Q:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      W_K:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      W_V:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      softmax:
-        temperature: 0
-    kanlayer:
-      splineOrder: 0
-      basis_activation: 
-      weight_base:
-        data: []
-        shape: 
-      weight_base_grad:
-        data: []
-        shape: 
-      weight_spline:
-        data: []
-        shape: 
-      weight_spline_grad:
-        data: []
-        shape: 
-      c:
-        data: []
-        shape: 
-      c_grad:
-        data: []
-        shape: 
     layernorm:
       affine: 1
       bias: 1
@@ -9178,7 +9111,7 @@ MonoBehaviour:
         data: []
         shape: 
     rmsnorm:
-      epsilon: 0.00000001
+      epsilon: 0.000001
       affine: 1
       gamma:
         data: []
@@ -9203,6 +9136,32 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    gatedlinearunit:
+      activation: swish
+      up_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      gate_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      down_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
     lazyconv2d:
       Conv2D:
         bias: 1
@@ -9271,9 +9230,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 1953556296
+      residualConnectionHash: -53304280
     residualconnectionjoin:
-      residualConnectionHash: 1953556296
+      residualConnectionHash: -53304280
     squeeze:
       axis: 0
     unsqueeze:
@@ -9330,6 +9289,7 @@ MonoBehaviour:
     tanh:
       inPlace: 1
     softmax:
+      is_safe: 0
       temperature: 0
     leakyrelu:
       inPlace: 0
@@ -9361,7 +9321,7 @@ MonoBehaviour:
     rrelu:
       lower: 0
       upper: 0
-    swish:
+    silu:
       inPlace: 0
     relu6:
       inPlace: 0
@@ -14655,23 +14615,7 @@ MonoBehaviour:
       r_biases:
         data: []
         shape: 
-    attention:
-      d: 0
-      is_causal: 0
-      W_Q:
-        data: []
-        shape: 
-      W_K:
-        data: []
-        shape: 
-      W_V:
-        data: []
-        shape: 
-    multiheadattention:
-      embedding_dim: 0
-      num_heads: 0
-      head_dim: 0
-      is_causal: 0
+    groupedqueryattention:
       W_QKV:
         bias: 1
         weights:
@@ -14688,61 +14632,30 @@ MonoBehaviour:
         biases:
           data: []
           shape: 
+      q_rmsn:
+        epsilon: 0.000001
+        affine: 1
+        gamma:
+          data: []
+          shape: 
+        gammaGrad:
+          data: []
+          shape: 
+      k_rmsn:
+        epsilon: 0.000001
+        affine: 1
+        gamma:
+          data: []
+          shape: 
+        gammaGrad:
+          data: []
+          shape: 
       drop:
         inPlace: 0
         dropout: 0
       softmax:
+        is_safe: 0
         temperature: 0
-    attentionv2:
-      d: 0
-      mask: 0
-      W_Q:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      W_K:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      W_V:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      softmax:
-        temperature: 0
-    kanlayer:
-      splineOrder: 0
-      basis_activation: 
-      weight_base:
-        data: []
-        shape: 
-      weight_base_grad:
-        data: []
-        shape: 
-      weight_spline:
-        data: []
-        shape: 
-      weight_spline_grad:
-        data: []
-        shape: 
-      c:
-        data: []
-        shape: 
-      c_grad:
-        data: []
-        shape: 
     layernorm:
       affine: 1
       bias: 1
@@ -14754,7 +14667,7 @@ MonoBehaviour:
         data: []
         shape: 
     rmsnorm:
-      epsilon: 0.00000001
+      epsilon: 0.000001
       affine: 1
       gamma:
         data: []
@@ -14779,6 +14692,32 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    gatedlinearunit:
+      activation: swish
+      up_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      gate_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      down_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
     lazyconv2d:
       Conv2D:
         bias: 1
@@ -14847,9 +14786,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 713641438
+      residualConnectionHash: 1382798072
     residualconnectionjoin:
-      residualConnectionHash: 713641438
+      residualConnectionHash: 1382798072
     squeeze:
       axis: 0
     unsqueeze:
@@ -14906,6 +14845,7 @@ MonoBehaviour:
     tanh:
       inPlace: 0
     softmax:
+      is_safe: 0
       temperature: 0
     leakyrelu:
       inPlace: 0
@@ -14937,7 +14877,7 @@ MonoBehaviour:
     rrelu:
       lower: 0
       upper: 0
-    swish:
+    silu:
       inPlace: 0
     relu6:
       inPlace: 0
@@ -14975,23 +14915,7 @@ MonoBehaviour:
       r_biases:
         data: []
         shape: 
-    attention:
-      d: 0
-      is_causal: 0
-      W_Q:
-        data: []
-        shape: 
-      W_K:
-        data: []
-        shape: 
-      W_V:
-        data: []
-        shape: 
-    multiheadattention:
-      embedding_dim: 0
-      num_heads: 0
-      head_dim: 0
-      is_causal: 0
+    groupedqueryattention:
       W_QKV:
         bias: 1
         weights:
@@ -15008,61 +14932,30 @@ MonoBehaviour:
         biases:
           data: []
           shape: 
+      q_rmsn:
+        epsilon: 0.000001
+        affine: 1
+        gamma:
+          data: []
+          shape: 
+        gammaGrad:
+          data: []
+          shape: 
+      k_rmsn:
+        epsilon: 0.000001
+        affine: 1
+        gamma:
+          data: []
+          shape: 
+        gammaGrad:
+          data: []
+          shape: 
       drop:
         inPlace: 0
         dropout: 0
       softmax:
+        is_safe: 0
         temperature: 0
-    attentionv2:
-      d: 0
-      mask: 0
-      W_Q:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      W_K:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      W_V:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      softmax:
-        temperature: 0
-    kanlayer:
-      splineOrder: 0
-      basis_activation: 
-      weight_base:
-        data: []
-        shape: 
-      weight_base_grad:
-        data: []
-        shape: 
-      weight_spline:
-        data: []
-        shape: 
-      weight_spline_grad:
-        data: []
-        shape: 
-      c:
-        data: []
-        shape: 
-      c_grad:
-        data: []
-        shape: 
     layernorm:
       affine: 1
       bias: 1
@@ -15074,7 +14967,7 @@ MonoBehaviour:
         data: []
         shape: 
     rmsnorm:
-      epsilon: 0.00000001
+      epsilon: 0.000001
       affine: 1
       gamma:
         data: []
@@ -15099,6 +14992,32 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    gatedlinearunit:
+      activation: swish
+      up_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      gate_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      down_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
     lazyconv2d:
       Conv2D:
         bias: 1
@@ -15167,9 +15086,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -2145223506
+      residualConnectionHash: -1476066872
     residualconnectionjoin:
-      residualConnectionHash: -2145223506
+      residualConnectionHash: -1476066872
     squeeze:
       axis: 0
     unsqueeze:
@@ -15226,6 +15145,7 @@ MonoBehaviour:
     tanh:
       inPlace: 1
     softmax:
+      is_safe: 0
       temperature: 0
     leakyrelu:
       inPlace: 0
@@ -15257,7 +15177,7 @@ MonoBehaviour:
     rrelu:
       lower: 0
       upper: 0
-    swish:
+    silu:
       inPlace: 0
     relu6:
       inPlace: 0
@@ -17923,23 +17843,7 @@ MonoBehaviour:
       r_biases:
         data: []
         shape: 
-    attention:
-      d: 0
-      is_causal: 0
-      W_Q:
-        data: []
-        shape: 
-      W_K:
-        data: []
-        shape: 
-      W_V:
-        data: []
-        shape: 
-    multiheadattention:
-      embedding_dim: 0
-      num_heads: 0
-      head_dim: 0
-      is_causal: 0
+    groupedqueryattention:
       W_QKV:
         bias: 1
         weights:
@@ -17956,61 +17860,30 @@ MonoBehaviour:
         biases:
           data: []
           shape: 
+      q_rmsn:
+        epsilon: 0.000001
+        affine: 1
+        gamma:
+          data: []
+          shape: 
+        gammaGrad:
+          data: []
+          shape: 
+      k_rmsn:
+        epsilon: 0.000001
+        affine: 1
+        gamma:
+          data: []
+          shape: 
+        gammaGrad:
+          data: []
+          shape: 
       drop:
         inPlace: 0
         dropout: 0
       softmax:
+        is_safe: 0
         temperature: 0
-    attentionv2:
-      d: 0
-      mask: 0
-      W_Q:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      W_K:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      W_V:
-        bias: 1
-        weights:
-          data: []
-          shape: 
-        biases:
-          data: []
-          shape: 
-      softmax:
-        temperature: 0
-    kanlayer:
-      splineOrder: 0
-      basis_activation: 
-      weight_base:
-        data: []
-        shape: 
-      weight_base_grad:
-        data: []
-        shape: 
-      weight_spline:
-        data: []
-        shape: 
-      weight_spline_grad:
-        data: []
-        shape: 
-      c:
-        data: []
-        shape: 
-      c_grad:
-        data: []
-        shape: 
     layernorm:
       affine: 1
       bias: 1
@@ -18022,7 +17895,7 @@ MonoBehaviour:
         data: []
         shape: 
     rmsnorm:
-      epsilon: 0.00000001
+      epsilon: 0.000001
       affine: 1
       gamma:
         data: []
@@ -18047,6 +17920,32 @@ MonoBehaviour:
       beta:
         data: []
         shape: 
+    gatedlinearunit:
+      activation: swish
+      up_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      gate_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
+      down_proj:
+        bias: 1
+        weights:
+          data: []
+          shape: 
+        biases:
+          data: []
+          shape: 
     lazyconv2d:
       Conv2D:
         bias: 1
@@ -18115,9 +18014,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 1980235816
+      residualConnectionHash: 1213290098
     residualconnectionjoin:
-      residualConnectionHash: 1980235816
+      residualConnectionHash: 1213290098
     squeeze:
       axis: 0
     unsqueeze:
@@ -18174,6 +18073,7 @@ MonoBehaviour:
     tanh:
       inPlace: 0
     softmax:
+      is_safe: 0
       temperature: 0
     leakyrelu:
       inPlace: 0
@@ -18205,7 +18105,7 @@ MonoBehaviour:
     rrelu:
       lower: 0
       upper: 0
-    swish:
+    silu:
       inPlace: 0
     relu6:
       inPlace: 0

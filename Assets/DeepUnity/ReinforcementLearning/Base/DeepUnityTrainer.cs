@@ -4,14 +4,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Xml.Linq;
 using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace DeepUnity.ReinforcementLearning
 {
-    internal abstract class DeepUnityTrainer : MonoBehaviour
+    public abstract class DeepUnityTrainer : MonoBehaviour
     {
         public static DeepUnityTrainer Instance;
 
@@ -110,9 +110,7 @@ namespace DeepUnity.ReinforcementLearning
             if (autosaveSecondsElapsed >= autosave * 60f)
             {
                 autosaveSecondsElapsed = 0f;
-                model.Save();
-                Instance.SaveOptimStates();
-               
+                model.Save(Instance.SerializeOptimizerStates(), DeepUnityTrainer.Instance);               
             }
             autosaveSecondsElapsed += Time.fixedDeltaTime;
 
@@ -149,18 +147,7 @@ namespace DeepUnity.ReinforcementLearning
 
         protected abstract void Initialize(string[] optimizer_states);
         protected abstract string[] SerializeOptimizerStates();
-        private void SaveOptimStates()
-        {
-            if (Instance.optimStatesPath != null)
-            {
-                string[] optim_states = Instance.SerializeOptimizerStates();
-                for (int i = 0; i < optim_states.Length; i++)
-                {
-                    File.WriteAllText(Instance.optimStatesPath + $"{Instance.GetType().Name.ToLower()}_optim_state_{i}.json", optim_states[i]);
-                }
-            }
-            ConsoleMessage.Info($"<b>[AUTOSAVE]</b> Optimizer states <b><i>{Instance.model.behaviourName}</i></b> saved");
-        }
+
         protected abstract void OnBeforeFixedUpdate();
         IEnumerator DrawDotsToLearningText()
         {
@@ -221,9 +208,10 @@ namespace DeepUnity.ReinforcementLearning
                 if (!Directory.Exists(Instance.optimStatesPath))
                 {
                     Directory.CreateDirectory(Instance.optimStatesPath);
-                    File.WriteAllText(Instance.optimStatesPath + "info.txt", "• This folder contains the optim states' saves from previous training sessions of this agent.\n" +
+                    File.WriteAllText(Instance.optimStatesPath + "info.txt", $"Timestamp: {DateTime.Now}\n"+
+                        "• This folder contains the optim states' saves from previous training sessions of this agent.\n" +
                         "• These are usefull for continuing the agent training in a different session as they hold gradients' momentums.\n" +
-                        "• It is recommended to remove these files (rare situations) if the agent receives modifications (e.g. different input distribution).\n");
+                        "• If needed, you can safely remove these files.");
                 }
                 string[] files_names = Directory.GetFiles(Instance.optimStatesPath, "*.json");
                 files_names = files_names.Where(x => x.Contains(Instance.GetType().Name.ToLower())).ToArray();
@@ -235,11 +223,20 @@ namespace DeepUnity.ReinforcementLearning
                 }
                 optimizer_states = file_contents.Count > 0 ? file_contents.ToArray() : null;
                 if(optimizer_states != null)
-                    UnityEngine.Debug.Log($"<color=#57f542><b>[INFO]</b> Optimizer states <b><i>{Instance.model.behaviourName}</i></b> loaded. </color>");
+                    ConsoleMessage.Info($"<color=#57f542><b>[AUTOSAVE]</b> Optimizer states <b><i>{Instance.model.behaviourName}</i></b> loaded</color>");
 #endif
+
 
                 Instance.Initialize(optimizer_states);
             }
+
+            // set 0: Default layers on agents body to any parallel environment tag
+            // THIS DOESN'T IMPROVE PERFORMANCE :(
+            // if (Instance.hp.putAgentsOnDifferentLayers)
+            // {
+            //     EnvironmentGroupLayerAssigner.AssignRandomEnvironmentGroupLayer(agent);
+            //     // ConsoleMessage.Info("Agents with Transforms set on layer <b>0: Default</b> were moved to EnvironmentGroup Layers for performance");
+            // }
 
             // Assign common attributes to all agents (based on the last agent that subscribes - this one is actually the first in the Hierarchy)
             Instance.parallelAgents.ForEach(x =>
@@ -254,26 +251,19 @@ namespace DeepUnity.ReinforcementLearning
 #if UNITY_EDITOR
         private static void Autosave(UnityEditor.PlayModeStateChange state)
         {
-            Instance.model.Save();
-
-            if(state == PlayModeStateChange.ExitingPlayMode || state == PlayModeStateChange.ExitingEditMode)
-                Instance.SaveOptimStates(); // this is removed from here because the script will write down the values of the optimizer even before initializing from the files.
-            // we can also make this part to be ommited once then it is fine.
-            
+            Instance.model.Save(Instance.SerializeOptimizerStates(), DeepUnityTrainer.Instance);
         }
 #endif
         private void OnApplicationQuit()
         {
-            Instance.model.Save();
-            Instance.SaveOptimStates();
+            Instance.model.Save(Instance.SerializeOptimizerStates(), DeepUnityTrainer.Instance);
         }
         protected static void EndTrainingSession(string reason)
         {
             if (!Instance.ended)
             {
                 ConsoleMessage.Info("Training Session Ended! " + reason);
-                Instance.model.Save();
-                Instance.SaveOptimStates();
+                Instance.model.Save(Instance.SerializeOptimizerStates(), DeepUnityTrainer.Instance);
                 
 #if UNITY_EDITOR
                 UnityEditor.EditorApplication.isPlaying = false;
@@ -317,7 +307,7 @@ namespace DeepUnity.ReinforcementLearning
             else
             {
                 lastCallFixedUpdateFrame = lcf;
-                // PARALLEL OBSERVATION PROCESS ----------------------------
+                // PARALLEL OBSERVATION PROCESS ---------------------------- [START]
                 for (int i = 0; i < parallelAgents.Count; i++)
                 {
                     if (parallelAgents[i].LastState == null)
@@ -325,10 +315,10 @@ namespace DeepUnity.ReinforcementLearning
                     else
                         parallelAgents[i].Timestep.state = parallelAgents[i].LastState;
                 }
-                // PARALLEL OBSERVATION PROCESS ----------------------------
+                // PARALLEL OBSERVATION PROCESS ---------------------------- [END]
 
 
-                // PARALLEL ACTION PROCESS ---------------------------------
+                // PARALLEL ACTION PROCESS --------------------------------- [START]
                 var allStates = parallelAgents.Where(x => x.behaviourType == BehaviourType.Learn).Select(x => x.Timestep.state).ToArray();
                 Tensor stateBatch = Tensor.Concat(null, allStates);
                 
@@ -372,7 +362,66 @@ namespace DeepUnity.ReinforcementLearning
                     ag.Timestep.action_discrete = valuesc.Item1;
                     ag.Timestep.prob_discrete = valuesc.Item2;
                 }
-                // PARALLEL ACTION PROCESS ---------------------------------
+                // PARALLEL ACTION PROCESS --------------------------------- [END]
+            }
+        }
+    }
+
+
+
+    /// <summary>
+    /// This class is meant to assign recursively a EnvironmentGroupX physics layer to an agent to improve performance.
+    /// Unfortunatelly it doesn't.
+    /// </summary>
+    internal static class EnvironmentGroupLayerAssigner
+    {
+        public static void AssignRandomEnvironmentGroupLayer(Agent agent)
+        {
+            var envLayers = GetEnvironmentGroupLayers();
+            if (envLayers.Count == 0)
+            {
+                ConsoleMessage.Warning("No layers named EnvironmentGroupX were found. Define them in order to use."); 
+                return;
+            }
+
+            int pickedLayer = envLayers[Utils.Random.Range(0, envLayers.Count)];
+            AssignToHierarchy(agent.transform, pickedLayer);
+        }
+
+        private static List<int> GetEnvironmentGroupLayers()
+        {
+            var result = new List<int>();
+            // Unity supports layers 0..31
+            for (int i = 0; i < 32; i++)
+            {
+                string name = LayerMask.LayerToName(i);
+                if (string.IsNullOrEmpty(name)) continue;
+
+                if (IsEnvironmentGroupName(name))
+                    result.Add(i);
+            }
+            return result;
+        }
+
+        private static bool IsEnvironmentGroupName(string name)
+        {
+            if (!name.StartsWith("EnvironmentGroup")) return false;
+            for (int i = "EnvironmentGroup".Length; i < name.Length; i++)
+            {
+                if (!char.IsDigit(name[i])) return false;
+            }
+            return name.Length > "EnvironmentGroup".Length;
+        }
+
+        private static void AssignToHierarchy(Transform t, int targetLayer)
+        {
+            if (t.gameObject.layer == 0) // only default is split
+                t.gameObject.layer = targetLayer;
+
+            int childCount = t.childCount;
+            for (int i = 0; i < childCount; i++)
+            {
+                AssignToHierarchy(t.GetChild(i), targetLayer);
             }
         }
     }

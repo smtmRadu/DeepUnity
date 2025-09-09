@@ -1,0 +1,3 @@
+Timestamp: 9/6/2025 2:36:19 PM• This folder contains the optim states' saves from previous training sessions of this agent.
+• These are usefull for continuing the agent training in a different session as they hold gradients' momentums.
+• If needed, you can safely remove these files.

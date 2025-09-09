@@ -3,6 +3,11 @@ using UnityEngine;
 
 namespace DeepUnity.ReinforcementLearning
 {
+    /// <summary>
+    /// How to use it.
+    /// - Create a new empty GameObject in the scene.
+    /// - Attach this script to that object.
+    /// </summary>
     public class BehaviourModifier : MonoBehaviour
     {
         [SerializeField] private AgentBehaviour behavior;
@@ -32,7 +37,7 @@ namespace DeepUnity.ReinforcementLearning
 
             behavior.observationSize = newSpaceSize;
             behavior.observationsNormalizer = new RunningNormalizer(newSpaceSize);
-            behavior.Save();
+            behavior.Save(null, null);
         }
 
         private void ModifyNetInputs(Sequential network)

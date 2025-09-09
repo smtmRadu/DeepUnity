@@ -43,13 +43,13 @@ namespace DeepUnity.Tutorials
 
         private void Start()
         {
-            Dense x = new Dense(10, 10);
-            AdamW optim = new AdamW(parameters: x.Parameters(),lr: 1e-4f, amsgrad:true);
+            Tensor x = Tensor.RandomNormal(10, 10);
+            print(x);
+             x = Tensor.RandomNormal(10, 100);
+            print(x);
 
-            
-            string json = JsonUtility.ToJson(optim);
-
-            print(json);
+            x = Tensor.RandomNormal(100, 120, 20);
+            print(x);
 
             //print(gemma_model.ParameterCount());
 

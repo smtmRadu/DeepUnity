@@ -5,6 +5,7 @@ RWStructuredBuffer<float> QKV;
 RWStructuredBuffer<float> Q;
 RWStructuredBuffer<float> K;
 RWStructuredBuffer<float> AttentionWeights;
+
 RWStructuredBuffer<float> V;
 RWStructuredBuffer<float> AttendedValues; // B, sequence_length_v, inner_embedding dim
 
@@ -30,22 +31,18 @@ uint X_index(uint b, uint l, uint e)
 {
     return ((b * sequence_length_q + l) * embedding_dim + e);
 }
-uint W_QKV_index(uint e, uint p)
+
+uint W_QKV_index(uint p, uint e)
 {
-    return e * qkv_proj_dim + p;
+    return p * embedding_dim + e;
 }
 uint QKV_index(uint b, uint l, uint p)
 {
     return ((b * sequence_length_q + l) * qkv_proj_dim + p);
 }
-uint O_index(uint b, uint l, uint e)
-{
-    return ((b * sequence_length_q + l) * embedding_dim + e);
-}
-uint W_O_index(uint ie, uint e)
-{
-    return ie * embedding_dim + e;
-}
+
+
+
 
 uint Q_index(uint b, uint l, uint h, uint d)
 { 
@@ -67,13 +64,22 @@ uint AttendedValues_index(uint b, uint l, uint hq, uint d)
 { 
     return (((b * sequence_length_q + l) * num_heads_q + hq) * head_dim + d);
 }
+
+uint O_index(uint b, uint l, uint e)
+{
+    return ((b * sequence_length_q + l) * embedding_dim + e);
+}
+uint W_O_index(uint e, uint ie)
+{
+    return e * inner_embedding_dim + ie;
+}
 // ---------------------------------------------------------------------------
 
 #pragma kernel QKVProj
-[numthreads(1, 4, 64)]
+[numthreads(1, 8, 32)]
 void QKVProj(uint3 id : SV_DispatchThreadID)
 {
-    // Matrix multiplication: X [B, L, E] * W_QKV [E, qkv_proj_dim] = QKVProj [B, L, qkv_proj_dim]
+    // Matrix multiplication: X [B, L, E] * W_QKV [qkv_proj_dim, E] = QKVProj [B, L, qkv_proj_dim]
     
     uint batch_idx = id.x;
     uint seq_idx = id.y;
@@ -88,7 +94,7 @@ void QKVProj(uint3 id : SV_DispatchThreadID)
     // Sum over embedding dimension
     for (uint e = 0; e < embedding_dim; e++)
     {
-        sum += X[X_index(batch_idx, seq_idx, e)] * W_QKV[W_QKV_index(e, proj_idx)];
+        sum += X[X_index(batch_idx, seq_idx, e)] * W_QKV[W_QKV_index(proj_idx, e)];
     }
     
     QKV[QKV_index(batch_idx, seq_idx, proj_idx)] = sum;
@@ -147,7 +153,7 @@ void AttendValues(uint3 id : SV_DispatchThreadID)
 
 
 #pragma kernel OProj
-[numthreads(1, 4, 64)]
+[numthreads(1, 8, 32)]
 void OProj(uint3 id : SV_DispatchThreadID)
 {
     // Matrix multiplication: AttendedValues [B, L, num_heads_q * head_dim] * W_O [inner_embedding_dim, embedding_dim] = O [B, L, embedding_dim]
@@ -170,7 +176,7 @@ void OProj(uint3 id : SV_DispatchThreadID)
         uint hq = ie / head_dim;
         uint d = ie % head_dim;
         
-        sum += AttendedValues[AttendedValues_index(batch_idx, seq_idx, hq, d)] * W_O[W_O_index(ie, emb_idx)];
+        sum += AttendedValues[AttendedValues_index(batch_idx, seq_idx, hq, d)] * W_O[W_O_index(emb_idx, ie)];
     }
     
     O[O_index(batch_idx, seq_idx, emb_idx)] = sum;

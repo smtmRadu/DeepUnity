@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Reflection;
+using System;
 
 namespace DeepUnity
 {
@@ -11,7 +12,7 @@ namespace DeepUnity
         /// <param name="message"></param>
         public static void Info(string message)
         {
-            Debug.Log($"<color=#03a9fc><b>[INFO]</b> {message}.</color>");
+            Debug.Log($"<color=#03a9fc><b>[INFO] [{DateTime.Now}]</b> {message}.</color>");
         }
         /// <summary>
         /// Display some unexpected bugs in the Debug Console that should be repaired.
@@ -19,7 +20,7 @@ namespace DeepUnity
         /// <param name="message"></param>
         public static void Warning(string message)
         {
-            Debug.Log($"<color=#fcba03><b>[WARNING]</b> {message}.</color>");
+            Debug.Log($"<color=#fcba03><b>[WARNING] [{DateTime.Now}]</b> {message}.</color>");
         }
         /// <summary>
         /// Display errors in the Debug Console that must be repaired.
@@ -27,7 +28,7 @@ namespace DeepUnity
         /// <param name="message"></param>
         public static void Error(string message)
         {
-            Debug.Log($"<color=red><b>[ERROR]</b> {message}.</color>");
+            Debug.Log($"<color=red><b>[ERROR] [{DateTime.Now}]</b> {message}.</color>");
         }
 
 

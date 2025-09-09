@@ -19,7 +19,7 @@ namespace DeepUnity
 
                 ATTN_EXPANSION_FACTOR = 2,
                 
-                NUM_LAYERS = 18 , 
+                NUM_LAYERS = 18, 
                 CONTEXT_LENGTH = 32768,
                 ROPE_THETA = 1_000_000,
                 HEADS_Q = 16,

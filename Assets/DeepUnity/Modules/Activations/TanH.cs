@@ -31,22 +31,16 @@ namespace DeepUnity.Activations
         {
             if(inPlace)
             {
-                float e2x;
-                float tanh;
                 for (int i = 0; i < x.Count(); i++)
                 {
-                    e2x = MathF.Exp(x[i] * 2f);
-                    tanh = (e2x - 1f) / (e2x + 1f);
-                    x[i] = tanh;
+                    x[i] = MathF.Tanh(x[i]);
                 }
                 return x;
             }
             else
                 return x.Select(x =>
                 {
-                    float e2x = MathF.Exp(2f * x);
-                    float tanh = (e2x - 1f) / (e2x + 1f);
-                    return tanh;
+                    return MathF.Tanh(x);
                 });
         }
 

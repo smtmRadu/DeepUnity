@@ -10,7 +10,10 @@ namespace DeepUnity.Optimizers
     {
         public Parameter[] parameters;
 
-        
+        /// <summary>
+        /// the description of this optimizer. Used as a metadata when serialized.
+        /// </summary>
+        [SerializeField] public string description;
         /// <summary>
         /// learning rate
         /// </summary>
@@ -31,6 +34,7 @@ namespace DeepUnity.Optimizers
         /// step counter
         /// </summary>
         [SerializeField] protected int t;
+        
 
 
         protected Optimizer(Parameter[] parameters, float lr, float eps, float weight_decay, bool maximize)
@@ -40,6 +44,7 @@ namespace DeepUnity.Optimizers
             lambda = weight_decay;
             epsilon = eps;
             this.maximize = maximize;
+            this.description = this.GetType().Name;
             t = 0;
         }
         public abstract void Step();

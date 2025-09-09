@@ -433,7 +433,7 @@ MonoBehaviour:
   numLayers: 2
   hidUnits: 32
   activation: 2
-  model: {fileID: 11400000, guid: d03e3f389189bc5438efa7f8e7a7b875, type: 2}
+  model: {fileID: 11400000, guid: b62f45e3af8818149a025c57c80fbcfd, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0

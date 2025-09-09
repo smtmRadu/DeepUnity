@@ -6,7 +6,7 @@ using UnityEngine;
 namespace DeepUnity.Activations
 {
     [Serializable]
-    public sealed class Silu : IModule, IActivation
+    public sealed class SiLU : IModule, IActivation
     {
         [SerializeField] private bool inPlace = false;
         private Tensor InputCache { get; set; }
@@ -18,7 +18,7 @@ namespace DeepUnity.Activations
         /// where * = any shape.
         /// </summary>
         /// <param name="in_place">Modifies the input tensor in place.</param>
-        public Silu(bool in_place = false)
+        public SiLU(bool in_place = false)
         {
             this.inPlace = in_place;    
         }
@@ -63,7 +63,7 @@ namespace DeepUnity.Activations
             return inputGrad;
         }
         
-        public object Clone() => new Silu(inPlace);
+        public object Clone() => new SiLU(inPlace);
 
     }
 

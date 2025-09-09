@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
+using System.Globalization;
 
 namespace DeepUnity
 {
@@ -221,6 +222,18 @@ namespace DeepUnity
             }
 
             return logspace;
+        }
+        /// <summary>
+        /// Creates a Tensor using predefined data. 
+        /// </summary>
+        /// <param name="array"></param>
+        /// <param name="shape"></param>
+        /// <returns></returns>
+        public static Tensor FromArray(float[] array, params int[] shape)
+        {
+            Tensor t = new(shape);
+            Array.Copy(array, t.data, array.Length);
+            return t;
         }
         /// <summary>
         /// Creates a predefined tensor of shape (1).
@@ -1986,13 +1999,16 @@ namespace DeepUnity
         /// <param name="endAxis"></param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
-        public static Tensor Flatten(Tensor tensor, int startAxis, int endAxis)
+        public static Tensor Flatten(Tensor tensor, int startAxis = 0, int endAxis = -1)
         {
-            if (startAxis > endAxis)
-                throw new Exception($"Start axis ({startAxis}) must be greater or equal to the end axis ({endAxis}) when flattening.");
-
+            int orig_start_axis = startAxis;
+            int orig_end_axis = endAxis;
             HandleAxis(tensor, ref startAxis);
             HandleAxis(tensor, ref endAxis);
+
+            if (startAxis > endAxis)
+                throw new Exception($"Start axis ({orig_start_axis}) must be smaller or equal to the end axis ({orig_end_axis}) when flattening.");
+
 
             List<int> newShape = new();
             
@@ -4324,7 +4340,7 @@ namespace DeepUnity
         {
             return Unsqueeze(this, axis);
         }
-        public Tensor Flatten(int startAxis, int endAxis)
+        public Tensor Flatten(int startAxis = 0, int endAxis = -1)
         {
             return Flatten(this, startAxis, endAxis);
         }
@@ -4631,72 +4647,223 @@ namespace DeepUnity
         {
             int rank = Rank;
 
+            bool shorten = data.Length > 1000;
+
             StringBuilder sb = new();
 
             sb.Append($"Tensor({Shape.ToCommaSeparatedString()})");
-
             sb.Append("\n[");
-            for (int l = 0; l < Batch; l++)
+
+            if (!shorten)
+            {
+                for (int l = 0; l < Batch; l++)
+                {
+                    if (l > 0)
+                    {
+                        sb.Append("\n\n\n");
+                        for (int indent = 0; indent < rank - 3; indent++)
+                        {
+                            sb.Append(" ");
+                        }
+                    }
+                    if (rank > 3)
+                        sb.Append("[");
+
+                    for (int k = 0; k < Channels; k++)
+                    {
+                        if (k > 0)
+                        {
+                            sb.Append("\n\n");
+                            for (int indent = 0; indent < rank - 2; indent++)
+                            {
+                                sb.Append(" ");
+                            }
+                        }
+                        if (rank > 2)
+                            sb.Append("[");
+
+                        for (int j = 0; j < Height; j++)
+                        {
+                            if (j > 0 && rank > 1)
+                            {
+                                sb.Append("\n");
+                                for (int indent = 0; indent < rank - 1; indent++)
+                                {
+                                    sb.Append(" ");
+                                }
+                            }
+                            if (rank > 1)
+                                sb.Append("[");
+
+                            for (int i = 0; i < Width; i++)
+                            {
+                                if (i > 0)
+                                    sb.Append(", ");
+
+                                sb.Append(this[l, k, j, i].ToString(StringFormat, CultureInfo.InvariantCulture));
+                            }
+
+                            if (rank > 1)
+                                sb.Append("]");
+                        }
+
+                        if (rank > 2)
+                            sb.Append("]");
+                    }
+
+                    if (rank > 3)
+                        sb.Append("]");
+                }
+
+                sb.Append("]");
+                return sb.ToString();
+            }
+
+            void PrintRow(int l, int k, int j)
+            {
+                if (j > 0 && rank > 1)
+                {
+                    sb.Append("\n");
+                    for (int indent = 0; indent < rank - 1; indent++)
+                        sb.Append(" ");
+                }
+                if (rank > 1)
+                    sb.Append("[");
+
+                int cols = Width;
+                if (cols <= 6)
+                {
+                    for (int i = 0; i < cols; i++)
+                    {
+                        if (i > 0) sb.Append(", ");
+                        sb.Append(this[l, k, j, i].ToString(StringFormat, CultureInfo.InvariantCulture));
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < 3; i++)
+                    {
+                        if (i > 0) sb.Append(", ");
+                        sb.Append(this[l, k, j, i].ToString(StringFormat, CultureInfo.InvariantCulture));
+                    }
+                    sb.Append(", ..., ");
+                    for (int i = cols - 3; i < cols; i++)
+                    {
+                        if (i > cols - 3) sb.Append(", ");
+                        sb.Append(this[l, k, j, i].ToString(StringFormat, CultureInfo.InvariantCulture));
+                    }
+                }
+
+                if (rank > 1)
+                    sb.Append("]");
+            }
+
+            void PrintRows(int l, int k)
+            {
+                int rows = Height;
+                if (rows <= 6)
+                {
+                    for (int j = 0; j < rows; j++) PrintRow(l, k, j);
+                    return;
+                }
+
+                for (int j = 0; j < 3; j++) PrintRow(l, k, j);
+
+                if (rank > 1)
+                {
+                    sb.Append("\n");
+                    for (int indent = 0; indent < rank - 1; indent++)
+                        sb.Append(" ");
+                    sb.Append("...");
+                }
+
+                for (int j = rows - 3; j < rows; j++) PrintRow(l, k, j);
+            }
+
+            void PrintChannelBlock(int l, int k, bool addLeadingGapByK)
+            {
+                if (addLeadingGapByK)
+                {
+                    sb.Append("\n\n");
+                    for (int indent = 0; indent < rank - 2; indent++)
+                        sb.Append(" ");
+                }
+                if (rank > 2) sb.Append("[");
+
+                PrintRows(l, k);
+
+                if (rank > 2) sb.Append("]");
+            }
+
+            for (int l = 0; l < (Batch <= 6 ? Batch : 3); l++)
             {
                 if (l > 0)
                 {
                     sb.Append("\n\n\n");
                     for (int indent = 0; indent < rank - 3; indent++)
-                    {
                         sb.Append(" ");
-                    }
                 }
-                if (rank > 3)
-                    sb.Append("[");
+                if (rank > 3) sb.Append("[");
 
-                for (int k = 0; k < Channels; k++)
+                if (Channels <= 6)
                 {
-                    if (k > 0)
+                    for (int k = 0; k < Channels; k++)
+                        PrintChannelBlock(l, k, k > 0);
+                }
+                else
+                {
+                    for (int k = 0; k < 3; k++)
+                        PrintChannelBlock(l, k, k > 0);
+                    sb.Append("\n\n");
+                    for (int indent = 0; indent < rank - 2; indent++)
+                        sb.Append(" ");
+                    sb.Append("...");
+
+                    for (int k = Channels - 3; k < Channels; k++)
+                        PrintChannelBlock(l, k, true);
+                }
+
+                if (rank > 3) sb.Append("]");
+            }
+
+            if (Batch > 6)
+            {
+                sb.Append("\n\n\n");
+                for (int indent = 0; indent < rank - 3; indent++)
+                    sb.Append(" ");
+                sb.Append("...");
+
+                for (int l = Batch - 3; l < Batch; l++)
+                {
+                    sb.Append("\n\n\n");
+                    for (int indent = 0; indent < rank - 3; indent++)
+                        sb.Append(" ");
+                    if (rank > 3) sb.Append("[");
+
+                    if (Channels <= 6)
                     {
+                        for (int k = 0; k < Channels; k++)
+                            PrintChannelBlock(l, k, k > 0);
+                    }
+                    else
+                    {
+                        for (int k = 0; k < 3; k++)
+                            PrintChannelBlock(l, k, k > 0);
+
                         sb.Append("\n\n");
                         for (int indent = 0; indent < rank - 2; indent++)
-                        {
                             sb.Append(" ");
-                        }
-                    }
-                    if (rank > 2)
-                        sb.Append("[");
+                        sb.Append("...");
 
-                    for (int j = 0; j < Height; j++)
-                    {
-                        if (j > 0 && rank > 1)
-                        {
-                            sb.Append("\n");
-                            for (int indent = 0; indent < rank - 1; indent++)
-                            {
-                                sb.Append(" ");
-                            }
-                        }
-                        if (rank > 1)
-                            sb.Append("[");
-
-                        for (int i = 0; i < Width; i++)
-                        {
-                            if (i > 0)
-                                sb.Append(", ");
-
-                            sb.Append(this[l, k, j, i].ToString(StringFormat));
-                        }
-
-                        if (rank > 1)
-                            sb.Append("]");
+                        for (int k = Channels - 3; k < Channels; k++)
+                            PrintChannelBlock(l, k, true);
                     }
 
-                    if (rank > 2)
-                        sb.Append("]");
+                    if (rank > 3) sb.Append("]");
                 }
-
-                if (rank > 3)
-                    sb.Append("]");
             }
 
             sb.Append("]");
-
             return sb.ToString();
         }
         public override int GetHashCode()

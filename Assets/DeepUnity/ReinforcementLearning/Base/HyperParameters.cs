@@ -109,10 +109,7 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("Policy will only be updated once every policy_delay times for each update of the Q-networks.")]
         [MinMax(0, 10)] public int policyDelay = 2;
         
-        [HideInInspector]
-        [Tooltip("Debug the train_data into a file.")]
-        [Space(30)]
-        public bool debug = false;
+        
 
         [Space(50)]
         [Tooltip("How does the timescale modifies during training.")]
@@ -121,6 +118,15 @@ namespace DeepUnity.ReinforcementLearning
         [Min(0.1f)] public float timescale = 1f;
 
 
+        [HideInInspector]
+        [Tooltip("Debug the train_data into a file.")]
+        [Space(30)]
+        public bool debug = false;
+
+        // disabled because is not improving anything, but rather makes it worse.
+        [Tooltip("If on, every agent is assigned (recursively) a different physics layer (only from 0: Default) to improve simulation speed.")]
+        public bool putAgentsOnDifferentLayers = false;
+        
         private void Awake()
         {
             if (bufferSize % batchSize != 0)
@@ -274,6 +280,7 @@ namespace DeepUnity.ReinforcementLearning
             else
                 throw new NotImplementedException("Unhandled trainer type");
 
+            //dontDrawMe.Add("putAgentsOnDifferentLayers");
             dontDrawMe.Add("timescale");
 
 
@@ -286,11 +293,13 @@ namespace DeepUnity.ReinforcementLearning
                 // Add a read-only property drawer for the "timescale" field
                 EditorGUI.BeginDisabledGroup(true);
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("timescale"), true);
+                //EditorGUILayout.PropertyField(serializedObject.FindProperty("putAgentsOnDifferentLayers"), true);
                 EditorGUI.EndDisabledGroup();
             }
             else
             {
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("timescale"), true);
+                //EditorGUILayout.PropertyField(serializedObject.FindProperty("putAgentsOnDifferentLayers"), true);
             }
 
 

@@ -100,14 +100,11 @@ namespace DeepUnity.Modules
                 cs.SetBuffer(0, "gamma", weightsBuffer);
 
                 ComputeBuffer biasesBuffer = null;
-                if (bias)
-                {
-                    biasesBuffer = new ComputeBuffer(bias ? biases.Count() : H_out, 4);
-                    biasesBuffer.SetData(bias ? biases.ToArray() : new float[H_out]);
-                    cs.SetBuffer(0, "beta", biasesBuffer);
-                }
-                
 
+                biasesBuffer = new ComputeBuffer(bias ? biases.Count() : 1, 4); //bias buffer must be set regardless of not using it.
+                biasesBuffer.SetData(bias ? biases.ToArray() : new float[1]);
+                cs.SetBuffer(0, "beta", biasesBuffer);
+                
                 ComputeBuffer outputBuffer = new ComputeBuffer(batch_size * H_out, 4);
                 // outputBuffer.SetData(zero_values); // we do not need this because the values are set (not added) to the rw structrured buffer.
                 cs.SetBuffer(0, "output", outputBuffer);
@@ -223,12 +220,11 @@ namespace DeepUnity.Modules
                     cs.SetBuffer(1, "gamma_grad", weightsGradBuffer);
 
                     ComputeBuffer biasesGradBuffer = null;
-                    if (bias)
-                    {
-                        biasesGradBuffer = new ComputeBuffer(bias ? biasesGrad.Count() : H_out, 4);
-                        biasesGradBuffer.SetData(bias ? biasesGrad.ToArray() : new float[H_out]);
-                        cs.SetBuffer(1, "beta_grad", biasesGradBuffer);
-                    }
+
+                    biasesGradBuffer = new ComputeBuffer(bias ? biasesGrad.Count() : 1, 4);
+                    biasesGradBuffer.SetData(bias ? biasesGrad.ToArray() : new float[1]);
+                    cs.SetBuffer(1, "beta_grad", biasesGradBuffer);
+                    
                     
 
                     cs.SetInt("batch_size", batch_size);

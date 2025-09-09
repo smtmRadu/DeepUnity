@@ -17,6 +17,9 @@ namespace DeepUnity.Modules
     [Serializable]
     public class Gemma3GQA
     {
+        private float? attn_logit_softcapping;
+        private float scaling;
+        private int sliding_window;
         private int qkv_proj_dim;
         private int embedding_dim;
         private int inner_embedding_dim;
@@ -91,15 +94,17 @@ namespace DeepUnity.Modules
             int? num_heads_kv = null,
             float expansion_factor = 1f,
             float qk_norm_eps = 1e-6f,
+            int sliding_window = -1,
+            float query_pre_attention_scalar = 256f,
+            float? softcap = null,
             InitType weight_init = InitType.LeCun_Normal,
-            Device device = Device.CPU,
             RotaryPositionalEmbeddings rope = null,
             string layer_params_path = null)
         {
             if (embed_dim % num_heads_q != 0)
                 throw new ArgumentException("embed_dim must be divisible by num_heads_q.");
 
-
+            
             this.embedding_dim = embed_dim;
             this.inner_embedding_dim = (int)(embedding_dim * expansion_factor);
             this.num_heads_q = num_heads_q;
@@ -118,15 +123,18 @@ namespace DeepUnity.Modules
 
             W_QKV = new ComputeBuffer(this.embedding_dim * qkv_proj_dim, 4, ComputeBufferType.Structured);
             W_O = new ComputeBuffer(this.inner_embedding_dim * this.embedding_dim, 4, ComputeBufferType.Structured);
-
+            
             this.qk_norm = true;
             // line 182 https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py
             this.q_norm = new Gemma3RMSNorm(this.head_dim, eps: qk_norm_eps, layer_params_path + "/self_attn_q_norm.bin");
             this.k_norm = new Gemma3RMSNorm(this.head_dim, eps: qk_norm_eps, layer_params_path + "/self_attn_k_norm.bin");
-            
-            softmax = new Softmax();
-            this.rope = rope;
+            this.sliding_window = sliding_window;
 
+            this.scaling = MathF.Pow(query_pre_attention_scalar, -0.5f);
+            this.attn_logit_softcapping = softcap;
+            this.softmax = new Softmax();
+            this.rope = rope;
+           
             if (!string.IsNullOrEmpty(layer_params_path))
             {
                 _ = LoadWeightsAsync(layer_params_path);
@@ -141,23 +149,24 @@ namespace DeepUnity.Modules
 
         private async Task LoadWeightsAsync(string path)
         {
+            // GEEMMA FAILS BECAUSE QKV PROJ IS WRONGGG
             Task<float[]>[] tasks = new Task<float[]>[4];
-            tasks[0] = Task.Run(() => Utils.ReadWeights(path + "/self_attn_q_proj.bin", embedding_dim * inner_embedding_dim));
-            tasks[1] = Task.Run(() => Utils.ReadWeights(path + "/self_attn_k_proj.bin", embedding_dim * this.inner_embedding_dim * this.num_heads_kv / num_heads_q));
-            tasks[2] = Task.Run(() => Utils.ReadWeights(path + "/self_attn_v_proj.bin", embedding_dim * this.inner_embedding_dim * this.num_heads_kv / num_heads_q));
-            tasks[3] = Task.Run(() => Utils.ReadWeights(path + "/self_attn_o_proj.bin", this.inner_embedding_dim * embedding_dim));
+            tasks[0] = Task.Run(() => Utils.ReadWeights(path + "/self_attn_q_proj.bin", this.embedding_dim * this.inner_embedding_dim));
+            tasks[1] = Task.Run(() => Utils.ReadWeights(path + "/self_attn_k_proj.bin", this.embedding_dim * this.inner_embedding_dim * this.num_heads_kv / this.num_heads_q));
+            tasks[2] = Task.Run(() => Utils.ReadWeights(path + "/self_attn_v_proj.bin", this.embedding_dim * this.inner_embedding_dim * this.num_heads_kv / this.num_heads_q));
+            tasks[3] = Task.Run(() => Utils.ReadWeights(path + "/self_attn_o_proj.bin", this.inner_embedding_dim * this.embedding_dim));
 
             float[][] results = await Task.WhenAll(tasks);
-            float[] flat_qkv = new float[this.embedding_dim * qkv_proj_dim];
+            float[] flat_qkv = new float[this.embedding_dim * this.qkv_proj_dim];
             Array.Copy(results[0], 0, flat_qkv, 
-                0, 
-                embedding_dim * inner_embedding_dim);
-            Array.Copy(results[1], 0, flat_qkv, 
-                embedding_dim * inner_embedding_dim, 
-                embedding_dim * this.inner_embedding_dim * this.num_heads_kv / num_heads_q);
-            Array.Copy(results[2], 0, flat_qkv, 
-                embedding_dim * inner_embedding_dim + embedding_dim * this.inner_embedding_dim * this.num_heads_kv / num_heads_q,
-                embedding_dim * this.inner_embedding_dim * this.num_heads_kv / num_heads_q);
+                0,
+                this.embedding_dim * this.inner_embedding_dim);
+            Array.Copy(results[1], 0, flat_qkv,
+                this.embedding_dim * this.inner_embedding_dim,
+                this.embedding_dim * this.inner_embedding_dim * this.num_heads_kv / this.num_heads_q);
+            Array.Copy(results[2], 0, flat_qkv,
+                this.embedding_dim * this.inner_embedding_dim + this.embedding_dim * this.inner_embedding_dim * this.num_heads_kv / this.num_heads_q,
+                this.embedding_dim * this.inner_embedding_dim * this.num_heads_kv / this.num_heads_q);
             W_QKV.SetData(flat_qkv);
             W_O.SetData(results[3]);
 
@@ -174,28 +183,32 @@ namespace DeepUnity.Modules
 
             // ========================================================== QKV PROJ =========================================================================
             ComputeShader cs = DeepUnityMeta.GQAInferenceCS;
-            int kernel = cs.FindKernel("QKVProj");
-            cs.SetBuffer(kernel, "W_QKV", W_QKV);
+            int qkvKernel = cs.FindKernel("QKVProj");
+            cs.SetBuffer(qkvKernel, "W_QKV", W_QKV);
 
             ComputeBuffer xBuff = new ComputeBuffer(x.Count(), 4, ComputeBufferType.Structured);
             xBuff.SetData(x.ToArray());
-            cs.SetBuffer(kernel, "X", xBuff);
+            // Debug.Log("X (gemma):" + x);
+            cs.SetBuffer(qkvKernel, "X", xBuff);
 
             ComputeBuffer qkvBuff = new ComputeBuffer(B * L_x * qkv_proj_dim, 4, ComputeBufferType.Structured);
-            cs.SetBuffer(kernel, "QKV", qkvBuff);
+            cs.SetBuffer(qkvKernel, "QKV", qkvBuff);
 
+            cs.SetInt("batch_size", B);
+            cs.SetInt("sequence_length_q", L_x);
             cs.SetInt("embedding_dim", embedding_dim);
             cs.SetInt("qkv_proj_dim", qkv_proj_dim);
-
-            cs.Dispatch(kernel, 
+            
+            cs.Dispatch(qkvKernel, 
                 B, 
-                (L_x + 3) / 4, 
-                (qkv_proj_dim + 63) / 64);
+                (L_x + 7) / 8, 
+                (qkv_proj_dim + 31) / 32);
 
             Tensor QKV = batched ? Tensor.Constant(qkvBuff, B, L_x, qkv_proj_dim) : Tensor.Constant(qkvBuff, L_x, qkv_proj_dim);
             qkvBuff.Release();
             xBuff.Release();
 
+            // UnityEngine.Debug.Log("QKV (gemma):" + QKV);
             //Debug.Log(QKV);
             Tensor Q = batched ? Tensor.Zeros(B, L_x, this.num_heads_q, this.head_dim) : Tensor.Zeros(L_x, this.num_heads_q, this.head_dim);
             Tensor K = batched ? Tensor.Zeros(B, L_x, this.num_heads_kv, this.head_dim) : Tensor.Zeros(L_x, this.num_heads_kv, this.head_dim);
@@ -249,6 +262,10 @@ namespace DeepUnity.Modules
                 }
             }
 
+            // Debug.Log("Q (gemma): " + Q);
+            // Debug.Log("K (gemma): " + K);
+            // Debug.Log("V (gemma): " + V);
+
             // ==================================================================== QK Norm =================================================================
             if (qk_norm)
             {
@@ -258,7 +275,7 @@ namespace DeepUnity.Modules
                 Tensor variance = Q.Square().Mean(-1, keepDim: true).Expand(-1, Q.Size(-1));
                 Q = Q / Tensor.Sqrt(variance + 1e-6f);
 
-                variance = K.Square().Mean(-1, keepDim: true).Expand(-1, Q.Size(-1));
+                variance = K.Square().Mean(-1, keepDim: true).Expand(-1, K.Size(-1));
                 K = K / Tensor.Sqrt(variance + 1e-6f);
                  
                 // affine
@@ -270,17 +287,20 @@ namespace DeepUnity.Modules
                         {
                             for (int h = 0; h < this.num_heads_q; h++)
                             {
-                                Q[b, l, h, e] *= q_norm.gamma[e];
+                                Q[b, l, h, e] *= (1f + q_norm.gamma[e]);
                             }
 
                             for (int h = 0; h < this.num_heads_kv; h++)
                             {
-                                K[b, l, h, e] *= k_norm.gamma[e];
+                                K[b, l, h, e] *= (1f + k_norm.gamma[e]);
                             }
                         }
                     }
                 }
             }
+
+            //Debug.Log("Q norm (gemma): " + Q);
+            //Debug.Log("K norm (gemma): " + K);
 
             // =============================================================== RoPE + Caching ==========================================================
             if (_buildKVCache)
@@ -307,7 +327,15 @@ namespace DeepUnity.Modules
 
             Tensor mask = BuildMask(is_causal, AttentionMask, batched ? new int[] { B, num_heads_q, L_x, L_k } : new int[] { num_heads_q, L_x, L_k });
             
-            Tensor scores = ComputeAttentionScoresGPU(Q, K, scale: 1f / MathF.Sqrt(head_dim)); // B, Hq,  L_x, L_k
+            Tensor scores = ComputeAttentionScoresGPU(Q, K, scale: scaling); // B, Hq,  L_x, L_k
+
+            if(this.attn_logit_softcapping is not null)
+            {
+                scores = scores / this.attn_logit_softcapping.Value;
+                scores = scores.Tanh(); // in gemma (line 256 - https://github.com/huggingface/transformers/blob/main/src/transformers/models/gemma3/modeling_gemma3.py), scores receive a softcap and are passed through tanh 
+                scores = scores * this.attn_logit_softcapping.Value;
+            }
+
             // Debug.Log("scores:" + scores);
             Tensor scores_masked = mask == null ? scores : scores + mask;// B, Hq, L_x, L_k
             Tensor attention_weights = softmax.Predict(scores_masked);  // B, Hq, L_x, L_k
@@ -321,19 +349,19 @@ namespace DeepUnity.Modules
                 int Hkv = V.Size(-2);
 
                 cs = DeepUnityMeta.GQAInferenceCS;
-                kernel = cs.FindKernel("AttendValues");
+                int attendValueskernel = cs.FindKernel("AttendValues");
 
                 ComputeBuffer awBuf = new ComputeBuffer(attention_weights.Count(), 4);
                 awBuf.SetData(attention_weights.ToArray());
-                cs.SetBuffer(kernel, "AttentionWeights", awBuf);
+                cs.SetBuffer(attendValueskernel, "AttentionWeights", awBuf);
 
                 ComputeBuffer vBuf = new ComputeBuffer(V.Count(), 4);
                 vBuf.SetData(V.ToArray());
-                cs.SetBuffer(kernel, "V", vBuf);
+                cs.SetBuffer(attendValueskernel, "V", vBuf);
 
                 int attendedValuesCount = B * L_v * this.inner_embedding_dim;
                 ComputeBuffer attndValsBuff = new ComputeBuffer(attendedValuesCount, 4);
-                cs.SetBuffer(kernel, "AttendedValues", attndValsBuff);
+                cs.SetBuffer(attendValueskernel, "AttendedValues", attndValsBuff);
 
                 cs.SetInt("batch_size", B);
                 cs.SetInt("sequence_length_v", L_v);
@@ -344,22 +372,22 @@ namespace DeepUnity.Modules
                 int gx = (D + 31) / 32;
                 int gy = (L_q + 31) / 32;
                 int gz = B * Hq;
-                cs.Dispatch(kernel, gx, gy, gz);
+                cs.Dispatch(attendValueskernel, gx, gy, gz);
                 awBuf.Release();
                 vBuf.Release();
 
 
                 // ======================================================================= OUTPUT projection ===============================================
 
-                kernel = cs.FindKernel("OProj") ;
+                int oProjKernel = cs.FindKernel("OProj");
 
-                cs.SetBuffer(kernel, "AttendedValues", attndValsBuff);
-                cs.SetBuffer(kernel, "W_O", W_O);
+                cs.SetBuffer(oProjKernel, "AttendedValues", attndValsBuff);
+                cs.SetBuffer(oProjKernel, "W_O", W_O);
                 cs.SetInt("inner_embedding_dim", inner_embedding_dim);
 
                 ComputeBuffer oBuff = new ComputeBuffer(B * L_q * embedding_dim, 4, ComputeBufferType.Structured);
-                cs.SetBuffer(kernel, "O", oBuff);
-                cs.Dispatch(kernel, B, (L_q + 3) / 4, (embedding_dim + 63) / 64);
+                cs.SetBuffer(oProjKernel, "O", oBuff);
+                cs.Dispatch(oProjKernel, B, (L_q + 3) / 4, (embedding_dim + 31) / 32);
 
 
                 Tensor output = batched ? Tensor.Constant(oBuff, B, L_q, embedding_dim) : Tensor.Constant(oBuff, L_q, embedding_dim);
@@ -391,7 +419,7 @@ namespace DeepUnity.Modules
 
 
                                 if (attention_mask is not null)
-                                    mask[b, l, h, e] += (1f - attention_mask[b, l]) * -1e10f;
+                                    mask[b, l, h, e] += (1f - attention_mask[b, l]) * -1e25f;
 
                             }
                         }
@@ -412,7 +440,7 @@ namespace DeepUnity.Modules
 
 
                             if (attention_mask is not null)
-                                mask[l, h, e] += (1f - attention_mask[l]) * -1e10f;
+                                mask[l, h, e] += (1f - attention_mask[l]) * -1e25f;
                         }
                     }
                 }

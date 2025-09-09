@@ -42,29 +42,29 @@ TagManager:
   - UI
   - Transparent
   - Ground
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
+  - EnvironmentGroup1
+  - EnvironmentGroup2
+  - EnvironmentGroup3
+  - EnvironmentGroup4
+  - EnvironmentGroup5
+  - EnvironmentGroup6
+  - EnvironmentGroup7
+  - EnvironmentGroup8
+  - EnvironmentGroup9
+  - EnvironmentGroup10
+  - EnvironmentGroup12
+  - EnvironmentGroup13
+  - EnvironmentGroup14
+  - EnvironmentGroup15
+  - EnvironmentGroup16
+  - EnvironmentGroup17
+  - EnvironmentGroup18
+  - EnvironmentGroup19
+  - EnvironmentGroup20
+  - EnvironmentGroup21
+  - EnvironmentGroup22
+  - EnvironmentGroup23
+  - EnvironmentGroup24
   - 
   m_SortingLayers:
   - name: Default

@@ -14,20 +14,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   trainer: 0
   maxSteps: 2000000000
-  actorLearningRate: 0.0002
-  criticLearningRate: 0.0003
+  actorLearningRate: 0.0001
+  criticLearningRate: 0.0001
   gamma: 0.98
   LRSchedule: 1
-  batchSize: 1024
   bufferSize: 20480
-  horizon: 256
+  batchSize: 1024
   numEpoch: 8
+  horizon: 256
   beta: 0.005
   epsilon: 0.2
   lambda: 0.96
-  maxNorm: 0.5
   valueCoeff: 0.5
-  KLDivergence: 0
+  maxNorm: 0.5
+  earlyStopping: 0
   targetKL: 0.015
   normalizeAdvantages: 1
   replayBufferSize: 1000000
@@ -38,7 +38,9 @@ MonoBehaviour:
   alpha: 0.2
   tau: 0.005
   noiseClip: 0.5
+  targetNoise: 0.2
   policyDelay: 2
   debug: 0
   timescaleAdjustment: 0
   timescale: 1
+  putAgentsOnDifferentLayers: 0

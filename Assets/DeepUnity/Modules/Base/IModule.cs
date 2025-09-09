@@ -82,7 +82,7 @@ namespace DeepUnity.Modules
         public LogSoftmax logsoftmax = null;
         public RReLU rrelu = null;
         public SELU selu = null;
-        public Silu silu = null;
+        public SiLU silu = null;
         public ReLU6 relu6 = null;
         public Rish rish = null;
 
@@ -276,7 +276,7 @@ namespace DeepUnity.Modules
             {
                 permute = permuteModule;
             }
-            else if (module is Silu siluModule)
+            else if (module is SiLU siluModule)
             {
                 silu = siluModule;
             }
@@ -501,7 +501,7 @@ namespace DeepUnity.Modules
             {
                 module = moduleWrapper.permute;
             }
-            else if (typeof(Silu).Name.Equals(moduleWrapper.name))
+            else if (typeof(SiLU).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.silu;
             }

@@ -2,8 +2,15 @@ namespace DeepUnity
 {
     namespace Gemma3Modelling
     {
+        public enum GemmaLayerType
+        {
+            FullAttention,
+            SlidingWindowAttention,
+        }
         public static class Gemma3Config
         {
+            public static int? ATTN_LOGIT_SOFTCAPPING = null;
+            public static float? ROPE_SCALING = null;
             public static int
                 PAD_IDX = 0,
                 EOS_IDX = 1,
@@ -11,19 +18,41 @@ namespace DeepUnity
                 VOCAB_SIZE = 262144,
                 HIDDEN_SIZE = 640,
                 MLP_INTERMEDIATE_SIZE = 2048,
-                
-                NUM_LAYERS = 3,
-                CONTEXT_LENGTH = 32768, // they say is 128K, the code says 32768.. fuck off.
+                NUM_LAYERS = 18,
+                MAX_POSITION_EMBEDDINGS = 32_768, // they say is 128K, the code says 32768.. fuck off.
+                ROPE_LOCAL_BASE_FREQUENCY = 10_000,
                 ROPE_THETA = 1_000_000,
                 HEAD_DIM = 256,
                 HEADS_Q = 4,
-                HEADS_KV = 1;
+                HEADS_KV = 1,
+                SLIDING_WINDOW = 512;
 
             public static float
                 RMS_EPS = 1e-6f,
                 QUERY_PRE_ATTENTION_SCALAR = 256,
                 ATTN_EXPANSION_FACTOR = 1.6f;
 
+            public static GemmaLayerType[] layer_types = new GemmaLayerType[]
+            {
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.FullAttention,
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.FullAttention,
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.SlidingWindowAttention,
+                GemmaLayerType.FullAttention,
+            }; 
             public static bool
                 TIE_EMBEDDING = true;
         }

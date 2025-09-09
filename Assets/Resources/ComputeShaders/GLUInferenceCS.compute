@@ -1,10 +1,7 @@
-﻿static const uint QWEN3_MLP_INTERMEDIATE = 3072u;
-static const uint GEMMA3_MLP_INTERMEDIATE = 2048u;
-
-StructuredBuffer<float> weights; // gate + up + down (joined in this order)
-RWStructuredBuffer<float> input;
+﻿StructuredBuffer<float> weights; // gate + up + down (joined in this order, they were flattened from (output_features, input_features) => as the weights of dense module)
+RWStructuredBuffer<float> input; //this is also used to write the output values in it.
 RWStructuredBuffer<float> intermediate;
-groupshared float inter[QWEN3_MLP_INTERMEDIATE]; // cannot be shared across kernels!!!
+
 int activation_type; // 0 for silu, 1 for gelu
 int hidden_size; 
 int intermediate_size; 
@@ -13,20 +10,21 @@ int seq_len;
 
 float silu(float x)
 {
-    return x / (1.0 + exp(-x));
+    return x / (1.0f + exp(-x));
     
 }
-float tanh(float x)
+float safe_tanh(float x) // in llm sit seems like a lot of big numbers are running, it seems they are stabilized only by layernorms
 {
-    float e2x = exp(2.0 * x);
-    return (e2x - 1.0) / (e2x + 1.0);
-
+    float a = abs(x);
+    float e = exp(-2.0f * a);
+    return sign(x) * ((1.0f - e) / (1.0f + e));
+    
+    // return sign(x) * (1.0f - 2.0f / (1.0f + exp(-2.0f * abs(x))));
 }
 
 float gelu(float x)
 {
-    float tanh_ = tanh(0.79788456080286535587989211986876f * (x + 0.044715f * pow(x, 3.0)));
-    return 0.5 * x * (1.0 + tanh_);
+    return 0.5f * x * (1.0f + tanh(0.79788456080286535587989211986876f * (x + 0.044715f * x * x * x)));
 
 }
 
@@ -65,11 +63,13 @@ void GateUp(uint3 id : SV_DispatchThreadID)
         intermediate[inter_idx] = silu(g) * u;
     else if(activation_type == 1)
         intermediate[inter_idx] = gelu(g) * u;
+    else
+        intermediate[inter_idx] = 0.0;
     
 }
 
 #pragma kernel Down
-[numthreads(64, 4, 1)]
+[numthreads(32, 4, 1)]
 void Down(uint3 id : SV_DispatchThreadID)
 {
     const uint h_idx = id.x; 
@@ -93,52 +93,4 @@ void Down(uint3 id : SV_DispatchThreadID)
 
     const uint out_idx = ((b_idx * seq_len) + l_idx) * hidden_size + h_idx;
     input[out_idx] = acc;
-}
-
-// it seems like this continues to fail in being faster than the split kernel.... fuck off.
-#pragma kernel GateUpDown_Fused_1024_3072
-[numthreads(32, 32, 1)] // 2D thread layout for better parallelization
-void GateUpDown_Fused_1024_3072(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
-{
-    if (!(batch_size == 1 && seq_len == 1 && hidden_size == 1024 && intermediate_size == QWEN3_MLP_INTERMEDIATE))
-        return;
-        
-    static const uint H = 1024u;
-    const uint gate_off = 0u;
-    const uint up_off = H * QWEN3_MLP_INTERMEDIATE;
-    const uint down_off = 2u * H * QWEN3_MLP_INTERMEDIATE;
-    
-    uint flat_tid = tid.y * 32 + tid.x; // Flatten 2D to 1D
-    uint group_id = gid.x;
-    
-    // Phase 1: Gate/Up computation (all threads cooperate)
-    for (uint i = flat_tid; i < QWEN3_MLP_INTERMEDIATE; i += 1024u)  // 1024 = 32*32
-    {
-        float g = 0.0, u = 0.0;
-        [loop]
-        for (uint k = 0; k < H; ++k)
-        {
-            const float x = input[k];
-            g += x * weights[gate_off + i * H + k];
-            u += x * weights[up_off + i * H + k];
-        }
-        inter[i] = (g / (1.0 + exp(-g))) * u;
-    }
-    
-    GroupMemoryBarrierWithGroupSync();
-    
-    // Phase 2: Down projection - Each group handles different output features
-    uint outputs_per_group = H / gid.x; // Divide outputs among groups
-    uint output_start = group_id * outputs_per_group;
-    uint output_end = min(output_start + outputs_per_group, H);
-    
-    for (uint h = output_start + flat_tid; h < output_end; h += 1024u)
-    {
-        float acc = 0.0;
-        const uint row = down_off + h * QWEN3_MLP_INTERMEDIATE;
-        [loop]
-        for (uint i = 0; i < QWEN3_MLP_INTERMEDIATE; ++i)
-            acc += inter[i] * weights[row + i];
-        input[h] = acc;
-    }
 }

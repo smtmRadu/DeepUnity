@@ -2,6 +2,7 @@ using DeepUnity.Activations;
 using DeepUnity.Modules;
 using System;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace DeepUnity
@@ -25,10 +26,10 @@ namespace DeepUnity
 
         private void InitActivation()
         {
-            switch(this.activation)
+            switch(this.activation.ToLower())
             {
                 case "swish" or "silu":
-                    _activation = new Silu();
+                    _activation = new SiLU();
                     break;
                 case "gelu":
                     _activation = new GELU();
@@ -40,16 +41,33 @@ namespace DeepUnity
                     throw new ArgumentException($"Unhandled {activation} activation.DEVNOTE: It cannot handle parametrized activations!!");
             }
         }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="input_size"></param>
+        /// <param name="hidden_size"></param>
+        /// <param name="output_size"></param>
+        /// <param name="init"></param>
+        /// <param name="activation">["swish", "gelu", "relu"]</param>
+        /// <param name="device"></param>
         public GatedLinearUnit(int input_size, int hidden_size, int output_size, InitType init = InitType.LeCun_Uniform, string activation = "swish", Device device = Device.CPU)
         {
             up_proj= new Dense(input_size, hidden_size, bias: false, weight_init: init, device:device);
             gate_proj = new Dense(input_size, hidden_size, bias: false, weight_init: init, device: device);
             down_proj = new Dense(hidden_size, output_size, bias: false, weight_init: init, device: device);
-
+            this.activation = activation;
             InitActivation();
         }
         private GatedLinearUnit() { }
-        public Tensor Predict(Tensor x) => this.down_proj.Predict(this._activation.Predict(this.gate_proj.Predict(x)) * this.up_proj.Predict(x));
+        public Tensor Predict(Tensor x)
+        {
+            var up = this.up_proj.Predict(x);
+            var g = this.gate_proj.Predict(x);
+            g = this._activation.Predict(g);
+            Debug.Log("Intermediate GLU: " + (g * up).ToArray().ToCommaSeparatedString());
+            var dp = this.down_proj.Predict(g * up);
+            return dp;
+        }
         public Tensor Forward(Tensor x)
         {
             UpProjCache = this.up_proj.Forward(x);

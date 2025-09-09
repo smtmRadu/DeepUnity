@@ -158,8 +158,10 @@ namespace DeepUnity.Modules
             int B = batched ? x.Size(-3) : 1;
             int L_x = x.Size(-2);
 
-            //Debug.Log("x:" + x);
+            //Debug.Log("X (base):" + x);
             Tensor QKV = W_QKV.Predict(x);
+            //Debug.Log("QKV (base):" + QKV);
+
 
             //Debug.Log(QKV);
             Tensor Q = batched ? Tensor.Zeros(B, L_x, this.num_heads_q, this.head_dim)  : Tensor.Zeros(L_x, this.num_heads_q, this.head_dim);
@@ -214,6 +216,10 @@ namespace DeepUnity.Modules
                 }       
             }
 
+            //Debug.Log("Q (base): " + Q);
+            //Debug.Log("K (base): " + K);
+            //Debug.Log("V (base): " + V);
+
             if (qk_norm)
             {
                 // implement fast rmsnorm on head_num, head_dim tensors using the qk norm weights
@@ -222,7 +228,7 @@ namespace DeepUnity.Modules
                 Tensor variance = Q.Square().Mean(-1, keepDim: true).Expand(-1, Q.Size(-1));
                 Q = Q / Tensor.Sqrt(variance + 1e-6f);
                 
-                variance = K.Square().Mean(-1, keepDim: true).Expand(-1, Q.Size(-1));
+                variance = K.Square().Mean(-1, keepDim: true).Expand(-1, K.Size(-1));
                 K = K / Tensor.Sqrt(variance + 1e-6f);
 
                 // affine
@@ -245,7 +251,9 @@ namespace DeepUnity.Modules
                     }
                 }
             }
-            
+
+            //Debug.Log("Q norm (base): " + Q);
+            //Debug.Log("K norm (base): " + K);
 
 
             // K is cached with rotation.

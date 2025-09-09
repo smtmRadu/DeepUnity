@@ -38,7 +38,6 @@ namespace DeepUnity.ReinforcementLearning
             if (model.muNetwork.Modules.Last().GetType() != typeof(Tanh))
             {
                 model.muNetwork.Modules = model.muNetwork.Modules.Concat(new IModule[] { new Tanh() }).ToArray();
-                model.Save();
             }
 
 

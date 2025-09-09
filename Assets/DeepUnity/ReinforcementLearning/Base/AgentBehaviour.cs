@@ -110,7 +110,7 @@ namespace DeepUnity.ReinforcementLearning
                     case NonLinearity.Tanh:
                         return new Tanh(in_place: true);
                     case NonLinearity.Silu:
-                        return new Silu(in_place: true);
+                        return new SiLU(in_place: true);
                     default:
                         throw new ArgumentException("Unhandles hidden activation");
                 }
@@ -590,7 +590,8 @@ namespace DeepUnity.ReinforcementLearning
         /// <summary>
         /// Updates the state of the Behaviour parameters.
         /// </summary>
-        public void Save()
+        /// <param name="optim_states">Can be nullable</param>
+        public void Save(string[] optim_states, DeepUnityTrainer trainer_instance)
         {
             if (!assetCreated)
             {
@@ -613,15 +614,28 @@ namespace DeepUnity.ReinforcementLearning
             sigmaNetwork?.Save();
             discreteNetwork?.Save();
 
+            if (optim_states is not null && trainer_instance is not null && trainer_instance.optimStatesPath is not null) // editor space requires to have the optim states path
+            {
+                for (int i = 0; i < optim_states.Length; i++)
+                {
+                    File.WriteAllText(trainer_instance.optimStatesPath + $"{trainer_instance.GetType().Name.ToLower()}_optim_state_{i}.json", optim_states[i]);
+                }
+
+                ConsoleMessage.Info($"<b>[AUTOSAVE]</b> Optimizer states <b><i>{trainer_instance.model.behaviourName}</i></b> saved");
+            }
+
+
+
+
+
 #if !UNITY_EDITOR
             string folderPath = Path.Combine(Utils.GetDesktopPath(), $"{this.behaviourName}_Trained");
             if(!Directory.Exists(folderPath))
                 Directory.CreateDirectory(folderPath);
-
-            {
-                string beh = JsonUtility.ToJson(this);
-                File.WriteAllText(Path.Combine(folderPath, $"_{this.behaviourName}.json"), beh);
-            }
+            
+            string beh = JsonUtility.ToJson(this);
+            File.WriteAllText(Path.Combine(folderPath, $"_{this.behaviourName}.json"), beh);
+            
 
             if(vNetwork!=null)
             {
@@ -652,6 +666,26 @@ namespace DeepUnity.ReinforcementLearning
             {
                 string discretenet = JsonUtility.ToJson(discreteNetwork);
                 File.WriteAllText(Path.Combine(folderPath, $"{DISCRETE_NET_NAMING_CONVENTION}.json"), discretenet);
+            }
+
+            //UnityEngine.Debug.Log(optim_states);
+            //UnityEngine.Debug.Log(trainer_instance);
+            if (optim_states is not null && trainer_instance is not null)
+            {
+
+                var optimDir = Path.Combine(folderPath, "OptimStates");
+                if(!Directory.Exists(optimDir))
+                    Directory.CreateDirectory(optimDir);
+
+                for (int i = 0; i < optim_states.Length; i++)
+                {
+                    var filePath = Path.Combine(
+                        optimDir, 
+                        $"{trainer_instance.GetType().Name.ToLower()}_optim_state_{i}.json"
+                    );
+
+                    File.WriteAllText(filePath, optim_states[i]);
+                }
             }
 #endif
         }
@@ -751,7 +785,7 @@ namespace DeepUnity.ReinforcementLearning
             return whatIsMissing;
         }
         /// <summary>
-        /// This was implemented due the fact the Unity Editor is sometimes losing references of the networks, so to not reassign them manually this exists.
+        /// This was implemented due the fact the Unity Editor is sometimes losing references of the networks, so this exists to not reassign them manually.
         /// </summary>
         private void TryReassignReference_EditorOnly()
         {
@@ -788,63 +822,87 @@ namespace DeepUnity.ReinforcementLearning
         /// When the training is within a build, the trained weights are saved on the desktop. <br></br>
         /// A button to update the weights in editor will appear on the behaviour asset.
         /// </summary>
-        public void TryUpdateWeightsFromDesktop()
+        public void TryUpdateWeightsAndOptimStatesFromDesktop()
         {
             if (!Directory.Exists(Path.Combine(Utils.GetDesktopPath(), $"{behaviourName}_Trained")))
                 return;
 
             // it seems like the overwrite doesn t work.
-            string path = Path.Combine(Utils.GetDesktopPath(), $"{this.behaviourName}_Trained");
+            string newVersionOfBehaviourPath = Path.Combine(Utils.GetDesktopPath(), $"{this.behaviourName}_Trained");
 
             if(vNetwork != null)
             {
-                string vnetPath = Path.Combine(path, $"{VALUE_NET_NAMING_CONVENTION}.json");
+                string vnetPath = Path.Combine(newVersionOfBehaviourPath, $"{VALUE_NET_NAMING_CONVENTION}.json");
                 string jsonData = File.ReadAllText(vnetPath);
                 JsonUtility.FromJsonOverwrite(jsonData, vNetwork);
             }
             
             if (q1Network != null)
             {
-                string q1netPath = Path.Combine(path, $"{Q1_NET_NAMING_CONVENTION}.json");
+                string q1netPath = Path.Combine(newVersionOfBehaviourPath, $"{Q1_NET_NAMING_CONVENTION}.json");
                 string jsonData = File.ReadAllText(q1netPath);
                 JsonUtility.FromJsonOverwrite(jsonData, q1Network);
             }
             
             if (q2Network != null)
             {
-                string q2netPath = Path.Combine(path, $"{Q2_NET_NAMING_CONVENTION}.json");
+                string q2netPath = Path.Combine(newVersionOfBehaviourPath, $"{Q2_NET_NAMING_CONVENTION}.json");
                 string jsonData = File.ReadAllText(q2netPath);
                 JsonUtility.FromJsonOverwrite(jsonData, q2Network);
             }
             
             if (muNetwork != null)
             {
-                string munetPath = Path.Combine(path, $"{MU_NET_NAMING_CONVENTION}.json");
+                string munetPath = Path.Combine(newVersionOfBehaviourPath, $"{MU_NET_NAMING_CONVENTION}.json");
                 string jsonData = File.ReadAllText(munetPath);
                 JsonUtility.FromJsonOverwrite(jsonData, muNetwork);
             }
             
             if (sigmaNetwork != null)
             {
-                string sigmanetPath = Path.Combine(path, $"{SIGMA_NET_NAMING_CONVENTION}.json");
+                string sigmanetPath = Path.Combine(newVersionOfBehaviourPath, $"{SIGMA_NET_NAMING_CONVENTION}.json");
                 string jsonData = File.ReadAllText(sigmanetPath);
                 JsonUtility.FromJsonOverwrite(jsonData, sigmaNetwork);
             }
             
             if (discreteNetwork != null)
             {
-                string discretenetPath = Path.Combine(path, $"{DISCRETE_NET_NAMING_CONVENTION}.json");
+                string discretenetPath = Path.Combine(newVersionOfBehaviourPath, $"{DISCRETE_NET_NAMING_CONVENTION}.json");
                 string jsonData = File.ReadAllText(discretenetPath);
                 JsonUtility.FromJsonOverwrite(jsonData, discreteNetwork);
             }
 
-            // The behaviour is last because is changes the reference to the correct networks and the reupdate will not work.
-            string behPath = Path.Combine(path, $"_{this.behaviourName}.json");
+#if UNITY_EDITOR
+            var newVersionOptimStatesFolder = Path.Combine(newVersionOfBehaviourPath, "OptimStates");
+
+            if (Directory.Exists(newVersionOptimStatesFolder))
+            {
+                var behaviourPath = Path.GetDirectoryName(AssetDatabase.GetAssetPath(this));
+                var oldVersionOptimStatesFolder = Path.Combine(behaviourPath, "OptimStates");
+
+                // Ensure the target folder exists
+                if (!Directory.Exists(oldVersionOptimStatesFolder))
+                    Directory.CreateDirectory(oldVersionOptimStatesFolder);
+
+                // Copy all files from source to target, overwriting if necessary
+                foreach (var sourceFilePath in Directory.GetFiles(newVersionOptimStatesFolder))
+                {
+                    var fileName = Path.GetFileName(sourceFilePath);
+                    var destFilePath = Path.Combine(oldVersionOptimStatesFolder, fileName);
+
+                    File.Copy(sourceFilePath, destFilePath, overwrite: true);
+                }
+
+                ConsoleMessage.Info($"<b>[OVERWRITE]</b> Agent behaviour <b><i>{behaviourName}</i></b> was overriden with the new optim states from Desktop");
+            }
+#endif
+            // The behaviour is last because it changes the reference to the correct networks and the reupdate will not work.
+            string behPath = Path.Combine(newVersionOfBehaviourPath, $"_{this.behaviourName}.json");
             string jsonDataBeh = File.ReadAllText(behPath);
             JsonUtility.FromJsonOverwrite(jsonDataBeh, this);
 
             TryReassignReference_EditorOnly();
-            Save();
+            Save(null, null);
             ConsoleMessage.Info($"<b>[OVERWRITE]</b> Agent behaviour <b><i>{behaviourName}</i></b> was overriden with the new weights from Desktop");
             // well this complete reassignation.. a lot of stuff going on i'm to lazy to implement it for now.
         }
@@ -853,7 +911,7 @@ namespace DeepUnity.ReinforcementLearning
     [UnityEditor.CustomEditor(typeof(AgentBehaviour), true), UnityEditor.CanEditMultipleObjects]
     sealed class CustomAgentBehaviourEditor : UnityEditor.Editor
     {
-        const string updateButtonMessage = "A version of this behavior is available on the desktop. \nPRESS to update the policy with the weights of that version.";
+        const string updateButtonMessage = "A (new) version of this behavior is available on the desktop. \nPRESS this button to update the weights to that version.";
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -865,7 +923,7 @@ namespace DeepUnity.ReinforcementLearning
             if(Directory.Exists(Path.Combine(Utils.GetDesktopPath(), $"{script.behaviourName}_Trained")) && GUILayout.Button(updateButtonMessage))
             {
                 // GUILayout.Box .HelpBox("A new version of this behavior is available on your desktop. Press the button above to take the new weights.", MessageType.Info);
-                script.TryUpdateWeightsFromDesktop();
+                script.TryUpdateWeightsAndOptimStatesFromDesktop();
               
             }
 
