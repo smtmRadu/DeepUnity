@@ -1,16 +1,16 @@
+using DeepUnity.Activations;
 using DeepUnity.Gemma3Modelling;
 using DeepUnity.Modules;
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using Unity.VisualScripting.Dependencies.Sqlite;
 using UnityEngine;
-
-// NOTES
-// TODO: 
-//       test if a a kernel rms norm will work (try make the entire decoder layer on gpu.. that s the idea)
-//       when copying the weights out from the model to unity, load them in separate file each so that they will not be over 50MB each (each module separate file) -> embedding layer might be placed in 2 probably.
-//       verify again the tokenizer of gemma to work. (optional)
+using static UnityEditor.Experimental.GraphView.GraphView;
 
 namespace DeepUnity
 {
@@ -141,7 +141,8 @@ namespace DeepUnity
                     hid = layers[i].Predict(hid, attention_mask);
                     // Debug.Log($"Layer {i} output: " + hid);
                 }
-                return norm.Predict(hid);
+                Tensor post_norm = norm.Predict(hid);
+                return post_norm.Squeeze(-2);
             }
 
             public int ParameterCount()
@@ -218,32 +219,121 @@ namespace DeepUnity
             int @params = model.ParameterCount();
             return @params;
         }
-        public int SampleToken(Tensor y, float temperature = 1f, int top_k = -1, float top_p = 1, float min_p = 0f)
+        
+        /// <summary>
+        /// Expects (L, V) or (B, L, V) for batched inference,
+        /// where V = vocab size, L (>= 1) = sequence length and B = batch_size
+        /// Returns (1, 1) or (B, 1, 1) for batched inference.
+        /// </summary>
+        /// <param name="logits"></param>
+        /// <param name="temperature"></param>
+        /// <param name="top_k"></param>
+        /// <param name="top_p"></param>
+        /// <param name="min_p"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        private Tensor SampleToken(Tensor logits, float temperature = 1f, int top_k = -1, float top_p = 1, float min_p = 0f)
         {
-            // Y = (B, L, VOCAB_SIZE) or (L, VOCAB_SIZE)
-            return (int)y.Max(-1)[0];
+            if(logits.Rank == 1 || logits.Rank == 2)
+            {
+                if(temperature == 0)
+                    return logits.ArgMax(-1);
+                
+                int vocab_size = logits.Size(-1);
+                int last_vec_idx = logits.Size(0) - 1;
+
+                Softmax sm = new Softmax(temperature : temperature);
+                Tensor probs = sm.Predict(logits);
+
+                // max prob for min_p
+                float minProbTresh = probs.Max() * min_p;
+                int candidatesCount = probs.Count(x => x >= minProbTresh);
+
+                if (candidatesCount == 0)
+                    return logits.ArgMax(-1);
+
+                List<int> candidates = new List<int>();
+                for (int i = 0; i < vocab_size ; i++)
+                {
+                    if (probs[i] >= minProbTresh)
+                        candidates.Add(i);
+                }
+
+                candidates.Sort((a, b) => probs[a].CompareTo(probs[b])); //descending
+
+                /// TOP_K
+                if(top_k > 0 && top_k < candidatesCount)
+                {
+                    candidatesCount = top_k;
+                }
+
+                /// TOP_P
+                if(top_p < 1)
+                {
+                    float cumProb = 0f;
+                    int cutoff = candidatesCount;
+                    for (int i = 0; i < candidatesCount; i++)
+                    {
+                        cumProb += probs[candidates[i]];
+                        if (cumProb >= top_p)
+                        {
+                            cutoff = i + 1;
+                            break;
+                        }
+                    }
+                    candidatesCount = cutoff;
+                }
+
+                // renormalize the new dist
+                float newSum = 0.0f;
+                for (int i = 0; i < candidatesCount; i++)
+                {
+                    newSum += probs[candidates[i]];
+                }
+                if (newSum == 0.0)
+                {
+                    return logits.ArgMax(-1);
+                }
+
+                // Sample 
+                return Tensor.Constant(Utils.Random.Sample(candidates, candidates.Select(x => probs[x])));
+            }
+            else if(logits.Rank == 3)
+            {
+                throw new Exception("Batched sampling not handled");
+
+            }
+            else
+            {
+                throw new Exception("Cannot sample 4D tensors");
+
+            }
         }
+        
         public Tensor Predict(Tensor input_ids, Tensor attn_mask = null)
         {
             if(!IsReady)
             {
                 throw new System.Exception("The model was not loaded yet. Please verify if IsReady.");
+                // never put while(true) because model will not initialize otherwise.
             }
 
             int seq_len = input_ids.Size(-1);
             bool is_batched = input_ids.Rank == 3;
             int batch_size = is_batched ? input_ids.Size(-3) : 1;
-            //Benckmark.Start();
             Tensor hid = model.Predict(input_ids, attn_mask);
-            //Benckmark.Stop("Layers");
+            return PostModelPredict(hid.Squeeze(-2));      
+        }
+        
+        private Tensor PostModelPredict(Tensor hid)
+        {
+            Tensor post_norm = model.norm.Predict(hid);
 
-
-
-
-            // ========================================================== LM Head forward ============================================================== //
-            // Benckmark.Start(); // lm head takes 0.01645s per 1 token.
+            int seq_len = hid.Size(-1);
+            bool is_batched = hid.Rank == 3;
+            int batch_size = is_batched ? hid.Size(-3) : 1;
             ComputeShader lm_head_cs = DeepUnityMeta.LmHeadInferenceCS;
-            int k = lm_head_cs.FindKernel("Predict");
+            int k = seq_len == 1 && batch_size == 1 ? lm_head_cs.FindKernel("Predict1Vec") : lm_head_cs.FindKernel("Predict");
 
             lm_head_cs.SetBuffer(k, "weights", this.lm_head);
 
@@ -259,8 +349,12 @@ namespace DeepUnity
             lm_head_cs.SetInt("hidden_size", this.hidden_size);
             lm_head_cs.SetInt("vocab_size", this.vocab_size);
 
-            lm_head_cs.Dispatch(k, (vocab_size + 31) / 32, (batch_size * seq_len + 7) / 8, 1);
-            Tensor output_probs = is_batched ?
+            if (seq_len == 1 && batch_size == 1)
+                lm_head_cs.Dispatch(k, (vocab_size + 511) / 512, batch_size * seq_len, 1);
+            else
+                lm_head_cs.Dispatch(k, (vocab_size + 31) / 32, (batch_size * seq_len + 7) / 8, 1);
+
+            Tensor output_logits = is_batched ?
                 Tensor.Constant(lm_head_output, batch_size, seq_len, vocab_size) :
                 Tensor.Constant(lm_head_output, seq_len, vocab_size);
 
@@ -268,32 +362,53 @@ namespace DeepUnity
             lm_head_input.Release();
 
             // Benckmark.Stop("lm head");
-            return output_probs;
+            return output_logits;
         }
-        public string Generate(string prompt, GemmaTokenizerFast tokenizer, float temperature = 0.7f, int top_k = 20, float top_p = 0.95f, float min_p = 0)
+        public IEnumerator Generate(string prompt, GemmaTokenizerFast tokenizer, int max_new_tokens = 128, float temperature = 1f, int top_k = -1, float top_p = 1f, float min_p = 0)
         {
+            Debug.Log("Generating...");
+            while(!this.IsReady)
+                yield return new WaitForSeconds(0.01f);
+
+            Debug.Log("Model Ready");
+            while (!tokenizer.IsReady)
+                yield return new WaitForSeconds(0.01f);
+            Debug.Log("Tokenizer Ready");
+
             foreach (var item in model.layers)
             {
                 item.self_attn.BuildKVCache = true;
             }
-            List<int> reponse_ids = new List<int>();
-            (Tensor, Tensor) x = tokenizer.Encode(prompt);
+            (Tensor, Tensor) tokenized_prompt = tokenizer.Encode(prompt);
 
-            Tensor y = model.Predict(x.Item1, x.Item2);
 
-            return null;
+            List<string> response = new List<string>();
 
-            // sample y
-            // int sampled_token = 100;
-            // while(sampled_token != model.eos_idx)
-            // {
-            //     y = model.Predict(Tensor.Constant(sampled_token));
-            // 
-            //     sampled_token = 100;
-            // }
-            // 
-            // return string.Join("", reponse_ids.Select(x => tokenizer.id2token[x]));
+
+            Debug.Log("x: " + tokenized_prompt.Item1);
+
+            // forward + lm_head ============================================================================================================
+            Tensor y = Predict(tokenized_prompt.Item1);
+            // ============================================================================================================
+
+
+            Debug.Log("y:" + y);
+            Tensor sampled_token_id = SampleToken(y, temperature: temperature, top_k: top_k, top_p: top_p, min_p: min_p);
+            //Debug.Log("sampled_tok:" + sampled_token_id);
+            for (int new_tok = 0; new_tok < max_new_tokens; new_tok++)
+            {
+                string sampled_token_str = tokenizer.Decode(sampled_token_id)[0];
+                Debug.Log(sampled_token_str);
+                response.Add(sampled_token_str);
+
+                yield return null;
+                // forward + lm_head ============================================================================================================
+                y = Predict(sampled_token_id);
+                // ============================================================================================================
+                sampled_token_id = SampleToken(y, temperature: temperature, top_k: top_k, top_p: top_p, min_p: min_p);
+            }
         }
+        
         public Dictionary<string, string> Chat(List<Dictionary<string, string>> messages, GemmaTokenizerFast tokenizer, float temperature = 0.7f, int top_k = 20, float top_p = 0.95f, float min_p = 0)
         {
             List<Dictionary<string, string>> cached_conv = new();

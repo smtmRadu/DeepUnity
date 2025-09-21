@@ -17,7 +17,7 @@ namespace DeepUnity
             if (input is null) throw new ArgumentNullException(nameof(input));
             if (!IsReady)
             {
-                throw new ArgumentException("Tokenizer loaded asynchronously and not yet initialized. Check 'tokenizer.IsInitialized' before using the tokenizer.");
+                throw new ArgumentException("Tokenizer loaded asynchronously and not yet initialized. Check 'tokenizer.IsReady' before using the tokenizer.");
             }
             if (add_special_tokens)
                 input = "<bos>" + input;

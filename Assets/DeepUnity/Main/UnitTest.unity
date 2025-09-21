@@ -531,6 +531,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   device: 1
+  online_sm: 1
   net: {fileID: 11400000, guid: 587aa50fe03dbcd489fd93c15d1a69e8, type: 2}
   canvas: {fileID: 1012927895}
   batch_size: 1

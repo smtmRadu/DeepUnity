@@ -30,7 +30,7 @@ float gelu(float x)
 
 
 #pragma kernel GateUp
-[numthreads(64, 4, 1)]
+[numthreads(64, 8, 1)]
 void GateUp(uint3 id : SV_DispatchThreadID)
 {
     const uint i_idx = id.x; 
@@ -69,12 +69,85 @@ void GateUp(uint3 id : SV_DispatchThreadID)
 }
 
 #pragma kernel Down
-[numthreads(32, 4, 1)]
+[numthreads(64, 8, 1)]
 void Down(uint3 id : SV_DispatchThreadID)
 {
     const uint h_idx = id.x; 
     const uint l_idx = id.y; 
     const uint b_idx = id.z; 
+
+    if (h_idx >= hidden_size || l_idx >= seq_len || b_idx >= batch_size)
+        return;
+
+    const uint down_off = 2u * hidden_size * intermediate_size;
+
+    const uint inter_base = ((b_idx * seq_len) + l_idx) * intermediate_size;
+
+    float acc = 0.0;
+
+    for (uint i = 0; i < intermediate_size; ++i)
+    {
+        const float z = intermediate[inter_base + i];
+        acc += z * weights[down_off + h_idx * intermediate_size + i];
+    }
+
+    const uint out_idx = ((b_idx * seq_len) + l_idx) * hidden_size + h_idx;
+    input[out_idx] = acc;
+}
+
+
+
+
+
+
+
+
+#pragma kernel GateUp1Vec
+[numthreads(256, 1, 1)]
+void GateUp1Vec(uint3 id : SV_DispatchThreadID)
+{
+    const uint i_idx = id.x;
+    const uint l_idx = id.y;
+    const uint b_idx = id.z;
+
+    if (i_idx >= intermediate_size || l_idx >= seq_len || b_idx >= batch_size)
+        return;
+
+    const uint H = hidden_size;
+    const uint I = intermediate_size;
+
+    const uint gate_off = 0u;
+    const uint up_off = H * I;
+
+    const uint input_base = ((b_idx * seq_len) + l_idx) * H;
+
+    float g = 0.0;
+    float u = 0.0;
+
+    for (uint k = 0; k < H; ++k)
+    {
+        const float x = input[input_base + k];
+        g += x * weights[gate_off + i_idx * H + k];
+        u += x * weights[up_off + i_idx * H + k];
+    }
+
+    const uint inter_idx = ((b_idx * seq_len) + l_idx) * I + i_idx;
+    if (activation_type == 0)
+        intermediate[inter_idx] = silu(g) * u;
+    else if (activation_type == 1)
+        intermediate[inter_idx] = gelu(g) * u;
+    else
+        intermediate[inter_idx] = 0.0;
+    
+}
+
+#pragma kernel Down1Vec
+[numthreads(256, 1, 1)]
+void Down1Vec(uint3 id : SV_DispatchThreadID)
+{
+    const uint h_idx = id.x;
+    const uint l_idx = id.y;
+    const uint b_idx = id.z;
 
     if (h_idx >= hidden_size || l_idx >= seq_len || b_idx >= batch_size)
         return;

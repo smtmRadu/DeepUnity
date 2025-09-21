@@ -59,23 +59,24 @@ namespace DeepUnity
             {
                 // self attn
                 var skip = hidden_states.Clone() as Tensor;
+                //UnityEngine.Debug.Log("input_ln_in:" + hidden_states);
                 hidden_states = input_layernorm.Predict(hidden_states);
-                //UnityEngine.Debug.Log("input_ln:" + hidden_states);
+                //UnityEngine.Debug.Log($"layer_{layer_idx}.input_ln_out:" + hidden_states);
                 hidden_states = self_attn.Predict(hidden_states); // here to set the attention mask for this layer if not null.
-                //UnityEngine.Debug.Log("self_attn:" + hidden_states);
+                //UnityEngine.Debug.Log($"layer_{layer_idx}.self_attn:" + hidden_states);
                 hidden_states = post_attention_layernorm.Predict(hidden_states);
-                //UnityEngine.Debug.Log("post_self_attn_ln:" + hidden_states);
+                //UnityEngine.Debug.Log($"layer_{layer_idx}.post_self_attn_ln:" + hidden_states);
                 hidden_states = hidden_states + skip ;
 
 
                 // mlp
                 skip = hidden_states.Clone() as Tensor;
                 hidden_states = pre_feedforward_layernorm.Predict(hidden_states);
-                //UnityEngine.Debug.Log("pre_feedforward_ln:" + hidden_states);
+                //UnityEngine.Debug.Log($"layer_{layer_idx}.pre_feedforward_ln:" + hidden_states);
                 hidden_states = this.mlp.Predict(hidden_states);
-                //UnityEngine.Debug.Log("mlp:" + hidden_states);
+                //UnityEngine.Debug.Log($"layer_{layer_idx}.mlp:" + hidden_states);
                 hidden_states = post_feedforward_layernorm.Predict(hidden_states);
-                //UnityEngine.Debug.Log("post_feedforward_ln:" + hidden_states);
+                //UnityEngine.Debug.Log($"layer_{layer_idx}.post_feedforward_ln:" + hidden_states);
                 hidden_states = hidden_states + skip;
                 return hidden_states;
             }

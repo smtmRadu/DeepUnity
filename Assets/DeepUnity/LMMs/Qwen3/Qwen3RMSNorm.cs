@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace DeepUnity
@@ -9,17 +10,28 @@ namespace DeepUnity
             private int num_features;
             public float eps;
             public float[] gamma;
+            public bool IsInitialized { get; private set; } = false;
 
-            public ComputeBuffer gamma_Cb;
-            public Qwen3RMSNorm(int num_features, float eps = 1e-6f)
+            public Qwen3RMSNorm(int num_features, float eps = 1e-6f, string weights_path = null)
             {
                 this.num_features = num_features;
                 this.eps = eps;
                 this.gamma = new float[num_features];
+
+                if (!string.IsNullOrEmpty(weights_path))
+                {
+                    _ = LoadWeightsAsync(weights_path);
+                }
                 //this.gamma_Cb = new ComputeBuffer(num_features,4, ComputeBufferType.Structured);
             }
+            private async Task LoadWeightsAsync(string path)
+            {
+                this.gamma = await Task.Run(() => Utils.ReadWeights(path, num_features));
+                IsInitialized = true;
+                // ConsoleMessage.Info($"Loaded {path}");
+                //Debug.Log(this.gamma.ToCommaSeparatedString());
+            }
 
- 
             public Tensor Predict(Tensor x)
             {
                 Tensor ms = x.Square().Mean(-1, keepDim: true).Expand(-1, x.Size(-1));

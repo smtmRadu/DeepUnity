@@ -32,6 +32,7 @@ namespace DeepUnity
                 QUERY_PRE_ATTENTION_SCALAR = 256,
                 ATTN_EXPANSION_FACTOR = 1.6f;
 
+            // 5:1 ratio
             public static GemmaLayerType[] layer_types = new GemmaLayerType[]
             {
                 GemmaLayerType.SlidingWindowAttention,

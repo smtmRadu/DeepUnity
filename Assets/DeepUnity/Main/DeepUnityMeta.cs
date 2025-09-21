@@ -259,9 +259,9 @@ namespace DeepUnity
     }
     public enum NonLinearity
     {
-        Tanh,
         Relu, // Fast end efficient
-        Silu
+        Tanh, // Slower but stable
+        Silu // Most expressive
     }
     public enum HiddenStates
     {

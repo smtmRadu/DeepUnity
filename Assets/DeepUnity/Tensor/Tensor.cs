@@ -2085,7 +2085,7 @@ namespace DeepUnity
 
                 if (tensors[i].shape.Length != tensors[0].shape.Length)
                 {
-                    throw new ArgumentException($"All tensors must have the same number of dimensions");
+                    throw new ArgumentException($"All tensors must have the same number of dimensions (received shapes: {tensors.Select(x => $"({x.shape.ToCommaSeparatedString()})").ToCommaSeparatedString()})");
                 }
 
                 // Check all dimensions except the concatenation axis

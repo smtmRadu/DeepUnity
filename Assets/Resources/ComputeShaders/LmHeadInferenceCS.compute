@@ -23,12 +23,11 @@ void Y_set(int b, int l, int v, float val)
 }
 
 #pragma kernel Predict
-// Use 2D: x -> vocab id, y -> token index in the B*L "token stream".
-[numthreads(32, 8, 1)]
+[numthreads(64, 8, 1)]
 void Predict(uint3 id : SV_DispatchThreadID)
 {
     uint v = id.x;
-    uint t = id.y; // token index in [0, B*L)
+    uint t = id.y;
     if (v >= vocab_size || t >= (batch_size * seq_len))
         return;
 
@@ -36,7 +35,28 @@ void Predict(uint3 id : SV_DispatchThreadID)
     uint l = t % seq_len;
 
     float sum = 0.0;
-    // naive dot(X[b,l,:], W[v,:])
+    [loop]
+    for (int h = 0; h < hidden_size; ++h)
+    {
+        sum += X(b, l, h) * W(v, h);
+    }
+    Y_set(b, l, v, sum);
+}
+
+// kernel used when decoding (batch_size == seq_len == 1)
+#pragma kernel Predict1Vec
+[numthreads(512, 1, 1)]
+void Predict1Vec(uint3 id : SV_DispatchThreadID)
+{
+    uint v = id.x;
+    uint t = id.y; 
+    if (v >= vocab_size || t >= (batch_size * seq_len))
+        return;
+
+    uint b = t / seq_len;
+    uint l = t % seq_len;
+
+    float sum = 0.0;
     [loop]
     for (int h = 0; h < hidden_size; ++h)
     {

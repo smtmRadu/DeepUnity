@@ -15,6 +15,7 @@ namespace DeepUnity.Tutorials
     public class UnitTest : MonoBehaviour
     {
         public Device device = Device.CPU;
+        public bool online_sm = false;
         public Sequential net;
         public GameObject canvas;
         public Optimizer optim;
@@ -43,14 +44,12 @@ namespace DeepUnity.Tutorials
 
         private void Start()
         {
-            Tensor x = Tensor.RandomNormal(10, 10);
-            print(x);
-             x = Tensor.RandomNormal(10, 100);
-            print(x);
-
-            x = Tensor.RandomNormal(100, 120, 20);
-            print(x);
-
+            Tensor x = Tensor.RandomNormal(100, 100);
+            Softmax sm = new Softmax();
+            Benckmark.Start();
+            sm.Predict(x);
+            Benckmark.Stop();
+            
             //print(gemma_model.ParameterCount());
 
 
@@ -136,29 +135,29 @@ namespace DeepUnity.Tutorials
             // works.
             // the kernel of qwen3 mlp fails.
 
-           GatedLinearUnit swiglu = new GatedLinearUnit(1024, 3072, 1024, device:Device.GPU);
-           Qwen3MLP swiglu2 = new Qwen3MLP(1024, 3072);
-           float[] w = swiglu.gate_proj.weights.ToArray().Concat(swiglu.up_proj.weights.ToArray()).ToArray();
-           w = w.Concat(swiglu.down_proj.weights.ToArray()).ToArray();
-
-           swiglu2.weights.Dispose();
-           swiglu2.weights = TensorGPU.Constant(w);
-
-           Tensor x = Tensor.RandomNormal(1, 1, 1024);
-           TensorGPU xgpu = TensorGPU.Identity(x);
-           //print(swiglu.gate_proj.weights);
-           //print(swiglu2.weights.ToCommaSeparatedString());
-           Benckmark.Start();
-           print(swiglu.Predict(x));
-            Benckmark.Stop();
-
-            Benckmark.Start();
-            print(swiglu2.Predict(xgpu));
-            Benckmark.Stop();
-
-
-            xgpu.Dispose();
-            // print(swiglu2.Predict(x));
+           // GatedLinearUnit swiglu = new GatedLinearUnit(1024, 3072, 1024, device:Device.GPU);
+           // Qwen3MLP swiglu2 = new Qwen3MLP(1024, 3072);
+           // float[] w = swiglu.gate_proj.weights.ToArray().Concat(swiglu.up_proj.weights.ToArray()).ToArray();
+           // w = w.Concat(swiglu.down_proj.weights.ToArray()).ToArray();
+// 
+           // swiglu2.weights.Dispose();
+           // swiglu2.weights = TensorGPU.Constant(w);
+// 
+           // Tensor x = Tensor.RandomNormal(1, 1, 1024);
+           // TensorGPU xgpu = TensorGPU.Identity(x);
+           // //print(swiglu.gate_proj.weights);
+           // //print(swiglu2.weights.ToCommaSeparatedString());
+           // Benckmark.Start();
+           // print(swiglu.Predict(x));
+           //  Benckmark.Stop();
+// 
+           //  Benckmark.Start();
+           //  print(swiglu2.Predict(xgpu));
+           //  Benckmark.Stop();
+// 
+// 
+           //  xgpu.Dispose();
+           //  // print(swiglu2.Predict(x));
         }
         private void TestQwen()
         {

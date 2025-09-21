@@ -185,7 +185,7 @@ namespace DeepUnity
 
         public List<string> Decode(Tensor input_ids)
         {
-            if (input_ids.Rank == 1)
+            if (input_ids.Rank == 1 || input_ids.Rank == 0)
             {
                 StringBuilder sb = new StringBuilder();
                 for (int i = 0; i < input_ids.Size(-1); i++)

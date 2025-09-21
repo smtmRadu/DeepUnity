@@ -15,6 +15,11 @@ namespace DeepUnity
         [SerializeField] public int max_seq_len;
         [SerializeField] public int theta = 10_000;
 
+        public enum RoPEType
+        {
+            Interleaved,
+            SplitHalf
+        }
 
         public Tensor cosCachePredict;
         public Tensor sinCachePredict;
@@ -53,7 +58,7 @@ namespace DeepUnity
             });
         }
 
-        public Tensor ApplyRotaryEmbeddings(Tensor x, int[] input_pos = null)
+        public Tensor ApplyRotaryEmbeddings(Tensor x, int[] input_pos = null, RoPEType type = RoPEType.SplitHalf)
         {
 
             int rank = x.Rank;
@@ -80,26 +85,56 @@ namespace DeepUnity
             Tensor y = Tensor.Zeros(x.Shape);
 
             //Debug.Log(input_pos.ToCommaSeparatedString());
-            Parallel.For(0, seq_len, l =>
+
+            if(type == RoPEType.SplitHalf)
             {
-                for (int b = 0; b < batch_size; b++)
+                int half_dim = head_dim / 2;
+
+                Parallel.For(0, seq_len, l =>
                 {
-                    for (int h = 0; h < num_heads; h++)
+                    for (int b = 0; b < batch_size; b++)
                     {
-                        for (int i = 0; i < head_dim / 2; i++)
+                        for (int h = 0; h < num_heads; h++)
                         {
-                            float cos_ = cosCachePredict[input_pos[l], i];
-                            float sin_ = sinCachePredict[input_pos[l], i];
+                            for (int i = 0; i < half_dim; i++)
+                            {
+                                float cos_ = cosCachePredict[input_pos[l], i];
+                                float sin_ = sinCachePredict[input_pos[l], i];
 
-                            float x_even_ = x[b, l, h, 2 * i];
-                            float x_odd__ = x[b, l, h, 2 * i + 1];
+                                float x1 = x[b, l, h, i];              
+                                float x2 = x[b, l, h, i + half_dim];   
 
-                            y[b, l, h, 2 * i] = x_even_ * cos_ - x_odd__ * sin_;
-                            y[b, l, h, 2 * i + 1] = x_odd__ * cos_ + x_even_ * sin_;
+                                y[b, l, h, i] = x1 * cos_ - x2 * sin_;
+                                y[b, l, h, i + half_dim] = x2 * cos_ + x1 * sin_;
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
+            else if(type == RoPEType.Interleaved)
+            {
+                Parallel.For(0, seq_len, l =>
+                {
+                    for (int b = 0; b < batch_size; b++)
+                    {
+                        for (int h = 0; h < num_heads; h++)
+                        {
+                            for (int i = 0; i < head_dim / 2; i++)
+                            {
+                                float cos_ = cosCachePredict[input_pos[l], i];
+                                float sin_ = sinCachePredict[input_pos[l], i];
+
+                                float x_even_ = x[b, l, h, 2 * i];
+                                float x_odd__ = x[b, l, h, 2 * i + 1];
+
+                                y[b, l, h, 2 * i] = x_even_ * cos_ - x_odd__ * sin_;
+                                y[b, l, h, 2 * i + 1] = x_odd__ * cos_ + x_even_ * sin_;
+                            }
+                        }
+                    }
+                });
+            }
+                
 
             return y;
         }

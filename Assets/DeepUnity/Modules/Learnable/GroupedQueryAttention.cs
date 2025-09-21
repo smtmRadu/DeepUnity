@@ -494,7 +494,7 @@ namespace DeepUnity.Modules
             kBuf.SetData(K.ToArray());
             cs.SetBuffer(kernel, "K", kBuf);
 
-            int awCount = B * Hq * L_q * L_q;
+            int awCount = B * Hq * L_q * L_k;
             ComputeBuffer awBuf = new ComputeBuffer(awCount, 4);
             cs.SetBuffer(kernel, "AttentionWeights", awBuf);
 

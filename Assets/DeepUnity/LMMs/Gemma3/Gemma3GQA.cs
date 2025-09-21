@@ -149,7 +149,6 @@ namespace DeepUnity.Modules
 
         private async Task LoadWeightsAsync(string path)
         {
-            // GEEMMA FAILS BECAUSE QKV PROJ IS WRONGGG
             Task<float[]>[] tasks = new Task<float[]>[4];
             tasks[0] = Task.Run(() => Utils.ReadWeights(path + "/self_attn_q_proj.bin", this.embedding_dim * this.inner_embedding_dim));
             tasks[1] = Task.Run(() => Utils.ReadWeights(path + "/self_attn_k_proj.bin", this.embedding_dim * this.inner_embedding_dim * this.num_heads_kv / this.num_heads_q));
@@ -176,7 +175,7 @@ namespace DeepUnity.Modules
         public Tensor Predict(Tensor x)
         {
             if (x.Rank > 3 || x.Rank < 2)
-                throw new ArgumentException($"GQA input must be of shape (B, L, E) or (L, E). Received tensor of rank {x.Rank} - shape {x.Shape.ToCommaSeparatedString()}");
+                throw new ArgumentException($"GQA input must be of shape (B, L, E) or (L, E). Received tensor of rank {x.Rank} | shape ({x.Shape.ToCommaSeparatedString()}).");
             bool batched = x.Rank == 3;
             int B = batched ? x.Size(-3) : 1;
             int L_x = x.Size(-2);
@@ -262,9 +261,9 @@ namespace DeepUnity.Modules
                 }
             }
 
-            // Debug.Log("Q (gemma): " + Q);
-            // Debug.Log("K (gemma): " + K);
-            // Debug.Log("V (gemma): " + V);
+            //Debug.Log("Q (gemma): " + Q);
+            //Debug.Log("K (gemma): " + K);
+            //Debug.Log("V (gemma): " + V);
 
             // ==================================================================== QK Norm =================================================================
             if (qk_norm)
@@ -450,6 +449,8 @@ namespace DeepUnity.Modules
         }
         public static Tensor ComputeAttentionScoresGPU(Tensor Q, Tensor K, float scale)
         {
+            //Debug.Log("Q:" + Q);
+            //Debug.Log("K:" + K);
             bool batched = Q.Rank == 4;
             int B = batched ? Q.Size(0) : 1;
             int L_q = Q.Size(-3);
@@ -469,7 +470,7 @@ namespace DeepUnity.Modules
             kBuf.SetData(K.ToArray());
             cs.SetBuffer(kernel, "K", kBuf);
 
-            int awCount = B * Hq * L_q * L_q;
+            int awCount = B * Hq * L_q * L_k;
             ComputeBuffer awBuf = new ComputeBuffer(awCount, 4);
             cs.SetBuffer(kernel, "AttentionWeights", awBuf);
 

@@ -124,8 +124,8 @@ namespace DeepUnity.ReinforcementLearning
         public bool debug = false;
 
         // disabled because is not improving anything, but rather makes it worse.
-        [Tooltip("If on, every agent is assigned (recursively) a different physics layer (only from 0: Default) to improve simulation speed.")]
-        public bool putAgentsOnDifferentLayers = false;
+        // [Tooltip("If on, every agent is assigned (recursively) a different physics layer (only from 0: Default) to improve simulation speed.")]
+        // public bool putAgentsOnDifferentLayers = false;
         
         private void Awake()
         {

@@ -1,46 +1,62 @@
-using DeepUnity.Gemma3Modeling;
-using DeepUnity.Modules;
-using System.Collections.Generic;
-using System.Linq;
-using Unity.VisualScripting;
-using UnityEditor;
+using System.Collections;
 using UnityEngine;
 
 namespace DeepUnity.Tutorials
 {
     public class LMUnitTest : MonoBehaviour
     {
+        [SerializeField] private string initial_text = "Einstein was"; // Einstein was born in 1879 in Ulm, Germany. He was the son of a German physician
         [SerializeField] Device device = Device.CPU;
         [SerializeField] int batch_size = 1;
-        Gemma3ForCausalLM gemma_model;
-        GemmaTokenizerFast gemma_tokenizer;
+        [ViewOnly, SerializeField] bool is_model_ready = false;
+        [ViewOnly, SerializeField] bool is_tokenizer_ready = false;
+        Gemma3ForCausalLM model;
+        GemmaTokenizerFast tokenizer;
 
         bool output_once = false;
-        private void Update()
-        {
-            if (!gemma_model.IsReady || !gemma_tokenizer.IsReady)
-                return;
-        
-            if (!output_once)
-            {
-                string input = "Hi Gemma!";
-                var x = gemma_tokenizer.Encode(input);
-        
-                print(x.Item1);
-                Benckmark.Start();
-                print(gemma_model.Predict(x.Item1, x.Item2));
-                Benckmark.Stop();
-                output_once = true;
-            }
-            
-        }
+
+
+
         private void Start()
         {
             Benckmark.Start();
-            gemma_model = new Gemma3ForCausalLM();
-            gemma_tokenizer = new GemmaTokenizerFast();
-            Benckmark.Stop("gemma model init");
+            model = new Gemma3ForCausalLM();
+            tokenizer = new GemmaTokenizerFast();
+            Benckmark.Stop($"model init: {model.ParameterCount()}");
+
+
+            StartCoroutine(model.Generate(initial_text, tokenizer, max_new_tokens:16, temperature:0f));
         }
+
+
+        // private void Update()
+        // {
+        //     is_model_ready = model.IsReady;
+        //     is_tokenizer_ready = tokenizer.IsReady;
+        //     
+        //     if (!model.IsReady || !tokenizer.IsReady)
+        //         return;
+        // 
+        //     if (!output_once)
+        //     {
+        //         string input = "Einstein was";
+        //         var x = tokenizer.Encode(input);
+        // 
+        //         print(x.Item1);
+        //         Benckmark.Start();
+        //         print(model.Predict(x.Item1, x.Item2));
+        //         Benckmark.Stop();
+        //         output_once = true;
+        //     }
+        //     
+        // }
+        // private void Start()
+        // {
+        //     Benckmark.Start();
+        //     gemma_model = new Gemma3ForCausalLM();
+        //     gemma_tokenizer = new GemmaTokenizerFast();
+        //     Benckmark.Stop("gemma model init");
+        // }
         // private void Start()
         // {
         //     Utils.Random.Seed = 42;

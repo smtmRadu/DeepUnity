@@ -96,7 +96,7 @@ namespace DeepUnity.Modules
 
             if(input.Rank == 0)
             {
-                Tensor y = Tensor.Zeros(hidden_dim);
+                Tensor y = Tensor.Zeros(1, hidden_dim);
                 for (int e = 0; e < hidden_dim; e++)
                 {
                     y[e] = this.embeddings[(int)input[0], e];
