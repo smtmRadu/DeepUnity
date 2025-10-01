@@ -4200,6 +4200,9 @@ namespace DeepUnity
         }
         /// <summary>
         /// Extracts a slice from the tensor along a specified axis.
+        /// 
+        /// Example:
+        /// Input: (10, 3, 9).Slice(axis:-3, 2, 4, 1) => Output: (2, 3, 9)
         /// </summary>
         /// <param name="tensor">The input tensor.</param>
         /// <param name="axis">The axis along which to slice.</param>

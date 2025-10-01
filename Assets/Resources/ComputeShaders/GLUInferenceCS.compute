@@ -24,7 +24,7 @@ float safe_tanh(float x) // in llm sit seems like a lot of big numbers are runni
 
 float gelu(float x)
 {
-    return 0.5f * x * (1.0f + tanh(0.79788456080286535587989211986876f * (x + 0.044715f * x * x * x)));
+    return 0.5f * x * (1.0f + safe_tanh(0.79788456080286535587989211986876f * (x + 0.044715f * x * x * x)));
 
 }
 
@@ -142,7 +142,7 @@ void GateUp1Vec(uint3 id : SV_DispatchThreadID)
 }
 
 #pragma kernel Down1Vec
-[numthreads(256, 1, 1)]
+[numthreads(320, 1, 1)]
 void Down1Vec(uint3 id : SV_DispatchThreadID)
 {
     const uint h_idx = id.x;

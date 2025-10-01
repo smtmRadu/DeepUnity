@@ -1,17 +1,21 @@
-using System.Collections;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace DeepUnity.Tutorials
 {
     public class LMUnitTest : MonoBehaviour
     {
-        [SerializeField] private string initial_text = "Einstein was"; // Einstein was born in 1879 in Ulm, Germany. He was the son of a German physician
+        // 2 147505 691 => 8132 528 236743 236770 236828 236832
+        [SerializeField] private Text display;
+        [Multiline]
+        [SerializeField] private string prompt = "Einstein was"; // Einstein was born in 1879 in Ulm, Germany. He was the son of a German physician
         [SerializeField] Device device = Device.CPU;
         [SerializeField] int batch_size = 1;
+        [SerializeField] int max_completion_tokens = 2;
+        [SerializeField] float temperature = 0f;
         [ViewOnly, SerializeField] bool is_model_ready = false;
         [ViewOnly, SerializeField] bool is_tokenizer_ready = false;
         Gemma3ForCausalLM model;
-        GemmaTokenizerFast tokenizer;
 
         bool output_once = false;
 
@@ -21,11 +25,16 @@ namespace DeepUnity.Tutorials
         {
             Benckmark.Start();
             model = new Gemma3ForCausalLM();
-            tokenizer = new GemmaTokenizerFast();
             Benckmark.Stop($"model init: {model.ParameterCount()}");
 
-
-            StartCoroutine(model.Generate(initial_text, tokenizer, max_new_tokens:16, temperature:0f));
+            display.text = prompt;
+            // model.Predict(Tensor.Constant(new float[] { 2f, 4f }));
+            StartCoroutine(model.Generate(prompt, onTokenGenerated:(x) =>
+            {
+                display.text += x;
+                // Debug.Log(x);
+            },
+            max_new_tokens:max_completion_tokens, temperature:temperature));
         }
 
 
@@ -44,7 +53,7 @@ namespace DeepUnity.Tutorials
         // 
         //         print(x.Item1);
         //         Benckmark.Start();
-        //         print(model.Predict(x.Item1, x.Item2));
+        //         print(model.Predict(x.Item1, null));
         //         Benckmark.Stop();
         //         output_once = true;
         //     }

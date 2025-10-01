@@ -1,5 +1,5 @@
 # DeepUnity (2022.3.43f1 lts)
-![version](https://img.shields.io/badge/version-v0.10.3-blue)
+![version](https://img.shields.io/badge/version-v0.10.4-yellow)
 [Reference Paper](https://github.com/smtmRadu/Policy-Gradient-Methods-Insights-and-Optimization-Strategies)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using state-of-the-art algorithms.
@@ -52,7 +52,38 @@ public class Tutorial : MonoBehaviour
     }
 }
 ```
+## Large Language Models
 
+DeepUnity provides inference implementations for [Gemma3-270M](https://huggingface.co/google/gemma-3-270m) and [Qwen3-0.6B](Qwen/Qwen3-0.6B), along with SFT scripts w/ QLoRA. Current implementations are not optimized yet (~9 tok/s).
+
+#### Behaviour script overriding example
+
+```csharp
+using UnityEngine;
+using DeepUnity;
+using UnityEngine.UI;
+
+public class ChatWithGemma : MonoBehaviour
+{
+    [SerializeField] private Text display;
+    [SerializeField] private Text uiText;
+    [SerializeField] private float temperature = 0.7f;
+    [SerializeField] private float top_p = 0.95;
+    private Gemma3ForCausalLM model;
+    public void Start()
+    {
+        model = new Gemma3ForCausalLM();
+
+        StartCoroutine(model.Generate(
+            prompt: "Explain quantum entanglement in just 5 words", 
+            onTokenGenerated: (x) => {  display.text += x;  },
+            temperature:temperature, 
+            top_p:top_p))
+    }
+}
+```
+
+###### _You can finetune your own SLMs with the HuggingFace trainer (full or with adapters) for role-playing or other content generation, [merge the base model with the adapters,] then use the **build_params.ipynb** notebook to replace the **/params** folder with the serialized new weights._
 
 ## Reinforcement Learning
 

@@ -60,7 +60,7 @@ namespace DeepUnity
 
         public Tensor ApplyRotaryEmbeddings(Tensor x, int[] input_pos = null, RoPEType type = RoPEType.SplitHalf)
         {
-
+            
             int rank = x.Rank;
             bool is_batched = x.Rank == 4;
 
@@ -71,6 +71,8 @@ namespace DeepUnity
             int seq_len = x.Size(-3);
             if (input_pos is null)
                 input_pos = Enumerable.Range(0, seq_len).ToArray();
+
+            // Debug.Log("Rope pos:" + input_pos.ToCommaSeparatedString());
 
             if (seq_len != input_pos.Length)
                 throw new ShapeException($"Number of input positions is not matching the number of vectors to rotate: {x.Shape.ToCommaSeparatedString()}, input_pos {input_pos.ToCommaSeparatedString()})");
@@ -90,7 +92,7 @@ namespace DeepUnity
             {
                 int half_dim = head_dim / 2;
 
-                Parallel.For(0, seq_len, l =>
+                for(int l = 0; l < seq_len; l++)
                 {
                     for (int b = 0; b < batch_size; b++)
                     {
@@ -109,11 +111,11 @@ namespace DeepUnity
                             }
                         }
                     }
-                });
+                }
             }
             else if(type == RoPEType.Interleaved)
             {
-                Parallel.For(0, seq_len, l =>
+                for (int l = 0; l < seq_len; l++)
                 {
                     for (int b = 0; b < batch_size; b++)
                     {
@@ -132,7 +134,7 @@ namespace DeepUnity
                             }
                         }
                     }
-                });
+                }
             }
                 
 

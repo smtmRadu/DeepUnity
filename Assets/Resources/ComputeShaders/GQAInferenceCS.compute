@@ -44,9 +44,9 @@ uint QKV_index(uint b, uint l, uint p)
 
 
 
-uint Q_index(uint b, uint l, uint h, uint d)
+uint Q_index(uint b, uint l, uint hq, uint d)
 { 
-    return (((b * sequence_length_q + l) * num_heads_q + h) * head_dim + d);
+    return (((b * sequence_length_q + l) * num_heads_q + hq) * head_dim + d);
 }
 uint K_index(uint b, uint l, uint hkv, uint d)
 { 
@@ -54,7 +54,7 @@ uint K_index(uint b, uint l, uint hkv, uint d)
 }
 uint AttnWeights_index(uint b, uint hq, uint i, uint j)
 { 
-    return ((((b * num_heads_q + hq) * sequence_length_k) + i) * sequence_length_k + j);
+    return ((((b * num_heads_q + hq) * sequence_length_q) + i) * sequence_length_k + j);
 }
 uint V_index(uint b, uint l, uint hkv, uint d)
 { 
@@ -101,7 +101,7 @@ void QKVProj(uint3 id : SV_DispatchThreadID)
 }
 
 #pragma kernel ComputeAttentionScores
-[numthreads(32, 32, 1)]
+[numthreads(4, 32, 4)]
 void ComputeAttentionScores(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= sequence_length_q || id.y >= sequence_length_k)
@@ -119,14 +119,14 @@ void ComputeAttentionScores(uint3 id : SV_DispatchThreadID)
     float dot = 0.0f;
     for (uint d = 0; d < head_dim; ++d)
     {
-        dot += Q[Q_index(b, id.y, hq, d)] * K[K_index(b, id.x, hkv, d)];
+        dot += Q[Q_index(b, id.x, hq, d)] * K[K_index(b, id.y, hkv, d)];
     }
-    AttentionWeights[AttnWeights_index(b, hq, id.y, id.x)] = dot * scale;
+    AttentionWeights[AttnWeights_index(b, hq, id.x, id.y)] = dot * scale;
 }
 
 
 #pragma kernel AttendValues
-[numthreads(32, 32, 1)]
+[numthreads(64, 4, 4)]
 void AttendValues(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= head_dim || id.y >= sequence_length_q)
@@ -153,7 +153,7 @@ void AttendValues(uint3 id : SV_DispatchThreadID)
 
 
 #pragma kernel OProj
-[numthreads(1, 8, 32)]
+[numthreads(1, 4, 32)]
 void OProj(uint3 id : SV_DispatchThreadID)
 {
     // Matrix multiplication: AttendedValues [B, L, num_heads_q * head_dim] * W_O [inner_embedding_dim, embedding_dim] = O [B, L, embedding_dim]

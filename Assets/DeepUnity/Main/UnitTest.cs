@@ -40,7 +40,7 @@ namespace DeepUnity.Tutorials
 
         }
         Gemma3ForCausalLM gemma_model;
-        GemmaTokenizerFast gemma_tokenizer;
+        Gemma3TokenizerFast gemma_tokenizer;
 
         private void Start()
         {
@@ -85,7 +85,7 @@ namespace DeepUnity.Tutorials
                 };
             
             Benckmark.Start();
-            var tokenizer = new Qwen2TokenizerFast("Assets/DeepUnity/Tokenizers/Qwen2TokenizerFast.json");
+            var tokenizer = new Qwen3TokenizerFast("Assets/DeepUnity/Tokenizers/Qwen2TokenizerFast.json");
             
             string inpu = tokenizer.ApplyChatTemplate(conversation);
             print(inpu);
@@ -170,7 +170,7 @@ namespace DeepUnity.Tutorials
         }
         private void TestTokenizer()
         {
-            var tokenizer = new Qwen2TokenizerFast();
+            var tokenizer = new Qwen3TokenizerFast();
             var enc = tokenizer.Encode("Hello there martin, here's your special delight zone!");
             print(enc);
             print(tokenizer.Decode(enc.Item1)[0]);
@@ -178,7 +178,7 @@ namespace DeepUnity.Tutorials
         private void TestGemmaTokenizer()
         {
             string str = "Hello there martin, here's your special delight zone!";
-            var tokenizer = new GemmaTokenizerFast();
+            var tokenizer = new Gemma3TokenizerFast();
             var enc = tokenizer.Encode(str);
            
             // print(tokenizer.token2id.ElementAt(993));

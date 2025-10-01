@@ -56,7 +56,7 @@ namespace DeepUnity.Tutorials
         public void SetDefaultHP()
         {
             Utils.Random.Seed = 0;
-            model.config.trainer = TrainerType.VPG;
+            // model.config.trainer = TrainerType.VPG;
             model.config.actorLearningRate = 1e-3f;
             model.config.criticLearningRate = 1e-3f;
             model.config.batchSize = 128;
