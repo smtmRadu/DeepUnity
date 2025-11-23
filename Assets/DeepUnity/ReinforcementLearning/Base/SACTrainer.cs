@@ -37,11 +37,11 @@ namespace DeepUnity.ReinforcementLearning
 
             // Init optimizers
             const float QnetsL2Reg = 0.0F;
-            if(optimizer_states == null)
+            if (optimizer_states == null)
             {
                 optim_q1q2 = new AdamW(model.q1Network.Parameters().Concat(model.q2Network.Parameters()).ToArray(), lr: hp.criticLearningRate, weight_decay: -QnetsL2Reg);
-                optim_mu = new AdamW(model.muNetwork.Parameters(), hp.actorLearningRate);
-                optim_sigma = new AdamW(model.sigmaNetwork.Parameters(), hp.actorLearningRate);
+                optim_mu = new AdamW(model.muNetwork.Parameters(), lr:hp.actorLearningRate);
+                optim_sigma = new AdamW(model.sigmaNetwork.Parameters(), lr:hp.actorLearningRate);
             }
             else
             {
@@ -161,44 +161,49 @@ namespace DeepUnity.ReinforcementLearning
         {
             Tensor sPrime = Tensor.Concat(null, batch.Select(x => x.nextState).ToArray());
 
-            // Here actually you don't have to squash the action and correct the tanh, but anyways.
-            Tensor aTildePrime, probsPi;     // ã => actions newly sampled from πθ(•|s) (unsquashed)  (B, CONTINUOUS_ACTIONS)
-            model.ContinuousEval(sPrime, out aTildePrime, out probsPi);
+            Tensor u_prime, probsPi;
+            model.ContinuousEval(sPrime, out u_prime, out probsPi);
 
-            Tensor logProbsPi = probsPi.Log().Sum(-1) - (2.0f * (MathF.Log(2.0F) - aTildePrime - (2.0f * aTildePrime).Softplus())).Sum(-1);
-            aTildePrime = aTildePrime.Tanh();
-            Tensor pair_sPrime_aTildePrime = StateActionPair(sPrime, aTildePrime);
-            Tensor Qtarg1_sPrime_aTildePrime = q1TargNetwork.Predict(pair_sPrime_aTildePrime); // (B, 1)
-            Tensor Qtarg2_sPrime_aTildePrime = q2TargNetwork.Predict(pair_sPrime_aTildePrime); // (B, 1)
+            // Compute log π(a'|s'):
+            // log π = Σ log N(u|μ,σ) - Σ log(1 - tanh²(u))
 
+            Tensor logProbsPi = probsPi.Log().Sum(-1, keepDim: true) - (2.0f * (MathF.Log(2.0f) - u_prime - (-2.0f * u_prime).Softplus())).Sum(-1, keepDim: true); ;
+
+            Tensor a_prime = u_prime.Tanh();
+            Tensor pair_sPrime_aPrime = StateActionPair(sPrime, a_prime);
+            Tensor Qtarg1 = q1TargNetwork.Predict(pair_sPrime_aPrime);
+            Tensor Qtarg2 = q2TargNetwork.Predict(pair_sPrime_aPrime);
 
             Parallel.For(0, batch.Length, b =>
             {
-                // y(r,s',d) = r + Ɣ(1 - d)[min(Q1t(s',ã'), Q2t(s',ã')) - αlogπθ(ã'|s')]
-
                 float r = batch[b].reward[0];
                 float d = batch[b].done[0];
-                float Qt1_sa = Qtarg1_sPrime_aTildePrime[b, 0];
-                float Qt2_sa = Qtarg2_sPrime_aTildePrime[b, 0];
-                float logPi = logProbsPi[b];
-                float _y = r + hp.gamma * (1f - d) * (MathF.Min(Qt1_sa, Qt2_sa) - hp.alpha * logPi);
+                float Qt1 = Qtarg1[b, 0];
+                float Qt2 = Qtarg2[b, 0];
+                float logPi = logProbsPi[b, 0];
+
+                // Target: y = r + γ(1-d)[min(Q₁,Q₂) - α·log π]
+                float _y = r + hp.gamma * (1f - d) * (MathF.Min(Qt1, Qt2) - hp.alpha * logPi);
 
                 batch[b].q_target = Tensor.Constant(_y);
             });
 
             y = Tensor.Concat(null, batch.Select(x => x.q_target).ToArray());
         }
+
         private void UpdateQFunctions(Tensor states, Tensor raw_continuous_actions, Tensor Q_targets)
         {
             model.q1Network.RequiresGrad = true;
             model.q2Network.RequiresGrad = true;
-            // Update Q functions          
-            // ∇φ = (Qφ(s,a) - y(r,s',d)^2
-            Tensor state_actionPair = StateActionPair(states, raw_continuous_actions.Tanh());
+
+            // raw_continuous_actions should be UNSQUASHED actions from replay buffer
+            // Squash them for Q-network input
+            Tensor actions_squashed = raw_continuous_actions.Tanh();
+            Tensor state_actionPair = StateActionPair(states, actions_squashed);
+
             Tensor Q1_s_a = model.q1Network.Forward(state_actionPair);
             Tensor Q2_s_a = model.q2Network.Forward(state_actionPair);
 
-            
             Loss q1Loss = Loss.MSE(Q1_s_a, Q_targets);
             Loss q2Loss = Loss.MSE(Q2_s_a, Q_targets);
             criticLoss = (q1Loss.Item + q2Loss.Item) / 2;
@@ -208,108 +213,120 @@ namespace DeepUnity.ReinforcementLearning
             model.q2Network.Backward(q2Loss.Grad * 0.5f);
             optim_q1q2.Step();
         }
+
+
         private void UpdatePolicy(Tensor states)
         {
             model.q1Network.RequiresGrad = false;
             model.q2Network.RequiresGrad = false;
-            // For Appendix C.
-            // log πθ(a|s) = log μ(u|s) - log (1 - tanh^2(u))
-            // ⊙·····························································⊙
-            // ãθ(s) is a sample from πθ(•|s), which is differentiable wrt θ via the reparametrization trick.
-            // ãθ(s,ξ) = tanh(μθ(s) + σθ(s) ⊙ ξ), where ξ ~ N(0, 1)
-
-            // ã' => actions newly sampled from πθ(•|s)
-            // ãθ(s,ξ) = tanh(μθ(s) + σθ(s) ⊙ ξ), where ξ ~ N(0, 1) => actions newly sampled from πθ(•|s) using the reparametrization trick, which is differentiable wrt θ via the reparametrization trick.
-
-            // u = mu + sigma * ksi
 
             int batch_size = states.Size(0);
             Tensor aTildeS, u, mu, sigma, ksi;
             model.ContinuousForward(states, out mu, out sigma);
-            ksi = Tensor.RandomNormal(sigma.Shape);
 
-            // ãθ(s) = tanh(u)
+            // 1. SAFETY: Even with Softplus, sigma can be near-zero (e.g. 1e-7), 
+            // which causes Log(sigma) to explode to -16. Clamp it.
+            sigma = sigma.Clip(1e-6f, 10f);
+
+            ksi = Tensor.RandomNormal(sigma.Shape);
             u = mu + sigma * ksi;
             aTildeS = u.Tanh();
             int D = aTildeS.Size(-1);
 
-            // https://en.wikipedia.org/wiki/Multivariate_normal_distribution // corresponding density with infinite support
-            Tensor muDist = Tensor.Pow(
-                                MathF.Sqrt(MathF.Pow(2f * MathF.PI, D)) *
-                                sigma.Prod(-1, true), -1)
+            // 2. NUMERICALLY STABLE LOG-PROB CALCULATION
+            // Instead of calculating 'muDist' (linear prob) and Logging it, compute Log directly.
+            // log N(u|mu, sig) = -D/2 * log(2pi) - sum(log(sigma)) - 0.5 * sum(ksi^2)
 
-                            * Tensor.Exp(-1f / 2f * Tensor.Sum(ksi.Pow(2f), -1, true)); // mu_dist represents a scalar value, obtained by passing the u value through the dist check appendix C 
-            // shape (B, 1) // keep shape like this
+            float log2Pi = MathF.Log(2f * MathF.PI);
+            Tensor logSigmaSum = sigma.Log().Sum(-1, keepDim: true);
+            Tensor ksiSqSum = ksi.Pow(2f).Sum(-1, keepDim: true);
 
-            // Check appendix C (21)-------------------------------------------------------------------------------------------------
-            // log πθ(ãθ(s) |s) = log μ(u|s) - E [log (1 - tanh^2(u))] // ### CHANGE
-            // Tensor logPiaTildeS = Tensor.Log(muDist) - Tensor.Sum(Tensor.Log(1f - u.Tanh().Square()), -1, true); // (B, 1) 
+            Tensor logPi_Gaussian = -0.5f * D * log2Pi - logSigmaSum - 0.5f * ksiSqSum;
 
-            // OpenAI spinup implementation (core.py, more numerically stable and equivalent to (21))
-            Tensor logPI_aThetaTildeS = Tensor.Log(muDist) - Tensor.Sum(2.0f * (MathF.Log(2.0f) - u - Tensor.Softplus(-2.0f * u)), -1, true); // (B, 1)
-            //-----------------------------------------------------------------------------------------------------------------------
+            // Tanh Correction (Same as before, this part was correct)
+            Tensor tanh_correction = Tensor.Sum(2.0f * (MathF.Log(2.0f) - u - Tensor.Softplus(-2.0f * u)), -1, true);
 
+            Tensor logPI_aThetaTildeS = logPi_Gaussian - tanh_correction;
+
+            // 3. Compute Q-Loss (Manual Graph Connection)
+            // Since you are doing manual backprop, StateActionPair is fine, 
+            // provided ExtractActionFromStateAction is correct.
             Tensor pair_states_aTildeS = StateActionPair(states, aTildeS);
             Tensor Q1s_aTildeS = model.q1Network.Forward(pair_states_aTildeS);
             Tensor Q2s_aTildeS = model.q2Network.Forward(pair_states_aTildeS);
 
-            // ∇θ min[ Qφ1(s,ãθ(s)), Qφ2(s,ãθ(s))] - αlogπθ(ãθ(s)|s) ]
             Tensor objectiveFunctionJ = Tensor.Minimum(Q1s_aTildeS, Q2s_aTildeS) - hp.alpha * logPI_aThetaTildeS;
             actorLoss = objectiveFunctionJ.Average();
 
-            // Start differentiating the objective loss
-      
-            Tensor tanh_u = aTildeS; // right?:D
+            // -------------------------------------------------------
+            // 4. Manual Differentiation
+            // -------------------------------------------------------
 
-
-
-
-
-            // Firstly, we compute the derivative of minQ1Q2 wrt ãθ(s)
+            // A. Q-Function Gradients
             Tensor dminQ1Q2_dQ1 = Q1s_aTildeS <= Q2s_aTildeS;
             Tensor dminQ1Q2_dQ2 = Tensor.LogicalNot(dminQ1Q2_dQ1);
 
-            Tensor dminQ1Q2_ds_aTildeS = model.q1Network.Backward(dminQ1Q2_dQ1) + model.q2Network.Backward(dminQ1Q2_dQ2); // Take the gradients from both networks (gap-matching)
-
-            // By backwarding the min, we will receive a Tensor of shape (B, S + A), and because we compute the derivative wrt A,
-            // we need only A from this tensor, so we extract it separately
+            // Get Gradient w.r.t Input (State+Action)
+            Tensor dminQ1Q2_ds_aTildeS = model.q1Network.Backward(dminQ1Q2_dQ1) + model.q2Network.Backward(dminQ1Q2_dQ2);
             Tensor dminQ1Q2_daTildeS = ExtractActionFromStateAction(dminQ1Q2_ds_aTildeS, states.Size(-1), aTildeS.Size(-1));
 
-            Tensor dminQ1Q2_du = dminQ1Q2_daTildeS * (1f - tanh_u.Square());
-            Tensor dminQ1Q2_dMu = dminQ1Q2_du;// * 1f;
+            Tensor dminQ1Q2_du = dminQ1Q2_daTildeS * (1f - aTildeS.Pow(2f)); // 1 - tanh^2
+            Tensor dminQ1Q2_dMu = dminQ1Q2_du;
             Tensor dminQ1Q2_dSigma = dminQ1Q2_du * ksi;
 
+            // B. Entropy Gradients
+            // We need gradients of: -alpha * logPi
+            // Note: Your previous 'dAlphaLogPi' calculations were correct in derivation, 
+            // but let's align them with the stable LogPi calculation.
 
+            // Gradient of LogGaussian w.r.t u (Reparameterized) is 0 (as per your correct analysis).
+            // Gradient of LogGaussian w.r.t Sigma (Reparameterized) is -1/sigma.
 
-            // Secondly, we compute the derivative of logπθ(ãθ(s)|s) wrt ãθ(s). Note that we are using Gaussian Distribution squashed, check Appendix C in SAC paper
+            // Derivative of Tanh Correction w.r.t u
+            // d/du [ 2(log2 - u - softplus(-2u)) ] = 2 * ( -1 - sigmoid(-2u)*(-2) ) = -2 + 4*sigmoid(-2u)
+            // This matches your previous 'd2_Log2_u_sp2u_du' logic, but let's reuse the formula for clarity
+            // or keep your efficient implementation:
+            Tensor dCorrection_du = (2f - 2f * Tensor.Exp(2f * u)) / (Tensor.Exp(2f * u) + 1f);
 
-            // So we know that 
-            // MuDist = Multivariate Normal Distribution(u, mu, sigma)
-            // dLogMu/dx = Σ^(-1)(x - mu)
+            // Total d(LogPi)/du = d(LogGaussian)/du - d(Correction)/du
+            // d(LogGaussian)/du = -(u-mu)/sigma^2.
+            Tensor dLogGaussian_du = -ksi / sigma;
 
-            // log πθ(a|s) = log μ(u|s) - Σlog(1 - tanh^2(u)) (with tanh correction) (Appendix C (21) in SAC original paper)
-            // ∇ log πθ(a|s) ([wrt. μ & 𝜎])= dlog μ(u|s)/du - dlog (1 - tanh^2(u))/du = (u - mu)/𝜎^2 - (-2 * tanh(u) * sech^2(u) / (1 - tanh^2(u)))
+            Tensor dLogPi_du = dLogGaussian_du - dCorrection_du;
 
-            Tensor dLogMuDist_du = (u - mu) / sigma.Pow(2f); // https://observablehq.com/@herbps10/distributions-and-their-gradients
-            // Tensor dLog_1mTanh2u_du = -2f * tanh_u * u.Sech().Pow(2f) / (1f - tanh_u.Pow(2f)); // Wolfram Alpha? maybe..
-            /// ### Numerically stable formula gradient (core.py, more numerically stable equivalent to (21)). Solved the so hard problem proposed by the openai developers in code
-            Tensor d2_Log2_u_sp2u_du = (2f - 2f * Tensor.Exp(2f * u)) / (Tensor.Exp(2f * u) + 1f);
+            // C. Combine Gradients
+            // We want to MAXIMIZE J.
+            // dJ/dTheta = dQ/dTheta - alpha * dLogPi/dTheta
 
-            Tensor dAlphaLogPi_aTildeS_s_du = hp.alpha * (dLogMuDist_du - d2_Log2_u_sp2u_du);
-            Tensor dAlphaLogPiaTildeS_s_dMu = dAlphaLogPi_aTildeS_s_du; // * 1f;
-            Tensor dAlphaLogPiaTildeS_s_dSigma = dAlphaLogPi_aTildeS_s_du * ksi;
+            // For Mu:
+            // dQ/dMu = dQ/du * 1
+            // dLogPi/dMu (Total) = dLogPi/du * 1 + Partial_Mu(LogGaussian)
+            // Partial_Mu(LogGaussian) = (u-mu)/sigma^2 = ksi/sigma.
+            // Total dLogPi/dMu = (-ksi/sigma - dCorrection_du) + ksi/sigma = -dCorrection_du.
 
-            Tensor dJ_dMu = dminQ1Q2_dMu - dAlphaLogPiaTildeS_s_dMu;
+            Tensor dJ_dMu = dminQ1Q2_dMu - hp.alpha * (-dCorrection_du);
+
+            // For Sigma:
+            // dQ/dSigma = dQ/du * ksi
+            // dLogPi/dSigma (Total) = dLogPi/du * ksi + Partial_Sigma(LogGaussian)
+            // Partial_Sigma(LogGaussian) = -1/sigma + (u-mu)^2/sigma^3 = -1/sigma + ksi^2/sigma.
+            // Total dLogPi/dSigma = (-ksi/sigma - dCorrection_du)*ksi + (-1/sigma + ksi^2/sigma)
+            //                     = -ksi^2/sigma - dCorrection_du*ksi - 1/sigma + ksi^2/sigma
+            //                     = -dCorrection_du*ksi - 1/sigma.
+
+            Tensor dJ_dSigma = dminQ1Q2_dSigma - hp.alpha * (-dCorrection_du * ksi - 1f / sigma);
+
+            // 5. Step (Ascent)
+            // If optimizer minimizes (theta = theta - grad), we pass -dJ.
             optim_mu.ZeroGrad();
             model.muNetwork.Backward(-dJ_dMu);
             optim_mu.Step();
 
-            Tensor dJ_dSigma = dminQ1Q2_dSigma - dAlphaLogPiaTildeS_s_dSigma;
             optim_sigma.ZeroGrad();
             model.sigmaNetwork.Backward(-dJ_dSigma);
             optim_sigma.Step();
-
         }
+
         public void UpdateTargetNetworks()
         {
             Tensor[] phi1 = model.q1Network.Parameters().Select(x => x.param).ToArray();

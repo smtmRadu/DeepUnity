@@ -1,6 +1,6 @@
 namespace DeepUnity
 {
-    namespace Gemma3Modelling
+    namespace Gemma3Modeling
     {
         public enum GemmaLayerType
         {
@@ -15,7 +15,7 @@ namespace DeepUnity
                 PAD_IDX = 0,
                 EOS_IDX = 1,
                 BOS_IDX = 2,
-                VOCAB_SIZE = 262144,
+                VOCAB_SIZE = 262144 ,
                 HIDDEN_SIZE = 640,
                 MLP_INTERMEDIATE_SIZE = 2048,
                 NUM_LAYERS = 18,
@@ -32,6 +32,9 @@ namespace DeepUnity
                 QUERY_PRE_ATTENTION_SCALAR = 256,
                 ATTN_EXPANSION_FACTOR = 1.6f;
 
+            public static bool
+                TIE_EMBEDDING = true,
+                USE_BIDIRECTIONAL_ATTENTION = false;
             // 5:1 ratio
             public static GemmaLayerType[] layer_types = new GemmaLayerType[]
             {
@@ -54,8 +57,6 @@ namespace DeepUnity
                 GemmaLayerType.SlidingWindowAttention,
                 GemmaLayerType.FullAttention,
             }; 
-            public static bool
-                TIE_EMBEDDING = true;
         }
     }
 }

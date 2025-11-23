@@ -1,5 +1,3 @@
-using DeepUnity.Gemma3Modelling;
-using DeepUnity.Modules;
 
 namespace DeepUnity
 {
@@ -23,7 +21,7 @@ namespace DeepUnity
                     hidden_size: Gemma3Config.HIDDEN_SIZE,
                     intermediate_size: Gemma3Config.MLP_INTERMEDIATE_SIZE,
                     params_path + $"/layer_{layer_idx}");
-                this.self_attn = new Gemma3GQA(embed_dim: Gemma3Config.HIDDEN_SIZE,
+                    this.self_attn = new Gemma3GQA(embed_dim: Gemma3Config.HIDDEN_SIZE,
                     num_heads_q: Gemma3Config.HEADS_Q,
                     num_heads_kv: Gemma3Config.HEADS_KV,
                     expansion_factor: Gemma3Config.ATTN_EXPANSION_FACTOR,
@@ -31,7 +29,7 @@ namespace DeepUnity
                     sliding_window: Gemma3Config.layer_types[layer_index] == GemmaLayerType.SlidingWindowAttention ? Gemma3Config.SLIDING_WINDOW : -1,
                     query_pre_attention_scalar:Gemma3Config.QUERY_PRE_ATTENTION_SCALAR,
                     softcap:Gemma3Config.ATTN_LOGIT_SOFTCAPPING,
-                    weight_init: InitType.Zeros,
+                    is_causal:Gemma3Config.USE_BIDIRECTIONAL_ATTENTION,
                     rope: rope,
                     layer_params_path: params_path + $"/layer_{layer_idx}");
                 input_layernorm = new Gemma3RMSNorm(

@@ -4,7 +4,7 @@ namespace DeepUnity
 {
     /// <summary>
     /// Displays a button inspector that executes a public method. 
-    /// Usage: Place [Button("_Name of the Method_")] attribute over any field of the class.
+    /// Usage: Place [Button("Name_of_the_Method</Name>")] attribute over any field of the class.
     /// </summary>
     public class ButtonAttribute : PropertyAttribute
     {

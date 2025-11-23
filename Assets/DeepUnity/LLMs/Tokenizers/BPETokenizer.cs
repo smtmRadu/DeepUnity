@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing.Printing;
 using System.IO;
 using System.Linq;
@@ -18,11 +19,12 @@ namespace DeepUnity
     }
     public abstract class BPETokenizer
     {
+        protected int BOS_TOKEN_ID;
         protected int EOS_TOKEN_ID;
         protected int PAD_TOKEN_ID;
 
         protected TrieNode token2id_trie;
-        
+
         public Dictionary<string, int> token2id = new();
         public Dictionary<int, string> id2token = new();
         protected int _maxTokenLength;
@@ -50,14 +52,16 @@ namespace DeepUnity
                 // Sync loading
                 string content = File.ReadAllText(path_to_vocab_json);
                 ProcessContent(content);
-            }      
+            }
         }
 
         public async Task LoadAsync(string path_to_vocab_json)
         {
+            Stopwatch sw = Stopwatch.StartNew();
+
             string content = await Task.Run(() => File.ReadAllText(path_to_vocab_json));
             await Task.Run(() => ProcessContent(content));
-            ConsoleMessage.Info("Tokenizer loaded async");
+            ConsoleMessage.Info($"Tokenizer loaded async ({(sw.ElapsedMilliseconds / 1000).ToString("0.00")} s)");
         }
 
         private void ProcessContent(string content)
@@ -87,7 +91,7 @@ namespace DeepUnity
 
                         if (int.TryParse(valuePart, out int tokenId))
                         {
-                            string token = tokenSpan.ToString();
+                            string token = UnescapeJsonString(tokenSpan.ToString());
                             token2id[token] = tokenId;
                             id2token[tokenId] = token;
                         }
@@ -96,20 +100,58 @@ namespace DeepUnity
 
                 span = lineEnd == -1 ? ReadOnlySpan<char>.Empty : span.Slice(lineEnd + 1);
             }
-            // var keys = id2token.Keys.ToList();
-            // for (int i = 0; i < keys.Count; i++)
-            // {
-            //     if(i != keys[i])
-            //     {
-            //         Debug.Log(i); 
-            //         break;
-            //     }
-            // 
-            // }
-            //Debug.Log(id2token.Keys.ToCommaSeparatedString());
-            //Debug.Log(token2id.Values.ToCommaSeparatedString());
             BuildTrie();
-            
+        }
+
+        private string UnescapeJsonString(string str)
+        {
+            if (string.IsNullOrEmpty(str)) return str;
+
+            var sb = new StringBuilder(str.Length);
+            for (int i = 0; i < str.Length; i++)
+            {
+                if (str[i] == '\\' && i + 1 < str.Length)
+                {
+                    switch (str[i + 1])
+                    {
+                        case 'n': sb.Append('\n'); i++; break;
+                        case 'r': sb.Append('\r'); i++; break;
+                        case 't': sb.Append('\t'); i++; break;
+                        case '\\': sb.Append('\\'); i++; break;
+                        case '"': sb.Append('"'); i++; break;
+                        case '/': sb.Append('/'); i++; break;
+                        case 'b': sb.Append('\b'); i++; break;
+                        case 'f': sb.Append('\f'); i++; break;
+                        case 'u': // Unicode escape like \u2581
+                            if (i + 5 < str.Length)
+                            {
+                                string hex = str.Substring(i + 2, 4);
+                                if (int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out int code))
+                                {
+                                    sb.Append((char)code);
+                                    i += 5;
+                                }
+                                else
+                                {
+                                    sb.Append(str[i]);
+                                }
+                            }
+                            else
+                            {
+                                sb.Append(str[i]);
+                            }
+                            break;
+                        default:
+                            sb.Append(str[i]);
+                            break;
+                    }
+                }
+                else
+                {
+                    sb.Append(str[i]);
+                }
+            }
+            return sb.ToString();
         }
 
         private void BuildTrie()
@@ -146,7 +188,7 @@ namespace DeepUnity
         /// <param name="max_length"></param>
         /// <returns><b>input_ids</b> and <b>attention_mask</b> tensors</returns>
         /// <exception cref="NotImplementedException"></exception>
-        public (Tensor, Tensor) Encode(List<string> inputs, bool add_special_tokens=true, bool truncation = false, int max_length = 512, string padding_side = "right")
+        public (Tensor, Tensor) Encode(List<string> inputs, bool add_special_tokens = true, bool truncation = false, int max_length = 512, string padding_side = "right")
         {
             if (!IsReady)
             {
@@ -164,7 +206,7 @@ namespace DeepUnity
                 max_length = Math.Max(max_length, enc.Item1.Size(-1));
             });
 
-            Tensor input_ids_tensor = Tensor.Fill(value:PAD_TOKEN_ID, inputs.Count, max_length);
+            Tensor input_ids_tensor = Tensor.Fill(value: PAD_TOKEN_ID, inputs.Count, max_length);
             Tensor attention_masks_tensor = Tensor.Zeros(inputs.Count, max_length);
 
             for (int b = 0; b < inputs.Count; b++)
@@ -175,7 +217,7 @@ namespace DeepUnity
                     for (int l = 0; l < elem_length; l++)
                     {
                         input_ids_tensor[b, l] = input_ids[b][l];
-                        attention_masks_tensor[b, l] = attn_masks[b][l];     
+                        attention_masks_tensor[b, l] = attn_masks[b][l];
                     }
                 }
                 else if (padding_side == "left")
@@ -186,10 +228,10 @@ namespace DeepUnity
                         input_ids_tensor[b, i + left_pad] = input_ids[b][i];
                         attention_masks_tensor[b, i + left_pad] = attn_masks[b][i];
                     }
-                }    
+                }
                 else
                     throw new NotImplementedException();
-               
+
             }
 
 
@@ -204,7 +246,7 @@ namespace DeepUnity
                 for (int i = 0; i < input_ids.Size(-1); i++)
                 {
                     if (id2token.ContainsKey(i))
-                        sb.Append(id2token[(int)input_ids[i]]);     
+                        sb.Append(id2token[(int)input_ids[i]]);
                     else
                         sb.Append("<UNK>");
                 }

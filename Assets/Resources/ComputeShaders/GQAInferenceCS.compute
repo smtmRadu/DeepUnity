@@ -5,7 +5,6 @@ RWStructuredBuffer<float> QKV;
 RWStructuredBuffer<float> Q;
 RWStructuredBuffer<float> K;
 RWStructuredBuffer<float> AttentionWeights;
-
 RWStructuredBuffer<float> V;
 RWStructuredBuffer<float> AttendedValues; // B, sequence_length_v, inner_embedding dim
 
@@ -76,7 +75,7 @@ uint W_O_index(uint e, uint ie)
 // ---------------------------------------------------------------------------
 
 #pragma kernel QKVProj
-[numthreads(1, 8, 32)]
+[numthreads(1, 16, 32)]
 void QKVProj(uint3 id : SV_DispatchThreadID)
 {
     // Matrix multiplication: X [B, L, E] * W_QKV [qkv_proj_dim, E] = QKVProj [B, L, qkv_proj_dim]
@@ -100,8 +99,34 @@ void QKVProj(uint3 id : SV_DispatchThreadID)
     QKV[QKV_index(batch_idx, seq_idx, proj_idx)] = sum;
 }
 
+#pragma kernel QKVProj1Vec
+[numthreads(256, 1, 1)]
+void QKVProj1Vec(uint3 id : SV_DispatchThreadID)
+{
+    // Matrix multiplication: X [B, L, E] * W_QKV [qkv_proj_dim, E] = QKVProj [B, L, qkv_proj_dim]
+    
+    uint batch_idx = id.z;
+    uint seq_idx = id.y;
+    uint proj_idx = id.x;
+    
+    // Bounds checking
+    if (batch_idx >= batch_size || seq_idx >= sequence_length_q || proj_idx >= qkv_proj_dim)
+        return;
+    
+    float sum = 0.0f;
+    
+    // Sum over embedding dimension
+    for (uint e = 0; e < embedding_dim; e++)
+    {
+        sum += X[X_index(batch_idx, seq_idx, e)] * W_QKV[W_QKV_index(proj_idx, e)];
+    }
+    
+    QKV[QKV_index(batch_idx, seq_idx, proj_idx)] = sum;
+}
+
+
 #pragma kernel ComputeAttentionScores
-[numthreads(4, 32, 4)]
+[numthreads(1, 32, 4)]
 void ComputeAttentionScores(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= sequence_length_q || id.y >= sequence_length_k)
@@ -125,8 +150,39 @@ void ComputeAttentionScores(uint3 id : SV_DispatchThreadID)
 }
 
 
+#pragma kernel CausalMaskAndSoftmax
+[numthreads(1,1,1)]
+void CausalMaskAndSoftmax(uint3 id : SV_DispatchThreadID)
+{
+    // for now we don't to it.
+    return;
+    
+    // apply mask
+    for (uint b = 0; b < batch_size; b++)
+    {
+        for (uint h_q = 0; h_q < num_heads_q; h_q++)
+        {
+            for (uint l_q = 0; l_q < sequence_length_q; l_q++)
+            {
+                for (uint l_k = 0; l_k < sequence_length_k; l_k++)
+                {
+                    uint index = AttnWeights_index(b, h_q, l_q, l_k);
+                    AttentionWeights[index] = AttentionWeights[index]; //Mask[index];
+
+                }
+            }
+
+        }
+
+    }
+    
+    // apply (rolling) softmask
+
+}
+
+
 #pragma kernel AttendValues
-[numthreads(64, 4, 4)]
+[numthreads(128, 1, 4)]
 void AttendValues(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= head_dim || id.y >= sequence_length_q)

@@ -4,8 +4,6 @@
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using state-of-the-art algorithms.
 
-[COMING SOON] - LLMs Inference inside Unity (Gemma3-270M, Qwen3-0.6B)
-
 #### Run your first DeepUnity script
 ```csharp
 using UnityEngine;
@@ -75,7 +73,7 @@ public class ChatWithGemma : MonoBehaviour
         model = new Gemma3ForCausalLM();
 
         StartCoroutine(model.Generate(
-            prompt: "Explain quantum entanglement in just 5 words", 
+            prompt: "Explain quantum entanglement in just 5 words.", 
             onTokenGenerated: (x) => {  display.text += x;  },
             temperature:temperature, 
             top_p:top_p))

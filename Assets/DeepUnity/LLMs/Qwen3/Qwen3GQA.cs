@@ -33,6 +33,12 @@ namespace DeepUnity.Modules
         [SerializeField] public RotaryPositionalEmbeddings rope;
         public ComputeBuffer W_QKV;
         public ComputeBuffer W_O;
+        public ComputeBuffer input_buffer;
+        public ComputeBuffer qkv_proj_buffer;
+        public ComputeBuffer q_buffer;
+        public ComputeBuffer attended_values_buffer;
+        public ComputeBuffer output_buffer;
+
         [SerializeField] public Qwen3RMSNorm q_norm;
         [SerializeField] public Qwen3RMSNorm k_norm;
         [SerializeField] private Softmax softmax;
@@ -93,7 +99,6 @@ namespace DeepUnity.Modules
             int? num_heads_kv = null,
             float expansion_factor = 1f,
             float qk_norm_eps = 1e-6f,
-            InitType weight_init = InitType.LeCun_Normal,
             RotaryPositionalEmbeddings rope = null,
             string layer_params_path = null)
         {
@@ -137,8 +142,13 @@ namespace DeepUnity.Modules
         private Qwen3GQA() { }
         ~Qwen3GQA()
         {
-            W_O.Release();
-            W_QKV.Release();
+            W_O?.Release();
+            W_QKV?.Release();
+            input_buffer?.Release();
+            qkv_proj_buffer?.Release();
+            output_buffer?.Release();
+            attended_values_buffer?.Release();
+            q_buffer?.Release();
         }
 
         private async Task LoadWeightsAsync(string path)
@@ -166,6 +176,50 @@ namespace DeepUnity.Modules
             IsInitialized = true;
             // ConsoleMessage.Info($"Loaded {path}/self_attn");
         }
+        public void PrepareInputBuffer(int x_count)
+        {
+            if (input_buffer == null || input_buffer.count != x_count)
+            {
+                input_buffer?.Release();
+                input_buffer = new ComputeBuffer(x_count, 4, ComputeBufferType.Structured);
+            }
+        }
+        public void PrepareQKVProjBuffer(int B, int L)
+        {
+            if (qkv_proj_buffer == null || qkv_proj_buffer.count != B * L * qkv_proj_dim)
+            {
+                qkv_proj_buffer?.Release();
+                qkv_proj_buffer = new ComputeBuffer(B * L * qkv_proj_dim, 4, ComputeBufferType.Structured);
+            }
+
+        }
+
+        public void PrepareQBuffer(int q_count)
+        {
+            if (q_buffer == null || q_buffer.count != q_count)
+            {
+                q_buffer?.Release();
+                q_buffer = new ComputeBuffer(q_count, 4, ComputeBufferType.Structured);
+            }
+        }
+        public void PrepareAttendedValuesBuffer(int B, int L)
+        {
+            if (attended_values_buffer == null || attended_values_buffer.count != B * L * this.inner_embedding_dim)
+            {
+                attended_values_buffer?.Release();
+                attended_values_buffer = new ComputeBuffer(B * L * this.inner_embedding_dim, 4, ComputeBufferType.Structured);
+            }
+        }
+        public void PrepareOutputBuffer(int B, int L)
+        {
+            if (output_buffer == null || output_buffer.count != B * L * this.embedding_dim)
+            {
+                output_buffer?.Release();
+                output_buffer = new ComputeBuffer(B * L * this.embedding_dim, 4, ComputeBufferType.Structured);
+            }
+        }
+
+
         public Tensor Predict(Tensor x)
         {
             if (x.Rank > 3 || x.Rank < 2)
@@ -176,30 +230,35 @@ namespace DeepUnity.Modules
 
             // ========================================================== QKV PROJ =========================================================================
             ComputeShader cs = DeepUnityMeta.GQAInferenceCS;
-            int qkvKernel = cs.FindKernel("QKVProj");
+            int qkvKernel = cs.FindKernel(B == 1 && L_x == 1 ? "QKVProj1Vec" : "QKVProj");
             cs.SetBuffer(qkvKernel, "W_QKV", W_QKV);
 
-            ComputeBuffer xBuff = new ComputeBuffer(x.Count(), 4, ComputeBufferType.Structured);
-            xBuff.SetData(x.ToArray());
+            PrepareInputBuffer(x.Count());
+            input_buffer.SetData(x.ToArray());
             // Debug.Log("X (gemma):" + x);
-            cs.SetBuffer(qkvKernel, "X", xBuff);
+            cs.SetBuffer(qkvKernel, "X", input_buffer);
 
-            ComputeBuffer qkvBuff = new ComputeBuffer(B * L_x * qkv_proj_dim, 4, ComputeBufferType.Structured);
-            cs.SetBuffer(qkvKernel, "QKV", qkvBuff);
+            PrepareQKVProjBuffer(B: B, L: L_x);
+            cs.SetBuffer(qkvKernel, "QKV", qkv_proj_buffer);
 
             cs.SetInt("batch_size", B);
             cs.SetInt("sequence_length_q", L_x);
             cs.SetInt("embedding_dim", embedding_dim);
             cs.SetInt("qkv_proj_dim", qkv_proj_dim);
 
-            cs.Dispatch(qkvKernel,
-                B,
-                (L_x + 7) / 8,
-                (qkv_proj_dim + 31) / 32);
+            if (B == 1 && L_x == 1)
+                cs.Dispatch(qkvKernel,
+                            (qkv_proj_dim + 255) / 256,
+                            L_x,
+                            B);
 
-            Tensor QKV = batched ? Tensor.Constant(qkvBuff, B, L_x, qkv_proj_dim) : Tensor.Constant(qkvBuff, L_x, qkv_proj_dim);
-            qkvBuff.Release();
-            xBuff.Release();
+            else
+                cs.Dispatch(qkvKernel,
+                    B,
+                    (L_x + 15) / 16,
+                    (qkv_proj_dim + 31) / 32);
+
+            Tensor QKV = batched ? Tensor.Constant(qkv_proj_buffer, B, L_x, qkv_proj_dim) : Tensor.Constant(qkv_proj_buffer, L_x, qkv_proj_dim);
 
             // UnityEngine.Debug.Log("QKV (gemma):" + QKV);
             //Debug.Log(QKV);
@@ -280,12 +339,12 @@ namespace DeepUnity.Modules
                         {
                             for (int h = 0; h < this.num_heads_q; h++)
                             {
-                                Q[b, l, h, e] *= (1f + q_norm.gamma[e]);
+                                Q[b, l, h, e] *= q_norm.gamma[e];
                             }
 
                             for (int h = 0; h < this.num_heads_kv; h++)
                             {
-                                K[b, l, h, e] *= (1f + k_norm.gamma[e]);
+                                K[b, l, h, e] *= k_norm.gamma[e];
                             }
                         }
                     }
@@ -322,10 +381,12 @@ namespace DeepUnity.Modules
 
             Tensor scores = ComputeAttentionScoresGPU(Q, K, scale: scaling); // B, Hq,  L_x, L_k
 
+
             // Debug.Log("scores:" + scores);
             Tensor scores_masked = mask == null ? scores : scores + mask;// B, Hq, L_x, L_k
             Tensor attention_weights = softmax.Predict(scores_masked);  // B, Hq, L_x, L_k
 
+            // Debug.Log("Attention weights (gemma): " + attention_weights);
             // ============================================================ V projection ==================================================================
             {
                 int Hq = attention_weights.Size(batched ? 1 : 0);
@@ -345,19 +406,19 @@ namespace DeepUnity.Modules
                 vBuf.SetData(V.ToArray());
                 cs.SetBuffer(attendValueskernel, "V", vBuf);
 
-                int attendedValuesCount = B * L_v * this.inner_embedding_dim;
-                ComputeBuffer attndValsBuff = new ComputeBuffer(attendedValuesCount, 4);
-                cs.SetBuffer(attendValueskernel, "AttendedValues", attndValsBuff);
+                PrepareAttendedValuesBuffer(B: B, L: L_q);
+                cs.SetBuffer(attendValueskernel, "AttendedValues", attended_values_buffer);
 
                 cs.SetInt("batch_size", B);
                 cs.SetInt("sequence_length_v", L_v);
+                cs.SetInt("sequence_length_q", L_q);
                 cs.SetInt("num_heads_q", Hq);
                 cs.SetInt("num_heads_kv", Hkv);
                 cs.SetInt("head_dim", D);
 
-                int gx = (D + 31) / 32;
-                int gy = (L_q + 31) / 32;
-                int gz = B * Hq;
+                int gx = (D + 127) / 128;
+                int gy = L_q;
+                int gz = (B * Hq + 3) / 4;
                 cs.Dispatch(attendValueskernel, gx, gy, gz);
                 awBuf.Release();
                 vBuf.Release();
@@ -367,19 +428,17 @@ namespace DeepUnity.Modules
 
                 int oProjKernel = cs.FindKernel("OProj");
 
-                cs.SetBuffer(oProjKernel, "AttendedValues", attndValsBuff);
+                cs.SetBuffer(oProjKernel, "AttendedValues", attended_values_buffer);
                 cs.SetBuffer(oProjKernel, "W_O", W_O);
                 cs.SetInt("inner_embedding_dim", inner_embedding_dim);
 
-                ComputeBuffer oBuff = new ComputeBuffer(B * L_q * embedding_dim, 4, ComputeBufferType.Structured);
-                cs.SetBuffer(oProjKernel, "O", oBuff);
+                //ComputeBuffer oBuff = new ComputeBuffer(B * L_q * embedding_dim, 4, ComputeBufferType.Structured);
+                PrepareOutputBuffer(B: B, L: L_q);
+                cs.SetBuffer(oProjKernel, "O", output_buffer);
                 cs.Dispatch(oProjKernel, B, (L_q + 3) / 4, (embedding_dim + 31) / 32);
 
 
-                Tensor output = batched ? Tensor.Constant(oBuff, B, L_q, embedding_dim) : Tensor.Constant(oBuff, L_q, embedding_dim);
-
-                attndValsBuff.Release();
-                oBuff.Release();
+                Tensor output = batched ? Tensor.Constant(output_buffer, B, L_q, embedding_dim) : Tensor.Constant(output_buffer, L_q, embedding_dim);
                 return output;
             }
 
@@ -392,21 +451,29 @@ namespace DeepUnity.Modules
 
             if (is_batched)
             {
-                for (int b = 0; b < mask_shape[0]; b++)
-                {
-                    for (int l = 0; l < mask_shape[1]; l++)
-                    {
-                        for (int h = 0; h < mask_shape[2]; h++)
-                        {
-                            for (int e = 0; e < mask_shape[3]; e++)
-                            {
-                                if (is_causal && h < e)
-                                    mask[b, l, h, e] = -1e10f;
+                int B = mask_shape[0];
+                int num_heads = mask_shape[1];
+                int L_q = mask_shape[2];  // Query sequence length
+                int L_k = mask_shape[3];  // Key sequence length
 
+                for (int b = 0; b < B; b++)
+                {
+                    for (int h = 0; h < num_heads; h++)
+                    {
+                        for (int q_pos = 0; q_pos < L_q; q_pos++)
+                        {
+                            for (int k_pos = 0; k_pos < L_k; k_pos++)
+                            {
+                                // Causal mask: query position can only attend to key positions up to (cache_len + q_pos)
+                                // When decoding with cache, L_k = cache_len + L_q
+                                // So query at position q_pos can attend to keys at positions [0, cache_len + q_pos]
+                                int current_q_abs_pos = (L_k - L_q) + q_pos;  // Absolute position of this query token
+
+                                if (is_causal && k_pos > current_q_abs_pos)
+                                    mask[b, h, q_pos, k_pos] = -1e10f;
 
                                 if (attention_mask is not null)
-                                    mask[b, l, h, e] += (1f - attention_mask[b, l]) * -1e25f;
-
+                                    mask[b, h, q_pos, k_pos] += (1f - attention_mask[b, k_pos]) * -1e25f;
                             }
                         }
                     }
@@ -414,19 +481,23 @@ namespace DeepUnity.Modules
             }
             else
             {
-                for (int l = 0; l < mask_shape[0]; l++)
+                int num_heads = mask_shape[0];
+                int L_q = mask_shape[1];  // Query sequence length
+                int L_k = mask_shape[2];  // Key sequence length
+
+                for (int h = 0; h < num_heads; h++)
                 {
-                    for (int h = 0; h < mask_shape[1]; h++)
+                    for (int q_pos = 0; q_pos < L_q; q_pos++)
                     {
-                        for (int e = 0; e < mask_shape[2]; e++)
+                        for (int k_pos = 0; k_pos < L_k; k_pos++)
                         {
-                            if (is_causal && h < e)
-                                mask[l, h, e] = -1e10f;
+                            int current_q_abs_pos = (L_k - L_q) + q_pos;
 
-
+                            if (is_causal && k_pos > current_q_abs_pos)
+                                mask[h, q_pos, k_pos] = -1e10f;
 
                             if (attention_mask is not null)
-                                mask[l, h, e] += (1f - attention_mask[l]) * -1e25f;
+                                mask[h, q_pos, k_pos] += (1f - attention_mask[k_pos]) * -1e25f;
                         }
                     }
                 }
@@ -434,8 +505,10 @@ namespace DeepUnity.Modules
 
             return mask;
         }
-        public static Tensor ComputeAttentionScoresGPU(Tensor Q, Tensor K, float scale)
+        public Tensor ComputeAttentionScoresGPU(Tensor Q, Tensor K, float scale)
         {
+            //Debug.Log("Q:" + Q);
+            //Debug.Log("K:" + K);
             bool batched = Q.Rank == 4;
             int B = batched ? Q.Size(0) : 1;
             int L_q = Q.Size(-3);
@@ -447,9 +520,9 @@ namespace DeepUnity.Modules
             ComputeShader cs = DeepUnityMeta.GQAInferenceCS;
             int kernel = cs.FindKernel("ComputeAttentionScores");
 
-            ComputeBuffer qBuf = new ComputeBuffer(Q.Count(), 4);
-            qBuf.SetData(Q.ToArray());
-            cs.SetBuffer(kernel, "Q", qBuf);
+            PrepareQBuffer(Q.Count());
+            q_buffer.SetData(Q.ToArray());
+            cs.SetBuffer(kernel, "Q", q_buffer);
 
             ComputeBuffer kBuf = new ComputeBuffer(K.Count(), 4);
             kBuf.SetData(K.ToArray());
@@ -467,16 +540,15 @@ namespace DeepUnity.Modules
             cs.SetInt("head_dim", D);
             cs.SetFloat("scale", scale);
 
-            int gx = (L_q + 31) / 32;
+            int gx = L_q;
             int gy = (L_k + 31) / 32;
-            int gz = B * Hq;
+            int gz = (B * Hq + 3) / 4;
             cs.Dispatch(kernel, gx, gy, gz);
 
             Tensor scores = batched ?
                 Tensor.Constant(awBuf, B, Hq, L_q, L_k) :
                 Tensor.Constant(awBuf, Hq, L_q, L_k);
 
-            qBuf.Release();
             kBuf.Release();
             awBuf.Release();
 

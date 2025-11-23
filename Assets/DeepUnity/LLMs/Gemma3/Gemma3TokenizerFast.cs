@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace DeepUnity
 {
@@ -20,6 +22,9 @@ namespace DeepUnity
             {
                 throw new ArgumentException("Tokenizer loaded asynchronously and not yet initialized. Check 'tokenizer.IsReady' before using the tokenizer.");
             }
+
+            // input = Regex.Escape(input);
+
             if (add_special_tokens)
                 input = "<bos>" + input;
 

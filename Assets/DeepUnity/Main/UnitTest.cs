@@ -93,15 +93,6 @@ namespace DeepUnity.Tutorials
             Benckmark.Stop();
         }
 
-        private void TestGemma()
-        {
-            var gemma_model = new Gemma3ForCausalLM();
-            print(gemma_model.ParameterCount());
-
-            Tensor input_ids = Tensor.Ones(1, 1);
-            Tensor attention_mask = null;// Tensor.Ones(1, 1);
-            gemma_model.Predict(input_ids, attention_mask);
-        }
         private void TestEmbedding()
         {
             Embedding emb = new Embedding(30, 4, pad_idx:0);

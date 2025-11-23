@@ -1,0 +1,4 @@
+FACTIONS
+1. The Sunforged Dominion: A militaristic human empire devoted to the Sun God, Solarin.
+2. The Verdant Circle: A druidic alliance of elves and spirits protecting nature.
+3. The Ashen Covenant: A cult seeking to resurrect the Void Serpent.

@@ -1,0 +1,8 @@
+MECHANICS
+Combat:
+- Turn based.
+- Strength determines melee damage.
+- Agility influences dodge chance.
+
+Magic:
+- Four schools: Radiance, Shadow, Nature, Arcana.

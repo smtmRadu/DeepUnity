@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using UnityEngine;
 
 namespace DeepUnity
 {
@@ -50,7 +49,7 @@ namespace DeepUnity
                         }
                     }
                 }
-                else if(x.Rank == 3)
+                else if (x.Rank == 3)
                 {
                     int bat_siz = x.Size(-3);
                     int seq_len = x.Size(-2);
@@ -66,9 +65,10 @@ namespace DeepUnity
                         }
 
                     }
-                    
-                }
 
+                }
+                else
+                    throw new ShapeException($"RMSNorm Input has rank={x.Rank}");
                 return y;
 
             }

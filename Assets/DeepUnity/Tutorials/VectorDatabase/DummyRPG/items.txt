@@ -1,0 +1,10 @@
+ITEMS
+Item: Blade of Dawnsong
+Type: Sword
+Rarity: Legendary
+Effect: Emits radiant energy harmful to undead.
+
+Item: Whisperleaf Amulet
+Type: Trinket
+Rarity: Rare
+Effect: Allows communication with forest spirits.

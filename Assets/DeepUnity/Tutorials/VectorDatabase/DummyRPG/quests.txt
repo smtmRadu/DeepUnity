@@ -1,0 +1,11 @@
+QUESTS
+Quest: The Lost Prince
+Summary: Prince Kael has vanished under mysterious circumstances.
+Steps:
+1. Investigate the royal chambers.
+2. Question witnesses in the capital.
+3. Explore the Whispering Woods.
+4. Confront the Ashen Covenant cell.
+
+Quest: The Cursed Mill
+Summary: A windmill near Riverwood is said to be haunted.

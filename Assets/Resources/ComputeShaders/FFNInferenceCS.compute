@@ -1,0 +1,157 @@
+StructuredBuffer<float> weights; // up + down (joined: up weights [H×I] then down weights [I×H])
+RWStructuredBuffer<float> input; // input/output buffer
+RWStructuredBuffer<float> intermediate; // intermediate activations
+
+int activation_type; // -1 for linear, 0 for silu, 1 for gelu
+int hidden_size;
+int intermediate_size;
+int batch_size;
+int seq_len;
+
+float silu(float x)
+{
+    return x / (1.0f + exp(-x));
+}
+
+float safe_tanh(float x)
+{
+    float a = abs(x);
+    float e = exp(-2.0f * a);
+    return sign(x) * ((1.0f - e) / (1.0f + e));
+}
+
+float gelu(float x)
+{
+    return 0.5f * x * (1.0f + safe_tanh(0.79788456080286535587989211986876f * (x + 0.044715f * x * x * x)));
+}
+
+#pragma kernel Up
+[numthreads(64, 8, 1)]
+void Up(uint3 id : SV_DispatchThreadID)
+{
+    const uint i_idx = id.x;
+    const uint l_idx = id.y;
+    const uint b_idx = id.z;
+
+    if (i_idx >= intermediate_size || l_idx >= seq_len || b_idx >= batch_size)
+        return;
+
+    const uint H = hidden_size;
+    const uint I = intermediate_size;
+    const uint up_off = 0u; // Up projection starts at 0
+
+    const uint input_base = ((b_idx * seq_len) + l_idx) * H;
+    
+    float u = 0.0f;
+    
+    for (uint k = 0; k < H; ++k)
+    {
+        const float x = input[input_base + k];
+        u += x * weights[up_off + i_idx * H + k];
+    }
+
+    const uint inter_idx = ((b_idx * seq_len) + l_idx) * I + i_idx;
+    
+    if (activation_type == -1)
+        intermediate[inter_idx] = u;
+    else if (activation_type == 0)
+        intermediate[inter_idx] = silu(u);
+    else if (activation_type == 1)
+        intermediate[inter_idx] = gelu(u);
+    else
+        intermediate[inter_idx] = u; // Pass-through for unknown type
+}
+
+#pragma kernel Down
+[numthreads(64, 8, 1)]
+void Down(uint3 id : SV_DispatchThreadID)
+{
+    const uint h_idx = id.x;
+    const uint l_idx = id.y;
+    const uint b_idx = id.z;
+
+    if (h_idx >= hidden_size || l_idx >= seq_len || b_idx >= batch_size)
+        return;
+
+    const uint H = hidden_size;
+    const uint I = intermediate_size;
+    const uint down_off = H * intermediate_size; // Down weights start after up weights
+
+    const uint inter_base = ((b_idx * seq_len) + l_idx) * I;
+    
+    float acc = 0.0f;
+    
+    for (uint i = 0; i < intermediate_size; ++i)
+    {
+        const float z = intermediate[inter_base + i];
+        acc += z * weights[down_off + h_idx * I + i];
+    }
+
+    const uint out_idx = ((b_idx * seq_len) + l_idx) * H + h_idx;
+    input[out_idx] = acc;
+}
+
+// 1D vector variants
+#pragma kernel Up1Vec
+[numthreads(256, 1, 1)]
+void Up1Vec(uint3 id : SV_DispatchThreadID)
+{
+    const uint i_idx = id.x;
+    const uint l_idx = id.y;
+    const uint b_idx = id.z;
+
+    if (i_idx >= intermediate_size || l_idx >= seq_len || b_idx >= batch_size)
+        return;
+
+    const uint H = hidden_size;
+    const uint I = intermediate_size;
+    const uint up_off = 0u;
+
+    const uint input_base = ((b_idx * seq_len) + l_idx) * H;
+    
+    float u = 0.0f;
+    
+    for (uint k = 0; k < H; ++k)
+    {
+        const float x = input[input_base + k];
+        u += x * weights[up_off + i_idx * H + k];
+    }
+
+    const uint inter_idx = ((b_idx * seq_len) + l_idx) * I + i_idx;
+    
+    if (activation_type == -1)
+        intermediate[inter_idx] = u;
+    else if (activation_type == 0)
+        intermediate[inter_idx] = silu(u);
+    else if (activation_type == 1)
+        intermediate[inter_idx] = gelu(u);
+    else
+        intermediate[inter_idx] = u; // Pass-through for unknown type
+}
+
+#pragma kernel Down1Vec
+[numthreads(320, 1, 1)]
+void Down1Vec(uint3 id : SV_DispatchThreadID) 
+{
+    const uint h_idx = id.x;
+    const uint l_idx = id.y;
+    const uint b_idx = id.z;
+
+    if (h_idx >= hidden_size || l_idx >= seq_len || b_idx >= batch_size)
+        return;
+
+    const uint down_off = hidden_size * intermediate_size;
+
+    const uint inter_base = ((b_idx * seq_len) + l_idx) * intermediate_size;
+    
+    float acc = 0.0f;
+    
+    for (uint i = 0; i < intermediate_size; ++i)
+    {
+        const float z = intermediate[inter_base + i];
+        acc += z * weights[down_off + h_idx * intermediate_size + i];
+    }
+
+    const uint out_idx = ((b_idx * seq_len) + l_idx) * hidden_size + h_idx;
+    input[out_idx] = acc;
+}

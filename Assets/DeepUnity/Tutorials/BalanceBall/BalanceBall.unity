@@ -432,8 +432,8 @@ MonoBehaviour:
   archType: 0
   numLayers: 2
   hidUnits: 32
-  activation: 2
-  model: {fileID: 11400000, guid: b62f45e3af8818149a025c57c80fbcfd, type: 2}
+  activation: 0
+  model: {fileID: 11400000, guid: e6b56fd7d99640447a70f1a91b603e93, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0

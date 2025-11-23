@@ -1,6 +1,4 @@
 using System.Threading.Tasks;
-using Unity.VisualScripting;
-using UnityEngine;
 
 namespace DeepUnity
 {
@@ -72,7 +70,8 @@ namespace DeepUnity
                     }
 
                 }
-
+                else
+                    throw new ShapeException($"RMSNorm Input has rank={x.Rank}");
                 return y;
 
             }

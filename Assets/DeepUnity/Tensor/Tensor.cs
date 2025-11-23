@@ -1,11 +1,13 @@
-﻿using System;
+﻿using DeepUnity.Sensors;
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
-using System.Globalization;
+using UnityEngine.XR;
 
 namespace DeepUnity
 {
@@ -1815,7 +1817,51 @@ namespace DeepUnity
             }
             return y;
         }
+        /// <summary>
+        /// Computes the cosine similarity between two tensors along the specified axis.
+        /// Cosine similarity is defined as: (x · y) / (||x|| * ||y|| + ε)
+        /// </summary>
+        /// <param name="x">First input tensor.</param>
+        /// <param name="y">Second input tensor (must have same shape as x).</param>
+        /// <param name="axis">The dimension along which to compute cosine similarity. Default is -1 (last dimension).</param>
+        /// <param name="eps">Small value to avoid division by zero. Default is 1e-8.</param>
+        /// <returns>A tensor with the same shape as input squeezed on the specified axis.</returns>
+        /// <exception cref="ArgumentException">Thrown if shapes don't match or axis is invalid.</exception>
+        public static Tensor CosineSimilarity(Tensor x, Tensor y, int axis = -1, float eps = 1e-8f)
+        {
+            if (!x.shape.SequenceEqual(y.shape))
+                throw new ArgumentException($"x and y must have identical shapes. Received x: ({x.shape.ToCommaSeparatedString()}), y: ({y.shape.ToCommaSeparatedString()})");
 
+            HandleAxis(x, ref axis);
+            Dim dimIndex = AxisToDim(x, axis);
+
+            // Compute dot product along axis
+            Tensor dot = Zeros(x.shape);
+            int batch = x.Batch;
+            int channels = x.Channels;
+            int height = x.Height;
+            int width = x.Width;
+
+            // Element-wise multiply
+            for (int i = 0; i < x.data.Length; i++)
+            {
+                dot.data[i] = x.data[i] * y.data[i];
+            }
+
+            Tensor numerator = Sum(dot, axis, keepDim: true);
+
+            Tensor xSquared = x.Select(v => v * v);
+            Tensor ySquared = y.Select(v => v * v);
+
+            Tensor xNorm = Sqrt(Sum(xSquared, axis, keepDim: true));
+            Tensor yNorm = Sqrt(Sum(ySquared, axis, keepDim: true));
+
+            Tensor denominator = xNorm * yNorm + eps;
+            Tensor result = numerator / denominator;
+
+            Squeeze_(result, axis);
+            return result;
+        }
         #endregion Special
 
 
@@ -1840,13 +1886,9 @@ namespace DeepUnity
         /// <exception cref="ArgumentException"></exception>
         public static Tensor Reshape(Tensor tensor, params int[] newShape)
         {
-            int count = 1;
-            foreach (var item in newShape)
-            {
-                count *= item;
-            }
+            int count = newShape.Aggregate((x, z) => x * z);
             if (count != tensor.data.Length)
-                throw new ArgumentException($"The shape ({tensor.shape.ToCommaSeparatedString()}) cannot be reshaped to ({newShape.ToCommaSeparatedString()}).");
+                throw new ArgumentException($"The shape ({tensor.shape.ToCommaSeparatedString()}) cannot be reshaped to ({newShape.ToCommaSeparatedString()}) because {String.Join(" x ", newShape)} = {count}.");
 
             // if new shape is broader than the original shape
             Tensor result = new Tensor(newShape);
@@ -4318,6 +4360,93 @@ namespace DeepUnity
 
             return result;
         }
+
+        /// <summary>
+        /// If input is a vector (1-D tensor), then returns a 2-D square tensor with the elements of input as the diagonal. <br></br>
+        /// If input is a matrix (2-D tensor), then returns a 1-D tensor with the diagonal elements of input.<br></br>
+        /// </summary>
+        /// <param name="tensor"></param>
+        /// <returns></returns>
+        public static Tensor Diag(Tensor tensor, int diagonal=0)
+        {
+            if (tensor == null)
+                throw new ArgumentNullException(nameof(tensor));
+
+            if (tensor.Rank == 1)
+            {
+                int N = tensor.Size(-1);
+                int absDiag = Math.Abs(diagonal);
+                int size = N + absDiag;
+                Tensor result = Zeros(size, size);
+
+                if (diagonal >= 0)
+                {
+                    for (int i = 0; i < N; i++)
+                    {
+                        result[i, i + diagonal] = tensor[i];
+                    }
+                }
+                else
+                {
+                    int offset = -diagonal;
+                    for (int i = 0; i < N; i++)
+                    {
+                        result[i + offset, i] = tensor[i];
+                    }
+                }
+
+                return result;
+            }
+            else if (tensor.Rank == 2)
+            {
+                int H = tensor.Height;
+                int W = tensor.Width;
+
+                int diagLength;
+                if (diagonal == 0)
+                {
+                    diagLength = Math.Min(H, W);
+                }
+                else if (diagonal > 0)
+                {
+                    diagLength = Math.Min(H, W - diagonal);
+                }
+                else
+                {
+                    diagLength = Math.Min(H + diagonal, W);
+                }
+
+                if (diagLength <= 0)
+                {
+                    return Zeros(0);
+                }
+
+                Tensor result = Zeros(diagLength);
+                if (diagonal >= 0)
+                {
+                    for (int i = 0; i < diagLength; i++)
+                    {
+                        result[i] = tensor[i, i + diagonal];
+                    }
+                }
+                else
+                {
+                    int offset = -diagonal;
+                    for (int i = 0; i < diagLength; i++)
+                    {
+                        result[i] = tensor[i + offset, i];
+                    }
+                }
+
+                return result;
+            }
+            else
+            {
+                throw new ArgumentException($"Diag expects a 1D or 2D tensor, but received {tensor.Rank}D tensor with shape ({tensor.Shape.ToCommaSeparatedString()}).");
+            }
+
+
+        }
         #endregion Statics
 
 
@@ -4542,9 +4671,12 @@ namespace DeepUnity
         public Tensor Slice(int axis, int startInclusive, int endExclusive, int step)
         {
             return Slice(this, axis, startInclusive, endExclusive, step);
+        } 
+        public Tensor Diag(int diagonal)
+        {
+            return Diag(this,  diagonal);
         }
         #endregion Instance
-
 
         #region LINQ
         public Tensor Select(Func<float, float> selector)
@@ -4884,7 +5016,7 @@ namespace DeepUnity
 
         // inside use
         /// <summary>
-        /// Checks if the axis is out of range or not. Also transforms a negative axis to a positive one.
+        /// Checks if the axis is out of range or not. Also transforms a negative axis to a positive one. The value of the axis remains the same if positive and passes.
         /// </summary>
         /// <param name="tensor"></param>
         /// <param name="axis"></param>

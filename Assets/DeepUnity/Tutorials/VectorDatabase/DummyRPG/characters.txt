@@ -1,0 +1,10 @@
+CHARACTERS
+Name: King Aldren Thalor
+Race: Human
+Traits: Wise, strategic, burdened by prophecy
+Backstory: Once a knight, now the reluctant ruler of the Sunforged Dominion.
+
+Name: Elyra Moonshadow
+Race: Elf
+Traits: Agile, quiet, distrustful
+Backstory: A ranger of the Verdant Circle haunted by visions of a burning forest.

@@ -29,7 +29,6 @@ namespace DeepUnity
                     expansion_factor: Qwen3Modeling.Qwen3Config.ATTN_EXPANSION_FACTOR,
                     qk_norm_eps: Qwen3Modeling.Qwen3Config.RMS_EPS,
                     rope: rope,
-                    weight_init: InitType.Zeros,
                     layer_params_path: params_path + $"/layer_{layer_idx}");
                 input_layernorm = new Qwen3RMSNorm(
                     num_features: Qwen3Modeling.Qwen3Config.HIDDEN_SIZE,

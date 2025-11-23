@@ -1,5 +1,4 @@
 using DeepUnity.Activations;
-using DeepUnity.Gemma3Modelling;
 using DeepUnity.Modules;
 using System;
 using System.Collections;
@@ -57,7 +56,7 @@ namespace DeepUnity
                     Qwen3Modeling.Qwen3Config.PAD_IDX,
                     init: InitType.Zeros);
 
-                lm_head = new ComputeBuffer(Gemma3Config.VOCAB_SIZE * Gemma3Config.HIDDEN_SIZE, 4, ComputeBufferType.Structured);
+                lm_head = new ComputeBuffer(Qwen3Config.VOCAB_SIZE * Qwen3Config.HIDDEN_SIZE, 4, ComputeBufferType.Structured);
 
                 _ = LoadEmbeddingWeightsAsync(params_path, lm_head);
 

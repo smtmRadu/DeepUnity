@@ -1,0 +1,5 @@
+GEOGRAPHY
+Regions:
+1. The Golden Plains – homeland of the Sunforged Dominion.
+2. The Whispering Woods – enchanted forest inhabited by spirits.
+3. The Ashen Wastes – corrupted lands touched by Void magic.

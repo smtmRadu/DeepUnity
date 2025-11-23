@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -370,6 +370,132 @@ namespace DeepUnity
 
             return weights;
         }
+
+
+        public static class LinAlg
+        {
+            /// <summary>
+            /// Principal Component Analysis (PCA) reduction.
+            /// </summary>
+            /// <param name="X">2-D tensor of shape (N, D) – N samples, D features.</param>
+            /// <param name="k">Number of principal components to keep.</param>
+            /// <param name="center">Whether to remove the column-wise mean before PCA.</param>
+            /// <returns>2-D tensor of shape (N, k) – reduced data.</returns>
+            public static Tensor PCA(Tensor X, int k, bool center = true)
+            {
+                throw new NotImplementedException();
+                // if (X.Rank != 2)
+                //     throw new ArgumentException("PCA expects a 2-D tensor (N, D).");
+                // if (k <= 0 || k > X.Size(-1))
+                //     throw new ArgumentException("k must be in [1, D].");
+                // 
+                // Tensor mean = null;
+                // if (center)
+                //     X = X - X.Mean(axis: 0, keepDim: true).Expand(0, X.Size(0));                           
+                // 
+                // // 2. Compute the covariance matrix
+                // //    C = (Xᵀ · X) / (N-1)   ->  (D, D)
+                // Tensor cov = Tensor.MatMul(X.T(), X) / (X.Size(-2) - 1);
+                // 
+                // // 3. Eigendecomposition of the symmetric covariance matrix
+                // var (eigVals, eigVecs) = Eigh(cov);   // both (D, D)
+                
+
+                // TILL HERE IS CORRECT
+
+                // // 4. Sort eigen-stuff in descending order
+                // var idx = Tensor.Sort(eigVals, axis: 0, ascending: false);
+                // 
+                // 
+                // 
+                // eigVals = eigVals[idx.ToArray().Select(i => (int)i)];
+                // eigVecs = eigVecs.Slice(1, 0, eigVecs.Size(-1))           // keep all rows
+                //                  .Gather(idx.ToArray().Select(i => (int)i).ToArray(), axis: 1);
+                // 
+                // // 5. Pick top-k eigenvectors  (D, k)
+                // Tensor W = eigVecs.Slice(1, 0, k);
+                // 
+                // // 6. Project data  (N, D) · (D, k)  ->  (N, k)
+                // Tensor reduced = Tensor.MatMul(X, W);
+                // 
+                // // 7. Optional: add the mean back (not usual for pure dimensionality reduction)
+                // // if (center) reduced = reduced + mean · W;
+                // 
+                // return reduced;
+            }
+
+            /// <summary>
+            /// Classic Jacobi eigendecomposition for a real symmetric matrix.
+            /// Returns (eigenvalues, eigenvectors) both shaped (D, D).
+            /// </summary>
+            private static (Tensor, Tensor) Eigh(Tensor A, int maxSwp = 15)
+            {
+                int n = A.Size(-2);
+                Tensor V = Tensor.Eye(n);
+                Tensor D = Tensor.Identity(A);   
+
+                for (int swp = 0; swp < maxSwp; swp++)
+                {
+                    bool changed = false;
+                    for (int p = 0; p < n - 1; p++)
+                    {
+                        for (int q = p + 1; q < n; q++)
+                        {
+                            float apq = D[p, q];
+                            if (MathF.Abs(apq) < 1e-12f) continue;
+
+                            changed = true;
+                            float app = D[p, p];
+                            float aqq = D[q, q];
+
+                            // compute Jacobi rotation angle
+                            float phi = 0.5f * MathF.Atan2(2f * apq, app - aqq);
+                            float c = MathF.Cos(phi);
+                            float s = MathF.Sin(phi);
+
+                            // rotate D
+                            for (int i = 0; i < n; i++)
+                            {
+                                float dip = D[i, p];
+                                float diq = D[i, q];
+                                D[i, p] = c * dip - s * diq;
+                                D[i, q] = s * dip + c * diq;
+                                if (i != p && i != q)
+                                {
+                                    float dpi = D[p, i];
+                                    float dqi = D[q, i];
+                                    D[p, i] = c * dpi - s * dqi;
+                                    D[q, i] = s * dpi + c * dqi;
+                                }
+                            }
+                            D[p, p] = c * c * app + s * s * aqq - 2f * c * s * apq;
+                            D[q, q] = s * s * app + c * c * aqq + 2f * c * s * apq;
+                            D[p, q] = D[q, p] = 0f;
+
+                            // accumulate V
+                            for (int i = 0; i < n; i++)
+                            {
+                                float vip = V[i, p];
+                                float viq = V[i, q];
+                                V[i, p] = c * vip - s * viq;
+                                V[i, q] = s * vip + c * viq;
+                            }
+                        }
+                    }
+                    if (!changed) break;
+                }
+
+                Tensor vals = Tensor.Zeros(n, 1);
+                for (int i = 0; i < n; i++) vals[i, 0] = D[i, i];
+                vals = vals.Flatten();             
+                vals = Tensor.Diag(vals);            
+                return (vals, V);
+            }
+
+        }
+
+
+
 
         /// <summary>
         /// A class that contains all hyberbolic functions

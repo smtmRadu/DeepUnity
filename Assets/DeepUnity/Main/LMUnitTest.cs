@@ -7,21 +7,25 @@ namespace DeepUnity.Tutorials
     {
         // 2 147505 691 => 8132 528 236743 236770 236828 236832
         [SerializeField] private Text display;
+        [SerializeField] private Text paramsDisplay;
         [Multiline]
-        [SerializeField] private string prompt = "Einstein was"; // Einstein was born in 1879 in Ulm, Germany. He was the son of a German physician
+        [SerializeField] private string prompt = "Einstein was born"; // Einstein was born in 1879 in Ulm, Germany. He was the son of a German physician
         [SerializeField] Device device = Device.CPU;
         [SerializeField] int batch_size = 1;
         [SerializeField] int max_completion_tokens = 2;
         [SerializeField] float temperature = 0f;
-        [ViewOnly, SerializeField] bool is_model_ready = false;
-        [ViewOnly, SerializeField] bool is_tokenizer_ready = false;
         Gemma3ForCausalLM model;
-
+        Gemma3ForEmbeddings embeddingModel;
         bool output_once = false;
 
 
-
         private void Start()
+        {
+            GetEmbeddings();
+        }
+
+
+        private void AutoComplete()
         {
             Benckmark.Start();
             model = new Gemma3ForCausalLM();
@@ -29,14 +33,31 @@ namespace DeepUnity.Tutorials
 
             display.text = prompt;
             // model.Predict(Tensor.Constant(new float[] { 2f, 4f }));
-            StartCoroutine(model.Generate(prompt, onTokenGenerated:(x) =>
+            StartCoroutine(model.Generate(prompt, onTokenGenerated: (x) =>
             {
                 display.text += x;
+                paramsDisplay.text = $"Inference speed: {model.TokensPerSecond.ToString("0.0")} tok/s";
+
                 // Debug.Log(x);
             },
-            max_new_tokens:max_completion_tokens, temperature:temperature));
+            max_new_tokens: max_completion_tokens, temperature: temperature));
+
+
         }
 
+        private void GetEmbeddings()
+        {
+            embeddingModel = new Gemma3ForEmbeddings();
+
+            StartCoroutine(embeddingModel.EncodeQuery(prompt, onEmbeddingReceived: (x) =>
+            {
+                print(x);
+            }));
+
+            // SO the dense forward in final FFN is not working
+            // Also implement PCA and make cool vizualization for embeddings
+            // Embed some documents as examples
+        }
 
         // private void Update()
         // {

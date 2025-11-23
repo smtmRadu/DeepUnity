@@ -17,6 +17,7 @@ namespace DeepUnity
 
         internal readonly static ComputeShader GQAInferenceCS;
         internal readonly static ComputeShader GLUInferenceCS;
+        internal readonly static ComputeShader FFNInferenceCS;
         internal readonly static ComputeShader LmHeadInferenceCS;
 
         internal readonly static int THREADS_NUM = 256;
@@ -37,6 +38,7 @@ namespace DeepUnity
 
                 GQAInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/GQAInferenceCS");
                 GLUInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/GLUInferenceCS");
+                FFNInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/FFNInferenceCS");
                 LmHeadInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/LmHeadInferenceCS");
   
                 if (TensorCS == null)
