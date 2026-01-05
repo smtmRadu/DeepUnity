@@ -44,32 +44,38 @@ namespace DeepUnity.Gemma3Modeling
         [SerializeField] public Gemma3RMSNorm k_norm;
         [SerializeField] private Softmax softmax;
 
-        private bool _buildKVCache = false;  // Backing field
+        private bool _buildKVCache = false;  // Backing field (if kv are cached)
+        private int _cachedTokensNum = 0;
 
+        public int CachedTokensNum => _cachedTokensNum;
         public bool BuildKVCache
         {
             set
             {
                 if (value)
                 {
-                    CachedTokensNum = 0;
                     KCache = new List<Tensor>();
                     VCache = new List<Tensor>();
                     _buildKVCache = true;
+                    _cachedTokensNum = 0;
                 }
                 else
                 {
-                    CachedTokensNum = 0;
                     KCache = null;
                     VCache = null;
                     _buildKVCache = false;
+                    _cachedTokensNum = -1; // if -1 no caching is allowed
                 }
             }
         }// when build kv cache is ON, Q and K (roped) will be cached and the model must receive one inpu t(B,1,E) at a time (only 1 elem)
 
-        private int CachedTokensNum = 0;
+        
+
+        
+        // NOTE: len(KCache) is not equal to the num cached tokens. There might be concatenated tokens within KCache.
         private List<Tensor> KCache { get; set; } = null; // Rope + Norm
         private List<Tensor> VCache { get; set; } = null;
+
         /// <summary>
         ///  <b>(B, L)</b> or <b>(L)</b>.<br></br>
         /// </summary>
@@ -372,17 +378,17 @@ namespace DeepUnity.Gemma3Modeling
             // =============================================================== RoPE + Caching ==========================================================
             if (_buildKVCache)
             {
-                Q = rope == null ? Q : rope.ApplyRotaryEmbeddings(Q, input_pos: Enumerable.Range(CachedTokensNum, L_x).ToArray(), type: RotaryPositionalEmbeddings.RoPEType.SplitHalf);
-                K = rope == null ? K : rope.ApplyRotaryEmbeddings(K, input_pos: Enumerable.Range(CachedTokensNum, L_x).ToArray(), type: RotaryPositionalEmbeddings.RoPEType.SplitHalf);
+                Q = rope == null ? Q : rope.ApplyRotaryEmbeddings(Q, input_pos: Enumerable.Range(_cachedTokensNum, L_x).ToArray(), type: RotaryPositionalEmbeddings.RoPEType.SplitHalf);
+                K = rope == null ? K : rope.ApplyRotaryEmbeddings(K, input_pos: Enumerable.Range(_cachedTokensNum, L_x).ToArray(), type: RotaryPositionalEmbeddings.RoPEType.SplitHalf);
 
                 KCache.Add(K);
                 VCache.Add(V);
-                CachedTokensNum += L_x;
+                _cachedTokensNum += L_x;
 
                 K = Tensor.Concat(-3, KCache.ToArray()); // and here we merge with the cache.
                 V = Tensor.Concat(-3, VCache.ToArray());
             }
-            else
+            else // NO KV Caching
             {
                 Q = rope == null ? Q : rope.ApplyRotaryEmbeddings(Q);
                 K = rope == null ? K : rope.ApplyRotaryEmbeddings(K);

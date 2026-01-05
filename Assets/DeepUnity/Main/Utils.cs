@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -365,13 +366,26 @@ namespace DeepUnity
         public static float[] ReadWeights(string path, int numWeights)
         {
             float[] weights = new float[numWeights];
-            byte[] bytes = File.ReadAllBytes(path); // read file at once
+            byte[] bytes = System.IO.File.ReadAllBytes(path); // read file at once
             Buffer.BlockCopy(bytes, 0, weights, 0, bytes.Length);
 
             return weights;
         }
 
+        public static string Sha256(string str)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                byte[] bytes = Encoding.UTF8.GetBytes(str);
+                byte[] hash = sha256.ComputeHash(bytes);
 
+                StringBuilder sb = new StringBuilder(hash.Length * 2);
+                foreach (byte b in hash)
+                    sb.Append(b.ToString("x2"));
+
+                return sb.ToString();
+            }
+        }
         public static class LinAlg
         {
             /// <summary>

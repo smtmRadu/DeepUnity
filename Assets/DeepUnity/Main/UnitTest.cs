@@ -44,11 +44,8 @@ namespace DeepUnity.Tutorials
 
         private void Start()
         {
-            Tensor x = Tensor.RandomNormal(100, 100);
-            Softmax sm = new Softmax();
-            Benckmark.Start();
-            sm.Predict(x);
-            Benckmark.Stop();
+            //gemma_tokenizer = new Gemma3TokenizerFast(load_async:false);
+            //Debug.Log(gemma_tokenizer.Encode("Who are you?<start_of_turn>\n", add_special_tokens: false));
             
             //print(gemma_model.ParameterCount());
 

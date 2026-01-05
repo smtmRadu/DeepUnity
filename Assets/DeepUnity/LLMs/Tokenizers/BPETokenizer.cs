@@ -19,9 +19,7 @@ namespace DeepUnity
     }
     public abstract class BPETokenizer
     {
-        protected int BOS_TOKEN_ID;
-        protected int EOS_TOKEN_ID;
-        protected int PAD_TOKEN_ID;
+        public static readonly int PAD_TOKEN_ID = 0;
 
         protected TrieNode token2id_trie;
 

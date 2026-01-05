@@ -1,17 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Text.RegularExpressions;
 
 namespace DeepUnity
 {
     public class Gemma3TokenizerFast : BPETokenizer
     {
+        
+        public static readonly int EOS_TOKEN_ID = 1;
+        public static readonly int BOS_TOKEN_ID = 2;
+        public static readonly int UNK_TOKEN_ID = 3;
+        public static readonly int MASK_TOKEN_ID = 4;
+        public static readonly int START_OF_TURN_TOKEN_ID = 105;
+        public static readonly int END_OF_TURN_TOKEN_ID = 106;
+
         // Assets/DeepUnity/LMMs/Gemma3/GemmaTokenizerFast.json
-        public Gemma3TokenizerFast(string path_to_vocab_file = "Assets/DeepUnity/LLMs/Gemma3/Gemma3TokenizerFast.json", bool load_async=true) : base(path_to_vocab_file, load_async)
+        public Gemma3TokenizerFast(string path_to_vocab_file = "Assets/DeepUnity/LLMs/Gemma3/Gemma3TokenizerFast.json", bool load_async = true) : base(path_to_vocab_file, load_async)
         {
-            EOS_TOKEN_ID = 1;
-            PAD_TOKEN_ID = 0;
+
         }
 
         /// <inheritdoc/>
@@ -22,11 +27,6 @@ namespace DeepUnity
             {
                 throw new ArgumentException("Tokenizer loaded asynchronously and not yet initialized. Check 'tokenizer.IsReady' before using the tokenizer.");
             }
-
-            // input = Regex.Escape(input);
-
-            if (add_special_tokens)
-                input = "<bos>" + input;
 
             int n = input.Length;
             Span<char> text = n <= 32_768 ? stackalloc char[n] : new char[n];
@@ -63,12 +63,23 @@ namespace DeepUnity
                 pos += bestLen;
             }
 
+            float[] input_ids = null;
+            if(add_special_tokens)
+            {
+                input_ids = new float[idCount + 1];
+                input_ids[0] = 2f; // <bos> tokens. Never append special tokens as strings '<bos>' because tokenization might go wrong. It will split a special token in more.
+                for (int i = 0; i < idCount; i++) input_ids[i + 1] = input_ids_buffer[i];
+            }
+            else
+            {
+                input_ids = new float[idCount];
+                for (int i = 0; i < idCount; i++) input_ids[i] = input_ids_buffer[i];
+            }
 
-            float[] input_ids = new float[idCount];
-            for (int i = 0; i < idCount; i++) input_ids[i] = input_ids_buffer[i];
+            
 
             Tensor inputTensor = Tensor.Constant(input_ids);
-            Tensor maskTensor = Tensor.Ones(idCount);
+            Tensor maskTensor = Tensor.Ones(input_ids.Length);
 
             return (inputTensor, maskTensor);
         }
@@ -77,7 +88,19 @@ namespace DeepUnity
         /// <inheritdoc/>
         public override string ApplyChatTemplate(List<Dictionary<string, string>> input, bool add_generation_prompt = true)
         {
-            throw new Exception("Gemma3 270M doesn't support chat template.");
+            throw new NotImplementedException();
+            // template is like so:
+            /*
+              <bos><start_of_turn>user
+              [SYSTEM PROMPT]
+
+              [USER PROMPT]<end_of_turn>
+              <start_of_turn>model
+              [ASSISTANT]<end_of_turn>
+              ...etc
+             
+             
+             */
         }
 
     }

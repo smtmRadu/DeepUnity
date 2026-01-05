@@ -7,11 +7,10 @@ namespace DeepUnity
     public class MobileLLMTokenizerFast : BPETokenizer
     {
 
+        public static readonly int BOS_TOKEN_ID = 1;
+        public static readonly int EOS_TOKEN_ID = 2;
         public MobileLLMTokenizerFast(string path_to_vocab_file = "Assets/DeepUnity/LLMs/MobileLLM/MobileLLMTokenizerFast.json", bool load_async = true) : base(path_to_vocab_file, load_async)
         {
-            BOS_TOKEN_ID = 1;
-            EOS_TOKEN_ID = 2;
-            PAD_TOKEN_ID = -1;
         }
 
         /// <inheritdoc/>
@@ -39,7 +38,7 @@ namespace DeepUnity
             while (pos < n && (!truncation || idCount < max_length))
             {
                 TrieNode cur = token2id_trie;
-                int bestId = PAD_TOKEN_ID;
+                int bestId = -1;
                 int bestLen = 1;
                 int p = pos;
 

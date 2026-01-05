@@ -18,32 +18,45 @@ namespace DeepUnity.Tutorials
         Gemma3ForEmbeddings embeddingModel;
         bool output_once = false;
 
-
-        private void Start()
+        Gemma3TokenizerFast tok = null;
+        public void Update()
         {
-            GetEmbeddings();
-        }
-
-
-        private void AutoComplete()
-        {
-            Benckmark.Start();
-            model = new Gemma3ForCausalLM();
-            Benckmark.Stop($"model init: {model.ParameterCount()}");
-
-            display.text = prompt;
-            // model.Predict(Tensor.Constant(new float[] { 2f, 4f }));
-            StartCoroutine(model.Generate(prompt, onTokenGenerated: (x) =>
+            if (Time.frameCount > 1000)
             {
-                display.text += x;
-                paramsDisplay.text = $"Inference speed: {model.TokensPerSecond.ToString("0.0")} tok/s";
-
-                // Debug.Log(x);
-            },
-            max_new_tokens: max_completion_tokens, temperature: temperature));
-
-
+                
+                if(tok == null)
+                {
+                    tok = new Gemma3TokenizerFast();
+                    Debug.Log("Loading TOkenizer");
+                }
+            }
         }
+
+        // private void Start()
+        // {
+        //     AutoComplete();
+        // }
+        // 
+        // 
+        // private void AutoComplete()
+        // {
+        //     Benckmark.Start();
+        //     model = new Gemma3ForCausalLM();
+        //     Benckmark.Stop($"model init: {model.ParameterCount()}");
+        // 
+        //     display.text = "User:\n" + prompt + "\n\nAssistant:\n";
+        //     // model.Predict(Tensor.Constant(new float[] { 2f, 4f }));
+        //     StartCoroutine(model.Autocomplete("", prompt, onTokenGenerated: (x) =>
+        //     {
+        //         display.text += x;
+        //         paramsDisplay.text = $"Inference speed: {model.TokensPerSecond.ToString("0.0")} tok/s";
+        // 
+        //         // Debug.Log(x);
+        //     },
+        //     max_new_tokens: max_completion_tokens, temperature: temperature));
+        // 
+        // 
+        // }
 
         private void GetEmbeddings()
         {

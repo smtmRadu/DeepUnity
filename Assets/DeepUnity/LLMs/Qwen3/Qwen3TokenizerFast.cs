@@ -7,10 +7,11 @@ namespace DeepUnity
 {
     public class Qwen3TokenizerFast : BPETokenizer
     {
+        public static readonly int EOS_TOKEN_ID = 151643;
+        public new static readonly int PAD_TOKEN_ID = 151643;
         public Qwen3TokenizerFast(string path_to_vocab_file = "Assets/DeepUnity/LLMs/Qwen3TokenizerFast.json") : base(path_to_vocab_file)
         {
-            EOS_TOKEN_ID = 151643;
-            PAD_TOKEN_ID = 151643;
+
         }
 
         /// <inheritdoc/>

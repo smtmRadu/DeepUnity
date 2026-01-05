@@ -13,21 +13,30 @@ namespace DeepUnity.Tutorials
     
     public class VectorDatabase : MonoBehaviour
     {
-        [SerializeField] private ScrollView scrollView;
-        [SerializeField] private GameObject docCard;
         [SerializeField] private List<TextAsset> documents;
         private List<VectorDatabaseNode> nodes;
         private Gemma3ForEmbeddings embedding_gemma;
         [Button("Retrieve")]
         [SerializeField] string query;
         [SerializeField] int top_k;
-
+        private ScrollView scrollView;
 
         private void Awake()
         {
+            var root = GetComponent<UIDocument>().rootVisualElement;
+            root.style.color = Color.white;
+            scrollView = new ScrollView();
+            scrollView.style.flexGrow = 1;
+            scrollView.style.paddingLeft = 8;
+            scrollView.style.paddingRight = 8;
+
+            root.Add(scrollView);
+
             documents = documents.Where(x => x != null).ToList();
             StartCoroutine(Vectorize());
         }
+
+ 
 
         private void Start()
         {
@@ -73,7 +82,7 @@ namespace DeepUnity.Tutorials
                 float[] emb_values = emb_str.Split(", ").Select(x => float.Parse(x)).ToArray();
                 nodes.Add(new VectorDatabaseNode(doc.text, Tensor.Constant(emb_values)));
 
-                Debug.Log(nodes.Last().Embedding);
+                // Debug.Log(nodes.Last().Embedding);
             }
 
         }
@@ -92,25 +101,55 @@ namespace DeepUnity.Tutorials
             yield return embedding_gemma.EncodeQuery(query, onEmbeddingReceived:
             emb => {
 
-                float[] similarities = nodes.Select(x => Tensor.CosineSimilarity(x.Embedding, emb)[0]).ToArray();
-                List<(int, float)> indexed_similarities = new();
-                for (int i = 0; i < similarities.Length; i++)
-                {
-                    indexed_similarities.Add((i,  similarities[i]));
-                }
-
-                List<VectorDatabaseNode> top_k_nodes = new();
+                var ranked = nodes
+                 .Select(node => new
+                 {
+                     Node = node,
+                     Score = Tensor.CosineSimilarity(node.Embedding, emb)[0]
+                 })
+                 .OrderByDescending(x => x.Score)
+                 .Take(top_k)
+                 .ToList();
 
                 scrollView.Clear();
 
-                
-                
+                print(ranked.Count);
+                print(nodes.Count);
+
+                print(ranked[0].Node.Document);
+                foreach (var item in ranked)
+                {
+                    scrollView.Add(CreateDocCard(item.Node.Document, item.Score));
+                }
+
+
             });
 
             
 
         }
+
+        private VisualElement CreateDocCard(string text, float score)
+        {
+            var card = new VisualElement();
+            card.style.marginBottom = 8;
+            card.style.paddingBottom = 6;
+            card.style.borderBottomWidth = 1;
+            card.style.borderBottomColor = Color.gray;
+
+            var scoreLabel = new Label($"Score: {score:F3}");
+            scoreLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+
+            var textLabel = new Label(text);
+            textLabel.style.whiteSpace = WhiteSpace.Normal;
+
+            card.Add(scoreLabel);
+            card.Add(textLabel);
+
+            return card;
+        }
+
     }
-    
+
 
 }
