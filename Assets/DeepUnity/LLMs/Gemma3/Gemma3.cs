@@ -13,6 +13,9 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Assertions;
 
+using System.IO;
+using System.Drawing.Printing;
+
 
 namespace DeepUnity
 {
@@ -29,24 +32,49 @@ namespace DeepUnity
             public bool IsInitialized { get 
                 {
                     if (!IsEmbeddingInitialized)
+                    {
+                        // UnityEngine.Debug.Log("Embedding not initialized");
                         return false;
+                    }
+                        
                     if (!norm.IsInitialized)
+                    {
+                        // UnityEngine.Debug.Log("Norm not initialized");
                         return false;
+                    }
 
                     foreach (var layer in layers)
                     {
                         if(!layer.self_attn.IsInitialized)
+                        {
+                            // UnityEngine.Debug.Log("Self attn not initialized");
                             return false;
+                        }
                         if(!layer.mlp.IsInitialized)
+                        {
+                            // UnityEngine.Debug.Log("mlp not initialized");
                             return false;
+                        }
                         if(!layer.input_layernorm.IsInitialized)
+                        {
+                            // UnityEngine.Debug.Log("input ln not initialized");
                             return false;
+                        }
                         if (!layer.post_attention_layernorm.IsInitialized)
+                        {
+                            // UnityEngine.Debug.Log("post attn ln not initialized");
                             return false;
+                        }
                         if (!layer.pre_feedforward_layernorm.IsInitialized)
+                        {
+                            // UnityEngine.Debug.Log("pre ffn ln not initialized");
                             return false;
-                        if (!layer.post_attention_layernorm.IsInitialized)
+                        }
+                        if (!layer.post_feedforward_layernorm.IsInitialized)
+                        {
+                            // UnityEngine.Debug.Log("post ffn ln not initialized");
                             return false;
+                        }
                     }
                     return true;
                 } 
@@ -108,9 +136,10 @@ namespace DeepUnity
                     string path = files[i];
                     tasks[i] = Task.Run(() => Utils.ReadWeights(path, size));
                 }
-
+                // UnityEngine.Debug.Log("Here1");
                 float[][] results = await Task.WhenAll(tasks);
 
+                // UnityEngine.Debug.Log("Here2");
                 Parallel.For(0, 14, part =>
                 {
                     for (int i = 0; i < results[part].Length; i++)
@@ -173,6 +202,8 @@ namespace DeepUnity
         public float TokensPerSecond { get; private set; }
         public Gemma3ForCausalLM(string params_path= "Assets/DeepUnity/LLMs/Gemma3/params_it", string tokenizer_path = "Assets/DeepUnity/LLMs/Gemma3/Gemma3TokenizerFast.json")
         {
+            if (File.Exists(path))
+                throw new ArgumentException($"Path to the model {params_path} does not exist.");
             this.path = params_path;
             this.vocab_size = Gemma3Config.VOCAB_SIZE;
             this.hidden_size = Gemma3Config.HIDDEN_SIZE;
@@ -336,6 +367,7 @@ namespace DeepUnity
 
             }
         }
+
         
         public Tensor Predict(Tensor input_ids, Tensor attn_mask = null)
         {
@@ -461,32 +493,28 @@ namespace DeepUnity
                 lm_head_output_buffer = new ComputeBuffer(output_buff_size, 4, ComputeBufferType.Structured);
             }
         }
-        public IEnumerator Generate(string prompt, Action<string> onTokenGenerated, int max_new_tokens = 128, float temperature = 1f, int top_k = -1, float top_p = 1f, float min_p = 0)
+        public IEnumerator Generate(Tensor input_ids, Action<string> onTokenGenerated, int max_new_tokens = 128, float temperature = 1f, int top_k = -1, float top_p = 1f, float min_p = 0)
         {
             // Debug.Log("Generating...");
             while (!this.IsReady)
                 yield return new WaitForSeconds(0.01f);
 
-            // Debug.Log("Model Ready");
+            // UnityEngine.Debug.Log("Model Ready");
             while (!tokenizer.IsReady)
                 yield return new WaitForSeconds(0.01f);
-            // Debug.Log("Tokenizer Ready");
+            // UnityEngine.Debug.Log("Tokenizer Ready");
 
             foreach (var item in model.layers)
-            {
                 item.self_attn.BuildKVCache = true;
-            }
-            (Tensor, Tensor) tokenized_prompt = tokenizer.Encode(prompt, add_special_tokens:true);
             yield return null;
 
+            // UnityEngine.Debug.Log("x: " + input_ids);
 
             // UnityEngine.Debug.Log("x: " + tokenized_prompt.Item1);
 
             // forward + lm_head (with frame generation allowed) ============================================================================================================
             Tensor y = null;
             {
-                var input_ids = tokenized_prompt.Item1;
-                Tensor attn_mask = null;
                 int seq_len = input_ids.Size(-1);
                 bool is_batched = input_ids.Rank == 3;
                 int batch_size = is_batched ? input_ids.Size(-3) : 1;
@@ -497,7 +525,7 @@ namespace DeepUnity
                 yield return null;
                 for (int i = 0; i < model.layers.Count; i++) // do not put yield return null between layer modules because you get a strange range of fps (60 to 140) - better just 60
                 {
-                    hid = model.layers[i].Predict(hid, attn_mask);
+                    hid = model.layers[i].Predict(hid, attention_mask:null);
                     yield return null;
                 }
                 hid = model.norm.Predict(hid).Squeeze(-2);
@@ -536,9 +564,11 @@ namespace DeepUnity
             // ============================================================================================================
 
 
-            // Debug.Log("y:" + y);
+            
             Tensor sampled_token_id = SampleToken(y, temperature: temperature, top_k: top_k, top_p: top_p, min_p: min_p);
+            
             string sampled_token_str = tokenizer.Decode(sampled_token_id)[0];
+            
             // Debug.Log("Next token: " + sampled_token_str + $" ({sampled_token_id[0]})");
             onTokenGenerated?.Invoke(sampled_token_str);
             yield return null;
@@ -549,7 +579,7 @@ namespace DeepUnity
                 Stopwatch sw = Stopwatch.StartNew();
                 // forward + lm_head (with frame generation allowed) ============================================================================================================
                 {
-                    var input_ids = sampled_token_id;
+                    input_ids = sampled_token_id;
                     Tensor attn_mask = null;
                     int seq_len = input_ids.Size(-1);
                     bool is_batched = input_ids.Rank == 3;
@@ -596,7 +626,11 @@ namespace DeepUnity
                 // Debug.Log("y:" + y);
                 // ============================================================================================================
                 sampled_token_id = SampleToken(y, temperature: temperature, top_k: top_k, top_p: top_p, min_p: min_p);
-
+                // UnityEngine.Debug.Log("y:" + y[245237]);
+                // UnityEngine.Debug.Log("y:" + y[236743]);
+                // UnityEngine.Debug.Log("y:" + sampled_token_str);
+                // UnityEngine.Debug.Log("Decoded y:" + sampled_token_id[0]);
+                // UnityEngine.Debug.Log(sampled_token_id + " output_vec: " + y);
                 if ((int)sampled_token_id[0] == Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID)
                     break;
 
@@ -700,7 +734,7 @@ namespace DeepUnity
             if (isFreshlyInitialized) // IF this is the first call in Chat (merge user prompt w/ system prompt)
             {
 
-                UnityEngine.Debug.Log("This is the first Chat call");
+                // UnityEngine.Debug.Log("This is the first Chat call");
 
                 isFreshlyInitialized = false;
                 prefix = Tensor.Constant(new float[] { 108 });
@@ -711,7 +745,7 @@ namespace DeepUnity
             }
             else // a new standalone user prompt (eot was added 
             {
-                UnityEngine.Debug.Log("This is NOT the first Chat call");
+                // UnityEngine.Debug.Log("This is NOT the first Chat call");
                 prefix = Tensor.Constant(new float[] { Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID, 107, Gemma3TokenizerFast.START_OF_TURN_TOKEN_ID, 2364f, 107f });
                 postfix = Tensor.Constant(new float[] { Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID, 107f, Gemma3TokenizerFast.START_OF_TURN_TOKEN_ID, 4368f, 107 });
 
@@ -840,7 +874,7 @@ namespace DeepUnity
                 // UnityEngine.Debug.Log($"Decoded token: {sampled_token_id[0]}");
                 if ((int)sampled_token_id[0] == Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID)
                 {
-                    UnityEngine.Debug.Log("Gemma3 ended the response.");
+                    ConsoleMessage.Info("Gemma3 ended the response.");
                     break;
                 }
 

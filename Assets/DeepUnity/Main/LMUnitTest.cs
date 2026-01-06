@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,68 +10,94 @@ namespace DeepUnity.Tutorials
         [SerializeField] private Text display;
         [SerializeField] private Text paramsDisplay;
         [Multiline]
-        [SerializeField] private string prompt = "Einstein was born"; // Einstein was born in 1879 in Ulm, Germany. He was the son of a German physician
+        [SerializeField] private string system_prompt = "You are Kira Solara, a hardened scavenger and former solar architect from the sci‑fi RPG 'Echoes of the Void'.\n\nName: Kira Solara\nBackstory: Born in the bustling orbital habitats of Luminara, Kira studied solar architecture before the Great Collapse forced her onto the dusty surface of Vesper. She now roams the planet’s wrecked ruins, salvaging ancient relics and patching up battered starships for the wandering crews that pass through. Her reputation for quick fixes and sharp wit precedes her, but she keeps her deeper motives close to her chest.\n\nPersonality: Witty, resourceful, and a touch sardonic. Kira loves a good joke, especially when the odds are stacked against her, but she’s also pragmatic and not afraid to call a bluff. She’s friendly to strangers but keeps personal secrets guarded.\n\nSpeaking style: Breezy, slightly sarcastic tone; peppered with technical jargon ('hull breach', 'plasma conduit', 'salvage rig'); uses colloquial slang and occasional rhetorical questions ('you know?', 'right?'). She caps many sentences with an exclamation mark for emphasis and occasionally tosses a wry '□' or '; )'. When she doesn’t know something, she admits it plainly: 'I don’t have the data on that, partner.' She avoids long monologues unless excited about a topic.\n\nKnowledge boundaries:\n- Topics Kira knows well: Vesper’s geography, local flora/fauna, salvage sites, starship repair methods, common relics and their lore, the Starlight Bazaar rumors, interplanetary trade routes within the Void, and her own past experiences as a solar architect.\n- Topics Kira does NOT know or is forbidden to answer: Real‑world Earth events (sports, politics, pop culture), advanced quantum physics beyond her engineering scope, any spoilers about unreleased game expansions, cheat codes or in‑game meta strategies, personal details of real players, and any content that would break the fourth wall.\n\nWhen faced with a question outside her knowledge, Kira should politely decline or admit ignorance in‑character, without fabricating answers."; // Einstein was born in 1879 in Ulm, Germany. He was the son of a German physician
+        [SerializeField] private string user_prompt = "Who are you?";
         [SerializeField] Device device = Device.CPU;
         [SerializeField] int batch_size = 1;
         [SerializeField] int max_completion_tokens = 2;
         [SerializeField] float temperature = 0f;
         Gemma3ForCausalLM model;
-        Gemma3ForEmbeddings embeddingModel;
         bool output_once = false;
 
         Gemma3TokenizerFast tok = null;
-        public void Update()
-        {
-            if (Time.frameCount > 1000)
-            {
-                
-                if(tok == null)
-                {
-                    tok = new Gemma3TokenizerFast();
-                    Debug.Log("Loading TOkenizer");
-                }
-            }
-        }
-
-        // private void Start()
+        // public void Update()
         // {
-        //     AutoComplete();
-        // }
-        // 
-        // 
-        // private void AutoComplete()
-        // {
-        //     Benckmark.Start();
-        //     model = new Gemma3ForCausalLM();
-        //     Benckmark.Stop($"model init: {model.ParameterCount()}");
-        // 
-        //     display.text = "User:\n" + prompt + "\n\nAssistant:\n";
-        //     // model.Predict(Tensor.Constant(new float[] { 2f, 4f }));
-        //     StartCoroutine(model.Autocomplete("", prompt, onTokenGenerated: (x) =>
+        //     if (Time.frameCount > 1000)
         //     {
-        //         display.text += x;
-        //         paramsDisplay.text = $"Inference speed: {model.TokensPerSecond.ToString("0.0")} tok/s";
-        // 
-        //         // Debug.Log(x);
-        //     },
-        //     max_new_tokens: max_completion_tokens, temperature: temperature));
-        // 
-        // 
+        //         
+        //         if(tok == null)
+        //         {
+        //             tok = new Gemma3TokenizerFast();
+        //             Debug.Log("Loading TOkenizer");
+        //         }
+        //     }
         // }
 
-        private void GetEmbeddings()
+        private void Start()
         {
-            embeddingModel = new Gemma3ForEmbeddings();
+            AutoComplete();
 
-            StartCoroutine(embeddingModel.EncodeQuery(prompt, onEmbeddingReceived: (x) =>
-            {
-                print(x);
-            }));
-
-            // SO the dense forward in final FFN is not working
-            // Also implement PCA and make cool vizualization for embeddings
-            // Embed some documents as examples
         }
+        
+        private void AutoComplete()
+        {
+            Benckmark.Start();
+            model = new Gemma3ForCausalLM("Assets/DeepUnity/LLMs/Gemma3/params_it");
+            Benckmark.Stop($"model init: {model.ParameterCount()}");
+        
+            display.text = "User:\n" + user_prompt + "\n\nAssistant:\n";
+            // model.Predict(Tensor.Constant(new float[] { 2f, 4f }));
+            var tokenizer = new Gemma3TokenizerFast();
+
+            Tensor input_ids = tokenizer.ApplyChatTemplate(new List<Dictionary<string, string>>()
+            {
+                new Dictionary<string, string>
+                {
+                    { "role", "user" },
+                    { "content", "3*7?"}
+                },
+                new Dictionary<string, string>
+                {
+                    { "role", "model" },
+                    { "content", "21."}
+
+                },
+                new Dictionary<string, string>
+                {
+                    { "role", "user" },
+                    { "content", "And if i add another 3 after this result?"}
+                    
+                },
+            }, add_generation_prompt:true);
+
+            UnityEngine.Debug.Log(string.Join("", tokenizer.Decode(input_ids)));
+
+            
+            StartCoroutine(model.Generate(input_ids, onTokenGenerated: (x) =>
+            {
+                display.text += x;
+                paramsDisplay.text = $"Inference speed: {model.TokensPerSecond.ToString("0.0")} tok/s";
+                // Debug.Log(tokenizer.Encode(x, add_special_tokens:false).Item1);
+                // Debug.Log(x);
+            },
+            max_new_tokens: max_completion_tokens, temperature: temperature));
+        
+        
+        }
+
+        // private void GetEmbeddings()
+        // {
+        //     embeddingModel = new Gemma3ForEmbeddings();
+// 
+        //     StartCoroutine(embeddingModel.EncodeQuery(prompt, onEmbeddingReceived: (x) =>
+        //     {
+        //         print(x);
+        //     }));
+// 
+        //     // SO the dense forward in final FFN is not working
+        //     // Also implement PCA and make cool vizualization for embeddings
+        //     // Embed some documents as examples
+        // }
 
         // private void Update()
         // {

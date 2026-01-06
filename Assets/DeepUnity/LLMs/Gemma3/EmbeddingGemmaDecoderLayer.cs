@@ -1,4 +1,6 @@
 
+using DeepUnity.Modules;
+
 namespace DeepUnity
 {
     namespace Gemma3Modeling
@@ -29,7 +31,7 @@ namespace DeepUnity
                     sliding_window: EmbeddingGemmaConfig.layer_types[layer_index] == GemmaLayerType.SlidingWindowAttention ? EmbeddingGemmaConfig.SLIDING_WINDOW : -1,
                     query_pre_attention_scalar: EmbeddingGemmaConfig.QUERY_PRE_ATTENTION_SCALAR,
                     softcap: EmbeddingGemmaConfig.ATTN_LOGIT_SOFTCAPPING,
-                    is_causal: EmbeddingGemmaConfig.USE_BIDIRECTIONAL_ATTENTION,
+                    is_causal: !EmbeddingGemmaConfig.USE_BIDIRECTIONAL_ATTENTION,
                     rope: rope,
                     layer_params_path: params_path + $"/layer_{layer_idx}");
                 input_layernorm = new Gemma3RMSNorm(

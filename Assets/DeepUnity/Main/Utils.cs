@@ -991,7 +991,6 @@ namespace DeepUnity
                 }
                 else
                 {
-                   
                     float surpass = 0f;
                     float random = Random.Value;
                     for (int i = 0; i < collection.Count(); i++)

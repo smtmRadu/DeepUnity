@@ -292,20 +292,9 @@ namespace DeepUnity
             }
         }
 
-        public virtual string ApplyChatTemplate(List<Dictionary<string, string>> input, bool add_generation_prompt = true)
+        public virtual Tensor ApplyChatTemplate(List<Dictionary<string, string>> input, bool add_generation_prompt = true)
         {
             throw new NotImplementedException("The current tokenizer does not implement the ApplyChatTemplate function.");
-        }
-        public List<string> ApplyChatTemplate(List<List<Dictionary<string, string>>> input, bool add_generation_prompt = true)
-        {
-            var output = new List<string>();
-
-            foreach (var item in input)
-            {
-                output.Add(ApplyChatTemplate(item, add_generation_prompt: add_generation_prompt));
-            }
-
-            return output;
         }
 
     }

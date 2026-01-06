@@ -62,7 +62,7 @@ namespace DeepUnity.Tutorials.ChatDemo
             chatWindow.gameObject.SetActive(true);
             yield return null;
 
-            llm = new Gemma3ForCausalLM();
+            llm = new Gemma3ForCausalLM("Assets/DeepUnity/LLMs/Gemma3/params_ft");
             chatWindow.SetInfoText($"Initializing {npc_name}...");
             yield return null;
 
@@ -116,8 +116,8 @@ namespace DeepUnity.Tutorials.ChatDemo
                 }
             });
 
-            if (llm.conversation_cache_tokens != null)
-                UnityEngine.Debug.Log(llm.conversation_cache_tokens.ToCommaSeparatedString());
+            // if (llm.conversation_cache_tokens != null)
+            //     UnityEngine.Debug.Log(llm.conversation_cache_tokens.ToCommaSeparatedString());
 
             chatWindow.SendButton.GetComponent<Button>().interactable = true;
             chatWindow.InputField.ActivateInputField();
@@ -132,6 +132,7 @@ namespace DeepUnity.Tutorials.ChatDemo
 
             llm = null;
             GC.Collect();
+            chatWindow.Clear();
             chatWindow.gameObject.SetActive(false);
             pressIToInteractText.enabled = true;
 

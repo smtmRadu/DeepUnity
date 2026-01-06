@@ -63,30 +63,43 @@ namespace DeepUnity.Tutorials
             //TestGQACache();
             //TestQwen();
             // TestGQA();
-            return;
 
             // TestTokenizer();
             
             var conversation = new List<Dictionary<string, string>>()
                 {
-                    new Dictionary<string, string>
-                    {
-                        { "role", "system" },
-                        {"content", "You are a helpfull assistant" }
-                    },
+                    // new Dictionary<string, string>
+                    // {
+                    //     { "role", "system" },
+                    //     {"content", "You are a helpfull assistant" }
+                    // },
                     new Dictionary<string, string>
                     {
                         { "role", "user" },
                         { "content", "How's the day today?" }
                     },
+                    new Dictionary<string, string>
+                    {
+                        { "role", "model" },
+                        { "content", "Not a good one really." }
+                    },
+                    new Dictionary<string, string>
+                    {
+                        { "role", "user" },
+                        { "content", "Why?" }
+                    },
+                    new Dictionary<string, string>
+                    {
+                        { "role", "model" },
+                        { "content", "I'm sick." }
+                    },
                 };
             
             Benckmark.Start();
-            var tokenizer = new Qwen3TokenizerFast("Assets/DeepUnity/Tokenizers/Qwen2TokenizerFast.json");
+            var tokenizer = new Gemma3TokenizerFast(load_async:false);
             
-            string inpu = tokenizer.ApplyChatTemplate(conversation);
-            print(inpu);
-            // print(tokenizer.Encode(new List<string> { "Hi sanclsnac", " csaciauh ncsknacasbiucn jcknas cijas cianckjasbi", " csaciauh ncsknacasbiucn jcknas cijas cianckjasbi soa hciucb kjasch iausc aksjch aoshc assixhaos xakhsbx aisxg asib ib" }));
+            var templ = tokenizer.ApplyChatTemplate(conversation);
+            Debug.Log(string.Join("", tokenizer.Decode(templ)));
             Benckmark.Stop();
         }
 

@@ -75,7 +75,7 @@ namespace DeepUnity
             return (inputTensor, maskTensor);
         }
 
-        public override string ApplyChatTemplate(List<Dictionary<string, string>> input, bool add_generation_prompt = true)
+        public override Tensor ApplyChatTemplate(List<Dictionary<string, string>> input, bool add_generation_prompt = true)
         {
             throw new Exception("MobileLLM doesn't support chat template.");
         }

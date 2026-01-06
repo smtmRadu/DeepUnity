@@ -69,24 +69,25 @@ namespace DeepUnity
 
 
         /// <inheritdoc/>
-        public override string ApplyChatTemplate(List<Dictionary<string, string>> input, bool add_generation_prompt = true)
+        public override Tensor ApplyChatTemplate(List<Dictionary<string, string>> input, bool add_generation_prompt = true)
         {
-            StringBuilder formattedChat = new StringBuilder();
-
-            foreach (var message in input)
-            {
-                if (message.TryGetValue("role", out string role) && message.TryGetValue("content", out string content))
-                {
-                    formattedChat.AppendFormat("<|im_start|>{0}\n{1}<|im_end|>\n", role, content);
-                }
-                else
-                {
-                    throw new ArgumentException("Messages should contain the following keys: role and content");
-                }
-            }
-            if(add_generation_prompt)
-                formattedChat.Append("<|im_start|>assistant\n");
-            return formattedChat.ToString();
+            throw new NotImplementedException();
+            // StringBuilder formattedChat = new StringBuilder();
+// 
+            // foreach (var message in input)
+            // {
+            //     if (message.TryGetValue("role", out string role) && message.TryGetValue("content", out string content))
+            //     {
+            //         formattedChat.AppendFormat("<|im_start|>{0}\n{1}<|im_end|>\n", role, content);
+            //     }
+            //     else
+            //     {
+            //         throw new ArgumentException("Messages should contain the following keys: role and content");
+            //     }
+            // }
+            // if(add_generation_prompt)
+            //     formattedChat.Append("<|im_start|>assistant\n");
+            // return formattedChat.ToString();
         }
     }
 }

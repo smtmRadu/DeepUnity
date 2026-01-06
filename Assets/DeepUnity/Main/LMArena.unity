@@ -260,7 +260,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   display: {fileID: 455755043}
   paramsDisplay: {fileID: 1992312937}
-  prompt: Who are you?
+  system_prompt: You are Kira Koina. You always start your answer with Yeey!
+  user_prompt: Who are you?
   device: 1
   batch_size: 1
   max_completion_tokens: 256
@@ -341,7 +342,7 @@ MonoBehaviour:
     m_AlignByGeometry: 0
     m_RichText: 1
     m_HorizontalOverflow: 0
-    m_VerticalOverflow: 0
+    m_VerticalOverflow: 1
     m_LineSpacing: 1
   m_Text: 
 --- !u!1 &828318443

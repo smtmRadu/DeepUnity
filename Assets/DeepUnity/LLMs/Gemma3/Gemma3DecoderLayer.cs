@@ -1,4 +1,6 @@
 
+using DeepUnity.Modules;
+
 namespace DeepUnity
 {
     namespace Gemma3Modeling
@@ -21,7 +23,7 @@ namespace DeepUnity
                     hidden_size: Gemma3Config.HIDDEN_SIZE,
                     intermediate_size: Gemma3Config.MLP_INTERMEDIATE_SIZE,
                     params_path + $"/layer_{layer_idx}");
-                    this.self_attn = new Gemma3GQA(embed_dim: Gemma3Config.HIDDEN_SIZE,
+                this.self_attn = new Gemma3GQA(embed_dim: Gemma3Config.HIDDEN_SIZE,
                     num_heads_q: Gemma3Config.HEADS_Q,
                     num_heads_kv: Gemma3Config.HEADS_KV,
                     expansion_factor: Gemma3Config.ATTN_EXPANSION_FACTOR,
@@ -29,7 +31,7 @@ namespace DeepUnity
                     sliding_window: Gemma3Config.layer_types[layer_index] == GemmaLayerType.SlidingWindowAttention ? Gemma3Config.SLIDING_WINDOW : -1,
                     query_pre_attention_scalar:Gemma3Config.QUERY_PRE_ATTENTION_SCALAR,
                     softcap:Gemma3Config.ATTN_LOGIT_SOFTCAPPING,
-                    is_causal:Gemma3Config.USE_BIDIRECTIONAL_ATTENTION,
+                    is_causal:!Gemma3Config.USE_BIDIRECTIONAL_ATTENTION,
                     rope: rope,
                     layer_params_path: params_path + $"/layer_{layer_idx}");
                 input_layernorm = new Gemma3RMSNorm(
@@ -61,18 +63,18 @@ namespace DeepUnity
                 hidden_states = self_attn.Predict(hidden_states); // here to set the attention mask for this layer if not null.
                 // UnityEngine.Debug.Log($"layer_{layer_idx}.self_attn:" + hidden_states);
                 hidden_states = post_attention_layernorm.Predict(hidden_states);
-                // UnityEngine.Debug.Log($"layer_{layer_idx}.post_self_attn_ln:" + hidden_states);
+                //UnityEngine.Debug.Log($"layer_{layer_idx}.post_self_attn_ln:" + hidden_states);
                 hidden_states = hidden_states + skip ;  
 
 
                 // mlp
                 skip = hidden_states.Clone() as Tensor;
                 hidden_states = pre_feedforward_layernorm.Predict(hidden_states);
-                // UnityEngine.Debug.Log($"layer_{layer_idx}.pre_feedforward_ln:" + hidden_states);
+            // UnityEngine.Debug.Log($"layer_{layer_idx}.pre_feedforward_ln:" + hidden_states);
                 hidden_states = this.mlp.Predict(hidden_states);
-                // UnityEngine.Debug.Log($"layer_{layer_idx}.mlp:" + hidden_states);
+             //UnityEngine.Debug.Log($"layer_{layer_idx}.mlp:" + hidden_states);
                 hidden_states = post_feedforward_layernorm.Predict(hidden_states);
-                // UnityEngine.Debug.Log($"layer_{layer_idx}.post_feedforward_ln:" + hidden_states);
+              //  UnityEngine.Debug.Log($"layer_{layer_idx}.post_feedforward_ln:" + hidden_states);
                 hidden_states = hidden_states + skip;
                 return hidden_states;
             }

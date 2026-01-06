@@ -371,48 +371,6 @@ namespace DeepUnity
                 sampled_token_id = SampleToken(y, temperature: temperature, top_k: top_k, top_p: top_p, min_p: min_p);
             }
         }
-
-        public Dictionary<string, string> Chat(List<Dictionary<string, string>> messages, Qwen3TokenizerFast tokenizer, float temperature = 0.7f, int top_k = 20, float top_p = 0.95f, float min_p = 0)
-        {
-            List<Dictionary<string, string>> cached_conv = new();
-            List<Dictionary<string, string>> noncached_conv = new();
-
-            bool counting_cached_messages = true;
-            foreach (var item in messages)
-            {
-                if(conversation_cache.Contains(item) && counting_cached_messages)
-                {
-                    cached_conv.Add(item);
-                }
-                else
-                {
-                    counting_cached_messages = false;
-                    noncached_conv.Add(item);
-                }
-            }
-            string input = tokenizer.ApplyChatTemplate(messages, add_generation_prompt:true);
-            var x = tokenizer.Encode(input);
-            Tensor input_ids = x.Item1;
-            Tensor attn_mask = x.Item2;
-
-            // Set attention mask to all gqa modules..
-            // Keep length of KV cache equal to the cached conv len
-            // Start passing 1 element at a time.
-            
-
-            StringBuilder generated_output = new StringBuilder();
-
-            Tensor output = this.model.Predict(input_ids, attn_mask);
-
-            // do it un
-
-            return new Dictionary<string, string>
-            {
-                {"role","assistant"},
-                {"content", generated_output.ToString()}
-            };
-
-        }
     }
 }
 

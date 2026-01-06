@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
 
-namespace DeepUnity.Gemma3Modeling
+namespace DeepUnity.Modules
 {
     /// <summary>
     /// Input: <b>(B, L, E)</b> or <b>(L, E)</b>.<br></br>
@@ -40,42 +40,39 @@ namespace DeepUnity.Gemma3Modeling
         public ComputeBuffer attended_values_buffer;
         public ComputeBuffer output_buffer;
 
+
+
+
         [SerializeField] public Gemma3RMSNorm q_norm;
         [SerializeField] public Gemma3RMSNorm k_norm;
         [SerializeField] private Softmax softmax;
 
-        private bool _buildKVCache = false;  // Backing field (if kv are cached)
-        private int _cachedTokensNum = 0;
+        private bool _buildKVCache = false;  // Backing field
 
-        public int CachedTokensNum => _cachedTokensNum;
         public bool BuildKVCache
         {
             set
             {
                 if (value)
                 {
+                    CachedTokensNum = 0;
                     KCache = new List<Tensor>();
                     VCache = new List<Tensor>();
                     _buildKVCache = true;
-                    _cachedTokensNum = 0;
                 }
                 else
                 {
+                    CachedTokensNum = 0;
                     KCache = null;
                     VCache = null;
                     _buildKVCache = false;
-                    _cachedTokensNum = -1; // if -1 no caching is allowed
                 }
             }
         }// when build kv cache is ON, Q and K (roped) will be cached and the model must receive one inpu t(B,1,E) at a time (only 1 elem)
 
-        
-
-        
-        // NOTE: len(KCache) is not equal to the num cached tokens. There might be concatenated tokens within KCache.
+        private int CachedTokensNum = 0;
         private List<Tensor> KCache { get; set; } = null; // Rope + Norm
         private List<Tensor> VCache { get; set; } = null;
-
         /// <summary>
         ///  <b>(B, L)</b> or <b>(L)</b>.<br></br>
         /// </summary>
@@ -107,8 +104,8 @@ namespace DeepUnity.Gemma3Modeling
             float expansion_factor = 1f,
             float qk_norm_eps = 1e-6f,
             int sliding_window = -1,
-            float query_pre_attention_scalar = 256f,
             bool is_causal = true,
+            float query_pre_attention_scalar = 256f,
             float? softcap = null,
             RotaryPositionalEmbeddings rope = null,
             string layer_params_path = null)
@@ -129,6 +126,7 @@ namespace DeepUnity.Gemma3Modeling
                 throw new ArgumentException("num_heads_q must be an integer multiple of num_heads_kv for GQA.");
 
             this.is_causal = is_causal;
+            // UnityEngine.Debug.Log("is_causal " +  is_causal);
             this.head_dim = this.inner_embedding_dim / num_heads_q;
 
             qkv_proj_dim = this.inner_embedding_dim + 2 * (this.inner_embedding_dim * this.num_heads_kv / num_heads_q);
@@ -155,13 +153,8 @@ namespace DeepUnity.Gemma3Modeling
         private Gemma3GQA() { }
         ~Gemma3GQA()
         {
-            W_O?.Release();
-            W_QKV?.Release();
-            input_buffer?.Release();
-            qkv_proj_buffer?.Release();
-            output_buffer?.Release();
-            attended_values_buffer?.Release();
-            q_buffer?.Release();
+           W_O.Release();
+           W_QKV.Release();
         }
 
         private async Task LoadWeightsAsync(string path)
@@ -198,95 +191,46 @@ namespace DeepUnity.Gemma3Modeling
             IsInitialized = true;
             // ConsoleMessage.Info($"Loaded {path}/self_attn");
         }
-
-        public void PrepareInputBuffer(int x_count)
-        {
-            if (input_buffer == null || input_buffer.count != x_count)
-            {
-                input_buffer?.Release();
-                input_buffer = new ComputeBuffer(x_count, 4, ComputeBufferType.Structured);
-            }
-        }
-        public void PrepareQKVProjBuffer(int B, int L)
-        {
-            if (qkv_proj_buffer == null || qkv_proj_buffer.count != B * L * qkv_proj_dim)
-            {
-                qkv_proj_buffer?.Release();
-                qkv_proj_buffer = new ComputeBuffer(B * L * qkv_proj_dim, 4, ComputeBufferType.Structured);
-            }
-
-        }
-
-        public void PrepareQBuffer(int q_count)
-        {
-            if (q_buffer == null || q_buffer.count != q_count)
-            {
-                q_buffer?.Release();
-                q_buffer = new ComputeBuffer(q_count, 4, ComputeBufferType.Structured);
-            }
-        }
-        public void PrepareAttendedValuesBuffer(int B, int L)
-        {
-            if (attended_values_buffer == null || attended_values_buffer.count != B * L * this.inner_embedding_dim)
-            {
-                attended_values_buffer?.Release();
-                attended_values_buffer = new ComputeBuffer(B * L * this.inner_embedding_dim, 4, ComputeBufferType.Structured);
-            }
-        }
-        public void PrepareOutputBuffer(int B, int L)
-        {
-            if(output_buffer == null || output_buffer.count != B * L * this.embedding_dim)
-            {
-                output_buffer?.Release();
-                output_buffer = new ComputeBuffer(B * L * this.embedding_dim, 4, ComputeBufferType.Structured);
-            }
-        }
-        
         public Tensor Predict(Tensor x)
         {
             if (x.Rank > 3 || x.Rank < 2)
                 throw new ArgumentException($"GQA input must be of shape (B, L, E) or (L, E). Received tensor of rank {x.Rank} | shape ({x.Shape.ToCommaSeparatedString()}).");
-            bool is_batched_input = x.Rank == 3;
-            int B = is_batched_input ? x.Size(-3) : 1;
+            bool batched = x.Rank == 3;
+            int B = batched ? x.Size(-3) : 1;
             int L_x = x.Size(-2);
 
             // ========================================================== QKV PROJ =========================================================================
             ComputeShader cs = DeepUnityMeta.GQAInferenceCS;
-            int qkvKernel = cs.FindKernel(B == 1 && L_x == 1 ? "QKVProj1Vec" :"QKVProj");
+            int qkvKernel = cs.FindKernel("QKVProj");
             cs.SetBuffer(qkvKernel, "W_QKV", W_QKV);
 
-            PrepareInputBuffer(x.Count());
-            input_buffer.SetData(x.ToArray());
+            ComputeBuffer xBuff = new ComputeBuffer(x.Count(), 4, ComputeBufferType.Structured);
+            xBuff.SetData(x.ToArray());
             // Debug.Log("X (gemma):" + x);
-            cs.SetBuffer(qkvKernel, "X", input_buffer);
+            cs.SetBuffer(qkvKernel, "X", xBuff);
 
-            PrepareQKVProjBuffer(B: B, L: L_x);
-            cs.SetBuffer(qkvKernel, "QKV", qkv_proj_buffer);
+            ComputeBuffer qkvBuff = new ComputeBuffer(B * L_x * qkv_proj_dim, 4, ComputeBufferType.Structured);
+            cs.SetBuffer(qkvKernel, "QKV", qkvBuff);
 
             cs.SetInt("batch_size", B);
             cs.SetInt("sequence_length_q", L_x);
             cs.SetInt("embedding_dim", embedding_dim);
             cs.SetInt("qkv_proj_dim", qkv_proj_dim);
             
-            if(B == 1 && L_x == 1)
-                cs.Dispatch(qkvKernel,
-                            (qkv_proj_dim + 255) / 256,
-                            L_x,
-                            B);
+            cs.Dispatch(qkvKernel, 
+                B, 
+                (L_x + 7) / 8, 
+                (qkv_proj_dim + 31) / 32);
 
-            else
-                cs.Dispatch(qkvKernel,
-                    B,
-                    (L_x + 15) / 16,
-                    (qkv_proj_dim + 31) / 32);
-
-            Tensor QKV = is_batched_input ? Tensor.Constant(qkv_proj_buffer, B, L_x, qkv_proj_dim) : Tensor.Constant(qkv_proj_buffer, L_x, qkv_proj_dim);
+            Tensor QKV = batched ? Tensor.Constant(qkvBuff, B, L_x, qkv_proj_dim) : Tensor.Constant(qkvBuff, L_x, qkv_proj_dim);
+            qkvBuff.Release();
+            xBuff.Release();
 
             // UnityEngine.Debug.Log("QKV (gemma):" + QKV);
             //Debug.Log(QKV);
-            Tensor Q = is_batched_input ? Tensor.Zeros(B, L_x, this.num_heads_q, this.head_dim) : Tensor.Zeros(L_x, this.num_heads_q, this.head_dim);
-            Tensor K = is_batched_input ? Tensor.Zeros(B, L_x, this.num_heads_kv, this.head_dim) : Tensor.Zeros(L_x, this.num_heads_kv, this.head_dim);
-            Tensor V = is_batched_input ? Tensor.Zeros(B, L_x, this.num_heads_kv, this.head_dim) : Tensor.Zeros(L_x, this.num_heads_kv, this.head_dim);
+            Tensor Q = batched ? Tensor.Zeros(B, L_x, this.num_heads_q, this.head_dim) : Tensor.Zeros(L_x, this.num_heads_q, this.head_dim);
+            Tensor K = batched ? Tensor.Zeros(B, L_x, this.num_heads_kv, this.head_dim) : Tensor.Zeros(L_x, this.num_heads_kv, this.head_dim);
+            Tensor V = batched ? Tensor.Zeros(B, L_x, this.num_heads_kv, this.head_dim) : Tensor.Zeros(L_x, this.num_heads_kv, this.head_dim);
 
             // Unpack QKV
             if (L_x > 1)
@@ -343,6 +287,8 @@ namespace DeepUnity.Gemma3Modeling
             // ==================================================================== QK Norm =================================================================
             if (qk_norm)
             {
+                // implement fast rmsnorm on head_num, head_dim tensors using the qk norm weights
+
                 bool is_batched = Q.Rank == 4;
                 Tensor variance = Q.Square().Mean(-1, keepDim: true).Expand(-1, Q.Size(-1));
                 Q = Q / Tensor.Sqrt(variance + 1e-6f);
@@ -374,21 +320,20 @@ namespace DeepUnity.Gemma3Modeling
             //Debug.Log("Q norm (gemma): " + Q);
             //Debug.Log("K norm (gemma): " + K);
 
-            // Till here Q K V has the seq_len=len(x) **1 when decoding**
             // =============================================================== RoPE + Caching ==========================================================
             if (_buildKVCache)
             {
-                Q = rope == null ? Q : rope.ApplyRotaryEmbeddings(Q, input_pos: Enumerable.Range(_cachedTokensNum, L_x).ToArray(), type: RotaryPositionalEmbeddings.RoPEType.SplitHalf);
-                K = rope == null ? K : rope.ApplyRotaryEmbeddings(K, input_pos: Enumerable.Range(_cachedTokensNum, L_x).ToArray(), type: RotaryPositionalEmbeddings.RoPEType.SplitHalf);
+                Q = rope == null ? Q : rope.ApplyRotaryEmbeddings(Q, input_pos: Enumerable.Range(CachedTokensNum, L_x).ToArray(), type: RotaryPositionalEmbeddings.RoPEType.SplitHalf);
+                K = rope == null ? K : rope.ApplyRotaryEmbeddings(K, input_pos: Enumerable.Range(CachedTokensNum, L_x).ToArray(), type: RotaryPositionalEmbeddings.RoPEType.SplitHalf);
 
                 KCache.Add(K);
                 VCache.Add(V);
-                _cachedTokensNum += L_x;
+                CachedTokensNum += L_x;
 
-                K = Tensor.Concat(-3, KCache.ToArray()); // and here we merge with the cache.
+                K = Tensor.Concat(-3, KCache.ToArray());// Update the concat function so it allows for tensor with different sizes on the axis that is merged on.... plaese..
                 V = Tensor.Concat(-3, VCache.ToArray());
             }
-            else // NO KV Caching
+            else
             {
                 Q = rope == null ? Q : rope.ApplyRotaryEmbeddings(Q);
                 K = rope == null ? K : rope.ApplyRotaryEmbeddings(K);
@@ -398,13 +343,13 @@ namespace DeepUnity.Gemma3Modeling
 
             int L_k = K.Size(-3); // L_k is the actual length of the sequence. x might have a sequence length of only 1 when doing inference.
 
-            Tensor mask = BuildMask(is_causal, sliding_window, AttentionMask, is_batched_input ? new int[] { B, num_heads_q, L_x, L_k } : new int[] { num_heads_q, L_x, L_k });
+            Tensor mask = BuildMask(is_causal, sliding_window, AttentionMask, batched ? new int[] { B, num_heads_q, L_x, L_k } : new int[] { num_heads_q, L_x, L_k });
             
             Tensor scores = ComputeAttentionScoresGPU(Q, K, scale: scaling); // B, Hq,  L_x, L_k
 
             //Debug.Log("Scores (gemma): " + scores);
 
-            if (this.attn_logit_softcapping is not null) // does not apply to gemma-3-270M but we write it for consistency with hf code.
+            if (this.attn_logit_softcapping is not null)
             {
                 scores = scores / this.attn_logit_softcapping.Value;
                 scores = scores.Tanh(); // in gemma (line 256 - https://github.com/huggingface/transformers/blob/main/src/transformers/models/gemma3/modeling_gemma3.py), scores receive a softcap and are passed through tanh 
@@ -418,7 +363,7 @@ namespace DeepUnity.Gemma3Modeling
             // Debug.Log("Attention weights (gemma): " + attention_weights);
             // ============================================================ V projection ==================================================================
             {
-                int Hq = attention_weights.Size(is_batched_input ? 1 : 0);
+                int Hq = attention_weights.Size(batched ? 1 : 0);
                 int L_q = attention_weights.Size(-2);
                 int L_v = attention_weights.Size(-1);
                 int D = V.Size(-1);
@@ -435,20 +380,20 @@ namespace DeepUnity.Gemma3Modeling
                 vBuf.SetData(V.ToArray());
                 cs.SetBuffer(attendValueskernel, "V", vBuf);
 
-                PrepareAttendedValuesBuffer(B: B, L: L_q);
-                cs.SetBuffer(attendValueskernel, "AttendedValues", attended_values_buffer);
+                int attendedValuesCount = B * L_v * this.inner_embedding_dim;
+                ComputeBuffer attndValsBuff = new ComputeBuffer(attendedValuesCount, 4);
+                cs.SetBuffer(attendValueskernel, "AttendedValues", attndValsBuff);
 
                 cs.SetInt("batch_size", B);
                 cs.SetInt("sequence_length_v", L_v);
-                cs.SetInt("sequence_length_q", L_q);
                 cs.SetInt("num_heads_q", Hq);
                 cs.SetInt("num_heads_kv", Hkv);
                 cs.SetInt("head_dim", D);
 
-                cs.Dispatch(attendValueskernel,
-                    (D + 127) / 128,
-                    L_q,
-                    (B * Hq + 3) / 4);
+                int gx = (D + 63) / 64;
+                int gy = (L_q + 3) / 4;
+                int gz = (B * Hq + 3) / 4;
+                cs.Dispatch(attendValueskernel, gx, gy, gz);
                 awBuf.Release();
                 vBuf.Release();
 
@@ -457,17 +402,19 @@ namespace DeepUnity.Gemma3Modeling
 
                 int oProjKernel = cs.FindKernel("OProj");
 
-                cs.SetBuffer(oProjKernel, "AttendedValues", attended_values_buffer);
+                cs.SetBuffer(oProjKernel, "AttendedValues", attndValsBuff);
                 cs.SetBuffer(oProjKernel, "W_O", W_O);
                 cs.SetInt("inner_embedding_dim", inner_embedding_dim);
 
-                //ComputeBuffer oBuff = new ComputeBuffer(B * L_q * embedding_dim, 4, ComputeBufferType.Structured);
-                PrepareOutputBuffer(B: B, L: L_q);
-                cs.SetBuffer(oProjKernel, "O", output_buffer);
+                ComputeBuffer oBuff = new ComputeBuffer(B * L_q * embedding_dim, 4, ComputeBufferType.Structured);
+                cs.SetBuffer(oProjKernel, "O", oBuff);
                 cs.Dispatch(oProjKernel, B, (L_q + 3) / 4, (embedding_dim + 31) / 32);
 
 
-                Tensor output = is_batched_input ? Tensor.Constant(output_buffer, B, L_q, embedding_dim) : Tensor.Constant(output_buffer, L_q, embedding_dim);
+                Tensor output = batched ? Tensor.Constant(oBuff, B, L_q, embedding_dim) : Tensor.Constant(oBuff, L_q, embedding_dim);
+
+                attndValsBuff.Release();
+                oBuff.Release();
                 return output;
             }
 
@@ -483,7 +430,7 @@ namespace DeepUnity.Gemma3Modeling
             {
                 int B = mask_shape[0];
                 int num_heads = mask_shape[1];
-                int L_q = mask_shape[2];  // Query sequence length (1 on decoding)
+                int L_q = mask_shape[2];  // Query sequence length
                 int L_k = mask_shape[3];  // Key sequence length
 
                 for (int b = 0; b < B; b++)
@@ -548,7 +495,7 @@ namespace DeepUnity.Gemma3Modeling
         /// <param name="K"></param>
         /// <param name="scale"></param>
         /// <returns></returns>
-        public Tensor ComputeAttentionScoresGPU(Tensor Q, Tensor K, float scale)
+        public static Tensor ComputeAttentionScoresGPU(Tensor Q, Tensor K, float scale)
         {
             //Debug.Log("Q:" + Q);
             //Debug.Log("K:" + K);
@@ -563,9 +510,9 @@ namespace DeepUnity.Gemma3Modeling
             ComputeShader cs = DeepUnityMeta.GQAInferenceCS;
             int kernel = cs.FindKernel("ComputeAttentionScores");
 
-            PrepareQBuffer(Q.Count());
-            q_buffer.SetData(Q.ToArray());
-            cs.SetBuffer(kernel, "Q", q_buffer);
+            ComputeBuffer qBuf = new ComputeBuffer(Q.Count(), 4);
+            qBuf.SetData(Q.ToArray());
+            cs.SetBuffer(kernel, "Q", qBuf);
 
             ComputeBuffer kBuf = new ComputeBuffer(K.Count(), 4);
             kBuf.SetData(K.ToArray());
@@ -583,7 +530,7 @@ namespace DeepUnity.Gemma3Modeling
             cs.SetInt("head_dim", D);
             cs.SetFloat("scale", scale);
 
-            int gx = L_q;
+            int gx = (L_q + 3) / 4;
             int gy = (L_k + 31) / 32;
             int gz = (B * Hq + 3) / 4;
             cs.Dispatch(kernel, gx, gy, gz);
@@ -592,6 +539,7 @@ namespace DeepUnity.Gemma3Modeling
                 Tensor.Constant(awBuf, B, Hq, L_q, L_k) :
                 Tensor.Constant(awBuf, Hq, L_q, L_k);
 
+            qBuf.Release();
             kBuf.Release();
             awBuf.Release();
 

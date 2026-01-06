@@ -108,7 +108,26 @@ namespace DeepUnity.Tutorials.ChatDemo
 
         public void Clear()
         {
+            if (messageContainer != null)
+            {
+                for (int i = messageContainer.childCount - 1; i >= 0; i--)
+                {
+                    GameObject child = messageContainer.GetChild(i).gameObject;
+                    if (child == messageTemplate)
+                        continue;
+
+                    Destroy(child);
+                }
+            }
+
             messages.Clear();
+
+            Canvas.ForceUpdateCanvases();
+
+            if (scrollRect != null)
+            {
+                scrollRect.verticalNormalizedPosition = 0f;
+            }
         }
 
         public void SetInfoText(string text)
