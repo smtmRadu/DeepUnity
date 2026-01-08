@@ -59,7 +59,7 @@ namespace DeepUnity
 
             string content = await Task.Run(() => File.ReadAllText(path_to_vocab_json));
             await Task.Run(() => ProcessContent(content));
-            ConsoleMessage.Info($"Tokenizer loaded async ({(sw.ElapsedMilliseconds / 1000).ToString("0.00")} s)");
+            ConsoleMessage.Info($"Tokenizer loaded async ({sw.Elapsed.TotalSeconds:0.00} s)");
         }
 
         private void ProcessContent(string content)

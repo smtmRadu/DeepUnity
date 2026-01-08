@@ -15,7 +15,11 @@ using UnityEngine.Assertions;
 
 using System.IO;
 using System.Drawing.Printing;
+using Palmmedia.ReportGenerator.Core.Common;
 
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace DeepUnity
 {
@@ -195,7 +199,7 @@ namespace DeepUnity
         private ComputeBuffer lm_head_input_buffer;
         private ComputeBuffer lm_head_output_buffer;
         public Gemma3TokenizerFast tokenizer;
-        public List<int> conversation_cache_tokens;
+        // public List<int> conversation_cache_tokens;
         private bool isFreshlyInitialized = false;
 
         public bool IsReady => model.IsInitialized;
@@ -214,7 +218,9 @@ namespace DeepUnity
 #endif
             // to initialize lm_head async as well it must be parsed with ref, but async methods does not allow ref arguments.. fuck em..
             // lm head will be initialized in gemma3 model
+            Stopwatch sw = Stopwatch.StartNew();
             model = new Gemma3Modeling.Gemma3Model(params_path, ref lm_head);
+            ConsoleMessage.Info($"Model loaded async ({sw.Elapsed.TotalSeconds:0.00} s)");
         }
 
         ~Gemma3ForCausalLM()
@@ -650,6 +656,7 @@ namespace DeepUnity
 
         public IEnumerator InitializeChat(string system_prompt = "")
         {
+            
             // Debug.Log("Generating...");
             while (!this.IsReady)
                 yield return new WaitForSeconds(0.01f);
@@ -658,26 +665,43 @@ namespace DeepUnity
             while (!tokenizer.IsReady)
                 yield return new WaitForSeconds(0.01f);
             // Debug.Log("Tokenizer Ready");
-
-
-            Assert.AreNotEqual(system_prompt, null); // we enforce system prompt to exist nomatter what. Because the Chat() function will append to it further.
+            Assert.AreNotEqual(system_prompt, null); // we enforce system prompt to exist no matter what. Because the Chat() function will append to it further.
 
             // TRY FIND Cache
             string hash = Utils.Sha256(system_prompt + path);
-            var cache = Resources.Load<UnityEngine.Object>($"Cache/{hash}");
-            if(cache != null)
+            const string resourcesRoot = "Assets/Resources";
+            var cacheRoot = $"{resourcesRoot}/Cache";
+            var hashFolder = $"{cacheRoot}/{hash}";
+
+            if (!AssetDatabase.IsValidFolder(resourcesRoot))
+                    AssetDatabase.CreateFolder("Assets", "Resources");
+            if (!AssetDatabase.IsValidFolder(cacheRoot))
+                    AssetDatabase.CreateFolder(resourcesRoot, "Cache");
+
+            Stopwatch sw = Stopwatch.StartNew();
+            if(AssetDatabase.IsValidFolder(hashFolder))
             {
-                UnityEngine.Debug.Log("System prompt KVCache loaded from Resources/Cache");
+                for(int l_id = 0; l_id < model.layers.Count; l_id++)
+                {
+                    Tensor kcache = JsonUtility.FromJson<Tensor>(Resources.Load<TextAsset>($"Cache/{hash}/k_cache_layer_{l_id}").text);
+                    Tensor vcache = JsonUtility.FromJson<Tensor>(Resources.Load<TextAsset>($"Cache/{hash}/v_cache_layer_{l_id}").text);
+                    model.layers[l_id].self_attn.KCache = kcache;
+                    model.layers[l_id].self_attn.VCache = vcache;
+                }
+
+                sw.Stop();
+                ConsoleMessage.Info($"KVCache loaded from {hashFolder} ({sw.Elapsed.TotalSeconds:0.00} s)");
             }
             else // pass through the model  the system prompt
             {
+                sw = Stopwatch.StartNew();
                 foreach (var item in model.layers)
                 {
                     item.self_attn.BuildKVCache = true;
                 }
 
 
-                Stopwatch sw = Stopwatch.StartNew();
+                
 
                 // "user" = 2364
                 // "model" = 4368
@@ -686,8 +710,8 @@ namespace DeepUnity
                 (Tensor, Tensor) tokenized_prompt = tokenizer.Encode(system_prompt, add_special_tokens: false, truncation: true, max_length: 2048);
                 Tensor prefix = Tensor.Constant(new float[] { Gemma3TokenizerFast.BOS_TOKEN_ID, Gemma3TokenizerFast.START_OF_TURN_TOKEN_ID, 2364f, 107f });
                 var input_ids = Tensor.Concat(-1, prefix, tokenized_prompt.Item1);
-                conversation_cache_tokens = new();
-                conversation_cache_tokens.AddRange(input_ids.ToArray().Select(x => (int)(x)));
+                // conversation_cache_tokens = new();
+                // conversation_cache_tokens.AddRange(input_ids.ToArray().Select(x => (int)(x)));
 
 
                 // pass the system prompt through the network
@@ -702,12 +726,38 @@ namespace DeepUnity
            
 
                 sw.Stop();
-                UnityEngine.Debug.Log($"Model Initialized for chatting ({1000f / (float)sw.ElapsedMilliseconds} s). Conversation set: {conversation_cache_tokens.ToCommaSeparatedString()}");
+                ConsoleMessage.Info($"System prompt computed ({sw.Elapsed.TotalSeconds:0.00} s).");
 
 
 
 
                 // NOW CACHE KV
+#if UNITY_EDITOR
+
+                
+                sw = Stopwatch.StartNew(); 
+                AssetDatabase.CreateFolder(cacheRoot, hash);
+
+                List<string> json_k = new();
+                List<string> json_v = new();
+                foreach (var layer in model.layers)
+                {
+                    json_k.Add(JsonUtility.ToJson(layer.self_attn.KCache));
+                    json_v.Add(JsonUtility.ToJson(layer.self_attn.VCache));
+
+                }
+
+                for(int i = 0; i < json_k.Count; i++)
+                {
+                    File.WriteAllText($"{hashFolder}/k_cache_layer_{i}.json", json_k[i]);
+                    File.WriteAllText($"{hashFolder}/v_cache_layer_{i}.json", json_v[i]);
+                }
+
+                AssetDatabase.Refresh();
+                sw.Stop();
+                ConsoleMessage.Info($"KV Cache cached. ({sw.Elapsed.TotalSeconds:0.00} s)");
+
+#endif
 
                 yield return true;
             }
@@ -756,7 +806,7 @@ namespace DeepUnity
             (Tensor, Tensor) tokenized_prompt = tokenizer.Encode(prompt, add_special_tokens: false, truncation: true, max_length: 2048);
 
             Tensor input_ids = Tensor.Concat(-1, prefix, tokenized_prompt.Item1, postfix);
-            conversation_cache_tokens.AddRange(input_ids.ToArray().Select(x => (int)(x)));
+            // conversation_cache_tokens.AddRange(input_ids.ToArray().Select(x => (int)(x)));
             Tensor y = null;
             {
                 int seq_len = input_ids.Size(-1);
@@ -811,7 +861,7 @@ namespace DeepUnity
             // Debug.Log("y:" + y);
             Tensor sampled_token_id = SampleToken(y, temperature: temperature, top_k: top_k, top_p: top_p, min_p: min_p);
             string sampled_token_str = tokenizer.Decode(sampled_token_id)[0];
-            conversation_cache_tokens.Add((int)sampled_token_id[0]);
+            // conversation_cache_tokens.Add((int)sampled_token_id[0]);
             onTokenGenerated?.Invoke(sampled_token_str);
             yield return null;
 
@@ -878,7 +928,7 @@ namespace DeepUnity
                     break;
                 }
 
-                conversation_cache_tokens.Add((int)sampled_token_id[0]);
+                // conversation_cache_tokens.Add((int)sampled_token_id[0]);
 
                 // Debug.Log(sampled_token_str);
                 onTokenGenerated?.Invoke(sampled_token_str);

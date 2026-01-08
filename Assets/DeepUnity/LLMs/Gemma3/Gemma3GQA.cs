@@ -29,9 +29,9 @@ namespace DeepUnity.Modules
         private bool is_causal;
         private bool qk_norm;
 
-        public bool IsInitialized { get; private set; } = false;
+        
 
-        [SerializeField] public RotaryPositionalEmbeddings rope;
+        
         public ComputeBuffer W_QKV;
         public ComputeBuffer W_O;
         public ComputeBuffer input_buffer;
@@ -39,47 +39,84 @@ namespace DeepUnity.Modules
         public ComputeBuffer q_buffer;
         public ComputeBuffer attended_values_buffer;
         public ComputeBuffer output_buffer;
-
-
-
-
+        [SerializeField] public RotaryPositionalEmbeddings rope;
         [SerializeField] public Gemma3RMSNorm q_norm;
         [SerializeField] public Gemma3RMSNorm k_norm;
         [SerializeField] private Softmax softmax;
 
-        private bool _buildKVCache = false;  // Backing field
-
+        
+        
+        private bool buildKVCache = false;  // Backing field
+        private Tensor attentionMask = null;
+        private int cachedTokensNum = 0;
+        private List<Tensor> kCache; // Rope + Norm
+        private List<Tensor> vCache;
+        
+        public bool IsInitialized { get; private set; } = false;
         public bool BuildKVCache
         {
             set
             {
                 if (value)
                 {
-                    CachedTokensNum = 0;
-                    KCache = new List<Tensor>();
-                    VCache = new List<Tensor>();
-                    _buildKVCache = true;
+                    cachedTokensNum = 0;
+                    kCache = new List<Tensor>();
+                    vCache = new List<Tensor>();
+                    buildKVCache = true;
                 }
                 else
                 {
-                    CachedTokensNum = 0;
-                    KCache = null;
-                    VCache = null;
-                    _buildKVCache = false;
+                    cachedTokensNum = 0;
+                    kCache = null;
+                    vCache = null;
+                    buildKVCache = false;
                 }
             }
-        }// when build kv cache is ON, Q and K (roped) will be cached and the model must receive one inpu t(B,1,E) at a time (only 1 elem)
+        }// when build kv cache is ON, Q and K (roped) will be cached and the model must receive one input(B,1,E) at a time (only 1 elem)
 
-        private int CachedTokensNum = 0;
-        private List<Tensor> KCache { get; set; } = null; // Rope + Norm
-        private List<Tensor> VCache { get; set; } = null;
         /// <summary>
         ///  <b>(B, L)</b> or <b>(L)</b>.<br></br>
         /// </summary>
-        public Tensor AttentionMask { get; set; } = null; // This is the second input that must have entered in the forward function.
+        public Tensor AttentionMask { get => attentionMask; set => attentionMask = value; } // This is the second input that must have entered in the forward function.
+        public Tensor KCache
+        {
+            get 
+            {
+                if(kCache == null)
+                    return null;
+                if(kCache.Count == 1)
+                    return kCache[0];
+                return Tensor.Concat(0, kCache.ToArray());
+            }
+            set
+            {
+                if(value.Rank != 3)
+                    throw new ArgumentException("KV Cache tensor must be of shape (L, 1, H_dim)");
+                buildKVCache = true;
+                cachedTokensNum = value.Size(0);
+                kCache = new List<Tensor>(){value};
 
-
-
+            }
+        }
+        public Tensor VCache
+        {
+            get 
+            {
+                if(vCache == null)
+                    return null;
+                if(vCache.Count == 1)
+                    return vCache[0];
+                return Tensor.Concat(0, vCache.ToArray());
+            }
+            set
+            {
+                if(value.Rank != 3)
+                    throw new ArgumentException("KV Cache tensor must be of shape (L, 1, H_dim)");
+                buildKVCache = true;
+                cachedTokensNum = value.Size(0);
+                vCache = new List<Tensor>(){value};
+            }
+        }
 
         /// <summary>
         /// Input: <b>(B, L, E)</b> or <b>(L, E)</b>.<br></br>
@@ -321,17 +358,17 @@ namespace DeepUnity.Modules
             //Debug.Log("K norm (gemma): " + K);
 
             // =============================================================== RoPE + Caching ==========================================================
-            if (_buildKVCache)
+            if (buildKVCache)
             {
-                Q = rope == null ? Q : rope.ApplyRotaryEmbeddings(Q, input_pos: Enumerable.Range(CachedTokensNum, L_x).ToArray(), type: RotaryPositionalEmbeddings.RoPEType.SplitHalf);
-                K = rope == null ? K : rope.ApplyRotaryEmbeddings(K, input_pos: Enumerable.Range(CachedTokensNum, L_x).ToArray(), type: RotaryPositionalEmbeddings.RoPEType.SplitHalf);
+                Q = rope == null ? Q : rope.ApplyRotaryEmbeddings(Q, input_pos: Enumerable.Range(cachedTokensNum, L_x).ToArray(), type: RotaryPositionalEmbeddings.RoPEType.SplitHalf);
+                K = rope == null ? K : rope.ApplyRotaryEmbeddings(K, input_pos: Enumerable.Range(cachedTokensNum, L_x).ToArray(), type: RotaryPositionalEmbeddings.RoPEType.SplitHalf);
 
-                KCache.Add(K);
-                VCache.Add(V);
-                CachedTokensNum += L_x;
+                kCache.Add(K);
+                vCache.Add(V);
+                cachedTokensNum += L_x;
 
-                K = Tensor.Concat(-3, KCache.ToArray());// Update the concat function so it allows for tensor with different sizes on the axis that is merged on.... plaese..
-                V = Tensor.Concat(-3, VCache.ToArray());
+                K = Tensor.Concat(-3, kCache.ToArray());// Update the concat function so it allows for tensor with different sizes on the axis that is merged on.... plaese..
+                V = Tensor.Concat(-3, vCache.ToArray());
             }
             else
             {
@@ -343,7 +380,7 @@ namespace DeepUnity.Modules
 
             int L_k = K.Size(-3); // L_k is the actual length of the sequence. x might have a sequence length of only 1 when doing inference.
 
-            Tensor mask = BuildMask(is_causal, sliding_window, AttentionMask, batched ? new int[] { B, num_heads_q, L_x, L_k } : new int[] { num_heads_q, L_x, L_k });
+            Tensor mask = BuildMask(is_causal, sliding_window, attentionMask, batched ? new int[] { B, num_heads_q, L_x, L_k } : new int[] { num_heads_q, L_x, L_k });
             
             Tensor scores = ComputeAttentionScoresGPU(Q, K, scale: scaling); // B, Hq,  L_x, L_k
 
