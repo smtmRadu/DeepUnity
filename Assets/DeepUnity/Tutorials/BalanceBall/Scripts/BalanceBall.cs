@@ -5,8 +5,10 @@ namespace DeepUnity.Tutorials
 {
     public class BalanceBall : Agent
     {
-        [Button("SetDefaultHP")]
+        [Button("SetSACHP")]
+        // [Button("SetDefaultHP")]
         [SerializeField] Rigidbody ball;
+        
         [SerializeField] const float rotationSpeed = 1f;
 
         public override void CollectObservations(StateVector sensorBuffer)
@@ -63,6 +65,17 @@ namespace DeepUnity.Tutorials
             model.config.bufferSize = 2048;
             model.standardDeviationValue = 2;
             model.config.timescale = 10;
+
+            print("Config changed for Balance ball");
+        }
+
+        public void SetSACHP()
+        {
+            Utils.Random.Seed = 0;
+            model.config.trainer = TrainerType.SAC;
+            model.config.actorLearningRate = 1e-3f;
+            model.config.criticLearningRate = 1e-3f;
+            model.config.timescale = 20;
 
             print("Config changed for Balance ball");
         }

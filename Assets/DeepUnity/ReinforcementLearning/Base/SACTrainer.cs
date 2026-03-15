@@ -1,9 +1,10 @@
-﻿using DeepUnity.Activations;
+using DeepUnity.Activations;
 using DeepUnity.Models;
 using DeepUnity.Optimizers;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using UnityEditor;
@@ -16,12 +17,42 @@ namespace DeepUnity.ReinforcementLearning
     // Actually q networks are receiving both squashed and unsquashed inputs
 
     // OpenAI SAC trains critic without an aditional value function
+    // [SAC Diagnostics Checklist]
+    // 1) Delete this behaviour's SAC OptimStates files.
+    // 2) Start from fresh behaviour weights.
+    // 3) Start a new training session from step 0.
+    // Reusing stale replay/optimizer state can mask SAC root-cause signals.
     internal sealed class SACTrainer : DeepUnityTrainer, IOffPolicy
     {
+        private struct SACPolicyDiagnostics
+        {
+            public float jMean;
+            public float minQMean;
+            public float entropyTermMean;
+            public float logPiMean;
+            public float sigmaMean;
+            public float sigmaMin;
+            public float sigmaMax;
+            public float actionSaturationRatio;
+            public float dJdMuL2PerElem;
+            public float dJdSigmaL2PerElem;
+            public float dQdaL2PerElem;
+        }
+        private struct SACTargetDiagnostics
+        {
+            public float qTargetMean;
+            public float qTargetStd;
+            public float qTargetMinMean;
+            public float targetEntropyTermMean;
+        }
+
         // Q target networks
         private static Sequential q1TargNetwork;
         private static Sequential q2TargNetwork;
         private int new_experiences_collected = 0;
+        private long sacGradientStep = 0;
+        private SACPolicyDiagnostics policyDiagnostics;
+        private SACTargetDiagnostics targetDiagnostics;
 
         public Optimizer optim_q1q2 { get; set; }
         public Optimizer optim_mu { get; set; }
@@ -46,7 +77,7 @@ namespace DeepUnity.ReinforcementLearning
             else
             {
                 optim_q1q2 = JsonUtility.FromJson<AdamW>(optimizer_states[0]);
-                optim_q1q2.parameters = model.q1Network.Parameters();
+                optim_q1q2.parameters = model.q1Network.Parameters().Concat(model.q2Network.Parameters()).ToArray();
 
                 optim_mu = JsonUtility.FromJson<AdamW>(optimizer_states[1]);
                 optim_mu.parameters = model.muNetwork.Parameters();
@@ -89,6 +120,10 @@ namespace DeepUnity.ReinforcementLearning
                 ConsoleMessage.Info("Online Normalization is not available for off-policy algorithms");
                 model.normalize = false;
             }
+            if (hp.sacDebugMetrics)
+            {
+                ConsoleMessage.Info("[SAC] Diagnostics mode is ON. For valid root-cause isolation run a hard reset: clear SAC OptimStates + fresh behaviour weights + new session.");
+            }
         }
         protected override void OnBeforeFixedUpdate()
         {
@@ -105,13 +140,25 @@ namespace DeepUnity.ReinforcementLearning
                     if (agent_mem.Count == 0)
                         continue;
 
+                    // SAC critic always expects environment actions in [-1, 1].
+                    // During trainable-std phase, actions are stored unsquashed (u), so squash once before replay insert.
+                    // During random warmup, actions are already in [-1, 1], so we keep them unchanged.
+                    if (model.stochasticity == Stochasticity.TrainableStandardDeviation)
+                    {
+                        foreach (var ts in agent_mem.frames)
+                        {
+                            if (ts.action_continuous != null)
+                                ts.action_continuous = ts.action_continuous.Tanh();
+                        }
+                    }
+
                     train_data.TryAppend(agent_mem.frames, hp.replayBufferSize);
                     agent_mem.Clear();
                 }
 
                 if (train_data.Count >= hp.updateAfter)
                 {
-                    model.stochasticity = Stochasticity.TrainebleStandardDeviation;
+                    model.stochasticity = Stochasticity.TrainableStandardDeviation;
 
                     actorLoss = 0;
                     criticLoss = 0;
@@ -133,6 +180,9 @@ namespace DeepUnity.ReinforcementLearning
 
         private void Train()
         {
+            model.muNetwork.Device = model.trainingDevice;
+            model.sigmaNetwork.Device = model.trainingDevice;
+
             for (int epoch_index = 0; epoch_index < hp.updatesNum; epoch_index++)
             {
                 // Sample a random batch of transitions from the replay buffer
@@ -142,12 +192,15 @@ namespace DeepUnity.ReinforcementLearning
                 Tensor states = Tensor.Concat(null, batch.Select(x => x.state).ToArray());
                 Tensor raw_continuous_actions = Tensor.Concat(null, batch.Select(x => x.action_continuous).ToArray());
                 Tensor q_targets;
+                long currentSacStep = ++sacGradientStep;
 
-                ComputeQTargets(batch, out q_targets);
+                ComputeQTargets(batch, out q_targets, currentSacStep);
                 UpdateQFunctions(states, raw_continuous_actions, q_targets);
-                UpdatePolicy(states);
+                UpdatePolicy(states, currentSacStep);
                 UpdateTargetNetworks();
 
+                if (ShouldLogSacDiagnostics(currentSacStep))
+                    LogSacDiagnostics(currentSacStep);
 
                 if (hp.LRSchedule)
                 {
@@ -156,23 +209,34 @@ namespace DeepUnity.ReinforcementLearning
                     optim_sigma.Scheduler.Step();
                 }
             }
+
+            model.muNetwork.Device = model.inferenceDevice;
+            model.sigmaNetwork.Device = model.inferenceDevice;
         }
-        private void ComputeQTargets(TimestepTuple[] batch, out Tensor y)
+        private void ComputeQTargets(TimestepTuple[] batch, out Tensor y, long currentSacStep)
         {
             Tensor sPrime = Tensor.Concat(null, batch.Select(x => x.nextState).ToArray());
+            Tensor mu_prime, sigma_prime;
+            model.ContinuousForward(sPrime, out mu_prime, out sigma_prime);
+            sigma_prime = sigma_prime.Clip(1e-6f, 10f);
 
-            Tensor u_prime, probsPi;
-            model.ContinuousEval(sPrime, out u_prime, out probsPi);
-
-            // Compute log π(a'|s'):
-            // log π = Σ log N(u|μ,σ) - Σ log(1 - tanh²(u))
-
-            Tensor logProbsPi = probsPi.Log().Sum(-1, keepDim: true) - (2.0f * (MathF.Log(2.0f) - u_prime - (-2.0f * u_prime).Softplus())).Sum(-1, keepDim: true); ;
-
+            Tensor ksi_prime = Tensor.RandomNormal(sigma_prime.Shape);
+            Tensor u_prime = mu_prime + sigma_prime * ksi_prime;
             Tensor a_prime = u_prime.Tanh();
+
+            int D = a_prime.Size(-1);
+            float log2Pi = MathF.Log(2f * MathF.PI);
+            Tensor logSigmaSum = sigma_prime.Log().Sum(-1, keepDim: true);
+            Tensor ksiSqSum = ksi_prime.Pow(2f).Sum(-1, keepDim: true);
+            Tensor logPiGaussian = -0.5f * D * log2Pi - logSigmaSum - 0.5f * ksiSqSum;
+            Tensor tanhCorrection = Tensor.Sum(2.0f * (MathF.Log(2.0f) - u_prime - Tensor.Softplus(-2.0f * u_prime)), -1, true);
+            Tensor logProbsPi = logPiGaussian - tanhCorrection;
+            Tensor targetEntropyTerm = -hp.alpha * logProbsPi;
+
             Tensor pair_sPrime_aPrime = StateActionPair(sPrime, a_prime);
             Tensor Qtarg1 = q1TargNetwork.Predict(pair_sPrime_aPrime);
             Tensor Qtarg2 = q2TargNetwork.Predict(pair_sPrime_aPrime);
+            Tensor qTargetMin = Tensor.Minimum(Qtarg1, Qtarg2);
 
             Parallel.For(0, batch.Length, b =>
             {
@@ -189,24 +253,31 @@ namespace DeepUnity.ReinforcementLearning
             });
 
             y = Tensor.Concat(null, batch.Select(x => x.q_target).ToArray());
+
+            targetDiagnostics.qTargetMean = y.Average();
+            targetDiagnostics.qTargetStd = StdOf(y);
+            targetDiagnostics.qTargetMinMean = qTargetMin.Average();
+            targetDiagnostics.targetEntropyTermMean = targetEntropyTerm.Average();
+
+            if (hp.sacDebugMetrics && HasNonFinite(logProbsPi))
+            {
+                ConsoleMessage.Warning($"[SAC][step {currentSacStep}] Non-finite values detected in target logPi.");
+            }
         }
 
-        private void UpdateQFunctions(Tensor states, Tensor raw_continuous_actions, Tensor Q_targets)
+        private void UpdateQFunctions(Tensor states, Tensor continuous_actions, Tensor Q_targets)
         {
             model.q1Network.RequiresGrad = true;
             model.q2Network.RequiresGrad = true;
 
-            // raw_continuous_actions should be UNSQUASHED actions from replay buffer
-            // Squash them for Q-network input
-            Tensor actions_squashed = raw_continuous_actions.Tanh();
-            Tensor state_actionPair = StateActionPair(states, actions_squashed);
+            Tensor state_actionPair = StateActionPair(states, continuous_actions);
 
             Tensor Q1_s_a = model.q1Network.Forward(state_actionPair);
             Tensor Q2_s_a = model.q2Network.Forward(state_actionPair);
 
             Loss q1Loss = Loss.MSE(Q1_s_a, Q_targets);
             Loss q2Loss = Loss.MSE(Q2_s_a, Q_targets);
-            criticLoss = (q1Loss.Item + q2Loss.Item) / 2;
+            criticLoss += (q1Loss.Item + q2Loss.Item) / 2;
 
             optim_q1q2.ZeroGrad();
             model.q1Network.Backward(q1Loss.Grad * 0.5f);
@@ -215,18 +286,18 @@ namespace DeepUnity.ReinforcementLearning
         }
 
 
-        private void UpdatePolicy(Tensor states)
+        private void UpdatePolicy(Tensor states, long currentSacStep)
         {
             model.q1Network.RequiresGrad = false;
             model.q2Network.RequiresGrad = false;
 
             int batch_size = states.Size(0);
-            Tensor aTildeS, u, mu, sigma, ksi;
-            model.ContinuousForward(states, out mu, out sigma);
+            Tensor aTildeS, u, mu, sigmaPreClip, sigma, ksi;
+            model.ContinuousForward(states, out mu, out sigmaPreClip);
 
             // 1. SAFETY: Even with Softplus, sigma can be near-zero (e.g. 1e-7), 
             // which causes Log(sigma) to explode to -16. Clamp it.
-            sigma = sigma.Clip(1e-6f, 10f);
+            sigma = sigmaPreClip.Clip(1e-6f, 10f);
 
             ksi = Tensor.RandomNormal(sigma.Shape);
             u = mu + sigma * ksi;
@@ -255,8 +326,10 @@ namespace DeepUnity.ReinforcementLearning
             Tensor Q1s_aTildeS = model.q1Network.Forward(pair_states_aTildeS);
             Tensor Q2s_aTildeS = model.q2Network.Forward(pair_states_aTildeS);
 
-            Tensor objectiveFunctionJ = Tensor.Minimum(Q1s_aTildeS, Q2s_aTildeS) - hp.alpha * logPI_aThetaTildeS;
-            actorLoss = objectiveFunctionJ.Average();
+            Tensor minQ = Tensor.Minimum(Q1s_aTildeS, Q2s_aTildeS);
+            Tensor entropyTerm = -hp.alpha * logPI_aThetaTildeS;
+            Tensor objectiveFunctionJ = minQ + entropyTerm;
+            actorLoss += objectiveFunctionJ.Average();
 
             // -------------------------------------------------------
             // 4. Manual Differentiation
@@ -270,61 +343,83 @@ namespace DeepUnity.ReinforcementLearning
             Tensor dminQ1Q2_ds_aTildeS = model.q1Network.Backward(dminQ1Q2_dQ1) + model.q2Network.Backward(dminQ1Q2_dQ2);
             Tensor dminQ1Q2_daTildeS = ExtractActionFromStateAction(dminQ1Q2_ds_aTildeS, states.Size(-1), aTildeS.Size(-1));
 
-            Tensor dminQ1Q2_du = dminQ1Q2_daTildeS * (1f - aTildeS.Pow(2f)); // 1 - tanh^2
-            Tensor dminQ1Q2_dMu = dminQ1Q2_du;
-            Tensor dminQ1Q2_dSigma = dminQ1Q2_du * ksi;
+            Tensor dQ_du = dminQ1Q2_daTildeS * (1f - aTildeS.Pow(2f)); // dQ/du = dQ/da * (1 - tanh(u)^2)
 
             // B. Entropy Gradients
-            // We need gradients of: -alpha * logPi
-            // Note: Your previous 'dAlphaLogPi' calculations were correct in derivation, 
-            // but let's align them with the stable LogPi calculation.
+            // We compute log π using the reparameterized noise ksi:
+            // log π = const - sum(log σ) - 0.5 * sum(ksi^2) - tanh_correction(u).
+            // In this form ksi is sampled noise and does not depend on μ, so the Gaussian term
+            // contributes no μ-gradient. Only the tanh correction flows through u = μ + σ·ξ.
+            Tensor dCorrection_du = -2f * aTildeS;
+            Tensor dLogPi_dMu = -dCorrection_du;
+            Tensor dLogPi_dSigma = -dCorrection_du * ksi - 1f / sigma;
 
-            // Gradient of LogGaussian w.r.t u (Reparameterized) is 0 (as per your correct analysis).
-            // Gradient of LogGaussian w.r.t Sigma (Reparameterized) is -1/sigma.
+            // C. Combine Gradients (maximize J = minQ - alpha * logpi)
+            Tensor dJ_dMu = dQ_du - hp.alpha * dLogPi_dMu;
+            Tensor dJ_dSigma = dQ_du * ksi - hp.alpha * dLogPi_dSigma;
 
-            // Derivative of Tanh Correction w.r.t u
-            // d/du [ 2(log2 - u - softplus(-2u)) ] = 2 * ( -1 - sigmoid(-2u)*(-2) ) = -2 + 4*sigmoid(-2u)
-            // This matches your previous 'd2_Log2_u_sp2u_du' logic, but let's reuse the formula for clarity
-            // or keep your efficient implementation:
-            Tensor dCorrection_du = (2f - 2f * Tensor.Exp(2f * u)) / (Tensor.Exp(2f * u) + 1f);
+            // Chain rule for sigma path:
+            // sigma = Clip(sigma_pre, lo, hi), sigma_pre = sigma_net_output * standardDeviationScale
+            Tensor sigmaClipMask = sigmaPreClip.Select(x => x >= 1e-6f && x <= 10f ? 1f : 0f);
 
-            // Total d(LogPi)/du = d(LogGaussian)/du - d(Correction)/du
-            // d(LogGaussian)/du = -(u-mu)/sigma^2.
-            Tensor dLogGaussian_du = -ksi / sigma;
-
-            Tensor dLogPi_du = dLogGaussian_du - dCorrection_du;
-
-            // C. Combine Gradients
-            // We want to MAXIMIZE J.
-            // dJ/dTheta = dQ/dTheta - alpha * dLogPi/dTheta
-
-            // For Mu:
-            // dQ/dMu = dQ/du * 1
-            // dLogPi/dMu (Total) = dLogPi/du * 1 + Partial_Mu(LogGaussian)
-            // Partial_Mu(LogGaussian) = (u-mu)/sigma^2 = ksi/sigma.
-            // Total dLogPi/dMu = (-ksi/sigma - dCorrection_du) + ksi/sigma = -dCorrection_du.
-
-            Tensor dJ_dMu = dminQ1Q2_dMu - hp.alpha * (-dCorrection_du);
-
-            // For Sigma:
-            // dQ/dSigma = dQ/du * ksi
-            // dLogPi/dSigma (Total) = dLogPi/du * ksi + Partial_Sigma(LogGaussian)
-            // Partial_Sigma(LogGaussian) = -1/sigma + (u-mu)^2/sigma^3 = -1/sigma + ksi^2/sigma.
-            // Total dLogPi/dSigma = (-ksi/sigma - dCorrection_du)*ksi + (-1/sigma + ksi^2/sigma)
-            //                     = -ksi^2/sigma - dCorrection_du*ksi - 1/sigma + ksi^2/sigma
-            //                     = -dCorrection_du*ksi - 1/sigma.
-
-            Tensor dJ_dSigma = dminQ1Q2_dSigma - hp.alpha * (-dCorrection_du * ksi - 1f / sigma);
+            // #region agent log
+            if (currentSacStep % 50 == 0)
+            {
+                float sigmaClipMaskMean = sigmaClipMask.Average();
+                float actorLR = optim_mu.gamma;
+                long maxSteps = model.config.maxSteps;
+                float stepRatio = maxSteps > 0 ? (float)currentSacStep / maxSteps : 0f;
+                float dQduL2 = L2PerElement(dminQ1Q2_daTildeS);
+                float dJdMuL2 = L2PerElement(dJ_dMu);
+                float jVal = objectiveFunctionJ.Average();
+                float minQVal = minQ.Average();
+                float entVal = entropyTerm.Average();
+                AgentDebugLog("SACTrainer.cs:UpdatePolicy", "sigmaClipMask", "{\"sigmaClipMaskMean\":" + sigmaClipMaskMean + ",\"step\":" + currentSacStep + "}", "D");
+                AgentDebugLog("SACTrainer.cs:UpdatePolicy", "LR", "{\"actorLR\":" + actorLR + ",\"sacStep\":" + currentSacStep + ",\"maxSteps\":" + maxSteps + ",\"stepRatio\":" + stepRatio + "}", "E");
+                AgentDebugLog("SACTrainer.cs:UpdatePolicy", "gradient magnitude", "{\"dQduL2\":" + dQduL2 + ",\"dJdMuL2\":" + dJdMuL2 + ",\"step\":" + currentSacStep + "}", "F");
+                AgentDebugLog("SACTrainer.cs:UpdatePolicy", "J trend", "{\"J\":" + jVal + ",\"minQ\":" + minQVal + ",\"entropyTerm\":" + entVal + ",\"step\":" + currentSacStep + "}", "B");
+                if (currentSacStep % 200 == 0)
+                    ConsoleMessage.Info($"[SAC-DEBUG step={currentSacStep}] J={jVal:F4} minQ={minQVal:F4} ent={entVal:F4} dQduL2={dQduL2:G4} dJdMuL2={dJdMuL2:G4} actorLR={actorLR:G4}");
+            }
+            // #endregion agent log
+            Tensor dJ_dSigmaPreClip = dJ_dSigma * sigmaClipMask;
+            Tensor dJ_dSigmaNetOut = dJ_dSigmaPreClip * model.standardDeviationScale;
 
             // 5. Step (Ascent)
             // If optimizer minimizes (theta = theta - grad), we pass -dJ.
             optim_mu.ZeroGrad();
             model.muNetwork.Backward(-dJ_dMu);
+            if (hp.maxNorm > 0f) optim_mu.ClipGradNorm(hp.maxNorm);
             optim_mu.Step();
 
             optim_sigma.ZeroGrad();
-            model.sigmaNetwork.Backward(-dJ_dSigma);
+            model.sigmaNetwork.Backward(-dJ_dSigmaNetOut);
+            if (hp.maxNorm > 0f) optim_sigma.ClipGradNorm(hp.maxNorm);
             optim_sigma.Step();
+
+            // restored q1/q2 network device removed
+
+            policyDiagnostics.jMean = objectiveFunctionJ.Average();
+            policyDiagnostics.minQMean = minQ.Average();
+            policyDiagnostics.entropyTermMean = entropyTerm.Average();
+            policyDiagnostics.logPiMean = logPI_aThetaTildeS.Average();
+            policyDiagnostics.sigmaMean = sigma.Average();
+            policyDiagnostics.sigmaMin = sigma.Min();
+            policyDiagnostics.sigmaMax = sigma.Max();
+            policyDiagnostics.actionSaturationRatio = aTildeS.Select(x => MathF.Abs(x) > 0.95f ? 1f : 0f).Average();
+            policyDiagnostics.dJdMuL2PerElem = L2PerElement(dJ_dMu);
+            policyDiagnostics.dJdSigmaL2PerElem = L2PerElement(dJ_dSigma);
+            policyDiagnostics.dQdaL2PerElem = L2PerElement(dminQ1Q2_daTildeS);
+
+            if (hp.sacDebugMetrics
+                && (HasNonFinite(logPI_aThetaTildeS)
+                    || HasNonFinite(sigma)
+                    || HasNonFinite(dJ_dMu)
+                    || HasNonFinite(dJ_dSigma)
+                    || HasNonFinite(dJ_dSigmaNetOut)))
+            {
+                ConsoleMessage.Warning($"[SAC][step {currentSacStep}] Non-finite values detected in policy path (logPi/sigma/dJdMu/dJdSigma).");
+            }
         }
 
         public void UpdateTargetNetworks()
@@ -382,6 +477,61 @@ namespace DeepUnity.ReinforcementLearning
                 }
             });
             return pair;
+        }
+
+        // #region agent log
+        private static bool _debugLogPathPrinted;
+        private static void AgentDebugLog(string location, string message, string dataJson, string hypothesisId = null)
+        {
+            var line = "{\"sessionId\":\"b67f4f\",\"location\":\"" + location + "\",\"message\":\"" + message.Replace("\"", "\\\"") + "\",\"data\":" + dataJson + ",\"timestamp\":" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + (string.IsNullOrEmpty(hypothesisId) ? "" : ",\"hypothesisId\":\"" + hypothesisId + "\"") + "}\n";
+            var paths = new[] { Path.Combine(Application.dataPath, "DeepUnity", "ReinforcementLearning", "Base", "debug-b67f4f.log"), Path.Combine(Application.persistentDataPath, "debug-b67f4f.log") };
+            foreach (var logPath in paths)
+            {
+                try
+                {
+                    var logDir = Path.GetDirectoryName(logPath);
+                    if (!string.IsNullOrEmpty(logDir) && !Directory.Exists(logDir)) Directory.CreateDirectory(logDir);
+                    File.AppendAllText(logPath, line);
+                    if (!_debugLogPathPrinted) { ConsoleMessage.Info("[SAC-DEBUG] Log file: " + logPath); _debugLogPathPrinted = true; }
+                    return;
+                }
+                catch { }
+            }
+        }
+        // #endregion agent log
+
+        private bool ShouldLogSacDiagnostics(long step)
+        {
+            if (!hp.sacDebugMetrics)
+                return false;
+
+            int every = Math.Max(1, hp.sacDebugEveryNUpdates);
+            return step % every == 0;
+        }
+        private void LogSacDiagnostics(long step)
+        {
+            ConsoleMessage.Info(
+                $"[SAC-DIAG][step {step}] " +
+                $"J={policyDiagnostics.jMean:0.0000} | minQ={policyDiagnostics.minQMean:0.0000} | ent(-a*logpi)={policyDiagnostics.entropyTermMean:0.0000} | logpi={policyDiagnostics.logPiMean:0.0000} | " +
+                $"sigma(mean/min/max)=({policyDiagnostics.sigmaMean:0.000000}/{policyDiagnostics.sigmaMin:0.000000}/{policyDiagnostics.sigmaMax:0.000000}) | " +
+                $"sat(|a|>.95)={policyDiagnostics.actionSaturationRatio:P2} | " +
+                $"||dJdMu||/N={policyDiagnostics.dJdMuL2PerElem:0.000000e+0} | ||dJdSigma||/N={policyDiagnostics.dJdSigmaL2PerElem:0.000000e+0} | ||dQda||/N={policyDiagnostics.dQdaL2PerElem:0.000000e+0} | " +
+                $"Qtarget(mean/std)={targetDiagnostics.qTargetMean:0.0000}/{targetDiagnostics.qTargetStd:0.0000} | qtarg_min_mean={targetDiagnostics.qTargetMinMean:0.0000} | target_ent_term={targetDiagnostics.targetEntropyTermMean:0.0000}");
+        }
+        private static bool HasNonFinite(Tensor tensor)
+        {
+            return tensor.Any(x => float.IsNaN(x) || float.IsInfinity(x));
+        }
+        private static float L2PerElement(Tensor tensor)
+        {
+            float l2 = Tensor.Norm(tensor, NormType.EuclideanL2)[0];
+            return l2 / MathF.Max(1f, tensor.Count());
+        }
+        private static float StdOf(Tensor tensor)
+        {
+            float mean = tensor.Average();
+            float variance = tensor.Select(x => (x - mean) * (x - mean)).Average();
+            return MathF.Sqrt(MathF.Max(0f, variance));
         }
 
         protected override string[] SerializeOptimizerStates()

@@ -57,6 +57,10 @@ namespace DeepUnity.Modules
         {
             set
             {
+                if (this.is_causal == false)
+                {
+                    ConsoleMessage.Warning("Cannot build or reset KVCache because the model is not causal. Action skipped.");
+                }
                 if (value)
                 {
                     cachedTokensNum = 0;

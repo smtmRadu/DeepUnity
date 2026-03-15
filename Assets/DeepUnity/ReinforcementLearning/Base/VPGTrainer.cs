@@ -70,7 +70,7 @@ namespace DeepUnity.ReinforcementLearning
             if (model.discreteNetwork != null)
                 model.discreteNetwork.Device = model.inferenceDevice;
 
-            if (model.stochasticity != Stochasticity.FixedStandardDeviation || model.stochasticity != Stochasticity.TrainebleStandardDeviation)
+            if (model.stochasticity != Stochasticity.FixedStandardDeviation || model.stochasticity != Stochasticity.TrainableStandardDeviation)
                 model.stochasticity = Stochasticity.FixedStandardDeviation;
 
         }
@@ -189,7 +189,7 @@ namespace DeepUnity.ReinforcementLearning
                     {
                         tasks_kle.AddLast(Task.Run(() => mu_kle_cache = model.muNetwork.Parameters().Select(x => x.param.Clone() as Tensor).ToArray()));
 
-                        if (model.stochasticity == Stochasticity.TrainebleStandardDeviation)
+                        if (model.stochasticity == Stochasticity.TrainableStandardDeviation)
                             tasks_kle.AddLast(Task.Run(() => sigma_kle_cache = model.sigmaNetwork.Parameters().Select(x => x.param.Clone() as Tensor).ToArray()));
 
                     }
@@ -260,7 +260,7 @@ namespace DeepUnity.ReinforcementLearning
                                         Tensor.CopyTo(cache, current);
                                     }
                                 }));
-                                if (model.stochasticity == Stochasticity.TrainebleStandardDeviation)
+                                if (model.stochasticity == Stochasticity.TrainableStandardDeviation)
                                     tasks_kle.AddLast(Task.Run(() =>
                                     {
                                         foreach (var (cache, current) in sigma_kle_cache.Zip(model.sigmaNetwork.Parameters(), (x, y) => (x, y.param)))
@@ -385,7 +385,7 @@ namespace DeepUnity.ReinforcementLearning
             // optim_mu.ClipGradNorm(hp.maxNorm);
             optim_mu.Step();
 
-            if (model.stochasticity == Stochasticity.TrainebleStandardDeviation)
+            if (model.stochasticity == Stochasticity.TrainableStandardDeviation)
             {
                 // ∂πθ(a|s) / ∂σ = πθ(a|s) * ((x - μ)^2 - σ^2) / σ^3    (Simple statistical gradient-following for connectionst Reinforcement Learning (pag 14))
                 Tensor dPi_dSigma = pi * ((actions - mu).Square() - sigmaSquared) / (sigmaSquared * sigma);

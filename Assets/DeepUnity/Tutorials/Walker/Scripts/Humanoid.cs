@@ -35,7 +35,6 @@ namespace DeepUnity.Tutorials
 
         [ViewOnly] public float stepReward;
 
-
         BodyController bodyController;
         public override void Awake()
         {
@@ -79,6 +78,19 @@ namespace DeepUnity.Tutorials
                 }
             });
         }
+
+        public override void OnEpisodeBegin()
+        {
+            var currentZpos = transform.position.z;
+
+
+            if (behaviourType == BehaviourType.Learn)
+            {
+                float noise = Utils.Random.Range(-0.03f, 0.03f);
+                transform.position = new Vector3(transform.position.x, transform.position.y + noise, transform.position.z); 
+            }
+        }
+        
         public override void CollectObservations(StateVector stateBuffer)
         {
             var jdDict = bodyController.bodyPartsDict;

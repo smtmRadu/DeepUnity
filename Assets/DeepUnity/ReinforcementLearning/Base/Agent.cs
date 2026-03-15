@@ -339,7 +339,7 @@ namespace DeepUnity.ReinforcementLearning
             ActionsBuffer.Clear();
             if(model.IsUsingContinuousActions)
             {
-                if (model.stochasticity == Stochasticity.FixedStandardDeviation || model.stochasticity == Stochasticity.TrainebleStandardDeviation)
+                if (model.stochasticity == Stochasticity.FixedStandardDeviation || model.stochasticity == Stochasticity.TrainableStandardDeviation)
                     ActionsBuffer.ContinuousActions = Timestep.action_continuous.Tanh().ToArray();
          
                 else if (model.stochasticity == Stochasticity.ActiveNoise || model.stochasticity == Stochasticity.OUNoise || model.stochasticity == Stochasticity.Random)

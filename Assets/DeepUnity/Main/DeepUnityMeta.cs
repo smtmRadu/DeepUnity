@@ -203,7 +203,7 @@ namespace DeepUnity
         [Tooltip("Used for stochastic policies (PPO)")]
         FixedStandardDeviation,
         [Tooltip("Used for stochastic policies (PPO, SAC)")]
-        TrainebleStandardDeviation,
+        TrainableStandardDeviation,
         [Tooltip("Zero-mean Gaussian noise is added over the actions. Used for deterministic policies (TD3, DDPG)")]
         ActiveNoise,
         [Tooltip("Ornstein-Uhlenbeck noise is added over the actions. Used in DPPG.")]

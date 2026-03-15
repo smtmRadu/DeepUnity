@@ -15,6 +15,13 @@ namespace DeepUnity.Models
         [NonSerialized] public IModule[] Modules;
         [SerializeField] private IModuleWrapper[] serializedModules;
 
+        public static Sequential Create(params IModule[] modules)
+        {
+            var instance = CreateInstance<Sequential>();
+            instance.Modules = modules;
+            return instance;
+        }
+
         public Sequential(params IModule[] modules) => this.Modules = modules;
 
         /// <summary>
@@ -129,7 +136,7 @@ namespace DeepUnity.Models
         public override object Clone()
         {
             var cloned_modules = Modules.Select(x => (IModule)x.Clone()).ToArray();
-            var net = new Sequential(cloned_modules);
+            var net = Create(cloned_modules);
             return net; 
         } 
     }

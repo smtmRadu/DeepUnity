@@ -4,18 +4,12 @@ using DeepUnity.Modules;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Assertions;
-
 using System.IO;
-using System.Drawing.Printing;
-using Palmmedia.ReportGenerator.Core.Common;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -673,13 +667,14 @@ namespace DeepUnity
             var cacheRoot = $"{resourcesRoot}/Cache";
             var hashFolder = $"{cacheRoot}/{hash}";
 
-            if (!AssetDatabase.IsValidFolder(resourcesRoot))
-                    AssetDatabase.CreateFolder("Assets", "Resources");
-            if (!AssetDatabase.IsValidFolder(cacheRoot))
-                    AssetDatabase.CreateFolder(resourcesRoot, "Cache");
+            if (!Directory.Exists(resourcesRoot))
+                    Directory.CreateDirectory(resourcesRoot);
+            if (!Directory.Exists(cacheRoot))
+                    Directory.CreateDirectory(cacheRoot);
 
+            bool is_there_a_hash_folder = Directory.Exists(hashFolder);
             Stopwatch sw = Stopwatch.StartNew();
-            if(AssetDatabase.IsValidFolder(hashFolder))
+            if(is_there_a_hash_folder)
             {
                 for(int l_id = 0; l_id < model.layers.Count; l_id++)
                 {
@@ -732,11 +727,8 @@ namespace DeepUnity
 
 
                 // NOW CACHE KV
-#if UNITY_EDITOR
-
-                
                 sw = Stopwatch.StartNew(); 
-                AssetDatabase.CreateFolder(cacheRoot, hash);
+                Directory.CreateDirectory(hashFolder);
 
                 List<string> json_k = new();
                 List<string> json_v = new();
@@ -753,11 +745,11 @@ namespace DeepUnity
                     File.WriteAllText($"{hashFolder}/v_cache_layer_{i}.json", json_v[i]);
                 }
 
-                AssetDatabase.Refresh();
+#if UNITY_EDITOR
+                UnityEditor.AssetDatabase.Refresh();
+#endif
                 sw.Stop();
                 ConsoleMessage.Info($"KV Cache cached. ({sw.Elapsed.TotalSeconds:0.00} s)");
-
-#endif
 
                 yield return true;
             }

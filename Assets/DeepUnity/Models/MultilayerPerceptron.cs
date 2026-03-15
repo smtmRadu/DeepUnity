@@ -163,7 +163,7 @@ namespace DeepUnity.Models
         public override object Clone()
         {
             var cloned_modules = modules.Select(x => (IModule)x.Clone()).ToArray();
-            var net = new Sequential(cloned_modules);
+            var net = Sequential.Create(cloned_modules);
             return net;
         }
     }

@@ -70,6 +70,7 @@ namespace DeepUnity.Tutorials
             }
             AssetDatabase.Refresh();
 #endif
+            yield return null;
         }
     
     
@@ -116,7 +117,7 @@ namespace DeepUnity.Tutorials
                 print(ranked.Count);
                 print(nodes.Count);
 
-                print(ranked[0].Node.Document);
+                print("First document retrieved: " + ranked[0].Node.Document);
                 foreach (var item in ranked)
                 {
                     scrollView.Add(CreateDocCard(item.Node.Document, item.Score));

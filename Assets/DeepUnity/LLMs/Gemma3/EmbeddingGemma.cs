@@ -310,14 +310,14 @@ namespace DeepUnity
             Stopwatch stopwatch = Stopwatch.StartNew();
 
             //Debug.Log("Tokenizer ready");
-            foreach (var item in model.layers)
-            {
-                item.self_attn.BuildKVCache = false;
-            }
+            // foreach (var item in model.layers)
+            // {
+            //     item.self_attn.BuildKVCache = false;
+            // }
 
             //Debug.Log("Prompt: " + prompt);
 
-            prompt += "<eos>"; // it seems like when tested with sentence-transformers it adds <bos> and <eos> tags at the start and end
+            // prompt += "<eos>"; 
             (Tensor, Tensor) tokenized_prompt = tokenizer.Encode(prompt);
             yield return null;
 
@@ -326,7 +326,7 @@ namespace DeepUnity
             // forward + lm_head (with frame generation allowed) ============================================================================================================
             Tensor y = null;
 
-            var input_ids = tokenized_prompt.Item1;
+            var input_ids = Tensor.Concat(-1, tokenized_prompt.Item1, Tensor.Fill(Gemma3TokenizerFast.EOS_TOKEN_ID, 1)); // it seems like when tested with sentence-transformers it adds <bos> and <eos> tags at the start and end
             // Debug.Log("Input IDS: " + input_ids);
             Tensor attn_mask = null;
             bool is_batched = input_ids.Rank == 3;

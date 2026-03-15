@@ -41,7 +41,7 @@ namespace DeepUnity.Modules
             if(elementwise_affine)
             {
                 gamma = Tensor.Ones(num_features);
-                gammaGrad = null;  //Tensor.Zeros(num_features);
+                gammaGrad = Tensor.Zeros(num_features); // this should be null but it seems that in RL it somehow fails to be initialized.. (for linear layer works idk why)
             }
         }
         private RMSNorm() { }

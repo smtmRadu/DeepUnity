@@ -1,0 +1,30 @@
+[ActorChainGradientProbe] Q1(mu(s)) on GPU
+samples=3, epsilon=0.001, checkedParameters=8, stateSize=10, actionSize=2
+sample=1 q=-0.149268 mean|err|=8.765E-006 max|err|=3.415E-005 cos=1.000000
+  param[0][0]: analytic=0.0000E+000 numeric=0.0000E+000 absErr=0.0000E+000
+  param[0][160]: analytic=4.5331E-003 numeric=4.5672E-003 absErr=3.4150E-005
+  param[0][319]: analytic=-7.6738E-003 numeric=-7.6592E-003 absErr=1.4577E-005
+  param[1][0]: analytic=0.0000E+000 numeric=0.0000E+000 absErr=0.0000E+000
+  param[1][16]: analytic=-1.2498E-002 numeric=-1.2517E-002 absErr=1.9422E-005
+  param[1][31]: analytic=-1.1218E-001 numeric=-1.1218E-001 absErr=1.9744E-006
+  param[2][0]: analytic=0.0000E+000 numeric=0.0000E+000 absErr=0.0000E+000
+  param[2][512]: analytic=0.0000E+000 numeric=0.0000E+000 absErr=0.0000E+000
+sample=2 q=0.201575 mean|err|=8.843E-006 max|err|=4.446E-005 cos=0.999970
+  param[0][0]: analytic=0.0000E+000 numeric=0.0000E+000 absErr=0.0000E+000
+  param[0][160]: analytic=0.0000E+000 numeric=0.0000E+000 absErr=0.0000E+000
+  param[0][319]: analytic=1.2370E-003 numeric=1.2815E-003 absErr=4.4465E-005
+  param[1][0]: analytic=0.0000E+000 numeric=0.0000E+000 absErr=0.0000E+000
+  param[1][16]: analytic=0.0000E+000 numeric=0.0000E+000 absErr=0.0000E+000
+  param[1][31]: analytic=-4.3621E-003 numeric=-4.3884E-003 absErr=2.6280E-005
+  param[2][0]: analytic=0.0000E+000 numeric=0.0000E+000 absErr=0.0000E+000
+  param[2][512]: analytic=0.0000E+000 numeric=0.0000E+000 absErr=0.0000E+000
+sample=3 q=0.323566 mean|err|=1.934E-005 max|err|=5.406E-005 cos=1.000000
+  param[0][0]: analytic=0.0000E+000 numeric=0.0000E+000 absErr=0.0000E+000
+  param[0][160]: analytic=3.4030E-003 numeric=3.4571E-003 absErr=5.4055E-005
+  param[0][319]: analytic=-5.5787E-002 numeric=-5.5820E-002 absErr=3.2306E-005
+  param[1][0]: analytic=0.0000E+000 numeric=0.0000E+000 absErr=0.0000E+000
+  param[1][16]: analytic=5.1108E-002 numeric=5.1066E-002 absErr=4.1675E-005
+  param[1][31]: analytic=1.3670E-001 numeric=1.3667E-001 absErr=2.6658E-005
+  param[2][0]: analytic=0.0000E+000 numeric=0.0000E+000 absErr=0.0000E+000
+  param[2][512]: analytic=0.0000E+000 numeric=0.0000E+000 absErr=0.0000E+000
+summary mean|err|=1.232E-005 max|err|=5.406E-005 avgCos=0.999990

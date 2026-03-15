@@ -1,0 +1,37 @@
+Your task is to write a roleplay conversation between an NPC and a player.
+
+Instructions:
+1. First you need to invent the NPC. Come up with a name, a personality (e.g. style of talking), backstory and knowledge.
+   This entire thing will go into the system message. Try to formulate it naturaly, like: "You are John Doe, a roman warrior blah blah blah"
+   Make the entire decription concise.
+   You can propose any character you want, either historical, science fiction, ladies, warriors, fantastic creatures etc.
+2. Then you need to propose the conversation. You will come up with user/assistant messages exchange.
+   Consider to make creative but in the same time expected questions from the user: Like who you are, how can I make this, how can I reach that, what was your story etc.
+   The assistant will always answer in the style that was proposed in the system prompt (e.g. if the NPC is a dwarf, it will answer in a dwarven style)
+   The assistant will always answer within the limits of his knowledge defined in the system prompt.
+   He refuses to answer questions that are outside of his knowledge. But he doesn't refuse just with: "I don't know" or "I cannot answer that", he will refuse in his style.
+3. Create around 8-12 conversation exchanges. You can also include a bye message from both (but not just simple bye)
+4. You will return as your final answer a list of dicts as follows (no extra text/comments/informations, just this list):
+[
+    {
+        "role": "system",
+        "content": "..."
+    },
+    {
+        "role": "user",
+        "content": "..."
+    },
+    {
+        "role": "assistant",
+        "content": "..."
+    },
+    {
+        "role": "user",
+        "content": "..."
+    },
+    {
+        "role": "assistant",
+        "content": "..."
+    }
+    ...
+]

@@ -1,4 +1,4 @@
-﻿using DeepUnity.Activations;
+using DeepUnity.Activations;
 using DeepUnity.Models;
 using DeepUnity.Modules;
 using System;
@@ -95,12 +95,17 @@ namespace DeepUnity.ReinforcementLearning
         const string MU_NET_NAMING_CONVENTION = "Mu";
         const string SIGMA_NET_NAMING_CONVENTION = "Sigma";
         const string DISCRETE_NET_NAMING_CONVENTION = "Discrete";
-        private AgentBehaviour(in int STATE_SIZE, in int STACKED_INPUTS, in int VISUAL_INPUT_WIDTH, in int VISUAL_INPUT_HEIGHT, in int VISUAL_INPUT_CHANNELS,
+        private void Initialize(in int STATE_SIZE, in int STACKED_INPUTS, in int VISUAL_INPUT_WIDTH, in int VISUAL_INPUT_HEIGHT, in int VISUAL_INPUT_CHANNELS,
             in int CONTINUOUS_ACTIONS_NUM, in int DISCRETE_ACTIONS_NUM, in int NUM_LAYERS, in int HIDDEN_UNITS, in ArchitectureType ARCHITECTURE, in NonLinearity NONLINEARITY)
         {
+            observationSize = STATE_SIZE;
+            stackedInputs = STACKED_INPUTS;
+            continuousDim = CONTINUOUS_ACTIONS_NUM;
+            discreteDim = DISCRETE_ACTIONS_NUM;
+            observationsNormalizer = new RunningNormalizer(STATE_SIZE * STACKED_INPUTS);
+            rewardsNormalizer = new RewardsNormalizer();
+            assetCreated = true;
 
-           
-           
             static IActivation HiddenActivation(NonLinearity activ)
             {
                 switch(activ)
@@ -301,60 +306,60 @@ namespace DeepUnity.ReinforcementLearning
 
             if (ARCHITECTURE == ArchitectureType.MLP)
             {
-                vNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                vNetwork = Sequential.Create(CreateMLP(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                 if (CONTINUOUS_ACTIONS_NUM > 0)
                 {
-                    muNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
-                    sigmaNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
-                    q1Network = new Sequential(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
-                    q2Network = new Sequential(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                    muNetwork = Sequential.Create(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                    sigmaNetwork = Sequential.Create(CreateMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
+                    q1Network = Sequential.Create(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                    q2Network = Sequential.Create(CreateMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                 }
 
                 if (DISCRETE_ACTIONS_NUM > 0)
-                    discreteNetwork = new Sequential(CreateMLP(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softmax() }).ToArray());
+                    discreteNetwork = Sequential.Create(CreateMLP(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softmax() }).ToArray());
             }
             else if (ARCHITECTURE == ArchitectureType.LnMLP)
             {
-                vNetwork = new Sequential(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                vNetwork = Sequential.Create(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                 if (CONTINUOUS_ACTIONS_NUM > 0)
                 {
-                    muNetwork = new Sequential(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
-                    sigmaNetwork = new Sequential(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
-                    q1Network = new Sequential(CreateLnMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
-                    q2Network = new Sequential(CreateLnMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                    muNetwork = Sequential.Create(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                    sigmaNetwork = Sequential.Create(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
+                    q1Network = Sequential.Create(CreateLnMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                    q2Network = Sequential.Create(CreateLnMLP((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                 }
 
                 if (DISCRETE_ACTIONS_NUM > 0)
-                    discreteNetwork = new Sequential(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softmax() }).ToArray());
+                    discreteNetwork = Sequential.Create(CreateLnMLP(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softmax() }).ToArray());
 
             }
             else if (ARCHITECTURE == ArchitectureType.RNN)
             {
-                vNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                vNetwork = Sequential.Create(CreateRNN(STATE_SIZE, STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
 
                 if (CONTINUOUS_ACTIONS_NUM > 0)
                 {
-                    muNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
-                    sigmaNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
-                    q1Network = new Sequential(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
-                    q2Network = new Sequential(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                    muNetwork = Sequential.Create(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                    sigmaNetwork = Sequential.Create(CreateRNN(STATE_SIZE, STACKED_INPUTS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
+                    q1Network = Sequential.Create(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                    q2Network = Sequential.Create(CreateRNN((STATE_SIZE + CONTINUOUS_ACTIONS_NUM), STACKED_INPUTS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
                 }
 
                 if (DISCRETE_ACTIONS_NUM > 0)
-                    discreteNetwork = new Sequential(CreateRNN(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softmax() }).ToArray());
+                    discreteNetwork = Sequential.Create(CreateRNN(STATE_SIZE, STACKED_INPUTS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softmax() }).ToArray());
             }
             else if (ARCHITECTURE == ArchitectureType.CNN)
             {
-                vNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                vNetwork = Sequential.Create(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, 1, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
 
                 if (CONTINUOUS_ACTIONS_NUM > 0)
                 {
-                    muNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
-                    sigmaNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
+                    muNetwork = Sequential.Create(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY));
+                    sigmaNetwork = Sequential.Create(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, CONTINUOUS_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softplus() }).ToArray());
                 }
 
                 if (DISCRETE_ACTIONS_NUM > 0)
-                    discreteNetwork = new Sequential(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softmax() }).ToArray());
+                    discreteNetwork = Sequential.Create(CreateCNN(VISUAL_INPUT_WIDTH, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_CHANNELS, DISCRETE_ACTIONS_NUM, NUM_LAYERS, HIDDEN_UNITS, NONLINEARITY).Concat(new IModule[] { new Softmax() }).ToArray());
 
                 Tensor input = Tensor.Ones(VISUAL_INPUT_CHANNELS, VISUAL_INPUT_HEIGHT, VISUAL_INPUT_WIDTH);
                 vNetwork.Predict(input);
@@ -367,6 +372,79 @@ namespace DeepUnity.ReinforcementLearning
                 throw new NotImplementedException("Unhandled ArchType");
 
         }
+#if UNITY_EDITOR
+        private static void EnsureBehaviourFolder(string behaviourName)
+        {
+            string folderPath = $"Assets/{behaviourName}";
+            if (AssetDatabase.IsValidFolder(folderPath))
+                return;
+
+            AssetDatabase.CreateFolder("Assets", behaviourName);
+        }
+
+        private static bool EnsureNetworkAsset(ref Sequential field, string behaviourName, string assetName, Sequential fallback)
+        {
+            if (field != null && AssetDatabase.Contains(field))
+                return false;
+
+            if (field != null)
+            {
+                field.CreateAsset($"{behaviourName}/{assetName}");
+                return true;
+            }
+
+            field = AssetDatabase.LoadAssetAtPath<Sequential>($"Assets/{behaviourName}/{assetName}.asset");
+            if (field != null)
+                return false;
+
+            field = fallback;
+            field.CreateAsset($"{behaviourName}/{assetName}");
+            return true;
+        }
+
+        private void EnsureSupportAssets_EditorOnly(string behaviourName, int stateSize, int stackedInputs, int widthSize, int heightSize, int channelSize, int continuousActions, int discreteActions, int numLayers, int hidUnits, ArchitectureType aType, NonLinearity nonlinearity, bool notifyIfRepaired)
+        {
+            EnsureBehaviourFolder(behaviourName);
+
+            bool repaired = false;
+            if (config == null || !AssetDatabase.Contains(config))
+            {
+                config = Hyperparameters.CreateOrLoadAsset(behaviourName);
+                repaired = true;
+            }
+
+            AgentBehaviour template = CreateInstance<AgentBehaviour>();
+            template.behaviourName = behaviourName;
+            template.Initialize(stateSize, stackedInputs, widthSize, heightSize, channelSize, continuousActions, discreteActions, numLayers, hidUnits, aType, nonlinearity);
+
+            repaired |= EnsureNetworkAsset(ref vNetwork, behaviourName, VALUE_NET_NAMING_CONVENTION, template.vNetwork);
+
+            if (continuousActions > 0)
+            {
+                repaired |= EnsureNetworkAsset(ref muNetwork, behaviourName, MU_NET_NAMING_CONVENTION, template.muNetwork);
+                repaired |= EnsureNetworkAsset(ref sigmaNetwork, behaviourName, SIGMA_NET_NAMING_CONVENTION, template.sigmaNetwork);
+                repaired |= EnsureNetworkAsset(ref q1Network, behaviourName, Q1_NET_NAMING_CONVENTION, template.q1Network);
+                repaired |= EnsureNetworkAsset(ref q2Network, behaviourName, Q2_NET_NAMING_CONVENTION, template.q2Network);
+            }
+
+            if (discreteActions > 0)
+            {
+                repaired |= EnsureNetworkAsset(ref discreteNetwork, behaviourName, DISCRETE_NET_NAMING_CONVENTION, template.discreteNetwork);
+            }
+
+            DestroyImmediate(template);
+
+            if (!repaired)
+                return;
+
+            EditorUtility.SetDirty(this);
+            AssetDatabase.SaveAssetIfDirty(this);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            if (notifyIfRepaired)
+                ConsoleMessage.Info($"Behaviour {behaviourName} bake repaired missing assets.");
+        }
+#endif
 
         /// <summary>
         /// Input: <paramref name="state"/> - <em>sₜ</em> | <see cref="Tensor"/> (<em>Observations</em>) or <see cref="Tensor"/>  (<em>Batch</em>, <em>Observations</em>)<br></br>
@@ -392,7 +470,7 @@ namespace DeepUnity.ReinforcementLearning
                     action = mu.Select(x => Utils.Random.Normal(x, standardDeviationValue, threadsafe: false));
                     probs = Tensor.Probability(action, mu, sigma);
                     break;
-                case Stochasticity.TrainebleStandardDeviation:
+                case Stochasticity.TrainableStandardDeviation:
                     mu = muNetwork.Predict(state);
                     sigma = sigmaNetwork.Predict(state) * standardDeviationScale;
                     action = mu.Zip(sigma, (x, y) => Utils.Random.Normal(x, y, threadsafe: false));
@@ -443,7 +521,7 @@ namespace DeepUnity.ReinforcementLearning
                     muBatch = muNetwork.Forward(stateBatch);
                     sigmaBatch = Tensor.Fill(standardDeviationValue, muBatch.Shape);
                     break;
-                case Stochasticity.TrainebleStandardDeviation:
+                case Stochasticity.TrainableStandardDeviation:
                     muBatch = muNetwork.Forward(stateBatch);
                     sigmaBatch = sigmaNetwork.Forward(stateBatch) * standardDeviationScale;
                     break;
@@ -548,42 +626,25 @@ namespace DeepUnity.ReinforcementLearning
             if (stateSize == 0 && (aType == ArchitectureType.CNN || aType  == ArchitectureType.ATT))
                 stateSize = 1;
 #if UNITY_EDITOR
+            EnsureBehaviourFolder(name);
             var instance = UnityEditor.AssetDatabase.LoadAssetAtPath<AgentBehaviour>($"Assets/{name}/_{name}.asset");
 
             if (instance != null)
             {
+                instance.EnsureSupportAssets_EditorOnly(name, stateSize, stackedInputs, widthSize, heightSize, channelSize, continuousActions, discreteActions, numLayers, hidUnits, aType, nonlinearity, notifyIfRepaired: true);
                 ConsoleMessage.Info($"Behaviour {name} asset loaded");
                 return instance;
             }
 #endif
 
-            AgentBehaviour newAgBeh = new AgentBehaviour(stateSize, stackedInputs, widthSize, heightSize, channelSize, continuousActions, discreteActions, numLayers, hidUnits, aType, nonlinearity);
+            AgentBehaviour newAgBeh = CreateInstance<AgentBehaviour>();
             newAgBeh.behaviourName = name;
-            newAgBeh.observationSize = stateSize;
-            newAgBeh.stackedInputs = stackedInputs;
-            newAgBeh.continuousDim = continuousActions;
-            newAgBeh.discreteDim = discreteActions;
-            newAgBeh.observationsNormalizer = new RunningNormalizer(stateSize * stackedInputs);
-            newAgBeh.rewardsNormalizer = new RewardsNormalizer(); // the gamma is updated afterwards
-            newAgBeh.assetCreated = true;
-
-            // Create the asset
-            if (!Directory.Exists($"Assets/{name}"))
-                Directory.CreateDirectory($"Assets/{name}");
+            newAgBeh.Initialize(stateSize, stackedInputs, widthSize, heightSize, channelSize, continuousActions, discreteActions, numLayers, hidUnits, aType, nonlinearity);
 
 #if UNITY_EDITOR
             UnityEditor.AssetDatabase.CreateAsset(newAgBeh, $"Assets/{name}/_{name}.asset");
+            newAgBeh.EnsureSupportAssets_EditorOnly(name, stateSize, stackedInputs, widthSize, heightSize, channelSize, continuousActions, discreteActions, numLayers, hidUnits, aType, nonlinearity, notifyIfRepaired: false);
 #endif
-
-            // Create aux assets
-            newAgBeh.config = Hyperparameters.CreateOrLoadAsset(name);
-            newAgBeh.vNetwork?.CreateAsset($"{name}/{VALUE_NET_NAMING_CONVENTION}");
-            newAgBeh.muNetwork?.CreateAsset($"{name}/{MU_NET_NAMING_CONVENTION}");
-            newAgBeh.sigmaNetwork?.CreateAsset($"{name}/{SIGMA_NET_NAMING_CONVENTION}");
-            newAgBeh.q1Network?.CreateAsset($"{name}/{Q1_NET_NAMING_CONVENTION}");
-            newAgBeh.q2Network?.CreateAsset($"{name}/{Q2_NET_NAMING_CONVENTION}");
-            newAgBeh.discreteNetwork?.CreateAsset($"{name}/{DISCRETE_NET_NAMING_CONVENTION}");
-
 
             return newAgBeh;
         }
@@ -790,32 +851,35 @@ namespace DeepUnity.ReinforcementLearning
         private void TryReassignReference_EditorOnly()
         {
 #if UNITY_EDITOR
-            if(config == null)
+            string path = AssetDatabase.GetAssetPath(GetInstanceID());
+            if (string.IsNullOrEmpty(path))
+                return;
+
+            string dirpath = Path.GetDirectoryName(path);
+            string[] guids = AssetDatabase.FindAssets("t:Object", new[] { dirpath });
+            List<UnityEngine.Object> allBehaviorAssets = new();
+            foreach (string guid in guids)
             {
-                string path = AssetDatabase.GetAssetPath(GetInstanceID());
-                string dirpath = Path.GetDirectoryName(path);
-
-                string[] guids = AssetDatabase.FindAssets("t:Object", new[] { dirpath });
-                List<UnityEngine.Object> allBehaviorAssets = new();
-                foreach (string guid in guids)
-                {
-                    string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                    allBehaviorAssets.Add(AssetDatabase.LoadAssetAtPath(assetPath, typeof(UnityEngine.Object)));
-                }
-
-                this.config = allBehaviorAssets.OfType<Hyperparameters>().FirstOrDefault();
-
-                if (vNetwork == null)
-                {
-                    var networks = allBehaviorAssets.OfType<Sequential>();
-                    vNetwork = networks.FirstOrDefault(x => x.name == VALUE_NET_NAMING_CONVENTION);
-                    muNetwork = networks.FirstOrDefault(x => x.name == MU_NET_NAMING_CONVENTION);
-                    sigmaNetwork = networks.FirstOrDefault(x => x.name == SIGMA_NET_NAMING_CONVENTION);
-                    discreteNetwork = networks.FirstOrDefault(x => x.name == DISCRETE_NET_NAMING_CONVENTION);
-                    q1Network = networks.FirstOrDefault(x => x.name == Q1_NET_NAMING_CONVENTION);
-                    q2Network = networks.FirstOrDefault(x => x.name == Q2_NET_NAMING_CONVENTION);
-                }
+                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                allBehaviorAssets.Add(AssetDatabase.LoadAssetAtPath(assetPath, typeof(UnityEngine.Object)));
             }
+
+            if (config == null)
+                config = allBehaviorAssets.OfType<Hyperparameters>().FirstOrDefault();
+
+            var networks = allBehaviorAssets.OfType<Sequential>();
+            if (vNetwork == null)
+                vNetwork = networks.FirstOrDefault(x => x.name == VALUE_NET_NAMING_CONVENTION);
+            if (muNetwork == null)
+                muNetwork = networks.FirstOrDefault(x => x.name == MU_NET_NAMING_CONVENTION);
+            if (sigmaNetwork == null)
+                sigmaNetwork = networks.FirstOrDefault(x => x.name == SIGMA_NET_NAMING_CONVENTION);
+            if (discreteNetwork == null)
+                discreteNetwork = networks.FirstOrDefault(x => x.name == DISCRETE_NET_NAMING_CONVENTION);
+            if (q1Network == null)
+                q1Network = networks.FirstOrDefault(x => x.name == Q1_NET_NAMING_CONVENTION);
+            if (q2Network == null)
+                q2Network = networks.FirstOrDefault(x => x.name == Q2_NET_NAMING_CONVENTION);
 #endif
         }
         /// <summary>
@@ -944,7 +1008,7 @@ namespace DeepUnity.ReinforcementLearning
             }
             else
             {
-                if (script.stochasticity == Stochasticity.TrainebleStandardDeviation)
+                if (script.stochasticity == Stochasticity.TrainableStandardDeviation)
                 {
                     dontDrawMe.Add("standardDeviationValue");
                     dontDrawMe.Add("noiseValue");

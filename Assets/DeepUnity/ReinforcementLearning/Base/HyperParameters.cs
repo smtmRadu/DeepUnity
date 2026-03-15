@@ -96,6 +96,12 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("[Typicall range: 0.001 - 0.01] How aggresively to update the target network used for boostraping value estimation.")]
         [MinMax(0.001f, 0.01f)] public float tau = 0.005f;
 
+        [Tooltip("Enable detailed SAC diagnostics logging (actor/target decomposition, saturation, and gradient health).")]
+        public bool sacDebugMetrics = false;
+
+        [Tooltip("Log SAC diagnostics once every N SAC gradient updates.")]
+        [Min(1)] public int sacDebugEveryNUpdates = 25;
+
         // ========================================================================================================================================================================
 
         // TD3/DDPG specific
@@ -146,7 +152,7 @@ namespace DeepUnity.ReinforcementLearning
         /// <returns></returns>
         public static Hyperparameters CreateOrLoadAsset(string behaviourName)
         {
-            Hyperparameters hp = new Hyperparameters();
+            Hyperparameters hp = CreateInstance<Hyperparameters>();
 #if UNITY_EDITOR
             var instance = AssetDatabase.LoadAssetAtPath<Hyperparameters>($"Assets/{behaviourName}/Config.asset");
 
@@ -279,6 +285,12 @@ namespace DeepUnity.ReinforcementLearning
             }
             else
                 throw new NotImplementedException("Unhandled trainer type");
+
+            if (script.trainer != TrainerType.SAC)
+            {
+                dontDrawMe.Add("sacDebugMetrics");
+                dontDrawMe.Add("sacDebugEveryNUpdates");
+            }
 
             //dontDrawMe.Add("putAgentsOnDifferentLayers");
             dontDrawMe.Add("timescale");
