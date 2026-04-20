@@ -705,12 +705,12 @@ namespace DeepUnity.ReinforcementLearning
             }
             if (q1Network != null)
             {
-                string q1net = JsonUtility.ToJson(vNetwork);
+                string q1net = JsonUtility.ToJson(q1Network);
                 File.WriteAllText(Path.Combine(folderPath, $"{Q1_NET_NAMING_CONVENTION}.json"), q1net);
             }
             if (q2Network != null)
             {
-                string q2net = JsonUtility.ToJson(vNetwork);
+                string q2net = JsonUtility.ToJson(q2Network);
                 File.WriteAllText(Path.Combine(folderPath, $"{Q2_NET_NAMING_CONVENTION}.json"), q2net);
             }
             if (muNetwork != null)
@@ -720,7 +720,7 @@ namespace DeepUnity.ReinforcementLearning
             }
             if (sigmaNetwork != null)
             {
-                string sigmanet = JsonUtility.ToJson(muNetwork);
+                string sigmanet = JsonUtility.ToJson(sigmaNetwork);
                 File.WriteAllText(Path.Combine(folderPath, $"{SIGMA_NET_NAMING_CONVENTION}.json"), sigmanet);
             }
             if (discreteNetwork != null)

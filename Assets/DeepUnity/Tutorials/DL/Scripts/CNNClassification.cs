@@ -3,6 +3,7 @@ using DeepUnity.Optimizers;
 using DeepUnity.Activations;
 using DeepUnity.Modules;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using UnityEngine;
 using DeepUnity.Models;
@@ -22,6 +23,7 @@ namespace DeepUnity.Tutorials
         [SerializeField] private int batch_size = 64;
         [SerializeField] private bool augment_data = false;
         [SerializeField] private float maxNorm = 0.5f;
+        [SerializeField] private int saveEveryNBatches = 50;
         [SerializeField] private PerformanceGraph accuracyGraph;
         [SerializeField] private PerformanceGraph lossGraph;
         Optimizer optim;
@@ -30,6 +32,9 @@ namespace DeepUnity.Tutorials
         List<(Tensor, Tensor)[]> train_batches;
         int epochIndex = 1;
         int batch_index = 0;
+        int totalSteps;
+        int globalStep = 0;
+        Stopwatch trainingWatch = new();
 
         public void Start()
         {
@@ -66,9 +71,10 @@ namespace DeepUnity.Tutorials
 
             print(network.Predict(Tensor.Random01(1, 28, 28)));
 
-            Datasets.MNIST("C:\\Users\\radup\\OneDrive\\Desktop", out train, out _, DatasetSettings.LoadTrainOnly);
-            Debug.Log("MNIST Dataset loaded.");
-
+            Benckmark.Start();
+            Datasets.MNIST(null, out train, out _, DatasetSettings.LoadTrainOnly);
+            Benckmark.Stop();
+            UnityEngine.Debug.Log($"MNIST Dataset loaded. {train.Count} samples.");
            
             optim = new AdamW(network.Parameters(), lr: lr, weight_decay: weightDecay, amsgrad: true);
             scheduler = new LinearAnnealing(optim, total_iters: epochs);
@@ -76,14 +82,20 @@ namespace DeepUnity.Tutorials
             lossGraph = new PerformanceGraph();
             Utils.Shuffle(train);
             train_batches = Utils.Split(train, batch_size);
+            totalSteps = epochs * train_batches.Count;
+            trainingWatch.Start();
             print($"Total train samples {train.Count}.");
             print($"Total train batches {train_batches.Count}.");
+            print($"Total steps {totalSteps}.");
             print("Network used: " + network.Summary());
         }
 
         public void Update()
         {
-            if (batch_index % 50 == 0)
+            if (train_batches == null)
+                return;
+
+            if (saveEveryNBatches > 0 && batch_index % saveEveryNBatches == 0)
                 network.Save();
 
             // Case when epoch finished
@@ -123,16 +135,29 @@ namespace DeepUnity.Tutorials
             accuracyGraph.Append(acc);
             lossGraph.Append(loss.Item);
 
-            Debug.Log($"Epoch: {epochIndex} | Batch: {batch_index++}/{train_batches.Count} | Acc: {acc * 100f}% | Loss: {loss.Item} | Lr: {scheduler.CurrentLR}");
+            globalStep++;
+            float pct = (float)globalStep / totalSteps * 100f;
+            double elapsed = trainingWatch.Elapsed.TotalSeconds;
+            double eta = globalStep > 0 ? elapsed / globalStep * (totalSteps - globalStep) : 0;
+            int etaMin = (int)(eta / 60);
+            int etaSec = (int)(eta % 60);
+
+            bool saved = (saveEveryNBatches > 0 && batch_index % saveEveryNBatches == 0) || batch_index == train_batches.Count - 1;
+            UnityEngine.Debug.Log($"[{pct:F1}%] Step {globalStep}/{totalSteps} | Epoch {epochIndex} | Batch {batch_index++}/{train_batches.Count} | Acc: {acc * 100f:F1}% | Loss: {loss.Item:F4} | Lr: {scheduler.CurrentLR} | ETA: {etaMin}m{etaSec:D2}s{(saved ? " | SAVE" : "")}");
         }
 
 
         public Tensor AugmentImage(Tensor image)
         {
-            Tensor tex = Utils.Vision.Zoom(image, Utils.Random.Range(0.8f, 1.2f));
-            tex = Utils.Vision.Rotate(tex, Utils.Random.Range(-10, 10));
-            tex = Utils.Vision.Offset(tex, Utils.Random.Range(-3, 3), Utils.Random.Range(-3, 3));
-            tex = Utils.Vision.Noise(tex, Utils.Random.Range(0.01f, 0.05f), Utils.Random.Range(0.01f, 0.1f));
+            Tensor tex = image;
+            if (Utils.Random.Range(0f, 1f) < 0.5f)
+                tex = Utils.Vision.Zoom(tex, Utils.Random.Range(0.8f, 1.2f));
+            if (Utils.Random.Range(0f, 1f) < 0.5f)
+                tex = Utils.Vision.Rotate(tex, Utils.Random.Range(-10, 10));
+            if (Utils.Random.Range(0f, 1f) < 0.5f)
+                tex = Utils.Vision.Offset(tex, Utils.Random.Range(-3, 3), Utils.Random.Range(-3, 3));
+            if (Utils.Random.Range(0f, 1f) < 0.3f)
+                tex = Utils.Vision.Noise(tex, Utils.Random.Range(0.01f, 0.05f), Utils.Random.Range(0.01f, 0.1f));
             return tex;
         }
     }

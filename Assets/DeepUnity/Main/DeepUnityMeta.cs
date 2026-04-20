@@ -19,6 +19,9 @@ namespace DeepUnity
         internal readonly static ComputeShader GLUInferenceCS;
         internal readonly static ComputeShader FFNInferenceCS;
         internal readonly static ComputeShader LmHeadInferenceCS;
+        internal readonly static ComputeShader Gemma3FP32CS;
+        internal readonly static ComputeShader Gemma3FP16CS;
+        internal readonly static ComputeShader Gemma3CS;
 
         internal readonly static int THREADS_NUM = 256;
         internal readonly static Lazy<ParallelOptions> MULTITHREADS_8 = new Lazy<ParallelOptions>(() => new ParallelOptions { MaxDegreeOfParallelism = 8 });
@@ -40,6 +43,9 @@ namespace DeepUnity
                 GLUInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/GLUInferenceCS");
                 FFNInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/FFNInferenceCS");
                 LmHeadInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/LmHeadInferenceCS");
+                Gemma3FP32CS = Resources.Load<ComputeShader>("ComputeShaders/Gemma3FP32CS");
+                Gemma3FP16CS = Resources.Load<ComputeShader>("ComputeShaders/Gemma3FP16CS");
+                Gemma3CS = Resources.Load<ComputeShader>("ComputeShaders/Gemma3CS");
   
                 if (TensorCS == null)
                     throw new Exception("The Compute Shader scripts were moved from Resources/ComputeShaders folder. Please move them back or modify this script that finds them by adjusting the path.");

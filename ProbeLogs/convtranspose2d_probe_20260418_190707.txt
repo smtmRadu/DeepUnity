@@ -1,0 +1,32 @@
+[ConvTranspose2DProbe]
+seed=1234
+shape batched=(2, 2, 4, 5)
+shape unbatched=(2, 4, 5)
+kernels=(2, 3, 3, 3) bias=True
+compareGpu=True supportsComputeShaders=True
+finiteDifferences=True epsilon=0.001 checks=6
+absTolerance=1.000E-005 relTolerance=1.000E-004
+
+Case: batched
+  inputShape=(2, 2, 4, 5) outputShape=(2, 3, 6, 7)
+  cpuForward preview=[-1.004E-001, -1.001E-001, -1.634E-001, -1.915E-001, -1.388E-001, -1.626E-001]
+  gpuForward vs cpuForward: PASS mean|err|=6.766E-009 max|err|=5.960E-008 maxRel=4.226E-007 at [0, 0, 3, 2] left=-1.4104E-001 right=-1.4104E-001
+  gpuInputGrad vs cpuInputGrad: PASS mean|err|=5.599E-013 max|err|=3.638E-012 maxRel=6.812E-008 at [0, 0, 3, 0] left=-5.3403E-005 right=-5.3403E-005
+  gpuKernelGrad vs cpuKernelGrad: PASS mean|err|=4.852E-012 max|err|=2.910E-011 maxRel=2.488E-007 at [0, 2, 2, 0] left=1.1700E-004 right=1.1700E-004
+  gpuBiasGrad vs cpuBiasGrad: PASS mean|err|=0.000E+000 max|err|=0.000E+000 maxRel=0.000E+000 at [0] left=8.1760E-004 right=8.1760E-004
+  finiteDifferences[batched]
+    dL/dInput: FAIL checks=6 mean|err|=1.357E-001 max|err|=2.198E-001 maxRel=9.995E-001 at [1, 1, 0, 3] analytic=-1.0181E-004 numeric=-2.1990E-001
+    dL/dKernel: FAIL checks=6 mean|err|=1.122E-001 max|err|=2.252E-001 maxRel=9.995E-001 at [1, 0, 1, 2] analytic=1.0429E-004 numeric=2.2526E-001
+    dL/dBias: FAIL checks=3 mean|err|=9.789E-001 max|err|=1.765E+000 maxRel=9.995E-001 at [0] analytic=8.1760E-004 numeric=1.7660E+000
+
+Case: unbatched
+  inputShape=(2, 4, 5) outputShape=(3, 6, 7)
+  cpuForward preview=[9.062E-002, 1.211E-001, 9.923E-002, 9.362E-002, 1.003E-001, 6.219E-002]
+  gpuForward vs cpuForward: PASS mean|err|=1.320E-008 max|err|=5.960E-008 maxRel=1.848E-007 at [1, 3, 4] left=-3.2259E-001 right=-3.2259E-001
+  gpuInputGrad vs cpuInputGrad: PASS mean|err|=7.731E-013 max|err|=7.276E-012 maxRel=6.524E-008 at [0, 1, 0] left=1.1152E-004 right=1.1152E-004
+  gpuKernelGrad vs cpuKernelGrad: PASS mean|err|=1.069E-012 max|err|=1.455E-011 maxRel=1.024E-007 at [0, 1, 1, 0] left=1.4209E-004 right=1.4209E-004
+  gpuBiasGrad vs cpuBiasGrad: PASS mean|err|=0.000E+000 max|err|=0.000E+000 maxRel=0.000E+000 at [0] left=-1.2003E-003 right=-1.2003E-003
+  finiteDifferences[unbatched]
+    dL/dInput: FAIL checks=6 mean|err|=6.477E-002 max|err|=1.733E-001 maxRel=9.991E-001 at [0, 3, 1] analytic=-1.6057E-004 numeric=-1.7345E-001
+    dL/dKernel: FAIL checks=6 mean|err|=4.820E-002 max|err|=1.149E-001 maxRel=9.991E-001 at [0, 1, 0, 2] analytic=-1.0646E-004 numeric=-1.1498E-001
+    dL/dBias: FAIL checks=3 mean|err|=1.036E+000 max|err|=1.562E+000 maxRel=9.991E-001 at [1] analytic=1.4478E-003 numeric=1.5636E+000

@@ -1,5 +1,5 @@
-RWStructuredBuffer<float> input; // (in_channels, in_height, in_width)
-RWStructuredBuffer<float> gamma; // (out_channels, in_channels, kernelSize, kernelSize)
+RWStructuredBuffer<float> input; // (batch_size, in_channels, in_height, in_width)
+RWStructuredBuffer<float> gamma; // (in_channels, out_channels, kernel_height, kernel_width)
 RWStructuredBuffer<float> beta; // (out_channels)
 RWStructuredBuffer<float> output;
 RWStructuredBuffer<float> gamma_grad;
@@ -16,16 +16,16 @@ int out_height;
 int out_width;
 int kernel_height;
 int kernel_width;
-int grad_scale;
+float grad_scale;
 
-
-float gamma_get(int b, int c, int h, int w)
+// Kernel layout: (in_channels, out_channels, kernel_height, kernel_width)
+float gamma_get(int ic, int oc, int h, int w)
 {
-    return gamma[b * in_channels * kernel_height * kernel_width + c * kernel_height * kernel_width + h * kernel_width + w];
+    return gamma[ic * out_channels * kernel_height * kernel_width + oc * kernel_height * kernel_width + h * kernel_width + w];
 }
-void gamma_grad_add(int b, int c, int h, int w, float value)
+void gamma_grad_add(int ic, int oc, int h, int w, float value)
 {
-    gamma_grad[b * in_channels * kernel_height * kernel_width + c * kernel_height * kernel_width + h * kernel_width + w] += value;
+    gamma_grad[ic * out_channels * kernel_height * kernel_width + oc * kernel_height * kernel_width + h * kernel_width + w] += value;
 }
 float input_get(int b, int c, int h, int w)
 {
@@ -44,15 +44,17 @@ void input_grad_add(int b, int c, int h, int w, float value)
     input_grad[b * in_channels * in_height * in_width + c * in_height * in_width + h * in_width + w] += value;
 }
 
+// Forward: full convolution with rotated kernels
+// output[b, oc, oh, ow] = bias[oc] + sum_ic sum_j input[b, ic, oh + j - kH + 1, ow + i - kW + 1] * W[ic, oc, kH-1-j, kW-1-i]
 #pragma kernel Forward
 [numthreads(16, 16, 4)]
 void Forward(int3 id : SV_DispatchThreadID)
 {
    // id.x = out_width, id.y = out_height, id.z = out_channels
-    
+
     if (id.x >= out_width || id.y >= out_height || id.z >= out_channels)
         return;
-    
+
     for (int b = 0; b < batch_size; b++)
     {
         for (int ic = 0; ic < in_channels; ic++)
@@ -62,14 +64,14 @@ void Forward(int3 id : SV_DispatchThreadID)
             {
                 for (int i = 0; i < kernel_width; i++)
                 {
-                    int inputRow = id.y - j;
-                    int inputCol = id.x - i;
-                    
-                    if (inputRow >= 0 && inputRow < out_height && inputCol >= 0 && inputCol < out_width)
+                    int inputRow = id.y + j - kernel_height + 1;
+                    int inputCol = id.x + i - kernel_width + 1;
+
+                    if (inputRow >= 0 && inputRow < in_height && inputCol >= 0 && inputCol < in_width)
                     {
                         sum += input_get(b, ic, inputRow, inputCol) * gamma_get(ic, id.z, kernel_height - j - 1, kernel_width - i - 1);
                     }
-                    
+
                 }
             }
             output_add(b, id.z, id.y, id.x, sum);
@@ -78,34 +80,35 @@ void Forward(int3 id : SV_DispatchThreadID)
 }
 
 
+// Weight gradient: valid correlation of loss with input
+// dW[ic, oc, kh, kw] = sum_b sum_h sum_w loss[b, oc, h + kh, w + kw] * input[b, ic, h, w]
 #pragma kernel ComputeKernelsGradients3
 [numthreads(3, 3, 64)]
 void ComputeKernelsGradients3(int3 id : SV_DispatchThreadID)
 {
-    // id.x = kernel_width, id.y = kernel_height, id.z = out_channels
-     // Performs 2d correlation between the input and loss to compute the gradients for kernels;
-    
-    if (id.x >= kernel_width || id.y >= kernel_height || id.z >= out_channels)
+    // id.x = kernel_width, id.y = kernel_height, id.z = in_channels
+
+    if (id.x >= kernel_width || id.y >= kernel_height || id.z >= in_channels)
         return;
-    
+
     for (int b = 0; b < batch_size; b++)
     {
-        for (int ic = 0; ic < in_channels; ic++)
+        for (int oc = 0; oc < out_channels; oc++)
         {
             float sum = 0.;
-            
-            for (int j = 0; j < out_height; j++)
+
+            for (int h = 0; h < in_height; h++)
             {
-                for (int i = 0; i < out_width; i++)
+                for (int w = 0; w < in_width; w++)
                 {
-                    sum += input_get(b, ic, j + id.y, i + id.x) * loss_get(b, id.z, j, i);
+                    sum += loss_get(b, oc, h + id.y, w + id.x) * input_get(b, id.z, h, w);
                 }
             }
-           
-            gamma_grad_add(id.z, ic, id.y, id.x, sum / grad_scale);
+
+            gamma_grad_add(id.z, oc, id.y, id.x, sum / grad_scale);
         }
     }
-    
+
     // Beta grad computing on GPU was deprecated due the fact is faster on CPU
 }
 
@@ -113,66 +116,58 @@ void ComputeKernelsGradients3(int3 id : SV_DispatchThreadID)
 [numthreads(5, 5, 32)]
 void ComputeKernelsGradients5(int3 id : SV_DispatchThreadID)
 {
-    // id.x = kernel_width, id.y = kernel_height, id.z = out_channels
-     // Performs 2d correlation between the input and loss to compute the gradients for kernels;
-    
-    if (id.x >= kernel_width || id.y >= kernel_height || id.z >= out_channels)
+    // id.x = kernel_width, id.y = kernel_height, id.z = in_channels
+
+    if (id.x >= kernel_width || id.y >= kernel_height || id.z >= in_channels)
         return;
-    
+
     for (int b = 0; b < batch_size; b++)
     {
-        for (int ic = 0; ic < in_channels; ic++)
+        for (int oc = 0; oc < out_channels; oc++)
         {
             float sum = 0.;
-            
-            for (int j = 0; j < out_height; j++)
+
+            for (int h = 0; h < in_height; h++)
             {
-                for (int i = 0; i < out_width; i++)
+                for (int w = 0; w < in_width; w++)
                 {
-                    sum += input_get(b, ic, id.y + j, id.x + i) * loss_get(b, id.z, j, i);
+                    sum += loss_get(b, oc, h + id.y, w + id.x) * input_get(b, id.z, h, w);
                 }
             }
-           
-            gamma_grad_add(id.z, ic, id.y, id.x, sum / grad_scale);
+
+            gamma_grad_add(id.z, oc, id.y, id.x, sum / grad_scale);
         }
     }
-    
+
     // Beta grad computing on GPU was deprecated due the fact is faster on CPU
 }
 
+// Input gradient: valid correlation of loss with weights (no rotation)
+// dL/dx[b, ic, ih, iw] = sum_oc sum_kh sum_kw loss[b, oc, ih + kh, iw + kw] * W[ic, oc, kh, kw]
 #pragma kernel ComputeInputGradient
 [numthreads(16, 16, 4)]
 void ComputeInputGradient(int3 id : SV_DispatchThreadID)
 {
     // id.x = in_width, id.y = in_height, id.z = batch_size
-    // Convolves loss and kernels
-    
-    if (id.x >= in_width || id.y >= in_height || id.z == batch_size)
+
+    if (id.x >= in_width || id.y >= in_height || id.z >= batch_size)
         return;
-    
+
     for (int ic = 0; ic < in_channels; ic++)
     {
+        float sum = 0.f;
         for (int oc = 0; oc < out_channels; oc++)
         {
-            float sum = 0.f;
-            for (int j = 0; j < kernel_height; j++)
+            for (int kh = 0; kh < kernel_height; kh++)
             {
-                for (int i = 0; i < kernel_width; i++)
+                for (int kw = 0; kw < kernel_width; kw++)
                 {
-                    int inputRow = id.y - j;
-                    int inputCol = id.x - i;
-                    
-                    if (inputRow >= 0 && inputRow < out_height && inputCol >= 0 && inputCol < out_width)
-                    {
-                        sum += loss_get(id.z, oc, inputRow, inputCol) * gamma_get(oc, ic, kernel_height - j - 1, kernel_width - i - 1);
-                    }
+                    sum += loss_get(id.z, oc, id.y + kh, id.x + kw) * gamma_get(ic, oc, kh, kw);
                 }
-
             }
-            
-            input_grad_add(id.z, ic, id.y, id.x, sum / grad_scale);
         }
 
+        input_grad_add(id.z, ic, id.y, id.x, sum / grad_scale);
     }
 
 }

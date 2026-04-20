@@ -42,11 +42,10 @@ namespace DeepUnity.Tutorials
         private void AutoComplete()
         {
             Benckmark.Start();
-            model = new Gemma3ForCausalLM("Assets/DeepUnity/LLMs/Gemma3/params_it");
+            model = new Gemma3ForCausalLM();
             Benckmark.Stop($"model init: {model.ParameterCount()}");
         
             display.text = "User:\n" + user_prompt + "\n\nAssistant:\n";
-            // model.Predict(Tensor.Constant(new float[] { 2f, 4f }));
             var tokenizer = new Gemma3TokenizerFast();
 
             Tensor input_ids = tokenizer.ApplyChatTemplate(new List<Dictionary<string, string>>()
@@ -65,7 +64,7 @@ namespace DeepUnity.Tutorials
                 new Dictionary<string, string>
                 {
                     { "role", "user" },
-                    { "content", "And if i add another 3 after this result?"}
+                    { "content", "Write me a long story about Jack Sparrow!"}
                     
                 },
             }, add_generation_prompt:true);
@@ -73,6 +72,16 @@ namespace DeepUnity.Tutorials
             UnityEngine.Debug.Log(string.Join("", tokenizer.Decode(input_ids)));
 
             
+            StartCoroutine(VerifyThenGenerate(input_ids));
+        }
+
+        private System.Collections.IEnumerator VerifyThenGenerate(Tensor input_ids)
+        {
+            while (!model.IsReady)
+                yield return new WaitForSeconds(0.01f);
+
+            model.VerifyWeights();
+
             StartCoroutine(model.Generate(input_ids, onTokenGenerated: (x) =>
             {
                 display.text += x;
@@ -81,8 +90,6 @@ namespace DeepUnity.Tutorials
                 // Debug.Log(x);
             },
             max_new_tokens: max_completion_tokens, temperature: temperature));
-        
-        
         }
 
         // private void GetEmbeddings()

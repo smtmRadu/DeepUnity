@@ -113,6 +113,11 @@ namespace DeepUnity.ReinforcementLearning
         /// <param name="observation4"></param>
         public void AddObservation(Quaternion observation4)
         {
+            // Canonicalize the quaternion sign so identical rotations are not observed as both q and -q.
+            // This avoids replay/value aliasing for environments that feed raw quaternion components.
+            if (ShouldFlipQuaternion(observation4))
+                observation4 = new Quaternion(-observation4.x, -observation4.y, -observation4.z, -observation4.w);
+
             AddObservation(observation4.x);
             AddObservation(observation4.y);
             AddObservation(observation4.z);
@@ -174,6 +179,25 @@ namespace DeepUnity.ReinforcementLearning
                 else
                     AddObservation(0f);
             }
+        }
+
+        private static bool ShouldFlipQuaternion(Quaternion q)
+        {
+            const float eps = 1e-6f;
+
+            if (Mathf.Abs(q.w) > eps)
+                return q.w < 0f;
+
+            if (Mathf.Abs(q.z) > eps)
+                return q.z < 0f;
+
+            if (Mathf.Abs(q.y) > eps)
+                return q.y < 0f;
+
+            if (Mathf.Abs(q.x) > eps)
+                return q.x < 0f;
+
+            return false;
         }
     }
 }

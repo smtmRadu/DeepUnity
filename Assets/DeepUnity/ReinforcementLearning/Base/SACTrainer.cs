@@ -71,8 +71,8 @@ namespace DeepUnity.ReinforcementLearning
             if (optimizer_states == null)
             {
                 optim_q1q2 = new AdamW(model.q1Network.Parameters().Concat(model.q2Network.Parameters()).ToArray(), lr: hp.criticLearningRate, weight_decay: -QnetsL2Reg);
-                optim_mu = new AdamW(model.muNetwork.Parameters(), lr:hp.actorLearningRate);
-                optim_sigma = new AdamW(model.sigmaNetwork.Parameters(), lr:hp.actorLearningRate);
+                optim_mu = new AdamW(model.muNetwork.Parameters(), lr:hp.actorLearningRate, weight_decay: 0f);
+                optim_sigma = new AdamW(model.sigmaNetwork.Parameters(), lr:hp.actorLearningRate, weight_decay: 0f);
             }
             else
             {
@@ -88,9 +88,10 @@ namespace DeepUnity.ReinforcementLearning
 
 
             // Init schedulers
-            optim_q1q2.Scheduler = new LinearAnnealing(optim_q1q2, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
-            optim_mu.Scheduler = new LinearAnnealing(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
-            optim_sigma.Scheduler = new LinearAnnealing(optim_sigma, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
+            int totalGradientSteps = Math.Max(1, (int)Math.Min(int.MaxValue, (long)hp.maxSteps * hp.updatesNum / Math.Max(1, hp.updateInterval)));
+            optim_q1q2.Scheduler = new LinearAnnealing(optim_q1q2, start_factor: 1f, end_factor: 0f, total_iters: totalGradientSteps);
+            optim_mu.Scheduler = new LinearAnnealing(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: totalGradientSteps);
+            optim_sigma.Scheduler = new LinearAnnealing(optim_sigma, start_factor: 1f, end_factor: 0f, total_iters: totalGradientSteps);
 
             // Init target networks
             q1TargNetwork = model.q1Network.Clone() as Sequential;
@@ -123,6 +124,12 @@ namespace DeepUnity.ReinforcementLearning
             if (hp.sacDebugMetrics)
             {
                 ConsoleMessage.Info("[SAC] Diagnostics mode is ON. For valid root-cause isolation run a hard reset: clear SAC OptimStates + fresh behaviour weights + new session.");
+            }
+
+            float effectiveUtdRatio = hp.updatesNum / (float)Math.Max(1, hp.updateInterval);
+            if (effectiveUtdRatio < 0.25f)
+            {
+                ConsoleMessage.Warning($"[SAC] Effective update-to-data ratio is {effectiveUtdRatio:0.###} gradient steps per new environment step (`updatesNum / updateInterval`). This is much lower than common SAC settings and may cause early plateaus. Consider `updateInterval = 1` or `updatesNum ≈ updateInterval`.");
             }
         }
         protected override void OnBeforeFixedUpdate()
@@ -242,12 +249,15 @@ namespace DeepUnity.ReinforcementLearning
             {
                 float r = batch[b].reward[0];
                 float d = batch[b].done[0];
+                float tr = batch[b].truncated != null ? batch[b].truncated[0] : 0f;
                 float Qt1 = Qtarg1[b, 0];
                 float Qt2 = Qtarg2[b, 0];
                 float logPi = logProbsPi[b, 0];
 
-                // Target: y = r + γ(1-d)[min(Q₁,Q₂) - α·log π]
-                float _y = r + hp.gamma * (1f - d) * (MathF.Min(Qt1, Qt2) - hp.alpha * logPi);
+                // Target: y = r + γ·bootstrap·[min(Q₁,Q₂) - α·log π]
+                // bootstrap = 1 for non-terminal and truncated (max-step timeout), 0 for true terminal
+                float bootstrap = 1f - d + tr;
+                float _y = r + hp.gamma * bootstrap * (MathF.Min(Qt1, Qt2) - hp.alpha * logPi);
 
                 batch[b].q_target = Tensor.Constant(_y);
             });
@@ -389,12 +399,10 @@ namespace DeepUnity.ReinforcementLearning
             // If optimizer minimizes (theta = theta - grad), we pass -dJ.
             optim_mu.ZeroGrad();
             model.muNetwork.Backward(-dJ_dMu);
-            if (hp.maxNorm > 0f) optim_mu.ClipGradNorm(hp.maxNorm);
             optim_mu.Step();
 
             optim_sigma.ZeroGrad();
             model.sigmaNetwork.Backward(-dJ_dSigmaNetOut);
-            if (hp.maxNorm > 0f) optim_sigma.ClipGradNorm(hp.maxNorm);
             optim_sigma.Step();
 
             // restored q1/q2 network device removed

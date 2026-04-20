@@ -23,7 +23,7 @@ namespace DeepUnity.Activations
         protected Tensor InputCache { get; set; }
         public Tensor Predict(Tensor x)
         {
-            return x.Select(k => k > threshold ? threshold : value);
+            return x.Select(k => k > threshold ? k : value);
         }
 
         public Tensor Forward(Tensor x)

@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace DeepUnity
@@ -8,65 +10,76 @@ namespace DeepUnity
     {
         
         /// <summary>
+        /// Loads MNIST dataset from PNG image folders. Download from: https://www.kaggle.com/datasets/alexanderyyy/mnist-png <br />
         /// Item1 = input: Tensor(1,28,28)<br />
         /// Item2 = target: Tensor(10) -> onehot encoding<br />
-        /// Files used: <br></br>
-        ///     "train_input.txt"<br />
-        ///     "train_label.txt"<br />
-        ///     "test_input.txt"<br />
-        ///     "test_label.txt"<br />
+        /// Expected folder structure: path/train/0-9/*.png and path/test/0-9/*.png <br />
         /// </summary>
-        /// <param name="path">Example: C:\\Users\\Desktop</param>
+        /// <param name="path">Root folder containing train/ and test/ subdirectories. Defaults to Desktop/mnist/mnist_png.</param>
         /// <param name="train"></param>
         /// <param name="test"></param>
         public static void MNIST(string path, out List<(Tensor, Tensor)> train, out List<(Tensor, Tensor)> test, DatasetSettings whatToLoad = DatasetSettings.LoadAll)
         {
+            if (path == null)
+                path = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop), "mnist", "mnist_png");
+
             train = null;
             test = null;
-            string json_train_image = null;
-            string json_train_label = null;
-            string json_test_image = null;
-            string json_test_label = null;
-            List<Tensor> collect_train_image = null;
-            List<Tensor> collect_train_label = null;
-            List<Tensor> collect_test_image = null;
-            List<Tensor> collect_test_label = null;
-            if (whatToLoad == DatasetSettings.LoadAll || whatToLoad == DatasetSettings.LoadTrainOnly) 
+
+            if (whatToLoad == DatasetSettings.LoadAll || whatToLoad == DatasetSettings.LoadTrainOnly)
             {
                 train = new(60000);
-                json_train_image = File.ReadAllText(path + "\\train_input.txt");
-                json_train_label = File.ReadAllText(path + "\\train_target.txt");
-                collect_train_image = JsonUtility.FromJson<TensorCollection>(json_train_image).ToList();
-                collect_train_label = JsonUtility.FromJson<TensorCollection>(json_train_label).ToList();
-                for (int i = 0; i < collect_train_image.Count; i++)
-                {
-                    train.Add((collect_train_image[i], collect_train_label[i]));
-                }
+                string trainPath = Path.Combine(path, "train");
+                train.AddRange(LoadSplit(trainPath));
             }
+
             if (whatToLoad == DatasetSettings.LoadAll || whatToLoad == DatasetSettings.LoadTestOnly)
             {
                 test = new(10000);
-                json_test_image = File.ReadAllText(path + "\\test_input.txt");
-                json_test_label = File.ReadAllText(path + "\\test_target.txt");
-                collect_test_image = JsonUtility.FromJson<TensorCollection>(json_test_image).ToList();
-                collect_test_label = JsonUtility.FromJson<TensorCollection>(json_test_label).ToList();
-                for (int i = 0; i < collect_test_image.Count; i++)
-                {
-                    test.Add((collect_test_image[i], collect_test_label[i]));
-                }
+                string testPath = Path.Combine(path, "test");
+                test.AddRange(LoadSplit(testPath));
             }
-
-            json_train_image = null;
-            json_train_label = null;
-            json_test_image = null;
-            json_test_label = null;
-            collect_train_image?.Clear();
-            collect_train_label?.Clear();
-            collect_test_image?.Clear();
-            collect_test_label?.Clear();
 
             System.GC.Collect();
         }
+        private static List<(Tensor, Tensor)> LoadSplit(string splitPath)
+        {
+            // Phase 1: collect all file paths and labels
+            var fileEntries = new List<(string path, int label)>();
+            for (int i = 0; i < 10; i++)
+            {
+                string[] files = Directory.GetFiles(Path.Combine(splitPath, i.ToString()), "*.png", SearchOption.TopDirectoryOnly);
+                foreach (var file in files)
+                    fileEntries.Add((file, i));
+            }
+
+            // Phase 2: parallel read of file bytes from disk
+            var bytesArray = new byte[fileEntries.Count][];
+            Parallel.For(0, fileEntries.Count, i =>
+            {
+                bytesArray[i] = File.ReadAllBytes(fileEntries[i].path);
+            });
+
+            // Phase 3: sequential tensor creation (Texture2D requires main thread)
+            var result = new List<(Tensor, Tensor)>(fileEntries.Count);
+            for (int i = 0; i < fileEntries.Count; i++)
+            {
+                Texture2D tex = new Texture2D(28, 28);
+                tex.LoadImage(bytesArray[i]);
+                Color[] pixels = tex.GetPixels();
+                Object.Destroy(tex);
+
+                Tensor image = Tensor.Constant(pixels, (1, 28, 28));
+                Tensor label = Tensor.Zeros(10);
+                label[fileEntries[i].label] = 1;
+                result.Add((image, label));
+
+                bytesArray[i] = null;
+            }
+
+            return result;
+        }
+
         private static void SerializeMNIST()
         {
             Benckmark.Start();

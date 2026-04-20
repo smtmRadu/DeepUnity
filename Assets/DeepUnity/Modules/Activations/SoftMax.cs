@@ -150,7 +150,7 @@ namespace DeepUnity.Activations
             if (OutputCache.Rank != dLdY.Rank)
                 throw new ArgumentException($"Input received in Softmax is Rank {OutputCache.Rank} and the output gradient is Rank {dLdY.Rank}.");
 
-            return RecursiveLoRBackward(dLdY, OutputCache);
+            return RecursiveLoRBackward(dLdY, OutputCache) / temperature;
         }
 
         private Tensor RecursiveLoRBackward(Tensor dLdY, Tensor outputCache) // LoR means Low Rank decomp

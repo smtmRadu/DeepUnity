@@ -1,0 +1,602 @@
+// Gemma3NextCS.compute
+// ======================================================================================
+// GPU kernels for Gemma3 end-to-end GPU inference pipeline.
+// Provides kernels not available in the existing inference shaders:
+//   - Embedding lookup with scaling
+//   - RMSNorm (hidden-size and head-dim variants)
+//   - QKV split (packed -> separate Q, K, V)
+//   - Rotary Positional Embeddings (split-half)
+//   - KV cache writes (full append + sliding-window ring buffer)
+//   - Causal + sliding-window attention masking
+//   - Row-wise softmax
+//   - Argmax + stochastic sampling (temperature, top-k, top-p, min-p)
+//   - Buffer utilities (zero, copy, add-residual)
+//
+// Reuses from existing shaders (bound via C#):
+//   - QKVProj, ComputeAttentionScores, AttendValues, OProj  (GQAInferenceCS)
+//   - GateUp, Down, GateUp1Vec, Down1Vec                    (GLUInferenceCS)
+//   - Predict, Predict1Vec                                   (LmHeadInferenceCS)
+// ======================================================================================
+
+// ================================ PARAMETERS ================================
+uint seq_len;               // current input sequence length
+uint hidden_size;           // model hidden dim (640)
+uint head_dim;              // per-head dim (256)
+uint num_heads_q;           // query heads (4)
+uint num_heads_kv;          // key/value heads (1)
+uint vocab_size;            // vocabulary size (262144)
+uint position_offset;       // absolute position for RoPE (= tokens cached before this input)
+uint cache_len;             // tokens currently in cache (before this input)
+uint cache_capacity;        // max cache slots
+uint buffer_size;           // element count for generic utility kernels
+uint qkv_proj_dim;          // packed QKV dim (1536)
+uint num_vectors;           // for RmsNormHead: total vectors to normalize
+uint rope_num_heads;        // heads to rotate (num_heads_q for Q, num_heads_kv for K)
+uint seq_len_q;             // query length  (masking / softmax)
+uint seq_len_k;             // key length    (masking / softmax)
+uint sliding_window_size;   // 0 = full attention
+uint copy_src_offset;       // source offset for CopySlice
+float norm_eps;             // RMSNorm epsilon (1e-6)
+float embed_scale;          // sqrt(hidden_size)
+
+// -- Sampling --
+float temperature;          // > 0 for stochastic, use ArgMax kernel for temperature == 0
+int top_k_val;              // <= 0 means disabled
+float top_p_val;            // >= 1.0 means disabled
+float min_p_val;            // <= 0.0 means disabled
+int rng_seed;               // mutated by runif() during sampling
+
+
+// ================================ BUFFERS ====================================
+
+// -- Embedding --
+StructuredBuffer<float>     embed_weights;  // [vocab_size * hidden_size]
+StructuredBuffer<uint>      token_ids;      // [seq_len]
+RWStructuredBuffer<float>   embed_output;   // [seq_len * hidden_size]
+
+// -- RMSNorm --
+StructuredBuffer<float>     norm_gamma;     // [norm_dim]
+StructuredBuffer<float>     norm_input;     // [N * norm_dim]
+RWStructuredBuffer<float>   norm_output;    // [N * norm_dim]
+
+// -- QKV Split --
+StructuredBuffer<float>     qkv_packed;     // [seq_len * qkv_proj_dim]
+RWStructuredBuffer<float>   split_q;        // [seq_len * num_heads_q  * head_dim]
+RWStructuredBuffer<float>   split_k;        // [seq_len * num_heads_kv * head_dim]
+RWStructuredBuffer<float>   split_v;        // [seq_len * num_heads_kv * head_dim]
+
+// -- RoPE --
+StructuredBuffer<float>     rope_cos;       // [max_pos * half_dim]
+StructuredBuffer<float>     rope_sin;       // [max_pos * half_dim]
+RWStructuredBuffer<float>   rope_buf;       // in-place rotation target
+
+// -- KV Cache --
+RWStructuredBuffer<float>   kv_cache;       // [cache_capacity * num_heads_kv * head_dim]
+StructuredBuffer<float>     kv_new;         // [seq_len * num_heads_kv * head_dim]
+
+// -- Attention Scores / Softmax --
+RWStructuredBuffer<float>   attn_scores;    // [num_heads_q * seq_len_q * seq_len_k]
+
+// -- Argmax --
+StructuredBuffer<float>     logits_buf;     // [vocab_size]
+RWStructuredBuffer<uint>    argmax_result;  // [1]
+
+// -- Sampling --
+RWStructuredBuffer<float>   probs_buf;      // [vocab_size] scratch for sampling
+
+// -- Utility --
+RWStructuredBuffer<float>   buf_a;          // generic read-write
+StructuredBuffer<float>     buf_b;          // generic read-only
+
+
+// ========================= RNG (same hash as TensorCS) =======================
+float runif()
+{
+    rng_seed ^= 2747636419u;
+    rng_seed *= 2654435769u;
+    rng_seed ^= rng_seed >> 16;
+    rng_seed *= 2654435769u;
+    rng_seed ^= rng_seed >> 16;
+    rng_seed *= 2654435769u;
+    return float(rng_seed) / 4294967295.0 + 0.5;
+}
+
+
+// ========================= EmbeddingLookup ===================================
+// hidden[pos, h] = embed_weights[token_id[pos], h] * sqrt(hidden_size)
+// Dispatch: ((seq_len * hidden_size + 255) / 256, 1, 1)
+#pragma kernel EmbeddingLookup
+[numthreads(256, 1, 1)]
+void EmbeddingLookup(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * hidden_size)
+        return;
+
+    uint pos = idx / hidden_size;
+    uint h   = idx % hidden_size;
+    uint tok = token_ids[pos];
+
+    embed_output[idx] = embed_weights[tok * hidden_size + h] * embed_scale;
+}
+
+
+// ========================= RmsNormHidden =====================================
+// Gemma-style RMSNorm over hidden_size:  y = x * rsqrt(mean(x^2) + eps) * (1 + gamma)
+// One thread per sequence position.
+// Dispatch: ((seq_len + 255) / 256, 1, 1)
+#pragma kernel RmsNormHidden
+[numthreads(256, 1, 1)]
+void RmsNormHidden(uint3 id : SV_DispatchThreadID)
+{
+    uint pos = id.x;
+    if (pos >= seq_len)
+        return;
+
+    uint base_idx = pos * hidden_size;
+
+    // mean(x^2)
+    float sum_sq = 0.0;
+    for (uint i = 0; i < hidden_size; i++)
+    {
+        float v = norm_input[base_idx + i];
+        sum_sq += v * v;
+    }
+    float rms = rsqrt(sum_sq / (float)hidden_size + norm_eps);
+
+    // (1 + gamma) affine
+    for (uint i = 0; i < hidden_size; i++)
+    {
+        norm_output[base_idx + i] = norm_input[base_idx + i] * rms * (1.0 + norm_gamma[i]);
+    }
+}
+
+
+// ========================= RmsNormHead =======================================
+// RMSNorm over head_dim for Q / K normalization.
+// One thread per vector.  num_vectors = seq_len * num_heads.
+// Dispatch: ((num_vectors + 255) / 256, 1, 1)
+#pragma kernel RmsNormHead
+[numthreads(256, 1, 1)]
+void RmsNormHead(uint3 id : SV_DispatchThreadID)
+{
+    uint vec = id.x;
+    if (vec >= num_vectors)
+        return;
+
+    uint base_idx = vec * head_dim;
+
+    float sum_sq = 0.0;
+    for (uint i = 0; i < head_dim; i++)
+    {
+        float v = norm_input[base_idx + i];
+        sum_sq += v * v;
+    }
+    float rms = rsqrt(sum_sq / (float)head_dim + norm_eps);
+
+    for (uint i = 0; i < head_dim; i++)
+    {
+        norm_output[base_idx + i] = norm_input[base_idx + i] * rms * (1.0 + norm_gamma[i]);
+    }
+}
+
+
+// ========================= SplitQKV ==========================================
+// Unpacks [seq_len, qkv_proj_dim] into separate Q, K, V buffers.
+// Q region: [0 .. num_heads_q*head_dim)
+// K region: [num_heads_q*head_dim .. num_heads_q*head_dim + num_heads_kv*head_dim)
+// V region: the next num_heads_kv*head_dim elements
+// Dispatch: ((seq_len * qkv_proj_dim + 255) / 256, 1, 1)
+#pragma kernel SplitQKV
+[numthreads(256, 1, 1)]
+void SplitQKV(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    uint total = seq_len * qkv_proj_dim;
+    if (idx >= total)
+        return;
+
+    uint l = idx / qkv_proj_dim;
+    uint p = idx % qkv_proj_dim;
+    float val = qkv_packed[idx];
+
+    uint q_size = num_heads_q  * head_dim;
+    uint k_size = num_heads_kv * head_dim;
+
+    if (p < q_size)
+    {
+        split_q[l * q_size + p] = val;
+    }
+    else if (p < q_size + k_size)
+    {
+        split_k[l * k_size + (p - q_size)] = val;
+    }
+    else if (p < q_size + 2u * k_size)
+    {
+        split_v[l * k_size + (p - q_size - k_size)] = val;
+    }
+}
+
+
+// ========================= ApplyRopeSplitHalf ================================
+// In-place split-half RoPE.
+// rope_buf layout: [seq_len, rope_num_heads, head_dim]
+// Each thread handles one (pos, head, freq_index) triple, computing both halves.
+// Dispatch: ((seq_len * rope_num_heads * (head_dim/2) + 127) / 128, 1, 1)
+#pragma kernel ApplyRopeSplitHalf
+[numthreads(128, 1, 1)]
+void ApplyRopeSplitHalf(uint3 id : SV_DispatchThreadID)
+{
+    uint hd2   = head_dim / 2;
+    uint total = seq_len * rope_num_heads * hd2;
+    uint idx   = id.x;
+    if (idx >= total)
+        return;
+
+    uint i = idx % hd2;
+    uint tmp = idx / hd2;
+    uint h = tmp % rope_num_heads;
+    uint l = tmp / rope_num_heads;
+
+    uint base_off = (l * rope_num_heads + h) * head_dim;
+    float x1 = rope_buf[base_off + i];
+    float x2 = rope_buf[base_off + i + hd2];
+
+    uint abs_pos = position_offset + l;
+    float c = rope_cos[abs_pos * hd2 + i];
+    float s = rope_sin[abs_pos * hd2 + i];
+
+    rope_buf[base_off + i]       = x1 * c - x2 * s;
+    rope_buf[base_off + i + hd2] = x2 * c + x1 * s;
+}
+
+
+// ========================= WriteCacheFull ====================================
+// Appends new K or V to an append-only cache.
+// kv_new:   [seq_len, num_heads_kv, head_dim]
+// kv_cache: [cache_capacity, num_heads_kv, head_dim]
+// Writes at positions [cache_len .. cache_len + seq_len).
+// Dispatch: ((seq_len * num_heads_kv * head_dim + 255) / 256, 1, 1)
+#pragma kernel WriteCacheFull
+[numthreads(256, 1, 1)]
+void WriteCacheFull(uint3 id : SV_DispatchThreadID)
+{
+    uint idx   = id.x;
+    uint total = seq_len * num_heads_kv * head_dim;
+    if (idx >= total)
+        return;
+
+    uint d   = idx % head_dim;
+    uint tmp = idx / head_dim;
+    uint h   = tmp % num_heads_kv;
+    uint l   = tmp / num_heads_kv;
+
+    uint cache_pos = cache_len + l;
+    kv_cache[(cache_pos * num_heads_kv + h) * head_dim + d] = kv_new[idx];
+}
+
+
+// ========================= WriteCacheSliding =================================
+// Ring-buffer write for sliding-window KV cache.
+// Same signature as WriteCacheFull; positions wrap via modulo.
+// Dispatch: ((seq_len * num_heads_kv * head_dim + 255) / 256, 1, 1)
+#pragma kernel WriteCacheSliding
+[numthreads(256, 1, 1)]
+void WriteCacheSliding(uint3 id : SV_DispatchThreadID)
+{
+    uint idx   = id.x;
+    uint total = seq_len * num_heads_kv * head_dim;
+    if (idx >= total)
+        return;
+
+    uint d   = idx % head_dim;
+    uint tmp = idx / head_dim;
+    uint h   = tmp % num_heads_kv;
+    uint l   = tmp / num_heads_kv;
+
+    uint cache_pos = (cache_len + l) % cache_capacity;
+    kv_cache[(cache_pos * num_heads_kv + h) * head_dim + d] = kv_new[idx];
+}
+
+
+// ========================= ApplyMask =========================================
+// Applies causal mask (and optional sliding-window mask) to attention scores.
+// attn_scores layout: [num_heads_q, seq_len_q, seq_len_k]  (batch_size == 1)
+// sliding_window_size == 0 means full attention (no window clipping).
+// Dispatch: ((seq_len_k + 15) / 16, (num_heads_q * seq_len_q + 15) / 16, 1)
+#pragma kernel ApplyMask
+[numthreads(16, 16, 1)]
+void ApplyMask(uint3 id : SV_DispatchThreadID)
+{
+    uint k_pos = id.x;
+    uint row   = id.y;   // = hq * seq_len_q + q_pos
+    if (k_pos >= seq_len_k || row >= num_heads_q * seq_len_q)
+        return;
+
+    uint q_pos = row % seq_len_q;
+    uint hq    = row / seq_len_q;
+
+    // absolute query position (accounts for cached prefix)
+    uint abs_q = (seq_len_k - seq_len_q) + q_pos;
+
+    bool masked = false;
+
+    // causal: query can only attend to positions <= abs_q
+    if (k_pos > abs_q)
+        masked = true;
+
+    // sliding window: restrict to [abs_q - window, abs_q]
+    if (!masked && sliding_window_size > 0u && (abs_q - k_pos) > sliding_window_size)
+        masked = true;
+
+    if (masked)
+    {
+        uint score_idx = (hq * seq_len_q + q_pos) * seq_len_k + k_pos;
+        attn_scores[score_idx] = -1e10;
+    }
+}
+
+
+// ========================= SoftmaxRows =======================================
+// In-place numerically-stable row-wise softmax.
+// attn_scores: [num_rows, seq_len_k]   where num_rows = num_heads_q * seq_len_q
+// One thread per row.
+// Dispatch: ((num_heads_q * seq_len_q + 255) / 256, 1, 1)
+#pragma kernel SoftmaxRows
+[numthreads(256, 1, 1)]
+void SoftmaxRows(uint3 id : SV_DispatchThreadID)
+{
+    uint row      = id.x;
+    uint num_rows = num_heads_q * seq_len_q;
+    if (row >= num_rows)
+        return;
+
+    uint base_idx = row * seq_len_k;
+
+    // pass 1 -- row max
+    float max_val = attn_scores[base_idx];
+    for (uint j = 1; j < seq_len_k; j++)
+        max_val = max(max_val, attn_scores[base_idx + j]);
+
+    // pass 2 -- exp & sum
+    float sum_exp = 0.0;
+    for (uint j = 0; j < seq_len_k; j++)
+    {
+        float e = exp(attn_scores[base_idx + j] - max_val);
+        attn_scores[base_idx + j] = e;
+        sum_exp += e;
+    }
+
+    // pass 3 -- normalize
+    float inv_sum = 1.0 / max(sum_exp, 1e-12);
+    for (uint j = 0; j < seq_len_k; j++)
+        attn_scores[base_idx + j] *= inv_sum;
+}
+
+
+// ========================= ArgMax ============================================
+// Greedy token selection: finds argmax over logits_buf[0..vocab_size-1].
+// Result written to argmax_result[0].
+// Dispatch: (1, 1, 1)
+#pragma kernel ArgMax
+[numthreads(1, 1, 1)]
+void ArgMax(uint3 id : SV_DispatchThreadID)
+{
+    float best_val = logits_buf[0];
+    uint  best_idx = 0;
+    for (uint i = 1; i < vocab_size; i++)
+    {
+        float v = logits_buf[i];
+        if (v > best_val)
+        {
+            best_val = v;
+            best_idx = i;
+        }
+    }
+    argmax_result[0] = best_idx;
+}
+
+
+// ========================= ZeroBuffer ========================================
+// buf_a[0..buffer_size-1] = 0
+// Dispatch: ((buffer_size + 255) / 256, 1, 1)
+#pragma kernel ZeroBuffer
+[numthreads(256, 1, 1)]
+void ZeroBuffer(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size)
+        return;
+    buf_a[id.x] = 0.0;
+}
+
+
+// ========================= CopyBuffer ========================================
+// buf_a[i] = buf_b[i]   for i in [0, buffer_size)
+// Dispatch: ((buffer_size + 255) / 256, 1, 1)
+#pragma kernel CopyBuffer
+[numthreads(256, 1, 1)]
+void CopyBuffer(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size)
+        return;
+    buf_a[id.x] = buf_b[id.x];
+}
+
+
+// ========================= CopySlice =========================================
+// buf_a[i] = buf_b[copy_src_offset + i]   for i in [0, buffer_size)
+// Used to extract a sub-range (e.g. last hidden vector after final norm).
+// Dispatch: ((buffer_size + 255) / 256, 1, 1)
+#pragma kernel CopySlice
+[numthreads(256, 1, 1)]
+void CopySlice(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size)
+        return;
+    buf_a[id.x] = buf_b[copy_src_offset + id.x];
+}
+
+
+// ========================= AddResidual =======================================
+// buf_a[i] += buf_b[i]   for i in [0, buffer_size)
+// Dispatch: ((buffer_size + 255) / 256, 1, 1)
+#pragma kernel AddResidual
+[numthreads(256, 1, 1)]
+void AddResidual(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size)
+        return;
+    buf_a[id.x] += buf_b[id.x];
+}
+
+
+// ========================= SampleToken =======================================
+// Full stochastic sampling: temperature-scaled softmax -> min_p -> top_k -> top_p -> sample.
+// For temperature == 0 (greedy), use the ArgMax kernel instead.
+// Writes sampled token id to argmax_result[0].
+// Dispatch: (1, 1, 1)
+#pragma kernel SampleToken
+[numthreads(1, 1, 1)]
+void SampleToken(uint3 id : SV_DispatchThreadID)
+{
+    // ---- temperature-scaled softmax ----
+    float max_l = logits_buf[0];
+    for (uint i = 1; i < vocab_size; i++)
+        max_l = max(max_l, logits_buf[i]);
+
+    float inv_temp = 1.0 / temperature;
+    float sum_exp = 0.0;
+    for (uint i = 0; i < vocab_size; i++)
+    {
+        float e = exp((logits_buf[i] - max_l) * inv_temp);
+        probs_buf[i] = e;
+        sum_exp += e;
+    }
+    float inv_sum = 1.0 / max(sum_exp, 1e-12);
+    for (uint i = 0; i < vocab_size; i++)
+        probs_buf[i] *= inv_sum;
+
+    // ---- max probability (needed for min_p) ----
+    float max_prob = 0.0;
+    for (uint i = 0; i < vocab_size; i++)
+        max_prob = max(max_prob, probs_buf[i]);
+
+    // ---- min_p filter ----
+    uint cand_count = 0;
+    if (min_p_val > 0.0)
+    {
+        float min_thresh = max_prob * min_p_val;
+        for (uint i = 0; i < vocab_size; i++)
+        {
+            if (probs_buf[i] >= min_thresh)
+                cand_count++;
+            else
+                probs_buf[i] = 0.0;
+        }
+    }
+    else
+    {
+        for (uint i = 0; i < vocab_size; i++)
+            if (probs_buf[i] > 0.0) cand_count++;
+    }
+
+    if (cand_count == 0)
+    {
+        // degenerate -- fall back to argmax of raw logits
+        float best = logits_buf[0]; uint bi = 0;
+        for (uint i = 1; i < vocab_size; i++) { if (logits_buf[i] > best) { best = logits_buf[i]; bi = i; } }
+        argmax_result[0] = bi;
+        return;
+    }
+
+    // ---- top_k filter (negate-and-scan) ----
+    if (top_k_val > 0 && (uint)top_k_val < cand_count)
+    {
+        // Find top_k largest by repeatedly finding max, negating to mark as selected.
+        for (int k = 0; k < top_k_val; k++)
+        {
+            float best = -1.0;
+            uint  best_idx = 0;
+            for (uint i = 0; i < vocab_size; i++)
+            {
+                if (probs_buf[i] > best)
+                {
+                    best = probs_buf[i];
+                    best_idx = i;
+                }
+            }
+            probs_buf[best_idx] = -probs_buf[best_idx]; // mark selected
+        }
+        // Restore selected (negative -> positive), zero out the rest
+        for (uint i = 0; i < vocab_size; i++)
+        {
+            if (probs_buf[i] < 0.0)
+                probs_buf[i] = -probs_buf[i];
+            else
+                probs_buf[i] = 0.0;
+        }
+    }
+
+    // ---- top_p (nucleus) filter ----
+    if (top_p_val < 1.0)
+    {
+        float cum = 0.0;
+        // Greedily include tokens by descending probability until mass >= top_p.
+        while (cum < top_p_val)
+        {
+            float best = 0.0;
+            uint  best_idx = 0;
+            for (uint i = 0; i < vocab_size; i++)
+            {
+                if (probs_buf[i] > best)
+                {
+                    best = probs_buf[i];
+                    best_idx = i;
+                }
+            }
+            if (best <= 0.0) break;
+            cum += best;
+            probs_buf[best_idx] = -best; // mark as included
+        }
+        // Restore included, zero out excluded
+        for (uint i = 0; i < vocab_size; i++)
+        {
+            if (probs_buf[i] < 0.0)
+                probs_buf[i] = -probs_buf[i];
+            else
+                probs_buf[i] = 0.0;
+        }
+    }
+
+    // ---- renormalize ----
+    float new_sum = 0.0;
+    for (uint i = 0; i < vocab_size; i++)
+        new_sum += probs_buf[i];
+
+    if (new_sum <= 0.0)
+    {
+        float best = logits_buf[0]; uint bi = 0;
+        for (uint i = 1; i < vocab_size; i++) { if (logits_buf[i] > best) { best = logits_buf[i]; bi = i; } }
+        argmax_result[0] = bi;
+        return;
+    }
+
+    float inv_new = 1.0 / new_sum;
+    for (uint i = 0; i < vocab_size; i++)
+        probs_buf[i] *= inv_new;
+
+    // ---- CDF sampling with runif() ----
+    float r = runif();
+    float cdf = 0.0;
+    uint sampled = 0;
+    for (uint i = 0; i < vocab_size; i++)
+    {
+        cdf += probs_buf[i];
+        if (cdf >= r)
+        {
+            sampled = i;
+            break;
+        }
+    }
+    argmax_result[0] = sampled;
+}

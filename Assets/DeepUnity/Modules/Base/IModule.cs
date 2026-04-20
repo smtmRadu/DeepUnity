@@ -52,6 +52,7 @@ namespace DeepUnity.Modules
         // 2D
         public BatchNorm2D batchnorm2d = null;        
         public Conv2D conv2d = null;
+        public ConvTranspose2D convtranspose2d = null;
         public AvgPool2D avgpool2d = null;
         public MaxPool2D maxpool2d = null;    
         public ZeroPad2D zeropad2d = null;
@@ -143,6 +144,10 @@ namespace DeepUnity.Modules
             else if (module is Conv2D conv2dModule)
             {
                 conv2d = conv2dModule;
+            }
+            else if (module is ConvTranspose2D convtranspose2dModule)
+            {
+                convtranspose2d = convtranspose2dModule;
             }
             else if (module is ELU eluModule)
             {
@@ -368,6 +373,10 @@ namespace DeepUnity.Modules
             else if(typeof(Conv2D).Name.Equals(moduleWrapper.name))
             {
                 module = moduleWrapper.conv2d;
+            }
+            else if(typeof(ConvTranspose2D).Name.Equals(moduleWrapper.name))
+            {
+                module = moduleWrapper.convtranspose2d;
             }
             else if (typeof(ELU).Name.Equals(moduleWrapper.name))
             {

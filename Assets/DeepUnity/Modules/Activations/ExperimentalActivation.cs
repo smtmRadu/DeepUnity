@@ -54,8 +54,9 @@ namespace DeepUnity.Activations
             Parallel.For(0, InputCache.Count(), i =>
             {
                 var x = InputCache[i];
-                inputGrad[i] = MathF.Exp(x) * ((x - 1f) * x * x + MathF.Exp(x)) / MathF.Pow(x * x + MathF.Exp(x), 2f);
-                
+                float localGrad = MathF.Exp(x) * ((x - 1f) * x * x + MathF.Exp(x)) / MathF.Pow(x * x + MathF.Exp(x), 2f);
+                inputGrad[i] = dLdY[i] * localGrad;
+                 
                 //inputGrad[i] = (MathF.Exp(x - 1) * (MathF.Pow(x, 3) - 3 * x * x + 2 * x + 2)) / MathF.Pow(x * x - 2 * x + 2, 2);
 
                 // inputGrad[i] = x * MathF.Sign(x) / (2f * MathF.Pow(MathF.Abs(x), 1.5f));

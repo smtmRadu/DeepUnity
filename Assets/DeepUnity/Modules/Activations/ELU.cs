@@ -25,7 +25,7 @@ namespace DeepUnity.Activations
 
         public Tensor Backward(Tensor dLdY)
         {
-            return dLdY * InputCache.Select(k => k > 0f ? 1f : alpha * (MathF.Exp(k) - 1f));
+            return dLdY * InputCache.Select(k => k > 0f ? 1f : alpha * MathF.Exp(k));
         }
 
         public object Clone() => new ELU(alpha);

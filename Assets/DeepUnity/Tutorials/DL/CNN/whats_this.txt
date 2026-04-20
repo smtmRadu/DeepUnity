@@ -1,1 +1,4 @@
 This is a MNIST classifier. Use Play-CNN game object to try it yourself by drawing digits on the screen. It was trained with augmentation for only 2 epochs, and gets 98% acc on tests.
+
+
+Current saved model was trained 1 single epoch, test acc=98.14%

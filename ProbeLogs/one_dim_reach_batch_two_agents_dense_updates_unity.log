@@ -1,0 +1,863 @@
+[Licensing::Module] Trying to connect to existing licensing client channel...
+[Licensing::IpcConnector] Successfully connected to the License Client on channel: "LicenseClient-Radu" at "2026-03-28T21:18:35.5662485Z"
+[Licensing::Client] Error: Code 10 while verifying Licensing Client signature (process Id: 7884, path: "C:/Program Files/Unity Hub/UnityLicensingClient_V1/Unity.Licensing.Client.exe")
+[Licensing::Module] Error: LicensingClient has failed validation; ignoring
+[Licensing::Client] Handshaking with LicensingClient:
+  Version:                 1.17.4+4293ba1
+  Session Id:              15f1969a89aa4d0d976f908b73ba6715
+  Correlation Id:          59e496c331fc0c870faf09aab917943e
+  External correlation Id: 6569992147697235120
+  Machine Id:              oXls6e35UgvMtqNRKbNJFvG5sz4=
+[Licensing::Module] Successfully connected to LicensingClient on channel: "LicenseClient-Radu" (connect: 0.00s, validation: 0.02s, handshake: 0.03s)
+[Licensing::IpcConnector] Successfully connected to the License Notification on channel: "LicenseClient-Radu-notifications" at "2026-03-28T21:18:35.621882Z"
+[Licensing::Module] Error: Access token is unavailable; failed to update
+[Licensing::Client] Successfully updated license
+Built from '2022.3/staging' branch; Version is '2022.3.43f1 (85497d293fa1) revision 8735101'; Using compiler version '192829333'; Build Type 'Release'
+OS: 'Windows 11  (10.0.26200) 64bit Professional' Language: 'en' Physical Memory: 32038 MB
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Module] Serial number assigned to: "7971683010988-UnityPersXXXX"
+BatchMode: 1, IsHumanControllingUs: 0, StartBugReporterOnCrash: 0, Is64bit: 1, IsPro: 0
+[Licensing::Client] Successfully resolved entitlement details
+
+COMMAND LINE ARGUMENTS:
+C:\Program Files\Unity\Hub\Editor\2022.3.43f1\Editor\Unity.exe
+-batchmode
+-projectPath
+C:\Dev\DeepUnity
+-executeMethod
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner.RunOneDimReachSacTwoAgentsDenseUpdates
+-logFile
+C:\Dev\DeepUnity\ProbeLogs\one_dim_reach_batch_two_agents_dense_updates_unity.log
+Successfully changed project path to: C:\Dev\DeepUnity
+C:/Dev/DeepUnity
+[UnityMemory] Configuration Parameters - Can be set up in boot.config
+    "memorysetup-bucket-allocator-granularity=16"
+    "memorysetup-bucket-allocator-bucket-count=8"
+    "memorysetup-bucket-allocator-block-size=33554432"
+    "memorysetup-bucket-allocator-block-count=8"
+    "memorysetup-main-allocator-block-size=16777216"
+    "memorysetup-thread-allocator-block-size=16777216"
+    "memorysetup-gfx-main-allocator-block-size=16777216"
+    "memorysetup-gfx-thread-allocator-block-size=16777216"
+    "memorysetup-cache-allocator-block-size=4194304"
+    "memorysetup-typetree-allocator-block-size=2097152"
+    "memorysetup-profiler-bucket-allocator-granularity=16"
+    "memorysetup-profiler-bucket-allocator-bucket-count=8"
+    "memorysetup-profiler-bucket-allocator-block-size=33554432"
+    "memorysetup-profiler-bucket-allocator-block-count=8"
+    "memorysetup-profiler-allocator-block-size=16777216"
+    "memorysetup-profiler-editor-allocator-block-size=1048576"
+    "memorysetup-temp-allocator-size-main=16777216"
+    "memorysetup-job-temp-allocator-block-size=2097152"
+    "memorysetup-job-temp-allocator-block-size-background=1048576"
+    "memorysetup-job-temp-allocator-reduction-small-platforms=262144"
+    "memorysetup-allocator-temp-initial-block-size-main=262144"
+    "memorysetup-allocator-temp-initial-block-size-worker=262144"
+    "memorysetup-temp-allocator-size-background-worker=32768"
+    "memorysetup-temp-allocator-size-job-worker=262144"
+    "memorysetup-temp-allocator-size-preload-manager=33554432"
+    "memorysetup-temp-allocator-size-nav-mesh-worker=65536"
+    "memorysetup-temp-allocator-size-audio-worker=65536"
+    "memorysetup-temp-allocator-size-cloud-worker=32768"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gfx=262144"
+Player connection [39700]  Target information:
+
+Player connection [39700]  * "[IP] 172.30.160.1 [Port] 55504 [Flags] 2 [Guid] 3153347164 [EditorId] 3153347164 [Version] 1048832 [Id] WindowsEditor(7,rpc) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [39700]  * "[IP] 172.30.64.1 [Port] 55504 [Flags] 2 [Guid] 3153347164 [EditorId] 3153347164 [Version] 1048832 [Id] WindowsEditor(7,rpc) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [39700]  * "[IP] 10.22.119.230 [Port] 55504 [Flags] 2 [Guid] 3153347164 [EditorId] 3153347164 [Version] 1048832 [Id] WindowsEditor(7,rpc) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [39700] Host joined multi-casting on [225.0.0.222:54997]...
+Player connection [39700] Host joined alternative multi-casting on [225.0.0.222:34997]...
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+[Package Manager] UpmClient::Connect -- Connected to IPC stream "Upm-51612" after 0.3 seconds.
+[Package Manager] Restoring resolved packages state from cache
+[Licensing::Client] Successfully resolved entitlement details
+[Package Manager] Registered 62 packages:
+  Packages from [https://packages.unity.com]:
+    com.unity.ai.navigation@1.1.5 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ai.navigation@1.1.5)
+    com.unity.collab-proxy@2.4.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.collab-proxy@2.4.4)
+    com.unity.recorder@4.0.3 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.recorder@4.0.3)
+    com.unity.textmeshpro@3.0.9 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.textmeshpro@3.0.9)
+    com.unity.timeline@1.7.6 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.timeline@1.7.6)
+    com.unity.visualscripting@1.9.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.visualscripting@1.9.4)
+    com.unity.ide.visualstudio@2.0.22 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ide.visualstudio@2.0.22)
+    com.unity.ide.rider@3.0.31 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ide.rider@3.0.31)
+    com.unity.ide.vscode@1.2.5 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ide.vscode@1.2.5)
+    com.unity.editorcoroutines@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.editorcoroutines@1.0.0)
+    com.unity.performance.profile-analyzer@1.2.2 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.performance.profile-analyzer@1.2.2)
+    com.unity.test-framework@1.1.33 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.test-framework@1.1.33)
+    com.unity.testtools.codecoverage@1.2.6 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.testtools.codecoverage@1.2.6)
+    com.unity.2d.animation@9.1.1 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.animation@9.1.1)
+    com.unity.2d.pixel-perfect@5.0.3 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.pixel-perfect@5.0.3)
+    com.unity.2d.psdimporter@8.0.5 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.psdimporter@8.0.5)
+    com.unity.2d.spriteshape@9.0.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.spriteshape@9.0.4)
+    com.unity.2d.tilemap.extras@3.1.2 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.tilemap.extras@3.1.2)
+    com.unity.2d.aseprite@1.1.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.aseprite@1.1.4)
+    com.unity.settings-manager@2.0.1 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.settings-manager@2.0.1)
+    com.unity.ext.nunit@1.0.6 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ext.nunit@1.0.6)
+    com.unity.2d.common@8.0.3 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.common@8.0.3)
+    com.unity.mathematics@1.2.6 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.mathematics@1.2.6)
+    com.unity.collections@1.2.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.collections@1.2.4)
+    com.unity.burst@1.8.17 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.burst@1.8.17)
+  Built-in packages:
+    com.unity.feature.2d@2.0.1 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.feature.2d@2.0.1)
+    com.unity.feature.development@1.0.1 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.feature.development@1.0.1)
+    com.unity.ugui@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ugui@1.0.0)
+    com.unity.modules.ai@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.ai@1.0.0)
+    com.unity.modules.androidjni@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.androidjni@1.0.0)
+    com.unity.modules.animation@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.animation@1.0.0)
+    com.unity.modules.assetbundle@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.assetbundle@1.0.0)
+    com.unity.modules.audio@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.audio@1.0.0)
+    com.unity.modules.cloth@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.cloth@1.0.0)
+    com.unity.modules.director@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.director@1.0.0)
+    com.unity.modules.imageconversion@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.imageconversion@1.0.0)
+    com.unity.modules.imgui@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.imgui@1.0.0)
+    com.unity.modules.jsonserialize@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.jsonserialize@1.0.0)
+    com.unity.modules.particlesystem@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.particlesystem@1.0.0)
+    com.unity.modules.physics@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.physics@1.0.0)
+    com.unity.modules.physics2d@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.physics2d@1.0.0)
+    com.unity.modules.screencapture@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.screencapture@1.0.0)
+    com.unity.modules.terrain@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.terrain@1.0.0)
+    com.unity.modules.terrainphysics@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.terrainphysics@1.0.0)
+    com.unity.modules.tilemap@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.tilemap@1.0.0)
+    com.unity.modules.ui@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.ui@1.0.0)
+    com.unity.modules.uielements@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.uielements@1.0.0)
+    com.unity.modules.umbra@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.umbra@1.0.0)
+    com.unity.modules.unityanalytics@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unityanalytics@1.0.0)
+    com.unity.modules.unitywebrequest@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequest@1.0.0)
+    com.unity.modules.unitywebrequestassetbundle@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequestassetbundle@1.0.0)
+    com.unity.modules.unitywebrequestaudio@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequestaudio@1.0.0)
+    com.unity.modules.unitywebrequesttexture@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequesttexture@1.0.0)
+    com.unity.modules.unitywebrequestwww@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequestwww@1.0.0)
+    com.unity.modules.vehicles@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.vehicles@1.0.0)
+    com.unity.modules.video@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.video@1.0.0)
+    com.unity.modules.vr@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.vr@1.0.0)
+    com.unity.modules.wind@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.wind@1.0.0)
+    com.unity.modules.xr@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.xr@1.0.0)
+    com.unity.modules.subsystems@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.subsystems@1.0.0)
+    com.unity.2d.sprite@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.sprite@1.0.0)
+    com.unity.2d.tilemap@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.tilemap@1.0.0)
+[Subsystems] No new subsystems found in resolved package list.
+Package Manager log level set to [2]
+[Package Manager] Done registering packages in 1.38 seconds
+Refreshing native plugins compatible for Editor in 17.78 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Initialize engine version: 2022.3.43f1 (85497d293fa1)
+[Subsystems] Discovering subsystems at path C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Resources/UnitySubsystems
+[Subsystems] Discovering subsystems at path C:/Dev/DeepUnity/Assets
+GfxDevice: creating device client; threaded=0; jobified=0
+Direct3D:
+    Version:  Direct3D 11.0 [level 11.1]
+    Renderer: NVIDIA GeForce RTX 4060 Laptop GPU (ID=0x28a0)
+    Vendor:   NVIDIA
+    VRAM:     7957 MB
+    Driver:   32.0.15.8183
+[Licensing::Client] Successfully resolved entitlement details
+Initialize mono
+Mono path[0] = 'C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed'
+Mono path[1] = 'C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/MonoBleedingEdge/lib/mono/unityjit-win32'
+Mono config path = 'C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/MonoBleedingEdge/etc'
+Using monoOptions --debugger-agent=transport=dt_socket,embedding=1,server=y,suspend=n,address=127.0.0.1:56612
+Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
+Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
+ImportWorker Server TCP listen port: 0
+Begin MonoManager ReloadAssembly
+Registering precompiled unity dll's ...
+[Licensing::Client] Successfully resolved entitlement details
+Register platform support module: C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/PlaybackEngines/AndroidPlayer/UnityEditor.Android.Extensions.dll
+Register platform support module: C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll
+Registered in 0.034946 seconds.
+- Loaded All Assemblies, in  0.304 seconds
+Native extension for WindowsStandalone target not found
+Native extension for Android target not found
+Mono: successfully reloaded assembly
+- Finished resetting the current domain, in  0.271 seconds
+Domain Reload Profiling: 573ms
+	BeginReloadAssembly (86ms)
+		ExecutionOrderSort (0ms)
+		DisableScriptedObjects (0ms)
+		BackupInstance (0ms)
+		ReleaseScriptingObjects (0ms)
+		CreateAndSetChildDomain (1ms)
+	RebuildCommonClasses (25ms)
+	RebuildNativeTypeToScriptingClass (7ms)
+	initialDomainReloadingComplete (77ms)
+	LoadAllAssembliesAndSetupDomain (107ms)
+		LoadAssemblies (83ms)
+		RebuildTransferFunctionScriptingTraits (0ms)
+		AnalyzeDomain (105ms)
+			TypeCache.Refresh (103ms)
+				TypeCache.ScanAssembly (94ms)
+			ScanForSourceGeneratedMonoScriptInfo (0ms)
+			ResolveRequiredComponents (1ms)
+	FinalizeReload (271ms)
+		ReleaseScriptCaches (0ms)
+		RebuildScriptCaches (0ms)
+		SetupLoadedEditorAssemblies (236ms)
+			LogAssemblyErrors (0ms)
+			InitializePlatformSupportModulesInManaged (59ms)
+			SetLoadedEditorAssemblies (4ms)
+			RefreshPlugins (0ms)
+			BeforeProcessingInitializeOnLoad (2ms)
+			ProcessInitializeOnLoadAttributes (125ms)
+			ProcessInitializeOnLoadMethodAttributes (46ms)
+			AfterProcessingInitializeOnLoad (0ms)
+			EditorAssembliesLoaded (0ms)
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (0ms)
+[Licensing::Client] Successfully resolved entitlement details
+Application.AssetDatabase Initial Refresh Start
+[ScriptCompilation] Requested script compilation because: Assetdatabase observed changes in script compilation related files
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:80
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Production
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: C:\Dev\DeepUnity\
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/Ping application/grpc -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'gRPC - /UnityILPP.PostProcessing/Ping'
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'gRPC - /UnityILPP.PostProcessing/Ping'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/Ping application/grpc - - 200 - application/grpc 37.2898ms
+Starting: C:\Program Files\Unity\Hub\Editor\2022.3.43f1\Editor\Data\bee_backend.exe --dont-print-to-structured-log --ipc --defer-dag-verification --dagfile="Library/Bee/1900b0aE.dag" --continue-on-failure --profile="Library/Bee/backend1.traceevents" ScriptAssemblies
+WorkingDir: C:/Dev/DeepUnity
+DisplayProgressbar: Compiling Scripts
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/ConfigurePostProcessors application/grpc -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'gRPC - /UnityILPP.PostProcessing/ConfigurePostProcessors'
+info: Unity.ILPP.Runner.PostProcessingAssemblyLoadContext[0]
+      Resolved Unity.Burst.Cecil, Version=0.11.4.0, Culture=neutral, PublicKeyToken=50cebf1cceb9d05e with Library\PackageCache\com.unity.burst@1.8.17\Unity.Burst.CodeGen\Unity.Burst.Cecil.dll
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'gRPC - /UnityILPP.PostProcessing/ConfigurePostProcessors'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/ConfigurePostProcessors application/grpc - - 200 - application/grpc 86.4275ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/PostProcessAssembly application/grpc -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'gRPC - /UnityILPP.PostProcessing/PostProcessAssembly'
+info: Unity.ILPP.Runner.PostProcessingPipeline[0]
+      Processing assembly Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.dll, with 116 defines and 270 references
+info: Unity.ILPP.Runner.PostProcessingPipeline[0]
+      processors: zzzUnity.Burst.CodeGen.BurstILPostProcessor
+info: Unity.ILPP.Runner.PostProcessingPipeline[0]
+      running zzzUnity.Burst.CodeGen.BurstILPostProcessor
+info: Unity.ILPP.Runner.PostProcessingAssemblyLoadContext[0]
+      Resolved Unity.Burst.Cecil.Rocks, Version=0.11.4.0, Culture=neutral, PublicKeyToken=50cebf1cceb9d05e with Library\PackageCache\com.unity.burst@1.8.17\Unity.Burst.CodeGen\Unity.Burst.Cecil.Rocks.dll
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'gRPC - /UnityILPP.PostProcessing/PostProcessAssembly'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/PostProcessAssembly application/grpc - - 200 - application/grpc 241.8346ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/PostProcessAssembly application/grpc -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'gRPC - /UnityILPP.PostProcessing/PostProcessAssembly'
+info: Unity.ILPP.Runner.PostProcessingPipeline[0]
+      Processing assembly Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp-Editor.dll, with 117 defines and 285 references
+info: Unity.ILPP.Runner.PostProcessingPipeline[0]
+      processors: zzzUnity.Burst.CodeGen.BurstILPostProcessor
+info: Unity.ILPP.Runner.PostProcessingPipeline[0]
+      running zzzUnity.Burst.CodeGen.BurstILPostProcessor
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'gRPC - /UnityILPP.PostProcessing/PostProcessAssembly'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/PostProcessAssembly application/grpc - - 200 - application/grpc 19.5065ms
+ExitCode: 0 Duration: 1s381ms
+[622/802    0s] ILPP-Configuration Library/ilpp-configuration.nevergeneratedoutput
+[794/802    0s] Csc Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.dll (+2 others)
+Assets\DeepUnity\Modules\Learnable\EmbeddingFP16.cs(7,7): warning CS0105: The using directive for 'System' appeared previously in this namespace
+
+Assets\DeepUnity\LLMs\Gemma3\EmbeddingGemma.cs(327,20): warning CS0219: The variable 'y' is assigned but its value is never used
+
+Assets\DeepUnity\Modules\Activations\SoftMax.cs(189,21): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\Modules\Other\Unsqueeze.cs(16,13): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\Modules\Other\Squeeze.cs(18,13): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\Modules\Learnable\DenseGPU.cs(37,13): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\Modules\Learnable\DenseGPU.cs(78,17): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\Main\LMUnitTest.cs(22,29): warning CS0414: The field 'LMUnitTest.tok' is assigned but its value is never used
+
+Assets\DeepUnity\Main\LMUnitTest.cs(13,41): warning CS0414: The field 'LMUnitTest.system_prompt' is assigned but its value is never used
+
+Assets\DeepUnity\Main\LMUnitTest.cs(16,30): warning CS0414: The field 'LMUnitTest.batch_size' is assigned but its value is never used
+
+Assets\DeepUnity\Main\LMUnitTest.cs(15,33): warning CS0414: The field 'LMUnitTest.device' is assigned but its value is never used
+
+Assets\DeepUnity\Main\LMUnitTest.cs(20,14): warning CS0414: The field 'LMUnitTest.output_once' is assigned but its value is never used
+[795/802    0s] Csc Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp-Editor.dll (+2 others)
+[796/802    0s] ILPostProcess Library/Bee/artifacts/1900b0aE.dag/post-processed/Assembly-CSharp.dll (+pdb)
+Processing assembly Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.dll, with 116 defines and 270 references
+
+processors: zzzUnity.Burst.CodeGen.BurstILPostProcessor
+
+running zzzUnity.Burst.CodeGen.BurstILPostProcessor
+[797/802    0s] ILPostProcess Library/Bee/artifacts/1900b0aE.dag/post-processed/Assembly-CSharp-Editor.dll (+pdb)
+Processing assembly Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp-Editor.dll, with 117 defines and 285 references
+
+processors: zzzUnity.Burst.CodeGen.BurstILPostProcessor
+
+running zzzUnity.Burst.CodeGen.BurstILPostProcessor
+[798/802    0s] CopyFiles Library/ScriptAssemblies/Assembly-CSharp.pdb
+[799/802    0s] CopyFiles Library/ScriptAssemblies/Assembly-CSharp.dll
+[800/802    0s] CopyFiles Library/ScriptAssemblies/Assembly-CSharp-Editor.dll
+[801/802    0s] CopyFiles Library/ScriptAssemblies/Assembly-CSharp-Editor.pdb
+*** Tundra build success (1.33 seconds), 9 items updated, 802 evaluated
+Assets\DeepUnity\Modules\Learnable\EmbeddingFP16.cs(7,7): warning CS0105: The using directive for 'System' appeared previously in this namespace
+Assets\DeepUnity\LLMs\Gemma3\EmbeddingGemma.cs(327,20): warning CS0219: The variable 'y' is assigned but its value is never used
+Assets\DeepUnity\Modules\Activations\SoftMax.cs(189,21): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Modules\Other\Unsqueeze.cs(16,13): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Modules\Other\Squeeze.cs(18,13): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Modules\Learnable\DenseGPU.cs(37,13): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Modules\Learnable\DenseGPU.cs(78,17): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Main\LMUnitTest.cs(22,29): warning CS0414: The field 'LMUnitTest.tok' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(13,41): warning CS0414: The field 'LMUnitTest.system_prompt' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(16,30): warning CS0414: The field 'LMUnitTest.batch_size' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(15,33): warning CS0414: The field 'LMUnitTest.device' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(20,14): warning CS0414: The field 'LMUnitTest.output_once' is assigned but its value is never used
+AssetDatabase: script compilation time: 1.877123s
+Begin MonoManager ReloadAssembly
+Total cache size 108871536
+Total cache size after purge 108871536
+- Loaded All Assemblies, in  0.559 seconds
+Refreshing native plugins compatible for Editor in 6.51 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211614/OptimStates using Guid(aa1cecd8874345c419e5fe640cb3bd16) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'bd951644d1d06daa344480ccc7b56f20') in 0.012088 seconds
+Start importing Assets/DeepUnity/ReinforcementLearning/Base/DeepUnityTrainer.cs using Guid(06fb3b61e488bed4aa8029d819c210f5) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'd40082a82c95cbb80fe84186c1fd327b') in 0.004439 seconds
+Refreshing native plugins compatible for Editor in 6.31 ms, found 7 plugins.
+Native extension for WindowsStandalone target not found
+Native extension for Android target not found
+Mono: successfully reloaded assembly
+- Finished resetting the current domain, in  2.449 seconds
+Domain Reload Profiling: 3005ms
+	BeginReloadAssembly (121ms)
+		ExecutionOrderSort (0ms)
+		DisableScriptedObjects (3ms)
+		BackupInstance (0ms)
+		ReleaseScriptingObjects (0ms)
+		CreateAndSetChildDomain (25ms)
+	RebuildCommonClasses (24ms)
+	RebuildNativeTypeToScriptingClass (7ms)
+	initialDomainReloadingComplete (25ms)
+	LoadAllAssembliesAndSetupDomain (377ms)
+		LoadAssemblies (281ms)
+		RebuildTransferFunctionScriptingTraits (0ms)
+		AnalyzeDomain (159ms)
+			TypeCache.Refresh (138ms)
+				TypeCache.ScanAssembly (125ms)
+			ScanForSourceGeneratedMonoScriptInfo (15ms)
+			ResolveRequiredComponents (4ms)
+	FinalizeReload (2450ms)
+		ReleaseScriptCaches (0ms)
+		RebuildScriptCaches (0ms)
+		SetupLoadedEditorAssemblies (2315ms)
+			LogAssemblyErrors (0ms)
+			InitializePlatformSupportModulesInManaged (15ms)
+			SetLoadedEditorAssemblies (4ms)
+			RefreshPlugins (0ms)
+			BeforeProcessingInitializeOnLoad (66ms)
+			ProcessInitializeOnLoadAttributes (2166ms)
+			ProcessInitializeOnLoadMethodAttributes (55ms)
+			AfterProcessingInitializeOnLoad (8ms)
+			EditorAssembliesLoaded (0ms)
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (8ms)
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211614/OptimStates/info.txt using Guid(317dad2090c477a4eae067f641b995d1) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'b91f1a374163344ad1310a9c44972f8e') in 0.016578 seconds
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211614/OptimStates/sactrainer_optim_state_1.json using Guid(02cd6308f879ac643ac2abc9fc1c6bdf) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: '0369f17e92453337ba9a5b1f73d9332c') in 0.008506 seconds
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211614/OptimStates/sactrainer_optim_state_2.json using Guid(2446234119090f4448b7ec2f588f8961) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'd154126a1529380b33d8e53606071368') in 0.007965 seconds
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211614/OptimStates/sactrainer_optim_state_0.json using Guid(7ccca1451da951d4cb29f43e171679c1) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'eabf1c331bef51eec403e3b18899ffde') in 0.008033 seconds
+Refreshing native plugins compatible for Editor in 11.28 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=a7496f24a5794a440aae9ca107fc70e7): Total: 7.150 seconds - Initiated by InitialRefreshV2(ForceSynchronousImport)
+	Summary:
+		Imports: total=6 (actual=6, local cache=0, cache server=0)
+		Asset DB Process Time: managed=4 ms, native=1785 ms
+		Asset DB Callback time: managed=338 ms, native=15 ms
+		Scripting: domain reloads=1, domain reload time=3081 ms, compile time=1877 ms, other=47 ms
+		Project Asset Count: scripts=6012, non-scripts=4191
+		Asset File Changes: new=5, changed=6, moved=0, deleted=0
+		Scan Filter Count: 0
+	InvokeBeforeRefreshCallbacks: 1.108ms
+	ApplyChangesToAssetFolders: 0.064ms
+	Scan: 231.016ms
+	OnSourceAssetsModified: 2.163ms
+	GetAllGuidsForCategorization: 1.318ms
+	CategorizeAssets: 165.334ms
+	ImportOutOfDateAssets: 2565.143ms (594.804ms without children)
+		ImportManagerImport: 65.837ms (5.036ms without children)
+			ImportInProcess: 60.705ms
+			UpdateCategorizedAssets: 0.096ms
+		CompileScripts: 1877.271ms
+		ReloadNativeAssets: 0.001ms
+		UnloadImportedAssets: 23.530ms
+		ReloadImportedAssets: 0.255ms
+		EnsureUptoDateAssetsAreRegisteredWithGuidPM: 2.423ms
+		InitializingProgressBar: 0.017ms
+		PostProcessAllAssetNotificationsAddChangedAssets: 0.001ms
+		OnDemandSchedulerStart: 1.005ms
+	PostProcessAllAssets: 336.825ms
+	Hotreload: 13.474ms
+	GatherAllCurrentPrimaryArtifactRevisions: 0.002ms
+	UnloadStreamsBegin: 0.498ms
+	PersistCurrentRevisions: 0.452ms
+	UnloadStreamsEnd: 0.040ms
+	GenerateScriptTypeHashes: 3.146ms
+	Untracked: 3832.733ms
+Application.AssetDatabase Initial Refresh End
+Launched and connected shader compiler UnityShaderCompiler.exe after 0.04 seconds
+Scanning for USB devices : 2.693ms
+Initializing Unity extensions:
+[Licensing::Client] Successfully resolved entitlement details
+[MODES] ModeService[none].Initialize
+[MODES] ModeService[none].LoadModes
+[MODES] Loading mode Default (0) for mode-current-id-DeepUnity
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ProgressiveSceneManager::Cancel()
+Unloading 13 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 96 unused Assets / (2.7 MB). Loaded Objects now: 5150.
+Memory consumption went from 131.7 MB to 129.0 MB.
+Total: 5.299200 ms (FindLiveObjects: 0.572100 ms CreateObjectMapping: 0.314700 ms MarkObjects: 3.718700 ms  DeleteObjects: 0.692300 ms)
+
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+Unloading 1 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 1 unused Assets / (2.7 KB). Loaded Objects now: 5150.
+Memory consumption went from 126.4 MB to 126.4 MB.
+Total: 4.489000 ms (FindLiveObjects: 0.425900 ms CreateObjectMapping: 0.242300 ms MarkObjects: 3.796500 ms  DeleteObjects: 0.023000 ms)
+
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847 using Guid(d8ef97628b9bdd34f8b09971456775a1) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: '48045040e005f3878a7f5403c90b00f0') in 0.004129 seconds
+Refreshing native plugins compatible for Editor in 6.79 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=971e7659906e34840ae03fc6a6486575): Total: 0.071 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/___OneDimReachSac_two_agents_dense_updates_20260328_211847.asset using Guid(4b0f667735fe79d45aee0dde0b7b4927) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: '1eceb0747e46473539a87034ec29532f') in 0.004105 seconds
+Refreshing native plugins compatible for Editor in 6.99 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=a872dc2ef859a9740bf15985d7afaa0a): Total: 0.033 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/Config.asset using Guid(e12e115e9359ff2468330e3e17f44ac1) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: '96069109c7d6e1ab8d4b9c9439ae0748') in 0.004030 seconds
+Refreshing native plugins compatible for Editor in 8.27 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=3cfa500eaa4071e4dbf82f5e35f8c743): Total: 0.036 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+<color=#0ef0bf>[<b>__OneDimReachSac_two_agents_dense_updates_20260328_211847/Config</b> <i>Hyperparameters</i> asset created]</color>
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ReinforcementLearning.Hyperparameters:CreateOrLoadAsset (string) (at Assets/DeepUnity/ReinforcementLearning/Base/HyperParameters.cs:166)
+DeepUnity.ReinforcementLearning.AgentBehaviour:EnsureSupportAssets_EditorOnly (string,int,int,int,int,int,int,int,int,int,DeepUnity.ArchitectureType,DeepUnity.NonLinearity,bool) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:412)
+DeepUnity.ReinforcementLearning.AgentBehaviour:CreateOrLoadAsset (string,int,int,int,int,int,int,int,int,int,DeepUnity.ArchitectureType,DeepUnity.NonLinearity) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:646)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:SetupScene (DeepUnity.ReinforcementLearning.OneDimReachBatchRunner/RunSpec,string,string,string) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:140)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:StartRun (DeepUnity.ReinforcementLearning.OneDimReachBatchRunner/RunSpec) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:123)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:RunOneDimReachSacTwoAgentsDenseUpdates () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:96)
+
+(Filename: Assets/DeepUnity/ReinforcementLearning/Base/HyperParameters.cs Line: 166)
+
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/V.asset using Guid(44c9bb97080a4b74096c38aa16d97761) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'c91a24b58a9b9e648123ff9361dfe64b') in 0.005260 seconds
+Refreshing native plugins compatible for Editor in 7.58 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=be5301aba660c8243a34e25c6275d3f4): Total: 0.039 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/V.asset using Guid(44c9bb97080a4b74096c38aa16d97761) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: '5f0566cfe67f8c385a0541c3386a90f1') in 0.004958 seconds
+Refreshing native plugins compatible for Editor in 7.56 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=33b513dd1d2a216479c8afc0ca2e24e5): Total: 0.033 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+<color=#03a9fc><b>[INFO] [3/28/2026 11:18:48 PM]</b> <b>__OneDimReachSac_two_agents_dense_updates_20260328_211847/V</b> <i>Sequential</i> asset created.</color>
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ConsoleMessage:Info (string) (at Assets/DeepUnity/Exceptions/ConsoleMessage.cs:15)
+DeepUnity.Models.Model`2<DeepUnity.Models.Sequential, DeepUnity.Tensor>:CreateAsset (string) (at Assets/DeepUnity/Models/Model.cs:113)
+DeepUnity.ReinforcementLearning.AgentBehaviour:EnsureNetworkAsset (DeepUnity.Models.Sequential&,string,string,DeepUnity.Models.Sequential) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:392)
+DeepUnity.ReinforcementLearning.AgentBehaviour:EnsureSupportAssets_EditorOnly (string,int,int,int,int,int,int,int,int,int,DeepUnity.ArchitectureType,DeepUnity.NonLinearity,bool) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:420)
+DeepUnity.ReinforcementLearning.AgentBehaviour:CreateOrLoadAsset (string,int,int,int,int,int,int,int,int,int,DeepUnity.ArchitectureType,DeepUnity.NonLinearity) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:646)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:SetupScene (DeepUnity.ReinforcementLearning.OneDimReachBatchRunner/RunSpec,string,string,string) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:140)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:StartRun (DeepUnity.ReinforcementLearning.OneDimReachBatchRunner/RunSpec) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:123)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:RunOneDimReachSacTwoAgentsDenseUpdates () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:96)
+
+(Filename: Assets/DeepUnity/Exceptions/ConsoleMessage.cs Line: 15)
+
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/Mu.asset using Guid(92a5a2b089a0126469225f794e2931a0) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: '38fbc1284baabc2c4ea3e494c3c2493b') in 0.005229 seconds
+Refreshing native plugins compatible for Editor in 9.51 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=47a0465be45607242839d83e6af42867): Total: 0.039 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/Mu.asset using Guid(92a5a2b089a0126469225f794e2931a0) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: '6d7c986f21874d22b870e50ec9fb99a2') in 0.004983 seconds
+Refreshing native plugins compatible for Editor in 7.26 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=07de7e6308e0bbc479a568fa2f57891e): Total: 0.035 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+<color=#03a9fc><b>[INFO] [3/28/2026 11:18:48 PM]</b> <b>__OneDimReachSac_two_agents_dense_updates_20260328_211847/Mu</b> <i>Sequential</i> asset created.</color>
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ConsoleMessage:Info (string) (at Assets/DeepUnity/Exceptions/ConsoleMessage.cs:15)
+DeepUnity.Models.Model`2<DeepUnity.Models.Sequential, DeepUnity.Tensor>:CreateAsset (string) (at Assets/DeepUnity/Models/Model.cs:113)
+DeepUnity.ReinforcementLearning.AgentBehaviour:EnsureNetworkAsset (DeepUnity.Models.Sequential&,string,string,DeepUnity.Models.Sequential) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:392)
+DeepUnity.ReinforcementLearning.AgentBehaviour:EnsureSupportAssets_EditorOnly (string,int,int,int,int,int,int,int,int,int,DeepUnity.ArchitectureType,DeepUnity.NonLinearity,bool) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:424)
+DeepUnity.ReinforcementLearning.AgentBehaviour:CreateOrLoadAsset (string,int,int,int,int,int,int,int,int,int,DeepUnity.ArchitectureType,DeepUnity.NonLinearity) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:646)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:SetupScene (DeepUnity.ReinforcementLearning.OneDimReachBatchRunner/RunSpec,string,string,string) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:140)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:StartRun (DeepUnity.ReinforcementLearning.OneDimReachBatchRunner/RunSpec) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:123)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:RunOneDimReachSacTwoAgentsDenseUpdates () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:96)
+
+(Filename: Assets/DeepUnity/Exceptions/ConsoleMessage.cs Line: 15)
+
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/Sigma.asset using Guid(75191a0a72c5f3e409d4f7fc87983796) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'd5ddf1c393e28d0b771683aa4fd2d1f0') in 0.004604 seconds
+Refreshing native plugins compatible for Editor in 6.90 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=951e7f4aa2cdf904fb0412f673f5ce91): Total: 0.034 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/Sigma.asset using Guid(75191a0a72c5f3e409d4f7fc87983796) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'e508854501fc05b9813aa70a803de863') in 0.004829 seconds
+Refreshing native plugins compatible for Editor in 8.20 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=319070ce802277546a4c5353a02b5e9c): Total: 0.035 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+<color=#03a9fc><b>[INFO] [3/28/2026 11:18:48 PM]</b> <b>__OneDimReachSac_two_agents_dense_updates_20260328_211847/Sigma</b> <i>Sequential</i> asset created.</color>
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ConsoleMessage:Info (string) (at Assets/DeepUnity/Exceptions/ConsoleMessage.cs:15)
+DeepUnity.Models.Model`2<DeepUnity.Models.Sequential, DeepUnity.Tensor>:CreateAsset (string) (at Assets/DeepUnity/Models/Model.cs:113)
+DeepUnity.ReinforcementLearning.AgentBehaviour:EnsureNetworkAsset (DeepUnity.Models.Sequential&,string,string,DeepUnity.Models.Sequential) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:392)
+DeepUnity.ReinforcementLearning.AgentBehaviour:EnsureSupportAssets_EditorOnly (string,int,int,int,int,int,int,int,int,int,DeepUnity.ArchitectureType,DeepUnity.NonLinearity,bool) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:425)
+DeepUnity.ReinforcementLearning.AgentBehaviour:CreateOrLoadAsset (string,int,int,int,int,int,int,int,int,int,DeepUnity.ArchitectureType,DeepUnity.NonLinearity) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:646)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:SetupScene (DeepUnity.ReinforcementLearning.OneDimReachBatchRunner/RunSpec,string,string,string) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:140)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:StartRun (DeepUnity.ReinforcementLearning.OneDimReachBatchRunner/RunSpec) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:123)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:RunOneDimReachSacTwoAgentsDenseUpdates () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:96)
+
+(Filename: Assets/DeepUnity/Exceptions/ConsoleMessage.cs Line: 15)
+
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/Q1.asset using Guid(5b1161df4989d884980a8dcca1dfe93c) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: '46a571d26403f59eb1da9247efdf4840') in 0.005390 seconds
+Refreshing native plugins compatible for Editor in 7.45 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=ce0500177dc88234b971a4e8f5c1b7cb): Total: 0.035 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/Q1.asset using Guid(5b1161df4989d884980a8dcca1dfe93c) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'f583f89695c40763d480659e74a17827') in 0.004617 seconds
+Refreshing native plugins compatible for Editor in 6.64 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=5ca7e015a5f247c4085a1b300676c8e9): Total: 0.032 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+<color=#03a9fc><b>[INFO] [3/28/2026 11:18:48 PM]</b> <b>__OneDimReachSac_two_agents_dense_updates_20260328_211847/Q1</b> <i>Sequential</i> asset created.</color>
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ConsoleMessage:Info (string) (at Assets/DeepUnity/Exceptions/ConsoleMessage.cs:15)
+DeepUnity.Models.Model`2<DeepUnity.Models.Sequential, DeepUnity.Tensor>:CreateAsset (string) (at Assets/DeepUnity/Models/Model.cs:113)
+DeepUnity.ReinforcementLearning.AgentBehaviour:EnsureNetworkAsset (DeepUnity.Models.Sequential&,string,string,DeepUnity.Models.Sequential) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:392)
+DeepUnity.ReinforcementLearning.AgentBehaviour:EnsureSupportAssets_EditorOnly (string,int,int,int,int,int,int,int,int,int,DeepUnity.ArchitectureType,DeepUnity.NonLinearity,bool) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:426)
+DeepUnity.ReinforcementLearning.AgentBehaviour:CreateOrLoadAsset (string,int,int,int,int,int,int,int,int,int,DeepUnity.ArchitectureType,DeepUnity.NonLinearity) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:646)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:SetupScene (DeepUnity.ReinforcementLearning.OneDimReachBatchRunner/RunSpec,string,string,string) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:140)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:StartRun (DeepUnity.ReinforcementLearning.OneDimReachBatchRunner/RunSpec) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:123)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:RunOneDimReachSacTwoAgentsDenseUpdates () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:96)
+
+(Filename: Assets/DeepUnity/Exceptions/ConsoleMessage.cs Line: 15)
+
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/Q2.asset using Guid(943db7a2b3af27a449b97e56c9993c69) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: '09112fe011cd50278e00df285ea8a3ec') in 0.004838 seconds
+Refreshing native plugins compatible for Editor in 6.30 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=98c2f7d46c17fca4e9a0ef50a1b9a3bf): Total: 0.032 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/Q2.asset using Guid(943db7a2b3af27a449b97e56c9993c69) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: '4a73eb860d28194fdc5ac7cee88fa6b5') in 0.004517 seconds
+Refreshing native plugins compatible for Editor in 6.31 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=b65d7ef11a8010144afa0a9259581826): Total: 0.030 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+<color=#03a9fc><b>[INFO] [3/28/2026 11:18:48 PM]</b> <b>__OneDimReachSac_two_agents_dense_updates_20260328_211847/Q2</b> <i>Sequential</i> asset created.</color>
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ConsoleMessage:Info (string) (at Assets/DeepUnity/Exceptions/ConsoleMessage.cs:15)
+DeepUnity.Models.Model`2<DeepUnity.Models.Sequential, DeepUnity.Tensor>:CreateAsset (string) (at Assets/DeepUnity/Models/Model.cs:113)
+DeepUnity.ReinforcementLearning.AgentBehaviour:EnsureNetworkAsset (DeepUnity.Models.Sequential&,string,string,DeepUnity.Models.Sequential) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:392)
+DeepUnity.ReinforcementLearning.AgentBehaviour:EnsureSupportAssets_EditorOnly (string,int,int,int,int,int,int,int,int,int,DeepUnity.ArchitectureType,DeepUnity.NonLinearity,bool) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:427)
+DeepUnity.ReinforcementLearning.AgentBehaviour:CreateOrLoadAsset (string,int,int,int,int,int,int,int,int,int,DeepUnity.ArchitectureType,DeepUnity.NonLinearity) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:646)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:SetupScene (DeepUnity.ReinforcementLearning.OneDimReachBatchRunner/RunSpec,string,string,string) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:140)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:StartRun (DeepUnity.ReinforcementLearning.OneDimReachBatchRunner/RunSpec) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:123)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:RunOneDimReachSacTwoAgentsDenseUpdates () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:96)
+
+(Filename: Assets/DeepUnity/Exceptions/ConsoleMessage.cs Line: 15)
+
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/___OneDimReachSac_two_agents_dense_updates_20260328_211847.asset using Guid(4b0f667735fe79d45aee0dde0b7b4927) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'c115d83e2b8874a90ea0df6f60363137') in 0.004776 seconds
+Refreshing native plugins compatible for Editor in 7.40 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=b1e01bc44433a204ca7418d44a7d24a8): Total: 0.033 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+Asset Pipeline Refresh (id=f5a953fefcce8e642a4ca1c396f488ae): Total: 0.008 seconds - Initiated by RefreshV2(NoUpdateAssetOptions)
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/Config.asset using Guid(e12e115e9359ff2468330e3e17f44ac1) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'a1af9a8abf4e9dfb6f5e470ae49006c4') in 0.006217 seconds
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/___OneDimReachSac_two_agents_dense_updates_20260328_211847.asset using Guid(4b0f667735fe79d45aee0dde0b7b4927) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'cb2ba4d7d40a53a3efcc61409d7dded0') in 0.005499 seconds
+Refreshing native plugins compatible for Editor in 7.22 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=e36cae9e8c1c55e4d8a054b83071a842): Total: 0.048 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+[OneDimReachBatchRunner] Prepared two_agents_dense_updates run. Report dir: C:\Dev\DeepUnity\ProbeLogs\one_dim_reach_two_agents_dense_updates_20260328_211847
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:StartRun (DeepUnity.ReinforcementLearning.OneDimReachBatchRunner/RunSpec) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:124)
+DeepUnity.ReinforcementLearning.OneDimReachBatchRunner:RunOneDimReachSacTwoAgentsDenseUpdates () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs:96)
+
+(Filename: Assets/DeepUnity/ReinforcementLearning/Tools/Editor/OneDimReachBatchRunner.cs Line: 124)
+
+[Project] Loading completed in 13.029 seconds
+	Project init time: 				11.300 seconds
+		Template init time: 		0.000 seconds
+		Package Manager init time: 		0.310 seconds
+		Asset Database init time: 		1.531 seconds
+		Global illumination init time: 	0.003 seconds
+		Assemblies load time: 			0.590 seconds
+		Unity extensions init time: 	0.006 seconds
+		Asset Database refresh time: 	0.008 seconds
+	Scene opening time: 			0.976 seconds
+##utp:{"type":"ProjectInfo","version":2,"phase":"Immediate","time":1774732728586,"processId":51612,"projectLoad":13.0292272,"projectInit":11.300197,"templateInit":0.0,"packageManagerInit":0.3102122,"assetDatabaseInit":1.5312277,"globalIlluminationInit":0.0032062,"assembliesLoad":0.5902416,"unityExtensionsInit":0.0059825,"assetDatabaseRefresh":0.007847,"sceneOpening":0.9764369}
+##utp:{"type":"EditorInfo","version":2,"phase":"Immediate","time":1774732728586,"processId":51612,"editorVersion":"2022.3.43f1 (85497d293fa1)","branch":"2022.3/staging","buildType":"Release","platform":"Windows"}
+Reloading assemblies for play mode.
+Reloading assemblies after forced synchronous recompile.
+Begin MonoManager ReloadAssembly
+- Loaded All Assemblies, in  0.490 seconds
+Refreshing native plugins compatible for Editor in 6.86 ms, found 7 plugins.
+Native extension for WindowsStandalone target not found
+Native extension for Android target not found
+Mono: successfully reloaded assembly
+- Finished resetting the current domain, in  0.867 seconds
+Domain Reload Profiling: 1355ms
+	BeginReloadAssembly (374ms)
+		ExecutionOrderSort (0ms)
+		DisableScriptedObjects (7ms)
+		BackupInstance (0ms)
+		ReleaseScriptingObjects (0ms)
+		CreateAndSetChildDomain (262ms)
+	RebuildCommonClasses (25ms)
+	RebuildNativeTypeToScriptingClass (8ms)
+	initialDomainReloadingComplete (28ms)
+	LoadAllAssembliesAndSetupDomain (53ms)
+		LoadAssemblies (100ms)
+		RebuildTransferFunctionScriptingTraits (0ms)
+		AnalyzeDomain (12ms)
+			TypeCache.Refresh (4ms)
+				TypeCache.ScanAssembly (0ms)
+			ScanForSourceGeneratedMonoScriptInfo (0ms)
+			ResolveRequiredComponents (5ms)
+	FinalizeReload (868ms)
+		ReleaseScriptCaches (0ms)
+		RebuildScriptCaches (0ms)
+		SetupLoadedEditorAssemblies (713ms)
+			LogAssemblyErrors (0ms)
+			InitializePlatformSupportModulesInManaged (27ms)
+			SetLoadedEditorAssemblies (5ms)
+			RefreshPlugins (0ms)
+			BeforeProcessingInitializeOnLoad (64ms)
+			ProcessInitializeOnLoadAttributes (543ms)
+			ProcessInitializeOnLoadMethodAttributes (66ms)
+			AfterProcessingInitializeOnLoad (7ms)
+			EditorAssembliesLoaded (0ms)
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (7ms)
+Asset Pipeline Refresh (id=148d939a5ce267d4ab493f1a775a1520): Total: 1.685 seconds - Initiated by StopAssetImportingV2(ForceSynchronousImport | ForceDomainReload)
+	Summary:
+		Imports: total=0 (actual=0, local cache=0, cache server=0)
+		Asset DB Process Time: managed=0 ms, native=278 ms
+		Asset DB Callback time: managed=15 ms, native=0 ms
+		Scripting: domain reloads=1, domain reload time=1390 ms, compile time=0 ms, other=0 ms
+		Project Asset Count: scripts=6013, non-scripts=4198
+		Asset File Changes: new=0, changed=0, moved=0, deleted=0
+		Scan Filter Count: 0
+	InvokeBeforeRefreshCallbacks: 0.879ms
+	ApplyChangesToAssetFolders: 0.178ms
+	Scan: 0.001ms
+	OnSourceAssetsModified: 0.002ms
+	GetAllGuidsForCategorization: 0.912ms
+	CategorizeAssets: 143.485ms
+	ImportOutOfDateAssets: 887.988ms (884.140ms without children)
+		CompileScripts: 0.021ms
+		CollectScriptTypesHashes: 0.274ms
+		ReloadNativeAssets: 0.272ms
+		UnloadImportedAssets: 0.405ms
+		EnsureUptoDateAssetsAreRegisteredWithGuidPM: 1.735ms
+		InitializingProgressBar: 0.001ms
+		PostProcessAllAssetNotificationsAddChangedAssets: 0.001ms
+		OnDemandSchedulerStart: 1.141ms
+	PostProcessAllAssets: 15.009ms
+	GatherAllCurrentPrimaryArtifactRevisions: 0.204ms
+	UnloadStreamsBegin: 0.234ms
+	PersistCurrentRevisions: 0.220ms
+	UnloadStreamsEnd: 0.045ms
+	GenerateScriptTypeHashes: 2.112ms
+	Untracked: 635.843ms
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+Loaded scene 'Temp/__Backupscenes/0.backup'
+	Deserialize:            0.765 ms
+	Integration:            229.826 ms
+	Integration of assets:  0.002 ms
+	Thread Wait Time:       28.300 ms
+	Total Operation Time:   258.893 ms
+<color=#03a9fc><b>[INFO] [3/28/2026 11:18:50 PM]</b> <b>[AUTOSAVE]</b> Agent behaviour <b><i>__OneDimReachSac_two_agents_dense_updates_20260328_211847</i></b> saved.</color>
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ConsoleMessage:Info (string) (at Assets/DeepUnity/Exceptions/ConsoleMessage.cs:15)
+DeepUnity.ReinforcementLearning.AgentBehaviour:Save (string[],DeepUnity.ReinforcementLearning.DeepUnityTrainer) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:664)
+DeepUnity.ReinforcementLearning.DeepUnityTrainer:Autosave (UnityEditor.PlayModeStateChange) (at Assets/DeepUnity/ReinforcementLearning/Base/DeepUnityTrainer.cs:254)
+UnityEditor.EditorApplication:Internal_PlayModeStateChanged (UnityEditor.PlayModeStateChange)
+
+(Filename: Assets/DeepUnity/Exceptions/ConsoleMessage.cs Line: 15)
+
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/___OneDimReachSac_two_agents_dense_updates_20260328_211847.asset using Guid(4b0f667735fe79d45aee0dde0b7b4927) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: '78dace6212656d145d1ce8c9fde75a70') in 0.010151 seconds
+Refreshing native plugins compatible for Editor in 9.36 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=573308c4f053a0c4baa5aa353d62f443): Total: 0.073 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/V.asset using Guid(44c9bb97080a4b74096c38aa16d97761) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: '43864f124dc0fb4c1d0aaa25fc7fcac8') in 0.005269 seconds
+Refreshing native plugins compatible for Editor in 10.40 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=2a33710d167563f45850863171df7516): Total: 0.043 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/Q1.asset using Guid(5b1161df4989d884980a8dcca1dfe93c) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: '7f798ff8c11b6e0d67c149aa896428f7') in 0.006344 seconds
+Refreshing native plugins compatible for Editor in 12.40 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=997a91ca95c49b64bb03af96740d7928): Total: 0.052 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/Q2.asset using Guid(943db7a2b3af27a449b97e56c9993c69) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: '5ef16961e9491dc0834394b6651b5a07') in 0.004797 seconds
+Refreshing native plugins compatible for Editor in 8.68 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=e35adfde1787362418562034283412ba): Total: 0.037 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/Mu.asset using Guid(92a5a2b089a0126469225f794e2931a0) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'e60ea201b0d0dcef3f1d87fa200fc70e') in 0.006054 seconds
+Refreshing native plugins compatible for Editor in 7.19 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=fe2ad75ad7d20364aac475cf7fbd8ad9): Total: 0.040 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+Start importing Assets/__OneDimReachSac_two_agents_dense_updates_20260328_211847/Sigma.asset using Guid(75191a0a72c5f3e409d4f7fc87983796) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'f4d74f3a86cfdd187fb7fefd450afc3d') in 0.004547 seconds
+Refreshing native plugins compatible for Editor in 7.42 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=cd586068cb9a5c340a66d898646f2de0): Total: 0.037 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+<color=#03a9fc><b>[INFO] [3/28/2026 11:18:50 PM]</b> <b>[AUTOSAVE]</b> Optimizer states <b><i>__OneDimReachSac_two_agents_dense_updates_20260328_211847</i></b> saved.</color>
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ConsoleMessage:Info (string) (at Assets/DeepUnity/Exceptions/ConsoleMessage.cs:15)
+DeepUnity.ReinforcementLearning.AgentBehaviour:Save (string[],DeepUnity.ReinforcementLearning.DeepUnityTrainer) (at Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs:685)
+DeepUnity.ReinforcementLearning.DeepUnityTrainer:Autosave (UnityEditor.PlayModeStateChange) (at Assets/DeepUnity/ReinforcementLearning/Base/DeepUnityTrainer.cs:254)
+UnityEditor.EditorApplication:Internal_PlayModeStateChanged (UnityEditor.PlayModeStateChange)
+
+(Filename: Assets/DeepUnity/Exceptions/ConsoleMessage.cs Line: 15)
+
+[MODES] ModeService[none].Initialize
+[MODES] ModeService[none].LoadModes
+[MODES] Loading mode Default (0) for mode-current-id-DeepUnity
+Created GICache directory at C:/Users/Radu/AppData/LocalLow/Unity/Caches/GiCache. Took: 0.038s, timestamps: [15.434 - 15.471]
+<color=#03a9fc><b>[INFO] [3/28/2026 11:18:52 PM]</b> [SAC-DEBUG] Log file: C:/Dev/DeepUnity/Assets\DeepUnity\ReinforcementLearning\Base\debug-b67f4f.log.</color>
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ConsoleMessage:Info (string) (at Assets/DeepUnity/Exceptions/ConsoleMessage.cs:15)
+DeepUnity.ReinforcementLearning.SACTrainer:AgentDebugLog (string,string,string,string) (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:503)
+DeepUnity.ReinforcementLearning.SACTrainer:UpdatePolicy (DeepUnity.Tensor,long) (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:387)
+DeepUnity.ReinforcementLearning.SACTrainer:Train () (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:206)
+DeepUnity.ReinforcementLearning.SACTrainer:OnBeforeFixedUpdate () (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:174)
+DeepUnity.ReinforcementLearning.DeepUnityTrainer:FixedUpdate () (at Assets/DeepUnity/ReinforcementLearning/Base/DeepUnityTrainer.cs:101)
+
+(Filename: Assets/DeepUnity/Exceptions/ConsoleMessage.cs Line: 15)
+
+<color=#03a9fc><b>[INFO] [3/28/2026 11:18:53 PM]</b> [SAC-DEBUG step=200] J=0.9430 minQ=0.8094 ent=0.1336 dQduL2=0.007039 dJdMuL2=0.02762 actorLR=0.001.</color>
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ConsoleMessage:Info (string) (at Assets/DeepUnity/Exceptions/ConsoleMessage.cs:15)
+DeepUnity.ReinforcementLearning.SACTrainer:UpdatePolicy (DeepUnity.Tensor,long) (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:392)
+DeepUnity.ReinforcementLearning.SACTrainer:Train () (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:206)
+DeepUnity.ReinforcementLearning.SACTrainer:OnBeforeFixedUpdate () (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:174)
+DeepUnity.ReinforcementLearning.DeepUnityTrainer:FixedUpdate () (at Assets/DeepUnity/ReinforcementLearning/Base/DeepUnityTrainer.cs:101)
+
+(Filename: Assets/DeepUnity/Exceptions/ConsoleMessage.cs Line: 15)
+
+<color=#03a9fc><b>[INFO] [3/28/2026 11:18:54 PM]</b> [SAC-DEBUG step=400] J=1.3851 minQ=1.2576 ent=0.1275 dQduL2=0.01266 dJdMuL2=0.03215 actorLR=0.001.</color>
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ConsoleMessage:Info (string) (at Assets/DeepUnity/Exceptions/ConsoleMessage.cs:15)
+DeepUnity.ReinforcementLearning.SACTrainer:UpdatePolicy (DeepUnity.Tensor,long) (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:392)
+DeepUnity.ReinforcementLearning.SACTrainer:Train () (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:206)
+DeepUnity.ReinforcementLearning.SACTrainer:OnBeforeFixedUpdate () (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:174)
+DeepUnity.ReinforcementLearning.DeepUnityTrainer:FixedUpdate () (at Assets/DeepUnity/ReinforcementLearning/Base/DeepUnityTrainer.cs:101)
+
+(Filename: Assets/DeepUnity/Exceptions/ConsoleMessage.cs Line: 15)
+
+<color=#03a9fc><b>[INFO] [3/28/2026 11:18:56 PM]</b> [SAC-DEBUG step=600] J=1.9331 minQ=1.7993 ent=0.1338 dQduL2=0.02092 dJdMuL2=0.03256 actorLR=0.001.</color>
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ConsoleMessage:Info (string) (at Assets/DeepUnity/Exceptions/ConsoleMessage.cs:15)
+DeepUnity.ReinforcementLearning.SACTrainer:UpdatePolicy (DeepUnity.Tensor,long) (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:392)
+DeepUnity.ReinforcementLearning.SACTrainer:Train () (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:206)
+DeepUnity.ReinforcementLearning.SACTrainer:OnBeforeFixedUpdate () (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:174)
+DeepUnity.ReinforcementLearning.DeepUnityTrainer:FixedUpdate () (at Assets/DeepUnity/ReinforcementLearning/Base/DeepUnityTrainer.cs:101)
+
+(Filename: Assets/DeepUnity/Exceptions/ConsoleMessage.cs Line: 15)
+
+[BalanceBallBatchPlayController] step=2278 updates=627 gradSteps~=627 utd~=0.275 actorLoss=2.0358 criticLoss=0.0045
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ReinforcementLearning.BalanceBallBatchPlayController:Update () (at Assets/DeepUnity/ReinforcementLearning/Tools/BalanceBallBatchPlayController.cs:51)
+
+(Filename: Assets/DeepUnity/ReinforcementLearning/Tools/BalanceBallBatchPlayController.cs Line: 51)
+
+<color=#03a9fc><b>[INFO] [3/28/2026 11:18:57 PM]</b> [SAC-DEBUG step=800] J=2.4419 minQ=2.3318 ent=0.1102 dQduL2=0.03044 dJdMuL2=0.03279 actorLR=0.001.</color>
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ConsoleMessage:Info (string) (at Assets/DeepUnity/Exceptions/ConsoleMessage.cs:15)
+DeepUnity.ReinforcementLearning.SACTrainer:UpdatePolicy (DeepUnity.Tensor,long) (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:392)
+DeepUnity.ReinforcementLearning.SACTrainer:Train () (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:206)
+DeepUnity.ReinforcementLearning.SACTrainer:OnBeforeFixedUpdate () (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:174)
+DeepUnity.ReinforcementLearning.DeepUnityTrainer:FixedUpdate () (at Assets/DeepUnity/ReinforcementLearning/Base/DeepUnityTrainer.cs:101)
+
+(Filename: Assets/DeepUnity/Exceptions/ConsoleMessage.cs Line: 15)
+
+<color=#03a9fc><b>[INFO] [3/28/2026 11:18:59 PM]</b> [SAC-DEBUG step=1000] J=3.1080 minQ=3.0039 ent=0.1041 dQduL2=0.03402 dJdMuL2=0.03569 actorLR=0.001.</color>
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ConsoleMessage:Info (string) (at Assets/DeepUnity/Exceptions/ConsoleMessage.cs:15)
+DeepUnity.ReinforcementLearning.SACTrainer:UpdatePolicy (DeepUnity.Tensor,long) (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:392)
+DeepUnity.ReinforcementLearning.SACTrainer:Train () (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:206)
+DeepUnity.ReinforcementLearning.SACTrainer:OnBeforeFixedUpdate () (at Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs:174)
+DeepUnity.ReinforcementLearning.DeepUnityTrainer:FixedUpdate () (at Assets/DeepUnity/ReinforcementLearning/Base/DeepUnityTrainer.cs:101)
+
+(Filename: Assets/DeepUnity/Exceptions/ConsoleMessage.cs Line: 15)
+

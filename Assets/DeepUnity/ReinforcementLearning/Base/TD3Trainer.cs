@@ -38,9 +38,10 @@ namespace DeepUnity.ReinforcementLearning
             optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate);
 
             // Initialize schedulers
-            optim_q1.Scheduler = new LinearAnnealing(optim_q1, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
-            optim_q2.Scheduler = new LinearAnnealing(optim_q2, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
-            optim_mu.Scheduler = new LinearAnnealing(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: (int)model.config.maxSteps);
+            int totalGradientSteps = Math.Max(1, (int)Math.Min(int.MaxValue, (long)hp.maxSteps * hp.updatesNum / Math.Max(1, hp.updateInterval)));
+            optim_q1.Scheduler = new LinearAnnealing(optim_q1, start_factor: 1f, end_factor: 0f, total_iters: totalGradientSteps);
+            optim_q2.Scheduler = new LinearAnnealing(optim_q2, start_factor: 1f, end_factor: 0f, total_iters: totalGradientSteps);
+            optim_mu.Scheduler = new LinearAnnealing(optim_mu, start_factor: 1f, end_factor: 0f, total_iters: totalGradientSteps);
 
             // Initialize target networks
             q1TargNetwork = model.q1Network.Clone() as Sequential;
@@ -175,10 +176,12 @@ namespace DeepUnity.ReinforcementLearning
 
                 float r = batch[b].reward[0];
                 float d = batch[b].done[0];
+                float tr = batch[b].truncated != null ? batch[b].truncated[0] : 0f;
                 float Qt1_sa = Qtarg1_sPrime_aTildePrime[b, 0];
                 float Qt2_sa = Qtarg2_sPrime_aTildePrime[b, 0];
 
-                float y_ = r + hp.gamma * (1f - d) * MathF.Min(Qt1_sa, Qt2_sa);
+                float bootstrap = 1f - d + tr;
+                float y_ = r + hp.gamma * bootstrap * MathF.Min(Qt1_sa, Qt2_sa);
 
                 batch[b].q_target = Tensor.Constant(y_);
             });

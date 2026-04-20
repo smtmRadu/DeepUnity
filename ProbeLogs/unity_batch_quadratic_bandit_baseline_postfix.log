@@ -1,0 +1,964 @@
+[Licensing::Module] Trying to connect to existing licensing client channel...
+[Licensing::IpcConnector] Successfully connected to the License Client on channel: "LicenseClient-Radu" at "2026-03-28T16:58:55.5795195Z"
+[Licensing::Client] Error: Code 10 while verifying Licensing Client signature (process Id: 7884, path: "C:/Program Files/Unity Hub/UnityLicensingClient_V1/Unity.Licensing.Client.exe")
+[Licensing::Module] Error: LicensingClient has failed validation; ignoring
+[Licensing::Client] Handshaking with LicensingClient:
+  Version:                 1.17.4+4293ba1
+  Session Id:              07a9413a4b67469aa66838ed9772856b
+  Correlation Id:          59e496c331fc0c870faf09aab917943e
+  External correlation Id: 5693011273942312053
+  Machine Id:              oXls6e35UgvMtqNRKbNJFvG5sz4=
+[Licensing::Module] Successfully connected to LicensingClient on channel: "LicenseClient-Radu" (connect: 0.00s, validation: 0.02s, handshake: 0.03s)
+[Licensing::IpcConnector] Successfully connected to the License Notification on channel: "LicenseClient-Radu-notifications" at "2026-03-28T16:58:55.6359574Z"
+[Licensing::Module] Error: Access token is unavailable; failed to update
+[Licensing::Client] Successfully updated license
+Built from '2022.3/staging' branch; Version is '2022.3.43f1 (85497d293fa1) revision 8735101'; Using compiler version '192829333'; Build Type 'Release'
+OS: 'Windows 11  (10.0.26200) 64bit Professional' Language: 'en' Physical Memory: 32038 MB
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Module] Serial number assigned to: "7971683010988-UnityPersXXXX"
+BatchMode: 1, IsHumanControllingUs: 0, StartBugReporterOnCrash: 0, Is64bit: 1, IsPro: 0
+[Licensing::Client] Successfully resolved entitlement details
+
+COMMAND LINE ARGUMENTS:
+C:\Program Files\Unity\Hub\Editor\2022.3.43f1\Editor\Unity.exe
+-batchmode
+-nographics
+-projectPath
+C:\Dev\DeepUnity
+-executeMethod
+DeepUnity.ReinforcementLearning.QuadraticBanditBatchRunner.RunQuadraticBanditSacBaseline
+-logFile
+C:\Dev\DeepUnity\ProbeLogs\unity_batch_quadratic_bandit_baseline_postfix.log
+Successfully changed project path to: C:\Dev\DeepUnity
+C:/Dev/DeepUnity
+[UnityMemory] Configuration Parameters - Can be set up in boot.config
+    "memorysetup-bucket-allocator-granularity=16"
+    "memorysetup-bucket-allocator-bucket-count=8"
+    "memorysetup-bucket-allocator-block-size=33554432"
+    "memorysetup-bucket-allocator-block-count=8"
+    "memorysetup-main-allocator-block-size=16777216"
+    "memorysetup-thread-allocator-block-size=16777216"
+    "memorysetup-gfx-main-allocator-block-size=16777216"
+    "memorysetup-gfx-thread-allocator-block-size=16777216"
+    "memorysetup-cache-allocator-block-size=4194304"
+    "memorysetup-typetree-allocator-block-size=2097152"
+    "memorysetup-profiler-bucket-allocator-granularity=16"
+    "memorysetup-profiler-bucket-allocator-bucket-count=8"
+    "memorysetup-profiler-bucket-allocator-block-size=33554432"
+    "memorysetup-profiler-bucket-allocator-block-count=8"
+    "memorysetup-profiler-allocator-block-size=16777216"
+    "memorysetup-profiler-editor-allocator-block-size=1048576"
+    "memorysetup-temp-allocator-size-main=16777216"
+    "memorysetup-job-temp-allocator-block-size=2097152"
+    "memorysetup-job-temp-allocator-block-size-background=1048576"
+    "memorysetup-job-temp-allocator-reduction-small-platforms=262144"
+    "memorysetup-allocator-temp-initial-block-size-main=262144"
+    "memorysetup-allocator-temp-initial-block-size-worker=262144"
+    "memorysetup-temp-allocator-size-background-worker=32768"
+    "memorysetup-temp-allocator-size-job-worker=262144"
+    "memorysetup-temp-allocator-size-preload-manager=33554432"
+    "memorysetup-temp-allocator-size-nav-mesh-worker=65536"
+    "memorysetup-temp-allocator-size-audio-worker=65536"
+    "memorysetup-temp-allocator-size-cloud-worker=32768"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gfx=262144"
+Player connection [37124]  Target information:
+
+Player connection [37124]  * "[IP] 172.30.160.1 [Port] 55504 [Flags] 2 [Guid] 4124939127 [EditorId] 4124939127 [Version] 1048832 [Id] WindowsEditor(7,rpc) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [37124]  * "[IP] 172.30.64.1 [Port] 55504 [Flags] 2 [Guid] 4124939127 [EditorId] 4124939127 [Version] 1048832 [Id] WindowsEditor(7,rpc) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [37124]  * "[IP] 10.22.119.230 [Port] 55504 [Flags] 2 [Guid] 4124939127 [EditorId] 4124939127 [Version] 1048832 [Id] WindowsEditor(7,rpc) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [37124] Host joined multi-casting on [225.0.0.222:54997]...
+Player connection [37124] Host joined alternative multi-casting on [225.0.0.222:34997]...
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+[Package Manager] UpmClient::Connect -- Connected to IPC stream "Upm-44728" after 0.3 seconds.
+[Package Manager] Restoring resolved packages state from cache
+[Licensing::Client] Successfully resolved entitlement details
+[Package Manager] Registered 62 packages:
+  Packages from [https://packages.unity.com]:
+    com.unity.ai.navigation@1.1.5 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ai.navigation@1.1.5)
+    com.unity.collab-proxy@2.4.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.collab-proxy@2.4.4)
+    com.unity.recorder@4.0.3 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.recorder@4.0.3)
+    com.unity.textmeshpro@3.0.9 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.textmeshpro@3.0.9)
+    com.unity.timeline@1.7.6 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.timeline@1.7.6)
+    com.unity.visualscripting@1.9.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.visualscripting@1.9.4)
+    com.unity.ide.visualstudio@2.0.22 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ide.visualstudio@2.0.22)
+    com.unity.ide.rider@3.0.31 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ide.rider@3.0.31)
+    com.unity.ide.vscode@1.2.5 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ide.vscode@1.2.5)
+    com.unity.editorcoroutines@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.editorcoroutines@1.0.0)
+    com.unity.performance.profile-analyzer@1.2.2 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.performance.profile-analyzer@1.2.2)
+    com.unity.test-framework@1.1.33 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.test-framework@1.1.33)
+    com.unity.testtools.codecoverage@1.2.6 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.testtools.codecoverage@1.2.6)
+    com.unity.2d.animation@9.1.1 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.animation@9.1.1)
+    com.unity.2d.pixel-perfect@5.0.3 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.pixel-perfect@5.0.3)
+    com.unity.2d.psdimporter@8.0.5 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.psdimporter@8.0.5)
+    com.unity.2d.spriteshape@9.0.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.spriteshape@9.0.4)
+    com.unity.2d.tilemap.extras@3.1.2 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.tilemap.extras@3.1.2)
+    com.unity.2d.aseprite@1.1.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.aseprite@1.1.4)
+    com.unity.settings-manager@2.0.1 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.settings-manager@2.0.1)
+    com.unity.ext.nunit@1.0.6 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ext.nunit@1.0.6)
+    com.unity.2d.common@8.0.3 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.common@8.0.3)
+    com.unity.mathematics@1.2.6 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.mathematics@1.2.6)
+    com.unity.collections@1.2.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.collections@1.2.4)
+    com.unity.burst@1.8.17 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.burst@1.8.17)
+  Built-in packages:
+    com.unity.feature.2d@2.0.1 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.feature.2d@2.0.1)
+    com.unity.feature.development@1.0.1 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.feature.development@1.0.1)
+    com.unity.ugui@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ugui@1.0.0)
+    com.unity.modules.ai@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.ai@1.0.0)
+    com.unity.modules.androidjni@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.androidjni@1.0.0)
+    com.unity.modules.animation@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.animation@1.0.0)
+    com.unity.modules.assetbundle@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.assetbundle@1.0.0)
+    com.unity.modules.audio@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.audio@1.0.0)
+    com.unity.modules.cloth@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.cloth@1.0.0)
+    com.unity.modules.director@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.director@1.0.0)
+    com.unity.modules.imageconversion@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.imageconversion@1.0.0)
+    com.unity.modules.imgui@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.imgui@1.0.0)
+    com.unity.modules.jsonserialize@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.jsonserialize@1.0.0)
+    com.unity.modules.particlesystem@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.particlesystem@1.0.0)
+    com.unity.modules.physics@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.physics@1.0.0)
+    com.unity.modules.physics2d@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.physics2d@1.0.0)
+    com.unity.modules.screencapture@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.screencapture@1.0.0)
+    com.unity.modules.terrain@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.terrain@1.0.0)
+    com.unity.modules.terrainphysics@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.terrainphysics@1.0.0)
+    com.unity.modules.tilemap@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.tilemap@1.0.0)
+    com.unity.modules.ui@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.ui@1.0.0)
+    com.unity.modules.uielements@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.uielements@1.0.0)
+    com.unity.modules.umbra@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.umbra@1.0.0)
+    com.unity.modules.unityanalytics@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unityanalytics@1.0.0)
+    com.unity.modules.unitywebrequest@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequest@1.0.0)
+    com.unity.modules.unitywebrequestassetbundle@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequestassetbundle@1.0.0)
+    com.unity.modules.unitywebrequestaudio@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequestaudio@1.0.0)
+    com.unity.modules.unitywebrequesttexture@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequesttexture@1.0.0)
+    com.unity.modules.unitywebrequestwww@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequestwww@1.0.0)
+    com.unity.modules.vehicles@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.vehicles@1.0.0)
+    com.unity.modules.video@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.video@1.0.0)
+    com.unity.modules.vr@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.vr@1.0.0)
+    com.unity.modules.wind@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.wind@1.0.0)
+    com.unity.modules.xr@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.xr@1.0.0)
+    com.unity.modules.subsystems@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.subsystems@1.0.0)
+    com.unity.2d.sprite@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.sprite@1.0.0)
+    com.unity.2d.tilemap@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.tilemap@1.0.0)
+[Subsystems] No new subsystems found in resolved package list.
+Package Manager log level set to [2]
+[Package Manager] Done registering packages in 0.30 seconds
+Refreshing native plugins compatible for Editor in 17.34 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Initialize engine version: 2022.3.43f1 (85497d293fa1)
+[Subsystems] Discovering subsystems at path C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Resources/UnitySubsystems
+[Subsystems] Discovering subsystems at path C:/Dev/DeepUnity/Assets
+Forcing GfxDevice: Null
+GfxDevice: creating device client; threaded=0; jobified=0
+NullGfxDevice:
+    Version:  NULL 1.0 [1.0]
+    Renderer: Null Device
+    Vendor:   Unity Technologies
+[Licensing::Client] Successfully resolved entitlement details
+Initialize mono
+Mono path[0] = 'C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed'
+Mono path[1] = 'C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/MonoBleedingEdge/lib/mono/unityjit-win32'
+Mono config path = 'C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/MonoBleedingEdge/etc'
+Using monoOptions --debugger-agent=transport=dt_socket,embedding=1,server=y,suspend=n,address=127.0.0.1:56728
+Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
+Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
+ImportWorker Server TCP listen port: 0
+Begin MonoManager ReloadAssembly
+Registering precompiled unity dll's ...
+[Licensing::Client] Successfully resolved entitlement details
+Register platform support module: C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/PlaybackEngines/AndroidPlayer/UnityEditor.Android.Extensions.dll
+Register platform support module: C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll
+Registered in 0.034903 seconds.
+- Loaded All Assemblies, in  0.316 seconds
+Native extension for WindowsStandalone target not found
+Native extension for Android target not found
+Mono: successfully reloaded assembly
+- Finished resetting the current domain, in  0.219 seconds
+Domain Reload Profiling: 533ms
+	BeginReloadAssembly (77ms)
+		ExecutionOrderSort (0ms)
+		DisableScriptedObjects (0ms)
+		BackupInstance (0ms)
+		ReleaseScriptingObjects (0ms)
+		CreateAndSetChildDomain (1ms)
+	RebuildCommonClasses (29ms)
+	RebuildNativeTypeToScriptingClass (7ms)
+	initialDomainReloadingComplete (78ms)
+	LoadAllAssembliesAndSetupDomain (123ms)
+		LoadAssemblies (76ms)
+		RebuildTransferFunctionScriptingTraits (0ms)
+		AnalyzeDomain (120ms)
+			TypeCache.Refresh (118ms)
+				TypeCache.ScanAssembly (106ms)
+			ScanForSourceGeneratedMonoScriptInfo (0ms)
+			ResolveRequiredComponents (1ms)
+	FinalizeReload (219ms)
+		ReleaseScriptCaches (0ms)
+		RebuildScriptCaches (0ms)
+		SetupLoadedEditorAssemblies (186ms)
+			LogAssemblyErrors (0ms)
+			InitializePlatformSupportModulesInManaged (55ms)
+			SetLoadedEditorAssemblies (3ms)
+			RefreshPlugins (0ms)
+			BeforeProcessingInitializeOnLoad (2ms)
+			ProcessInitializeOnLoadAttributes (83ms)
+			ProcessInitializeOnLoadMethodAttributes (42ms)
+			AfterProcessingInitializeOnLoad (0ms)
+			EditorAssembliesLoaded (0ms)
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (0ms)
+[Licensing::Client] Successfully resolved entitlement details
+Application.AssetDatabase Initial Refresh Start
+[ScriptCompilation] Requested script compilation because: Assetdatabase observed changes in script compilation related files
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:80
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Production
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: C:\Dev\DeepUnity\
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/Ping application/grpc -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'gRPC - /UnityILPP.PostProcessing/Ping'
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'gRPC - /UnityILPP.PostProcessing/Ping'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/Ping application/grpc - - 200 - application/grpc 31.9914ms
+Starting: C:\Program Files\Unity\Hub\Editor\2022.3.43f1\Editor\Data\bee_backend.exe --dont-print-to-structured-log --ipc --defer-dag-verification --dagfile="Library/Bee/1900b0aE.dag" --continue-on-failure --profile="Library/Bee/backend1.traceevents" ScriptAssemblies
+WorkingDir: C:/Dev/DeepUnity
+DisplayProgressbar: Compiling Scripts
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/ConfigurePostProcessors application/grpc -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'gRPC - /UnityILPP.PostProcessing/ConfigurePostProcessors'
+info: Unity.ILPP.Runner.PostProcessingAssemblyLoadContext[0]
+      Resolved Unity.Burst.Cecil, Version=0.11.4.0, Culture=neutral, PublicKeyToken=50cebf1cceb9d05e with Library\PackageCache\com.unity.burst@1.8.17\Unity.Burst.CodeGen\Unity.Burst.Cecil.dll
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'gRPC - /UnityILPP.PostProcessing/ConfigurePostProcessors'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/ConfigurePostProcessors application/grpc - - 200 - application/grpc 53.1514ms
+ExitCode: 3 Duration: 0s677ms
+[622/802    0s] ILPP-Configuration Library/ilpp-configuration.nevergeneratedoutput
+[794/802    0s] Csc Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.dll (+2 others)
+##### CommandLine
+"C:\Program Files\Unity\Hub\Editor\2022.3.43f1\Editor\Data\NetCoreRuntime\dotnet.exe" exec "C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/DotNetSdkRoslyn/csc.dll" /nostdlib /noconfig /shared "@Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.rsp" "@Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.rsp2"
+##### Contents of Library\Bee\artifacts\1900b0aE.dag\Assembly-CSharp.rsp
+-target:library
+-out:"Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.dll"
+-refout:"Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.ref.dll"
+-define:UNITY_2022_3_43
+-define:UNITY_2022_3
+-define:UNITY_2022
+-define:UNITY_5_3_OR_NEWER
+-define:UNITY_5_4_OR_NEWER
+-define:UNITY_5_5_OR_NEWER
+-define:UNITY_5_6_OR_NEWER
+-define:UNITY_2017_1_OR_NEWER
+-define:UNITY_2017_2_OR_NEWER
+-define:UNITY_2017_3_OR_NEWER
+-define:UNITY_2017_4_OR_NEWER
+-define:UNITY_2018_1_OR_NEWER
+-define:UNITY_2018_2_OR_NEWER
+-define:UNITY_2018_3_OR_NEWER
+-define:UNITY_2018_4_OR_NEWER
+-define:UNITY_2019_1_OR_NEWER
+-define:UNITY_2019_2_OR_NEWER
+-define:UNITY_2019_3_OR_NEWER
+-define:UNITY_2019_4_OR_NEWER
+-define:UNITY_2020_1_OR_NEWER
+-define:UNITY_2020_2_OR_NEWER
+-define:UNITY_2020_3_OR_NEWER
+-define:UNITY_2021_1_OR_NEWER
+-define:UNITY_2021_2_OR_NEWER
+-define:UNITY_2021_3_OR_NEWER
+-define:UNITY_2022_1_OR_NEWER
+-define:UNITY_2022_2_OR_NEWER
+-define:UNITY_2022_3_OR_NEWER
+-define:PLATFORM_ARCH_64
+-define:UNITY_64
+-define:UNITY_INCLUDE_TESTS
+-define:ENABLE_AR
+-define:ENABLE_AUDIO
+-define:ENABLE_CACHING
+-define:ENABLE_CLOTH
+-define:ENABLE_EVENT_QUEUE
+-define:ENABLE_MICROPHONE
+-define:ENABLE_MULTIPLE_DISPLAYS
+-define:ENABLE_PHYSICS
+-define:ENABLE_TEXTURE_STREAMING
+-define:ENABLE_VIRTUALTEXTURING
+-define:ENABLE_LZMA
+-define:ENABLE_UNITYEVENTS
+-define:ENABLE_VR
+-define:ENABLE_WEBCAM
+-define:ENABLE_UNITYWEBREQUEST
+-define:ENABLE_WWW
+-define:ENABLE_CLOUD_SERVICES
+-define:ENABLE_CLOUD_SERVICES_ADS
+-define:ENABLE_CLOUD_SERVICES_USE_WEBREQUEST
+-define:ENABLE_CLOUD_SERVICES_CRASH_REPORTING
+-define:ENABLE_CLOUD_SERVICES_PURCHASING
+-define:ENABLE_CLOUD_SERVICES_ANALYTICS
+-define:ENABLE_CLOUD_SERVICES_BUILD
+-define:ENABLE_EDITOR_GAME_SERVICES
+-define:ENABLE_UNITY_GAME_SERVICES_ANALYTICS_SUPPORT
+-define:ENABLE_CLOUD_LICENSE
+-define:ENABLE_EDITOR_HUB_LICENSE
+-define:ENABLE_WEBSOCKET_CLIENT
+-define:ENABLE_GENERATE_NATIVE_PLUGINS_FOR_ASSEMBLIES_API
+-define:ENABLE_DIRECTOR_AUDIO
+-define:ENABLE_DIRECTOR_TEXTURE
+-define:ENABLE_MANAGED_JOBS
+-define:ENABLE_MANAGED_TRANSFORM_JOBS
+-define:ENABLE_MANAGED_ANIMATION_JOBS
+-define:ENABLE_MANAGED_AUDIO_JOBS
+-define:ENABLE_MANAGED_UNITYTLS
+-define:INCLUDE_DYNAMIC_GI
+-define:ENABLE_SCRIPTING_GC_WBARRIERS
+-define:PLATFORM_SUPPORTS_MONO
+-define:RENDER_SOFTWARE_CURSOR
+-define:ENABLE_VIDEO
+-define:ENABLE_ACCELERATOR_CLIENT_DEBUGGING
+-define:ENABLE_NAVIGATION_PACKAGE_DEBUG_VISUALIZATION
+-define:ENABLE_NAVIGATION_HEIGHTMESH_RUNTIME_SUPPORT
+-define:ENABLE_NAVIGATION_UI_REQUIRES_PACKAGE
+-define:PLATFORM_STANDALONE
+-define:TEXTCORE_1_0_OR_NEWER
+-define:PLATFORM_STANDALONE_WIN
+-define:UNITY_STANDALONE_WIN
+-define:UNITY_STANDALONE
+-define:ENABLE_RUNTIME_GI
+-define:ENABLE_MOVIES
+-define:ENABLE_NETWORK
+-define:ENABLE_NVIDIA
+-define:ENABLE_CRUNCH_TEXTURE_COMPRESSION
+-define:ENABLE_OUT_OF_PROCESS_CRASH_HANDLER
+-define:ENABLE_CLUSTER_SYNC
+-define:ENABLE_CLUSTERINPUT
+-define:PLATFORM_UPDATES_TIME_OUTSIDE_OF_PLAYER_LOOP
+-define:GFXDEVICE_WAITFOREVENT_MESSAGEPUMP
+-define:PLATFORM_INITIALIZES_MEMORY_MANAGER_EXPLICITLY
+-define:ENABLE_MONO
+-define:NET_4_6
+-define:NET_UNITY_4_8
+-define:ENABLE_PROFILER
+-define:DEBUG
+-define:TRACE
+-define:UNITY_ASSERTIONS
+-define:UNITY_EDITOR
+-define:UNITY_EDITOR_64
+-define:UNITY_EDITOR_WIN
+-define:ENABLE_UNITY_COLLECTIONS_CHECKS
+-define:ENABLE_BURST_AOT
+-define:UNITY_TEAM_LICENSE
+-define:ENABLE_CUSTOM_RENDER_TEXTURE
+-define:ENABLE_DIRECTOR
+-define:ENABLE_LOCALIZATION
+-define:ENABLE_SPRITES
+-define:ENABLE_TERRAIN
+-define:ENABLE_TILEMAP
+-define:ENABLE_TIMELINE
+-define:ENABLE_LEGACY_INPUT_MANAGER
+-define:TEXTCORE_FONT_ENGINE_1_5_OR_NEWER
+-define:CSHARP_7_OR_LATER
+-define:CSHARP_7_3_OR_NEWER
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.CoreModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.DeviceSimulatorModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.DiagnosticsModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.EditorToolbarModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.GraphViewModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.PresetsUIModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.QuickSearchModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.SceneTemplateModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.SceneViewModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.TextCoreFontEngineModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.TextCoreTextEngineModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.UIBuilderModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.UIElementsModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.UIElementsSamplesModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEditor.UnityConnectModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.AccessibilityModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.AIModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.AndroidJNIModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.AnimationModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.ARModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.AssetBundleModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.AudioModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.ClothModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.ClusterInputModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.ClusterRendererModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.ContentLoadModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.CoreModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.CrashReportingModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.DirectorModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.DSPGraphModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.GameCenterModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.GIModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.GridModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.HotReloadModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.ImageConversionModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.IMGUIModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.InputLegacyModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.InputModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.JSONSerializeModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.LocalizationModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.ParticleSystemModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.PerformanceReportingModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.Physics2DModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.PhysicsModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.ProfilerModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.PropertiesModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.RuntimeInitializeOnLoadManagerInitializerModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.ScreenCaptureModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.SharedInternalsModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.SpriteMaskModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.SpriteShapeModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.StreamingModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.SubstanceModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.SubsystemsModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.TerrainModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.TerrainPhysicsModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.TextCoreFontEngineModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.TextCoreTextEngineModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.TextRenderingModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.TilemapModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.TLSModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.UIElementsModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.UIModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.UmbraModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.UnityAnalyticsCommonModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.UnityAnalyticsModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.UnityConnectModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.UnityCurlModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.UnityTestProtocolModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.UnityWebRequestAssetBundleModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.UnityWebRequestAudioModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.UnityWebRequestModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.UnityWebRequestTextureModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.UnityWebRequestWWWModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.VehiclesModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.VFXModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.VideoModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.VirtualTexturingModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.VRModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.WindModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed/UnityEngine/UnityEngine.XRModule.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/PlaybackEngines/AndroidPlayer/Unity.Android.Gradle.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/PlaybackEngines/AndroidPlayer/Unity.Android.GradleProject.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/PlaybackEngines/AndroidPlayer/Unity.Android.Types.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/Microsoft.Win32.Primitives.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/netstandard.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.AppContext.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Buffers.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Collections.Concurrent.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Collections.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Collections.NonGeneric.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Collections.Specialized.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.ComponentModel.Annotations.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.ComponentModel.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.ComponentModel.EventBasedAsync.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.ComponentModel.Primitives.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.ComponentModel.TypeConverter.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Console.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Data.Common.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Diagnostics.Contracts.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Diagnostics.Debug.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Diagnostics.FileVersionInfo.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Diagnostics.Process.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Diagnostics.StackTrace.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Diagnostics.TextWriterTraceListener.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Diagnostics.Tools.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Diagnostics.TraceSource.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Drawing.Primitives.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Dynamic.Runtime.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Globalization.Calendars.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Globalization.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Globalization.Extensions.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.IO.Compression.ZipFile.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.IO.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.IO.FileSystem.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.IO.FileSystem.DriveInfo.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.IO.FileSystem.Primitives.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.IO.FileSystem.Watcher.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.IO.IsolatedStorage.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.IO.MemoryMappedFiles.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.IO.Pipes.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.IO.UnmanagedMemoryStream.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Linq.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Linq.Expressions.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Linq.Parallel.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Linq.Queryable.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Memory.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Net.Http.Rtc.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Net.NameResolution.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Net.NetworkInformation.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Net.Ping.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Net.Primitives.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Net.Requests.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Net.Security.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Net.Sockets.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Net.WebHeaderCollection.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Net.WebSockets.Client.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Net.WebSockets.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.ObjectModel.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Reflection.DispatchProxy.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Reflection.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Reflection.Emit.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Reflection.Emit.ILGeneration.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Reflection.Emit.Lightweight.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Reflection.Extensions.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Reflection.Primitives.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Resources.Reader.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Resources.ResourceManager.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Resources.Writer.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Runtime.CompilerServices.VisualC.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Runtime.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Runtime.Extensions.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Runtime.Handles.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Runtime.InteropServices.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Runtime.InteropServices.RuntimeInformation.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Runtime.InteropServices.WindowsRuntime.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Runtime.Numerics.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Runtime.Serialization.Formatters.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Runtime.Serialization.Json.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Runtime.Serialization.Primitives.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Runtime.Serialization.Xml.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Security.Claims.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Security.Cryptography.Algorithms.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Security.Cryptography.Csp.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Security.Cryptography.Encoding.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Security.Cryptography.Primitives.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Security.Cryptography.X509Certificates.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Security.Principal.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Security.SecureString.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.ServiceModel.Duplex.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.ServiceModel.Http.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.ServiceModel.NetTcp.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.ServiceModel.Primitives.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.ServiceModel.Security.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Text.Encoding.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Text.Encoding.Extensions.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Text.RegularExpressions.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Threading.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Threading.Overlapped.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Threading.Tasks.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Threading.Tasks.Extensions.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Threading.Tasks.Parallel.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Threading.Thread.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Threading.ThreadPool.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Threading.Timer.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.ValueTuple.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Xml.ReaderWriter.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Xml.XDocument.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Xml.XmlDocument.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Xml.XmlSerializer.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Xml.XPath.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Facades/System.Xml.XPath.XDocument.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/Microsoft.CSharp.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/mscorlib.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.ComponentModel.Composition.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.Core.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.Data.DataSetExtensions.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.Data.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.Drawing.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.IO.Compression.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.IO.Compression.FileSystem.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.Net.Http.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.Numerics.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.Numerics.Vectors.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.Runtime.Serialization.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.Transactions.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.Xml.dll"
+-r:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/UnityReferenceAssemblies/unity-4.8-api/System.Xml.Linq.dll"
+-r:"Library/PackageCache/com.unity.collections@1.2.4/Unity.Collections.LowLevel.ILSupport/Unity.Collections.LowLevel.ILSupport.dll"
+-r:"Library/PackageCache/com.unity.testtools.codecoverage@1.2.6/lib/ReportGenerator/ReportGeneratorMerged.dll"
+-r:"Library/PackageCache/com.unity.visualscripting@1.9.4/Runtime/VisualScripting.Flow/Dependencies/NCalc/Unity.VisualScripting.Antlr3.Runtime.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/PsdPlugin.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.Animation.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.Animation.Runtime.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.Aseprite.Common.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.Aseprite.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.Common.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.Common.Path.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.Common.Runtime.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.IK.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.IK.Runtime.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.PixelPerfect.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.PixelPerfect.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.Psdimporter.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.Sprite.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.SpriteShape.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.SpriteShape.Runtime.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.Tilemap.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.Tilemap.Extras.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.2D.Tilemap.Extras.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.AI.Navigation.Editor.ConversionSystem.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.AI.Navigation.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.AI.Navigation.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.AI.Navigation.Updater.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.Burst.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.Burst.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.Collections.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.EditorCoroutines.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.InternalAPIEditorBridge.001.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.InternalAPIEngineBridge.001.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.Mathematics.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.Mathematics.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.Performance.Profile-Analyzer.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.PlasticSCM.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.Recorder.Base.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.Recorder.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.Recorder.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.Rider.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.TestTools.CodeCoverage.Editor.OpenCover.Model.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.TestTools.CodeCoverage.Editor.OpenCover.Mono.Reflection.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.TestTools.CodeCoverage.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.TextMeshPro.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.TextMeshPro.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.Timeline.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.Timeline.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.VisualScripting.Core.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.VisualScripting.Core.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.VisualScripting.Flow.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.VisualScripting.Flow.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.VisualScripting.SettingsProvider.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.VisualScripting.Shared.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.VisualScripting.State.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.VisualScripting.State.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.VisualStudio.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/Unity.VSCode.Editor.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/UnityEditor.UI.ref.dll"
+-r:"Library/Bee/artifacts/1900b0aE.dag/UnityEngine.UI.ref.dll"
+-analyzer:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Tools/Unity.SourceGenerators/Unity.Properties.SourceGenerator.dll"
+-analyzer:"C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Tools/Unity.SourceGenerators/Unity.SourceGenerators.dll"
+"Assets/DeepUnity/Attributes/ButtonAttribute.cs"
+"Assets/DeepUnity/Attributes/MinMaxAttribute.cs"
+"Assets/DeepUnity/Attributes/ViewOnlyAttribute.cs"
+"Assets/DeepUnity/Diagnostics/Loss.cs"
+"Assets/DeepUnity/Diagnostics/Metrics.cs"
+"Assets/DeepUnity/Diagnostics/PerformanceGraph.cs"
+"Assets/DeepUnity/Exceptions/ConsoleMessage.cs"
+"Assets/DeepUnity/Exceptions/InputException.cs"
+"Assets/DeepUnity/Exceptions/ShapeException.cs"
+"Assets/DeepUnity/LLMs/Gemma3/EmbeddingGemma.cs"
+"Assets/DeepUnity/LLMs/Gemma3/EmbeddingGemmaConfig.cs"
+"Assets/DeepUnity/LLMs/Gemma3/EmbeddingGemmaDecoderLayer.cs"
+"Assets/DeepUnity/LLMs/Gemma3/Gemma3.cs"
+"Assets/DeepUnity/LLMs/Gemma3/Gemma3Config.cs"
+"Assets/DeepUnity/LLMs/Gemma3/Gemma3DecoderLayer.cs"
+"Assets/DeepUnity/LLMs/Gemma3/Gemma3GQA.cs"
+"Assets/DeepUnity/LLMs/Gemma3/Gemma3MLP.cs"
+"Assets/DeepUnity/LLMs/Gemma3/Gemma3RMSNorm.cs"
+"Assets/DeepUnity/LLMs/Gemma3/Gemma3TokenizerFast.cs"
+"Assets/DeepUnity/LLMs/MobileLLM/LlamaConfig.cs"
+"Assets/DeepUnity/LLMs/MobileLLM/LlamaDecoderLayer.cs"
+"Assets/DeepUnity/LLMs/MobileLLM/LlamaGQA.cs"
+"Assets/DeepUnity/LLMs/MobileLLM/LlamaMLP.cs"
+"Assets/DeepUnity/LLMs/MobileLLM/LlamaRMSNorm.cs"
+"Assets/DeepUnity/LLMs/MobileLLM/MobileLLM.cs"
+"Assets/DeepUnity/LLMs/MobileLLM/MobileLLMTokenizerFast.cs"
+"Assets/DeepUnity/LLMs/Qwen3/Qwen3.cs"
+"Assets/DeepUnity/LLMs/Qwen3/Qwen3Config.cs"
+"Assets/DeepUnity/LLMs/Qwen3/Qwen3DecoderLayer.cs"
+"Assets/DeepUnity/LLMs/Qwen3/Qwen3GQA.cs"
+"Assets/DeepUnity/LLMs/Qwen3/Qwen3MLP.cs"
+"Assets/DeepUnity/LLMs/Qwen3/Qwen3RMSNorm.cs"
+"Assets/DeepUnity/LLMs/Qwen3/Qwen3TokenizerFast.cs"
+"Assets/DeepUnity/LLMs/Tokenizers/BPETokenizer.cs"
+"Assets/DeepUnity/Main/Datasets.cs"
+"Assets/DeepUnity/Main/DeepUnityMeta.cs"
+"Assets/DeepUnity/Main/LMUnitTest.cs"
+"Assets/DeepUnity/Main/UnitTest.cs"
+"Assets/DeepUnity/Main/Utils.cs"
+"Assets/DeepUnity/Models/Model.cs"
+"Assets/DeepUnity/Models/MultiheadNetwork.cs"
+"Assets/DeepUnity/Models/MultilayerPerceptron.cs"
+"Assets/DeepUnity/Models/Sequential.cs"
+"Assets/DeepUnity/Models/VariationalAutoencoder.cs"
+"Assets/DeepUnity/Modules/Activations/ELU.cs"
+"Assets/DeepUnity/Modules/Activations/ExperimentalActivation.cs"
+"Assets/DeepUnity/Modules/Activations/Exponential.cs"
+"Assets/DeepUnity/Modules/Activations/GELU.cs"
+"Assets/DeepUnity/Modules/Activations/HardTanh.cs"
+"Assets/DeepUnity/Modules/Activations/LeakyReLU.cs"
+"Assets/DeepUnity/Modules/Activations/LogSoftmax.cs"
+"Assets/DeepUnity/Modules/Activations/Mish.cs"
+"Assets/DeepUnity/Modules/Activations/PReLU.cs"
+"Assets/DeepUnity/Modules/Activations/ReLU.cs"
+"Assets/DeepUnity/Modules/Activations/ReLU6.cs"
+"Assets/DeepUnity/Modules/Activations/Rish.cs"
+"Assets/DeepUnity/Modules/Activations/RReLU.cs"
+"Assets/DeepUnity/Modules/Activations/SELU.cs"
+"Assets/DeepUnity/Modules/Activations/Sigmoid.cs"
+"Assets/DeepUnity/Modules/Activations/Silu.cs"
+"Assets/DeepUnity/Modules/Activations/SoftMax.cs"
+"Assets/DeepUnity/Modules/Activations/SoftPlus.cs"
+"Assets/DeepUnity/Modules/Activations/Sparsemax.cs"
+"Assets/DeepUnity/Modules/Activations/TanH.cs"
+"Assets/DeepUnity/Modules/Activations/Threshold.cs"
+"Assets/DeepUnity/Modules/Base/IActivation.cs"
+"Assets/DeepUnity/Modules/Base/ILearnable.cs"
+"Assets/DeepUnity/Modules/Base/IModule.cs"
+"Assets/DeepUnity/Modules/Base/Parameter.cs"
+"Assets/DeepUnity/Modules/Learnable/Conv2D.cs"
+"Assets/DeepUnity/Modules/Learnable/ConvTranspose2D.cs"
+"Assets/DeepUnity/Modules/Learnable/Dense.cs"
+"Assets/DeepUnity/Modules/Learnable/DenseGPU.cs"
+"Assets/DeepUnity/Modules/Learnable/Embedding.cs"
+"Assets/DeepUnity/Modules/Learnable/EmbeddingFP16.cs"
+"Assets/DeepUnity/Modules/Learnable/GatedLinearUnit.cs"
+"Assets/DeepUnity/Modules/Learnable/GroupedQueryAttention.cs"
+"Assets/DeepUnity/Modules/Learnable/Lazy/LazyBatchNorm1D.cs"
+"Assets/DeepUnity/Modules/Learnable/Lazy/LazyBatchNorm2D.cs"
+"Assets/DeepUnity/Modules/Learnable/Lazy/LazyConv2D.cs"
+"Assets/DeepUnity/Modules/Learnable/Lazy/LazyDense.cs"
+"Assets/DeepUnity/Modules/Learnable/Norm/BatchNorm.cs"
+"Assets/DeepUnity/Modules/Learnable/Norm/BatchNorm2D.cs"
+"Assets/DeepUnity/Modules/Learnable/Norm/LayerNorm.cs"
+"Assets/DeepUnity/Modules/Learnable/Norm/RMSNorm.cs"
+"Assets/DeepUnity/Modules/Learnable/RNNCell.cs"
+"Assets/DeepUnity/Modules/Other/AvgPool1D.cs"
+"Assets/DeepUnity/Modules/Other/AvgPool2D.cs"
+"Assets/DeepUnity/Modules/Other/Dropout.cs"
+"Assets/DeepUnity/Modules/Other/Dropout2D.cs"
+"Assets/DeepUnity/Modules/Other/Flatten.cs"
+"Assets/DeepUnity/Modules/Other/LastSequence1DElementModule.cs"
+"Assets/DeepUnity/Modules/Other/MaxPool1D.cs"
+"Assets/DeepUnity/Modules/Other/MaxPool2D.cs"
+"Assets/DeepUnity/Modules/Other/MirrorPad1D.cs"
+"Assets/DeepUnity/Modules/Other/MirrorPad2D.cs"
+"Assets/DeepUnity/Modules/Other/Permute.cs"
+"Assets/DeepUnity/Modules/Other/Reshape.cs"
+"Assets/DeepUnity/Modules/Other/ResidualBlock.cs"
+"Assets/DeepUnity/Modules/Other/ResidualConnection.cs"
+"Assets/DeepUnity/Modules/Other/RotaryPositionalEmbeddings.cs"
+"Assets/DeepUnity/Modules/Other/Squeeze.cs"
+"Assets/DeepUnity/Modules/Other/Unsqueeze.cs"
+"Assets/DeepUnity/Modules/Other/ZeroPad1D.cs"
+"Assets/DeepUnity/Modules/Other/ZeroPad2D.cs"
+"Assets/DeepUnity/Optimizers/AdaBelief.cs"
+"Assets/DeepUnity/Optimizers/Adadelta.cs"
+"Assets/DeepUnity/Optimizers/Adagrad.cs"
+"Assets/DeepUnity/Optimizers/Adam.cs"
+"Assets/DeepUnity/Optimizers/Adamax.cs"
+"Assets/DeepUnity/Optimizers/AdamW.cs"
+"Assets/DeepUnity/Optimizers/Adan.cs"
+"Assets/DeepUnity/Optimizers/AdEMAMix.cs"
+"Assets/DeepUnity/Optimizers/GradClip.cs"
+"Assets/DeepUnity/Optimizers/Lion.cs"
+"Assets/DeepUnity/Optimizers/Muon.cs"
+"Assets/DeepUnity/Optimizers/NAdam.cs"
+"Assets/DeepUnity/Optimizers/Optimizer.cs"
+"Assets/DeepUnity/Optimizers/RAdam.cs"
+"Assets/DeepUnity/Optimizers/RMSProp.cs"
+"Assets/DeepUnity/Optimizers/SGD.cs"
+"Assets/DeepUnity/Optimizers/SpectralNorm.cs"
+"Assets/DeepUnity/Optimizers/StableAdamW.cs"
+"Assets/DeepUnity/ReinforcementLearning/Base/Agent.cs"
+"Assets/DeepUnity/ReinforcementLearning/Base/AgentBehaviour.cs"
+"Assets/DeepUnity/ReinforcementLearning/Base/DDPGTrainer.cs"
+"Assets/DeepUnity/ReinforcementLearning/Base/DecisionRequester.cs"
+"Assets/DeepUnity/ReinforcementLearning/Base/DeepUnityTrainer.cs"
+"Assets/DeepUnity/ReinforcementLearning/Base/HindsightExperienceReplay.cs"
+"Assets/DeepUnity/ReinforcementLearning/Base/HyperParameters.cs"
+"Assets/DeepUnity/ReinforcementLearning/Base/IOffPolicy.cs"
+"Assets/DeepUnity/ReinforcementLearning/Base/IOnPolicy.cs"
+"Assets/DeepUnity/ReinforcementLearning/Base/PPOTrainer.cs"
+"Assets/DeepUnity/ReinforcementLearning/Base/SACTrainer.cs"
+"Assets/DeepUnity/ReinforcementLearning/Base/TD3Trainer.cs"
+"Assets/DeepUnity/ReinforcementLearning/Base/VPGTrainer.cs"
+"Assets/DeepUnity/ReinforcementLearning/Buffers/ActionBuffer.cs"
+"Assets/DeepUnity/ReinforcementLearning/Buffers/ExperienceBuffer.cs"
+"Assets/DeepUnity/ReinforcementLearning/Buffers/MemoryBuffer.cs"
+"Assets/DeepUnity/ReinforcementLearning/Buffers/StateVector.cs"
+"Assets/DeepUnity/ReinforcementLearning/Buffers/TimestepTuple.cs"
+"Assets/DeepUnity/ReinforcementLearning/Sensors/CameraSensor.cs"
+"Assets/DeepUnity/ReinforcementLearning/Sensors/GridSensor.cs"
+"Assets/DeepUnity/ReinforcementLearning/Sensors/ISensor.cs"
+"Assets/DeepUnity/ReinforcementLearning/Sensors/RaySensor.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/ActorChainGradientProbe.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/BalanceBallBatchPlayController.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/BehaviourModifier.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/BodyController.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/CameraFollow.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/CameraManager.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/ColliderContact.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/CriticGradientProbe.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/EpisodeEndRagdoll.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/MinMaxNormalizer.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/OUNoise.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/PoseReseter.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/RewardsNormalizer.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/RunningNormalizer.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/StatisticsSerializer.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/TrainingStatistics.cs"
+"Assets/DeepUnity/ReinforcementLearning/Tools/TriggerContact.cs"
+"Assets/DeepUnity/Schedulers/CosineAnnealingWithWarmup.cs"
+"Assets/DeepUnity/Schedulers/LinearAnnealing.cs"
+"Assets/DeepUnity/Schedulers/Scheduler.cs"
+"Assets/DeepUnity/Schedulers/StepAnnealing.cs"
+"Assets/DeepUnity/Tensor/Tensor.cs"
+"Assets/DeepUnity/Tensor/TensorCollection.cs"
+"Assets/DeepUnity/Tensor/TensorFusedOperations.cs"
+"Assets/DeepUnity/Tensor/TensorGPU.cs"
+"Assets/DeepUnity/Tutorials/BalanceBall/Scripts/BalanceBall.cs"
+"Assets/DeepUnity/Tutorials/BalanceBall/Scripts/BalanceBallVision.cs"
+"Assets/DeepUnity/Tutorials/BalanceBall/Scripts/BallNoise.cs"
+"Assets/DeepUnity/Tutorials/BostonDynamics/Scripts/Autoshooter.cs"
+"Assets/DeepUnity/Tutorials/BostonDynamics/Scripts/Spot.cs"
+"Assets/DeepUnity/Tutorials/BostonDynamics/Scripts/TrainingGroundGenerator.cs"
+"Assets/DeepUnity/Tutorials/Breakout/Scripts/Breakout.cs"
+"Assets/DeepUnity/Tutorials/Breakout/Scripts/BreakoutBallScript.cs"
+"Assets/DeepUnity/Tutorials/ChatDemo/Scripts/BirdScript.cs"
+"Assets/DeepUnity/Tutorials/ChatDemo/Scripts/CameraScript.cs"
+"Assets/DeepUnity/Tutorials/ChatDemo/Scripts/ChatWindow.cs"
+"Assets/DeepUnity/Tutorials/ChatDemo/Scripts/KnightScript.cs"
+"Assets/DeepUnity/Tutorials/ChatDemo/Scripts/NPCInteractor.cs"
+"Assets/DeepUnity/Tutorials/ChatDemo/Scripts/WalkabilityMap.cs"
+"Assets/DeepUnity/Tutorials/Climber/Scripts/Climber.cs"
+"Assets/DeepUnity/Tutorials/Crawler/Scripts/Crawler.cs"
+"Assets/DeepUnity/Tutorials/CupWalker/Scripts/CupWalker.cs"
+"Assets/DeepUnity/Tutorials/DL/RunScripts/GenerateMNIST.cs"
+"Assets/DeepUnity/Tutorials/DL/RunScripts/PlayMNIST.cs"
+"Assets/DeepUnity/Tutorials/DL/RunScripts/TestAugmentation.cs"
+"Assets/DeepUnity/Tutorials/DL/RunScripts/TestMNIST.cs"
+"Assets/DeepUnity/Tutorials/DL/Scripts/CNNClassification.cs"
+"Assets/DeepUnity/Tutorials/DL/Scripts/CNNTesting.cs"
+"Assets/DeepUnity/Tutorials/DL/Scripts/GANGeneration.cs"
+"Assets/DeepUnity/Tutorials/DL/Scripts/MLPRegression.cs"
+"Assets/DeepUnity/Tutorials/DL/Scripts/StableDiffusionGeneration.cs"
+"Assets/DeepUnity/Tutorials/DL/Scripts/Tutorial.cs"
+"Assets/DeepUnity/Tutorials/DL/Scripts/VAEDenoising.cs"
+"Assets/DeepUnity/Tutorials/DL/Scripts/VAEReconstruction.cs"
+"Assets/DeepUnity/Tutorials/Dodge/Scripts/Dodger.cs"
+"Assets/DeepUnity/Tutorials/DonkeyKong/Scripts/BarrelScript.cs"
+"Assets/DeepUnity/Tutorials/DonkeyKong/Scripts/MarioScript.cs"
+"Assets/DeepUnity/Tutorials/DonkeyKong/Scripts/MonkeyScript.cs"
+"Assets/DeepUnity/Tutorials/Driver/Pusher/Scripts/BoxScript.cs"
+"Assets/DeepUnity/Tutorials/Driver/Pusher/Scripts/Pusher.cs"
+"Assets/DeepUnity/Tutorials/Driver/Scripts/CarController.cs"
+"Assets/DeepUnity/Tutorials/Driver/Scripts/Driver.cs"
+"Assets/DeepUnity/Tutorials/Dungeon/Scripts/DragonScript.cs"
+"Assets/DeepUnity/Tutorials/Dungeon/Scripts/DungeonManager.cs"
+"Assets/DeepUnity/Tutorials/Dungeon/Scripts/KnightScript.cs"
+"Assets/DeepUnity/Tutorials/Football/Scripts/FootballPlayer.cs"
+"Assets/DeepUnity/Tutorials/Football/Scripts/SoccerballScript.cs"
+"Assets/DeepUnity/Tutorials/Jumper/Scripts/Jumper.cs"
+"Assets/DeepUnity/Tutorials/Parker/Scripts/ParkingCar.cs"
+"Assets/DeepUnity/Tutorials/Reacher/Scripts/MoveToGoal.cs"
+"Assets/DeepUnity/Tutorials/Robot/Scripts/RobotScript.cs"
+"Assets/DeepUnity/Tutorials/RoboticArm/Scripts/BallScript.cs"
+"Assets/DeepUnity/Tutorials/RoboticArm/Scripts/RoboticArm.cs"
+"Assets/DeepUnity/Tutorials/SacSmoke/Scripts/QuadraticBanditAgent.cs"
+"Assets/DeepUnity/Tutorials/Shooter/Scripts/GlockScript.cs"
+"Assets/DeepUnity/Tutorials/Shooter/Scripts/ShooterScript.cs"
+"Assets/DeepUnity/Tutorials/Snowboarder&Skier/Scripts/Skier.cs"
+"Assets/DeepUnity/Tutorials/Snowboarder&Skier/Scripts/Snowboarder.cs"
+"Assets/DeepUnity/Tutorials/Soccer/Scripts/SoccerBallScript.cs"
+"Assets/DeepUnity/Tutorials/Soccer/Scripts/SoccerEnvironmentScript.cs"
+"Assets/DeepUnity/Tutorials/Soccer/Scripts/SoccerPlayer.cs"
+"Assets/DeepUnity/Tutorials/Sorter/Scripts/Sorter.cs"
+"Assets/DeepUnity/Tutorials/VectorDatabase/Scripts/VectorDatabase.cs"
+"Assets/DeepUnity/Tutorials/VectorDatabase/Scripts/VectorDatabaseNode.cs"
+"Assets/DeepUnity/Tutorials/Walker/Scripts/Humanoid.cs"
+"Assets/DeepUnity/Tutorials/Walker/Scripts/ReacherWalker.cs"
+"Assets/DeepUnity/Tutorials/Walker/Scripts/Walker.cs"
+"Assets/DeepUnity/Tutorials/Zombie/Scripts/BulletScript.cs"
+"Assets/DeepUnity/Tutorials/Zombie/Scripts/GunScript.cs"
+"Assets/DeepUnity/Tutorials/Zombie/Scripts/SurvivorScript.cs"
+"Assets/DeepUnity/Tutorials/Zombie/Scripts/ZombieScript.cs"
+"Assets/DeepUnity/Tutorials/Zombie/Scripts/ZombieSurvivalManager.cs"
+-langversion:9.0
+/deterministic
+/optimize+
+/debug:portable
+/nologo
+/RuntimeMetadataVersion:v4.0.30319
+/nowarn:0169
+/nowarn:0649
+/nowarn:0282
+/nowarn:1701
+/nowarn:1702
+/utf8output
+/preferreduilang:en-US
+/additionalfile:"Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.UnityAdditionalFile.txt"
+##### Custom Environment Variables
+DOTNET_MULTILEVEL_LOOKUP=0
+##### ExitCode
+1
+##### Output
+Assets\DeepUnity\Modules\Learnable\EmbeddingFP16.cs(7,7): warning CS0105: The using directive for 'System' appeared previously in this namespace
+
+Assets\DeepUnity\Modules\Other\Unsqueeze.cs(16,13): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\Modules\Other\Squeeze.cs(18,13): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\LLMs\Gemma3\EmbeddingGemma.cs(327,20): warning CS0219: The variable 'y' is assigned but its value is never used
+
+Assets\DeepUnity\Modules\Learnable\DenseGPU.cs(37,13): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\Modules\Learnable\DenseGPU.cs(78,17): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\Modules\Activations\SoftMax.cs(189,21): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\ReinforcementLearning\Base\DDPGTrainer.cs(49,38): error CS0103: The name 'Math' does not exist in the current context
+
+Assets\DeepUnity\ReinforcementLearning\Base\DDPGTrainer.cs(49,55): error CS0103: The name 'Math' does not exist in the current context
+
+Assets\DeepUnity\ReinforcementLearning\Base\DDPGTrainer.cs(49,114): error CS0103: The name 'Math' does not exist in the current context
+
+Assets\DeepUnity\Main\LMUnitTest.cs(22,29): warning CS0414: The field 'LMUnitTest.tok' is assigned but its value is never used
+
+Assets\DeepUnity\Main\LMUnitTest.cs(20,14): warning CS0414: The field 'LMUnitTest.output_once' is assigned but its value is never used
+
+Assets\DeepUnity\Main\LMUnitTest.cs(13,41): warning CS0414: The field 'LMUnitTest.system_prompt' is assigned but its value is never used
+
+Assets\DeepUnity\Main\LMUnitTest.cs(15,33): warning CS0414: The field 'LMUnitTest.device' is assigned but its value is never used
+
+Assets\DeepUnity\Main\LMUnitTest.cs(16,30): warning CS0414: The field 'LMUnitTest.batch_size' is assigned but its value is never used
+*** Tundra build failed (0.63 seconds), 2 items updated, 802 evaluated
+## Script Compilation Error for: Csc Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.dll (+2 others)
+## CmdLine: "C:\Program Files\Unity\Hub\Editor\2022.3.43f1\Editor\Data\NetCoreRuntime\dotnet.exe" exec "C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/DotNetSdkRoslyn/csc.dll" /nostdlib /noconfig /shared "@Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.rsp" "@Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.rsp2"
+## Output:
+Assets\DeepUnity\Modules\Learnable\EmbeddingFP16.cs(7,7): warning CS0105: The using directive for 'System' appeared previously in this namespace
+Assets\DeepUnity\Modules\Other\Unsqueeze.cs(16,13): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Modules\Other\Squeeze.cs(18,13): warning CS0162: Unreachable code detected
+Assets\DeepUnity\LLMs\Gemma3\EmbeddingGemma.cs(327,20): warning CS0219: The variable 'y' is assigned but its value is never used
+Assets\DeepUnity\Modules\Learnable\DenseGPU.cs(37,13): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Modules\Learnable\DenseGPU.cs(78,17): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Modules\Activations\SoftMax.cs(189,21): warning CS0162: Unreachable code detected
+Assets\DeepUnity\ReinforcementLearning\Base\DDPGTrainer.cs(49,38): error CS0103: The name 'Math' does not exist in the current context
+Assets\DeepUnity\ReinforcementLearning\Base\DDPGTrainer.cs(49,55): error CS0103: The name 'Math' does not exist in the current context
+Assets\DeepUnity\ReinforcementLearning\Base\DDPGTrainer.cs(49,114): error CS0103: The name 'Math' does not exist in the current context
+Assets\DeepUnity\Main\LMUnitTest.cs(22,29): warning CS0414: The field 'LMUnitTest.tok' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(20,14): warning CS0414: The field 'LMUnitTest.output_once' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(13,41): warning CS0414: The field 'LMUnitTest.system_prompt' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(15,33): warning CS0414: The field 'LMUnitTest.device' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(16,30): warning CS0414: The field 'LMUnitTest.batch_size' is assigned but its value is never used
+
+Assets\DeepUnity\Modules\Learnable\EmbeddingFP16.cs(7,7): warning CS0105: The using directive for 'System' appeared previously in this namespace
+Assets\DeepUnity\Modules\Other\Unsqueeze.cs(16,13): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Modules\Other\Squeeze.cs(18,13): warning CS0162: Unreachable code detected
+Assets\DeepUnity\LLMs\Gemma3\EmbeddingGemma.cs(327,20): warning CS0219: The variable 'y' is assigned but its value is never used
+Assets\DeepUnity\Modules\Learnable\DenseGPU.cs(37,13): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Modules\Learnable\DenseGPU.cs(78,17): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Modules\Activations\SoftMax.cs(189,21): warning CS0162: Unreachable code detected
+Assets\DeepUnity\ReinforcementLearning\Base\DDPGTrainer.cs(49,38): error CS0103: The name 'Math' does not exist in the current context
+Assets\DeepUnity\ReinforcementLearning\Base\DDPGTrainer.cs(49,55): error CS0103: The name 'Math' does not exist in the current context
+Assets\DeepUnity\ReinforcementLearning\Base\DDPGTrainer.cs(49,114): error CS0103: The name 'Math' does not exist in the current context
+Assets\DeepUnity\Main\LMUnitTest.cs(22,29): warning CS0414: The field 'LMUnitTest.tok' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(20,14): warning CS0414: The field 'LMUnitTest.output_once' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(13,41): warning CS0414: The field 'LMUnitTest.system_prompt' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(15,33): warning CS0414: The field 'LMUnitTest.device' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(16,30): warning CS0414: The field 'LMUnitTest.batch_size' is assigned but its value is never used
+AssetDatabase: script compilation time: 1.179497s
+Scripts have compiler errors.
+Exiting without the bug reporter. Application will terminate with return code 1Total cache size 108871536
+Total cache size after purge 108871536

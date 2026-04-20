@@ -250,7 +250,10 @@ namespace DeepUnity.ReinforcementLearning
 
             // CHECK MAX STEPS: If the agent reached max steps without reaching the terminal state (maxStep == 0 means unlimited steps per episode)
             if (EpisodeStepCount == DecisionRequester.maxStep && DecisionRequester.maxStep != 0)
+            {
+                Timestep.truncated[0] = 1f;
                 EndEpisode();
+            }
 
             if (Timestep?.done[0] == 1f)
                 OnEpisodeEnd?.Invoke(this, EventArgs.Empty);

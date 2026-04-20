@@ -1,648 +1,140 @@
-using DeepUnity.Activations;
-using DeepUnity.Gemma3Modeling;
-using DeepUnity.Modules;
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Assertions;
-using System.IO;
-
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 
 namespace DeepUnity
 {
-    namespace Gemma3Modeling
-    {
-        public class Gemma3Model 
-        {
-            public int vocab_size = 0;
-            public Embedding embed_tokens;
-            public List<Gemma3DecoderLayer> layers;
-            public Gemma3RMSNorm norm;
-            public RotaryPositionalEmbeddings rotary_emb; // used for FullGQA
-            public RotaryPositionalEmbeddings rotary_emb_local; // used for SWA
-            public bool IsInitialized { get 
-                {
-                    if (!IsEmbeddingInitialized)
-                    {
-                        // UnityEngine.Debug.Log("Embedding not initialized");
-                        return false;
-                    }
-                        
-                    if (!norm.IsInitialized)
-                    {
-                        // UnityEngine.Debug.Log("Norm not initialized");
-                        return false;
-                    }
-
-                    foreach (var layer in layers)
-                    {
-                        if(!layer.self_attn.IsInitialized)
-                        {
-                            // UnityEngine.Debug.Log("Self attn not initialized");
-                            return false;
-                        }
-                        if(!layer.mlp.IsInitialized)
-                        {
-                            // UnityEngine.Debug.Log("mlp not initialized");
-                            return false;
-                        }
-                        if(!layer.input_layernorm.IsInitialized)
-                        {
-                            // UnityEngine.Debug.Log("input ln not initialized");
-                            return false;
-                        }
-                        if (!layer.post_attention_layernorm.IsInitialized)
-                        {
-                            // UnityEngine.Debug.Log("post attn ln not initialized");
-                            return false;
-                        }
-                        if (!layer.pre_feedforward_layernorm.IsInitialized)
-                        {
-                            // UnityEngine.Debug.Log("pre ffn ln not initialized");
-                            return false;
-                        }
-                        if (!layer.post_feedforward_layernorm.IsInitialized)
-                        {
-                            // UnityEngine.Debug.Log("post ffn ln not initialized");
-                            return false;
-                        }
-                    }
-                    return true;
-                } 
-            }
-            private bool IsEmbeddingInitialized { get; set; } = false;
-            public Gemma3Model(string params_path, ref ComputeBuffer lm_head)
-            {
-                this.vocab_size = Gemma3Config.VOCAB_SIZE;
-                rotary_emb = new RotaryPositionalEmbeddings(
-                    Gemma3Config.HEAD_DIM,
-                    max_seq_len:Gemma3Config.MAX_POSITION_EMBEDDINGS,
-                    theta:Gemma3Config.ROPE_THETA); // use only 1 rope module shared by all layers.
-                rotary_emb_local = new RotaryPositionalEmbeddings(
-                    Gemma3Config.HEAD_DIM,
-                    max_seq_len: Gemma3Config.MAX_POSITION_EMBEDDINGS,
-                    theta: Gemma3Config.ROPE_LOCAL_BASE_FREQUENCY);
-                this.embed_tokens = new Embedding(
-                    Gemma3Config.VOCAB_SIZE,
-                    Gemma3Config.HIDDEN_SIZE,
-                    Gemma3Config.PAD_IDX,
-                    init: InitType.Zeros);
-
-                lm_head = new ComputeBuffer(Gemma3Config.VOCAB_SIZE * Gemma3Config.HIDDEN_SIZE, 4, ComputeBufferType.Structured);
-
-                _ = LoadEmbeddingWeightsAsync(params_path, lm_head);
-
-                this.layers = new();
-                for (int i = 0; i < Gemma3Config.NUM_LAYERS; i++)
-                {
-                    layers.Add(
-                        new Gemma3DecoderLayer(
-                            i, 
-                            Gemma3Config.layer_types[i] == GemmaLayerType.SlidingWindowAttention? rotary_emb_local : rotary_emb, 
-                            params_path));
-                }
-                
-                this.norm = new Gemma3RMSNorm(Gemma3Config.HIDDEN_SIZE, Gemma3Config.RMS_EPS, params_path + "/norm.bin"); //new RMSNorm(Qwen3Modeling.Qwen3Config.HIDDEN_SIZE, Qwen3Modeling.Qwen3Config.RMS_EPS, elementwise_affine: true);
-            
-            }
-
-            private async Task LoadEmbeddingWeightsAsync(string paramsPath, ComputeBuffer lm_head)
-            {
-                int[] partSizes = new int[]
-                {
-                    11_983_726, 11_983_726, 11_983_726, 11_983_726,
-                    11_983_726, 11_983_726, 11_983_726, 11_983_726,
-                    11_983_726, 11_983_726, 11_983_726, 11_983_726,
-                    11_983_726, 11_983_722
-                };
-
-                string[] files = new string[14];
-                for (int i = 0; i < 14; i++)
-                    files[i] = $"{paramsPath}/lm_head/part_{i}.bin";
-
-                Task<float[]>[] tasks = new Task<float[]>[14];
-                for (int i = 0; i < 14; i++)
-                {
-                    int size = partSizes[i];
-                    string path = files[i];
-                    tasks[i] = Task.Run(() => Utils.ReadWeights(path, size));
-                }
-                // UnityEngine.Debug.Log("Here1");
-                float[][] results = await Task.WhenAll(tasks);
-
-                // UnityEngine.Debug.Log("Here2");
-                Parallel.For(0, 14, part =>
-                {
-                    for (int i = 0; i < results[part].Length; i++)
-                    {
-                        this.embed_tokens.embeddings[part * 11_983_726 + i] = results[part][i];
-                    }
-                }); // faster with parallel for believe me.
-
-                IsEmbeddingInitialized = true;
-                // ConsoleMessage.Info($"Loaded {paramsPath}/embeddings");
-                lm_head.SetData(this.embed_tokens.embeddings.Data);
-                // ConsoleMessage.Info($"Loaded {paramsPath}/lm_head");
-            }
-
-            public Tensor Predict(Tensor input_ids, Tensor attention_mask = null)
-            {
-                
-                Tensor hid = embed_tokens.Predict(input_ids) * MathF.Sqrt(Gemma3Config.HIDDEN_SIZE); // input embeddings are normalized by sqrt(model_size) in hf transformers.
-
-                // Debug.Log("Embeddings: " + hid);
-
-                for (int i = 0; i < layers.Count; i++)
-                {
-                    hid = layers[i].Predict(hid, attention_mask);
-                    // Debug.Log($"Layer {i} output: " + hid);
-                }
-                Tensor post_norm = norm.Predict(hid);
-                return post_norm.Squeeze(-2);
-            }
-
-            public int ParameterCount()
-            {
-                int @params = embed_tokens.embeddings.Count();
-                //UnityEngine.Debug.Log($"model.embed_tokens:{embed_tokens.embeddings.Shape.ToCommaSeparatedString()}");
-                foreach (var item in layers)
-                {
-                    @params += item.ParameterCount();
-                }
-                //UnityEngine.Debug.Log($"model.norm:{norm.gamma.Length}");
-                @params += norm.gamma.Length;
-                return @params;
-            }
-        }
-    }
-
     public class Gemma3ForCausalLM
     {
         private string path;
-        private int vocab_size;
-        private int hidden_size;
         public Gemma3Modeling.Gemma3Model model;
-        public ComputeBuffer lm_head;
-        private ComputeBuffer lm_head_input_buffer;
-        private ComputeBuffer lm_head_output_buffer;
         public Gemma3TokenizerFast tokenizer;
-        // public List<int> conversation_cache_tokens;
-        private bool isFreshlyInitialized = false;
+        private bool isFreshlyInitialized;
 
-        public bool IsReady => model.IsInitialized;
+        public bool IsReady => model.IsReady && tokenizer.IsReady;
         public float TokensPerSecond { get; private set; }
-        public Gemma3ForCausalLM(string params_path= "Assets/DeepUnity/LLMs/Gemma3/params_it", string tokenizer_path = "Assets/DeepUnity/LLMs/Gemma3/Gemma3TokenizerFast.json")
+
+        public Gemma3ForCausalLM(
+            string params_path = "Assets/DeepUnity/LLMs/Gemma3GPUFP16/params_it",
+            string tokenizer_path = "Assets/DeepUnity/LLMs/Gemma3/Gemma3TokenizerFast.json",
+            int cacheCapacity = 8192)
         {
-            if (File.Exists(path))
-                throw new ArgumentException($"Path to the model {params_path} does not exist.");
             this.path = params_path;
-            this.vocab_size = Gemma3Config.VOCAB_SIZE;
-            this.hidden_size = Gemma3Config.HIDDEN_SIZE;
             this.tokenizer = new Gemma3TokenizerFast(tokenizer_path, load_async: true);
 
 #if UNITY_EDITOR
-            UnityEditor.EditorApplication.playModeStateChanged += DeallocGemma;
+            UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeChanged;
 #endif
-            // to initialize lm_head async as well it must be parsed with ref, but async methods does not allow ref arguments.. fuck em..
-            // lm head will be initialized in gemma3 model
             Stopwatch sw = Stopwatch.StartNew();
-            model = new Gemma3Modeling.Gemma3Model(params_path, ref lm_head);
-            ConsoleMessage.Info($"Model loaded async ({sw.Elapsed.TotalSeconds:0.00} s)");
+            model = new Gemma3Modeling.Gemma3Model(params_path, cacheCapacity);
+            ConsoleMessage.Info($"Gemma3 model created ({sw.Elapsed.TotalSeconds:0.00} s)");
         }
 
         ~Gemma3ForCausalLM()
         {
-            foreach (var item in model.layers)
-            {
-                item.mlp.weights?.Release();
-                item.mlp.inputOutputBuffer?.Release();
-                item.mlp.intermediateBuffer?.Release();
-                item.self_attn.W_QKV?.Release();
-                item.self_attn.W_O?.Release();
-                item.self_attn.output_buffer?.Release();
-                item.self_attn.attended_values_buffer?.Release();
-                item.self_attn.input_buffer?.Release();
-                item.self_attn.qkv_proj_buffer?.Release();
-                item.self_attn.q_buffer?.Release();
-            }
-
-            lm_head?.Release();
-            lm_head_input_buffer?.Release();
-            lm_head_output_buffer?.Release();
+            model?.Dispose();
             ConsoleMessage.Info("Gemma3 released from GPU");
         }
 
 #if UNITY_EDITOR
-        private void DeallocGemma(UnityEditor.PlayModeStateChange state)
+        private void OnPlayModeChanged(UnityEditor.PlayModeStateChange state)
         {
             if (state == UnityEditor.PlayModeStateChange.ExitingPlayMode)
             {
-                foreach (var item in model.layers)
-                {
-                    item.mlp.weights?.Release();
-                    item.mlp.inputOutputBuffer?.Release();
-                    item.mlp.intermediateBuffer?.Release();
-                    item.self_attn.W_QKV?.Release();
-                    item.self_attn.W_O?.Release();
-                    item.self_attn.input_buffer?.Release();
-                    item.self_attn.qkv_proj_buffer?.Release();
-                    item.self_attn.output_buffer?.Release();
-                    item.self_attn.attended_values_buffer?.Release();
-                    item.self_attn.q_buffer?.Release();
-                }
-
-                lm_head?.Release();
-                lm_head_input_buffer?.Release();
-                lm_head_output_buffer?.Release();
+                model?.Dispose();
                 ConsoleMessage.Info("Gemma3 released from GPU");
             }
         }
 #endif
+
         public int ParameterCount()
         {
-            int @params = model.ParameterCount();
-            return @params;
+            int p = Gemma3Modeling.Gemma3Config.VOCAB_SIZE * Gemma3Modeling.Gemma3Config.HIDDEN_SIZE;
+            int H = Gemma3Modeling.Gemma3Config.HIDDEN_SIZE;
+            int D = Gemma3Modeling.Gemma3Config.HEAD_DIM;
+            float exp = Gemma3Modeling.Gemma3Config.ATTN_EXPANSION_FACTOR;
+            int innerEmb = (int)(H * exp);
+            int Hq = Gemma3Modeling.Gemma3Config.HEADS_Q;
+            int Hkv = Gemma3Modeling.Gemma3Config.HEADS_KV;
+            int I = Gemma3Modeling.Gemma3Config.MLP_INTERMEDIATE_SIZE;
+
+            int perLayer = 0;
+            perLayer += H * innerEmb;
+            perLayer += H * innerEmb * Hkv / Hq;
+            perLayer += H * innerEmb * Hkv / Hq;
+            perLayer += innerEmb * H;
+            perLayer += D + D;
+            perLayer += H * I * 3;
+            perLayer += H * 4;
+
+            p += perLayer * Gemma3Modeling.Gemma3Config.NUM_LAYERS;
+            p += H;
+            return p;
         }
-        
-        /// <summary>
-        /// Expects (L, V) or (B, L, V) for batched inference,
-        /// where V = vocab size, L (>= 1) = sequence length and B = batch_size
-        /// Returns (1, 1) or (B, 1, 1) for batched inference.
-        /// </summary>
-        /// <param name="logits"></param>
-        /// <param name="temperature"></param>
-        /// <param name="top_k"></param>
-        /// <param name="top_p"></param>
-        /// <param name="min_p"></param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
-        private Tensor SampleToken(Tensor logits, float temperature = 1f, int top_k = -1, float top_p = 1, float min_p = 0f)
+
+        public void VerifyWeights()
         {
-            if(logits.Rank == 1)
+            uint[] packed = new uint[4];
+            model.weights.embedLmHead.GetData(packed, 0, 0, 4);
+            UnityEngine.Debug.Log("=== FP16 Weight Verification ===");
+            for (int i = 0; i < 8; i++)
             {
-                if(temperature == 0)
-                    return logits.ArgMax(-1);
-                
-                int vocab_size = logits.Size(-1);
-                
-
-                Softmax sm = new Softmax(temperature : temperature);
-                Tensor probs = sm.Predict(logits);
-
-                // max prob for min_p
-                float minProbTresh = probs.Max() * min_p;
-                int candidatesCount = probs.Count(x => x >= minProbTresh);
-
-                if (candidatesCount == 0)
-                    return logits.ArgMax(-1);
-
-                List<int> candidates = new List<int>();
-                for (int i = 0; i < vocab_size ; i++)
-                {
-                    if (probs[i] >= minProbTresh)
-                        candidates.Add(i);
-                }
-
-                candidates.Sort((a, b) => probs[a].CompareTo(probs[b])); //descending
-
-                /// TOP_K
-                if(top_k > 0 && top_k < candidatesCount)
-                {
-                    candidatesCount = top_k;
-                }
-
-                /// TOP_P
-                if(top_p < 1)
-                {
-                    float cumProb = 0f;
-                    int cutoff = candidatesCount;
-                    for (int i = 0; i < candidatesCount; i++)
-                    {
-                        cumProb += probs[candidates[i]];
-                        if (cumProb >= top_p)
-                        {
-                            cutoff = i + 1;
-                            break;
-                        }
-                    }
-                    candidatesCount = cutoff;
-                }
-
-                // renormalize the new dist
-                float newSum = 0.0f;
-                for (int i = 0; i < candidatesCount; i++)
-                {
-                    newSum += probs[candidates[i]];
-                }
-                if (newSum == 0.0)
-                {
-                    return logits.ArgMax(-1);
-                }
-
-                // Sample 
-                return Tensor.Constant(Utils.Random.Sample(candidates, candidates.Select(x => probs[x])));
-            }
-            else if(logits.Rank == 2)
-            {
-                if (logits.Size(-2) == 1)
-                    return SampleToken(logits.Squeeze(-2), temperature, top_k, top_p, min_p);
-                else
-                    return SampleToken(logits.Slice(-2, logits.Size(-2) - 1, logits.Size(-2), 1).Squeeze(), temperature, top_k, top_p, min_p);
-            }
-            else if (logits.Rank == 3)
-            {
-                throw new Exception("Batched sampling not handled");
-
-            }
-            else
-            {
-                throw new Exception("Cannot sample 4D tensors");
-
+                uint word = packed[i / 2];
+                uint shift = (uint)(i % 2) * 16;
+                ushort h = (ushort)((word >> (int)shift) & 0xFFFF);
+                float val = Mathf.HalfToFloat(h);
+                UnityEngine.Debug.Log($"  embed[0, {i}] = {val}");
             }
         }
 
-        
         public Tensor Predict(Tensor input_ids, Tensor attn_mask = null)
         {
-            if(!IsReady)
-            {
-                throw new System.Exception("The model was not loaded yet. Please verify if IsReady.");
-                // never put while(true) because model will not initialize otherwise.
-            }
-
-            int seq_len = input_ids.Size(-1);
-            bool is_batched = input_ids.Rank == 3;
-            int batch_size = is_batched ? input_ids.Size(-3) : 1;
-            Tensor hid = model.Predict(input_ids, attn_mask);
-
-
-            // LM HEAD Infer
-            ComputeShader lm_head_cs = DeepUnityMeta.LmHeadInferenceCS;
-            int k = seq_len == 1 && batch_size == 1 ? lm_head_cs.FindKernel("Predict1Vec") : lm_head_cs.FindKernel("Predict");
-
-            lm_head_cs.SetBuffer(k, "weights", this.lm_head);
-
-            ComputeBuffer lm_head_input = new ComputeBuffer(hid.Count(), 4);
-            lm_head_input.SetData(hid.ToArray());
-            lm_head_cs.SetBuffer(k, "input", lm_head_input);
-
-            ComputeBuffer lm_head_output = new ComputeBuffer(batch_size * seq_len * vocab_size, 4);
-            lm_head_cs.SetBuffer(k, "output", lm_head_output);
-
-            lm_head_cs.SetInt("batch_size", batch_size);
-            lm_head_cs.SetInt("seq_len", seq_len);
-            lm_head_cs.SetInt("hidden_size", this.hidden_size);
-            lm_head_cs.SetInt("vocab_size", this.vocab_size);
-
-            if (seq_len == 1 && batch_size == 1)
-                lm_head_cs.Dispatch(k, (vocab_size + 511) / 512, batch_size * seq_len, 1);
-            else
-                lm_head_cs.Dispatch(k, (vocab_size + 31) / 32, (batch_size * seq_len + 7) / 8, 1);
-
-            Tensor output_logits = is_batched ?
-                Tensor.Constant(lm_head_output, batch_size, seq_len, vocab_size) :
-                Tensor.Constant(lm_head_output, seq_len, vocab_size);
-
-            lm_head_output.Release();
-            lm_head_input.Release();
-
-            return output_logits;
-        }
-        /// <summary>
-        /// Generate("user: What's the capital of France? assistant: ", onTokenGenerated = (x) => { Debug.Log(x); }, tokenizer=tok)
-        /// </summary>
-        /// <param name="prompt"></param>
-        /// <param name="onTokenGenerated"></param>
-        /// <param name="tokenizer"></param>
-        /// <param name="max_new_tokens"></param>
-        /// <param name="temperature"></param>
-        /// <param name="top_k"></param>
-        /// <param name="top_p"></param>
-        /// <param name="min_p"></param>
-        /// <returns></returns>
-        public IEnumerator GenerateDebugOnly(string prompt, Action<string> onTokenGenerated, int max_new_tokens = 128, float temperature = 1f, int top_k = -1, float top_p = 1f, float min_p = 0)
-        {
-            // Debug.Log("Generating...");
-            while(!this.IsReady)
-                yield return new WaitForSeconds(0.01f);
-
-            // Debug.Log("Model Ready");
-            while (!tokenizer.IsReady)
-                yield return new WaitForSeconds(0.01f);
-            // Debug.Log("Tokenizer Ready");
-
-            foreach (var item in model.layers)
-            {
-                item.self_attn.BuildKVCache = true;
-            }
-            (Tensor, Tensor) tokenized_prompt = tokenizer.Encode(prompt);
-
-            // Debug.Log("x: " + tokenized_prompt.Item1);
-
-            // forward + lm_head ============================================================================================================
-            Tensor y = Predict(tokenized_prompt.Item1);
-            // ============================================================================================================
-
-
-            // Debug.Log("y:" + y);
-            Tensor sampled_token_id = SampleToken(y, temperature: temperature, top_k: top_k, top_p: top_p, min_p: min_p);
-            string sampled_token_str = tokenizer.Decode(sampled_token_id)[0];
-            // Debug.Log("Next token: " + sampled_token_str + $" ({sampled_token_id[0]})");
-            onTokenGenerated?.Invoke(sampled_token_str);
-            yield return null;
-
-            //Debug.Log("sampled_tok:" + sampled_token_id);
-            for (int new_tok = 0; new_tok < max_new_tokens - 1; new_tok++)
-            {
-               
-                // forward + lm_head ============================================================================================================
-                y = Predict(sampled_token_id);
-                // Debug.Log("y:" + y);
-                // ============================================================================================================
-                sampled_token_id = SampleToken(y, temperature: temperature, top_k: top_k, top_p: top_p, min_p: min_p);
-
-                sampled_token_str = tokenizer.Decode(sampled_token_id)[0];
-                // Debug.Log(sampled_token_str);
-                onTokenGenerated?.Invoke(sampled_token_str);
-                yield return null;
-                if ((int)sampled_token_id[0] == Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID)
-                    break;
-                
-            }
+            if (!IsReady)
+                throw new Exception("Gemma3 is not ready. Check IsReady first.");
+            int seqLen = input_ids.Size(-1);
+            model.Forward(input_ids, useCache: false, lastPosOnly: false);
+            return model.ReadLogits(seqLen);
         }
 
-
-        private void PrepareLmHeadIOBuffers(int input_buff_size, int output_buff_size)
+        public IEnumerator Generate(Tensor input_ids, Action<string> onTokenGenerated,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = -1, float top_p = 1f, float min_p = 0f)
         {
-            if(lm_head_input_buffer == null || lm_head_input_buffer.count != input_buff_size)
-            {
-                lm_head_input_buffer?.Release(); 
-                lm_head_input_buffer = new ComputeBuffer(input_buff_size, 4, ComputeBufferType.Structured);
-            }
+            while (!IsReady) yield return new WaitForSeconds(0.01f);
 
-            if (lm_head_output_buffer == null || lm_head_output_buffer.count != output_buff_size)
-            {
-                lm_head_output_buffer?.Release();
-                lm_head_output_buffer = new ComputeBuffer(output_buff_size, 4, ComputeBufferType.Structured);
-            }
-        }
-        public IEnumerator Generate(Tensor input_ids, Action<string> onTokenGenerated, int max_new_tokens = 128, float temperature = 1f, int top_k = -1, float top_p = 1f, float min_p = 0)
-        {
-            // Debug.Log("Generating...");
-            while (!this.IsReady)
-                yield return new WaitForSeconds(0.01f);
+            model.ResetCache();
 
-            // UnityEngine.Debug.Log("Model Ready");
-            while (!tokenizer.IsReady)
-                yield return new WaitForSeconds(0.01f);
-            // UnityEngine.Debug.Log("Tokenizer Ready");
+            var e = model.ForwardYielding(input_ids, useCache: true, lastPosOnly: true);
+            while (e.MoveNext()) yield return e.Current;
 
-            foreach (var item in model.layers)
-                item.self_attn.BuildKVCache = true;
+            // Async sample
+            model.DispatchSample(temperature, top_k, top_p, min_p);
+            while (!model.SampleReady) yield return null;
+            int tokenId = model.LastSampledToken;
+
+            string tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
+            onTokenGenerated?.Invoke(tokenStr);
             yield return null;
 
-            // UnityEngine.Debug.Log("x: " + input_ids);
-
-            // UnityEngine.Debug.Log("x: " + tokenized_prompt.Item1);
-
-            // forward + lm_head (with frame generation allowed) ============================================================================================================
-            Tensor y = null;
-            {
-                int seq_len = input_ids.Size(-1);
-                bool is_batched = input_ids.Rank == 3;
-                int batch_size = is_batched ? input_ids.Size(-3) : 1;
-
-              
-
-                Tensor hid = model.embed_tokens.Predict(input_ids) * MathF.Sqrt(Gemma3Config.HIDDEN_SIZE);
-                yield return null;
-                for (int i = 0; i < model.layers.Count; i++) // do not put yield return null between layer modules because you get a strange range of fps (60 to 140) - better just 60
-                {
-                    hid = model.layers[i].Predict(hid, attention_mask:null);
-                    yield return null;
-                }
-                hid = model.norm.Predict(hid).Squeeze(-2);
-                yield return null;
-
-                // LM HEAD Infer
-                ComputeShader lm_head_cs = DeepUnityMeta.LmHeadInferenceCS;
-                int k = seq_len == 1 && batch_size == 1 ? lm_head_cs.FindKernel("Predict1Vec") : lm_head_cs.FindKernel("Predict");
-
-                lm_head_cs.SetBuffer(k, "weights", this.lm_head);
-
-                PrepareLmHeadIOBuffers(input_buff_size:hid.Count(), output_buff_size:batch_size * seq_len * vocab_size);
-                lm_head_input_buffer.SetData(hid.ToArray());
-                yield return null;
-                lm_head_cs.SetBuffer(k, "input", lm_head_input_buffer);
-                lm_head_cs.SetBuffer(k, "output", lm_head_output_buffer);
-
-                lm_head_cs.SetInt("batch_size", batch_size);
-                lm_head_cs.SetInt("seq_len", seq_len);
-                lm_head_cs.SetInt("hidden_size", this.hidden_size);
-                lm_head_cs.SetInt("vocab_size", this.vocab_size);
-
-                if (seq_len == 1 && batch_size == 1)
-                    lm_head_cs.Dispatch(k, (vocab_size + 511) / 512, batch_size * seq_len, 1);
-                else
-                    lm_head_cs.Dispatch(k, (vocab_size + 31) / 32, (batch_size * seq_len + 7) / 8, 1);
-
-                yield return null;
-                y = is_batched ?
-                    Tensor.Constant(lm_head_output_buffer, batch_size, seq_len, vocab_size) :
-                    Tensor.Constant(lm_head_output_buffer, seq_len, vocab_size);
-                yield return null;
-            }
-
-
-            // ============================================================================================================
-
-
-            
-            Tensor sampled_token_id = SampleToken(y, temperature: temperature, top_k: top_k, top_p: top_p, min_p: min_p);
-            
-            string sampled_token_str = tokenizer.Decode(sampled_token_id)[0];
-            
-            // Debug.Log("Next token: " + sampled_token_str + $" ({sampled_token_id[0]})");
-            onTokenGenerated?.Invoke(sampled_token_str);
-            yield return null;
-
-            //Debug.Log("sampled_tok:" + sampled_token_id);
-            for (int new_tok = 0; new_tok < max_new_tokens - 1; new_tok++)
+            for (int t = 0; t < max_new_tokens - 1; t++)
             {
                 Stopwatch sw = Stopwatch.StartNew();
-                // forward + lm_head (with frame generation allowed) ============================================================================================================
-                {
-                    input_ids = sampled_token_id;
-                    Tensor attn_mask = null;
-                    int seq_len = input_ids.Size(-1);
-                    bool is_batched = input_ids.Rank == 3;
-                    int batch_size = is_batched ? input_ids.Size(-3) : 1;
+                Tensor nextInput = Tensor.Constant(tokenId);
+                e = model.ForwardYielding(nextInput, useCache: true, lastPosOnly: true);
+                while (e.MoveNext()) yield return e.Current;
 
-                    Tensor hid = model.embed_tokens.Predict(input_ids) * MathF.Sqrt(Gemma3Config.HIDDEN_SIZE);
-                    yield return null;
-                    for (int i = 0; i < model.layers.Count; i++)
-                    {
-                        hid = model.layers[i].Predict(hid, attn_mask);
-                        yield return null;
-                    }
-                    hid = model.norm.Predict(hid).Squeeze(-2);
-                    yield return null;
+                model.DispatchSample(temperature, top_k, top_p, min_p);
+                while (!model.SampleReady) yield return null;
+                tokenId = model.LastSampledToken;
 
-                    // LM HEAD Infer
-                    ComputeShader lm_head_cs = DeepUnityMeta.LmHeadInferenceCS;
-                    int k = seq_len == 1 && batch_size == 1 ? lm_head_cs.FindKernel("Predict1Vec") : lm_head_cs.FindKernel("Predict");
+                if (tokenId == Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID) break;
 
-                    lm_head_cs.SetBuffer(k, "weights", this.lm_head);
-
-                    PrepareLmHeadIOBuffers(input_buff_size: hid.Count(), output_buff_size: batch_size * seq_len * vocab_size);
-                    lm_head_input_buffer.SetData(hid.ToArray());
-                    yield return null;
-                    lm_head_cs.SetBuffer(k, "input", lm_head_input_buffer);
-                    lm_head_cs.SetBuffer(k, "output", lm_head_output_buffer);
-
-                    lm_head_cs.SetInt("batch_size", batch_size);
-                    lm_head_cs.SetInt("seq_len", seq_len);
-                    lm_head_cs.SetInt("hidden_size", this.hidden_size);
-                    lm_head_cs.SetInt("vocab_size", this.vocab_size);
-
-                    if (seq_len == 1 && batch_size == 1)
-                        lm_head_cs.Dispatch(k, (vocab_size + 511) / 512, batch_size * seq_len, 1);
-                    else
-                        lm_head_cs.Dispatch(k, (vocab_size + 31) / 32, (batch_size * seq_len + 7) / 8, 1);
-
-                    yield return null;
-                    y = is_batched ?
-                        Tensor.Constant(lm_head_output_buffer, batch_size, seq_len, vocab_size) :
-                        Tensor.Constant(lm_head_output_buffer, seq_len, vocab_size);
-                    yield return null;
-                }
-                // Debug.Log("y:" + y);
-                // ============================================================================================================
-                sampled_token_id = SampleToken(y, temperature: temperature, top_k: top_k, top_p: top_p, min_p: min_p);
-                // UnityEngine.Debug.Log("y:" + y[245237]);
-                // UnityEngine.Debug.Log("y:" + y[236743]);
-                // UnityEngine.Debug.Log("y:" + sampled_token_str);
-                // UnityEngine.Debug.Log("Decoded y:" + sampled_token_id[0]);
-                // UnityEngine.Debug.Log(sampled_token_id + " output_vec: " + y);
-                if ((int)sampled_token_id[0] == Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID)
-                    break;
-
-
-                sampled_token_str = tokenizer.Decode(sampled_token_id)[0];
-                onTokenGenerated?.Invoke(sampled_token_str);
-                TokensPerSecond = sw.ElapsedMilliseconds > 0f ? 1000f / (float)sw.ElapsedMilliseconds : 0;
+                tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
+                onTokenGenerated?.Invoke(tokenStr);
+                TokensPerSecond = sw.ElapsedMilliseconds > 0 ? 1000f / sw.ElapsedMilliseconds : 0f;
                 yield return null;
-                
-
             }
-
 
             TokensPerSecond = 0f;
             yield return true;
@@ -650,296 +142,98 @@ namespace DeepUnity
 
         public IEnumerator InitializeChat(string system_prompt = "")
         {
-            
-            // Debug.Log("Generating...");
-            while (!this.IsReady)
-                yield return new WaitForSeconds(0.01f);
+            while (!IsReady) yield return new WaitForSeconds(0.01f);
+            Assert.AreNotEqual(system_prompt, null);
 
-            // Debug.Log("Model Ready");
-            while (!tokenizer.IsReady)
-                yield return new WaitForSeconds(0.01f);
-            // Debug.Log("Tokenizer Ready");
-            Assert.AreNotEqual(system_prompt, null); // we enforce system prompt to exist no matter what. Because the Chat() function will append to it further.
-
-            // TRY FIND Cache
-            string hash = Utils.Sha256(system_prompt + path);
-            const string resourcesRoot = "Assets/Resources";
-            var cacheRoot = $"{resourcesRoot}/Cache";
-            var hashFolder = $"{cacheRoot}/{hash}";
-
-            if (!Directory.Exists(resourcesRoot))
-                    Directory.CreateDirectory(resourcesRoot);
-            if (!Directory.Exists(cacheRoot))
-                    Directory.CreateDirectory(cacheRoot);
-
-            bool is_there_a_hash_folder = Directory.Exists(hashFolder);
+            model.ResetCache();
             Stopwatch sw = Stopwatch.StartNew();
-            if(is_there_a_hash_folder)
+
+            (Tensor, Tensor) tok = tokenizer.Encode(system_prompt, add_special_tokens: false, truncation: true, max_length: 2048);
+            Tensor prefix = Tensor.Constant(new float[]
             {
-                for(int l_id = 0; l_id < model.layers.Count; l_id++)
-                {
-                    Tensor kcache = JsonUtility.FromJson<Tensor>(Resources.Load<TextAsset>($"Cache/{hash}/k_cache_layer_{l_id}").text);
-                    Tensor vcache = JsonUtility.FromJson<Tensor>(Resources.Load<TextAsset>($"Cache/{hash}/v_cache_layer_{l_id}").text);
-                    model.layers[l_id].self_attn.KCache = kcache;
-                    model.layers[l_id].self_attn.VCache = vcache;
-                }
+                Gemma3TokenizerFast.BOS_TOKEN_ID,
+                Gemma3TokenizerFast.START_OF_TURN_TOKEN_ID,
+                2364f, 107f
+            });
+            Tensor input_ids = Tensor.Concat(-1, prefix, tok.Item1);
 
-                sw.Stop();
-                ConsoleMessage.Info($"KVCache loaded from {hashFolder} ({sw.Elapsed.TotalSeconds:0.00} s)");
-            }
-            else // pass through the model  the system prompt
-            {
-                sw = Stopwatch.StartNew();
-                foreach (var item in model.layers)
-                {
-                    item.self_attn.BuildKVCache = true;
-                }
+            var e = model.ForwardYielding(input_ids, useCache: true, lastPosOnly: true);
+            while (e.MoveNext()) yield return e.Current;
 
-
-                
-
-                // "user" = 2364
-                // "model" = 4368
-                // "\n" = 107
-                // "\n\n" = 108
-                (Tensor, Tensor) tokenized_prompt = tokenizer.Encode(system_prompt, add_special_tokens: false, truncation: true, max_length: 2048);
-                Tensor prefix = Tensor.Constant(new float[] { Gemma3TokenizerFast.BOS_TOKEN_ID, Gemma3TokenizerFast.START_OF_TURN_TOKEN_ID, 2364f, 107f });
-                var input_ids = Tensor.Concat(-1, prefix, tokenized_prompt.Item1);
-                // conversation_cache_tokens = new();
-                // conversation_cache_tokens.AddRange(input_ids.ToArray().Select(x => (int)(x)));
-
-
-                // pass the system prompt through the network
-                Tensor hid = model.embed_tokens.Predict(input_ids) * MathF.Sqrt(Gemma3Config.HIDDEN_SIZE);
-                yield return null;
-                for (int i = 0; i < model.layers.Count; i++) // do not put yield return null between layer modules because you get a strange range of fps (60 to 140) - better just 60
-                {
-                    hid = model.layers[i].Predict(hid, attention_mask:null);
-                    yield return null;
-                } // only compute KV caches.
-
-           
-
-                sw.Stop();
-                ConsoleMessage.Info($"System prompt computed ({sw.Elapsed.TotalSeconds:0.00} s).");
-
-
-
-
-                // NOW CACHE KV
-                sw = Stopwatch.StartNew(); 
-                Directory.CreateDirectory(hashFolder);
-
-                List<string> json_k = new();
-                List<string> json_v = new();
-                foreach (var layer in model.layers)
-                {
-                    json_k.Add(JsonUtility.ToJson(layer.self_attn.KCache));
-                    json_v.Add(JsonUtility.ToJson(layer.self_attn.VCache));
-
-                }
-
-                for(int i = 0; i < json_k.Count; i++)
-                {
-                    File.WriteAllText($"{hashFolder}/k_cache_layer_{i}.json", json_k[i]);
-                    File.WriteAllText($"{hashFolder}/v_cache_layer_{i}.json", json_v[i]);
-                }
-
-#if UNITY_EDITOR
-                UnityEditor.AssetDatabase.Refresh();
-#endif
-                sw.Stop();
-                ConsoleMessage.Info($"KV Cache cached. ({sw.Elapsed.TotalSeconds:0.00} s)");
-
-                yield return true;
-            }
-
+            ConsoleMessage.Info($"Gemma3 system prompt computed ({sw.Elapsed.TotalSeconds:0.00} s).");
             isFreshlyInitialized = true;
+            yield return true;
         }
 
-        public IEnumerator Chat(string prompt, Action<string> onTokenGenerated, int max_new_tokens = 128, float temperature = 1f, int top_k = -1, float top_p = 1f, float min_p = 0)
+        public IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = -1, float top_p = 1f, float min_p = 0f)
         {
-            if (!this.IsReady)
+            if (!IsReady) throw new Exception("Call InitializeChat before Chat.");
+
+            Tensor prefixT, postfixT;
+            if (isFreshlyInitialized)
             {
-                throw new Exception("InitializeChat first before chatting with the LLM.");
-            }
-
-            //UnityEngine.Debug.Log($"Num cached tokens= {model.layers[0].self_attn.CachedTokensNum}");
-
-
-            Tensor prefix = null;
-            Tensor postfix = null;
-            // "user" = 2364
-            // "model" = 4368
-            // "\n" = 107
-            // "\n\n" = 108
-            if (isFreshlyInitialized) // IF this is the first call in Chat (merge user prompt w/ system prompt)
-            {
-
-                // UnityEngine.Debug.Log("This is the first Chat call");
-
                 isFreshlyInitialized = false;
-                prefix = Tensor.Constant(new float[] { 108 });
-                postfix = Tensor.Constant(new float[] { Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID, 107f, Gemma3TokenizerFast.START_OF_TURN_TOKEN_ID, 4368f, 107 });
-
-                // e.g. prompt = "\n\n" + prompt + "<end_of_turn>\n<start_of_turn>model\n";
-                
-            }
-            else // a new standalone user prompt (eot was added 
-            {
-                // UnityEngine.Debug.Log("This is NOT the first Chat call");
-                prefix = Tensor.Constant(new float[] { Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID, 107, Gemma3TokenizerFast.START_OF_TURN_TOKEN_ID, 2364f, 107f });
-                postfix = Tensor.Constant(new float[] { Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID, 107f, Gemma3TokenizerFast.START_OF_TURN_TOKEN_ID, 4368f, 107 });
-
-                // e.g. prompt = "<end_of_turn>\n<start_of_turn>user\n" + prompt + "<end_of_turn>" + "\n<start_of_turn>model\n";
-            }
-            
-
-            (Tensor, Tensor) tokenized_prompt = tokenizer.Encode(prompt, add_special_tokens: false, truncation: true, max_length: 2048);
-
-            Tensor input_ids = Tensor.Concat(-1, prefix, tokenized_prompt.Item1, postfix);
-            // conversation_cache_tokens.AddRange(input_ids.ToArray().Select(x => (int)(x)));
-            Tensor y = null;
-            {
-                int seq_len = input_ids.Size(-1);
-                bool is_batched = input_ids.Rank == 3;
-                int batch_size = is_batched ? input_ids.Size(-3) : 1;
-
-
-
-                Tensor hid = model.embed_tokens.Predict(input_ids) * MathF.Sqrt(Gemma3Config.HIDDEN_SIZE);
-                yield return null;
-                for (int i = 0; i < model.layers.Count; i++) // do not put yield return null between layer modules because you get a strange range of fps (60 to 140) - better just 60
+                prefixT = Tensor.Constant(new float[] { 108f });
+                postfixT = Tensor.Constant(new float[]
                 {
-                    hid = model.layers[i].Predict(hid, attention_mask:null);
-                    yield return null;
-                }
-                hid = model.norm.Predict(hid).Squeeze(-2);
-                yield return null;
-
-                // LM HEAD Infer
-                ComputeShader lm_head_cs = DeepUnityMeta.LmHeadInferenceCS;
-                int k = seq_len == 1 && batch_size == 1 ? lm_head_cs.FindKernel("Predict1Vec") : lm_head_cs.FindKernel("Predict");
-
-                lm_head_cs.SetBuffer(k, "weights", this.lm_head);
-
-                PrepareLmHeadIOBuffers(input_buff_size: hid.Count(), output_buff_size: batch_size * seq_len * vocab_size);
-                lm_head_input_buffer.SetData(hid.ToArray());
-                yield return null;
-                lm_head_cs.SetBuffer(k, "input", lm_head_input_buffer);
-                lm_head_cs.SetBuffer(k, "output", lm_head_output_buffer);
-
-                lm_head_cs.SetInt("batch_size", batch_size);
-                lm_head_cs.SetInt("seq_len", seq_len);
-                lm_head_cs.SetInt("hidden_size", this.hidden_size);
-                lm_head_cs.SetInt("vocab_size", this.vocab_size);
-
-                if (seq_len == 1 && batch_size == 1)
-                    lm_head_cs.Dispatch(k, (vocab_size + 511) / 512, batch_size * seq_len, 1);
-                else
-                    lm_head_cs.Dispatch(k, (vocab_size + 31) / 32, (batch_size * seq_len + 7) / 8, 1);
-
-                yield return null;
-                y = is_batched ?
-                    Tensor.Constant(lm_head_output_buffer, batch_size, seq_len, vocab_size) :
-                    Tensor.Constant(lm_head_output_buffer, seq_len, vocab_size);
-                yield return null;
+                    Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID, 107f,
+                    Gemma3TokenizerFast.START_OF_TURN_TOKEN_ID, 4368f, 107f
+                });
+            }
+            else
+            {
+                prefixT = Tensor.Constant(new float[]
+                {
+                    Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID, 107f,
+                    Gemma3TokenizerFast.START_OF_TURN_TOKEN_ID, 2364f, 107f
+                });
+                postfixT = Tensor.Constant(new float[]
+                {
+                    Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID, 107f,
+                    Gemma3TokenizerFast.START_OF_TURN_TOKEN_ID, 4368f, 107f
+                });
             }
 
+            (Tensor, Tensor) tok = tokenizer.Encode(prompt, add_special_tokens: false, truncation: true, max_length: 2048);
+            Tensor input_ids = Tensor.Concat(-1, prefixT, tok.Item1, postfixT);
 
-            // ============================================================================================================
+            var e = model.ForwardYielding(input_ids, useCache: true, lastPosOnly: true);
+            while (e.MoveNext()) yield return e.Current;
 
+            model.DispatchSample(temperature, top_k, top_p, min_p);
+            while (!model.SampleReady) yield return null;
+            int tokenId = model.LastSampledToken;
 
-            // Debug.Log("y:" + y);
-            Tensor sampled_token_id = SampleToken(y, temperature: temperature, top_k: top_k, top_p: top_p, min_p: min_p);
-            string sampled_token_str = tokenizer.Decode(sampled_token_id)[0];
-            // conversation_cache_tokens.Add((int)sampled_token_id[0]);
-            onTokenGenerated?.Invoke(sampled_token_str);
+            string tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
+            onTokenGenerated?.Invoke(tokenStr);
             yield return null;
 
-            //Debug.Log("sampled_tok:" + sampled_token_id);
-            for (int new_tok = 0; new_tok < max_new_tokens - 1; new_tok++)
+            for (int t = 0; t < max_new_tokens - 1; t++)
             {
                 Stopwatch sw = Stopwatch.StartNew();
-                // forward + lm_head (with frame generation allowed) ============================================================================================================
-                {
-                    input_ids = sampled_token_id;
-                    int seq_len = input_ids.Size(-1);
-                    bool is_batched = input_ids.Rank == 3;
-                    int batch_size = is_batched ? input_ids.Size(-3) : 1;
+                Tensor nextInput = Tensor.Constant(tokenId);
+                e = model.ForwardYielding(nextInput, useCache: true, lastPosOnly: true);
+                while (e.MoveNext()) yield return e.Current;
 
-                    Tensor hid = model.embed_tokens.Predict(input_ids) * MathF.Sqrt(Gemma3Config.HIDDEN_SIZE);
-                    yield return null;
-                    for (int i = 0; i < model.layers.Count; i++)
-                    {
-                        hid = model.layers[i].Predict(hid, attention_mask:null);
-                        yield return null;
-                    }
-                    hid = model.norm.Predict(hid).Squeeze(-2);
-                    yield return null;
+                model.DispatchSample(temperature, top_k, top_p, min_p);
+                while (!model.SampleReady) yield return null;
+                tokenId = model.LastSampledToken;
 
-                    // LM HEAD Infer
-                    ComputeShader lm_head_cs = DeepUnityMeta.LmHeadInferenceCS;
-                    int k = seq_len == 1 && batch_size == 1 ? lm_head_cs.FindKernel("Predict1Vec") : lm_head_cs.FindKernel("Predict");
-
-                    lm_head_cs.SetBuffer(k, "weights", this.lm_head);
-
-                    PrepareLmHeadIOBuffers(input_buff_size: hid.Count(), output_buff_size: batch_size * seq_len * vocab_size);
-                    lm_head_input_buffer.SetData(hid.ToArray());
-                    yield return null;
-                    lm_head_cs.SetBuffer(k, "input", lm_head_input_buffer);
-                    lm_head_cs.SetBuffer(k, "output", lm_head_output_buffer);
-
-                    lm_head_cs.SetInt("batch_size", batch_size);
-                    lm_head_cs.SetInt("seq_len", seq_len);
-                    lm_head_cs.SetInt("hidden_size", this.hidden_size);
-                    lm_head_cs.SetInt("vocab_size", this.vocab_size);
-
-                    if (seq_len == 1 && batch_size == 1)
-                        lm_head_cs.Dispatch(k, (vocab_size + 511) / 512, batch_size * seq_len, 1);
-                    else
-                        lm_head_cs.Dispatch(k, (vocab_size + 31) / 32, (batch_size * seq_len + 7) / 8, 1);
-
-                    yield return null;
-                    y = is_batched ?
-                        Tensor.Constant(lm_head_output_buffer, batch_size, seq_len, vocab_size) :
-                        Tensor.Constant(lm_head_output_buffer, seq_len, vocab_size);
-                    yield return null;
-                }
-                // Debug.Log("y:" + y);
-                // ============================================================================================================
-                sampled_token_id = SampleToken(y, temperature: temperature, top_k: top_k, top_p: top_p, min_p: min_p);
-                sampled_token_str = tokenizer.Decode(sampled_token_id)[0];
-
-                // We do not append eot to cache!!, we append it at the next call as token.
-                // 
-                // UnityEngine.Debug.Log($"Decoded token: {sampled_token_id[0]}");
-                if ((int)sampled_token_id[0] == Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID)
+                if (tokenId == Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID)
                 {
                     ConsoleMessage.Info("Gemma3 ended the response.");
                     break;
                 }
 
-                // conversation_cache_tokens.Add((int)sampled_token_id[0]);
-
-                // Debug.Log(sampled_token_str);
-                onTokenGenerated?.Invoke(sampled_token_str);
-                TokensPerSecond = sw.ElapsedMilliseconds > 0f ? 1000f / (float)sw.ElapsedMilliseconds : 0;
+                tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
+                onTokenGenerated?.Invoke(tokenStr);
+                TokensPerSecond = sw.ElapsedMilliseconds > 0 ? 1000f / sw.ElapsedMilliseconds : 0f;
                 yield return null;
-
-
             }
 
-
             TokensPerSecond = 0f;
-
             yield return true;
         }
-    
-    
-    
-    
-    
     }
 }
-

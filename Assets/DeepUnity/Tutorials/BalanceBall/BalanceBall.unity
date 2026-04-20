@@ -480,11 +480,11 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 2
   discreteActions: 0
-  archType: 0
+  archType: 1
   numLayers: 2
   hidUnits: 32
   activation: 0
-  model: {fileID: 11400000, guid: a4d3d3ea1c29b7944aea437bef5fefd5, type: 2}
+  model: {fileID: 11400000, guid: 568135155acb2d64e842659b49537eba, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0
@@ -933,7 +933,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1265864093
 Transform:
   m_ObjectHideFlags: 0

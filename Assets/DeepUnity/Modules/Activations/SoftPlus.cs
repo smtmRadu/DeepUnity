@@ -37,10 +37,41 @@ namespace DeepUnity.Activations
                 psiGrad = Tensor.Zeros(1);
         }
 
-       
+        private void EnsureState()
+        {
+            if (Mathf.Approximately(beta, 0f))
+                beta = 1f;
+
+            if (!IsUsableTensor(psi))
+                psi = Tensor.Ones(1);
+
+            if (!scaleTrainable)
+                return;
+
+            if (!IsUsableTensor(psiGrad) || psiGrad.Data.Length != psi.Data.Length)
+                psiGrad = Tensor.Zeros(psi.Shape);
+        }
+
+        private static bool IsUsableTensor(Tensor tensor)
+        {
+            if (tensor == null || tensor.Data == null)
+                return false;
+
+            try
+            {
+                int[] shape = tensor.Shape;
+                return shape != null && shape.Length > 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         public Tensor Predict(Tensor x)
         {
+            EnsureState();
+
             if(inPlace)
             {
                 float log;
@@ -67,8 +98,10 @@ namespace DeepUnity.Activations
 
         public Tensor Backward(Tensor dLdY)
         {
+            EnsureState();
+
             if(scaleTrainable)
-                psiGrad[0] = dLdY.Average() * MathF.Log(1f + MathF.Exp(beta * InputCache.Average())) / beta;
+                psiGrad[0] = dLdY.Zip(InputCache, (dLdOut, x) => dLdOut * MathF.Log(1f + MathF.Exp(beta * x)) / beta).Average();
 
             return dLdY * InputCache.Select(x =>
             {
@@ -80,6 +113,8 @@ namespace DeepUnity.Activations
 
         public Parameter[] Parameters()
         {
+            EnsureState();
+
             if (!scaleTrainable)
                 return new Parameter[] { };
 
@@ -92,16 +127,7 @@ namespace DeepUnity.Activations
         }
         public void OnAfterDeserialize()
         {
-            if (!scaleTrainable)
-                return;
-
-            if (psiGrad.Shape == null)
-                return;
-
-            if (psiGrad.Shape.Length == 0)
-                return;
-
-            psiGrad = Tensor.Zeros(1);
+            EnsureState();
         }
     }
 

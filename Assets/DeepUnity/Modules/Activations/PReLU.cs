@@ -57,7 +57,7 @@ namespace DeepUnity.Activations
             if(RequiresGrad)
             {
                 // dLoss/dTheta = x if x < 0 and 0 otherwise
-                float dLda = loss.Select(x => x >= 0f ? x : 0).ToArray().Average();
+                float dLda = loss.Zip(InputCache, (dLdY, x) => x < 0f ? dLdY * x : 0f).Average();
                 alphaGrad[0] = dLda;
             }
            

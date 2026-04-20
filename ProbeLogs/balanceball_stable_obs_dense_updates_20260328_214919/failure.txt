@@ -1,0 +1,6 @@
+System.ArgumentException: Object at index 0 is null
+  at (wrapper managed-to-native) UnityEditor.SerializedObject.InternalCreate(UnityEngine.Object[],UnityEngine.Object)
+  at UnityEditor.SerializedObject..ctor (UnityEngine.Object obj) [0x00008] in <8d33a6384e1148858f2e669234fa89ff>:0 
+  at DeepUnity.ReinforcementLearning.BalanceBallStableObsSacBatchRunner.ConfigureStableAgentSerializedFields (DeepUnity.Tutorials.BalanceBallStableObsAgent agent) [0x00000] in C:\Dev\DeepUnity\Assets\DeepUnity\ReinforcementLearning\Tools\Editor\BalanceBallStableObsSacBatchRunner.cs:133 
+  at DeepUnity.ReinforcementLearning.BalanceBallStableObsSacBatchRunner.SetupScene (System.String runId, System.String reportDirectory, System.String behaviourName) [0x000da] in C:\Dev\DeepUnity\Assets\DeepUnity\ReinforcementLearning\Tools\Editor\BalanceBallStableObsSacBatchRunner.cs:66 
+  at DeepUnity.ReinforcementLearning.BalanceBallStableObsSacBatchRunner.RunBalanceBallStableObsSacDenseUpdates () [0x0003a] in C:\Dev\DeepUnity\Assets\DeepUnity\ReinforcementLearning\Tools\Editor\BalanceBallStableObsSacBatchRunner.cs:24 

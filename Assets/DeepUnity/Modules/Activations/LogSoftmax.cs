@@ -23,21 +23,28 @@ namespace DeepUnity.Activations
         public LogSoftmax() { }
         private Softmax sm;
         private Tensor softmaxOutputCache;
+        private Softmax EnsureSoftmax()
+        {
+            if (sm == null)
+                sm = new Softmax();
+
+            return sm;
+        }
         public Tensor Predict(Tensor input)
         {
-            return sm.Predict(input).Log();
+            return EnsureSoftmax().Predict(input).Log();
         }
         public Tensor Forward(Tensor input)
         {
-            softmaxOutputCache = sm.Forward(input);
+            softmaxOutputCache = EnsureSoftmax().Forward(input);
             return softmaxOutputCache.Log();
         }
         public Tensor Backward(Tensor dLdY)
         {
-            return sm.Backward(1f / softmaxOutputCache);
+            return EnsureSoftmax().Backward(dLdY / softmaxOutputCache);
         }
 
-        public object Clone() => new Softmax();
+        public object Clone() => new LogSoftmax();
     }
 
 }

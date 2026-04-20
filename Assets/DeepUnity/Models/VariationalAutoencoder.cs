@@ -111,7 +111,8 @@ namespace DeepUnity.Models
             Tensor dLoss_dMu = dLoss_dZ;
             Tensor dLoss_dEncoder = mu.Backward(dLoss_dMu);
 
-            Tensor dLoss_dLogVar = dLoss_dZ * ksi;
+            // z = mu + exp(0.5 * log_var) * ksi, so dz/dlog_var = 0.5 * exp(0.5 * log_var) * ksi
+            Tensor dLoss_dLogVar = dLoss_dZ * (0.5f * Tensor.Exp(0.5f * logvar_v) * ksi);
             dLoss_dEncoder += log_var.Backward(dLoss_dLogVar);
 
             Tensor dLoss_dInput = encoder[encoder.Length - 1].Backward(dLoss_dEncoder);

@@ -241,7 +241,7 @@ namespace DeepUnity.Modules
             return Predict(input);
         }
 
-        /// <param name="loss">(B, C_out, H - K_h + 1, W - K_w + 1)</param>
+        /// <param name="loss">(B, C_out, H_out, W_out) where H_out = H_in + K_h - 1</param>
         /// <returns></returns>
         public Tensor Backward(Tensor loss)
         {
@@ -251,29 +251,30 @@ namespace DeepUnity.Modules
             int kernelHeight = GetKernelHeight;
             int kernelWidth = GetKernelWidth;
 
-            int inputChannels = InputCache.Size(-3);
+            int inChannels = InputCache.Size(-3);
             int inputHeight = InputCache.Size(-2);
             int inputWidth = InputCache.Size(-1);
 
-            int outputChannels = kernels.Size(-4);
-            int outputHeight = inputHeight - kernelHeight + 1;
-            int outputWidth = inputWidth - kernelWidth + 1;
+            int outChannels = GetOutChannels;
+            int lossHeight = inputHeight + kernelHeight - 1;
+            int lossWidth = inputWidth + kernelWidth - 1;
 
-            float grad_scale = batchSize * inputChannels * outputChannels * kernelHeight * kernelWidth * inputHeight * inputWidth; ; // * outputWidth * outputHeight;
+            // float grad_scale = batchSize * inChannels * outChannels * kernelHeight * kernelWidth * inputHeight * inputWidth;
+            float grad_scale = 1f;
 
-            // BIases are computed on CPU because is faster. The bias vector is too small in comparison with other stuff.
+            // Biases are computed on CPU because is faster. The bias vector is too small in comparison with other stuff.
             if (bias && RequiresGrad)
             {
                 // Bias grad
-                Parallel.For(0, outputChannels, oc =>
+                Parallel.For(0, outChannels, oc =>
                 {
                     float sum = 0f;
 
                     for (int b = 0; b < batchSize; b++)
                     {
-                        for (int h = 0; h < outputHeight; h++)
+                        for (int h = 0; h < lossHeight; h++)
                         {
-                            for (int w = 0; w < outputWidth; w++)
+                            for (int w = 0; w < lossWidth; w++)
                                 sum += loss[b, oc, h, w];
                         }
                     }
@@ -282,20 +283,21 @@ namespace DeepUnity.Modules
                 });
             }
 
-            
+
             if (Device == Device.CPU)
             {
                 Tensor inputGrad = InputCache.Rank == 3 ?
-                    Tensor.Zeros(inputChannels, inputHeight, inputWidth) :
-                    Tensor.Zeros(batchSize, inputChannels, inputHeight, inputWidth);
+                    Tensor.Zeros(inChannels, inputHeight, inputWidth) :
+                    Tensor.Zeros(batchSize, inChannels, inputHeight, inputWidth);
 
 
                 if (RequiresGrad)
                 {
-                    // Compute the gradients of the weights - valid correlation(loss, x)      
-                    Parallel.For(0, outputChannels, oc =>
+                    // Weight gradient: valid correlation of loss with input
+                    // dW[ic, oc, kh, kw] = sum_b sum_h sum_w loss[b, oc, h + kh, w + kw] * input[b, ic, h, w]
+                    Parallel.For(0, inChannels, ic =>
                     {
-                        Parallel.For(0, inputChannels, ic =>
+                        Parallel.For(0, outChannels, oc =>
                         {
                             for (int kh = 0; kh < kernelHeight; kh++)
                             {
@@ -305,47 +307,46 @@ namespace DeepUnity.Modules
 
                                     for (int b = 0; b < batchSize; b++)
                                     {
-                                        for (int j = 0; j < outputHeight; j++)
+                                        for (int h = 0; h < inputHeight; h++)
                                         {
-                                            for (int i = 0; i < outputWidth; i++)
+                                            for (int w = 0; w < inputWidth; w++)
                                             {
-                                                sum += InputCache[b, ic, j + kh, i + kw] * loss[b, oc, j, i];
+                                                sum += loss[b, oc, h + kh, w + kw] * InputCache[b, ic, h, w];
                                             }
                                         }
                                     }
 
-                                    kernelsGrad[oc, ic, kh, kw] = sum / grad_scale;
+                                    kernelsGrad[ic, oc, kh, kw] = sum / grad_scale;
                                 }
                             }
                         });
                     });
                 }
 
-                // Input grad -> valid correlation(loss, weights)
+                // Input gradient: valid correlation of loss with weights (no rotation)
+                // dL/dx[b, ic, ih, iw] = sum_oc sum_kh sum_kw loss[b, oc, ih + kh, iw + kw] * W[ic, oc, kh, kw]
                 Parallel.For(0, batchSize, (Action<int>)(b =>
                 {
-                    Parallel.For(0, inputChannels, (Action<int>)(ic =>
+                    Parallel.For(0, inChannels, (Action<int>)(ic =>
                     {
                         for (int ih = 0; ih < inputHeight; ih++)
                         {
                             for (int iw = 0; iw < inputWidth; iw++)
                             {
-                                float sum = this.bias ? biases[ic] : 0f;
+                                float sum = 0f;
 
-                                for (int oc = 0; oc < outputChannels; oc++)
+                                for (int oc = 0; oc < outChannels; oc++)
                                 {
                                     for (int kh = 0; kh < kernelHeight; kh++)
                                     {
                                         for (int kw = 0; kw < kernelWidth; kw++)
                                         {
-                                            
-                                            sum += loss[b, oc, ih + kh, iw + kw] * kernels[oc, ic, kh, kw]; // kernel is rotated by 180d
-                                            
+                                            sum += loss[b, oc, ih + kh, iw + kw] * kernels[ic, oc, kh, kw];
                                         }
                                     }
                                 }
 
-                                inputGrad[b, ic, ih, iw] = sum / grad_scale; // summation over input channels
+                                inputGrad[b, ic, ih, iw] = sum / grad_scale;
                             }
                         }
                     }));
@@ -355,7 +356,86 @@ namespace DeepUnity.Modules
                 return inputGrad;
             }
             else
-                throw new NotImplementedException();
+            {
+                int C_in = inChannels;
+                int H_in = inputHeight;
+                int W_in = inputWidth;
+                int C_out = outChannels;
+                int H_out = lossHeight;
+                int W_out = lossWidth;
+
+                ComputeShader cs = DeepUnityMeta.ConvTranpose2DCS;
+
+                cs.SetInt("batch_size", batchSize);
+                cs.SetInt("in_channels", C_in);
+                cs.SetInt("in_height", H_in);
+                cs.SetInt("in_width", W_in);
+                cs.SetInt("out_channels", C_out);
+                cs.SetInt("out_height", H_out);
+                cs.SetInt("out_width", W_out);
+                cs.SetInt("kernel_height", kernelHeight);
+                cs.SetInt("kernel_width", kernelWidth);
+                cs.SetFloat("grad_scale", grad_scale);
+
+                ComputeBuffer lossBuffer = new ComputeBuffer(loss.Count(), 4);
+                lossBuffer.SetData(loss.ToArray());
+
+                if (RequiresGrad)
+                {
+                    // Weight gradients
+                    int KINDEX = kernelHeight <= 3 ? 1 : 2;
+
+                    ComputeBuffer inputBuffer = new ComputeBuffer(InputCache.Count(), 4);
+                    inputBuffer.SetData(InputCache.ToArray());
+                    cs.SetBuffer(KINDEX, "input", inputBuffer);
+                    cs.SetBuffer(KINDEX, "loss", lossBuffer);
+
+                    ComputeBuffer gammaGradBuffer = new ComputeBuffer(kernelsGrad.Count(), 4);
+                    gammaGradBuffer.SetData(kernelsGrad.ToArray());
+                    cs.SetBuffer(KINDEX, "gamma_grad", gammaGradBuffer);
+
+                    if (KINDEX == 1)
+                        cs.Dispatch(1,
+                            (kernelWidth + 2) / 3,
+                            (kernelHeight + 2) / 3,
+                            (C_in + 63) / 64);
+                    else
+                        cs.Dispatch(2,
+                            (kernelWidth + 4) / 5,
+                            (kernelHeight + 4) / 5,
+                            (C_in + 31) / 32);
+
+                    Tensor.CopyTo(kernelsGrad + Tensor.Constant(gammaGradBuffer, kernelsGrad.Shape), kernelsGrad);
+                    gammaGradBuffer.Release();
+                    inputBuffer.Release();
+                }
+
+                // Input gradient
+                cs.SetBuffer(3, "loss", lossBuffer);
+
+                ComputeBuffer gammaBuffer = new ComputeBuffer(kernels.Count(), 4);
+                gammaBuffer.SetData(kernels.ToArray());
+                cs.SetBuffer(3, "gamma", gammaBuffer);
+
+                ComputeBuffer inputGradBuffer = new ComputeBuffer(InputCache.Count(), 4);
+                inputGradBuffer.SetData(new float[InputCache.Count()]);
+                cs.SetBuffer(3, "input_grad", inputGradBuffer);
+
+                cs.Dispatch(3,
+                    (W_in + 15) / 16,
+                    (H_in + 15) / 16,
+                    (batchSize + 3) / 4);
+
+                Tensor inputGrad = isBatched ?
+                    Tensor.Constant(inputGradBuffer, batchSize, C_in, H_in, W_in) :
+                    Tensor.Constant(inputGradBuffer, C_in, H_in, W_in);
+
+                lossBuffer.Release();
+                gammaBuffer.Release();
+                inputGradBuffer.Release();
+
+                return inputGrad;
+            }
         }
 
 
@@ -363,8 +443,10 @@ namespace DeepUnity.Modules
         public object Clone()
         {
             var convt = new ConvTranspose2D();
+            convt.RequiresGrad = RequiresGrad;
+            convt.Device = Device;
             convt.bias = bias;
-            convt.kernels = (Tensor)kernels.Clone();        
+            convt.kernels = (Tensor)kernels.Clone();
             convt.kernelsGrad = (Tensor)kernelsGrad.Clone();
 
             if (bias)
@@ -372,7 +454,6 @@ namespace DeepUnity.Modules
                 convt.biases = (Tensor)biases.Clone();
                 convt.biasesGrad = (Tensor)biasesGrad.Clone();
             }
-           
 
             return convt;
         }

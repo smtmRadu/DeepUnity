@@ -37,6 +37,11 @@ namespace DeepUnity.ReinforcementLearning
         /// Tensor(1) - 1 if nextState is terminal, 0 otherwise
         /// </summary>
         public Tensor done { get; set; }
+        /// <summary>
+        /// Tensor(1) - 1 if episode ended due to max-step timeout (not a true terminal), 0 otherwise.
+        /// Used by off-policy algorithms to bootstrap through truncated episodes.
+        /// </summary>
+        public Tensor truncated;
 
         /// <summary>
         /// Tensor(1) - positive or negative
@@ -59,6 +64,7 @@ namespace DeepUnity.ReinforcementLearning
         {
             this.index = index;
             done = Tensor.Zeros(1);
+            truncated = Tensor.Zeros(1);
             reward = Tensor.Zeros(1);
         }
         private TimestepTuple() { }
@@ -77,6 +83,7 @@ namespace DeepUnity.ReinforcementLearning
 
             clone.reward = reward;
             clone.done = done;
+            clone.truncated = truncated;
 
             clone.advantage = advantage;
             clone.v_target = v_target;

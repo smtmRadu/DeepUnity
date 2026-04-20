@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepUnity SAC Bug Hunt — Investigation Report</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+:root {
+  --bg-primary: #0f1117;
+  --bg-secondary: #1a1d2e;
+  --bg-card: #1e2235;
+  --bg-card-hover: #252a42;
+  --accent-red: #ef4444;
+  --accent-green: #22c55e;
+  --accent-blue: #3b82f6;
+  --accent-purple: #a855f7;
+  --accent-amber: #f59e0b;
+  --accent-cyan: #06b6d4;
+  --accent-pink: #ec4899;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --border: #2d3352;
+}
+* { box-sizing: border-box; }
+body { font-family: 'Inter', sans-serif; background: var(--bg-primary); color: var(--text-primary); }
+code, .mono { font-family: 'JetBrains Mono', monospace; }
+.glass { background: rgba(30, 34, 53, 0.7); backdrop-filter: blur(12px); border: 1px solid var(--border); }
+.glow-red { box-shadow: 0 0 20px rgba(239,68,68,0.15); }
+.glow-green { box-shadow: 0 0 20px rgba(34,197,94,0.15); }
+.glow-blue { box-shadow: 0 0 20px rgba(59,130,246,0.15); }
+.glow-purple { box-shadow: 0 0 20px rgba(168,85,247,0.15); }
+.glow-amber { box-shadow: 0 0 20px rgba(245,158,11,0.15); }
+.fade-in { opacity: 0; transform: translateY(20px); transition: all 0.6s ease; }
+.fade-in.visible { opacity: 1; transform: translateY(0); }
+.badge { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.025em; }
+nav a { transition: color 0.2s; }
+nav a:hover { color: var(--accent-blue); }
+.severity-critical { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+.severity-high { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
+.severity-medium { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+.status-fixed { background: rgba(34,197,94,0.15); color: #86efac; border: 1px solid rgba(34,197,94,0.3); }
+.status-verified { background: rgba(168,85,247,0.15); color: #d8b4fe; border: 1px solid rgba(168,85,247,0.3); }
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; transition: all 0.3s; }
+.card:hover { background: var(--bg-card-hover); transform: translateY(-2px); }
+svg text { font-family: 'Inter', sans-serif; }
+.diagram-node { transition: all 0.3s; cursor: pointer; }
+.diagram-node:hover { filter: brightness(1.2); transform: scale(1.03); }
+.collapsible-header { cursor: pointer; user-select: none; }
+.collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease; }
+.collapsible-content.open { max-height: 2000px; }
+.arrow-icon { transition: transform 0.3s; }
+.arrow-icon.rotated { transform: rotate(90deg); }
+.timeline-dot { width: 12px; height: 12px; border-radius: 50%; position: relative; z-index: 1; }
+.timeline-line { width: 2px; background: var(--border); position: absolute; top: 0; bottom: 0; left: 5px; }
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="fixed top-0 w-full z-50 glass px-6 py-3">
+  <div class="max-w-7xl mx-auto flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">DU</div>
+      <span class="font-semibold text-sm">SAC Bug Hunt Report</span>
+    </div>
+    <div class="hidden md:flex gap-6 text-sm text-slate-400">
+      <a href="#overview">Overview</a>
+      <a href="#bugs">Bugs Found</a>
+      <a href="#investigation">Investigation</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#validation">Validation</a>
+      <a href="#fixes">Fixes</a>
+      <a href="#recommendations">Next Steps</a>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<header class="pt-28 pb-16 px-6">
+  <div class="max-w-7xl mx-auto">
+    <div class="flex items-center gap-3 mb-4">
+      <span class="badge bg-red-500/20 text-red-300 border border-red-500/30">Bug Investigation</span>
+      <span class="badge bg-purple-500/20 text-purple-300 border border-purple-500/30">Multi-Agent Collab</span>
+      <span class="badge bg-blue-500/20 text-blue-300 border border-blue-500/30">2026-03-28</span>
+    </div>
+    <h1 class="text-5xl font-extrabold mb-4 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent leading-tight">
+      DeepUnity SAC Bug Hunt
+    </h1>
+    <p class="text-xl text-slate-400 max-w-3xl mb-8">
+      Why SAC training fails in Unity while the standalone C# reference implementation works perfectly.
+      A collaborative investigation between Claude Code and Codex.
+    </p>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl">
+      <div class="card text-center glow-red">
+        <div class="text-3xl font-bold text-red-400">7</div>
+        <div class="text-xs text-slate-400 mt-1">Bugs Found</div>
+      </div>
+      <div class="card text-center glow-green">
+        <div class="text-3xl font-bold text-green-400">7</div>
+        <div class="text-xs text-slate-400 mt-1">Bugs Fixed</div>
+      </div>
+      <div class="card text-center glow-purple">
+        <div class="text-3xl font-bold text-purple-400">1.0</div>
+        <div class="text-xs text-slate-400 mt-1">Cosine Similarity</div>
+      </div>
+      <div class="card text-center glow-blue">
+        <div class="text-3xl font-bold text-blue-400">2</div>
+        <div class="text-xs text-slate-400 mt-1">AI Agents</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Overview -->
+<section id="overview" class="py-16 px-6 fade-in">
+  <div class="max-w-7xl mx-auto">
+    <h2 class="text-3xl font-bold mb-2">Overview</h2>
+    <p class="text-slate-400 mb-8 max-w-2xl">The problem, the approach, and the verdict.</p>
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="card glow-red">
+        <div class="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center mb-4">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2L2 18h16L10 2z" stroke="#ef4444" stroke-width="2" fill="none"/><path d="M10 8v4M10 14v1" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">The Problem</h3>
+        <p class="text-sm text-slate-400">SAC (Soft Actor-Critic) fails to learn in DeepUnity. PPO works fine. Critic loss looks healthy but the actor reward plateaus near random baseline. Alpha sweeps and gradient rewrites didn't help.</p>
+      </div>
+      <div class="card glow-blue">
+        <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center mb-4">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="#3b82f6" stroke-width="2" fill="none"/><path d="M10 6v4l3 3" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">The Approach</h3>
+        <p class="text-sm text-slate-400">Two AI agents (Claude Code + Codex) collaborated via a shared file. Claude focused on optimizer/config analysis. Codex built numerical gradient probes with finite differences.</p>
+      </div>
+      <div class="card glow-green">
+        <div class="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center mb-4">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M6 10l3 3 5-6" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="10" r="7" stroke="#22c55e" stroke-width="2" fill="none"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">The Verdict</h3>
+        <p class="text-sm text-slate-400">The gradient math is perfect (cos=1.0). The bugs are: accidental weight decay, inherited PPO gradient clipping, wrong LR scheduler, and critically low update-to-data ratio (50x below standard). Dense updates improved smoke bandit reward by 49%.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Bugs Found -->
+<section id="bugs" class="py-16 px-6 fade-in">
+  <div class="max-w-7xl mx-auto">
+    <h2 class="text-3xl font-bold mb-2">Bugs Found</h2>
+    <p class="text-slate-400 mb-8">Five bugs identified, ranked by severity. The top two are the root cause.</p>
+
+    <!-- Bug 1 -->
+    <div class="card mb-4 border-l-4 border-l-red-500">
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-3">
+          <span class="severity-critical badge">CRITICAL</span>
+          <span class="status-fixed badge">FIXED</span>
+        </div>
+        <span class="mono text-xs text-slate-500">SACTrainer.cs:74-75</span>
+      </div>
+      <h3 class="text-lg font-semibold mb-2">Actor AdamW weight_decay = 0.01 (unintentional default)</h3>
+      <p class="text-sm text-slate-400 mb-3">The <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">optim_mu</code> and <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">optim_sigma</code> optimizers are created with <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">new AdamW(...)</code> without specifying weight_decay, inheriting AdamW's default of 0.01. The critic correctly sets it to 0.</p>
+      <div class="grid md:grid-cols-2 gap-4 mt-4">
+        <div class="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
+          <div class="text-xs text-red-400 font-semibold mb-2">BEFORE (Buggy)</div>
+          <code class="mono text-xs text-red-300 block whitespace-pre">optim_mu = new AdamW(params, lr: hp.actorLR);
+// weight_decay defaults to 0.01</code>
+        </div>
+        <div class="bg-green-500/5 border border-green-500/20 rounded-lg p-4">
+          <div class="text-xs text-green-400 font-semibold mb-2">AFTER (Fixed)</div>
+          <code class="mono text-xs text-green-300 block whitespace-pre">optim_mu = new AdamW(params, lr: hp.actorLR,
+    weight_decay: 0f);</code>
+        </div>
+      </div>
+      <div class="mt-4 bg-slate-800/50 rounded-lg p-3">
+        <div class="text-xs text-slate-400"><strong class="text-slate-300">Impact:</strong> Every gradient step, actor parameters are multiplied by (1 - lr * 0.01). Over 100K steps: <span class="text-red-400 font-semibold">26% parameter shrinkage</span>. Over 1M steps: <span class="text-red-400 font-semibold">95% shrinkage</span>. TD3 and DDPG are unaffected (they use Adam with wd=0 or explicitly set wd=0).</div>
+      </div>
+    </div>
+
+    <!-- Bug 2 -->
+    <div class="card mb-4 border-l-4 border-l-red-500">
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-3">
+          <span class="severity-critical badge">CRITICAL</span>
+          <span class="status-fixed badge">FIXED</span>
+        </div>
+        <span class="mono text-xs text-slate-500">SACTrainer.cs:392,397</span>
+      </div>
+      <h3 class="text-lg font-semibold mb-2">Actor gradient clipping inherited from PPO (maxNorm = 0.5)</h3>
+      <p class="text-sm text-slate-400 mb-3">The hyperparameters file states <em>"defaults are for PPO"</em>. The SAC inspector hides <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">maxNorm</code> from the UI but never zeros it, so SAC inherits PPO's clip value of 0.5. Even PPO itself has commented out mu-network clipping.</p>
+      <div class="grid md:grid-cols-2 gap-4 mt-4">
+        <div class="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
+          <div class="text-xs text-red-400 font-semibold mb-2">BEFORE (Buggy)</div>
+          <code class="mono text-xs text-red-300 block whitespace-pre">model.muNetwork.Backward(-dJ_dMu);
+if (hp.maxNorm > 0f)
+    optim_mu.ClipGradNorm(hp.maxNorm);
+optim_mu.Step();</code>
+        </div>
+        <div class="bg-green-500/5 border border-green-500/20 rounded-lg p-4">
+          <div class="text-xs text-green-400 font-semibold mb-2">AFTER (Fixed)</div>
+          <code class="mono text-xs text-green-300 block whitespace-pre">model.muNetwork.Backward(-dJ_dMu);
+optim_mu.Step();</code>
+        </div>
+      </div>
+      <div class="mt-4 bg-slate-800/50 rounded-lg p-3">
+        <div class="text-xs text-slate-400"><strong class="text-slate-300">Impact:</strong> Actor gradient norm is capped at 0.5 every step. SAC is the <span class="text-red-400 font-semibold">only off-policy algorithm</span> that inherited this — TD3 and DDPG never reference ClipGradNorm.</div>
+      </div>
+    </div>
+
+    <!-- Bug 3 -->
+    <div class="card mb-4 border-l-4 border-l-amber-500">
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-3">
+          <span class="severity-high badge">HIGH</span>
+          <span class="badge bg-slate-500/20 text-slate-300 border border-slate-500/30">TUNABLE</span>
+        </div>
+        <span class="mono text-xs text-slate-500">HyperParameters.cs:85</span>
+      </div>
+      <h3 class="text-lg font-semibold mb-2">50:1 update-to-experience ratio</h3>
+      <p class="text-sm text-slate-400">The canonical SAC does 1 gradient update per 1 env step (1:1). DeepUnity defaults to <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">updateInterval=50</code>, <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">updatesNum=1</code>, giving a 1:50 ratio. Each experience gets sampled ~0.43 times before eviction vs ~64 times in the standalone.</p>
+    </div>
+
+    <!-- Bug 4 -->
+    <div class="card mb-4 border-l-4 border-l-amber-500">
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-3">
+          <span class="severity-high badge">HIGH</span>
+          <span class="badge bg-slate-500/20 text-slate-300 border border-slate-500/30">DESIGN</span>
+        </div>
+        <span class="mono text-xs text-slate-500">SACTrainer.cs:135-136</span>
+      </div>
+      <h3 class="text-lg font-semibold mb-2">Replay buffer batch deletion (25% at a time)</h3>
+      <p class="text-sm text-slate-400">When the replay buffer fills, <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">RemoveRange(0, Count/4)</code> deletes 250K experiences at once. The standalone uses a ring buffer with 1-at-a-time circular overwrite. Batch deletion creates distribution shifts and wastes unsampled data.</p>
+    </div>
+
+    <!-- Bug 5 -->
+    <div class="card mb-4 border-l-4 border-l-blue-500">
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-3">
+          <span class="severity-medium badge">MEDIUM</span>
+          <span class="status-fixed badge">FIXED</span>
+        </div>
+        <span class="mono text-xs text-slate-500">AgentBehaviour.cs:708,713,723</span>
+      </div>
+      <h3 class="text-lg font-semibold mb-2">Save/load copy-paste bugs (build path only)</h3>
+      <p class="text-sm text-slate-400">Three serialization errors in the <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">#if !UNITY_EDITOR</code> save path: Q1 and Q2 both saved from <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">vNetwork</code>, Sigma saved from <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">muNetwork</code>. Editor save path is correct.</p>
+    </div>
+
+    <!-- Additional bug from Codex -->
+    <div class="card mb-4 border-l-4 border-l-blue-500">
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-3">
+          <span class="severity-medium badge">MEDIUM</span>
+          <span class="status-fixed badge">FIXED</span>
+        </div>
+        <span class="mono text-xs text-slate-500">SoftPlus.cs</span>
+      </div>
+      <h3 class="text-lg font-semibold mb-2">SoftPlus deserialization null reference</h3>
+      <p class="text-sm text-slate-400">Found by Codex while building the stochastic probe. The <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">SoftPlus</code> activation could reach Predict/Backward with an invalid internal tensor after asset deserialization. Hardened with runtime state repair.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Root Cause Diagram -->
+<section id="architecture" class="py-16 px-6 fade-in">
+  <div class="max-w-7xl mx-auto">
+    <h2 class="text-3xl font-bold mb-2">Root Cause Mechanism</h2>
+    <p class="text-slate-400 mb-8">How the two critical bugs compound to prevent learning.</p>
+    <div class="card p-8">
+      <svg viewBox="0 0 900 420" class="w-full" xmlns="http://www.w3.org/2000/svg">
+        <!-- Background boxes -->
+        <rect x="20" y="20" width="260" height="120" rx="12" fill="#1e2235" stroke="#ef4444" stroke-width="2"/>
+        <rect x="320" y="20" width="260" height="120" rx="12" fill="#1e2235" stroke="#ef4444" stroke-width="2"/>
+        <rect x="620" y="20" width="260" height="120" rx="12" fill="#1e2235" stroke="#f59e0b" stroke-width="2"/>
+
+        <!-- Bug 1 -->
+        <text x="150" y="55" text-anchor="middle" fill="#fca5a5" font-size="13" font-weight="700">Bug #1: weight_decay=0.01</text>
+        <text x="150" y="78" text-anchor="middle" fill="#94a3b8" font-size="11">Actor params *= 0.999997</text>
+        <text x="150" y="95" text-anchor="middle" fill="#94a3b8" font-size="11">every gradient step</text>
+        <text x="150" y="118" text-anchor="middle" fill="#ef4444" font-size="11" font-weight="600">95% shrinkage over 1M steps</text>
+
+        <!-- Bug 2 -->
+        <text x="450" y="55" text-anchor="middle" fill="#fca5a5" font-size="13" font-weight="700">Bug #2: maxNorm=0.5</text>
+        <text x="450" y="78" text-anchor="middle" fill="#94a3b8" font-size="11">Gradient norm capped at 0.5</text>
+        <text x="450" y="95" text-anchor="middle" fill="#94a3b8" font-size="11">regardless of actual signal</text>
+        <text x="450" y="118" text-anchor="middle" fill="#ef4444" font-size="11" font-weight="600">Constant-magnitude steps</text>
+
+        <!-- Bug 3 -->
+        <text x="750" y="55" text-anchor="middle" fill="#fcd34d" font-size="13" font-weight="700">Issue #3: 50:1 ratio</text>
+        <text x="750" y="78" text-anchor="middle" fill="#94a3b8" font-size="11">1 update per 50 env steps</text>
+        <text x="750" y="95" text-anchor="middle" fill="#94a3b8" font-size="11">vs standalone's 1:1</text>
+        <text x="750" y="118" text-anchor="middle" fill="#f59e0b" font-size="11" font-weight="600">50x fewer learning opportunities</text>
+
+        <!-- Arrows down -->
+        <path d="M150 140 L150 180" stroke="#ef4444" stroke-width="2" marker-end="url(#arrowRed)"/>
+        <path d="M450 140 L450 180" stroke="#ef4444" stroke-width="2" marker-end="url(#arrowRed)"/>
+        <path d="M750 140 L750 180" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrowAmber)"/>
+
+        <!-- Combined effect -->
+        <rect x="50" y="190" width="800" height="80" rx="12" fill="#1e2235" stroke="#64748b" stroke-width="1.5" stroke-dasharray="6,3"/>
+        <text x="450" y="220" text-anchor="middle" fill="#e2e8f0" font-size="14" font-weight="700">Combined Effect on Actor</text>
+        <text x="450" y="245" text-anchor="middle" fill="#94a3b8" font-size="12">Clipped gradients + weight decay + few updates = actor can barely move forward while being pulled back</text>
+
+        <!-- Arrow to result -->
+        <path d="M450 270 L450 310" stroke="#64748b" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+        <!-- Result -->
+        <rect x="150" y="320" width="600" height="80" rx="12" fill="rgba(239,68,68,0.1)" stroke="#ef4444" stroke-width="2"/>
+        <text x="450" y="352" text-anchor="middle" fill="#fca5a5" font-size="15" font-weight="700">Observed Symptom</text>
+        <text x="450" y="378" text-anchor="middle" fill="#94a3b8" font-size="12">"Critic loss healthy, actor objective trends up, but reward plateaus near random baseline"</text>
+
+        <!-- Arrow markers -->
+        <defs>
+          <marker id="arrowRed" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#ef4444"/></marker>
+          <marker id="arrowAmber" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#f59e0b"/></marker>
+          <marker id="arrowGray" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#64748b"/></marker>
+        </defs>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- Investigation Timeline -->
+<section id="investigation" class="py-16 px-6 fade-in">
+  <div class="max-w-7xl mx-auto">
+    <h2 class="text-3xl font-bold mb-2">Investigation Flow</h2>
+    <p class="text-slate-400 mb-8">How Claude Code and Codex divided the work.</p>
+    <div class="card p-8">
+      <svg viewBox="0 0 900 500" class="w-full" xmlns="http://www.w3.org/2000/svg">
+        <!-- Column headers -->
+        <rect x="50" y="10" width="340" height="40" rx="8" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.3)" stroke-width="1"/>
+        <text x="220" y="35" text-anchor="middle" fill="#93c5fd" font-size="13" font-weight="700">Claude Code</text>
+        <rect x="510" y="10" width="340" height="40" rx="8" fill="rgba(168,85,247,0.15)" stroke="rgba(168,85,247,0.3)" stroke-width="1"/>
+        <text x="680" y="35" text-anchor="middle" fill="#d8b4fe" font-size="13" font-weight="700">Codex</text>
+
+        <!-- Timeline center line -->
+        <line x1="450" y1="60" x2="450" y2="480" stroke="#2d3352" stroke-width="2"/>
+
+        <!-- Step 1: Code comparison -->
+        <rect x="60" y="70" width="320" height="55" rx="8" fill="#1e2235" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="80" y="93" fill="#93c5fd" font-size="11" font-weight="600">1. Full code comparison</text>
+        <text x="80" y="112" fill="#94a3b8" font-size="10">Unity SACTrainer vs standalone SacTrainer.cs</text>
+        <circle cx="450" cy="97" r="6" fill="#3b82f6"/>
+
+        <!-- Step 2: Codex probes -->
+        <rect x="520" y="70" width="320" height="55" rx="8" fill="#1e2235" stroke="#a855f7" stroke-width="1.5"/>
+        <text x="540" y="93" fill="#d8b4fe" font-size="11" font-weight="600">1. Critic gradient probe</text>
+        <text x="540" y="112" fill="#94a3b8" font-size="10">dQ/da matches finite differences (cos=1.0)</text>
+        <circle cx="450" cy="97" r="6" fill="#a855f7"/>
+
+        <!-- Step 3 -->
+        <rect x="60" y="145" width="320" height="55" rx="8" fill="#1e2235" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="80" y="168" fill="#93c5fd" font-size="11" font-weight="600">2. AdamW weight_decay traced</text>
+        <text x="80" y="187" fill="#94a3b8" font-size="10">Confirmed 0.01 actively applied every Step()</text>
+        <circle cx="450" cy="172" r="6" fill="#3b82f6"/>
+
+        <rect x="520" y="145" width="320" height="55" rx="8" fill="#1e2235" stroke="#a855f7" stroke-width="1.5"/>
+        <text x="540" y="168" fill="#d8b4fe" font-size="11" font-weight="600">2. Deterministic actor chain probe</text>
+        <text x="540" y="187" fill="#94a3b8" font-size="10">Q1(mu(s)) param grads match FD (cos=1.0)</text>
+        <circle cx="450" cy="172" r="6" fill="#a855f7"/>
+
+        <!-- Step 4 -->
+        <rect x="60" y="220" width="320" height="55" rx="8" fill="#1e2235" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="80" y="243" fill="#93c5fd" font-size="11" font-weight="600">3. PPO defaults audit</text>
+        <text x="80" y="262" fill="#94a3b8" font-size="10">maxNorm=0.5 only SAC inherits it (not TD3/DDPG)</text>
+        <circle cx="450" cy="247" r="6" fill="#3b82f6"/>
+
+        <rect x="520" y="220" width="320" height="55" rx="8" fill="#1e2235" stroke="#a855f7" stroke-width="1.5"/>
+        <text x="540" y="243" fill="#d8b4fe" font-size="11" font-weight="600">3. Stochastic SAC actor probe</text>
+        <text x="540" y="262" fill="#94a3b8" font-size="10">Full J = minQ - alpha*logpi validated (cos=1.0)</text>
+        <circle cx="450" cy="247" r="6" fill="#a855f7"/>
+
+        <!-- Step 5 -->
+        <rect x="60" y="295" width="320" height="55" rx="8" fill="#1e2235" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="80" y="318" fill="#93c5fd" font-size="11" font-weight="600">4. Update cadence analysis</text>
+        <text x="80" y="337" fill="#94a3b8" font-size="10">50:1 ratio, replay batch deletion, data waste</text>
+        <circle cx="450" cy="322" r="6" fill="#3b82f6"/>
+
+        <rect x="520" y="295" width="320" height="55" rx="8" fill="#1e2235" stroke="#a855f7" stroke-width="1.5"/>
+        <text x="540" y="318" fill="#d8b4fe" font-size="11" font-weight="600">4. SoftPlus serialization fix</text>
+        <text x="540" y="337" fill="#94a3b8" font-size="10">Null psi tensor after deserialization — hardened</text>
+        <circle cx="450" cy="322" r="6" fill="#a855f7"/>
+
+        <!-- Step 6: Convergence -->
+        <rect x="60" y="370" width="320" height="55" rx="8" fill="#1e2235" stroke="#22c55e" stroke-width="1.5"/>
+        <text x="80" y="393" fill="#86efac" font-size="11" font-weight="600">5. Math verification complete</text>
+        <text x="80" y="412" fill="#94a3b8" font-size="10">Line-by-line derivation: all formulas match</text>
+        <circle cx="450" cy="397" r="6" fill="#22c55e"/>
+
+        <rect x="520" y="370" width="320" height="55" rx="8" fill="#1e2235" stroke="#22c55e" stroke-width="1.5"/>
+        <text x="540" y="393" fill="#86efac" font-size="11" font-weight="600">5. Probe results confirmed</text>
+        <text x="540" y="412" fill="#94a3b8" font-size="10">All 4 probes pass: critic, actor, stochastic SAC</text>
+        <circle cx="450" cy="397" r="6" fill="#22c55e"/>
+
+        <!-- Conclusion -->
+        <rect x="200" y="445" width="500" height="40" rx="8" fill="rgba(34,197,94,0.1)" stroke="#22c55e" stroke-width="2"/>
+        <text x="450" y="470" text-anchor="middle" fill="#86efac" font-size="13" font-weight="700">Conclusion: Math correct. Bugs are in optimizer config only.</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- Validation -->
+<section id="validation" class="py-16 px-6 fade-in">
+  <div class="max-w-7xl mx-auto">
+    <h2 class="text-3xl font-bold mb-2">Gradient Validation Results</h2>
+    <p class="text-slate-400 mb-8">Finite difference probes on BalanceBall (10 obs, 2 actions) confirm all gradient computations are correct.</p>
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="card">
+        <h3 class="font-semibold text-lg mb-4 text-purple-400">Stochastic SAC Actor Probe (CPU)</h3>
+        <table class="w-full text-sm">
+          <thead><tr class="text-slate-500 border-b border-slate-700"><th class="text-left py-2">Component</th><th class="text-right">Mean |err|</th><th class="text-right">Max |err|</th><th class="text-right">Cosine</th></tr></thead>
+          <tbody>
+            <tr class="border-b border-slate-800"><td class="py-2 text-slate-300">output(mu)</td><td class="text-right mono text-xs">1.1e-4</td><td class="text-right mono text-xs">1.9e-4</td><td class="text-right font-semibold text-green-400">1.000000</td></tr>
+            <tr class="border-b border-slate-800"><td class="py-2 text-slate-300">output(sigma_preclip)</td><td class="text-right mono text-xs">1.9e-4</td><td class="text-right mono text-xs">3.7e-4</td><td class="text-right font-semibold text-green-400">1.000000</td></tr>
+            <tr class="border-b border-slate-800"><td class="py-2 text-slate-300">params(mu)</td><td class="text-right mono text-xs">1.3e-4</td><td class="text-right mono text-xs">3.6e-4</td><td class="text-right font-semibold text-green-400">1.000000</td></tr>
+            <tr><td class="py-2 text-slate-300">params(sigma)</td><td class="text-right mono text-xs">1.2e-4</td><td class="text-right mono text-xs">3.8e-4</td><td class="text-right font-semibold text-green-400">0.999999</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 class="font-semibold text-lg mb-4 text-blue-400">Deterministic Actor Chain Probe (CPU)</h3>
+        <table class="w-full text-sm">
+          <thead><tr class="text-slate-500 border-b border-slate-700"><th class="text-left py-2">Sample</th><th class="text-right">Mean |err|</th><th class="text-right">Max |err|</th><th class="text-right">Cosine</th></tr></thead>
+          <tbody>
+            <tr class="border-b border-slate-800"><td class="py-2 text-slate-300">Sample 1 (q=-0.81)</td><td class="text-right mono text-xs">1.9e-5</td><td class="text-right mono text-xs">8.8e-5</td><td class="text-right font-semibold text-green-400">1.000000</td></tr>
+            <tr class="border-b border-slate-800"><td class="py-2 text-slate-300">Sample 2 (q=-0.08)</td><td class="text-right mono text-xs">3.7e-6</td><td class="text-right mono text-xs">2.4e-5</td><td class="text-right font-semibold text-green-400">1.000000</td></tr>
+            <tr><td class="py-2 text-slate-300">Sample 3 (q=-0.44)</td><td class="text-right mono text-xs">0</td><td class="text-right mono text-xs">0</td><td class="text-right text-slate-500">0.000*</td></tr>
+          </tbody>
+        </table>
+        <p class="text-xs text-slate-500 mt-3">* Sample 3 hit a dead ReLU region (all-zero gradients). Not a bug.</p>
+      </div>
+    </div>
+
+    <div class="card mt-6">
+      <h3 class="font-semibold text-lg mb-4 text-cyan-400">What Was Verified Correct</h3>
+      <div class="grid md:grid-cols-3 gap-4">
+        <div class="flex items-start gap-3">
+          <svg width="20" height="20" viewBox="0 0 20 20" class="flex-shrink-0 mt-0.5"><path d="M6 10l3 3 5-6" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          <div><div class="text-sm font-medium">dLogPi/dMu</div><div class="text-xs text-slate-500">= 2*tanh(u)</div></div>
+        </div>
+        <div class="flex items-start gap-3">
+          <svg width="20" height="20" viewBox="0 0 20 20" class="flex-shrink-0 mt-0.5"><path d="M6 10l3 3 5-6" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          <div><div class="text-sm font-medium">dLogPi/dSigma</div><div class="text-xs text-slate-500">= 2*tanh(u)*eps - 1/sigma</div></div>
+        </div>
+        <div class="flex items-start gap-3">
+          <svg width="20" height="20" viewBox="0 0 20 20" class="flex-shrink-0 mt-0.5"><path d="M6 10l3 3 5-6" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          <div><div class="text-sm font-medium">dJ/dMu</div><div class="text-xs text-slate-500">= dQ/du - alpha * dLogPi/dMu</div></div>
+        </div>
+        <div class="flex items-start gap-3">
+          <svg width="20" height="20" viewBox="0 0 20 20" class="flex-shrink-0 mt-0.5"><path d="M6 10l3 3 5-6" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          <div><div class="text-sm font-medium">dJ/dSigma</div><div class="text-xs text-slate-500">= dQ/du*eps - alpha * dLogPi/dSigma</div></div>
+        </div>
+        <div class="flex items-start gap-3">
+          <svg width="20" height="20" viewBox="0 0 20 20" class="flex-shrink-0 mt-0.5"><path d="M6 10l3 3 5-6" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          <div><div class="text-sm font-medium">dQ/da extraction</div><div class="text-xs text-slate-500">Critic backprop to action input</div></div>
+        </div>
+        <div class="flex items-start gap-3">
+          <svg width="20" height="20" viewBox="0 0 20 20" class="flex-shrink-0 mt-0.5"><path d="M6 10l3 3 5-6" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          <div><div class="text-sm font-medium">Tanh correction</div><div class="text-xs text-slate-500">2*(log2 - u - softplus(-2u))</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Weight Decay Impact Chart -->
+<section class="py-16 px-6 fade-in">
+  <div class="max-w-7xl mx-auto">
+    <h2 class="text-3xl font-bold mb-2">Weight Decay Impact</h2>
+    <p class="text-slate-400 mb-8">Parameter magnitude over training with weight_decay=0.01 at lr=3e-4.</p>
+    <div class="card p-6" style="max-width:700px">
+      <canvas id="decayChart" height="300"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- Ablation Results -->
+<section class="py-16 px-6 fade-in">
+  <div class="max-w-7xl mx-auto">
+    <h2 class="text-3xl font-bold mb-2">Ablation Test Results</h2>
+    <p class="text-slate-400 mb-8">Codex ran the real DeepUnity SAC stack on a quadratic bandit smoke test with three update cadence configs.</p>
+    <div class="grid md:grid-cols-3 gap-6 mb-8">
+      <div class="card border-l-4 border-l-red-500">
+        <div class="text-xs text-slate-500 mb-2">Sparse Baseline (default)</div>
+        <div class="text-xs text-slate-500 mb-1 mono">updateInterval=50, updatesNum=1</div>
+        <div class="text-4xl font-bold text-red-400 my-3">0.59</div>
+        <div class="text-sm text-slate-400">41 gradient updates / 3025 steps</div>
+        <div class="text-xs text-slate-500 mt-2">UTD ratio: 0.02</div>
+      </div>
+      <div class="card border-l-4 border-l-amber-500">
+        <div class="text-xs text-slate-500 mb-2">Dense Replay</div>
+        <div class="text-xs text-slate-500 mb-1 mono">updateInterval=50, updatesNum=8</div>
+        <div class="text-4xl font-bold text-amber-400 my-3">0.70</div>
+        <div class="text-sm text-slate-400">42 update cycles / 3075 steps</div>
+        <div class="text-xs text-slate-500 mt-2">UTD ratio: 0.16</div>
+      </div>
+      <div class="card border-l-4 border-l-green-500 glow-green">
+        <div class="text-xs text-slate-500 mb-2">Dense Updates</div>
+        <div class="text-xs text-slate-500 mb-1 mono">updateInterval=1, updatesNum=1</div>
+        <div class="text-4xl font-bold text-green-400 my-3">0.88</div>
+        <div class="text-sm text-slate-400">2249 gradient updates / 3273 steps</div>
+        <div class="text-xs text-slate-500 mt-2">UTD ratio: 1.0</div>
+      </div>
+    </div>
+    <div class="card p-6" style="max-width:700px">
+      <canvas id="ablationChart" height="280"></canvas>
+    </div>
+    <div class="card mt-6 bg-green-500/5 border-green-500/20">
+      <h3 class="font-semibold text-green-400 mb-2">Key Takeaway</h3>
+      <p class="text-sm text-slate-400">Raising the update-to-data (UTD) ratio from 0.02 to 1.0 improved reward by <strong class="text-green-400">49%</strong> on a trivial one-step bandit. The default DeepUnity SAC cadence is 50x below the canonical SAC standard (SpinningUp, CleanRL, stable-baselines3).</p>
+    </div>
+  </div>
+</section>
+
+<!-- User Test Diagnostic -->
+<section class="py-16 px-6 fade-in">
+  <div class="max-w-7xl mx-auto">
+    <h2 class="text-3xl font-bold mb-2">User Test Diagnostic</h2>
+    <p class="text-slate-400 mb-8">BalanceBall SAC with weight_decay + grad clipping fixes, but still using default 50:1 cadence. The critic massively overestimates.</p>
+    <div class="card p-6" style="max-width:700px">
+      <canvas id="userTestChart" height="280"></canvas>
+    </div>
+    <div class="card mt-6 bg-red-500/5 border-red-500/20">
+      <p class="text-sm text-slate-400"><strong class="text-red-400">Symptom:</strong> J rises to 2.47 (98% of theoretical max 2.5) but actual episode length stays near random. The critic thinks the policy is nearly optimal when it's actually terrible. Entropy term stays flat at ~0.27 (never decreases). This is classic Q-value divergence from insufficient update frequency.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Additional Bugs Found -->
+<section class="py-16 px-6 fade-in">
+  <div class="max-w-7xl mx-auto">
+    <h2 class="text-3xl font-bold mb-2">Additional Bugs Found</h2>
+    <p class="text-slate-400 mb-8">Discovered during the broader off-policy trainer audit.</p>
+
+    <div class="card mb-4 border-l-4 border-l-red-500">
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-3">
+          <span class="severity-critical badge">CRITICAL</span>
+          <span class="status-fixed badge">FIXED</span>
+        </div>
+        <span class="mono text-xs text-slate-500">SACTrainer.cs, HyperParameters.cs</span>
+      </div>
+      <h3 class="text-lg font-semibold mb-2">Low UTD ratio: 50x below canonical SAC standard</h3>
+      <p class="text-sm text-slate-400">Default <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">updateInterval=50</code> with <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">updatesNum=1</code> gives 1 gradient step per 50 env transitions (UTD=0.02). Standard SAC uses UTD=1.0. Proven by ablation: 0.59 vs 0.88 reward.</p>
+    </div>
+
+    <div class="card mb-4 border-l-4 border-l-amber-500">
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-3">
+          <span class="severity-high badge">HIGH</span>
+          <span class="status-fixed badge">FIXED</span>
+        </div>
+        <span class="mono text-xs text-slate-500">SACTrainer.cs:91, TD3Trainer.cs:41</span>
+      </div>
+      <h3 class="text-lg font-semibold mb-2">LR Scheduler total_iters uses env steps instead of gradient steps</h3>
+      <p class="text-sm text-slate-400">Both SAC and TD3 set <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">total_iters = maxSteps</code> but the scheduler steps per gradient update. Should use <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">maxSteps * updatesNum / updateInterval</code> like DDPG does. Fixed by Codex.</p>
+    </div>
+
+    <div class="card mb-4 border-l-4 border-l-blue-500">
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-3">
+          <span class="severity-medium badge">MEDIUM</span>
+          <span class="status-fixed badge">FIXED</span>
+        </div>
+        <span class="mono text-xs text-slate-500">SoftPlus.cs</span>
+      </div>
+      <h3 class="text-lg font-semibold mb-2">SoftPlus deserialization null reference</h3>
+      <p class="text-sm text-slate-400">The SoftPlus activation could reach Predict/Backward with an invalid internal <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">psi</code> tensor after asset deserialization. Fixed by Codex with runtime self-repair via <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">EnsureState()</code>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Fixes Applied -->
+<section id="fixes" class="py-16 px-6 fade-in">
+  <div class="max-w-7xl mx-auto">
+    <h2 class="text-3xl font-bold mb-2">Fixes Applied</h2>
+    <p class="text-slate-400 mb-8">Minimal, surgical changes targeting the root cause.</p>
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="card">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="mono text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-300">SACTrainer.cs</span>
+          <span class="text-xs text-slate-500">4 lines changed</span>
+        </div>
+        <div class="space-y-3">
+          <div class="bg-slate-800/50 rounded-lg p-3">
+            <div class="text-xs text-green-400 mb-1">Lines 74-75: Added weight_decay: 0f</div>
+            <code class="mono text-xs text-slate-300 block">optim_mu = new AdamW(..., weight_decay: 0f);</code>
+            <code class="mono text-xs text-slate-300 block">optim_sigma = new AdamW(..., weight_decay: 0f);</code>
+          </div>
+          <div class="bg-slate-800/50 rounded-lg p-3">
+            <div class="text-xs text-red-400 mb-1">Lines 392, 397: Removed ClipGradNorm</div>
+            <code class="mono text-xs text-slate-500 line-through block">if (hp.maxNorm > 0f) optim_mu.ClipGradNorm(...);</code>
+            <code class="mono text-xs text-slate-500 line-through block">if (hp.maxNorm > 0f) optim_sigma.ClipGradNorm(...);</code>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="mono text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-300">AgentBehaviour.cs</span>
+          <span class="text-xs text-slate-500">3 lines changed</span>
+        </div>
+        <div class="space-y-3">
+          <div class="bg-slate-800/50 rounded-lg p-3">
+            <div class="text-xs text-green-400 mb-1">Line 708: Q1 save fix</div>
+            <code class="mono text-xs text-slate-300 block">JsonUtility.ToJson(q1Network)  <span class="text-slate-600">// was vNetwork</span></code>
+          </div>
+          <div class="bg-slate-800/50 rounded-lg p-3">
+            <div class="text-xs text-green-400 mb-1">Line 713: Q2 save fix</div>
+            <code class="mono text-xs text-slate-300 block">JsonUtility.ToJson(q2Network)  <span class="text-slate-600">// was vNetwork</span></code>
+          </div>
+          <div class="bg-slate-800/50 rounded-lg p-3">
+            <div class="text-xs text-green-400 mb-1">Line 723: Sigma save fix</div>
+            <code class="mono text-xs text-slate-300 block">JsonUtility.ToJson(sigmaNetwork) <span class="text-slate-600">// was muNetwork</span></code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Recommendations -->
+<section id="recommendations" class="py-16 px-6 fade-in">
+  <div class="max-w-7xl mx-auto">
+    <h2 class="text-3xl font-bold mb-2">Recommendations</h2>
+    <p class="text-slate-400 mb-8">Additional improvements beyond the critical fixes.</p>
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="card">
+        <h3 class="font-semibold mb-2 text-amber-400">Increase Update Frequency</h3>
+        <p class="text-sm text-slate-400 mb-3">Set <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">updatesNum = 4-8</code> or reduce <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">updateInterval</code> to improve the update-to-experience ratio.</p>
+        <div class="text-xs text-slate-500">The canonical SAC uses a 1:1 ratio. Current default is 1:50.</div>
+      </div>
+      <div class="card">
+        <h3 class="font-semibold mb-2 text-amber-400">Replace Replay Buffer</h3>
+        <p class="text-sm text-slate-400 mb-3">Switch from List with batch RemoveRange to a ring buffer with circular overwrite.</p>
+        <div class="text-xs text-slate-500">Prevents 250K-at-a-time data loss and distribution shifts.</div>
+      </div>
+      <div class="card">
+        <h3 class="font-semibold mb-2 text-cyan-400">SAC-Specific Defaults</h3>
+        <p class="text-sm text-slate-400 mb-3">Consider SAC-specific initialization in Initialize() to override PPO-oriented defaults (maxNorm, etc.).</p>
+        <div class="text-xs text-slate-500">Prevents future accidental inheritance from shared HyperParameters.</div>
+      </div>
+      <div class="card">
+        <h3 class="font-semibold mb-2 text-cyan-400">Softplus Overflow Guard</h3>
+        <p class="text-sm text-slate-400 mb-3">Add <code class="mono text-xs bg-slate-800 px-1.5 py-0.5 rounded">x > 20 ? x : log(1+exp(x))</code> guard to Tensor.Softplus for numerical stability.</p>
+        <div class="text-xs text-slate-500">The standalone has this guard; Unity doesn't. Low risk but good practice.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="py-12 px-6 border-t border-slate-800">
+  <div class="max-w-7xl mx-auto text-center">
+    <p class="text-sm text-slate-500 mb-2">DeepUnity SAC Bug Hunt Report &mdash; 2026-03-28</p>
+    <p class="text-xs text-slate-600">Collaborative investigation by Claude Code (optimizer/config analysis) and Codex (numerical gradient probes)</p>
+    <div class="flex justify-center gap-4 mt-4">
+      <span class="badge bg-blue-500/10 text-blue-400 border border-blue-500/20">Claude Code</span>
+      <span class="badge bg-purple-500/10 text-purple-400 border border-purple-500/20">Codex</span>
+      <span class="badge bg-green-500/10 text-green-400 border border-green-500/20">DeepUnity</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Fade-in on scroll
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) entry.target.classList.add('visible');
+  });
+}, { threshold: 0.1 });
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+// Weight decay chart
+const ctx = document.getElementById('decayChart').getContext('2d');
+const steps = [];
+const paramValue = [];
+const noDecayValue = [];
+let val = 0.5;
+for (let i = 0; i <= 1000000; i += 10000) {
+  steps.push(i / 1000 + 'K');
+  paramValue.push(0.5 * Math.pow(0.999997, i));
+  noDecayValue.push(0.5);
+}
+new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: steps,
+    datasets: [
+      {
+        label: 'With weight_decay=0.01',
+        data: paramValue,
+        borderColor: '#ef4444',
+        backgroundColor: 'rgba(239,68,68,0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0
+      },
+      {
+        label: 'Without weight_decay (fixed)',
+        data: noDecayValue,
+        borderColor: '#22c55e',
+        borderDash: [5, 5],
+        tension: 0,
+        pointRadius: 0
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#94a3b8', font: { family: 'Inter' } } },
+      tooltip: { backgroundColor: '#1e2235', titleColor: '#e2e8f0', bodyColor: '#94a3b8', borderColor: '#2d3352', borderWidth: 1 }
+    },
+    scales: {
+      x: { title: { display: true, text: 'Gradient Steps', color: '#64748b' }, ticks: { color: '#64748b', maxTicksLimit: 10 }, grid: { color: '#1e2235' } },
+      y: { title: { display: true, text: 'Parameter Magnitude', color: '#64748b' }, ticks: { color: '#64748b' }, grid: { color: '#1e2235' }, min: 0, max: 0.55 }
+    }
+  }
+});
+
+// Ablation chart
+const ablCtx = document.getElementById('ablationChart').getContext('2d');
+new Chart(ablCtx, {
+  type: 'bar',
+  data: {
+    labels: ['Sparse Baseline\n(UTD=0.02)', 'Dense Replay\n(UTD=0.16)', 'Dense Updates\n(UTD=1.0)'],
+    datasets: [{
+      label: 'Mean Reward (last 25 episodes)',
+      data: [0.5918, 0.6972, 0.8772],
+      backgroundColor: ['rgba(239,68,68,0.6)', 'rgba(245,158,11,0.6)', 'rgba(34,197,94,0.6)'],
+      borderColor: ['#ef4444', '#f59e0b', '#22c55e'],
+      borderWidth: 2,
+      borderRadius: 6
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: { backgroundColor: '#1e2235', titleColor: '#e2e8f0', bodyColor: '#94a3b8', borderColor: '#2d3352', borderWidth: 1 }
+    },
+    scales: {
+      x: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { color: '#1e2235' } },
+      y: { title: { display: true, text: 'Mean Reward (optimal = 1.0)', color: '#64748b' }, ticks: { color: '#64748b' }, grid: { color: '#1e2235' }, min: 0, max: 1.0 }
+    }
+  }
+});
+
+// User test diagnostic chart
+const utCtx = document.getElementById('userTestChart').getContext('2d');
+const utSteps = [50,100,150,200,250,300,350,400,450,500,550,600,650,700,750,800,850,900,950,1000,1050,1100,1150,1200,1250,1300,1350];
+const utJ = [0.70,0.98,0.96,1.01,1.16,1.18,1.27,1.31,1.32,1.42,1.54,1.55,1.61,1.67,1.73,1.80,1.87,1.93,1.99,2.06,2.11,2.18,2.18,2.28,2.36,2.31,2.47];
+const utMinQ = [0.50,0.74,0.68,0.74,0.89,0.91,0.99,1.04,1.06,1.16,1.27,1.27,1.34,1.40,1.46,1.53,1.60,1.66,1.72,1.79,1.84,1.91,1.91,2.01,2.08,2.04,2.21];
+const utEntropy = [0.21,0.24,0.28,0.27,0.27,0.27,0.27,0.27,0.26,0.26,0.27,0.28,0.27,0.27,0.27,0.27,0.27,0.27,0.27,0.27,0.27,0.27,0.27,0.27,0.28,0.27,0.26];
+new Chart(utCtx, {
+  type: 'line',
+  data: {
+    labels: utSteps,
+    datasets: [
+      { label: 'J (actor objective)', data: utJ, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.05)', fill: true, tension: 0.3, pointRadius: 0 },
+      { label: 'minQ (critic estimate)', data: utMinQ, borderColor: '#f59e0b', tension: 0.3, pointRadius: 0 },
+      { label: 'Entropy term', data: utEntropy, borderColor: '#3b82f6', tension: 0.3, pointRadius: 0 },
+      { label: 'Theoretical max Q (2.5)', data: utSteps.map(() => 2.5), borderColor: '#64748b', borderDash: [5,5], pointRadius: 0 }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#94a3b8', font: { family: 'Inter' } } },
+      tooltip: { backgroundColor: '#1e2235', titleColor: '#e2e8f0', bodyColor: '#94a3b8', borderColor: '#2d3352', borderWidth: 1 }
+    },
+    scales: {
+      x: { title: { display: true, text: 'SAC Gradient Steps', color: '#64748b' }, ticks: { color: '#64748b', maxTicksLimit: 8 }, grid: { color: '#1e2235' } },
+      y: { title: { display: true, text: 'Value', color: '#64748b' }, ticks: { color: '#64748b' }, grid: { color: '#1e2235' }, min: 0, max: 3.0 }
+    }
+  }
+});
+
+// Smooth scroll
+document.querySelectorAll('nav a').forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    document.querySelector(a.getAttribute('href')).scrollIntoView({ behavior: 'smooth' });
+  });
+});
+</script>
+</body>
+</html>

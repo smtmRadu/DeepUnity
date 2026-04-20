@@ -63,10 +63,12 @@ namespace DeepUnity.Activations
             Tensor inputGrad = Tensor.Zeros(dLdY.Shape);
             Parallel.For(0, InputCache.Count(), i =>
             {
-                float _elem = sqrt_2overPI * (InputCache[i] + 0.044715f * MathF.Pow(InputCache[i], 3f));
+                float x = InputCache[i];
+                float _elem = sqrt_2overPI * (x + 0.044715f * MathF.Pow(x, 3f));
                 float sech_ = Utils.Hyperbolics.Sech(_elem);
                 float tanh_ = Utils.Hyperbolics.Tanh(_elem);
-                float dgelu = 0.5f * (1f + tanh_) + 0.5f * InputCache[i] * sech_ * sech_;
+                float dElem = sqrt_2overPI * (1f + 3f * 0.044715f * x * x);
+                float dgelu = 0.5f * (1f + tanh_) + 0.5f * x * sech_ * sech_ * dElem;
                 inputGrad[i] = dLdY[i] * dgelu;
             });
             return inputGrad;

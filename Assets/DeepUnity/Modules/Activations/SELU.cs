@@ -27,7 +27,7 @@ namespace DeepUnity.Activations
                 if (x < 0)
                     return alpha * scale * MathF.Exp(x);
                 else
-                    return alpha * scale * MathF.Exp(x) + scale;
+                    return scale;
             });
         }
 

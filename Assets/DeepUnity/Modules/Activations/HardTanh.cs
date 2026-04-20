@@ -45,7 +45,11 @@ namespace DeepUnity.Activations
             });
         }
 
-        public object Clone() => new HardTanh();
+        public object Clone() => new HardTanh
+        {
+            min_value = this.min_value,
+            max_value = this.max_value
+        };
     }
 }
 

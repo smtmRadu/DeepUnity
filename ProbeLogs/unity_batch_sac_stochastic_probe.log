@@ -1,0 +1,2019 @@
+[Licensing::Module] Trying to connect to existing licensing client channel...
+[Licensing::IpcConnector] Connection attempt to the License Client on channel: "LicenseClient-Radu" failed because channel doesn't exist; code: "0x80000002"
+[Licensing::Module] Successfully launched the LicensingClient (PId: 12444)
+[Licensing::IpcConnector] Successfully connected to the License Client on channel: "LicenseClient-Radu" at "2026-03-28T15:31:35.0267121Z"
+[Licensing::Client] Error: Code 10 while verifying Licensing Client signature (process Id: 12444, path: "C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Resources/Licensing/Client/Unity.Licensing.Client.exe")
+[Licensing::Module] Error: LicensingClient has failed validation; ignoring
+[Licensing::Client] Handshaking with LicensingClient:
+  Version:                 1.15.5+a2f8afb
+  Session Id:              5a67ed23a13249cbaade41409dd01ff4
+  Correlation Id:          d06d3f58600f211ae92846a1c9fda58e
+  External correlation Id: 3219510001181858415
+  Machine Id:              oXls6e35UgvMtqNRKbNJFvG5sz4=
+[Licensing::Module] Successfully connected to LicensingClient on channel: "LicenseClient-Radu" (connect: 0.68s, validation: 0.05s, handshake: 0.04s)
+[Licensing::IpcConnector] Successfully connected to the License Notification on channel: "LicenseClient-Radu-notifications" at "2026-03-28T15:31:35.1132333Z"
+[Licensing::Module] Connected to LicensingClient (PId: 12444, launch time: 0.01, total connection time: 0.76s)
+[Licensing::Module] Error: Access token is unavailable; failed to update
+[Licensing::Client] Error: Code 500 while processing request (status: Unable to update licenses. Errors: No ULF license found.,Token not found in cache)
+[Licensing::Client] Error: Code 500 while updating license in client (status: Unable to update licenses. Errors: No ULF license found.,Token not found in cache)
+Built from '2022.3/staging' branch; Version is '2022.3.43f1 (85497d293fa1) revision 8735101'; Using compiler version '192829333'; Build Type 'Release'
+OS: 'Windows 11  (10.0.26200) 64bit Professional' Language: 'en' Physical Memory: 32038 MB
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Module] Serial number assigned to: "7971683010988-UnityPersXXXX"
+BatchMode: 1, IsHumanControllingUs: 0, StartBugReporterOnCrash: 0, Is64bit: 1, IsPro: 0
+[Licensing::Client] Successfully resolved entitlement details
+
+COMMAND LINE ARGUMENTS:
+C:\Program Files\Unity\Hub\Editor\2022.3.43f1\Editor\Unity.exe
+-batchmode
+-nographics
+-quit
+-projectPath
+C:\Dev\DeepUnity
+-executeMethod
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner.RunBalanceBallStochasticProbe
+-logFile
+C:\Dev\DeepUnity\ProbeLogs\unity_batch_sac_stochastic_probe.log
+Successfully changed project path to: C:\Dev\DeepUnity
+C:/Dev/DeepUnity
+[UnityMemory] Configuration Parameters - Can be set up in boot.config
+    "memorysetup-bucket-allocator-granularity=16"
+    "memorysetup-bucket-allocator-bucket-count=8"
+    "memorysetup-bucket-allocator-block-size=33554432"
+    "memorysetup-bucket-allocator-block-count=8"
+    "memorysetup-main-allocator-block-size=16777216"
+    "memorysetup-thread-allocator-block-size=16777216"
+    "memorysetup-gfx-main-allocator-block-size=16777216"
+    "memorysetup-gfx-thread-allocator-block-size=16777216"
+    "memorysetup-cache-allocator-block-size=4194304"
+    "memorysetup-typetree-allocator-block-size=2097152"
+    "memorysetup-profiler-bucket-allocator-granularity=16"
+    "memorysetup-profiler-bucket-allocator-bucket-count=8"
+    "memorysetup-profiler-bucket-allocator-block-size=33554432"
+    "memorysetup-profiler-bucket-allocator-block-count=8"
+    "memorysetup-profiler-allocator-block-size=16777216"
+    "memorysetup-profiler-editor-allocator-block-size=1048576"
+    "memorysetup-temp-allocator-size-main=16777216"
+    "memorysetup-job-temp-allocator-block-size=2097152"
+    "memorysetup-job-temp-allocator-block-size-background=1048576"
+    "memorysetup-job-temp-allocator-reduction-small-platforms=262144"
+    "memorysetup-allocator-temp-initial-block-size-main=262144"
+    "memorysetup-allocator-temp-initial-block-size-worker=262144"
+    "memorysetup-temp-allocator-size-background-worker=32768"
+    "memorysetup-temp-allocator-size-job-worker=262144"
+    "memorysetup-temp-allocator-size-preload-manager=33554432"
+    "memorysetup-temp-allocator-size-nav-mesh-worker=65536"
+    "memorysetup-temp-allocator-size-audio-worker=65536"
+    "memorysetup-temp-allocator-size-cloud-worker=32768"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gfx=262144"
+Player connection [39276]  Target information:
+
+Player connection [39276]  * "[IP] 172.30.160.1 [Port] 55504 [Flags] 2 [Guid] 2328800230 [EditorId] 2328800230 [Version] 1048832 [Id] WindowsEditor(7,rpc) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [39276]  * "[IP] 172.30.64.1 [Port] 55504 [Flags] 2 [Guid] 2328800230 [EditorId] 2328800230 [Version] 1048832 [Id] WindowsEditor(7,rpc) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [39276]  * "[IP] 10.22.119.230 [Port] 55504 [Flags] 2 [Guid] 2328800230 [EditorId] 2328800230 [Version] 1048832 [Id] WindowsEditor(7,rpc) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [39276] Host joined multi-casting on [225.0.0.222:54997]...
+Player connection [39276] Host joined alternative multi-casting on [225.0.0.222:34997]...
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+[Package Manager] UpmClient::Connect -- Connected to IPC stream "Upm-58072" after 0.3 seconds.
+[Package Manager] Restoring resolved packages state from cache
+[Licensing::Client] Successfully resolved entitlement details
+[Package Manager] Registered 62 packages:
+  Packages from [https://packages.unity.com]:
+    com.unity.ai.navigation@1.1.5 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ai.navigation@1.1.5)
+    com.unity.collab-proxy@2.4.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.collab-proxy@2.4.4)
+    com.unity.recorder@4.0.3 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.recorder@4.0.3)
+    com.unity.textmeshpro@3.0.9 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.textmeshpro@3.0.9)
+    com.unity.timeline@1.7.6 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.timeline@1.7.6)
+    com.unity.visualscripting@1.9.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.visualscripting@1.9.4)
+    com.unity.ide.visualstudio@2.0.22 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ide.visualstudio@2.0.22)
+    com.unity.ide.rider@3.0.31 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ide.rider@3.0.31)
+    com.unity.ide.vscode@1.2.5 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ide.vscode@1.2.5)
+    com.unity.editorcoroutines@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.editorcoroutines@1.0.0)
+    com.unity.performance.profile-analyzer@1.2.2 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.performance.profile-analyzer@1.2.2)
+    com.unity.test-framework@1.1.33 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.test-framework@1.1.33)
+    com.unity.testtools.codecoverage@1.2.6 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.testtools.codecoverage@1.2.6)
+    com.unity.2d.animation@9.1.1 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.animation@9.1.1)
+    com.unity.2d.pixel-perfect@5.0.3 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.pixel-perfect@5.0.3)
+    com.unity.2d.psdimporter@8.0.5 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.psdimporter@8.0.5)
+    com.unity.2d.spriteshape@9.0.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.spriteshape@9.0.4)
+    com.unity.2d.tilemap.extras@3.1.2 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.tilemap.extras@3.1.2)
+    com.unity.2d.aseprite@1.1.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.aseprite@1.1.4)
+    com.unity.settings-manager@2.0.1 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.settings-manager@2.0.1)
+    com.unity.ext.nunit@1.0.6 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ext.nunit@1.0.6)
+    com.unity.2d.common@8.0.3 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.common@8.0.3)
+    com.unity.mathematics@1.2.6 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.mathematics@1.2.6)
+    com.unity.collections@1.2.4 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.collections@1.2.4)
+    com.unity.burst@1.8.17 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.burst@1.8.17)
+  Built-in packages:
+    com.unity.feature.2d@2.0.1 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.feature.2d@2.0.1)
+    com.unity.feature.development@1.0.1 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.feature.development@1.0.1)
+    com.unity.ugui@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.ugui@1.0.0)
+    com.unity.modules.ai@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.ai@1.0.0)
+    com.unity.modules.androidjni@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.androidjni@1.0.0)
+    com.unity.modules.animation@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.animation@1.0.0)
+    com.unity.modules.assetbundle@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.assetbundle@1.0.0)
+    com.unity.modules.audio@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.audio@1.0.0)
+    com.unity.modules.cloth@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.cloth@1.0.0)
+    com.unity.modules.director@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.director@1.0.0)
+    com.unity.modules.imageconversion@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.imageconversion@1.0.0)
+    com.unity.modules.imgui@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.imgui@1.0.0)
+    com.unity.modules.jsonserialize@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.jsonserialize@1.0.0)
+    com.unity.modules.particlesystem@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.particlesystem@1.0.0)
+    com.unity.modules.physics@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.physics@1.0.0)
+    com.unity.modules.physics2d@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.physics2d@1.0.0)
+    com.unity.modules.screencapture@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.screencapture@1.0.0)
+    com.unity.modules.terrain@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.terrain@1.0.0)
+    com.unity.modules.terrainphysics@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.terrainphysics@1.0.0)
+    com.unity.modules.tilemap@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.tilemap@1.0.0)
+    com.unity.modules.ui@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.ui@1.0.0)
+    com.unity.modules.uielements@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.uielements@1.0.0)
+    com.unity.modules.umbra@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.umbra@1.0.0)
+    com.unity.modules.unityanalytics@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unityanalytics@1.0.0)
+    com.unity.modules.unitywebrequest@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequest@1.0.0)
+    com.unity.modules.unitywebrequestassetbundle@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequestassetbundle@1.0.0)
+    com.unity.modules.unitywebrequestaudio@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequestaudio@1.0.0)
+    com.unity.modules.unitywebrequesttexture@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequesttexture@1.0.0)
+    com.unity.modules.unitywebrequestwww@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.unitywebrequestwww@1.0.0)
+    com.unity.modules.vehicles@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.vehicles@1.0.0)
+    com.unity.modules.video@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.video@1.0.0)
+    com.unity.modules.vr@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.vr@1.0.0)
+    com.unity.modules.wind@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.wind@1.0.0)
+    com.unity.modules.xr@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.xr@1.0.0)
+    com.unity.modules.subsystems@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.modules.subsystems@1.0.0)
+    com.unity.2d.sprite@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.sprite@1.0.0)
+    com.unity.2d.tilemap@1.0.0 (location: C:\Dev\DeepUnity\Library\PackageCache\com.unity.2d.tilemap@1.0.0)
+[Subsystems] No new subsystems found in resolved package list.
+Package Manager log level set to [2]
+[Package Manager] Done registering packages in 1.24 seconds
+Refreshing native plugins compatible for Editor in 18.03 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Initialize engine version: 2022.3.43f1 (85497d293fa1)
+[Subsystems] Discovering subsystems at path C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Resources/UnitySubsystems
+[Subsystems] Discovering subsystems at path C:/Dev/DeepUnity/Assets
+Forcing GfxDevice: Null
+GfxDevice: creating device client; threaded=0; jobified=0
+NullGfxDevice:
+    Version:  NULL 1.0 [1.0]
+    Renderer: Null Device
+    Vendor:   Unity Technologies
+[Licensing::Client] Successfully resolved entitlement details
+Initialize mono
+Mono path[0] = 'C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/Managed'
+Mono path[1] = 'C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/MonoBleedingEdge/lib/mono/unityjit-win32'
+Mono config path = 'C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/MonoBleedingEdge/etc'
+Using monoOptions --debugger-agent=transport=dt_socket,embedding=1,server=y,suspend=n,address=127.0.0.1:56072
+Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
+Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
+ImportWorker Server TCP listen port: 0
+Begin MonoManager ReloadAssembly
+Registering precompiled unity dll's ...
+[Licensing::Client] Successfully resolved entitlement details
+Register platform support module: C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/PlaybackEngines/AndroidPlayer/UnityEditor.Android.Extensions.dll
+Register platform support module: C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll
+Registered in 0.034374 seconds.
+- Loaded All Assemblies, in  0.324 seconds
+Native extension for WindowsStandalone target not found
+Native extension for Android target not found
+Mono: successfully reloaded assembly
+- Finished resetting the current domain, in  0.265 seconds
+Domain Reload Profiling: 588ms
+	BeginReloadAssembly (98ms)
+		ExecutionOrderSort (0ms)
+		DisableScriptedObjects (0ms)
+		BackupInstance (0ms)
+		ReleaseScriptingObjects (0ms)
+		CreateAndSetChildDomain (1ms)
+	RebuildCommonClasses (27ms)
+	RebuildNativeTypeToScriptingClass (8ms)
+	initialDomainReloadingComplete (76ms)
+	LoadAllAssembliesAndSetupDomain (114ms)
+		LoadAssemblies (96ms)
+		RebuildTransferFunctionScriptingTraits (0ms)
+		AnalyzeDomain (112ms)
+			TypeCache.Refresh (111ms)
+				TypeCache.ScanAssembly (101ms)
+			ScanForSourceGeneratedMonoScriptInfo (0ms)
+			ResolveRequiredComponents (0ms)
+	FinalizeReload (266ms)
+		ReleaseScriptCaches (0ms)
+		RebuildScriptCaches (0ms)
+		SetupLoadedEditorAssemblies (227ms)
+			LogAssemblyErrors (0ms)
+			InitializePlatformSupportModulesInManaged (63ms)
+			SetLoadedEditorAssemblies (6ms)
+			RefreshPlugins (0ms)
+			BeforeProcessingInitializeOnLoad (3ms)
+			ProcessInitializeOnLoadAttributes (114ms)
+			ProcessInitializeOnLoadMethodAttributes (40ms)
+			AfterProcessingInitializeOnLoad (0ms)
+			EditorAssembliesLoaded (0ms)
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (0ms)
+[Licensing::Client] Successfully resolved entitlement details
+Application.AssetDatabase Initial Refresh Start
+[ScriptCompilation] Requested script compilation because: Assetdatabase observed changes in script compilation related files
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:80
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Production
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: C:\Dev\DeepUnity\
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/Ping application/grpc -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'gRPC - /UnityILPP.PostProcessing/Ping'
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'gRPC - /UnityILPP.PostProcessing/Ping'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/Ping application/grpc - - 200 - application/grpc 38.0209ms
+Starting: C:\Program Files\Unity\Hub\Editor\2022.3.43f1\Editor\Data\bee_backend.exe --dont-print-to-structured-log --ipc --defer-dag-verification --dagfile="Library/Bee/1900b0aE.dag" --continue-on-failure --profile="Library/Bee/backend1.traceevents" ScriptAssemblies
+WorkingDir: C:/Dev/DeepUnity
+DisplayProgressbar: Compiling Scripts
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/ConfigurePostProcessors application/grpc -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'gRPC - /UnityILPP.PostProcessing/ConfigurePostProcessors'
+info: Unity.ILPP.Runner.PostProcessingAssemblyLoadContext[0]
+      Resolved Unity.Burst.Cecil, Version=0.11.4.0, Culture=neutral, PublicKeyToken=50cebf1cceb9d05e with Library\PackageCache\com.unity.burst@1.8.17\Unity.Burst.CodeGen\Unity.Burst.Cecil.dll
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'gRPC - /UnityILPP.PostProcessing/ConfigurePostProcessors'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/ConfigurePostProcessors application/grpc - - 200 - application/grpc 56.5724ms
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/PostProcessAssembly application/grpc -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'gRPC - /UnityILPP.PostProcessing/PostProcessAssembly'
+info: Unity.ILPP.Runner.PostProcessingPipeline[0]
+      Processing assembly Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.dll, with 116 defines and 270 references
+info: Unity.ILPP.Runner.PostProcessingPipeline[0]
+      processors: zzzUnity.Burst.CodeGen.BurstILPostProcessor
+info: Unity.ILPP.Runner.PostProcessingPipeline[0]
+      running zzzUnity.Burst.CodeGen.BurstILPostProcessor
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/PostProcessAssembly application/grpc -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'gRPC - /UnityILPP.PostProcessing/PostProcessAssembly'
+info: Unity.ILPP.Runner.PostProcessingPipeline[0]
+      Processing assembly Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp-Editor.dll, with 117 defines and 285 references
+info: Unity.ILPP.Runner.PostProcessingPipeline[0]
+      processors: zzzUnity.Burst.CodeGen.BurstILPostProcessor
+info: Unity.ILPP.Runner.PostProcessingPipeline[0]
+      running zzzUnity.Burst.CodeGen.BurstILPostProcessor
+info: Unity.ILPP.Runner.PostProcessingAssemblyLoadContext[0]
+      Resolved Unity.Burst.Cecil.Rocks, Version=0.11.4.0, Culture=neutral, PublicKeyToken=50cebf1cceb9d05e with Library\PackageCache\com.unity.burst@1.8.17\Unity.Burst.CodeGen\Unity.Burst.Cecil.Rocks.dll
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'gRPC - /UnityILPP.PostProcessing/PostProcessAssembly'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/PostProcessAssembly application/grpc - - 200 - application/grpc 103.9075ms
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'gRPC - /UnityILPP.PostProcessing/PostProcessAssembly'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/PostProcessAssembly application/grpc - - 200 - application/grpc 193.0674ms
+ExitCode: 0 Duration: 2s106ms
+[622/802    0s] ILPP-Configuration Library/ilpp-configuration.nevergeneratedoutput
+[794/802    1s] Csc Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.dll (+2 others)
+Assets\DeepUnity\Modules\Learnable\EmbeddingFP16.cs(7,7): warning CS0105: The using directive for 'System' appeared previously in this namespace
+
+Assets\DeepUnity\Modules\Other\Unsqueeze.cs(16,13): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\Modules\Other\Squeeze.cs(18,13): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\LLMs\Gemma3\EmbeddingGemma.cs(327,20): warning CS0219: The variable 'y' is assigned but its value is never used
+
+Assets\DeepUnity\Modules\Learnable\DenseGPU.cs(37,13): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\Modules\Learnable\DenseGPU.cs(78,17): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\Modules\Activations\SoftMax.cs(189,21): warning CS0162: Unreachable code detected
+
+Assets\DeepUnity\Main\LMUnitTest.cs(15,33): warning CS0414: The field 'LMUnitTest.device' is assigned but its value is never used
+
+Assets\DeepUnity\Main\LMUnitTest.cs(20,14): warning CS0414: The field 'LMUnitTest.output_once' is assigned but its value is never used
+
+Assets\DeepUnity\Main\LMUnitTest.cs(13,41): warning CS0414: The field 'LMUnitTest.system_prompt' is assigned but its value is never used
+
+Assets\DeepUnity\Main\LMUnitTest.cs(22,29): warning CS0414: The field 'LMUnitTest.tok' is assigned but its value is never used
+
+Assets\DeepUnity\Main\LMUnitTest.cs(16,30): warning CS0414: The field 'LMUnitTest.batch_size' is assigned but its value is never used
+[796/802    0s] ILPostProcess Library/Bee/artifacts/1900b0aE.dag/post-processed/Assembly-CSharp-Editor.dll (+pdb)
+Processing assembly Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp-Editor.dll, with 117 defines and 285 references
+
+processors: zzzUnity.Burst.CodeGen.BurstILPostProcessor
+
+running zzzUnity.Burst.CodeGen.BurstILPostProcessor
+[799/802    0s] ILPostProcess Library/Bee/artifacts/1900b0aE.dag/post-processed/Assembly-CSharp.dll (+pdb)
+Processing assembly Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.dll, with 116 defines and 270 references
+
+processors: zzzUnity.Burst.CodeGen.BurstILPostProcessor
+
+running zzzUnity.Burst.CodeGen.BurstILPostProcessor
+[800/802    0s] CopyFiles Library/ScriptAssemblies/Assembly-CSharp.pdb
+[801/802    0s] CopyFiles Library/ScriptAssemblies/Assembly-CSharp.dll
+*** Tundra build success (2.05 seconds), 6 items updated, 802 evaluated
+Assets\DeepUnity\Modules\Learnable\EmbeddingFP16.cs(7,7): warning CS0105: The using directive for 'System' appeared previously in this namespace
+Assets\DeepUnity\Modules\Other\Unsqueeze.cs(16,13): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Modules\Other\Squeeze.cs(18,13): warning CS0162: Unreachable code detected
+Assets\DeepUnity\LLMs\Gemma3\EmbeddingGemma.cs(327,20): warning CS0219: The variable 'y' is assigned but its value is never used
+Assets\DeepUnity\Modules\Learnable\DenseGPU.cs(37,13): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Modules\Learnable\DenseGPU.cs(78,17): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Modules\Activations\SoftMax.cs(189,21): warning CS0162: Unreachable code detected
+Assets\DeepUnity\Main\LMUnitTest.cs(15,33): warning CS0414: The field 'LMUnitTest.device' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(20,14): warning CS0414: The field 'LMUnitTest.output_once' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(13,41): warning CS0414: The field 'LMUnitTest.system_prompt' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(22,29): warning CS0414: The field 'LMUnitTest.tok' is assigned but its value is never used
+Assets\DeepUnity\Main\LMUnitTest.cs(16,30): warning CS0414: The field 'LMUnitTest.batch_size' is assigned but its value is never used
+AssetDatabase: script compilation time: 2.617654s
+Begin MonoManager ReloadAssembly
+Total cache size 108871536
+Total cache size after purge 108871536
+- Loaded All Assemblies, in  0.670 seconds
+Refreshing native plugins compatible for Editor in 6.74 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Start importing Assets/DeepUnity/Modules/Activations/SoftPlus.cs using Guid(c5e7c83c5fbe1cf48ab8ea6557d65383) Importer(-1,00000000000000000000000000000000) [PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ -> (artifact id: 'b37a7e26d418fa305d431ef28aa7dc10') in 0.011402 seconds
+Refreshing native plugins compatible for Editor in 7.93 ms, found 7 plugins.
+Native extension for WindowsStandalone target not found
+Native extension for Android target not found
+Mono: successfully reloaded assembly
+- Finished resetting the current domain, in  2.959 seconds
+Domain Reload Profiling: 3625ms
+	BeginReloadAssembly (151ms)
+		ExecutionOrderSort (0ms)
+		DisableScriptedObjects (6ms)
+		BackupInstance (0ms)
+		ReleaseScriptingObjects (0ms)
+		CreateAndSetChildDomain (27ms)
+	RebuildCommonClasses (27ms)
+	RebuildNativeTypeToScriptingClass (10ms)
+	initialDomainReloadingComplete (30ms)
+	LoadAllAssembliesAndSetupDomain (446ms)
+		LoadAssemblies (339ms)
+		RebuildTransferFunctionScriptingTraits (0ms)
+		AnalyzeDomain (190ms)
+			TypeCache.Refresh (167ms)
+				TypeCache.ScanAssembly (154ms)
+			ScanForSourceGeneratedMonoScriptInfo (17ms)
+			ResolveRequiredComponents (5ms)
+	FinalizeReload (2960ms)
+		ReleaseScriptCaches (0ms)
+		RebuildScriptCaches (0ms)
+		SetupLoadedEditorAssemblies (2821ms)
+			LogAssemblyErrors (0ms)
+			InitializePlatformSupportModulesInManaged (16ms)
+			SetLoadedEditorAssemblies (4ms)
+			RefreshPlugins (0ms)
+			BeforeProcessingInitializeOnLoad (77ms)
+			ProcessInitializeOnLoadAttributes (2610ms)
+			ProcessInitializeOnLoadMethodAttributes (92ms)
+			AfterProcessingInitializeOnLoad (21ms)
+			EditorAssembliesLoaded (0ms)
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (9ms)
+Refreshing native plugins compatible for Editor in 8.45 ms, found 7 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=68730343c98a73044a28966a541db063): Total: 8.266 seconds - Initiated by InitialRefreshV2(ForceSynchronousImport)
+	Summary:
+		Imports: total=1 (actual=1, local cache=0, cache server=0)
+		Asset DB Process Time: managed=4 ms, native=1687 ms
+		Asset DB Callback time: managed=173 ms, native=15 ms
+		Scripting: domain reloads=1, domain reload time=3720 ms, compile time=2618 ms, other=47 ms
+		Project Asset Count: scripts=5981, non-scripts=4097
+		Asset File Changes: new=0, changed=1, moved=0, deleted=0
+		Scan Filter Count: 0
+	InvokeBeforeRefreshCallbacks: 0.815ms
+	ApplyChangesToAssetFolders: 0.055ms
+	Scan: 123.679ms
+	OnSourceAssetsModified: 2.044ms
+	GetAllGuidsForCategorization: 1.627ms
+	CategorizeAssets: 189.751ms
+	ImportOutOfDateAssets: 3029.939ms (370.192ms without children)
+		ImportManagerImport: 14.445ms (2.436ms without children)
+			ImportInProcess: 11.983ms
+			UpdateCategorizedAssets: 0.026ms
+		CompileScripts: 2617.808ms
+		ReloadNativeAssets: 0.001ms
+		UnloadImportedAssets: 23.793ms
+		ReloadImportedAssets: 0.357ms
+		EnsureUptoDateAssetsAreRegisteredWithGuidPM: 2.387ms
+		InitializingProgressBar: 0.010ms
+		PostProcessAllAssetNotificationsAddChangedAssets: 0.001ms
+		OnDemandSchedulerStart: 0.945ms
+	PostProcessAllAssets: 174.048ms
+	Hotreload: 11.222ms
+	GatherAllCurrentPrimaryArtifactRevisions: 0.002ms
+	UnloadStreamsBegin: 0.425ms
+	PersistCurrentRevisions: 0.441ms
+	UnloadStreamsEnd: 0.039ms
+	GenerateScriptTypeHashes: 2.397ms
+	Untracked: 4731.865ms
+Application.AssetDatabase Initial Refresh End
+Scanning for USB devices : 2.357ms
+Initializing Unity extensions:
+[Licensing::Client] Successfully resolved entitlement details
+[MODES] ModeService[none].Initialize
+[MODES] ModeService[none].LoadModes
+[MODES] Loading mode Default (0) for mode-current-id-DeepUnity
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+ProgressiveSceneManager::Cancel()
+Unloading 13 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 96 unused Assets / (507.6 KB). Loaded Objects now: 5140.
+Memory consumption went from 128.1 MB to 127.6 MB.
+Total: 5.447900 ms (FindLiveObjects: 0.493000 ms CreateObjectMapping: 0.163700 ms MarkObjects: 4.363300 ms  DeleteObjects: 0.426300 ms)
+
+[SacStochasticActorGradientProbe] full SAC actor objective on CPU
+samples=3, epsilon=0.001, checkedMuParameters=8, checkedSigmaParameters=8, stateSize=10, actionSize=2, alpha=0.2000
+sample=1 objective=-1.193200
+  output(mu): mean|err|=9.894E-005 max|err|=1.686E-004 cos=1.000000
+    analytic: [4.0002E-001, -4.4611E-001]
+    numeric : [4.0019E-001, -4.4608E-001]
+  output(sigma_preclip): mean|err|=1.464E-004 max|err|=1.653E-004 cos=1.000000
+    analytic: [-8.3281E-001, 1.4590E-001]
+    numeric : [-8.3297E-001, 1.4603E-001]
+  params(mu): mean|err|=6.545E-005 max|err|=1.621E-004 cos=1.000000
+    mu[0][0]: analytic=-5.0245E-002 numeric=-5.0128E-002 absErr=1.1785E-004
+    mu[0][320]: analytic=7.5705E-003 numeric=7.5102E-003 absErr=6.0333E-005
+    mu[0][639]: analytic=4.7856E-002 numeric=4.7863E-002 absErr=6.3218E-006
+    mu[1][0]: analytic=6.0142E-001 numeric=6.0141E-001 absErr=1.0312E-005
+    mu[1][32]: analytic=-9.0617E-002 numeric=-9.0718E-002 absErr=1.0153E-004
+    mu[1][63]: analytic=1.8965E-001 numeric=1.8948E-001 absErr=1.6209E-004
+    mu[2][0]: analytic=2.4608E-002 numeric=2.4557E-002 absErr=5.0671E-005
+    mu[2][2048]: analytic=-3.3524E-003 numeric=-3.3379E-003 absErr=1.4498E-005
+  params(sigma): mean|err|=1.143E-004 max|err|=2.326E-004 cos=1.000000
+    sigma[0][0]: analytic=-3.3430E-002 numeric=-3.3438E-002 absErr=7.8864E-006
+    sigma[0][320]: analytic=1.0134E-002 numeric=9.9540E-003 absErr=1.8007E-004
+    sigma[0][639]: analytic=-9.1716E-003 numeric=-9.1791E-003 absErr=7.5093E-006
+    sigma[1][0]: analytic=4.0015E-001 numeric=4.0025E-001 absErr=9.4712E-005
+    sigma[1][32]: analytic=-1.2130E-001 numeric=-1.2153E-001 absErr=2.3256E-004
+    sigma[1][63]: analytic=-3.6345E-002 numeric=-3.6120E-002 absErr=2.2496E-004
+    sigma[2][0]: analytic=-6.7863E-002 numeric=-6.8009E-002 absErr=1.4559E-004
+    sigma[2][2048]: analytic=-2.3761E-002 numeric=-2.3782E-002 absErr=2.1502E-005
+sample=2 objective=-2.951321
+  output(mu): mean|err|=5.205E-005 max|err|=9.319E-005 cos=1.000000
+    analytic: [-4.0006E-001, 3.9801E-001]
+    numeric : [-4.0007E-001, 3.9792E-001]
+  output(sigma_preclip): mean|err|=2.328E-004 max|err|=3.670E-004 cos=1.000000
+    analytic: [8.6747E-001, 5.3381E-001]
+    numeric : [8.6737E-001, 5.3418E-001]
+  params(mu): mean|err|=1.702E-004 max|err|=3.581E-004 cos=0.999999
+    mu[0][0]: analytic=-8.9645E-002 numeric=-9.0003E-002 absErr=3.5812E-004
+    mu[0][320]: analytic=3.3196E-002 numeric=3.3140E-002 absErr=5.6230E-005
+    mu[0][639]: analytic=4.0969E-002 numeric=4.0889E-002 absErr=8.0660E-005
+    mu[1][0]: analytic=-2.3574E-001 numeric=-2.3544E-001 absErr=2.9889E-004
+    mu[1][32]: analytic=8.7296E-002 numeric=8.7261E-002 absErr=3.4690E-005
+    mu[1][63]: analytic=-2.0834E-001 numeric=-2.0838E-001 absErr=3.3036E-005
+    mu[2][0]: analytic=-5.4491E-002 numeric=-5.4240E-002 absErr=2.5094E-004
+    mu[2][2048]: analytic=3.1959E-002 numeric=3.1710E-002 absErr=2.4888E-004
+  params(sigma): mean|err|=1.178E-004 max|err|=1.942E-004 cos=1.000000
+    sigma[0][0]: analytic=-1.3601E-001 numeric=-1.3590E-001 absErr=1.1504E-004
+    sigma[0][320]: analytic=7.1713E-002 numeric=7.1645E-002 absErr=6.8426E-005
+    sigma[0][639]: analytic=5.6554E-003 numeric=5.4836E-003 absErr=1.7178E-004
+    sigma[1][0]: analytic=-3.5767E-001 numeric=-3.5787E-001 absErr=1.9419E-004
+    sigma[1][32]: analytic=1.8858E-001 numeric=1.8847E-001 absErr=1.1280E-004
+    sigma[1][63]: analytic=-2.8760E-002 numeric=-2.8849E-002 absErr=8.8831E-005
+    sigma[2][0]: analytic=-2.1765E-003 numeric=-2.1458E-003 absErr=3.0759E-005
+    sigma[2][2048]: analytic=-6.5977E-003 numeric=-6.4373E-003 absErr=1.6035E-004
+sample=3 objective=-0.655417
+  output(mu): mean|err|=1.842E-004 max|err|=1.928E-004 cos=1.000000
+    analytic: [-3.2690E-001, 3.7162E-001]
+    numeric : [-3.2708E-001, 3.7181E-001]
+  output(sigma_preclip): mean|err|=1.809E-004 max|err|=2.275E-004 cos=1.000000
+    analytic: [-1.3188E-002, 7.1435E-001]
+    numeric : [-1.3053E-002, 7.1412E-001]
+  params(mu): mean|err|=1.434E-004 max|err|=2.722E-004 cos=1.000000
+    mu[0][0]: analytic=-1.9360E-001 numeric=-1.9369E-001 absErr=8.5965E-005
+    mu[0][320]: analytic=7.1189E-002 numeric=7.1317E-002 absErr=1.2780E-004
+    mu[0][639]: analytic=-9.1570E-002 numeric=-9.1761E-002 absErr=1.9131E-004
+    mu[1][0]: analytic=-3.9075E-001 numeric=-3.9092E-001 absErr=1.6570E-004
+    mu[1][32]: analytic=1.4368E-001 numeric=1.4365E-001 absErr=3.7491E-005
+    mu[1][63]: analytic=-2.2581E-001 numeric=-2.2596E-001 absErr=1.5175E-004
+    mu[2][0]: analytic=-3.9544E-002 numeric=-3.9428E-002 absErr=1.1513E-004
+    mu[2][2048]: analytic=2.9262E-002 numeric=2.9534E-002 absErr=2.7219E-004
+  params(sigma): mean|err|=1.295E-004 max|err|=3.817E-004 cos=0.999998
+    sigma[0][0]: analytic=-6.3549E-002 numeric=-6.3419E-002 absErr=1.2929E-004
+    sigma[0][320]: analytic=4.9889E-002 numeric=5.0068E-002 absErr=1.7921E-004
+    sigma[0][639]: analytic=-2.8078E-002 numeric=-2.8104E-002 absErr=2.5997E-005
+    sigma[1][0]: analytic=-1.2826E-001 numeric=-1.2788E-001 absErr=3.8166E-004
+    sigma[1][32]: analytic=1.0069E-001 numeric=1.0067E-001 absErr=2.0638E-005
+    sigma[1][63]: analytic=-6.9239E-002 numeric=-6.9261E-002 absErr=2.1949E-005
+    sigma[2][0]: analytic=-8.0877E-004 numeric=-9.2387E-004 absErr=1.1511E-004
+    sigma[2][2048]: analytic=-9.3149E-003 numeric=-9.4771E-003 absErr=1.6226E-004
+summary output(mu) mean|err|=1.117E-004 max|err|=1.928E-004 avgCos=1.000000
+summary output(sigma_preclip) mean|err|=1.867E-004 max|err|=3.670E-004 avgCos=1.000000
+summary params(mu) mean|err|=1.263E-004 max|err|=3.581E-004 avgCos=1.000000
+summary params(sigma) mean|err|=1.205E-004 max|err|=3.817E-004 avgCos=0.999999
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:302)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:19)
+
+(Filename: Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs Line: 302)
+
+[SacStochasticActorGradientProbe] Report written to C:\Dev\DeepUnity\ProbeLogs\sac_stochastic_actor_gradient_probe_BalanceBall_CPU.txt
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:303)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:19)
+
+(Filename: Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs Line: 303)
+
+[SacProbeBatchRunner] Stochastic SAC probe completed for BalanceBall on CPU. Report: C:\Dev\DeepUnity\ProbeLogs\sac_stochastic_actor_gradient_probe_BalanceBall_CPU.txt
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:66)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:19)
+
+(Filename: Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs Line: 66)
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:96)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 96]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:100)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 100]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:106)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 106]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:110)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 110]
+
+DenseCS.compute: Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:117)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 117]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:96)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 96]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:100)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 100]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:106)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 106]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:110)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 110]
+
+DenseCS.compute: Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:117)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 117]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:96)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 96]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:100)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 100]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:106)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 106]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:110)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 110]
+
+DenseCS.compute: Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:117)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:329)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 117]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:96)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 96]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:100)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 100]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:106)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 106]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:110)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 110]
+
+DenseCS.compute: Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:117)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 117]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:96)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 96]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:100)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 100]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:106)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 106]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:110)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 110]
+
+DenseCS.compute: Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:117)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 117]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:96)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 96]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:100)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 100]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:106)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 106]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:110)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 110]
+
+DenseCS.compute: Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:117)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:330)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 117]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:96)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 96]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:100)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 100]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:106)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 106]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:110)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 110]
+
+DenseCS.compute: Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:117)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 117]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:96)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 96]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:100)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 100]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:106)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 106]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:110)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 110]
+
+DenseCS.compute: Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:117)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 117]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:96)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 96]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:100)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 100]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:106)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 106]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:110)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 110]
+
+DenseCS.compute: Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:117)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:337)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 117]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:96)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 96]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:100)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 100]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:106)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 106]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:110)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 110]
+
+DenseCS.compute: Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:117)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:48)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 117]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:96)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 96]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:100)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 100]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:106)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 106]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:110)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 110]
+
+DenseCS.compute: Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:117)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 117]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:96)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 96]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:100)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 100]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:106)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 106]
+
+Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.ComputeShader:SetBuffer (int,int,UnityEngine.ComputeBuffer)
+UnityEngine.ComputeShader:SetBuffer (int,string,UnityEngine.ComputeBuffer)
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:110)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 110]
+
+DenseCS.compute: Kernel index (0) out of range
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+DeepUnity.Modules.Dense:Predict (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:117)
+DeepUnity.Modules.Dense:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:138)
+DeepUnity.Models.Sequential:Forward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:51)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:338)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Modules/Learnable/Dense.cs line 117]
+
+Kernel 'MatMul' not found
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+DeepUnity.Tensor:MatMul (DeepUnity.Tensor,DeepUnity.Tensor,DeepUnity.Device) (at Assets/DeepUnity/Tensor/Tensor.cs:1098)
+DeepUnity.Modules.Dense:Backward (DeepUnity.Tensor) (at Assets/DeepUnity/Modules/Learnable/Dense.cs:251)
+DeepUnity.Models.Sequential:Backward (DeepUnity.Tensor) (at Assets/DeepUnity/Models/Sequential.cs:62)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Models.Sequential,DeepUnity.Tensor,DeepUnity.Tensor) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:343)
+DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe:RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour,DeepUnity.Device,int,int,int,single,single) (at Assets/DeepUnity/ReinforcementLearning/Tools/SacStochasticActorGradientProbe.cs:148)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunStochasticProbe (string,DeepUnity.Device) (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:65)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe () (at Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs:20)
+
+[Assets/DeepUnity/Tensor/Tensor.cs line 1098]
+
+ArgumentException: Kernel 'MatMul' not found.
+  at (wrapper managed-to-native) UnityEngine.ComputeShader.FindKernel(UnityEngine.ComputeShader,string)
+  at DeepUnity.Tensor.MatMul (DeepUnity.Tensor left, DeepUnity.Tensor right, DeepUnity.Device device) [0x00669] in C:\Dev\DeepUnity\Assets\DeepUnity\Tensor\Tensor.cs:1098 
+  at DeepUnity.Modules.Dense.Backward (DeepUnity.Tensor loss) [0x00327] in C:\Dev\DeepUnity\Assets\DeepUnity\Modules\Learnable\Dense.cs:251 
+  at DeepUnity.Models.Sequential.Backward (DeepUnity.Tensor lossGradient) [0x00000] in C:\Dev\DeepUnity\Assets\DeepUnity\Models\Sequential.cs:62 
+  at DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe.ComputeAnalyticSample (DeepUnity.ReinforcementLearning.AgentBehaviour behaviour, DeepUnity.Models.Sequential muNetwork, DeepUnity.Models.Sequential sigmaNetwork, DeepUnity.Models.Sequential q1Network, DeepUnity.Models.Sequential q2Network, DeepUnity.Tensor state, DeepUnity.Tensor ksi) [0x00090] in C:\Dev\DeepUnity\Assets\DeepUnity\ReinforcementLearning\Tools\SacStochasticActorGradientProbe.cs:343 
+  at DeepUnity.ReinforcementLearning.SacStochasticActorGradientProbe.RunForBehaviour (DeepUnity.ReinforcementLearning.AgentBehaviour behaviour, DeepUnity.Device probeDevice, System.Int32 samples, System.Int32 checkedMuParameters, System.Int32 checkedSigmaParameters, System.Single epsilon, System.Single stateRange) [0x004b8] in C:\Dev\DeepUnity\Assets\DeepUnity\ReinforcementLearning\Tools\SacStochasticActorGradientProbe.cs:148 
+  at DeepUnity.ReinforcementLearning.SacProbeBatchRunner.RunStochasticProbe (System.String behaviourPath, DeepUnity.Device device) [0x00027] in C:\Dev\DeepUnity\Assets\DeepUnity\ReinforcementLearning\Tools\Editor\SacProbeBatchRunner.cs:65 
+  at DeepUnity.ReinforcementLearning.SacProbeBatchRunner.RunBalanceBallStochasticProbe () [0x0000b] in C:\Dev\DeepUnity\Assets\DeepUnity\ReinforcementLearning\Tools\Editor\SacProbeBatchRunner.cs:20 
+UnityEngine.DebugLogHandler:Internal_LogException(Exception, Object)
+UnityEngine.DebugLogHandler:LogException(Exception, Object)
+UnityEngine.Logger:LogException(Exception, Object)
+UnityEngine.Debug:LogException(Exception)
+DeepUnity.ReinforcementLearning.SacProbeBatchRunner:RunBalanceBallStochasticProbe() (at Assets\DeepUnity\ReinforcementLearning\Tools\Editor\SacProbeBatchRunner.cs:25)
+
+(Filename: Assets/DeepUnity/ReinforcementLearning/Tools/Editor/SacProbeBatchRunner.cs Line: 25)
+
+Curl error 42: Callback aborted
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+[Licensing::IpcConnector] License Notification channel disconnected successfully.
+[Licensing::IpcConnector] License Client channel disconnected successfully.
+Cleanup mono
+Leak Detected : Persistent allocates 3 individual allocations. To find out more please enable 'Preferences > Jobs > Leak Detection Level > Enabled With Stack Trace' and reproduce the leak again.
+abort_threads: Failed aborting id: 000000000000BD24, mono_thread_manage will ignore it
+
+abort_threads: Failed aborting id: 000000000000448C, mono_thread_manage will ignore it
+
+abort_threads: Failed aborting id: 000000000000BD24, mono_thread_manage will ignore it
+
+abort_threads: Failed aborting id: 000000000000448C, mono_thread_manage will ignore it
+
+debugger-agent: Unable to listen on 4924
+[Performance] WinEditorMain                                                                                                  :        1 samples, Peak.   881 ms (1.0x), Avg.   881 ms, Total. 881.1 ms (6.5%)
+[Performance] WinEditorMain.ConfigureCrashHandler                                                                            :        1 samples, Peak.  48.5 us (1.0x), Avg.  48.5 us, Total. 48.50 us (0.0%)
+[Performance] WinEditorMain.CurlRequestInitialize                                                                            :        1 samples, Peak.   411 us (1.0x), Avg.   411 us, Total. 411.2 us (0.0%)
+[Performance] WinEditorMain.SetupLogFile                                                                                     :        1 samples, Peak.   478 us (1.0x), Avg.   478 us, Total. 477.8 us (0.0%)
+[Performance] WinEditorMain.RunNativeTestsIfRequiredAndExit                                                                  :        1 samples, Peak.   100 ns (1.0x), Avg.   100 ns, Total. 100.0 ns (0.0%)
+[Performance] WinEditorMain.Licensing                                                                                        :        1 samples, Peak.   834 ms (1.0x), Avg.   834 ms, Total. 833.8 ms (6.2%)
+[Performance] WinEditorMain.InitializeCrashHandler                                                                           :        1 samples, Peak.  43.5 ms (1.0x), Avg.  43.5 ms, Total. 43.50 ms (0.3%)
+[Performance] WinEditorMain.CreateApplication                                                                                :        1 samples, Peak.   250 us (1.0x), Avg.   250 us, Total. 249.5 us (0.0%)
+[Performance] Application.InitializeProject                                                                                  :        1 samples, Peak.  11.3 s (1.0x), Avg.  11.3 s, Total. 11.30 s (83.5%)
+[Performance] Application.PackageManager.StartServer                                                                         :        1 samples, Peak.  6.55 ms (1.0x), Avg.  6.55 ms, Total. 6.555 ms (0.0%)
+[Performance] Application.AcquireProjectLock                                                                                 :        1 samples, Peak.  4.48 ms (1.0x), Avg.  4.48 ms, Total. 4.484 ms (0.0%)
+[Performance] Application.InitializeEngineNoGraphics                                                                         :        1 samples, Peak.  52.9 ms (1.0x), Avg.  52.9 ms, Total. 52.95 ms (0.4%)
+[Performance] Application.PackageManager.Initialize                                                                          :        1 samples, Peak.   340 ms (1.0x), Avg.   340 ms, Total. 340.3 ms (2.5%)
+[Performance] Connecting to Package Manager                                                                                  :       35 samples, Peak.  96.1 us (18.5x), Avg.  5.18 us, Total. 181.4 us (0.0%)
+[Performance] Application.EngineGraphics.Initialize                                                                          :        1 samples, Peak.  49.2 ms (1.0x), Avg.  49.2 ms, Total. 49.25 ms (0.4%)
+[Performance] Application.GI.Initialize                                                                                      :        1 samples, Peak.  2.74 ms (1.0x), Avg.  2.74 ms, Total. 2.742 ms (0.0%)
+[Performance] Application.LoadAllDefaultResourcesFromEditor                                                                  :        1 samples, Peak.  1.50 ms (1.0x), Avg.  1.50 ms, Total. 1.497 ms (0.0%)
+[Performance] Application.LoadMonoAssemblies                                                                                 :        1 samples, Peak.   606 ms (1.0x), Avg.   606 ms, Total. 605.6 ms (4.5%)
+[Performance] RestoreManagedReferences                                                                                       :        2 samples, Peak.  49.3 ms (2.0x), Avg.  24.7 ms, Total. 49.34 ms (0.4%)
+[Performance] InitializeOnLoad MixerEffectDefinitionReloader                                                                 :        2 samples, Peak.  3.81 ms (1.3x), Avg.  2.87 ms, Total. 5.734 ms (0.0%)
+[Performance] InitializeOnLoad SettingsService                                                                               :        2 samples, Peak.  15.6 us (1.0x), Avg.  15.4 us, Total. 30.70 us (0.0%)
+[Performance] InitializeOnLoad AssetStoreContext                                                                             :        2 samples, Peak.  20.7 ms (1.5x), Avg.  14.2 ms, Total. 28.44 ms (0.2%)
+[Performance] InitializeOnLoad ObjectSelectorSearch                                                                          :        2 samples, Peak.   162 us (1.2x), Avg.   138 us, Total. 275.7 us (0.0%)
+[Performance] InitializeOnLoad SceneSearch                                                                                   :        2 samples, Peak.  52.4 us (1.2x), Avg.  42.2 us, Total. 84.50 us (0.0%)
+[Performance] InitializeOnLoad ProjectSearch                                                                                 :        2 samples, Peak.   115 us (1.6x), Avg.  71.0 us, Total. 141.9 us (0.0%)
+[Performance] InitializeOnLoad WindowLayout                                                                                  :        2 samples, Peak.   264 us (1.2x), Avg.   228 us, Total. 455.5 us (0.0%)
+[Performance] InitializeOnLoad CacheServerWindow                                                                             :        2 samples, Peak.  25.3 us (1.4x), Avg.  17.6 us, Total. 35.20 us (0.0%)
+[Performance] InitializeOnLoad NativeFormatImporterUtility                                                                   :        2 samples, Peak.  2.56 ms (1.2x), Avg.  2.21 ms, Total. 4.414 ms (0.0%)
+[Performance] InitializeOnLoad DrivenRectTransformUndo                                                                       :        2 samples, Peak.   231 us (1.0x), Avg.   227 us, Total. 454.2 us (0.0%)
+[Performance] InitializeOnLoad CloudBuild                                                                                    :        2 samples, Peak.  4.20 us (1.1x), Avg.  3.85 us, Total. 7.700 us (0.0%)
+[Performance] InitializeOnLoad ManagedDebuggerWindow                                                                         :        2 samples, Peak.   590 us (1.0x), Avg.   572 us, Total. 1.144 ms (0.0%)
+[Performance] InitializeOnLoad PrefabInstanceChangedListener                                                                 :        2 samples, Peak.   127 us (1.0x), Avg.   126 us, Total. 251.7 us (0.0%)
+[Performance] InitializeOnLoad AddComponentWindow                                                                            :        2 samples, Peak.   112 us (1.1x), Avg.   104 us, Total. 208.3 us (0.0%)
+[Performance] InitializeOnLoad ManagedDebugger                                                                               :        2 samples, Peak.   600 ns (1.5x), Avg.   400 ns, Total. 800.0 ns (0.0%)
+[Performance] InitializeOnLoad MenuItems                                                                                     :        2 samples, Peak.  71.7 us (1.0x), Avg.  69.2 us, Total. 138.3 us (0.0%)
+[Performance] InitializeOnLoad EditMode                                                                                      :        2 samples, Peak.   340 us (1.1x), Avg.   316 us, Total. 631.4 us (0.0%)
+[Performance] InitializeOnLoad UISystemProfilerRenderService                                                                 :        2 samples, Peak.  8.10 us (1.1x), Avg.  7.50 us, Total. 15.00 us (0.0%)
+[Performance] InitializeOnLoad PlayModeDownload                                                                              :        2 samples, Peak.  5.22 ms (2.0x), Avg.  2.67 ms, Total. 5.347 ms (0.0%)
+[Performance] InitializeOnLoad ShortcutIntegration                                                                           :        2 samples, Peak.  92.1 us (1.4x), Avg.  67.4 us, Total. 134.8 us (0.0%)
+[Performance] InitializeOnLoad UnityConnect                                                                                  :        2 samples, Peak.  51.8 us (1.2x), Avg.  43.0 us, Total. 85.90 us (0.0%)
+[Performance] InitializeOnLoad SearchService                                                                                 :        2 samples, Peak.   111 us (1.1x), Avg.   102 us, Total. 203.4 us (0.0%)
+[Performance] InitializeOnLoad EditorMonitor                                                                                 :        2 samples, Peak.   582 us (1.0x), Avg.   578 us, Total. 1.155 ms (0.0%)
+[Performance] InitializeOnLoad RetainedMode                                                                                  :        2 samples, Peak.  2.62 ms (1.1x), Avg.  2.37 ms, Total. 4.733 ms (0.0%)
+[Performance] InitializeOnLoad EditorShaderLoader                                                                            :        2 samples, Peak.   790 us (1.0x), Avg.   762 us, Total. 1.524 ms (0.0%)
+[Performance] InitializeOnLoad EditorDelegateRegistration                                                                    :        2 samples, Peak.   671 us (1.2x), Avg.   560 us, Total. 1.121 ms (0.0%)
+[Performance] InitializeOnLoad UIDocumentHierarchyWatcher                                                                    :        2 samples, Peak.   146 us (1.2x), Avg.   120 us, Total. 239.9 us (0.0%)
+[Performance] InitializeOnLoad LiveReloadTrackerCreator                                                                      :        2 samples, Peak.   238 us (1.3x), Avg.   189 us, Total. 377.2 us (0.0%)
+[Performance] InitializeOnLoad UxmlObjectEditorFactories                                                                     :        2 samples, Peak.   573 us (1.1x), Avg.   499 us, Total. 998.5 us (0.0%)
+[Performance] InitializeOnLoad UXMLEditorFactories                                                                           :        2 samples, Peak.  53.1 ms (1.0x), Avg.  52.5 ms, Total. 105.0 ms (0.8%)
+[Performance] InitializeOnLoad CloudBuildPoller                                                                              :        2 samples, Peak.   292 us (1.1x), Avg.   274 us, Total. 548.5 us (0.0%)
+[Performance] InitializeOnLoad AdsService                                                                                    :        2 samples, Peak.  1.33 ms (1.0x), Avg.  1.28 ms, Total. 2.556 ms (0.0%)
+[Performance] InitializeOnLoad EditorGameServicesAnalytics                                                                   :        2 samples, Peak.  1.31 ms (1.3x), Avg.  1.01 ms, Total. 2.013 ms (0.0%)
+[Performance] InitializeOnLoad UDPService                                                                                    :        2 samples, Peak.   165 us (1.0x), Avg.   165 us, Total. 330.2 us (0.0%)
+[Performance] InitializeOnLoad BuildService                                                                                  :        2 samples, Peak.   153 us (1.1x), Avg.   135 us, Total. 269.5 us (0.0%)
+[Performance] InitializeOnLoad ServicesRepository                                                                            :        2 samples, Peak.   500 ns (1.3x), Avg.   400 ns, Total. 800.0 ns (0.0%)
+[Performance] InitializeOnLoad PurchasingService                                                                             :        2 samples, Peak.  4.98 ms (1.1x), Avg.  4.64 ms, Total. 9.271 ms (0.1%)
+[Performance] InitializeOnLoad AnalyticsService                                                                              :        2 samples, Peak.   168 us (1.1x), Avg.   148 us, Total. 296.0 us (0.0%)
+[Performance] InitializeOnLoad CrashService                                                                                  :        2 samples, Peak.   107 us (1.0x), Avg.   106 us, Total. 212.1 us (0.0%)
+[Performance] InitializeOnLoad SearchWindow                                                                                  :        2 samples, Peak.   115 us (1.1x), Avg.   105 us, Total. 210.8 us (0.0%)
+[Performance] InitializeOnLoad CustomIndexers                                                                                :        2 samples, Peak.  17.6 ms (1.2x), Avg.  14.9 ms, Total. 29.84 ms (0.2%)
+[Performance] InitializeOnLoad SearchMonitor                                                                                 :        2 samples, Peak.   796 us (1.1x), Avg.   735 us, Total. 1.469 ms (0.0%)
+[Performance] InitializeOnLoad ParameterControllerEditor                                                                     :        2 samples, Peak.  39.3 us (1.4x), Avg.  28.8 us, Total. 57.50 us (0.0%)
+[Performance] InitializeOnLoad LayerSettingsWindow                                                                           :        2 samples, Peak.  92.5 us (1.9x), Avg.  49.1 us, Total. 98.20 us (0.0%)
+[Performance] InitializeOnLoad PackageManagerHookGUIDConverter.RegisterPackagesEventHandler                                  :        2 samples, Peak.   688 us (1.6x), Avg.   422 us, Total. 843.6 us (0.0%)
+[Performance] InitializeOnLoad EditorDragAndDrop.RegisterEditorClient                                                        :        2 samples, Peak.   275 us (1.2x), Avg.   227 us, Total. 454.1 us (0.0%)
+[Performance] InitializeOnLoad EditorEventCallbacks.InitializeFontAssetResourceChangeCallBacks                               :        2 samples, Peak.  1.56 ms (1.2x), Avg.  1.26 ms, Total. 2.528 ms (0.0%)
+[Performance] InitializeOnLoad SceneTemplateService.Init                                                                     :        2 samples, Peak.  1.70 ms (1.2x), Avg.  1.36 ms, Total. 2.726 ms (0.0%)
+[Performance] InitializeOnLoad DiagnosticSwitchesConsoleMessage.Init                                                         :        2 samples, Peak.  5.56 ms (1.8x), Avg.  3.08 ms, Total. 6.152 ms (0.0%)
+[Performance] InitializeOnLoad ScopedRegistryAddedPopup.SubscribeToRegistriesAdded                                           :        2 samples, Peak.  20.7 ms (1.5x), Avg.  13.9 ms, Total. 27.76 ms (0.2%)
+[Performance] InitializeOnLoad SceneVisibilityManager.Initialize                                                             :        2 samples, Peak.  5.05 ms (1.6x), Avg.  3.26 ms, Total. 6.513 ms (0.0%)
+[Performance] InitializeOnLoad PackageManagerWindow.EditorInitializedInSafeMode                                              :        2 samples, Peak.   175 us (1.0x), Avg.   173 us, Total. 345.4 us (0.0%)
+[Performance] InitializeOnLoad ToolShortcutContext.Init                                                                      :        2 samples, Peak.   130 us (1.2x), Avg.   109 us, Total. 218.1 us (0.0%)
+[Performance] InitializeOnLoad SysrootManager.Initialize                                                                     :        2 samples, Peak.   542 us (1.1x), Avg.   481 us, Total. 961.2 us (0.0%)
+[Performance] InitializeOnLoad SceneViewMotion.RegisterShortcutContexts                                                      :        2 samples, Peak.   151 us (1.2x), Avg.   129 us, Total. 258.4 us (0.0%)
+[Performance] InitializeOnLoad MemoryProfilerCompilationGuard.InjectCompileGuard                                             :        2 samples, Peak.   113 us (1.0x), Avg.   110 us, Total. 219.5 us (0.0%)
+[Performance] InitializeOnLoad EditorWindow.Initialize                                                                       :        2 samples, Peak.   231 us (1.2x), Avg.   194 us, Total. 387.1 us (0.0%)
+[Performance] InitializeOnLoad AssetPostprocessingInternal.RefreshCustomDependencies                                         :        2 samples, Peak.  2.71 ms (1.0x), Avg.  2.65 ms, Total. 5.304 ms (0.0%)
+[Performance] InitializeOnLoad RectSelection.RegisterShortcutContext                                                         :        2 samples, Peak.   285 us (1.1x), Avg.   266 us, Total. 531.8 us (0.0%)
+[Performance] AssemblyReloadEvents.afterAssemblyReload: UnityEditor.SceneTemplate.SceneTemplateService.AfterAssemblyReload   :        2 samples, Peak.  4.86 ms (1.9x), Avg.  2.59 ms, Total. 5.171 ms (0.0%)
+[Performance] ProcessService.EditorAfterLoadAllAssemblies                                                                    :        2 samples, Peak.   564 us (1.4x), Avg.   401 us, Total. 801.4 us (0.0%)
+[Performance] Application.ReadLicenseInfo                                                                                    :        1 samples, Peak.  39.7 ms (1.0x), Avg.  39.7 ms, Total. 39.66 ms (0.3%)
+[Performance] Application.InitialRefresh                                                                                     :        1 samples, Peak.  8.27 s (1.0x), Avg.  8.27 s, Total. 8.270 s (61.1%)
+[Performance] ShaderImporter.SourceAssetModified                                                                             :        2 samples, Peak.  1.00 us (1.4x), Avg.   700 ns, Total. 1.400 us (0.0%)
+[Performance] ShaderIncludeImporter.SourceAssetModified                                                                      :        2 samples, Peak.  1.10 us (1.0x), Avg.  1.05 us, Total. 2.100 us (0.0%)
+[Performance] Compiling Scripts                                                                                              :        1 samples, Peak.  2.62 s (1.0x), Avg.  2.62 s, Total. 2.618 s (19.3%)
+[Performance] AssemblyReloadEvents.beforeAssemblyReload: UnityEditor.SceneTemplate.SceneTemplateService.BeforeAssemblyReload :        1 samples, Peak.   477 us (1.0x), Avg.   477 us, Total. 477.0 us (0.0%)
+[Performance] PSDImporterAssetPostProcessor.OnPreprocessAsset                                                                :        1 samples, Peak.   969 us (1.0x), Avg.   969 us, Total. 969.0 us (0.0%)
+[Performance] PresetManagerPostProcessor.OnPreprocessAsset                                                                   :        1 samples, Peak.   190 us (1.0x), Avg.   190 us, Total. 189.9 us (0.0%)
+[Performance] CancelSplashScreenOnAssetChange.OnPreprocessAsset                                                              :        1 samples, Peak.   117 us (1.0x), Avg.   117 us, Total. 116.5 us (0.0%)
+[Performance] SpritePostProcess.OnPreprocessAsset                                                                            :        1 samples, Peak.  1.63 ms (1.0x), Avg.  1.63 ms, Total. 1.630 ms (0.0%)
+[Performance] InitializeOnLoad BurstLoader                                                                                   :        1 samples, Peak.  1.64 s (1.0x), Avg.  1.64 s, Total. 1.640 s (12.1%)
+[Performance] InitializeOnLoad EditorToolManager                                                                             :        1 samples, Peak.  3.78 ms (1.0x), Avg.  3.78 ms, Total. 3.783 ms (0.0%)
+[Performance] InitializeOnLoad BackgroundWatcher                                                                             :        1 samples, Peak.   275 us (1.0x), Avg.   275 us, Total. 275.5 us (0.0%)
+[Performance] InitializeOnLoad UnityTestProtocolStarter                                                                      :        1 samples, Peak.   288 us (1.0x), Avg.   288 us, Total. 287.7 us (0.0%)
+[Performance] InitializeOnLoad TestStarter                                                                                   :        1 samples, Peak.  1.27 ms (1.0x), Avg.  1.27 ms, Total. 1.271 ms (0.0%)
+[Performance] InitializeOnLoad RerunCallbackInitializer                                                                      :        1 samples, Peak.  4.55 ms (1.0x), Avg.  4.55 ms, Total. 4.554 ms (0.0%)
+[Performance] InitializeOnLoad RiderScriptEditor                                                                             :        1 samples, Peak.  14.5 ms (1.0x), Avg.  14.5 ms, Total. 14.48 ms (0.1%)
+[Performance] InitializeOnLoad CallbackInitializer                                                                           :        1 samples, Peak.  1.91 ms (1.0x), Avg.  1.91 ms, Total. 1.907 ms (0.0%)
+[Performance] InitializeOnLoad SpriteEditorWindow                                                                            :        1 samples, Peak.   619 us (1.0x), Avg.   619 us, Total. 618.7 us (0.0%)
+[Performance] InitializeOnLoad CoverageReporterStarter                                                                       :        1 samples, Peak.  8.67 ms (1.0x), Avg.  8.67 ms, Total. 8.670 ms (0.1%)
+[Performance] InitializeOnLoad BackgroundImport                                                                              :        1 samples, Peak.   188 us (1.0x), Avg.   188 us, Total. 188.0 us (0.0%)
+[Performance] InitializeOnLoad VSCodeScriptEditor                                                                            :        1 samples, Peak.  9.78 ms (1.0x), Avg.  9.78 ms, Total. 9.782 ms (0.1%)
+[Performance] InitializeOnLoad PlasticPlugin                                                                                 :        1 samples, Peak.   105 ms (1.0x), Avg.   105 ms, Total. 105.0 ms (0.8%)
+[Performance] InitializeOnLoad VSUsageUtility                                                                                :        1 samples, Peak.   104 ms (1.0x), Avg.   104 ms, Total. 104.2 ms (0.8%)
+[Performance] InitializeOnLoad ToolbarBootstrap                                                                              :        1 samples, Peak.   566 ms (1.0x), Avg.   566 ms, Total. 566.2 ms (4.2%)
+[Performance] Package.AsyncRequest                                                                                           :        5 samples, Peak.  1.34 ms (5.0x), Avg.   269 us, Total. 1.345 ms (0.0%)
+[Performance] InitializeOnLoad VisualStudioEditor                                                                            :        1 samples, Peak.  5.08 ms (1.0x), Avg.  5.08 ms, Total. 5.085 ms (0.0%)
+[Performance] InitializeOnLoad TestRunnerApiListener                                                                         :        1 samples, Peak.   384 us (1.0x), Avg.   384 us, Total. 383.8 us (0.0%)
+[Performance] InitializeOnLoad VisualStudioIntegration                                                                       :        1 samples, Peak.   741 us (1.0x), Avg.   741 us, Total. 740.6 us (0.0%)
+[Performance] InitializeOnLoad PrefabLayoutRebuilder                                                                         :        1 samples, Peak.   387 us (1.0x), Avg.   387 us, Total. 387.1 us (0.0%)
+[Performance] InitializeOnLoad SpriteSkinCompositeStartup                                                                    :        1 samples, Peak.  21.7 ms (1.0x), Avg.  21.7 ms, Total. 21.66 ms (0.2%)
+[Performance] InitializeOnLoad UnityAnalyticsStorage                                                                         :        1 samples, Peak.   478 us (1.0x), Avg.   478 us, Total. 477.9 us (0.0%)
+[Performance] InitializeOnLoad BoneGizmoInitializer                                                                          :        1 samples, Peak.  4.58 ms (1.0x), Avg.  4.58 ms, Total. 4.585 ms (0.0%)
+[Performance] InitializeOnLoad Analytics                                                                                     :        1 samples, Peak.   313 us (1.0x), Avg.   313 us, Total. 312.9 us (0.0%)
+[Performance] InitializeOnLoad NavigationWindow                                                                              :        1 samples, Peak.   958 us (1.0x), Avg.   958 us, Total. 957.9 us (0.0%)
+[Performance] InitializeOnLoad SceneDragAndDrop                                                                              :        1 samples, Peak.   307 us (1.0x), Avg.   307 us, Total. 307.1 us (0.0%)
+[Performance] InitializeOnLoad SpriteShapeUpdateCache                                                                        :        1 samples, Peak.  1.11 ms (1.0x), Avg.  1.11 ms, Total. 1.107 ms (0.0%)
+[Performance] InitializeOnLoad SpriteShapeUnityAnalyticsStorage                                                              :        1 samples, Peak.  52.1 us (1.0x), Avg.  52.1 us, Total. 52.10 us (0.0%)
+[Performance] InitializeOnLoad IKEditorManager.CreateInstance                                                                :        1 samples, Peak.  2.67 ms (1.0x), Avg.  2.67 ms, Total. 2.671 ms (0.0%)
+[Performance] InitializeOnLoad $BurstDirectCallInitializer.Initialize                                                        :        7 samples, Peak.  28.1 ms (4.2x), Avg.  6.73 ms, Total. 47.09 ms (0.3%)
+[Performance] InitializeOnLoad SceneViewGridManager.Initialize                                                               :        1 samples, Peak.  5.90 ms (1.0x), Avg.  5.90 ms, Total. 5.903 ms (0.0%)
+[Performance] InitializeOnLoad TilemapPrefabStageHelper.Initialize                                                           :        1 samples, Peak.  2.70 ms (1.0x), Avg.  2.70 ms, Total. 2.705 ms (0.0%)
+[Performance] InitializeOnLoad SceneViewOpenTilePaletteHelper.Initialize                                                     :        1 samples, Peak.  3.46 ms (1.0x), Avg.  3.46 ms, Total. 3.464 ms (0.0%)
+[Performance] InitializeOnLoad TileDragAndDropManager.Initialize                                                             :        1 samples, Peak.  1.41 ms (1.0x), Avg.  1.41 ms, Total. 1.414 ms (0.0%)
+[Performance] InitializeOnLoad VisualStudioEditor.LegacyVisualStudioCodePackageDisabler                                      :        1 samples, Peak.  5.42 ms (1.0x), Avg.  5.42 ms, Total. 5.418 ms (0.0%)
+[Performance] InitializeOnLoad BackgroundImport.Setup                                                                        :        1 samples, Peak.  2.63 ms (1.0x), Avg.  2.63 ms, Total. 2.635 ms (0.0%)
+[Performance] InitializeOnLoad TestJobDataHolder.ResumeRunningJobs                                                           :        1 samples, Peak.  1.12 ms (1.0x), Avg.  1.12 ms, Total. 1.117 ms (0.0%)
+[Performance] InitializeOnLoad AnalyticsReporter.RegisterCallbacks                                                           :        1 samples, Peak.   345 us (1.0x), Avg.   345 us, Total. 345.2 us (0.0%)
+[Performance] DidReloadScriptsTestRunnerWindow.CompilationCallback                                                           :        1 samples, Peak.   854 us (1.0x), Avg.   854 us, Total. 854.1 us (0.0%)
+[Performance] DidReloadScriptsTestListCache.ScriptReloaded                                                                   :        1 samples, Peak.  1.87 ms (1.0x), Avg.  1.87 ms, Total. 1.875 ms (0.0%)
+[Performance] DidReloadScriptsAdvancedDropdownWindow.OnScriptReload                                                          :        1 samples, Peak.   287 us (1.0x), Avg.   287 us, Total. 286.7 us (0.0%)
+[Performance] AssemblyReloadEvents.afterAssemblyReload: UnityEditor.U2D.Animation.BoneGizmo.OnAfterAssemblyReload            :        1 samples, Peak.   870 us (1.0x), Avg.   870 us, Total. 869.7 us (0.0%)
+[Performance] AssetDatabase.ImportAssets                                                                                     :        3 samples, Peak.  1.30 us (1.7x), Avg.   767 ns, Total. 2.300 us (0.0%)
+[Performance] VersionControl.Task.Wait                                                                                       :        1 samples, Peak.  15.8 us (1.0x), Avg.  15.8 us, Total. 15.80 us (0.0%)
+[Performance] TMPro_TexturePostProcessor.OnPostprocessAllAssets                                                              :        2 samples, Peak.  1.03 ms (1.1x), Avg.   956 us, Total. 1.912 ms (0.0%)
+[Performance] AssetPostprocessor.OnPostprocessAllAssets                                                                      :        2 samples, Peak.   851 us (1.0x), Avg.   848 us, Total. 1.696 ms (0.0%)
+[Performance] BuilderAssetPostprocessor.OnPostprocessAllAssets                                                               :        2 samples, Peak.  25.5 ms (1.0x), Avg.  25.5 ms, Total. 51.00 ms (0.4%)
+[Performance] ArtifactBrowserPostProcessor.OnPostprocessAllAssets                                                            :        2 samples, Peak.   662 us (1.0x), Avg.   660 us, Total. 1.319 ms (0.0%)
+[Performance] AssetEvents.OnPostprocessAllAssets                                                                             :        4 samples, Peak.   302 us (1.6x), Avg.   185 us, Total. 738.3 us (0.0%)
+[Performance] AudioMixerPostprocessor.OnPostprocessAllAssets                                                                 :        2 samples, Peak.   747 us (1.0x), Avg.   745 us, Total. 1.489 ms (0.0%)
+[Performance] StyleCatalogPostProcessor.OnPostprocessAllAssets                                                               :        2 samples, Peak.  70.1 ms (1.0x), Avg.  70.0 ms, Total. 140.0 ms (1.0%)
+[Performance] BuildCatalog                                                                                                   :        1 samples, Peak.  67.7 ms (1.0x), Avg.  67.7 ms, Total. 67.67 ms (0.5%)
+[Performance] ModelImporterPostProcessor.OnPostprocessAllAssets                                                              :        2 samples, Peak.  1.46 ms (1.0x), Avg.  1.45 ms, Total. 2.890 ms (0.0%)
+[Performance] RetainedModeAssetPostprocessor.OnPostprocessAllAssets                                                          :        2 samples, Peak.  3.39 ms (1.0x), Avg.  3.36 ms, Total. 6.719 ms (0.0%)
+[Performance] AssetChangedListener.OnPostprocessAllAssets                                                                    :        2 samples, Peak.  1.99 ms (1.0x), Avg.  1.99 ms, Total. 3.973 ms (0.0%)
+[Performance] SpeedTreePostProcessor.OnPostprocessAllAssets                                                                  :        2 samples, Peak.   248 us (1.1x), Avg.   222 us, Total. 444.9 us (0.0%)
+[Performance] TextAssetPostProcessor.OnPostprocessAllAssets                                                                  :        2 samples, Peak.   718 us (1.0x), Avg.   716 us, Total. 1.432 ms (0.0%)
+[Performance] AssetProcessor.OnPostprocessAllAssets                                                                          :        6 samples, Peak.  2.30 ms (1.6x), Avg.  1.43 ms, Total. 8.581 ms (0.1%)
+[Performance] SpriteLibraryAssetPostprocessor.OnPostprocessAllAssets                                                         :        2 samples, Peak.   267 us (1.0x), Avg.   264 us, Total. 527.3 us (0.0%)
+[Performance] PSDImporterAssetPostProcessor.OnPostprocessAllAssets                                                           :        2 samples, Peak.   113 us (1.0x), Avg.   111 us, Total. 222.6 us (0.0%)
+[Performance] PSDImportPostProcessor.OnPostprocessAllAssets                                                                  :        2 samples, Peak.   156 us (1.0x), Avg.   155 us, Total. 310.2 us (0.0%)
+[Performance] SpriteEditorTexturePostprocessor.OnPostprocessAllAssets                                                        :        2 samples, Peak.   294 us (1.0x), Avg.   292 us, Total. 583.8 us (0.0%)
+[Performance] SpriteShapeAssetPostProcessor.OnPostprocessAllAssets                                                           :        2 samples, Peak.   356 us (1.0x), Avg.   345 us, Total. 690.9 us (0.0%)
+[Performance] SyncVS.PostprocessSyncProject                                                                                  :        1 samples, Peak.  21.8 ms (1.0x), Avg.  21.8 ms, Total. 21.82 ms (0.2%)
+[Performance] Application.ImportPackagesAndSetTemplateWhenCreatingProject                                                    :        1 samples, Peak.  14.8 ms (1.0x), Avg.  14.8 ms, Total. 14.79 ms (0.1%)
+[Performance] Application.SyncCurrentColorSpace                                                                              :        1 samples, Peak.  16.4 ms (1.0x), Avg.  16.4 ms, Total. 16.35 ms (0.1%)
+[Performance] Application.OnUsbDevicesChanged                                                                                :        1 samples, Peak.  2.44 ms (1.0x), Avg.  2.44 ms, Total. 2.435 ms (0.0%)
+[Performance] Application.AssetInstanceCacheUpdate                                                                           :        1 samples, Peak.   400 ns (1.0x), Avg.   400 ns, Total. 400.0 ns (0.0%)
+[Performance] Application.UnityExtensions.Initialize                                                                         :        1 samples, Peak.  6.92 ms (1.0x), Avg.  6.92 ms, Total. 6.918 ms (0.1%)
+[Performance] CodeEditorProjectSync.SyncEditorProject                                                                        :        1 samples, Peak.   135 ms (1.0x), Avg.   135 ms, Total. 135.5 ms (1.0%)
+[Performance] Application.ExecuteStartups                                                                                    :        1 samples, Peak.  39.0 ms (1.0x), Avg.  39.0 ms, Total. 39.05 ms (0.3%)
+[Performance] Menu.RegisterMenuInterface                                                                                     :       26 samples, Peak.  2.10 us (8.4x), Avg.   250 ns, Total. 6.500 us (0.0%)
+[Performance] Gizmo.RebuildRenderers                                                                                         :        1 samples, Peak.  37.0 ms (1.0x), Avg.  37.0 ms, Total. 36.99 ms (0.3%)
+[Performance] Gizmo.AddGizmoRenderers                                                                                        :      104 samples, Peak.  1.81 ms (59.1x), Avg.  30.7 us, Total. 3.191 ms (0.0%)
+[Performance] Application.editorInitializingProject                                                                          :        1 samples, Peak.   222 ms (1.0x), Avg.   222 ms, Total. 222.1 ms (1.6%)
+[Performance] Application.InitializeMenu                                                                                     :        1 samples, Peak.   122 ms (1.0x), Avg.   122 ms, Total. 122.0 ms (0.9%)
+[Performance] Menu.RebuildAll                                                                                                :        1 samples, Peak.   122 ms (1.0x), Avg.   122 ms, Total. 122.0 ms (0.9%)
+[Performance] Menu.BuildRegisteredMenuInterfaces                                                                             :        1 samples, Peak.   118 ms (1.0x), Avg.   118 ms, Total. 118.4 ms (0.9%)
+[Performance] Menu.FilterMenuItem                                                                                            :      714 samples, Peak.  52.1 ms (702.2x), Avg.  74.2 us, Total. 53.00 ms (0.4%)
+[Performance] UpdateAllMenus                                                                                                 :        1 samples, Peak.   802 us (1.0x), Avg.   802 us, Total. 802.0 us (0.0%)
+[Performance] Menu.RebuildOSMainMenu                                                                                         :        2 samples, Peak.  2.31 ms (1.1x), Avg.  2.18 ms, Total. 4.361 ms (0.0%)
+[Performance] EditorSceneManager.sceneClosing: UnityEditor.SceneVisibilityManager.EditorSceneManagerOnSceneClosing           :        1 samples, Peak.   375 us (1.0x), Avg.   375 us, Total. 375.1 us (0.0%)
+[Performance] GUIView.RepaintAll.PlayerLoopController                                                                        :        1 samples, Peak.  1.30 us (1.0x), Avg.  1.30 us, Total. 1.300 us (0.0%)
+[Performance] EditorSceneManager.newSceneCreated: UnityEditor.SceneTemplate.SceneTemplateService.OnNewSceneCreated           :        1 samples, Peak.   294 us (1.0x), Avg.   294 us, Total. 293.6 us (0.0%)
+[Performance] EditorSceneManager.newSceneCreated: UnityEditor.SceneVisibilityManager.EditorSceneManagerOnNewSceneCreated     :        1 samples, Peak.   246 us (1.0x), Avg.   246 us, Total. 245.8 us (0.0%)
+[Performance] EditorSceneManager.newSceneCreated: UnityEditor.SceneManagement.StageNavigationManager.OnNewSceneCreated       :        1 samples, Peak.  81.7 us (1.0x), Avg.  81.7 us, Total. 81.70 us (0.0%)
+[Performance] Application.InvokeFinishedLoadingProject                                                                       :        1 samples, Peak.  16.8 ms (1.0x), Avg.  16.8 ms, Total. 16.84 ms (0.1%)
+[Performance] ProcessService.OnProjectLoaded                                                                                 :        1 samples, Peak.  67.3 us (1.0x), Avg.  67.3 us, Total. 67.30 us (0.0%)
+[Performance] Application.Shutdown.SaveDefaultWindowPreferences                                                              :        1 samples, Peak.  98.1 us (1.0x), Avg.  98.1 us, Total. 98.10 us (0.0%)
+[Performance] Application.Shutdown.SaveSceneManagerSetup                                                                     :        1 samples, Peak.  1.15 ms (1.0x), Avg.  1.15 ms, Total. 1.153 ms (0.0%)
+[Performance] Application.Shutdown.CleanupAllContainerWindows                                                                :        1 samples, Peak.   500 ns (1.0x), Avg.   500 ns, Total. 500.0 ns (0.0%)
+[Performance] EditorApplication.quitting: Unity.Burst.Editor.BurstLoader.OnEditorApplicationQuitting                         :        1 samples, Peak.  25.4 us (1.0x), Avg.  25.4 us, Total. 25.40 us (0.0%)
+[Performance] EditorApplication.quitting: UnityEditor.SettingsManagement.FileSettingsRepository.Save                         :        1 samples, Peak.  1.36 ms (1.0x), Avg.  1.36 ms, Total. 1.361 ms (0.0%)
+[Performance] EditorApplication.quitting: UnityEditor.Tilemaps.SceneViewGridManager.EditorQuitting                           :        1 samples, Peak.  98.4 us (1.0x), Avg.  98.4 us, Total. 98.40 us (0.0%)
+[Performance] EditorApplication.quitting: callback in UnityEditor.TextCore.Text.EditorEventCallbacks                         :        1 samples, Peak.  29.3 ms (1.0x), Avg.  29.3 ms, Total. 29.30 ms (0.2%)
+[Performance] Application.Shutdown.PauseProfilerSession                                                                      :        1 samples, Peak.  42.6 us (1.0x), Avg.  42.6 us, Total. 42.60 us (0.0%)
+[Performance] Application.Shutdown.PauseAssetImportWorkers                                                                   :        1 samples, Peak.   154 us (1.0x), Avg.   154 us, Total. 153.8 us (0.0%)
+[Performance] Application.Shutdown.SaveAssets                                                                                :        1 samples, Peak.  23.4 ms (1.0x), Avg.  23.4 ms, Total. 23.41 ms (0.2%)
+[Performance] PaletteAssetModificationProcessor.OnWillSaveAssets                                                             :        1 samples, Peak.   354 us (1.0x), Avg.   354 us, Total. 354.1 us (0.0%)
+[Performance] StateMacroSavedEvent.OnWillSaveAssets                                                                          :        1 samples, Peak.   167 us (1.0x), Avg.   167 us, Total. 166.8 us (0.0%)
+[Performance] FlowMacroSavedEvent.OnWillSaveAssets                                                                           :        1 samples, Peak.   109 us (1.0x), Avg.   109 us, Total. 109.3 us (0.0%)
+[Performance] AssetModificationProcessor.OnWillSaveAssets                                                                    :        1 samples, Peak.   622 us (1.0x), Avg.   622 us, Total. 622.3 us (0.0%)
+[Performance] BuilderAssetModificationProcessor.OnWillSaveAssets                                                             :        1 samples, Peak.   567 us (1.0x), Avg.   567 us, Total. 566.8 us (0.0%)
+[Performance] TerrainModificationProcessor.OnWillSaveAssets                                                                  :        1 samples, Peak.  1.10 ms (1.0x), Avg.  1.10 ms, Total. 1.097 ms (0.0%)
+[Performance] Application.Shutdown.CleanupRenderPipeline                                                                     :        1 samples, Peak.  9.90 us (1.0x), Avg.  9.90 us, Total. 9.900 us (0.0%)
+[Performance] Application.Shutdown.StopPreloadManager                                                                        :        1 samples, Peak.  9.76 ms (1.0x), Avg.  9.76 ms, Total. 9.757 ms (0.1%)
+[Performance] Application.Shutdown.DestroyWorld                                                                              :        1 samples, Peak.   649 us (1.0x), Avg.   649 us, Total. 649.5 us (0.0%)
+[Performance] Application.Shutdown.CleanupAfterLoad                                                                          :        1 samples, Peak.   455 ms (1.0x), Avg.   455 ms, Total. 455.3 ms (3.4%)
+[Performance] Application.Shutdown.Progress                                                                                  :        1 samples, Peak.  7.60 us (1.0x), Avg.  7.60 us, Total. 7.600 us (0.0%)
+[Performance] Application.Shutdown.GICleanupManagers                                                                         :        1 samples, Peak.  9.75 ms (1.0x), Avg.  9.75 ms, Total. 9.749 ms (0.1%)
+[Performance] Application.Shutdown.MenuCleanupClass                                                                          :        1 samples, Peak.   259 us (1.0x), Avg.   259 us, Total. 258.6 us (0.0%)
+[Performance] Application.Shutdown.ADBSaveStateBeforeShutdown                                                                :        1 samples, Peak.  11.0 us (1.0x), Avg.  11.0 us, Total. 11.00 us (0.0%)
+[Performance] Application.Shutdown.RemoteShutdown                                                                            :        1 samples, Peak.  1.90 us (1.0x), Avg.  1.90 us, Total. 1.900 us (0.0%)
+[Performance] Application.Shutdown.CleanupVCProvider                                                                         :        1 samples, Peak.  29.8 us (1.0x), Avg.  29.8 us, Total. 29.80 us (0.0%)
+[Performance] Application.Shutdown.InputShutdown                                                                             :        1 samples, Peak.  3.60 us (1.0x), Avg.  3.60 us, Total. 3.600 us (0.0%)
+[Performance] Application.Shutdown.GizmoManagerDestroy                                                                       :        1 samples, Peak.   780 us (1.0x), Avg.   780 us, Total. 779.9 us (0.0%)
+[Performance] Application.Shutdown.ProfilerSession                                                                           :        1 samples, Peak.   263 us (1.0x), Avg.   263 us, Total. 262.9 us (0.0%)
+[Performance] Application.Shutdown.ReleaseGfxWindowOnAllGUIViews                                                             :        1 samples, Peak.   500 ns (1.0x), Avg.   500 ns, Total. 500.0 ns (0.0%)
+[Performance] Application.Shutdown.CleanupEngine                                                                             :        1 samples, Peak.  99.3 ms (1.0x), Avg.  99.3 ms, Total. 99.29 ms (0.7%)
+[Performance] Application.Shutdown.CleanupAssetDatabase                                                                      :        1 samples, Peak.  18.9 ms (1.0x), Avg.  18.9 ms, Total. 18.86 ms (0.1%)
+[Performance] Application.Shutdown.ScriptCompilationCleanUp                                                                  :        1 samples, Peak.  23.2 ms (1.0x), Avg.  23.2 ms, Total. 23.19 ms (0.2%)
+[Performance] Application.Shutdown.DestroyJobSystem                                                                          :        1 samples, Peak.  99.9 us (1.0x), Avg.  99.9 us, Total. 99.90 us (0.0%)
+[Performance] Application.Shutdown.CleanupPersistentManager                                                                  :        1 samples, Peak.  2.36 ms (1.0x), Avg.  2.36 ms, Total. 2.362 ms (0.0%)
+[Performance] Application.Shutdown.CleanupAsyncReadManager                                                                   :        1 samples, Peak.   245 us (1.0x), Avg.   245 us, Total. 244.5 us (0.0%)
+[Performance] Application.Shutdown.CleanupProgressBar                                                                        :        1 samples, Peak.   300 ns (1.0x), Avg.   300 ns, Total. 300.0 ns (0.0%)
+[Performance] Application.Shutdown.CleanupMono                                                                               :        1 samples, Peak.   166 ms (1.0x), Avg.   166 ms, Total. 165.6 ms (1.2%)
+[Performance] Application.Shutdown.CleanupStdConverters                                                                      :        1 samples, Peak.  10.0 us (1.0x), Avg.  10.0 us, Total. 10.00 us (0.0%)
+[Performance] Application.Shutdown.UnloadAllPlatformSupportModuleNativeDlls                                                  :        1 samples, Peak.   800 ns (1.0x), Avg.   800 ns, Total. 800.0 ns (0.0%)
+[Performance] Application.Shutdown.UnloadAllPlatformSupportNativeLibraries                                                   :        1 samples, Peak. 0.0 (-nan(ind)x), Avg. 0.0, Total. 0.0 (0.0%)
+[Performance] Application.Shutdown.CleanupAutoDocumentation                                                                  :        1 samples, Peak.   334 us (1.0x), Avg.   334 us, Total. 334.1 us (0.0%)
+[Performance] Application.Shutdown.ShaderNameManagerDestroy                                                                  :        1 samples, Peak.  57.3 us (1.0x), Avg.  57.3 us, Total. 57.30 us (0.0%)
+[Performance] Application.Shutdown.CleanupCacheServer                                                                        :        1 samples, Peak.   400 ns (1.0x), Avg.   400 ns, Total. 400.0 ns (0.0%)
+[Performance] Application.Shutdown.Virtualization_Shutdown                                                                   :        1 samples, Peak.   500 ns (1.0x), Avg.   500 ns, Total. 500.0 ns (0.0%)
+[Performance] Application.Shutdown.DevConnections                                                                            :        1 samples, Peak.   211 us (1.0x), Avg.   211 us, Total. 210.8 us (0.0%)
+Checking for leaked weakptr:
+  Found no leaked weakptrs.
+[Package Manager] Server::Kill -- Server was shutdown
+Memory Statistics:
+[ALLOC_TEMP_TLS] TLS Allocator
+  StackAllocators : 
+    [ALLOC_TEMP_CurlRequest]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 0 B
+      Overflow Count 0
+    [ALLOC_TEMP_MAIN]
+      Initial Block Size 16.0 MB
+      Current Block Size 19.2 MB
+      Peak Allocated Bytes 11.0 MB
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 8]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 4]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 1.2 KB
+      Overflow Count 1
+    [ALLOC_TEMP_AUDIO_FMOD mixer thread]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_BakingJobs.Worker 5]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 11]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 3]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_BatchDeleteObjects]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_CoreBusinessMetricsCache]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 8.0 KB
+      Overflow Count 0
+    [ALLOC_TEMP_REST Message Handler]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 13]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 1.1 KB
+      Overflow Count 1
+    [ALLOC_TEMP_Background Job.Worker 2]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 1.5 KB
+      Overflow Count 0
+    [ALLOC_TEMP_AssetDatabase.IOService]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 10]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 1.2 KB
+      Overflow Count 1
+    [ALLOC_TEMP_Job.Worker 12]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 1.1 KB
+      Overflow Count 1
+    [ALLOC_TEMP_Loading.PreloadManager]
+      Initial Block Size 32.0 MB
+      Current Block Size 32.0 MB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Profiler.Dispatcher]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 0 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 14]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 1.1 KB
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 3]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 1.2 KB
+      Overflow Count 1
+    [ALLOC_TEMP_BakingJobs.Worker 7]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 5]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 13]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 2]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 1.2 KB
+      Overflow Count 1
+    [ALLOC_TEMP_BakingJobs.Worker 6]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 11]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 1.2 KB
+      Overflow Count 1
+    [ALLOC_TEMP_Job.Worker 0]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 1.2 KB
+      Overflow Count 1
+    [ALLOC_TEMP_Job.Worker 5]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 1.1 KB
+      Overflow Count 1
+    [ALLOC_TEMP_Job.Worker 6]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 1.2 KB
+      Overflow Count 1
+    [ALLOC_TEMP_Background Job.Worker 9]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_DirMonitor]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 0.5 KB
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 9]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 1.1 KB
+      Overflow Count 1
+    [ALLOC_TEMP_BakingJobs.Worker 1]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Loading.AsyncRead]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 128 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 10]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 6]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_AUDIO_FMOD (WASAPI) feeder thread]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 168 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 1]
+      Initial Block Size 32.0 KB
+      Current Block Size 248.0 KB
+      Peak Allocated Bytes 128.0 KB
+      Overflow Count 0
+    [ALLOC_TEMP_AUDIO_FMOD stream thread]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_BakingJobs.Worker 2]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 7]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 8]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 1.2 KB
+      Overflow Count 1
+    [ALLOC_TEMP_Job.Worker 1]
+      Initial Block Size 256.0 KB
+      Current Block Size 1.0 MB
+      Peak Allocated Bytes 1.0 MB
+      Overflow Count 1
+    [ALLOC_TEMP_BakingJobs.Worker 0]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_BakingJobs.Worker 3]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_EditorTaskManager]
+      Initial Block Size 64.0 KB
+      Current Block Size 68.0 KB
+      Peak Allocated Bytes 64.0 KB
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 15]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_BakingJobs.Worker 4]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 12]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_HTTP REST Server]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 75 B
+      Overflow Count 0
+    [ALLOC_TEMP_AssetGarbageCollectorHelper] x 15
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 0 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 0]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 4]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 14]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 7]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 1.1 KB
+      Overflow Count 1
+    [ALLOC_TEMP_CloudJob.Worker 0]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 4.3 KB
+      Overflow Count 0
+[ALLOC_MEMORYPROFILER]
+  Requested Block Size 1.0 MB
+  Peak Block count 2
+  Peak Allocated memory 0.8 MB
+  Peak Large allocation bytes 0 B
+[ALLOC_DEFAULT] Dual Thread Allocator
+  Peak main deferred allocation count 1298
+    [ALLOC_BUCKET]
+      Large Block size 32.0 MB
+      Used Block count 1
+      Peak Allocated bytes 11.0 MB
+    [ALLOC_DEFAULT_MAIN]
+      Requested Block Size 16.0 MB
+      Peak Block count 6
+      Peak Allocated memory 80.6 MB
+      Peak Large allocation bytes 0 B
+    [ALLOC_DEFAULT_THREAD]
+      Requested Block Size 16.0 MB
+      Peak Block count 1
+      Peak Allocated memory 128.1 MB
+      Peak Large allocation bytes 128.0 MB
+[ALLOC_TEMP_JOB_1_FRAME]
+  Initial Block Size 2.0 MB
+  Used Block Count 0
+  Overflow Count (too large) 0
+  Overflow Count (full) 0
+[ALLOC_TEMP_JOB_2_FRAMES]
+  Initial Block Size 2.0 MB
+  Used Block Count 0
+  Overflow Count (too large) 0
+  Overflow Count (full) 0
+[ALLOC_TEMP_JOB_4_FRAMES (JobTemp)]
+  Initial Block Size 2.0 MB
+  Used Block Count 1
+  Overflow Count (too large) 0
+  Overflow Count (full) 0
+[ALLOC_TEMP_JOB_ASYNC (Background)]
+  Initial Block Size 1.0 MB
+  Used Block Count 1
+  Overflow Count (too large) 7
+  Overflow Count (full) 0
+[ALLOC_GFX] Dual Thread Allocator
+  Peak main deferred allocation count 0
+    [ALLOC_BUCKET]
+      Large Block size 32.0 MB
+      Used Block count 1
+      Peak Allocated bytes 11.0 MB
+    [ALLOC_GFX_MAIN]
+      Requested Block Size 16.0 MB
+      Peak Block count 1
+      Peak Allocated memory 5.9 MB
+      Peak Large allocation bytes 0 B
+    [ALLOC_GFX_THREAD]
+      Requested Block Size 16.0 MB
+      Peak Block count 1
+      Peak Allocated memory 160 B
+      Peak Large allocation bytes 0 B
+[ALLOC_CACHEOBJECTS] Dual Thread Allocator
+  Peak main deferred allocation count 293
+    [ALLOC_BUCKET]
+      Large Block size 32.0 MB
+      Used Block count 1
+      Peak Allocated bytes 11.0 MB
+    [ALLOC_CACHEOBJECTS_MAIN]
+      Requested Block Size 4.0 MB
+      Peak Block count 16
+      Peak Allocated memory 54.9 MB
+      Peak Large allocation bytes 22.2 MB
+    [ALLOC_CACHEOBJECTS_THREAD]
+      Requested Block Size 4.0 MB
+      Peak Block count 1
+      Peak Allocated memory 304 B
+      Peak Large allocation bytes 0 B
+[ALLOC_TYPETREE] Dual Thread Allocator
+  Peak main deferred allocation count 587
+    [ALLOC_BUCKET]
+      Large Block size 32.0 MB
+      Used Block count 1
+      Peak Allocated bytes 11.0 MB
+    [ALLOC_TYPETREE_MAIN]
+      Requested Block Size 2.0 MB
+      Peak Block count 13
+      Peak Allocated memory 22.0 MB
+      Peak Large allocation bytes 0 B
+    [ALLOC_TYPETREE_THREAD]
+      Requested Block Size 2.0 MB
+      Peak Block count 1
+      Peak Allocated memory 2.0 KB
+      Peak Large allocation bytes 0 B
+[ALLOC_PROFILER]
+  Requested Block Size 16.0 MB
+  Peak Block count 1
+  Peak Allocated memory 0.6 MB
+  Peak Large allocation bytes 0 B
+    [ALLOC_PROFILER_BUCKET]
+      Large Block size 32.0 MB
+      Used Block count 1
+      Peak Allocated bytes 4.0 KB
+[ALLOC_PROFILER_EDITOR]
+  Requested Block Size 1.0 MB
+  Peak Block count 0
+  Peak Allocated memory 0 B
+  Peak Large allocation bytes 0 B
+    [ALLOC_PROFILER_BUCKET]
+      Large Block size 32.0 MB
+      Used Block count 1
+      Peak Allocated bytes 4.0 KB
+##utp:{"type":"MemoryLeaks","version":2,"phase":"Immediate","time":1774711907908,"processId":58072,"allocatedMemory":21027916,"memoryLabels":[{"Default":20295},{"Permanent":15559},{"NewDelete":80704},{"Thread":4229300},{"Manager":32426},{"VertexData":12},{"Geometry":560},{"Texture":176},{"Shader":68850},{"Material":24},{"GfxDevice":57304},{"GfxThread":72},{"Animation":296},{"Audio":3928},{"FontEngine":272},{"Physics":513},{"Serialization":948},{"Input":14736},{"JobScheduler":33008},{"Mono":40},{"ScriptingNativeRuntime":191848},{"BaseObject":1627276},{"Resource":1360},{"Renderer":2304},{"Transform":16},{"File":9711},{"WebCam":96},{"Culling":40},{"Terrain":1137},{"Wind":24},{"STL":48},{"String":18263},{"DynamicArray":89957},{"HashMap":96938},{"Utility":2663810},{"Curl":1424},{"PoolAlloc":1728},{"AI":104},{"TypeTree":4565},{"ScriptManager":640},{"RuntimeInitializeOnLoadManager":80},{"SpriteAtlas":128},{"GI":4072},{"Director":7960},{"CloudService":1712},{"WebRequest":688},{"VR":46081},{"SceneManager":568},{"Video":72},{"LazyScriptCache":40},{"NativeArray":12},{"Camera":25},{"Secure":1},{"SerializationCache":1584},{"APIUpdating":11872},{"Subsystems":392},{"VirtualTexturing":57896},{"StaticSafetyDebugInfo":327680},{"EditorGui":56},{"EditorUtility":19798},{"VersionControl":4},{"Undo":704},{"AssetDatabase":11227621},{"RestService":1414},{"EditorGi":376},{"License":3584},{"UnityConnect":25320},{"Collab":593},{"Upm":2032},{"DrivenProperties":96},{"LocalIPC":274},{"ProfilerEditor":10943},{"CoreBusinessMetrics":3846},{"AssetReference":40},{"IPCStream":40}]}
+~StackAllocator(ALLOC_TEMP_MAIN) m_LastAlloc not NULL. Did you forget to call FreeAllStackAllocations()?

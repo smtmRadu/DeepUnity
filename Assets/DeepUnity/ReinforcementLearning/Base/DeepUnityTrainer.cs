@@ -209,9 +209,9 @@ namespace DeepUnity.ReinforcementLearning
                 {
                     Directory.CreateDirectory(Instance.optimStatesPath);
                     File.WriteAllText(Instance.optimStatesPath + "info.txt", $"Timestamp: {DateTime.Now}\n"+
-                        "• This folder contains the optim states' saves from previous training sessions of this agent.\n" +
-                        "• These are usefull for continuing the agent training in a different session as they hold gradients' momentums.\n" +
-                        "• If needed, you can safely remove these files.");
+                        "- This folder contains the optim states' saves from previous training sessions of this agent.\n" +
+                        "- These are usefull for continuing the agent training in a different session as they hold gradients' momentums.\n" +
+                        "- If needed, you can safely remove these files.");
                 }
                 string[] files_names = Directory.GetFiles(Instance.optimStatesPath, "*.json");
                 files_names = files_names.Where(x => x.Contains(Instance.GetType().Name.ToLower())).ToArray();
@@ -285,9 +285,15 @@ namespace DeepUnity.ReinforcementLearning
         Dictionary<Agent, (Tensor, Tensor)> agentsDiscreteActionsProbs = new();
         public void ParallelInference(Agent ag, int lcf)
         {
-            if(lastCallFixedUpdateFrame == lcf)
+            Agent[] learningAgents = parallelAgents
+                .Where(x => x.behaviourType == BehaviourType.Learn)
+                .ToArray();
+
+            bool continuousCacheReady = !model.IsUsingContinuousActions || agentsContinuousActionsProbs.ContainsKey(ag);
+            bool discreteCacheReady = !model.IsUsingDiscreteActions || agentsDiscreteActionsProbs.ContainsKey(ag);
+
+            if (lastCallFixedUpdateFrame == lcf && continuousCacheReady && discreteCacheReady)
             {
-               
                 if (model.IsUsingContinuousActions)
                 {
                     var valuesc = agentsContinuousActionsProbs[ag];
@@ -295,75 +301,78 @@ namespace DeepUnity.ReinforcementLearning
                     ag.Timestep.prob_continuous = valuesc.Item2;
                 }
 
-               
                 if (model.IsUsingDiscreteActions)
                 {
                     var valuesd = agentsDiscreteActionsProbs[ag];
                     ag.Timestep.action_discrete = valuesd.Item1;
                     ag.Timestep.prob_discrete = valuesd.Item2;
                 }
-                             
+                return;
             }
-            else
+
+            lastCallFixedUpdateFrame = lcf;
+            agentsContinuousActionsProbs.Clear();
+            agentsDiscreteActionsProbs.Clear();
+
+            // PARALLEL OBSERVATION PROCESS ---------------------------- [START]
+            for (int i = 0; i < learningAgents.Length; i++)
             {
-                lastCallFixedUpdateFrame = lcf;
-                // PARALLEL OBSERVATION PROCESS ---------------------------- [START]
-                for (int i = 0; i < parallelAgents.Count; i++)
-                {
-                    if (parallelAgents[i].LastState == null)
-                        parallelAgents[i].Timestep.state = parallelAgents[i].GetState();
-                    else
-                        parallelAgents[i].Timestep.state = parallelAgents[i].LastState;
-                }
-                // PARALLEL OBSERVATION PROCESS ---------------------------- [END]
-
-
-                // PARALLEL ACTION PROCESS --------------------------------- [START]
-                var allStates = parallelAgents.Where(x => x.behaviourType == BehaviourType.Learn).Select(x => x.Timestep.state).ToArray();
-                Tensor stateBatch = Tensor.Concat(null, allStates);
-                
-                if(model.IsUsingContinuousActions)
-                {
-                    Tensor cactionBatch;
-                    Tensor cprobBatch;
-                    model.ContinuousEval(stateBatch, out cactionBatch, out cprobBatch);
-                    Tensor[] continuousActionsBatch = Tensor.Split(cactionBatch, 0, 1);
-                    Tensor[] continuousProbsBatch = Tensor.Split(cprobBatch, 0, 1);
-
-                    int index = 0;
-                    foreach (var agentx in parallelAgents)
-                    {
-                        agentsContinuousActionsProbs[agentx] = (continuousActionsBatch[index].Squeeze(0), continuousProbsBatch[index].Squeeze(0));
-                        index++;
-                    }
-
-                    var valuesc = agentsContinuousActionsProbs[ag];
-                    ag.Timestep.action_continuous = valuesc.Item1;
-                    ag.Timestep.prob_continuous = valuesc.Item2;
-                }
-
-
-                if(model.IsUsingDiscreteActions)
-                {
-                    Tensor dactionBatch;
-                    Tensor dprobBatch;
-                    model.DiscreteEval(stateBatch, out dactionBatch, out dprobBatch);
-                    Tensor[] discreteActionsBatch = Tensor.Split(dactionBatch, 0, 1);
-                    Tensor[] discreteProbsBatch = Tensor.Split(dprobBatch, 0, 1);
-
-                    int index = 0;
-                    foreach (var agentx in parallelAgents)
-                    {
-                        agentsDiscreteActionsProbs[agentx] = (discreteActionsBatch[index].Squeeze(0), discreteProbsBatch[index].Squeeze(0));
-                        index++;
-                    }
-
-                    var valuesc = agentsDiscreteActionsProbs[ag];
-                    ag.Timestep.action_discrete = valuesc.Item1;
-                    ag.Timestep.prob_discrete = valuesc.Item2;
-                }
-                // PARALLEL ACTION PROCESS --------------------------------- [END]
+                if (learningAgents[i].LastState == null)
+                    learningAgents[i].Timestep.state = learningAgents[i].GetState();
+                else
+                    learningAgents[i].Timestep.state = learningAgents[i].LastState;
             }
+            // PARALLEL OBSERVATION PROCESS ---------------------------- [END]
+
+            // PARALLEL ACTION PROCESS --------------------------------- [START]
+            var allStates = learningAgents.Select(x => x.Timestep.state).ToArray();
+            if (allStates.Length == 0 || allStates.Any(x => x == null))
+                throw new InvalidOperationException("ParallelInference encountered a null state while building the batched action query.");
+
+            Tensor stateBatch = Tensor.Concat(null, allStates);
+
+            if (model.IsUsingContinuousActions)
+            {
+                Tensor cactionBatch;
+                Tensor cprobBatch;
+                model.ContinuousEval(stateBatch, out cactionBatch, out cprobBatch);
+                Tensor[] continuousActionsBatch = Tensor.Split(cactionBatch, 0, 1);
+                Tensor[] continuousProbsBatch = cprobBatch != null ? Tensor.Split(cprobBatch, 0, 1) : null;
+
+                int index = 0;
+                foreach (var agentx in learningAgents)
+                {
+                    Tensor probs = continuousProbsBatch != null ? continuousProbsBatch[index].Squeeze(0) : null;
+                    agentsContinuousActionsProbs[agentx] = (continuousActionsBatch[index].Squeeze(0), probs);
+                    index++;
+                }
+
+                var valuesc = agentsContinuousActionsProbs[ag];
+                ag.Timestep.action_continuous = valuesc.Item1;
+                ag.Timestep.prob_continuous = valuesc.Item2;
+            }
+
+            if (model.IsUsingDiscreteActions)
+            {
+                Tensor dactionBatch;
+                Tensor dprobBatch;
+                model.DiscreteEval(stateBatch, out dactionBatch, out dprobBatch);
+                Tensor[] discreteActionsBatch = Tensor.Split(dactionBatch, 0, 1);
+                Tensor[] discreteProbsBatch = dprobBatch != null ? Tensor.Split(dprobBatch, 0, 1) : null;
+
+                int index = 0;
+                foreach (var agentx in learningAgents)
+                {
+                    Tensor probs = discreteProbsBatch != null ? discreteProbsBatch[index].Squeeze(0) : null;
+                    agentsDiscreteActionsProbs[agentx] = (discreteActionsBatch[index].Squeeze(0), probs);
+                    index++;
+                }
+
+                var valuesd = agentsDiscreteActionsProbs[ag];
+                ag.Timestep.action_discrete = valuesd.Item1;
+                ag.Timestep.prob_discrete = valuesd.Item2;
+            }
+            // PARALLEL ACTION PROCESS --------------------------------- [END]
         }
     }
 
@@ -426,4 +435,3 @@ namespace DeepUnity.ReinforcementLearning
         }
     }
 }
-

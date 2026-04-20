@@ -236,7 +236,8 @@ namespace DeepUnity.Modules
             int outputHeight = inputHeight - kernelHeight + 1;
             int outputWidth = inputWidth - kernelWidth + 1;
 
-            float grad_scale = batchSize * inputChannels * outputChannels * kernelHeight * kernelWidth * inputHeight * inputWidth; ; // * outputWidth * outputHeight;
+            // float grad_scale = batchSize * inputChannels * outputChannels * kernelHeight * kernelWidth * inputHeight * inputWidth; // * outputWidth * outputHeight;
+            float grad_scale = 1f;
             
             // BIases are computed on CPU because is faster. The bias vector is too small in comparison with other stuff.
             if(bias && RequiresGrad)

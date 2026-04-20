@@ -27,7 +27,7 @@ namespace DeepUnity.Tutorials.ChatDemo
         TMP_Text pressIToInteractText;
         [SerializeField] ChatWindow chatWindow;
         [SerializeField] private float temperature = 0.8f;
-        private Gemma3ForCausalLM llm;
+        private Gemma3ForCausalLM llm; // V35 GPU-accelerated inference
 
 
         [ViewOnly, SerializeField] KnightScript player;
@@ -62,7 +62,7 @@ namespace DeepUnity.Tutorials.ChatDemo
             chatWindow.gameObject.SetActive(true);
             yield return null;
 
-            llm = new Gemma3ForCausalLM("Assets/DeepUnity/LLMs/Gemma3/params_ft");
+            llm = new Gemma3ForCausalLM();
             chatWindow.SetInfoText($"Initializing {npc_name}...");
             yield return null;
 
