@@ -18,7 +18,7 @@ MonoBehaviour:
   criticLearningRate: 0.0003
   gamma: 0.99
   LRSchedule: 0
-  bufferSize: 2048
+  bufferSize: 10240
   batchSize: 512
   numEpoch: 8
   horizon: -1
@@ -43,5 +43,5 @@ MonoBehaviour:
   targetNoise: 0.2
   policyDelay: 2
   timescaleAdjustment: 0
-  timescale: 32.21
+  timescale: 1
   debug: 0

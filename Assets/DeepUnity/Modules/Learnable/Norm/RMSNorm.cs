@@ -23,6 +23,8 @@ namespace DeepUnity.Modules
         [SerializeField] public Tensor gamma;
         [SerializeField] private Tensor gammaGrad;
 
+        public float Epsilon => epsilon;
+
         private Tensor xHat { get; set; }
         private Tensor ms_x { get; set; }
 

@@ -507,6 +507,7 @@ namespace DeepUnity.ReinforcementLearning
 
                 // Draw buffer  
                 if (DeepUnityTrainer.Instance.GetType() == typeof(PPOTrainer) ||
+                    DeepUnityTrainer.Instance.GetType() == typeof(PPOGPUTrainer) ||
                     DeepUnityTrainer.Instance.GetType() == typeof(VPGTrainer))
                 {
                     int buff_count = DeepUnityTrainer.MemoriesCount;

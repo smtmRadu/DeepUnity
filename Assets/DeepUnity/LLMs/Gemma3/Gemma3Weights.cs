@@ -70,40 +70,23 @@ namespace DeepUnity
                 _ = LoadAllAsync(paramsPath);
             }
 
+            // ---- FP16 buffer helpers ----
             static ComputeBuffer HalfBuf(int halfCount)
             {
                 return new ComputeBuffer(halfCount / 2, 4, ComputeBufferType.Structured);
             }
 
-            static ushort[] ReadFP16(string path, int numWeights)
+            // Reads a .bin of packed FP16 directly into uint[] (2 halves per uint).
+            // Avoids the ushort->uint pack loop on the main thread.
+            static uint[] ReadFP16Packed(string path, int numHalves)
             {
                 byte[] bytes = System.IO.File.ReadAllBytes(path);
-                ushort[] w = new ushort[numWeights];
-                Buffer.BlockCopy(bytes, 0, w, 0, bytes.Length);
-                return w;
+                uint[] packed = new uint[numHalves / 2];
+                Buffer.BlockCopy(bytes, 0, packed, 0, bytes.Length);
+                return packed;
             }
 
-            // Transpose a row-major [rows × cols] matrix to [cols × rows]
-            // so that consecutive threads read contiguous memory (coalesced access).
-            static ushort[] TransposeHalf(ushort[] data, int rows, int cols)
-            {
-                ushort[] result = new ushort[rows * cols];
-                Parallel.For(0, rows, r =>
-                {
-                    for (int c = 0; c < cols; c++)
-                        result[c * rows + r] = data[r * cols + c];
-                });
-                return result;
-            }
-
-            static void UploadHalfs(ComputeBuffer buf, ushort[] data)
-            {
-                uint[] packed = new uint[data.Length / 2];
-                for (int i = 0; i < packed.Length; i++)
-                    packed[i] = (uint)data[2 * i] | ((uint)data[2 * i + 1] << 16);
-                buf.SetData(packed);
-            }
-
+            // ---- async loading ----
             async Task LoadAllAsync(string paramsPath)
             {
                 Task embedTask = LoadEmbeddingAsync(paramsPath);
@@ -113,10 +96,10 @@ namespace DeepUnity
                     int idx = i;
                     layerTasks[i] = LoadLayerAsync(paramsPath, idx);
                 }
-                Task<ushort[]> normTask = Task.Run(() => ReadFP16(paramsPath + "/norm.bin", hiddenSize));
+                Task<uint[]> normTask = Task.Run(() => ReadFP16Packed(paramsPath + "/norm.bin", hiddenSize));
 
                 await Task.WhenAll(embedTask, normTask, Task.WhenAll(layerTasks));
-                UploadHalfs(finalNormGamma, normTask.Result);
+                finalNormGamma.SetData(normTask.Result);
                 IsReady = true;
                 ConsoleMessage.Info("Gemma3 weights loaded.");
             }
@@ -131,26 +114,31 @@ namespace DeepUnity
                     11_983_726, 11_983_722
                 };
 
-                Task<ushort[]>[] tasks = new Task<ushort[]>[14];
+                Task<uint[]>[] tasks = new Task<uint[]>[14];
                 for (int i = 0; i < 14; i++)
                 {
                     int size = partSizes[i];
                     string path = $"{paramsPath}/lm_head/part_{i}.bin";
-                    tasks[i] = Task.Run(() => ReadFP16(path, size));
+                    tasks[i] = Task.Run(() => ReadFP16Packed(path, size));
                 }
 
-                ushort[][] results = await Task.WhenAll(tasks);
+                uint[][] results = await Task.WhenAll(tasks);
 
-                int totalSize = vocabSize * hiddenSize;
-                ushort[] combined = new ushort[totalSize];
-                int offset = 0;
-                for (int i = 0; i < 14; i++)
+                // Combine off the main thread; SetData on main thread is the only sync work.
+                uint[] combined = await Task.Run(() =>
                 {
-                    Array.Copy(results[i], 0, combined, offset, results[i].Length);
-                    offset += results[i].Length;
-                }
+                    int totalPacked = (vocabSize * hiddenSize) / 2;
+                    uint[] r = new uint[totalPacked];
+                    int offset = 0;
+                    for (int i = 0; i < 14; i++)
+                    {
+                        Array.Copy(results[i], 0, r, offset, results[i].Length);
+                        offset += results[i].Length;
+                    }
+                    return r;
+                });
 
-                UploadHalfs(embedLmHead, combined);
+                embedLmHead.SetData(combined);
             }
 
             async Task LoadLayerAsync(string paramsPath, int layerIdx)
@@ -162,52 +150,54 @@ namespace DeepUnity
                 int oSize = innerEmbDim * hiddenSize;
                 int mlpPart = hiddenSize * intermediateSize;
 
-                var tQ = Task.Run(() => ReadFP16(lp + "/self_attn_q_proj.bin", qSize));
-                var tK = Task.Run(() => ReadFP16(lp + "/self_attn_k_proj.bin", kvSize));
-                var tV = Task.Run(() => ReadFP16(lp + "/self_attn_v_proj.bin", kvSize));
-                var tO = Task.Run(() => ReadFP16(lp + "/self_attn_o_proj.bin", oSize));
-                var tQN = Task.Run(() => ReadFP16(lp + "/self_attn_q_norm.bin", headDim));
-                var tKN = Task.Run(() => ReadFP16(lp + "/self_attn_k_norm.bin", headDim));
-                var tGate = Task.Run(() => ReadFP16(lp + "/mlp_gate_proj.bin", mlpPart));
-                var tUp = Task.Run(() => ReadFP16(lp + "/mlp_up_proj.bin", mlpPart));
-                var tDown = Task.Run(() => ReadFP16(lp + "/mlp_down_proj.bin", mlpPart));
-                var tILn = Task.Run(() => ReadFP16(lp + "/input_layernorm.bin", hiddenSize));
-                var tPALn = Task.Run(() => ReadFP16(lp + "/post_attention_layernorm.bin", hiddenSize));
-                var tPFLn = Task.Run(() => ReadFP16(lp + "/pre_feedforward_layernorm.bin", hiddenSize));
-                var tPPLn = Task.Run(() => ReadFP16(lp + "/post_feedforward_layernorm.bin", hiddenSize));
+                var tQ = Task.Run(() => ReadFP16Packed(lp + "/self_attn_q_proj.bin", qSize));
+                var tK = Task.Run(() => ReadFP16Packed(lp + "/self_attn_k_proj.bin", kvSize));
+                var tV = Task.Run(() => ReadFP16Packed(lp + "/self_attn_v_proj.bin", kvSize));
+                var tO = Task.Run(() => ReadFP16Packed(lp + "/self_attn_o_proj.bin", oSize));
+                var tQN = Task.Run(() => ReadFP16Packed(lp + "/self_attn_q_norm.bin", headDim));
+                var tKN = Task.Run(() => ReadFP16Packed(lp + "/self_attn_k_norm.bin", headDim));
+                var tGate = Task.Run(() => ReadFP16Packed(lp + "/mlp_gate_proj.bin", mlpPart));
+                var tUp = Task.Run(() => ReadFP16Packed(lp + "/mlp_up_proj.bin", mlpPart));
+                var tDown = Task.Run(() => ReadFP16Packed(lp + "/mlp_down_proj.bin", mlpPart));
+                var tILn = Task.Run(() => ReadFP16Packed(lp + "/input_layernorm.bin", hiddenSize));
+                var tPALn = Task.Run(() => ReadFP16Packed(lp + "/post_attention_layernorm.bin", hiddenSize));
+                var tPFLn = Task.Run(() => ReadFP16Packed(lp + "/pre_feedforward_layernorm.bin", hiddenSize));
+                var tPPLn = Task.Run(() => ReadFP16Packed(lp + "/post_feedforward_layernorm.bin", hiddenSize));
 
                 await Task.WhenAll(tQ, tK, tV, tO, tQN, tKN, tGate, tUp, tDown, tILn, tPALn, tPFLn, tPPLn);
 
-                // Concatenate Q,K,V then transpose for coalesced GPU access.
-                // Original: [qkvProjDim × hiddenSize] row-major → Transposed: [hiddenSize × qkvProjDim]
-                ushort[] flatQKV = new ushort[hiddenSize * qkvProjDim];
-                Array.Copy(tQ.Result, 0, flatQKV, 0, qSize);
-                Array.Copy(tK.Result, 0, flatQKV, qSize, kvSize);
-                Array.Copy(tV.Result, 0, flatQKV, qSize + kvSize, kvSize);
-                UploadHalfs(W_QKV[layerIdx], TransposeHalf(flatQKV, qkvProjDim, hiddenSize));
+                // Assemble flat packed buffers off the main thread.
+                int qPacked = qSize / 2;
+                int kvPacked = kvSize / 2;
+                int mlpPacked = mlpPart / 2;
+                int qkvFlatLen = (hiddenSize * qkvProjDim) / 2;
+                int mlpFlatLen = (mlpPart * 3) / 2;
 
-                // W_O: [hiddenSize × innerEmbDim] → transposed [innerEmbDim × hiddenSize]
-                UploadHalfs(W_O[layerIdx], TransposeHalf(tO.Result, hiddenSize, innerEmbDim));
+                var (flatQKV, flatMLP) = await Task.Run(() =>
+                {
+                    uint[] qkv = new uint[qkvFlatLen];
+                    Array.Copy(tQ.Result, 0, qkv, 0, qPacked);
+                    Array.Copy(tK.Result, 0, qkv, qPacked, kvPacked);
+                    Array.Copy(tV.Result, 0, qkv, qPacked + kvPacked, kvPacked);
 
-                // MLP: transpose each sub-matrix for coalesced access
-                // gate: [intermediateSize × hiddenSize] → [hiddenSize × intermediateSize]
-                // up:   [intermediateSize × hiddenSize] → [hiddenSize × intermediateSize]
-                // down: [hiddenSize × intermediateSize] → [intermediateSize × hiddenSize]
-                ushort[] gate_T = TransposeHalf(tGate.Result, intermediateSize, hiddenSize);
-                ushort[] up_T = TransposeHalf(tUp.Result, intermediateSize, hiddenSize);
-                ushort[] down_T = TransposeHalf(tDown.Result, hiddenSize, intermediateSize);
-                ushort[] flatMLP = new ushort[mlpPart * 3];
-                Array.Copy(gate_T, 0, flatMLP, 0, mlpPart);
-                Array.Copy(up_T, 0, flatMLP, mlpPart, mlpPart);
-                Array.Copy(down_T, 0, flatMLP, 2 * mlpPart, mlpPart);
-                UploadHalfs(mlpWeights[layerIdx], flatMLP);
+                    uint[] mlp = new uint[mlpFlatLen];
+                    Array.Copy(tGate.Result, 0, mlp, 0, mlpPacked);
+                    Array.Copy(tUp.Result, 0, mlp, mlpPacked, mlpPacked);
+                    Array.Copy(tDown.Result, 0, mlp, 2 * mlpPacked, mlpPacked);
 
-                UploadHalfs(qNormGamma[layerIdx], tQN.Result);
-                UploadHalfs(kNormGamma[layerIdx], tKN.Result);
-                UploadHalfs(inputLnGamma[layerIdx], tILn.Result);
-                UploadHalfs(postAttnLnGamma[layerIdx], tPALn.Result);
-                UploadHalfs(preFfnLnGamma[layerIdx], tPFLn.Result);
-                UploadHalfs(postFfnLnGamma[layerIdx], tPPLn.Result);
+                    return (qkv, mlp);
+                });
+
+                // Main thread: only SetData.
+                W_QKV[layerIdx].SetData(flatQKV);
+                W_O[layerIdx].SetData(tO.Result);
+                mlpWeights[layerIdx].SetData(flatMLP);
+                qNormGamma[layerIdx].SetData(tQN.Result);
+                kNormGamma[layerIdx].SetData(tKN.Result);
+                inputLnGamma[layerIdx].SetData(tILn.Result);
+                postAttnLnGamma[layerIdx].SetData(tPALn.Result);
+                preFfnLnGamma[layerIdx].SetData(tPFLn.Result);
+                postFfnLnGamma[layerIdx].SetData(tPPLn.Result);
             }
 
             public void Dispose()

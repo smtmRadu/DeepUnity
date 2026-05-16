@@ -182,7 +182,7 @@ namespace DeepUnity.ReinforcementLearning
 
             Hyperparameters script = (Hyperparameters)target;
 
-            if (script.trainer == TrainerType.PPO)
+            if (script.trainer == TrainerType.PPO || script.trainer == TrainerType.PPOGPU)
             {
                 if (script.earlyStopping == (int)EarlyStopType.Off)
                     dontDrawMe.Add("targetKL");

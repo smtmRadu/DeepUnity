@@ -1,0 +1,459 @@
+// PPOLossCS -- PPO loss-shaped kernels for the FullGPU training path.
+//
+// All buffers are FP32. Per-row layout: [B, A] where A = action dim
+// (continuous_actions or discrete_actions).
+//
+// Continuous head (Gaussian, diagonal):
+//   prob_t per-action_i:    p_i = (1 / (sigma_i * sqrt(2*pi))) * exp(-0.5 * ((a_i - mu_i)/sigma_i)^2)
+//   pi(a|s) = product over i of p_i
+//   ratio = pi_new / pi_old
+//   surrogate = min(ratio*A, clip(ratio,1-eps,1+eps)*A)
+// Discrete head (Categorical):
+//   logits z[b,a] -> phi[b,a] = softmax(z) computed online (numerically safe).
+//   pi_new[b,a] = phi[b,a]; pi_old[b,a] passed in.
+//
+// All kernels are batched: one thread per (b, a) for elementwise; one
+// threadgroup per row for the safe softmax & multiply-reduce kernels.
+
+// =================================================================== Buffers
+RWStructuredBuffer<float> mu;          // [B, A] continuous mu (also used as logits buffer for discrete)
+RWStructuredBuffer<float> sigma;       // [B, A]
+RWStructuredBuffer<float> actions;     // [B, A] (continuous action samples; one-hot for discrete)
+RWStructuredBuffer<float> piOld;       // [B, A] for continuous: per-component prob; for discrete: full distribution
+RWStructuredBuffer<float> advantages;  // [B] (broadcast over A)
+RWStructuredBuffer<float> valueTargets;// [B]
+RWStructuredBuffer<float> values;      // [B] (network V output AND its grad in/out)
+
+RWStructuredBuffer<float> dMu;         // [B, A] gradient wrt mu (output of LCLIP backward)
+RWStructuredBuffer<float> dSigma;      // [B, A] gradient wrt sigma (when trainable)
+RWStructuredBuffer<float> dLogits;     // [B, A] gradient wrt discrete logits
+RWStructuredBuffer<float> dValues;     // [B]    gradient wrt value head output
+
+RWStructuredBuffer<float> piNew;       // [B, A] computed pi_new (continuous: per-component prob; discrete: phi)
+RWStructuredBuffer<float> probJoint;   // [B] joint prob (continuous: product over A) -- used for ratio
+
+RWStructuredBuffer<float> noise;       // [B, A] standard-normal samples used for continuous sampling
+RWStructuredBuffer<float> uniBuf;      // [B] uniform[0,1) samples used for discrete sampling
+                                       // (named uniBuf because `uniform` is a reserved HLSL keyword)
+RWStructuredBuffer<float> losses;      // [3] scalars: surrogate, value_mse, entropy (for logging)
+
+// Uniforms
+int B;
+int A;
+int trainable_sigma;       // 0 / 1
+int sigma_scale_enable;    // 0 / 1 (if 1, multiply sigma by sigma_scale)
+float sigma_scale;
+float fixed_sigma;         // when trainable_sigma == 0
+float clip_eps;            // PPO epsilon
+float beta_entropy;        // entropy coefficient
+float value_coeff;         // value loss coefficient (caller already factored in or applied here)
+int sample_categorical;    // 0 = use argmax (eval); 1 = sample via gumbel-max
+
+#define INV_SQRT_2PI 0.39894228040143267793994605993438f
+#define LN_2PI       1.83787706640934548356065947281124f
+
+// =================================================================== Continuous: Gaussian density per-component
+// piNew[b,a] = (1/(sigma*sqrt(2pi))) * exp(-0.5 * ((a - mu)/sigma)^2)
+// Effective sigma = trainable_sigma ? sigma[b,a] * (sigma_scale if enabled) : fixed_sigma.
+#pragma kernel ContGaussianProb
+[numthreads(256, 1, 1)]
+void ContGaussianProb(uint3 dt : SV_DispatchThreadID)
+{
+    int idx = (int)dt.x;
+    int total = B * A;
+    if (idx >= total) return;
+
+    float m = mu[idx];
+    float s;
+    if (trainable_sigma != 0)
+    {
+        s = sigma[idx];
+        if (sigma_scale_enable != 0) s *= sigma_scale;
+    }
+    else
+    {
+        s = fixed_sigma;
+    }
+    if (s < 1e-8f) s = 1e-8f;
+
+    float a = actions[idx];
+    float z = (a - m) / s;
+    piNew[idx] = (1.0f / (s * 2.5066283f)) * exp(-0.5f * z * z);   // 2.5066283 = sqrt(2*pi)
+}
+
+// =================================================================== Continuous: sample action via Box-Muller noise
+// Caller pre-fills `noise` with Standard-Normal samples (CPU once per batch).
+// actions[b,a] = mu[b,a] + sigma_eff * noise[b,a]
+// piNew[b,a] = N(actions[b,a]; mu, sigma_eff)
+#pragma kernel ContSampleAndProb
+[numthreads(256, 1, 1)]
+void ContSampleAndProb(uint3 dt : SV_DispatchThreadID)
+{
+    int idx = (int)dt.x;
+    int total = B * A;
+    if (idx >= total) return;
+
+    float m = mu[idx];
+    float s;
+    if (trainable_sigma != 0)
+    {
+        s = sigma[idx];
+        if (sigma_scale_enable != 0) s *= sigma_scale;
+    }
+    else
+    {
+        s = fixed_sigma;
+    }
+    if (s < 1e-8f) s = 1e-8f;
+
+    float n = noise[idx];
+    float a = m + s * n;
+    actions[idx] = a;
+
+    // density at the sampled point (== (1/(s*sqrt(2pi))) * exp(-0.5*n*n))
+    piNew[idx] = (1.0f / (s * 2.5066283f)) * exp(-0.5f * n * n);
+}
+
+// =================================================================== Continuous: PPO clipped surrogate gradient
+// Inputs: piNew[b,a], piOld[b,a], advantages[b], actions[b,a], mu[b,a], sigma[b,a]
+// Outputs: dMu[b,a]       = d(-LClip)/dmu    = d(-LClip)/dpiNew  *  dpiNew/dmu
+//          dSigma[b,a]    = d(-LClip)/dsigma = d(-LClip)/dpiNew  *  dpiNew/dsigma  + beta * d(-H)/dsigma
+// Following the same derivation used by the CPU PPOTrainer.UpdateContinuousNetwork.
+#pragma kernel ContSurrogateGrad
+[numthreads(256, 1, 1)]
+void ContSurrogateGrad(uint3 dt : SV_DispatchThreadID)
+{
+    int idx = (int)dt.x;
+    int total = B * A;
+    if (idx >= total) return;
+
+    int bi = idx / A;
+    float pNew = piNew[idx];
+    float pOld = piOld[idx];
+    float At   = advantages[bi];
+
+    if (pOld < 1e-12f) pOld = 1e-12f;
+    float rt = pNew / pOld;
+    float clip_lo = 1.0f - clip_eps;
+    float clip_hi = 1.0f + clip_eps;
+    float clip_r = clamp(rt, clip_lo, clip_hi);
+
+    // dMin(r*A, clip*A)/d(r*A) ; d(r*A)/dr = A so we propagate via piNew below
+    float dmindx = (rt * At <= clip_r * At) ? 1.0f : 0.0f;
+    float dmindy = (clip_r * At < rt * At) ? 1.0f : 0.0f;
+    float dclipdx = ((clip_lo <= rt) && (rt <= clip_hi)) ? 1.0f : 0.0f;
+
+    // d(-LClip)/dpiNew = -1 * (dmindx + dmindy*dclipdx) * (At / pOld)
+    float dmL_dPi = -1.0f * (dmindx * At + dmindy * At * dclipdx) / pOld;
+
+    float m = mu[idx];
+    float s;
+    if (trainable_sigma != 0)
+    {
+        s = sigma[idx];
+        if (sigma_scale_enable != 0) s *= sigma_scale;
+    }
+    else
+    {
+        s = fixed_sigma;
+    }
+    if (s < 1e-8f) s = 1e-8f;
+
+    float a = actions[idx];
+    float diff = a - m;
+    float ss = s * s;
+
+    // dpiNew/dmu = piNew * (a - mu)/sigma^2
+    float dPi_dMu = pNew * diff / ss;
+    dMu[idx] = dmL_dPi * dPi_dMu;
+
+    if (trainable_sigma != 0)
+    {
+        // dpiNew/dsigma = piNew * ((a-mu)^2 - sigma^2) / sigma^3
+        float dPi_dSigma = pNew * (diff * diff - ss) / (ss * s);
+        // d(-H)/dsigma = -1/sigma
+        float dmH_dSigma = -1.0f / s;
+        dSigma[idx] = dmL_dPi * dPi_dSigma + beta_entropy * dmH_dSigma;
+    }
+}
+
+// =================================================================== Online safe softmax
+// One threadgroup per row. Single-pass: track running max m and denom d
+// using "online softmax" recurrence (Milakov & Gimelshein 2018 / FlashAttention):
+//   for each new value v_i: new_m = max(m, v_i); d = d * exp(m - new_m) + exp(v_i - new_m); m = new_m
+// Then phi[b,a] = exp(z[b,a] - m) / d.
+#define SM_TG 256
+groupshared float gm[SM_TG];   // running max per thread
+groupshared float gd[SM_TG];   // running denom per thread
+groupshared float fm;          // final row max (reduce result)
+groupshared float fd;          // final row denom (reduce result)
+
+#pragma kernel SafeSoftmaxRows
+[numthreads(SM_TG, 1, 1)]
+void SafeSoftmaxRows(uint3 gid : SV_GroupID, uint3 lid : SV_GroupThreadID)
+{
+    int row = (int)gid.x;
+    if (row >= B) return;
+
+    int tid = (int)lid.x;
+    int base_idx = row * A;
+
+    // Per-thread online accumulator over its strided view of the row.
+    float my_m = -1e30f;
+    float my_d = 0.0f;
+    for (int a = tid; a < A; a += SM_TG)
+    {
+        float v = mu[base_idx + a];   // logits live in `mu`
+        if (v > my_m)
+        {
+            my_d = my_d * exp(my_m - v) + 1.0f;
+            my_m = v;
+        }
+        else
+        {
+            my_d += exp(v - my_m);
+        }
+    }
+    gm[tid] = my_m;
+    gd[tid] = my_d;
+    GroupMemoryBarrierWithGroupSync();
+
+    // Tree reduction merging running (m,d) pairs:
+    //   merge((m1,d1),(m2,d2)) = (M, d1*exp(m1-M) + d2*exp(m2-M)) where M=max(m1,m2)
+    [unroll]
+    for (int stride = SM_TG / 2; stride > 0; stride >>= 1)
+    {
+        if (tid < stride)
+        {
+            float m1 = gm[tid];      float d1 = gd[tid];
+            float m2 = gm[tid+stride]; float d2 = gd[tid+stride];
+            float M = max(m1, m2);
+            float D = d1 * exp(m1 - M) + d2 * exp(m2 - M);
+            gm[tid] = M;
+            gd[tid] = D;
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (tid == 0) { fm = gm[0]; fd = gd[0]; }
+    GroupMemoryBarrierWithGroupSync();
+
+    // Write phi
+    float invD = 1.0f / max(fd, 1e-30f);
+    for (int a2 = tid; a2 < A; a2 += SM_TG)
+    {
+        piNew[base_idx + a2] = exp(mu[base_idx + a2] - fm) * invD;
+    }
+}
+
+// =================================================================== Discrete: sample action (Gumbel-max)
+// Caller supplies `uniform` (B floats in [0,1)). We do per-row Gumbel-max:
+//   action = argmax_a (logits[b,a] + g(b,a))   where g = -log(-log(u(b,a)))
+// We avoid an extra A-wide uniform buffer by deriving per-component noise from
+// a hash of (row,a,uniform[row]). For RL with small A this is plenty.
+// Output: actions[b,a] = one-hot of the picked action.
+#pragma kernel DiscreteSample
+[numthreads(SM_TG, 1, 1)]
+void DiscreteSample(uint3 gid : SV_GroupID, uint3 lid : SV_GroupThreadID)
+{
+    int row = (int)gid.x;
+    if (row >= B) return;
+
+    int tid = (int)lid.x;
+    int base_idx = row * A;
+
+    float u_row = uniBuf[row];
+    // simple per-component pseudo-random in [0,1) using LCG-ish hash
+    // (only used to perturb logits for sampling -- OK for small action spaces).
+
+    // each thread tracks its best (key, idx)
+    float best_k = -1e30f;
+    int   best_a = -1;
+    for (int a = tid; a < A; a += SM_TG)
+    {
+        uint h = (uint)(asuint(u_row) ^ (uint)(a * 2654435761u) ^ (uint)(row * 374761393u));
+        h ^= h >> 13; h *= 0x5bd1e995u; h ^= h >> 15;
+        float ux = ((h & 0x00FFFFFFu) + 1u) * (1.0f / 16777217.0f);  // (0,1]
+        float g  = -log(-log(ux));
+        float key = (sample_categorical != 0) ? (mu[base_idx + a] + g) : mu[base_idx + a];
+        if (key > best_k) { best_k = key; best_a = a; }
+    }
+
+    // reduce best across threads
+    gm[tid] = best_k;
+    gd[tid] = (float)best_a;
+    GroupMemoryBarrierWithGroupSync();
+
+    [unroll]
+    for (int stride = SM_TG / 2; stride > 0; stride >>= 1)
+    {
+        if (tid < stride)
+        {
+            if (gm[tid+stride] > gm[tid])
+            {
+                gm[tid] = gm[tid+stride];
+                gd[tid] = gd[tid+stride];
+            }
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (tid == 0)
+    {
+        int chosen = (int)gd[0];
+        for (int a3 = 0; a3 < A; ++a3)
+            actions[base_idx + a3] = (a3 == chosen) ? 1.0f : 0.0f;
+    }
+}
+
+// =================================================================== Discrete: PPO clipped surrogate gradient
+// Inputs: piNew (= phi), piOld, advantages, actions (one-hot), beta_entropy.
+// dLogits[b,a] follows from chain rule:
+//   dPi_dPhi = actions   (one-hot mask)
+//   dmL_dPhi = -1 * (dmindx + dmindy*dclipdx) * (At/pOld) * dPi_dPhi  + beta * (log(phi)+1)
+//   dPhi_dz = phi * (delta_{aa'} - phi_{a'})   (softmax Jacobian)
+// Combined: dz[b,a] = sum_a' (phi*delta - phi*phi') * dmL_dPhi[b,a']
+//                   = phi[b,a] * (dmL_dPhi[b,a] - sum_{a'} phi[b,a'] * dmL_dPhi[b,a'])
+// We compute the row reduction in one threadgroup per row.
+#define DGTG 256
+groupshared float dpsum[DGTG];
+
+#pragma kernel DiscreteSurrogateGrad
+[numthreads(DGTG, 1, 1)]
+void DiscreteSurrogateGrad(uint3 gid : SV_GroupID, uint3 lid : SV_GroupThreadID)
+{
+    int row = (int)gid.x;
+    if (row >= B) return;
+    int tid = (int)lid.x;
+    int base_idx = row * A;
+
+    float At = advantages[row];
+
+    // Step 1: compute per-element dmL_dPhi = -1 * (dmindx*At + dmindy*At*dclipdx)/pOld  + beta*(log(phi)+1)
+    // (entropy bonus part). Store into dLogits temporarily; then we will combine with softmax Jacobian.
+    for (int a = tid; a < A; a += DGTG)
+    {
+        float pNew = piNew[base_idx + a];
+        float pOld = piOld[base_idx + a];
+        if (pOld < 1e-12f) pOld = 1e-12f;
+        float rt = pNew / pOld;
+        float clip_lo = 1.0f - clip_eps;
+        float clip_hi = 1.0f + clip_eps;
+        float clip_r = clamp(rt, clip_lo, clip_hi);
+
+        float dmindx = (rt * At <= clip_r * At) ? 1.0f : 0.0f;
+        float dmindy = (clip_r * At < rt * At) ? 1.0f : 0.0f;
+        float dclipdx = ((clip_lo <= rt) && (rt <= clip_hi)) ? 1.0f : 0.0f;
+
+        // dPi_dPhi = actions (one-hot). dmL_dPi = -At*(...)/pOld; dmL_dPhi = dmL_dPi * actions[a].
+        float a_oh = actions[base_idx + a];
+        float dmL_dPi = -1.0f * (dmindx * At + dmindy * At * dclipdx) / pOld;
+        float dmL_dPhi_a = dmL_dPi * a_oh;
+
+        // entropy bonus: +beta*(log(phi)+1)   (pushes towards uniform)
+        float ent = beta_entropy * (log(max(pNew, 1e-12f)) + 1.0f);
+
+        dLogits[base_idx + a] = dmL_dPhi_a + ent;
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    // Step 2: row reduction of phi[a'] * dmL_dPhi[a'] (where dmL_dPhi is in dLogits buffer right now)
+    float my = 0.0f;
+    for (int a2 = tid; a2 < A; a2 += DGTG)
+    {
+        my += piNew[base_idx + a2] * dLogits[base_idx + a2];
+    }
+    dpsum[tid] = my;
+    GroupMemoryBarrierWithGroupSync();
+
+    [unroll]
+    for (int stride = DGTG / 2; stride > 0; stride >>= 1)
+    {
+        if (tid < stride) dpsum[tid] += dpsum[tid + stride];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    float row_sum = dpsum[0];
+    GroupMemoryBarrierWithGroupSync();
+
+    // Step 3: dz[b,a] = phi[b,a] * (dmL_dPhi[b,a] - row_sum)
+    for (int a3 = tid; a3 < A; a3 += DGTG)
+    {
+        float pNew = piNew[base_idx + a3];
+        float dphi = dLogits[base_idx + a3];
+        dLogits[base_idx + a3] = pNew * (dphi - row_sum);
+    }
+}
+
+// =================================================================== Value MSE gradient
+// Per-element MSE grad: dLoss/dV[b] = 2 * (V[b] - Vtarget[b]) * value_coeff.
+// NOTE: no 1/B here -- DenseBwdW already divides by B during the weight-grad
+// reduction. Matches CPU Loss.MSE.Grad which returns 2*(predicts-targets).
+#pragma kernel ValueMseGrad
+[numthreads(256, 1, 1)]
+void ValueMseGrad(uint3 dt : SV_DispatchThreadID)
+{
+    int b = (int)dt.x;
+    if (b >= B) return;
+    float v = values[b];
+    float t = valueTargets[b];
+    dValues[b] = (v - t) * 2.0f * value_coeff;
+}
+
+// =================================================================== Advantages normalization (on-GPU)
+// Given advantages [B], compute mean, std (population), then (A-mean)/(std+eps).
+// One threadgroup, two passes via shared mem.
+#define ADV_TG 256
+groupshared float as1[ADV_TG];
+groupshared float as2[ADV_TG];
+groupshared float am, asd;
+
+#pragma kernel NormalizeAdvantages
+[numthreads(ADV_TG, 1, 1)]
+void NormalizeAdvantages(uint3 lid : SV_GroupThreadID)
+{
+    int tid = (int)lid.x;
+    float s1 = 0.0f, s2 = 0.0f;
+    for (int i = tid; i < B; i += ADV_TG)
+    {
+        float v = advantages[i];
+        s1 += v;
+        s2 += v * v;
+    }
+    as1[tid] = s1; as2[tid] = s2;
+    GroupMemoryBarrierWithGroupSync();
+    [unroll]
+    for (int stride = ADV_TG / 2; stride > 0; stride >>= 1)
+    {
+        if (tid < stride)
+        {
+            as1[tid] += as1[tid + stride];
+            as2[tid] += as2[tid + stride];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (tid == 0)
+    {
+        float invB = 1.0f / max((float)B, 1.0f);
+        float mean = as1[0] * invB;
+        float var  = as2[0] * invB - mean * mean;
+        am = mean;
+        asd = sqrt(max(var, 0.0f));
+    }
+    GroupMemoryBarrierWithGroupSync();
+    float mean_v = am;
+    float std_v  = asd;
+    for (int i2 = tid; i2 < B; i2 += ADV_TG)
+        advantages[i2] = (advantages[i2] - mean_v) / (std_v + 1e-8f);
+}
+
+// =================================================================== Continuous: joint prob (product over A)
+// probJoint[b] = product_a piNew[b,a]
+#pragma kernel ContJointProb
+[numthreads(256, 1, 1)]
+void ContJointProb(uint3 dt : SV_DispatchThreadID)
+{
+    int b = (int)dt.x;
+    if (b >= B) return;
+    float p = 1.0f;
+    for (int a = 0; a < A; ++a) p *= piNew[b * A + a];
+    probJoint[b] = p;
+}

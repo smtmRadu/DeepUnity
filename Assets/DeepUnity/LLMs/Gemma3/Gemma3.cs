@@ -6,6 +6,10 @@ using UnityEngine.Assertions;
 
 namespace DeepUnity
 {
+    // Default Gemma3 implementation in DeepUnity. FP16 weights, full-GPU inference
+    // (every kernel reads/writes ComputeBuffers — no per-step CPU<->GPU bounces).
+    // System-prompt KV cache is persisted as packed FP16 .bin under Assets/Resources/Cache/.
+    // Supersedes the earlier hybrid GPU/CPU `Gemma3OriginalForCausalLM`.
     public class Gemma3ForCausalLM
     {
         private string path;
@@ -17,9 +21,9 @@ namespace DeepUnity
         public float TokensPerSecond { get; private set; }
 
         public Gemma3ForCausalLM(
-            string params_path = "Assets/DeepUnity/LLMs/Gemma3GPUFP16/params_it",
+            string params_path = "Assets/DeepUnity/LLMs/Gemma3/params_it",
             string tokenizer_path = "Assets/DeepUnity/LLMs/Gemma3/Gemma3TokenizerFast.json",
-            int cacheCapacity = 8192)
+            int cacheCapacity = 2048)
         {
             this.path = params_path;
             this.tokenizer = new Gemma3TokenizerFast(tokenizer_path, load_async: true);
@@ -74,21 +78,6 @@ namespace DeepUnity
             return p;
         }
 
-        public void VerifyWeights()
-        {
-            uint[] packed = new uint[4];
-            model.weights.embedLmHead.GetData(packed, 0, 0, 4);
-            UnityEngine.Debug.Log("=== FP16 Weight Verification ===");
-            for (int i = 0; i < 8; i++)
-            {
-                uint word = packed[i / 2];
-                uint shift = (uint)(i % 2) * 16;
-                ushort h = (ushort)((word >> (int)shift) & 0xFFFF);
-                float val = Mathf.HalfToFloat(h);
-                UnityEngine.Debug.Log($"  embed[0, {i}] = {val}");
-            }
-        }
-
         public Tensor Predict(Tensor input_ids, Tensor attn_mask = null)
         {
             if (!IsReady)
@@ -108,11 +97,7 @@ namespace DeepUnity
             var e = model.ForwardYielding(input_ids, useCache: true, lastPosOnly: true);
             while (e.MoveNext()) yield return e.Current;
 
-            // Async sample
-            model.DispatchSample(temperature, top_k, top_p, min_p);
-            while (!model.SampleReady) yield return null;
-            int tokenId = model.LastSampledToken;
-
+            int tokenId = model.Sample(temperature, top_k, top_p, min_p);
             string tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
             onTokenGenerated?.Invoke(tokenStr);
             yield return null;
@@ -124,10 +109,7 @@ namespace DeepUnity
                 e = model.ForwardYielding(nextInput, useCache: true, lastPosOnly: true);
                 while (e.MoveNext()) yield return e.Current;
 
-                model.DispatchSample(temperature, top_k, top_p, min_p);
-                while (!model.SampleReady) yield return null;
-                tokenId = model.LastSampledToken;
-
+                tokenId = model.Sample(temperature, top_k, top_p, min_p);
                 if (tokenId == Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID) break;
 
                 tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
@@ -146,6 +128,18 @@ namespace DeepUnity
             Assert.AreNotEqual(system_prompt, null);
 
             model.ResetCache();
+
+            string cacheFolder = SystemPromptCacheFolder(system_prompt);
+            bool loaded = false;
+            yield return model.cache.TryLoadAsync(cacheFolder, r => loaded = r);
+            if (loaded)
+            {
+                ConsoleMessage.Info($"Gemma3 system prompt cache hit ({model.cache.CachedTokenCount} tokens).");
+                isFreshlyInitialized = true;
+                yield return true;
+                yield break;
+            }
+
             Stopwatch sw = Stopwatch.StartNew();
 
             (Tensor, Tensor) tok = tokenizer.Encode(system_prompt, add_special_tokens: false, truncation: true, max_length: 2048);
@@ -161,8 +155,23 @@ namespace DeepUnity
             while (e.MoveNext()) yield return e.Current;
 
             ConsoleMessage.Info($"Gemma3 system prompt computed ({sw.Elapsed.TotalSeconds:0.00} s).");
+
+            yield return model.cache.SaveAsync(cacheFolder);
+            ConsoleMessage.Info($"Gemma3 system prompt cache saved ({model.cache.CachedTokenCount} tokens).");
+
             isFreshlyInitialized = true;
             yield return true;
+        }
+
+        static string SystemPromptCacheFolder(string system_prompt)
+        {
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                byte[] h = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(system_prompt ?? string.Empty));
+                var sb = new System.Text.StringBuilder(64);
+                for (int i = 0; i < h.Length; i++) sb.Append(h[i].ToString("x2"));
+                return System.IO.Path.Combine("Assets/Resources/Cache", sb.ToString());
+            }
         }
 
         public IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
@@ -201,10 +210,7 @@ namespace DeepUnity
             var e = model.ForwardYielding(input_ids, useCache: true, lastPosOnly: true);
             while (e.MoveNext()) yield return e.Current;
 
-            model.DispatchSample(temperature, top_k, top_p, min_p);
-            while (!model.SampleReady) yield return null;
-            int tokenId = model.LastSampledToken;
-
+            int tokenId = model.Sample(temperature, top_k, top_p, min_p);
             string tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
             onTokenGenerated?.Invoke(tokenStr);
             yield return null;
@@ -216,10 +222,7 @@ namespace DeepUnity
                 e = model.ForwardYielding(nextInput, useCache: true, lastPosOnly: true);
                 while (e.MoveNext()) yield return e.Current;
 
-                model.DispatchSample(temperature, top_k, top_p, min_p);
-                while (!model.SampleReady) yield return null;
-                tokenId = model.LastSampledToken;
-
+                tokenId = model.Sample(temperature, top_k, top_p, min_p);
                 if (tokenId == Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID)
                 {
                     ConsoleMessage.Info("Gemma3 ended the response.");

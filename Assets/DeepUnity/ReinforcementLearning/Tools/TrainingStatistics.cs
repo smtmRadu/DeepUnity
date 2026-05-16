@@ -211,7 +211,7 @@ namespace DeepUnity.ReinforcementLearning
             y += 50;
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Hyperparameters]</text>");
             y += 20;
-            if (hp.trainer == TrainerType.PPO)
+            if (hp.trainer == TrainerType.PPO || hp.trainer == TrainerType.PPOGPU)
                 svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Buffer Size: {hp.bufferSize}        [Batch Size: {hp.batchSize}       (x{hp.bufferSize / hp.batchSize})]</text>");
             else if (hp.trainer == TrainerType.SAC || hp.trainer == TrainerType.TD3 || hp.trainer == TrainerType.DDPG)
                 svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Replay Buffer Size: {hp.replayBufferSize}        [Batch Size: {hp.minibatchSize}       (x{hp.replayBufferSize / hp.minibatchSize})]</text>");

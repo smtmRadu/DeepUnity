@@ -2,19 +2,11 @@ using System;
 using System.Collections;
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace DeepUnity
 {
     namespace Gemma3Modeling
     {
-        /// <summary>
-        /// Gemma3 V3.5 — optimized FP16 inference.
-        /// Changes from FP16:
-        ///   1. Copy elimination: 3-buffer rotation (bufA/bufB/bufC) removes 3 CopyBuffer dispatches per layer.
-        ///   2. Parallel ArgMax: shared-memory reduction across 256 threads.
-        ///   3. Async GPU readback: non-blocking token readback via AsyncGPUReadback.
-        /// </summary>
         public class Gemma3Model : IDisposable
         {
             ComputeShader cs;
@@ -22,7 +14,7 @@ namespace DeepUnity
             // kernel ids
             int kEmbedLookup, kRmsNormHidden, kRmsNormHead, kSplitQKV;
             int kApplyRope, kWriteCacheFull, kApplyMask, kSoftmaxRows;
-            int kArgMaxParallel, kSampleToken, kZeroBuffer, kCopyBuffer, kCopySlice, kAddResidual;
+            int kArgMax, kSampleToken, kZeroBuffer, kCopyBuffer, kCopySlice, kAddResidual;
             int kQKVProj, kAttnScores, kAttendValues, kOProj;
             int kGateUp, kDown, kGateUp1Vec, kDown1Vec;
             int kLmHead, kLmHead1Vec;
@@ -34,17 +26,12 @@ namespace DeepUnity
             ComputeBuffer ropeCosFull, ropeSinFull;
             ComputeBuffer ropeCosLocal, ropeSinLocal;
 
-            // 3-buffer rotation: eliminates CopyBuffer dispatches within layers
-            // bufA = hidden state entering/exiting each layer
-            // bufB, bufC = temporaries that swap roles during the layer
-            ComputeBuffer bufA, bufB, bufC;
-
-            // Attention scratch (unchanged from FP16)
+            // FP32 scratch buffers (same as Gemma3GPU)
+            ComputeBuffer hiddenBuf, skipBuf, normOutBuf;
             ComputeBuffer qkvBuf, qBuf, kBuf, vBuf, qNormBuf, kNormBuf;
-            ComputeBuffer attnScoresBuf, attendedBuf;
+            ComputeBuffer attnScoresBuf, attendedBuf, attnOutBuf;
             ComputeBuffer mlpInterBuf;
-            public ComputeBuffer logitsBuf;
-            ComputeBuffer probsBuf;
+            ComputeBuffer logitsBuf, probsBuf;
             ComputeBuffer argmaxBuf;
             ComputeBuffer tokenIdsBuf;
             ComputeBuffer lastHiddenBuf;
@@ -56,12 +43,6 @@ namespace DeepUnity
             readonly int innerEmbDim, qkvProjDim, intermediateSize, vocabSize;
             readonly int slidingWindow;
             readonly float rmsEps, embedScale, attnScaling;
-
-            // Async readback state
-            int lastSampledToken;
-            bool sampleReady;
-            public bool SampleReady => sampleReady;
-            public int LastSampledToken => lastSampledToken;
 
             public bool IsReady => weights.IsReady;
 
@@ -91,7 +72,7 @@ namespace DeepUnity
 
                 PrecomputeRoPE();
 
-                // Fixed-size buffers
+                // Fixed-size FP32 buffers
                 probsBuf = new ComputeBuffer(vocabSize, 4, ComputeBufferType.Structured);
                 argmaxBuf = new ComputeBuffer(1, 4, ComputeBufferType.Structured);
                 lastHiddenBuf = new ComputeBuffer(hiddenSize, 4, ComputeBufferType.Structured);
@@ -108,7 +89,7 @@ namespace DeepUnity
                 kWriteCacheFull = cs.FindKernel("WriteCacheFull");
                 kApplyMask = cs.FindKernel("ApplyMask");
                 kSoftmaxRows = cs.FindKernel("SoftmaxRows");
-                kArgMaxParallel = cs.FindKernel("ArgMaxParallel");
+                kArgMax = cs.FindKernel("ArgMax");
                 kSampleToken = cs.FindKernel("SampleToken");
                 kZeroBuffer = cs.FindKernel("ZeroBuffer");
                 kCopyBuffer = cs.FindKernel("CopyBuffer");
@@ -126,6 +107,7 @@ namespace DeepUnity
                 kLmHead1Vec = cs.FindKernel("LmHeadPredict1Vec");
             }
 
+            // Pack FP16 RoPE caches into uint buffers
             static ComputeBuffer PackedHalfBuf(int halfCount)
             {
                 return new ComputeBuffer(halfCount / 2, 4, ComputeBufferType.Structured);
@@ -173,6 +155,7 @@ namespace DeepUnity
                 UploadHalfs(ropeCosLocal, cL); UploadHalfs(ropeSinLocal, sL);
             }
 
+            // FP32 buffer management (same as Gemma3GPU)
             void Realloc(ref ComputeBuffer buf, int count)
             {
                 if (buf != null && buf.count >= count) return;
@@ -186,11 +169,9 @@ namespace DeepUnity
                 int sL = Math.Max(seqLen, curSeqAlloc);
                 int kL = Math.Max(totalKvLen, curKvAlloc);
 
-                // 3-buffer rotation replaces hiddenBuf, skipBuf, normOutBuf, attnOutBuf
-                Realloc(ref bufA, sL * hiddenSize);
-                Realloc(ref bufB, sL * hiddenSize);
-                Realloc(ref bufC, sL * hiddenSize);
-
+                Realloc(ref hiddenBuf, sL * hiddenSize);
+                Realloc(ref skipBuf, sL * hiddenSize);
+                Realloc(ref normOutBuf, sL * hiddenSize);
                 Realloc(ref qkvBuf, sL * qkvProjDim);
                 Realloc(ref qBuf, sL * headsQ * headDim);
                 Realloc(ref kBuf, sL * headsKV * headDim);
@@ -199,6 +180,7 @@ namespace DeepUnity
                 Realloc(ref kNormBuf, sL * headsKV * headDim);
                 Realloc(ref attnScoresBuf, headsQ * sL * kL);
                 Realloc(ref attendedBuf, sL * headsQ * headDim);
+                Realloc(ref attnOutBuf, sL * hiddenSize);
                 Realloc(ref mlpInterBuf, sL * intermediateSize);
                 Realloc(ref tokenIdsBuf, sL);
 
@@ -215,22 +197,7 @@ namespace DeepUnity
 
             static int Div256(int n) => (n + 255) / 256;
 
-            // ---- layer dispatch with 3-buffer rotation (no CopyBuffer within layer) ----
-            //
-            // Buffer flow per layer:
-            //   bufA (in) = current hidden state
-            //   Step 1:  RmsNorm(bufA) → bufB
-            //   Step 2:  QKVProj(bufB) → qkvBuf
-            //   Steps 3-13: attention pipeline (uses separate qBuf/kBuf/etc.)
-            //   Step 14: OProj → bufC
-            //   Step 15: PostAttnNorm(bufC) → bufB
-            //   Step 16: AddResidual(bufB += bufA)     ← bufA is the original residual
-            //   Step 17: PreFFNNorm(bufB) → bufC
-            //   Steps 18-19: MLP reads/writes bufC
-            //   Step 20: PostFFNNorm(bufC) → bufA
-            //   Step 21: AddResidual(bufA += bufB)     ← bufB is the mid-layer residual
-            //   bufA (out) = updated hidden state — same buffer, no copy needed
-            //
+            // ---- layer dispatch (identical flow to Gemma3GPU, but uses packed FP16 weight buffer names) ----
             void DispatchLayer(int li, int seqLen, int totalKvLen, bool useCache)
             {
                 bool isSW = Gemma3Modeling.Gemma3Config.layer_types[li] == Gemma3Modeling.GemmaLayerType.SlidingWindowAttention;
@@ -242,26 +209,32 @@ namespace DeepUnity
                 int hd2 = headDim / 2;
                 int hidTotal = seqLen * hiddenSize;
 
-                // 1. Input LayerNorm: bufA → bufB
+                // 1. copy hidden → skip
+                cs.SetInt("buffer_size", hidTotal);
+                cs.SetBuffer(kCopyBuffer, "buf_a", skipBuf);
+                cs.SetBuffer(kCopyBuffer, "buf_b", hiddenBuf);
+                cs.Dispatch(kCopyBuffer, Div256(hidTotal), 1, 1);
+
+                // 2. input layernorm
                 cs.SetInt("seq_len", seqLen);
                 cs.SetInt("hidden_size", hiddenSize);
                 cs.SetFloat("norm_eps", rmsEps);
-                cs.SetBuffer(kRmsNormHidden, "norm_input", bufA);
-                cs.SetBuffer(kRmsNormHidden, "norm_output", bufB);
+                cs.SetBuffer(kRmsNormHidden, "norm_input", hiddenBuf);
+                cs.SetBuffer(kRmsNormHidden, "norm_output", normOutBuf);
                 cs.SetBuffer(kRmsNormHidden, "norm_gamma", weights.inputLnGamma[li]);
                 cs.Dispatch(kRmsNormHidden, Div256(seqLen), 1, 1);
 
-                // 2. QKV Projection: bufB → qkvBuf
+                // 3. QKV proj (FP16 weights)
                 cs.SetInt("batch_size", 1);
                 cs.SetInt("sequence_length_q", seqLen);
                 cs.SetInt("embedding_dim", hiddenSize);
                 cs.SetInt("qkv_proj_dim", qkvProjDim);
-                cs.SetBuffer(kQKVProj, "X", bufB);
+                cs.SetBuffer(kQKVProj, "X", normOutBuf);
                 cs.SetBuffer(kQKVProj, "W_QKV", weights.W_QKV[li]);
                 cs.SetBuffer(kQKVProj, "QKV", qkvBuf);
                 cs.Dispatch(kQKVProj, 1, (seqLen + 7) / 8, (qkvProjDim + 31) / 32);
 
-                // 3. Split QKV
+                // 4. split QKV
                 cs.SetInt("seq_len", seqLen);
                 cs.SetInt("qkv_proj_dim", qkvProjDim);
                 cs.SetInt("num_heads_q", headsQ);
@@ -273,7 +246,7 @@ namespace DeepUnity
                 cs.SetBuffer(kSplitQKV, "split_v", vBuf);
                 cs.Dispatch(kSplitQKV, Div256(seqLen * qkvProjDim), 1, 1);
 
-                // 4. Q Norm
+                // 5. Q norm (FP16 gamma)
                 int numVecsQ = seqLen * headsQ;
                 cs.SetInt("num_vectors", numVecsQ);
                 cs.SetInt("head_dim", headDim);
@@ -283,7 +256,7 @@ namespace DeepUnity
                 cs.SetBuffer(kRmsNormHead, "norm_gamma", weights.qNormGamma[li]);
                 cs.Dispatch(kRmsNormHead, Div256(numVecsQ), 1, 1);
 
-                // 5. K Norm
+                // 6. K norm
                 int numVecsK = seqLen * headsKV;
                 cs.SetInt("num_vectors", numVecsK);
                 cs.SetBuffer(kRmsNormHead, "norm_input", kBuf);
@@ -291,7 +264,7 @@ namespace DeepUnity
                 cs.SetBuffer(kRmsNormHead, "norm_gamma", weights.kNormGamma[li]);
                 cs.Dispatch(kRmsNormHead, Div256(numVecsK), 1, 1);
 
-                // 6. RoPE Q
+                // 7. RoPE Q (FP16 cos/sin)
                 cs.SetInt("seq_len", seqLen);
                 cs.SetInt("head_dim", headDim);
                 cs.SetInt("rope_num_heads", headsQ);
@@ -301,12 +274,11 @@ namespace DeepUnity
                 cs.SetBuffer(kApplyRope, "rope_sin", sinC);
                 cs.Dispatch(kApplyRope, (seqLen * headsQ * hd2 + 127) / 128, 1, 1);
 
-                // 7. RoPE K
+                // 8. RoPE K
                 cs.SetInt("rope_num_heads", headsKV);
                 cs.SetBuffer(kApplyRope, "rope_buf", kNormBuf);
                 cs.Dispatch(kApplyRope, (seqLen * headsKV * hd2 + 127) / 128, 1, 1);
 
-                // 8-9. Write KV Cache
                 ComputeBuffer kForAttn, vForAttn;
                 if (useCache)
                 {
@@ -329,7 +301,7 @@ namespace DeepUnity
                     vForAttn = vBuf;
                 }
 
-                // 10. Attention Scores
+                // 11. attention scores
                 cs.SetInt("batch_size", 1);
                 cs.SetInt("sequence_length_q", seqLen);
                 cs.SetInt("sequence_length_k", kvLen);
@@ -342,58 +314,64 @@ namespace DeepUnity
                 cs.SetBuffer(kAttnScores, "AttentionWeights", attnScoresBuf);
                 cs.Dispatch(kAttnScores, (seqLen + 3) / 4, (kvLen + 31) / 32, (headsQ + 3) / 4);
 
-                // 11. Causal Mask
+                // 12. mask
                 cs.SetInt("seq_len_q", seqLen);
                 cs.SetInt("seq_len_k", kvLen);
                 cs.SetInt("num_heads_q", headsQ);
                 cs.SetInt("sliding_window_size", swSize);
+                cs.SetInt("bidirectional", 0); // causal LM
                 cs.SetBuffer(kApplyMask, "AttentionWeights", attnScoresBuf);
                 cs.Dispatch(kApplyMask, (kvLen + 15) / 16, (headsQ * seqLen + 15) / 16, 1);
 
-                // 12. Softmax
+                // 13. softmax
                 cs.SetInt("seq_len_q", seqLen);
                 cs.SetInt("seq_len_k", kvLen);
                 cs.SetBuffer(kSoftmaxRows, "AttentionWeights", attnScoresBuf);
                 cs.Dispatch(kSoftmaxRows, Div256(headsQ * seqLen), 1, 1);
 
-                // 13. Attend Values
+                // 14. attend values
                 cs.SetInt("sequence_length_v", kvLen);
                 cs.SetBuffer(kAttendValues, "AttentionWeights", attnScoresBuf);
                 cs.SetBuffer(kAttendValues, "V", vForAttn);
                 cs.SetBuffer(kAttendValues, "AttendedValues", attendedBuf);
                 cs.Dispatch(kAttendValues, (headDim + 63) / 64, (seqLen + 3) / 4, (headsQ + 3) / 4);
 
-                // 14. O Projection → bufC
+                // 15. O proj (FP16 weights)
                 cs.SetInt("inner_embedding_dim", innerEmbDim);
                 cs.SetInt("embedding_dim", hiddenSize);
                 cs.SetBuffer(kOProj, "AttendedValues", attendedBuf);
                 cs.SetBuffer(kOProj, "W_O", weights.W_O[li]);
-                cs.SetBuffer(kOProj, "O", bufC);
+                cs.SetBuffer(kOProj, "O", attnOutBuf);
                 cs.Dispatch(kOProj, 1, (seqLen + 3) / 4, (hiddenSize + 31) / 32);
 
-                // 15. Post-Attention LayerNorm: bufC → bufB
+                // 16. post-attn layernorm
                 cs.SetInt("seq_len", seqLen);
                 cs.SetInt("hidden_size", hiddenSize);
                 cs.SetFloat("norm_eps", rmsEps);
-                cs.SetBuffer(kRmsNormHidden, "norm_input", bufC);
-                cs.SetBuffer(kRmsNormHidden, "norm_output", bufB);
+                cs.SetBuffer(kRmsNormHidden, "norm_input", attnOutBuf);
+                cs.SetBuffer(kRmsNormHidden, "norm_output", normOutBuf);
                 cs.SetBuffer(kRmsNormHidden, "norm_gamma", weights.postAttnLnGamma[li]);
                 cs.Dispatch(kRmsNormHidden, Div256(seqLen), 1, 1);
 
-                // 16. Add Residual: bufB += bufA (bufA is the original hidden state)
+                // 17. residual
                 cs.SetInt("buffer_size", hidTotal);
-                cs.SetBuffer(kAddResidual, "buf_a", bufB);
-                cs.SetBuffer(kAddResidual, "buf_b", bufA);
+                cs.SetBuffer(kAddResidual, "buf_a", normOutBuf);
+                cs.SetBuffer(kAddResidual, "buf_b", skipBuf);
                 cs.Dispatch(kAddResidual, Div256(hidTotal), 1, 1);
 
-                // 17. Pre-FFN LayerNorm: bufB → bufC
+                // 18. copy normOut → skip
+                cs.SetBuffer(kCopyBuffer, "buf_a", skipBuf);
+                cs.SetBuffer(kCopyBuffer, "buf_b", normOutBuf);
+                cs.Dispatch(kCopyBuffer, Div256(hidTotal), 1, 1);
+
+                // 19. pre-FFN layernorm → hiddenBuf
                 cs.SetInt("seq_len", seqLen);
-                cs.SetBuffer(kRmsNormHidden, "norm_input", bufB);
-                cs.SetBuffer(kRmsNormHidden, "norm_output", bufC);
+                cs.SetBuffer(kRmsNormHidden, "norm_input", normOutBuf);
+                cs.SetBuffer(kRmsNormHidden, "norm_output", hiddenBuf);
                 cs.SetBuffer(kRmsNormHidden, "norm_gamma", weights.preFfnLnGamma[li]);
                 cs.Dispatch(kRmsNormHidden, Div256(seqLen), 1, 1);
 
-                // 18-19. MLP: reads/writes bufC via "input"
+                // 20-21. MLP (FP16 weights)
                 bool vec1 = seqLen == 1;
                 int kGU = vec1 ? kGateUp1Vec : kGateUp;
                 int kDN = vec1 ? kDown1Vec : kDown;
@@ -403,31 +381,34 @@ namespace DeepUnity
                 cs.SetInt("batch_size", 1);
                 cs.SetInt("seq_len", seqLen);
                 cs.SetInt("activation_type", 1);
-                cs.SetBuffer(kGU, "input", bufC);
+                cs.SetBuffer(kGU, "input", hiddenBuf);
                 cs.SetBuffer(kGU, "mlp_weights", weights.mlpWeights[li]);
                 cs.SetBuffer(kGU, "intermediate", mlpInterBuf);
                 if (vec1) cs.Dispatch(kGU, (intermediateSize + 255) / 256, 1, 1);
                 else cs.Dispatch(kGU, (intermediateSize + 63) / 64, (seqLen + 3) / 4, 1);
 
-                cs.SetBuffer(kDN, "input", bufC);
+                cs.SetBuffer(kDN, "input", hiddenBuf);
                 cs.SetBuffer(kDN, "mlp_weights", weights.mlpWeights[li]);
                 cs.SetBuffer(kDN, "intermediate", mlpInterBuf);
-                if (vec1) cs.Dispatch(kDN, (hiddenSize + 255) / 256, 1, 1);
+                if (vec1) cs.Dispatch(kDN, (intermediateSize + 319) / 320, 1, 1);
                 else cs.Dispatch(kDN, (hiddenSize + 31) / 32, (seqLen + 3) / 4, 1);
 
-                // 20. Post-FFN LayerNorm: bufC → bufA
+                // 22. post-FFN layernorm
                 cs.SetInt("seq_len", seqLen);
-                cs.SetBuffer(kRmsNormHidden, "norm_input", bufC);
-                cs.SetBuffer(kRmsNormHidden, "norm_output", bufA);
+                cs.SetBuffer(kRmsNormHidden, "norm_input", hiddenBuf);
+                cs.SetBuffer(kRmsNormHidden, "norm_output", normOutBuf);
                 cs.SetBuffer(kRmsNormHidden, "norm_gamma", weights.postFfnLnGamma[li]);
                 cs.Dispatch(kRmsNormHidden, Div256(seqLen), 1, 1);
 
-                // 21. Add Residual: bufA += bufB (bufB is the mid-layer residual)
-                cs.SetBuffer(kAddResidual, "buf_a", bufA);
-                cs.SetBuffer(kAddResidual, "buf_b", bufB);
+                // 23. residual
+                cs.SetBuffer(kAddResidual, "buf_a", normOutBuf);
+                cs.SetBuffer(kAddResidual, "buf_b", skipBuf);
                 cs.Dispatch(kAddResidual, Div256(hidTotal), 1, 1);
 
-                // bufA now holds the updated hidden state — no copy needed
+                // 24. normOut → hidden
+                cs.SetBuffer(kCopyBuffer, "buf_a", hiddenBuf);
+                cs.SetBuffer(kCopyBuffer, "buf_b", normOutBuf);
+                cs.Dispatch(kCopyBuffer, Div256(hidTotal), 1, 1);
             }
 
             public void Forward(Tensor input_ids, bool useCache, bool lastPosOnly)
@@ -439,13 +420,12 @@ namespace DeepUnity
                 EnsureScratch(seqLen, totalKvLen);
                 UploadTokens(input_ids, seqLen);
 
-                // Embedding → bufA
                 cs.SetInt("seq_len", seqLen);
                 cs.SetInt("hidden_size", hiddenSize);
                 cs.SetFloat("embed_scale", embedScale);
                 cs.SetBuffer(kEmbedLookup, "token_ids", tokenIdsBuf);
                 cs.SetBuffer(kEmbedLookup, "embed_weights", weights.embedLmHead);
-                cs.SetBuffer(kEmbedLookup, "embed_output", bufA);
+                cs.SetBuffer(kEmbedLookup, "embed_output", hiddenBuf);
                 cs.Dispatch(kEmbedLookup, Div256(seqLen * hiddenSize), 1, 1);
 
                 for (int i = 0; i < numLayers; i++)
@@ -466,13 +446,12 @@ namespace DeepUnity
                 EnsureScratch(seqLen, totalKvLen);
                 UploadTokens(input_ids, seqLen);
 
-                // Embedding → bufA
                 cs.SetInt("seq_len", seqLen);
                 cs.SetInt("hidden_size", hiddenSize);
                 cs.SetFloat("embed_scale", embedScale);
                 cs.SetBuffer(kEmbedLookup, "token_ids", tokenIdsBuf);
                 cs.SetBuffer(kEmbedLookup, "embed_weights", weights.embedLmHead);
-                cs.SetBuffer(kEmbedLookup, "embed_output", bufA);
+                cs.SetBuffer(kEmbedLookup, "embed_output", hiddenBuf);
                 cs.Dispatch(kEmbedLookup, Div256(seqLen * hiddenSize), 1, 1);
                 yield return null;
 
@@ -491,14 +470,12 @@ namespace DeepUnity
 
             void DispatchFinalLast(int seqLen)
             {
-                // Extract last position from bufA
                 cs.SetInt("buffer_size", hiddenSize);
                 cs.SetInt("copy_src_offset", (seqLen - 1) * hiddenSize);
                 cs.SetBuffer(kCopySlice, "buf_a", lastHiddenBuf);
-                cs.SetBuffer(kCopySlice, "buf_b", bufA);
+                cs.SetBuffer(kCopySlice, "buf_b", hiddenBuf);
                 cs.Dispatch(kCopySlice, Div256(hiddenSize), 1, 1);
 
-                // Final norm
                 cs.SetInt("seq_len", 1);
                 cs.SetInt("hidden_size", hiddenSize);
                 cs.SetFloat("norm_eps", rmsEps);
@@ -507,7 +484,6 @@ namespace DeepUnity
                 cs.SetBuffer(kRmsNormHidden, "norm_gamma", weights.finalNormGamma);
                 cs.Dispatch(kRmsNormHidden, 1, 1, 1);
 
-                // LM Head
                 Realloc(ref logitsBuf, vocabSize);
                 cs.SetInt("batch_size", 1);
                 cs.SetInt("seq_len", 1);
@@ -521,12 +497,11 @@ namespace DeepUnity
 
             void DispatchFinalAll(int seqLen)
             {
-                // Final norm: bufA → bufB
                 cs.SetInt("seq_len", seqLen);
                 cs.SetInt("hidden_size", hiddenSize);
                 cs.SetFloat("norm_eps", rmsEps);
-                cs.SetBuffer(kRmsNormHidden, "norm_input", bufA);
-                cs.SetBuffer(kRmsNormHidden, "norm_output", bufB);
+                cs.SetBuffer(kRmsNormHidden, "norm_input", hiddenBuf);
+                cs.SetBuffer(kRmsNormHidden, "norm_output", normOutBuf);
                 cs.SetBuffer(kRmsNormHidden, "norm_gamma", weights.finalNormGamma);
                 cs.Dispatch(kRmsNormHidden, Div256(seqLen), 1, 1);
 
@@ -538,29 +513,23 @@ namespace DeepUnity
                 cs.SetInt("hidden_size", hiddenSize);
                 cs.SetInt("vocab_size", vocabSize);
                 cs.SetBuffer(k, "lm_weights", weights.embedLmHead);
-                cs.SetBuffer(k, "lm_input", bufB);
+                cs.SetBuffer(k, "lm_input", normOutBuf);
                 cs.SetBuffer(k, "lm_output", logitsBuf);
                 if (v1) cs.Dispatch(k, (vocabSize + 511) / 512, 1, 1);
                 else cs.Dispatch(k, (vocabSize + 31) / 32, (seqLen + 7) / 8, 1);
             }
 
-            // ---- Synchronous sampling (for Predict) ----
-            public int Sample(float temperature, int topK, float topP, float minP)
-            {
-                return temperature == 0f ? SampleGreedy() : SampleStochastic(temperature, topK, topP, minP);
-            }
-
-            int SampleGreedy()
+            public int SampleGreedy()
             {
                 cs.SetInt("vocab_size", vocabSize);
-                cs.SetBuffer(kArgMaxParallel, "logits_buf", logitsBuf);
-                cs.SetBuffer(kArgMaxParallel, "argmax_result", argmaxBuf);
-                cs.Dispatch(kArgMaxParallel, 1, 1, 1);
+                cs.SetBuffer(kArgMax, "logits_buf", logitsBuf);
+                cs.SetBuffer(kArgMax, "argmax_result", argmaxBuf);
+                cs.Dispatch(kArgMax, 1, 1, 1);
                 uint[] r = new uint[1]; argmaxBuf.GetData(r);
                 return (int)r[0];
             }
 
-            int SampleStochastic(float temperature, int topK, float topP, float minP)
+            public int SampleStochastic(float temperature, int topK, float topP, float minP)
             {
                 cs.SetInt("vocab_size", vocabSize);
                 cs.SetFloat("temperature", temperature);
@@ -576,47 +545,14 @@ namespace DeepUnity
                 return (int)r[0];
             }
 
-            // ---- Async sampling (for coroutine-based Generate/Chat) ----
-            public void DispatchSample(float temperature, int topK, float topP, float minP)
+            public int Sample(float temperature, int topK, float topP, float minP)
             {
-                sampleReady = false;
-
-                if (temperature == 0f)
-                {
-                    cs.SetInt("vocab_size", vocabSize);
-                    cs.SetBuffer(kArgMaxParallel, "logits_buf", logitsBuf);
-                    cs.SetBuffer(kArgMaxParallel, "argmax_result", argmaxBuf);
-                    cs.Dispatch(kArgMaxParallel, 1, 1, 1);
-                }
-                else
-                {
-                    cs.SetInt("vocab_size", vocabSize);
-                    cs.SetFloat("temperature", temperature);
-                    cs.SetInt("top_k_val", topK);
-                    cs.SetFloat("top_p_val", topP);
-                    cs.SetFloat("min_p_val", minP);
-                    cs.SetInt("rng_seed", UnityEngine.Random.Range(int.MinValue, int.MaxValue));
-                    cs.SetBuffer(kSampleToken, "logits_buf", logitsBuf);
-                    cs.SetBuffer(kSampleToken, "probs_buf", probsBuf);
-                    cs.SetBuffer(kSampleToken, "argmax_result", argmaxBuf);
-                    cs.Dispatch(kSampleToken, 1, 1, 1);
-                }
-
-                AsyncGPUReadback.Request(argmaxBuf, 4, 0, OnSampleReadback);
-            }
-
-            void OnSampleReadback(AsyncGPUReadbackRequest req)
-            {
-                if (!req.hasError)
-                {
-                    var data = req.GetData<uint>();
-                    lastSampledToken = (int)data[0];
-                }
-                sampleReady = true;
+                return temperature == 0f ? SampleGreedy() : SampleStochastic(temperature, topK, topP, minP);
             }
 
             public Tensor ReadLogits(int seqLen)
             {
+                // Logits are FP32, read back directly
                 return seqLen == 1
                     ? Tensor.Constant(logitsBuf, vocabSize)
                     : Tensor.Constant(logitsBuf, seqLen, vocabSize);
@@ -629,10 +565,10 @@ namespace DeepUnity
                 weights?.Dispose(); cache?.Dispose();
                 ropeCosFull?.Release(); ropeSinFull?.Release();
                 ropeCosLocal?.Release(); ropeSinLocal?.Release();
-                bufA?.Release(); bufB?.Release(); bufC?.Release();
+                hiddenBuf?.Release(); skipBuf?.Release(); normOutBuf?.Release();
                 qkvBuf?.Release(); qBuf?.Release(); kBuf?.Release(); vBuf?.Release();
                 qNormBuf?.Release(); kNormBuf?.Release();
-                attnScoresBuf?.Release(); attendedBuf?.Release();
+                attnScoresBuf?.Release(); attendedBuf?.Release(); attnOutBuf?.Release();
                 mlpInterBuf?.Release(); logitsBuf?.Release(); probsBuf?.Release();
                 argmaxBuf?.Release(); tokenIdsBuf?.Release();
                 lastHiddenBuf?.Release(); normSingleBuf?.Release();

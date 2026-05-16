@@ -5,7 +5,7 @@ namespace DeepUnity.Tutorials
 {
     public class BalanceBall : Agent
     {
-        [Button("SetSACHP")]
+        [Button("SetPPOGPUHP")]
         // [Button("SetDefaultHP")]
         [SerializeField] Rigidbody ball;
         
@@ -55,10 +55,10 @@ namespace DeepUnity.Tutorials
 
 
         // This exist because balance ball is the best env for testing out. (in 1 minute it must get around 273 mean steps)
-        public void SetDefaultHP()
+        public void SetPPOGPUHP()
         {
             Utils.Random.Seed = 0;
-            // model.config.trainer = TrainerType.VPG;
+            model.config.trainer = TrainerType.PPOGPU;
             model.config.actorLearningRate = 1e-3f;
             model.config.criticLearningRate = 1e-3f;
             model.config.batchSize = 128;

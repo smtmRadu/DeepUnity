@@ -1,0 +1,457 @@
+// RLBoosterCS -- fully-GPU MLP/LnMLP kernels for the FullGPU RL training path.
+//
+// Conventions
+// -----------
+// Buffers are FP32 RW StructuredBuffers throughout (weights, activations,
+// gradients, momentum). Activations are row-major [B, dim].
+// Weights for a Dense(in -> out) are row-major [out, in] (matches the CPU
+// Dense's PyTorch-style layout). Bias is [out].
+//
+// Each kernel binds only the buffers it touches; uniforms are set per dispatch.
+// Tiled (16x16) matmul kernels are used for Dense forward and weight-grad to
+// keep arithmetic intensity high for the typical RL hidden sizes (64-512).
+
+// =================================================================== Common buffers
+RWStructuredBuffer<float> X;          // input  [B, IN]   (read for fwd; read for bwd weight-grad)
+RWStructuredBuffer<float> Y;          // output [B, OUT]  (written by fwd; read for bwd as Z cache)
+RWStructuredBuffer<float> dY;         // upstream grad [B, OUT]
+RWStructuredBuffer<float> dX;         // downstream grad [B, IN]
+
+RWStructuredBuffer<float> W;          // weights [OUT, IN]
+RWStructuredBuffer<float> b;          // bias    [OUT]
+RWStructuredBuffer<float> dW;         // weight grad [OUT, IN]
+RWStructuredBuffer<float> dB;         // bias grad   [OUT]
+
+RWStructuredBuffer<float> gamma;      // RMSNorm gain [F]
+RWStructuredBuffer<float> dGamma;     // RMSNorm gain grad [F]
+RWStructuredBuffer<float> msx;        // RMSNorm mean-of-squares cache [B]
+RWStructuredBuffer<float> xhat;       // RMSNorm pre-gain cache [B, F]   (= x / sqrt(ms+eps))
+
+// AdamW
+RWStructuredBuffer<float> P;          // parameter [N]
+RWStructuredBuffer<float> G;          // gradient  [N]
+RWStructuredBuffer<float> Mbuf;       // 1st moment [N]
+RWStructuredBuffer<float> Vbuf;       // 2nd moment [N]
+
+// Grad-norm clip
+RWStructuredBuffer<float> normSq;     // [1] scalar accumulator
+RWStructuredBuffer<float> scaleOut;   // [1] scalar (final scale)
+
+// Uniforms
+int B;            // current minibatch size
+int IN_;          // in features
+int OUT_;         // out features
+int F_;           // RMSNorm features (== last-dim hidden)
+int N_;           // total parameter count for AdamW
+int activation;   // -1 linear, 0 ReLU, 1 Tanh, 2 SiLU, 3 GELU
+int has_bias;     // 0 / 1
+int t_step;       // AdamW step (>=1)
+
+float eps_norm;   // RMSNorm eps
+float lr;         // AdamW learning rate
+float beta1;
+float beta2;
+float beta1_t;    // beta1^t
+float beta2_t;    // beta2^t
+float eps_adam;
+float weight_decay;
+float clip_max;   // grad clip max-norm, <=0 disables
+float scale;      // generic scalar (used by ScaleGrads)
+
+
+// =================================================================== Activations
+float fwd_act(float z, int kind)
+{
+    if (kind == 0) return z > 0 ? z : 0.0f;                         // ReLU
+    if (kind == 1)
+    {
+        // numerically-stable tanh
+        float a = abs(z);
+        float e = exp(-2.0f * a);
+        return sign(z) * ((1.0f - e) / (1.0f + e));
+    }
+    if (kind == 2) return z / (1.0f + exp(-z));                     // SiLU
+    if (kind == 3) return 0.5f * z * (1.0f + tanh(0.79788456f * (z + 0.044715f * z * z * z))); // GELU
+    return z;                                                       // linear
+}
+
+float bwd_act(float z, int kind)
+{
+    if (kind == 0) return z > 0 ? 1.0f : 0.0f;                      // ReLU'
+    if (kind == 1)
+    {
+        float a = abs(z);
+        float e = exp(-2.0f * a);
+        float th = sign(z) * ((1.0f - e) / (1.0f + e));
+        return 1.0f - th * th;                                      // Tanh'
+    }
+    if (kind == 2)
+    {
+        float s = 1.0f / (1.0f + exp(-z));
+        return s * (1.0f + z * (1.0f - s));                         // SiLU'
+    }
+    if (kind == 3)
+    {
+        // GELU' (tanh-approx)
+        float k0 = 0.79788456f;
+        float k1 = 0.044715f;
+        float u  = k0 * (z + k1 * z * z * z);
+        float t  = tanh(u);
+        float du = k0 * (1.0f + 3.0f * k1 * z * z);
+        return 0.5f * (1.0f + t) + 0.5f * z * (1.0f - t * t) * du;
+    }
+    return 1.0f;
+}
+
+// =================================================================== Dense forward (tiled, fused bias + activation)
+//   Y[b,o] = act( sum_k X[b,k]*W[o,k] + bias[o] )
+// Threadgroup tile (16x16): each group computes a 16(B) x 16(OUT) tile.
+groupshared float Xs[16][16];
+groupshared float Ws[16][16];
+
+#pragma kernel DenseFwd
+[numthreads(16, 16, 1)]
+void DenseFwd(uint3 gid : SV_GroupID, uint3 lid : SV_GroupThreadID, uint3 dt : SV_DispatchThreadID)
+{
+    int row = (int)dt.y;   // batch index
+    int col = (int)dt.x;   // out feature index
+
+    float acc = 0.0f;
+    int tiles = (IN_ + 15) / 16;
+    for (int t = 0; t < tiles; ++t)
+    {
+        int kx = t * 16 + (int)lid.x;     // k for X (along IN)
+        int ky = t * 16 + (int)lid.y;     // k for W (along IN)
+
+        Xs[lid.y][lid.x] = (row < B && kx < IN_) ? X[row * IN_ + kx] : 0.0f;
+        Ws[lid.y][lid.x] = (col < OUT_ && ky < IN_) ? W[col * IN_ + ky] : 0.0f;
+
+        GroupMemoryBarrierWithGroupSync();
+
+        [unroll(16)]
+        for (int k = 0; k < 16; ++k)
+            acc += Xs[lid.y][k] * Ws[k][lid.x];
+
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (row < B && col < OUT_)
+    {
+        if (has_bias != 0) acc += b[col];
+        Y[row * OUT_ + col] = fwd_act(acc, activation);
+    }
+}
+
+// =================================================================== Dense backward (input grad)
+//   dX[b,k] = sum_o dZ[b,o] * W[o,k]
+// where dZ = dY * act'(Z). Z is implicit: we recompute it as the *pre-activation* y of
+// the forward pass -- but we don't store Z. Instead we pass:
+//   - Y  = post-activation cached (also the next-stage input)
+//   - dY = upstream grad
+//   - "Zbuf" parameter binding gives the pre-activation if available.
+// For simplicity we expect the caller to pre-multiply dY by act'(Z) before
+// dispatching this kernel (kernel `ApplyActGrad`). So this kernel sees dZ in dY.
+
+#pragma kernel DenseBwdIn
+[numthreads(16, 16, 1)]
+void DenseBwdIn(uint3 dt : SV_DispatchThreadID)
+{
+    int row = (int)dt.y;
+    int kcol = (int)dt.x;
+
+    if (row >= B || kcol >= IN_) return;
+
+    float acc = 0.0f;
+    for (int o = 0; o < OUT_; ++o)
+        acc += dY[row * OUT_ + o] * W[o * IN_ + kcol];
+    dX[row * IN_ + kcol] = acc;
+}
+
+// =================================================================== Dense weight grad
+//   dW[o,k] = (1/B) * sum_b dZ[b,o] * X[b,k]
+//   dB[o]   = (1/B) * sum_b dZ[b,o]
+// One thread per (o,k). Reduction is serial over B (typically 64..512 in PPO).
+#pragma kernel DenseBwdW
+[numthreads(16, 16, 1)]
+void DenseBwdW(uint3 dt : SV_DispatchThreadID)
+{
+    int o = (int)dt.y;
+    int k = (int)dt.x;
+    if (o >= OUT_ || k >= IN_) return;
+
+    float acc = 0.0f;
+    for (int bi = 0; bi < B; ++bi)
+        acc += dY[bi * OUT_ + o] * X[bi * IN_ + k];
+    dW[o * IN_ + k] = acc / max((float)B, 1.0f);
+}
+
+// dB[o] = mean_b dY[b,o]   -- one thread per OUT
+#pragma kernel DenseBwdB
+[numthreads(256, 1, 1)]
+void DenseBwdB(uint3 dt : SV_DispatchThreadID)
+{
+    int o = (int)dt.x;
+    if (o >= OUT_) return;
+    float s = 0.0f;
+    for (int bi = 0; bi < B; ++bi) s += dY[bi * OUT_ + o];
+    dB[o] = s / max((float)B, 1.0f);
+}
+
+// =================================================================== Activation backward
+// dY' = dY * act'(Z), where Z is the pre-activation cached in `Y` (caller passes pre-act).
+// Operates in-place on dY when the caller binds Z as Y.
+#pragma kernel ApplyActGrad
+[numthreads(256, 1, 1)]
+void ApplyActGrad(uint3 dt : SV_DispatchThreadID)
+{
+    int idx = (int)dt.x;
+    int total = B * OUT_;
+    if (idx >= total) return;
+    float z = Y[idx];
+    dY[idx] = dY[idx] * bwd_act(z, activation);
+}
+
+// =================================================================== RMSNorm forward
+// xhat[b,f] = x[b,f] / sqrt(msx[b] + eps)
+// out[b,f]  = xhat[b,f] * (1+gamma[f]) -> when caller wants 1+gamma; here we use plain gamma
+// (matches the CPU RMSNorm:  out = xhat * gamma). The CPU RMSNorm in this repo
+// initializes gamma = 1, so plain multiply.
+// One threadgroup per row (B groups), reduction across F using shared memory.
+
+#define RMS_TG 256
+groupshared float ssum[RMS_TG];
+
+#pragma kernel RMSFwd
+[numthreads(RMS_TG, 1, 1)]
+void RMSFwd(uint3 gid : SV_GroupID, uint3 lid : SV_GroupThreadID)
+{
+    int row = (int)gid.x;
+    if (row >= B) return;
+
+    int tid = (int)lid.x;
+    float s = 0.0f;
+    for (int f = tid; f < F_; f += RMS_TG)
+    {
+        float v = X[row * F_ + f];
+        s += v * v;
+    }
+    ssum[tid] = s;
+    GroupMemoryBarrierWithGroupSync();
+
+    [unroll]
+    for (int stride = RMS_TG / 2; stride > 0; stride >>= 1)
+    {
+        if (tid < stride) ssum[tid] += ssum[tid + stride];
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (tid == 0) msx[row] = ssum[0] / (float)F_;
+    GroupMemoryBarrierWithGroupSync();
+
+    float r = rsqrt(msx[row] + eps_norm);
+    for (int f2 = tid; f2 < F_; f2 += RMS_TG)
+    {
+        float xv = X[row * F_ + f2];
+        float xh = xv * r;
+        xhat[row * F_ + f2] = xh;
+        Y[row * F_ + f2] = xh * gamma[f2];
+    }
+}
+
+// =================================================================== RMSNorm backward
+// dGamma[f] += (1/B) * sum_b dY[b,f] * xhat[b,f]
+// dX[b,f]   = (gamma[f] * r) * dY[b,f] - (x[b,f] * r^3 / F) * sum_i (gamma[i] * dY[b,i] * x[b,i])
+// where r = 1/sqrt(msx+eps).
+// One threadgroup per row, reduce over F.
+
+groupshared float gsum[RMS_TG];
+
+#pragma kernel RMSBwd
+[numthreads(RMS_TG, 1, 1)]
+void RMSBwd(uint3 gid : SV_GroupID, uint3 lid : SV_GroupThreadID)
+{
+    int row = (int)gid.x;
+    if (row >= B) return;
+
+    int tid = (int)lid.x;
+    float r  = rsqrt(msx[row] + eps_norm);
+    float r3 = r * r * r;
+
+    // Local sum of (gamma[i] * dY[b,i] * x[b,i])
+    float s = 0.0f;
+    for (int f = tid; f < F_; f += RMS_TG)
+    {
+        float dy = dY[row * F_ + f];
+        float xv = X[row * F_ + f];
+        s += gamma[f] * dy * xv;
+    }
+    gsum[tid] = s;
+    GroupMemoryBarrierWithGroupSync();
+
+    [unroll]
+    for (int stride = RMS_TG / 2; stride > 0; stride >>= 1)
+    {
+        if (tid < stride) gsum[tid] += gsum[tid + stride];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    float row_dot = gsum[0];   // sum_i gamma[i]*dY[b,i]*x[b,i]
+    GroupMemoryBarrierWithGroupSync();
+
+    float inv_n = 1.0f / (float)F_;
+    for (int f2 = tid; f2 < F_; f2 += RMS_TG)
+    {
+        float dy = dY[row * F_ + f2];
+        float xv = X[row * F_ + f2];
+        float dx_v = (gamma[f2] * r) * dy - (xv * r3 * inv_n) * row_dot;
+        dX[row * F_ + f2] = dx_v;
+    }
+}
+
+// dGamma[f] = (1/B) * sum_b dY[b,f] * xhat[b,f]    (replace; caller zeroes first if desired)
+#pragma kernel RMSBwdGamma
+[numthreads(256, 1, 1)]
+void RMSBwdGamma(uint3 dt : SV_DispatchThreadID)
+{
+    int f = (int)dt.x;
+    if (f >= F_) return;
+    float s = 0.0f;
+    for (int bi = 0; bi < B; ++bi) s += dY[bi * F_ + f] * xhat[bi * F_ + f];
+    dGamma[f] = s / max((float)B, 1.0f);
+}
+
+// =================================================================== AdamW (fused)
+// Decoupled weight decay; reads (P, G, M, V), writes (P, M, V) in one pass.
+// Optional grad-norm pre-scale via `scale` (uniform).
+#pragma kernel AdamWStep
+[numthreads(256, 1, 1)]
+void AdamWStep(uint3 dt : SV_DispatchThreadID)
+{
+    int i = (int)dt.x;
+    if (i >= N_) return;
+
+    float g = G[i] * scale;
+    float m = beta1 * Mbuf[i] + (1.0f - beta1) * g;
+    float v = beta2 * Vbuf[i] + (1.0f - beta2) * g * g;
+    Mbuf[i] = m;
+    Vbuf[i] = v;
+
+    float mhat = m / (1.0f - beta1_t);
+    float vhat = v / (1.0f - beta2_t);
+
+    float p = P[i];
+    if (weight_decay > 0.0f) p -= lr * weight_decay * p; // decoupled
+    p -= lr * mhat / (sqrt(vhat) + eps_adam);
+    P[i] = p;
+}
+
+// =================================================================== Grad-norm reduction
+// Single-threadgroup parallel reduction. Caller dispatches with (1,1,1) and the
+// kernel walks the full G buffer. Slightly slower than a multi-pass tree
+// reduction but simpler and only runs once per minibatch.
+#define GN_TG 256
+groupshared float gnscratch[GN_TG];
+
+#pragma kernel GradNormReduce
+[numthreads(GN_TG, 1, 1)]
+void GradNormReduce(uint3 lid : SV_GroupThreadID)
+{
+    int tid = (int)lid.x;
+    float s = 0.0f;
+    for (int i = tid; i < N_; i += GN_TG)
+    {
+        float v = G[i];
+        s += v * v;
+    }
+    gnscratch[tid] = s;
+    GroupMemoryBarrierWithGroupSync();
+
+    [unroll]
+    for (int stride = GN_TG / 2; stride > 0; stride >>= 1)
+    {
+        if (tid < stride) gnscratch[tid] += gnscratch[tid + stride];
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    // Accumulate into normSq[0] (we expect caller to zero it before the first
+    // GradNormReduce of the step, then call this kernel for each param buffer).
+    if (tid == 0) normSq[0] += gnscratch[0];
+}
+
+// scaleOut[0] = min(1, clip_max / (sqrt(normSq[0]) + 1e-8))
+#pragma kernel GradNormFinalize
+[numthreads(1, 1, 1)]
+void GradNormFinalize()
+{
+    if (clip_max <= 0.0f) { scaleOut[0] = 1.0f; return; }
+    float nm = sqrt(normSq[0]) + 1e-8f;
+    float s = clip_max / nm;
+    scaleOut[0] = (s < 1.0f) ? s : 1.0f;
+}
+
+// =================================================================== Misc helpers
+#pragma kernel ZeroBuffer
+[numthreads(256, 1, 1)]
+void ZeroBuffer(uint3 dt : SV_DispatchThreadID)
+{
+    int i = (int)dt.x;
+    if (i >= N_) return;
+    P[i] = 0.0f;
+}
+
+#pragma kernel CopyBuffer
+[numthreads(256, 1, 1)]
+void CopyBuffer(uint3 dt : SV_DispatchThreadID)
+{
+    int i = (int)dt.x;
+    if (i >= N_) return;
+    P[i] = G[i];
+}
+
+// out += in * scale (used for sigma scale, e.g. mu output post-multiplied)
+#pragma kernel ScaleInplace
+[numthreads(256, 1, 1)]
+void ScaleInplace(uint3 dt : SV_DispatchThreadID)
+{
+    int i = (int)dt.x;
+    if (i >= N_) return;
+    P[i] = P[i] * scale;
+}
+
+// Softplus: out = log(1 + exp(x))   (numerically stable)
+#pragma kernel SoftplusFwd
+[numthreads(256, 1, 1)]
+void SoftplusFwd(uint3 dt : SV_DispatchThreadID)
+{
+    int i = (int)dt.x;
+    int total = B * OUT_;
+    if (i >= total) return;
+    float x = X[i];
+    float v = (x > 20.0f) ? x : log(1.0f + exp(x));
+    Y[i] = v;
+}
+
+// Softplus backward: dX = dY * sigmoid(x)   where x = pre-softplus (cached in xhat or Y? we use X)
+// Caller binds X = pre-softplus, dY = upstream grad, dX = output grad.
+#pragma kernel SoftplusBwd
+[numthreads(256, 1, 1)]
+void SoftplusBwd(uint3 dt : SV_DispatchThreadID)
+{
+    int i = (int)dt.x;
+    int total = B * OUT_;
+    if (i >= total) return;
+    float x = X[i];
+    float s = 1.0f / (1.0f + exp(-x));
+    dX[i] = dY[i] * s;
+}
+
+// Generic activation forward, in-place on Y. Buffer Y must hold the pre-activations
+// (caller copies the input to Y first if needed). Activation kind selected by `activation`.
+#pragma kernel ActFwdInplace
+[numthreads(256, 1, 1)]
+void ActFwdInplace(uint3 dt : SV_DispatchThreadID)
+{
+    int i = (int)dt.x;
+    int total = B * OUT_;
+    if (i >= total) return;
+    Y[i] = fwd_act(Y[i], activation);
+}

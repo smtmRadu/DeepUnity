@@ -3,7 +3,6 @@ using DeepUnity.Activations;
 using DeepUnity.Models;
 using DeepUnity.Modules;
 using DeepUnity.Optimizers;
-using DeepUnity.Qwen3Modeling;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.VisualScripting;
@@ -116,21 +115,7 @@ namespace DeepUnity.Tutorials
             print(emb.Predict(x));
             print(emb.Predict(x2));
         }
-        private void TestRMSNorm()
-        {
-            RMSNorm rms = new RMSNorm(103, 1e-6f);
-            Qwen3RMSNorm rms2 = new Qwen3RMSNorm(103);
 
-            rms.gamma = Tensor.LinSpace(-0.5f, 0.7f, 103);
-            rms2.gamma = rms.gamma.ToArray();
-
-            print(rms.gamma.ToArray().ToCommaSeparatedString());
-            print(rms2.gamma.ToArray().ToCommaSeparatedString());
-            Tensor x = Tensor.LinSpace(-1, 1, 206).Reshape(2, 103);
-
-            print(rms.Predict(x));
-            print(rms2.Predict(x));
-        }
         private void TestSwiGLU()
         {
             // works.
@@ -160,22 +145,7 @@ namespace DeepUnity.Tutorials
            //  xgpu.Dispose();
            //  // print(swiglu2.Predict(x));
         }
-        private void TestQwen()
-        {
-            var qwen_model = new Qwen3ForCausalLM();
-            print(qwen_model.ParameterCount());
 
-            Tensor input_ids = Tensor.Ones(1, 1);
-            Tensor attention_mask = null;// Tensor.Ones(1, 1);
-            qwen_model.Predict(input_ids, attention_mask);
-        }
-        private void TestTokenizer()
-        {
-            var tokenizer = new Qwen3TokenizerFast();
-            var enc = tokenizer.Encode("Hello there martin, here's your special delight zone!");
-            print(enc);
-            print(tokenizer.Decode(enc.Item1)[0]);
-        }
         private void TestGemmaTokenizer()
         {
             string str = "Hello there martin, here's your special delight zone!";

@@ -260,11 +260,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   display: {fileID: 455755043}
   paramsDisplay: {fileID: 1992312937}
-  system_prompt: You are Kira Koina. You always start your answer with Yeey!
+  system_prompt: You are John Johnston.
   user_prompt: Who are you?
-  device: 1
-  batch_size: 1
-  max_completion_tokens: 256
+  max_completion_tokens: 128
   temperature: 1
 --- !u!1 &455755040
 GameObject:

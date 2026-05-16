@@ -766,7 +766,7 @@ namespace DeepUnity.ReinforcementLearning
             var trainer = config.trainer;
             var whatIsMissing = new List<string>();
 
-            if (trainer == TrainerType.PPO)
+            if (trainer == TrainerType.PPO || trainer == TrainerType.PPOGPU)
             {
                 if (!vNetwork)
                     whatIsMissing.Add("Value Network");
@@ -998,6 +998,25 @@ namespace DeepUnity.ReinforcementLearning
                     EditorGUILayout.HelpBox("Your device doesn't have a graphics card. The inference and training devices will be set on CPU by default.", MessageType.Warning);
                 }
             }
+
+            // FullGPU PPO runs the entire training step on the GPU, so trainingDevice is
+            // locked. Inference (when the model is later deployed outside training) stays
+            // user-configurable — runtime inference is decoupled from the training path.
+            if (script.config != null && script.config.trainer == TrainerType.PPOGPU)
+            {
+                if (script.trainingDevice != Device.GPU)
+                {
+                    script.trainingDevice = Device.GPU;
+                    EditorUtility.SetDirty(script);
+                }
+                EditorGUILayout.HelpBox(
+                    "PPOGPU runs forward, backward and AdamW step entirely on the GPU. " +
+                    "Training Device is locked to GPU. Inference Device stays user-configurable " +
+                    "so the trained model can run on CPU when deployed outside training.",
+                    MessageType.Info);
+                dontDrawMe.Add("trainingDevice");
+                EditorGUILayout.LabelField("Training Device", "GPU (locked by PPOGPU)");
+            }
             // See or not standard deviation
             if (!script.IsUsingContinuousActions)
             {
@@ -1060,9 +1079,9 @@ namespace DeepUnity.ReinforcementLearning
             }
 
             // In the future I need to change this, and store raw and normaized values separately in the off policy algs buffers
-            if(script.normalize == true && script.config != null && script.config.trainer != TrainerType.PPO)
+            if(script.normalize == true && script.config != null && script.config.trainer != TrainerType.PPO && script.config.trainer != TrainerType.PPOGPU)
             {
-                EditorGUILayout.HelpBox("'Normalize' is not yet compatible but with PPO.", MessageType.Warning);
+                EditorGUILayout.HelpBox("'Normalize' is not yet compatible but with PPO / PPOGPU.", MessageType.Warning);
 
             }
 

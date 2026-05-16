@@ -1,10 +1,9 @@
-// Gemma3CS.compute
+// Gemma3NextFP16CS.compute
 // ======================================================================================
 // Mixed-precision GPU inference kernels for Gemma3.
-// FP16 weights (coalesced transposed layout), FP32 activations, with:
-//   - ArgMaxParallel: shared-memory reduction (256 threads) instead of single-threaded
 // Weights stored as packed FP16 in StructuredBuffer<uint> (2 halfs per uint).
 // All activations, caches, and computation use FP32.
+// Saves ~50% weight memory while maintaining full precision in computation.
 // ======================================================================================
 
 // ================================ PARAMETERS ================================
@@ -24,6 +23,7 @@ uint rope_num_heads;
 uint seq_len_q;
 uint seq_len_k;
 uint sliding_window_size;
+uint bidirectional;            // 0 = causal mask; 1 = bidirectional (no causal). SW still applies symmetrically when set.
 uint copy_src_offset;
 uint embedding_dim;
 uint inner_embedding_dim;
@@ -44,6 +44,8 @@ int activation_type;
 
 
 // ================================ FP16 WEIGHT HELPER ================================
+// Weights are packed as 2 x float16 per uint.
+// Lower 16 bits = even index, upper 16 bits = odd index.
 float readH(StructuredBuffer<uint> buf, uint index)
 {
     uint word = buf[index >> 1];
@@ -52,24 +54,20 @@ float readH(StructuredBuffer<uint> buf, uint index)
 }
 
 
-// ================================ GROUPSHARED ================================
-groupshared float sm_val[256];
-groupshared uint  sm_idx[256];
-// smem_f removed — GPU L1 cache handles small input vectors efficiently
-
-
 // ================================ BUFFERS ================================
 
-StructuredBuffer<uint>      embed_weights;
-StructuredBuffer<uint>      norm_gamma;
-StructuredBuffer<uint>      W_QKV;
-StructuredBuffer<uint>      W_O;
-StructuredBuffer<uint>      mlp_weights;
-StructuredBuffer<uint>      lm_weights;
-StructuredBuffer<uint>      rope_cos;
-StructuredBuffer<uint>      rope_sin;
+// -- FP16 packed weights (read-only, stride 4, count = N/2) --
+StructuredBuffer<uint>      embed_weights;  // packed FP16 [vocab_size * hidden_size]
+StructuredBuffer<uint>      norm_gamma;     // packed FP16 [norm_dim]
+StructuredBuffer<uint>      W_QKV;          // packed FP16
+StructuredBuffer<uint>      W_O;            // packed FP16
+StructuredBuffer<uint>      mlp_weights;    // packed FP16 gate+up+down
+StructuredBuffer<uint>      lm_weights;     // packed FP16 (= embed_weights, tied)
+StructuredBuffer<uint>      rope_cos;       // packed FP16
+StructuredBuffer<uint>      rope_sin;       // packed FP16
 
-StructuredBuffer<uint>      token_ids;
+// -- FP32 activations (read-write, stride 4, count = N) --
+StructuredBuffer<uint>      token_ids;      // uint
 RWStructuredBuffer<float>   embed_output;
 RWStructuredBuffer<float>   norm_output;
 StructuredBuffer<float>     norm_input;
@@ -93,8 +91,8 @@ RWStructuredBuffer<float>   AttentionWeights;
 RWStructuredBuffer<float>   AttendedValues;
 RWStructuredBuffer<float>   O;
 
-RWStructuredBuffer<float>   input;
-RWStructuredBuffer<float>   intermediate;
+RWStructuredBuffer<float>   input;          // MLP input/output
+RWStructuredBuffer<float>   intermediate;   // MLP intermediate
 
 StructuredBuffer<float>     lm_input;
 RWStructuredBuffer<float>   lm_output;
@@ -291,8 +289,16 @@ void ApplyMask(uint3 id : SV_DispatchThreadID)
     uint abs_q = (seq_len_k - seq_len_q) + q_pos;
 
     bool masked = false;
-    if (k_pos > abs_q) masked = true;
-    if (!masked && sliding_window_size > 0u && (abs_q - k_pos) > sliding_window_size) masked = true;
+    if (bidirectional == 0u && k_pos > abs_q) masked = true;
+    if (!masked && sliding_window_size > 0u)
+    {
+        // SW: keep tokens within `sliding_window_size` distance.
+        // Causal path uses (abs_q - k_pos); bidirectional uses |abs_q - k_pos|.
+        uint dist = (abs_q > k_pos) ? (abs_q - k_pos) : (k_pos - abs_q);
+        bool too_far = (bidirectional == 0u) ? ((abs_q - k_pos) > sliding_window_size)
+                                              : (dist > sliding_window_size);
+        if (too_far) masked = true;
+    }
 
     if (masked)
         AttentionWeights[(hq * seq_len_q + q_pos) * seq_len_k + k_pos] = -1e10;
@@ -327,6 +333,7 @@ void SoftmaxRows(uint3 id : SV_DispatchThreadID)
 
 
 // ========================= QKVProj ===========================================
+// Reads FP16 weights, FP32 input, writes FP32 output
 #pragma kernel QKVProj
 [numthreads(1, 8, 32)]
 void QKVProj(uint3 id : SV_DispatchThreadID)
@@ -337,7 +344,7 @@ void QKVProj(uint3 id : SV_DispatchThreadID)
     float sum = 0.0;
     uint x_base = ((b * sequence_length_q + l) * embedding_dim);
     for (uint e = 0; e < embedding_dim; e++)
-        sum += X[x_base + e] * readH(W_QKV, e * qkv_proj_dim + p);
+        sum += X[x_base + e] * readH(W_QKV, p * embedding_dim + e);
 
     QKV[((b * sequence_length_q + l) * qkv_proj_dim + p)] = sum;
 }
@@ -393,6 +400,7 @@ void AttendValues(uint3 id : SV_DispatchThreadID)
 
 
 // ========================= OProj =============================================
+// Reads FP16 W_O weights
 #pragma kernel OProj
 [numthreads(1, 4, 32)]
 void OProj(uint3 id : SV_DispatchThreadID)
@@ -406,7 +414,7 @@ void OProj(uint3 id : SV_DispatchThreadID)
         uint hq = ie / head_dim;
         uint d  = ie % head_dim;
         sum += AttendedValues[(((b * sequence_length_q + l) * num_heads_q + hq) * head_dim + d)]
-             * readH(W_O, ie * embedding_dim + e);
+             * readH(W_O, e * inner_embedding_dim + ie);
     }
     O[((b * sequence_length_q + l) * embedding_dim + e)] = sum;
 }
@@ -428,8 +436,8 @@ void GateUp(uint3 id : SV_DispatchThreadID)
     for (uint k = 0; k < H; k++)
     {
         float x = input[input_base + k];
-        g += x * readH(mlp_weights, gate_off + k * I + i_idx);
-        u += x * readH(mlp_weights, up_off   + k * I + i_idx);
+        g += x * readH(mlp_weights, gate_off + i_idx * H + k);
+        u += x * readH(mlp_weights, up_off   + i_idx * H + k);
     }
 
     uint out_idx = ((b_idx * seq_len) + l_idx) * I + i_idx;
@@ -451,7 +459,7 @@ void Down(uint3 id : SV_DispatchThreadID)
 
     float acc = 0.0;
     for (uint i = 0; i < intermediate_size; i++)
-        acc += intermediate[inter_base + i] * readH(mlp_weights, down_off + i * hidden_size + h_idx);
+        acc += intermediate[inter_base + i] * readH(mlp_weights, down_off + h_idx * intermediate_size + i);
 
     input[((b_idx * seq_len) + l_idx) * hidden_size + h_idx] = acc;
 }
@@ -470,8 +478,8 @@ void GateUp1Vec(uint3 id : SV_DispatchThreadID)
     for (uint k = 0; k < H; k++)
     {
         float x = input[k];
-        g += x * readH(mlp_weights, k * I + i_idx);
-        u += x * readH(mlp_weights, H * I + k * I + i_idx);
+        g += x * readH(mlp_weights, i_idx * H + k);
+        u += x * readH(mlp_weights, H * I + i_idx * H + k);
     }
     if (activation_type == 0) intermediate[i_idx] = silu(g) * u;
     else                      intermediate[i_idx] = gelu(g) * u;
@@ -489,7 +497,7 @@ void Down1Vec(uint3 id : SV_DispatchThreadID)
     uint down_off = 2u * hidden_size * intermediate_size;
     float acc = 0.0;
     for (uint i = 0; i < intermediate_size; i++)
-        acc += intermediate[i] * readH(mlp_weights, down_off + i * hidden_size + h_idx);
+        acc += intermediate[i] * readH(mlp_weights, down_off + h_idx * intermediate_size + i);
     input[h_idx] = acc;
 }
 
@@ -526,7 +534,7 @@ void LmHeadPredict1Vec(uint3 id : SV_DispatchThreadID)
 }
 
 
-// ========================= ArgMax (legacy, single-threaded) ==================
+// ========================= ArgMax ============================================
 #pragma kernel ArgMax
 [numthreads(1, 1, 1)]
 void ArgMax(uint3 id : SV_DispatchThreadID)
@@ -539,48 +547,6 @@ void ArgMax(uint3 id : SV_DispatchThreadID)
         if (v > best_val) { best_val = v; best_idx = i; }
     }
     argmax_result[0] = best_idx;
-}
-
-
-// ========================= ArgMaxParallel ====================================
-// Shared-memory reduction ArgMax across 256 threads.
-// Each thread scans vocab_size/256 elements, then tree-reduce.
-#pragma kernel ArgMaxParallel
-[numthreads(256, 1, 1)]
-void ArgMaxParallel(uint3 tid : SV_GroupThreadID)
-{
-    uint t = tid.x;
-    uint chunk = (vocab_size + 255u) / 256u;
-    uint start = t * chunk;
-    uint end = min(start + chunk, vocab_size);
-
-    float bestVal = -1e30;
-    uint  bestIdx = 0;
-    for (uint i = start; i < end; i++)
-    {
-        float v = logits_buf[i];
-        if (v > bestVal) { bestVal = v; bestIdx = i; }
-    }
-
-    sm_val[t] = bestVal;
-    sm_idx[t] = bestIdx;
-    GroupMemoryBarrierWithGroupSync();
-
-    for (uint s = 128u; s > 0u; s >>= 1u)
-    {
-        if (t < s)
-        {
-            if (sm_val[t + s] > sm_val[t])
-            {
-                sm_val[t] = sm_val[t + s];
-                sm_idx[t] = sm_idx[t + s];
-            }
-        }
-        GroupMemoryBarrierWithGroupSync();
-    }
-
-    if (t == 0u)
-        argmax_result[0] = sm_idx[0];
 }
 
 

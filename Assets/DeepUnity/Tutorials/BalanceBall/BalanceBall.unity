@@ -480,11 +480,11 @@ MonoBehaviour:
   stackedInputs: 1
   continuousActions: 2
   discreteActions: 0
-  archType: 1
+  archType: 0
   numLayers: 2
   hidUnits: 32
   activation: 0
-  model: {fileID: 11400000, guid: 568135155acb2d64e842659b49537eba, type: 2}
+  model: {fileID: 11400000, guid: 9a1cdfb5978d50c4b8c5f3a21293ac00, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0

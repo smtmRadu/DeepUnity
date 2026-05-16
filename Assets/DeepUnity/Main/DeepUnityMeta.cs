@@ -20,8 +20,9 @@ namespace DeepUnity
         internal readonly static ComputeShader FFNInferenceCS;
         internal readonly static ComputeShader LmHeadInferenceCS;
         internal readonly static ComputeShader Gemma3FP32CS;
-        internal readonly static ComputeShader Gemma3FP16CS;
         internal readonly static ComputeShader Gemma3CS;
+        internal readonly static ComputeShader Gemma3OriginalCS;
+        internal readonly static ComputeShader Qwen3_5CS;
 
         internal readonly static int THREADS_NUM = 256;
         internal readonly static Lazy<ParallelOptions> MULTITHREADS_8 = new Lazy<ParallelOptions>(() => new ParallelOptions { MaxDegreeOfParallelism = 8 });
@@ -44,8 +45,9 @@ namespace DeepUnity
                 FFNInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/FFNInferenceCS");
                 LmHeadInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/LmHeadInferenceCS");
                 Gemma3FP32CS = Resources.Load<ComputeShader>("ComputeShaders/Gemma3FP32CS");
-                Gemma3FP16CS = Resources.Load<ComputeShader>("ComputeShaders/Gemma3FP16CS");
                 Gemma3CS = Resources.Load<ComputeShader>("ComputeShaders/Gemma3CS");
+                Gemma3OriginalCS = Resources.Load<ComputeShader>("ComputeShaders/Gemma3OriginalCS");
+                Qwen3_5CS = Resources.Load<ComputeShader>("ComputeShaders/Qwen3_5CS");
   
                 if (TensorCS == null)
                     throw new Exception("The Compute Shader scripts were moved from Resources/ComputeShaders folder. Please move them back or modify this script that finds them by adjusting the path.");
@@ -256,6 +258,8 @@ namespace DeepUnity
         DDPG,
         [Tooltip("Vanilla Policy Gradient")]
         VPG,
+        [Tooltip("Proximal Policy Optimization — FullGPU path. Forward, backward and AdamW step run entirely on GPU. MLP / LnMLP networks only.")]
+        PPOGPU,
     }
 
     public enum TimescaleAdjustmentType
