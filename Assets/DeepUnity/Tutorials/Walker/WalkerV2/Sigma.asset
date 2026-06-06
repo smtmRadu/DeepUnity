@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ffdd4f9587b2d8846a37ba5240ae14b2, type: 3}
   m_Name: Sigma
   m_EditorClassIdentifier: 
-  version: 79
+  version: 104
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -8929,9 +8929,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -1651211240
+      residualConnectionHash: 374163576
     residualconnectionjoin:
-      residualConnectionHash: -1651211240
+      residualConnectionHash: 374163576
     squeeze:
       axis: 0
     unsqueeze:
@@ -9235,9 +9235,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -215108888
+      residualConnectionHash: 1810265928
     residualconnectionjoin:
-      residualConnectionHash: -215108888
+      residualConnectionHash: 1810265928
     squeeze:
       axis: 0
     unsqueeze:
@@ -14797,9 +14797,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 1939044640
+      residualConnectionHash: 1105554512
     residualconnectionjoin:
-      residualConnectionHash: 1939044640
+      residualConnectionHash: 1105554512
     squeeze:
       axis: 0
     unsqueeze:
@@ -15103,9 +15103,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 333434314
+      residualConnectionHash: -627001246
     residualconnectionjoin:
-      residualConnectionHash: 333434314
+      residualConnectionHash: -627001246
     squeeze:
       axis: 0
     unsqueeze:
@@ -18037,9 +18037,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 1769536666
+      residualConnectionHash: 1174796574
     residualconnectionjoin:
-      residualConnectionHash: 1769536666
+      residualConnectionHash: 1174796574
     squeeze:
       axis: 0
     unsqueeze:

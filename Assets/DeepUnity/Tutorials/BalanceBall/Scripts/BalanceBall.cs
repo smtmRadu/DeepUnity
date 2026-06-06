@@ -64,7 +64,7 @@ namespace DeepUnity.Tutorials
             model.config.batchSize = 128;
             model.config.bufferSize = 2048;
             model.standardDeviationValue = 2;
-            model.config.timescale = 10;
+            model.config.timescale = 20;
 
             print("Config changed for Balance ball");
         }

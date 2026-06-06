@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5970f7530cba1f0499a4a3dbe7d27f96, type: 3}
   m_Name: Config
   m_EditorClassIdentifier: 
-  trainer: 0
+  trainer: 5
   maxSteps: 2000000000
   actorLearningRate: 0.0002
   criticLearningRate: 0.0002

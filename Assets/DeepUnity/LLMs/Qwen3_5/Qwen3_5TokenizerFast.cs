@@ -414,11 +414,10 @@ namespace DeepUnity
         }
 
         // ----------------------- Chat template (Qwen3.5) -----------------------
-        // Mirrors `tok.apply_chat_template(..., add_generation_prompt=True)` for the
-        // simple system+user case. The reference template wraps assistant turns with
-        // an empty <think>\n\n</think>\n\n block when thinking is disabled — we follow
-        // that since the default config has it enabled.
-        public Tensor ApplyChatTemplate(List<Dictionary<string, string>> messages, bool add_generation_prompt = true)
+        // Mirrors `tok.apply_chat_template(..., add_generation_prompt=True, enable_thinking=...)`.
+        // HF template: thinking ON emits only `<think>\n` (model fills the block and closes itself);
+        // thinking OFF emits the full empty wrap `<think>\n\n</think>\n\n` so the model skips it.
+        public Tensor ApplyChatTemplate(List<Dictionary<string, string>> messages, bool add_generation_prompt = true, bool enable_thinking = false)
         {
             var ids = new List<float>();
             foreach (var m in messages)
@@ -435,9 +434,16 @@ namespace DeepUnity
                 ids.Add(IM_START_TOKEN_ID);
                 AppendEncoded("assistant\n", ids);
                 ids.Add(Qwen3_5Modeling.Qwen3_5Config.THINK_OPEN_TOKEN_ID);
-                AppendEncoded("\n\n", ids);
-                ids.Add(Qwen3_5Modeling.Qwen3_5Config.THINK_CLOSE_TOKEN_ID);
-                AppendEncoded("\n\n", ids);
+                if (enable_thinking)
+                {
+                    AppendEncoded("\n", ids);
+                }
+                else
+                {
+                    AppendEncoded("\n\n", ids);
+                    ids.Add(Qwen3_5Modeling.Qwen3_5Config.THINK_CLOSE_TOKEN_ID);
+                    AppendEncoded("\n\n", ids);
+                }
             }
             return Tensor.Constant(ids.ToArray());
         }

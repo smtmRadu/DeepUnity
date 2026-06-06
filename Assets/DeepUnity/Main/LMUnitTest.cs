@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -15,9 +14,9 @@ namespace DeepUnity.Tutorials
         [SerializeField] private string user_prompt = "Who are you?";
         [SerializeField] private int max_completion_tokens = 32;
         [SerializeField] private float temperature = 0f;
+        [SerializeField] private bool enable_thinking = false;
 
         private Qwen3_5ForCausalLM model;
-        private Qwen3_5TokenizerFast tokenizer;
 
         private void Start()
         {
@@ -25,35 +24,25 @@ namespace DeepUnity.Tutorials
             model = new Qwen3_5ForCausalLM();
             Benckmark.Stop("Qwen3.5 model init");
 
-            tokenizer = model.tokenizer ?? new Qwen3_5TokenizerFast();
-            StartCoroutine(WaitThenGenerate());
+            StartCoroutine(Run());
         }
 
-        private IEnumerator WaitThenGenerate()
+        private IEnumerator Run()
         {
-            while (!model.IsReady) yield return new WaitForSeconds(0.01f);
-            while (!tokenizer.IsReady) yield return new WaitForSeconds(0.01f);
-
-            var msgs = new List<Dictionary<string, string>>();
-            if (!string.IsNullOrEmpty(system_prompt))
-                msgs.Add(new() { { "role", "system" }, { "content", system_prompt } });
-            msgs.Add(new() { { "role", "user" }, { "content", user_prompt } });
-            Tensor input_ids = tokenizer.ApplyChatTemplate(msgs, add_generation_prompt: true);
-
-            Debug.Log("prompt token count: " + input_ids.Size(-1));
-            Debug.Log("prompt decoded: " + tokenizer.Decode(input_ids)[0]);
+            yield return model.InitializeChat(system_prompt);
 
             if (display != null)
                 display.text = $"User:\n{user_prompt}\n\nAssistant:\n";
 
-            yield return model.Generate(input_ids, onTokenGenerated: x =>
+            yield return model.Chat(user_prompt, onTokenGenerated: x =>
             {
                 if (display != null) display.text += x;
                 if (paramsDisplay != null)
                     paramsDisplay.text = $"Inference: {model.TokensPerSecond:0.0} tok/s";
             },
             max_new_tokens: max_completion_tokens,
-            temperature: temperature);
+            temperature: temperature,
+            enable_thinking: enable_thinking);
         }
     }
 }

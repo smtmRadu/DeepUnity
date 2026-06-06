@@ -51,8 +51,11 @@ namespace DeepUnity.ReinforcementLearning
         const float avgDeltaTimeMomentum = 0.96f;
         string _learningText = "Learning";
         string _runtimeStatsText = " - ";
+        string _fpsText = "FPS: -";
         GUIStyle _learningTextStyle;
         GUIStyle _runtimeStatsStyle;
+        GUIStyle _fpsStyle;
+        GUIStyle _stopButtonStyle;
 
         private AudioClip trainingSound;
 
@@ -76,6 +79,8 @@ namespace DeepUnity.ReinforcementLearning
                 _learningTextStyle.normal.textColor = Color.white;
                 _runtimeStatsStyle = new GUIStyle(_learningTextStyle);
                 _runtimeStatsStyle.fontSize = 20;
+                _fpsStyle = new GUIStyle(_runtimeStatsStyle);
+                _fpsStyle.alignment = TextAnchor.UpperRight;
 
                 // Play some music in background
                 // trainingSound = Resources.Load<AudioClip>("Audio/TrainingSound1"); // note that that audio was removed from there
@@ -131,6 +136,14 @@ namespace DeepUnity.ReinforcementLearning
         private void Update()
         {
             avgDeltaTime = avgDeltaTime * avgDeltaTimeMomentum + Time.deltaTime * (1f - avgDeltaTimeMomentum);
+            float fps = 1f / avgDeltaTime;
+            _fpsText = $"FPS: {fps.ToString("0.0")}";
+            if (fps < 60f)
+                _fpsStyle.normal.textColor = Color.Lerp(Color.red, Color.yellow, Mathf.InverseLerp(30f, 60f, fps));
+            else if (fps < 80f)
+                _fpsStyle.normal.textColor = Color.Lerp(Color.yellow, Color.green, Mathf.InverseLerp(60f, 80f, fps));
+            else
+                _fpsStyle.normal.textColor = Color.Lerp(Color.green, Color.blue, Mathf.InverseLerp(80f, 100f, fps));
 
             if (DeepUnityTrainer.Instance is IOnPolicy)
                 _runtimeStatsText = $"[Trainer: {hp.trainer} | No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {MemoriesCount}/{hp.bufferSize} ({(MemoriesCount * 100f / hp.bufferSize).ToString("0.00")}%)]";
@@ -143,6 +156,23 @@ namespace DeepUnity.ReinforcementLearning
         {
             GUI.Label(new Rect(10, Screen.height - 65, 400, 60), _learningText, _learningTextStyle);
             GUI.Label(new Rect(10, 10, 800, 60), _runtimeStatsText, _runtimeStatsStyle);
+            GUI.Label(new Rect(Screen.width - 410, 10, 400, 60), _fpsText, _fpsStyle);
+
+            if (_stopButtonStyle == null)
+            {
+                _stopButtonStyle = new GUIStyle(GUI.skin.button);
+                _stopButtonStyle.fontSize = 18;
+                _stopButtonStyle.fontStyle = FontStyle.Bold;
+            }
+            if (!ended && GUI.Button(new Rect(Screen.width - 210, Screen.height - 70, 200, 60), "Stop Training", _stopButtonStyle))
+            {
+                // Saves the model and (in editor) exits play mode.
+                EndTrainingSession("Stopped by user");
+#if !UNITY_EDITOR
+                // In a build, save again is harmless (guarded by 'ended') and fully close the application.
+                Application.Quit();
+#endif
+            }
         }
 
         protected abstract void Initialize(string[] optimizer_states);
