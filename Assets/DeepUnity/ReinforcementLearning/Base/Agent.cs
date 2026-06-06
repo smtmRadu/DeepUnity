@@ -70,7 +70,7 @@ namespace DeepUnity.ReinforcementLearning
         /// The cumulated reward in the current episode (raw).
         /// </summary>
         public float EpisodeCumulativeReward { get; private set; } = 0f;
-        private int EpisodeFixedFramesCount { get; set; } = -1;
+        internal int EpisodeFixedFramesCount { get; private set; } = -1; // internal: read by DeepUnityTrainer.ParallelInferenceSubset to check the agent's decision clock
         /// <summary>
         /// A trigger that checks if the agent is using HER. It sets to true automatically when calling <see cref="HindsightExperienceReplay.SetGoal(Agent)"/>.
         /// </summary>
@@ -174,6 +174,11 @@ namespace DeepUnity.ReinforcementLearning
                 return;
 
             EpisodeFixedFramesCount++;
+
+            // Mark this agent as "ticked" for the current physics cycle (used by the
+            // subset-batched inference to know whose decision clock is post-increment).
+            if (behaviourType == BehaviourType.Learn && DeepUnityTrainer.Instance != null)
+                DeepUnityTrainer.Instance.NotifyAgentTick(this);
 
             PostTimestep();
 
@@ -321,11 +326,25 @@ namespace DeepUnity.ReinforcementLearning
             // Set state[t], action[t] & pi[t]
 
             // This is a huge update really, the inference speed is amazing.
-            if (behaviourType == BehaviourType.Learn && DeepUnityTrainer.Instance.parallelAgents.Count > 1 && DecisionRequester.decisionPeriod == 1)
+            bool batched = false;
+            if (behaviourType == BehaviourType.Learn && DeepUnityTrainer.Instance.parallelAgents.Count > 1)
             {
-                DeepUnityTrainer.Instance.ParallelInference(this, DeepUnityTrainer.Instance.FixedFrameCount);
-            } 
-            else
+                if (DecisionRequester.decisionPeriod == 1)
+                {
+                    DeepUnityTrainer.Instance.ParallelInference(this, DeepUnityTrainer.Instance.FixedFrameCount);
+                    batched = true;
+                }
+                else
+                {
+                    // decisionPeriod > 1: subset-batched inference. Only the agents whose internal
+                    // clock requests a decision this cycle (episodes can be phase-offset) are
+                    // forwarded together. Returns false on the first decision after an episode
+                    // reset (the state must be re-observed post-reset) -> solo path below.
+                    batched = DeepUnityTrainer.Instance.ParallelInferenceSubset(this);
+                }
+            }
+
+            if (!batched)
             {
                 // OBSERVATION PROCESS ------------------------------------------------------------------
                 if (LastState == null)

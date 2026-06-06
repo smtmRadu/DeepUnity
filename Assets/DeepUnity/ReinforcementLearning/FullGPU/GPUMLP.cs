@@ -73,6 +73,10 @@ namespace DeepUnity.ReinforcementLearning.FullGPU
         int kSoftplusFwd, kSoftplusBwd, kActFwdInplace;
         int kCopyBuffer;
 
+        // Distinct dummy for unused buffer slots. NEVER dummy-bind an already-bound buffer:
+        // D3D11 nulls the earlier UAV slot when the same resource is bound to two slots.
+        ComputeBuffer dummyBuf;
+
         public GPUMLP(Sequential cpuModel, int maxBatch)
         {
             cpuMirror = cpuModel;
@@ -80,6 +84,7 @@ namespace DeepUnity.ReinforcementLearning.FullGPU
             cs = Resources.Load<ComputeShader>("ComputeShaders/RLBoosterCS");
             if (cs == null) throw new Exception("RLBoosterCS.compute not found in Resources/ComputeShaders.");
             CacheKernelIds();
+            dummyBuf = new ComputeBuffer(1, 4, ComputeBufferType.Structured);
 
             int curDim = -1;
             for (int i = 0; i < cpuModel.Modules.Length; i++)
@@ -149,11 +154,12 @@ namespace DeepUnity.ReinforcementLearning.FullGPU
                 case ReLU _: return new ActivationStage(this, curDim, GPUActKind.ReLU);
                 case Tanh _: return new ActivationStage(this, curDim, GPUActKind.Tanh);
                 case SiLU _: return new ActivationStage(this, curDim, GPUActKind.SiLU);
+                case GELU _: return new ActivationStage(this, curDim, GPUActKind.GELU);
                 case Softplus _: return new SoftplusStage(this, curDim);
                 case Softmax _: return new SoftmaxTailStage(this, curDim); // recognized but executed by PPOLossCS
                 default:
                     throw new Exception($"GPUMLP: unsupported module type '{m.GetType().Name}'. " +
-                                        "FullGPU only supports MLP/LnMLP networks (Dense/RMSNorm/ReLU/Tanh/SiLU/Softplus/Softmax).");
+                                        "FullGPU only supports MLP/LnMLP networks (Dense/RMSNorm/ReLU/Tanh/SiLU/GELU/Softplus/Softmax).");
             }
         }
 
@@ -202,6 +208,7 @@ namespace DeepUnity.ReinforcementLearning.FullGPU
             foreach (var st in stages) st.Dispose();
             foreach (var t in tape) t?.Release();
             foreach (var t in dtape) t?.Release();
+            dummyBuf?.Release();
         }
 
         // ---------- helpers ----------
@@ -280,7 +287,7 @@ namespace DeepUnity.ReinforcementLearning.FullGPU
                 cs.SetBuffer(kFwd, "Y", outBuf);
                 cs.SetBuffer(kFwd, "W", W.P);
                 if (hasBias) cs.SetBuffer(kFwd, "b", B.P);
-                else { cs.SetBuffer(kFwd, "b", W.P); /* dummy bind */ }
+                else { cs.SetBuffer(kFwd, "b", owner.dummyBuf); /* dummy bind — must be a distinct buffer */ }
                 cs.Dispatch(kFwd, (OUT + 15) / 16, (batch + 15) / 16, 1);
             }
 

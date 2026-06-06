@@ -1,0 +1,514 @@
+
+===== NEW SESSION 2026-06-06 14:12:00 =====
+[init] kernels: ContGaussianProb=0 ContSurrogateGrad=2 SafeSoftmax=3 DiscSurrGrad=5 ValueMseGrad=6 NormAdv=7 (-1 = compile failure)
+[init] v=Dense->RMSNorm->ReLU->Dense->RMSNorm->ReLU->Dense
+[init] mu=Dense->RMSNorm->ReLU->Dense->RMSNorm->ReLU->Dense  sigma=Dense->RMSNorm->ReLU->Dense->RMSNorm->ReLU->Dense->Softplus  disc=null
+[init] stochasticity=FixedStandardDeviation trainableSigma=False fixedSigma=2 sigmaScale=1.5 contDim=2 discDim=0 obs=10x1
+[init] hp: buffer=2048 batch=128 epochs=8 lrA=0.001 lrV=0.001 clipEps=0.2 beta=0.005 vCoeff=0.5 maxNorm=0.5 normAdv=True lrSched=False gamma=0.99 lambda=0.96 horizon=-1 earlyStop=Off (GPU ignores earlyStop!)
+[u0] ---- Train start  buffer=2048 batch=128 epochs=8 steps=0 ----
+[u0] fwd-parity V: cpu=-0.006834 gpu=-0.006834 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u0] dMu: ||dMu||=124432.000000 mean|dMu|=7777.000000 max|dMu|=7777.000000
+[u0] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.109665 meanRel=0.310539 worst@203: piNew=0.066949 piOld=0.176613 act=-2.955322 mu=-1.968584
+[u0] mu fwd-parity: cpu[0]=0.282246 gpu[0]=0.282246 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u0] sigma_eff fixed=2.000000
+[u0] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u0] grad norms: ||grad_v||=1.610630 ||grad_mu||=59898.720000 (zero = bug; huge = explosion)
+[u0] weight delta (first 4 w): |Δw_v|=0.0160105 |Δw_mu|=0.0000000 (zero = no update; huge = explosion)
+[u0] ---- Train done  minibatches=128 elapsed=156.3ms avg_critic=0.0055 avg_actor=0.8871 avg_ent=2.0000 ----
+[u1] ---- Train start  buffer=2048 batch=128 epochs=8 steps=2048 ----
+[u1] fwd-parity V: cpu=0.521606 gpu=0.521606 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u1] dMu: ||dMu||=124432.000000 mean|dMu|=7777.000000 max|dMu|=7777.000000
+[u1] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.198860 meanRel=1.123941 worst@159: piNew=0.000489 piOld=0.199348 act=-6.934888 mu=-6.864710
+[u1] mu fwd-parity: cpu[0]=-5.898982 gpu[0]=-5.898982 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u1] sigma_eff fixed=2.000000
+[u1] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u1] grad norms: ||grad_v||=0.754064 ||grad_mu||=90565.220000 (zero = bug; huge = explosion)
+[u1] weight delta (first 4 w): |Δw_v|=0.0700366 |Δw_mu|=0.0000000 (zero = no update; huge = explosion)
+[u1] ---- Train done  minibatches=128 elapsed=148.0ms avg_critic=0.0019 avg_actor=0.1312 avg_ent=2.0000 ----
+
+===== NEW SESSION 2026-06-06 14:16:03 =====
+[init] kernels: ContGaussianProb=0 ContSurrogateGrad=2 SafeSoftmax=3 DiscSurrGrad=5 ValueMseGrad=6 NormAdv=7 (-1 = compile failure)
+[init] v=Dense->RMSNorm->ReLU->Dense->RMSNorm->ReLU->Dense
+[init] mu=Dense->RMSNorm->ReLU->Dense->RMSNorm->ReLU->Dense  sigma=Dense->RMSNorm->ReLU->Dense->RMSNorm->ReLU->Dense->Softplus  disc=null
+[init] stochasticity=FixedStandardDeviation trainableSigma=False fixedSigma=2 sigmaScale=1.5 contDim=2 discDim=0 obs=10x1
+[init] hp: buffer=2048 batch=128 epochs=8 lrA=0.001 lrV=0.001 clipEps=0.2 beta=0.005 vCoeff=0.5 maxNorm=0.5 normAdv=True lrSched=False gamma=0.99 lambda=0.96 horizon=-1 earlyStop=Off (GPU ignores earlyStop!)
+[u0] ---- Train start  buffer=2048 batch=128 epochs=8 steps=0 ----
+[u0] fwd-parity V: cpu=-0.847491 gpu=-0.847491 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u0] dMu: ||dMu||=7.727106 mean|dMu|=0.337975 max|dMu|=2.307773
+[u0] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@53: piNew=0.142871 piOld=0.142871 act=-0.384336 mu=1.249629
+[u0] mu fwd-parity: cpu[0]=0.998532 gpu[0]=0.998532 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u0] sigma_eff fixed=2.000000
+[u0] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u0] grad norms: ||grad_v||=2.908152 ||grad_mu||=0.263300 (zero = bug; huge = explosion)
+[u0] weight delta (first 4 w): |Δw_v|=0.1068611 |Δw_mu|=0.0758345 (zero = no update; huge = explosion)
+[u0] ---- Train done  minibatches=128 elapsed=153.3ms avg_critic=0.0081 avg_actor=0.9996 avg_ent=2.0000 ----
+[u1] ---- Train start  buffer=2048 batch=128 epochs=8 steps=2048 ----
+[u1] fwd-parity V: cpu=0.090629 gpu=0.090629 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u1] dMu: ||dMu||=7.858679 mean|dMu|=0.321926 max|dMu|=1.924737
+[u1] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@152: piNew=0.102595 piOld=0.102595 act=-0.488568 mu=1.817737
+[u1] mu fwd-parity: cpu[0]=0.713059 gpu[0]=0.713059 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u1] sigma_eff fixed=2.000000
+[u1] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u1] grad norms: ||grad_v||=1.887037 ||grad_mu||=0.606636 (zero = bug; huge = explosion)
+[u1] weight delta (first 4 w): |Δw_v|=0.0306871 |Δw_mu|=0.0296181 (zero = no update; huge = explosion)
+[u1] ---- Train done  minibatches=128 elapsed=165.9ms avg_critic=0.0038 avg_actor=0.9940 avg_ent=2.0000 ----
+[u2] ---- Train start  buffer=2048 batch=128 epochs=8 steps=4096 ----
+[u2] fwd-parity V: cpu=0.453747 gpu=0.453747 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u2] dMu: ||dMu||=8.494666 mean|dMu|=0.319421 max|dMu|=3.606900
+[u2] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.012876 meanRel=0.000404 worst@0: piNew=0.169072 piOld=0.156196 act=2.106904 mu=0.956799
+[u2] mu fwd-parity: cpu[0]=0.956799 gpu[0]=0.956799 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u2] sigma_eff fixed=2.000000
+[u2] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u2] grad norms: ||grad_v||=1.079606 ||grad_mu||=0.233176 (zero = bug; huge = explosion)
+[u2] weight delta (first 4 w): |Δw_v|=0.0042652 |Δw_mu|=0.0256389 (zero = no update; huge = explosion)
+[u2] ---- Train done  minibatches=128 elapsed=143.0ms avg_critic=0.0021 avg_actor=0.9996 avg_ent=2.0000 ----
+[u3] ---- Train start  buffer=2048 batch=128 epochs=8 steps=6144 ----
+[u3] fwd-parity V: cpu=0.942046 gpu=0.942046 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u3] dMu: ||dMu||=8.315822 mean|dMu|=0.371840 max|dMu|=2.394466
+[u3] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@242: piNew=0.117478 piOld=0.117478 act=-0.579198 mu=1.478794
+[u3] mu fwd-parity: cpu[0]=1.115173 gpu[0]=1.115173 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u3] sigma_eff fixed=2.000000
+[u3] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u3] grad norms: ||grad_v||=0.585321 ||grad_mu||=0.482078 (zero = bug; huge = explosion)
+[u3] weight delta (first 4 w): |Δw_v|=0.0070346 |Δw_mu|=0.0092639 (zero = no update; huge = explosion)
+[u3] ---- Train done  minibatches=128 elapsed=143.0ms avg_critic=0.0012 avg_actor=0.9988 avg_ent=2.0000 ----
+[u4] ---- Train start  buffer=2048 batch=128 epochs=8 steps=8192 ----
+[u4] fwd-parity V: cpu=0.060392 gpu=0.060392 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u4] dMu: ||dMu||=8.228839 mean|dMu|=0.330573 max|dMu|=2.581412
+[u4] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@200: piNew=0.100117 piOld=0.100117 act=3.424487 mu=1.076161
+[u4] mu fwd-parity: cpu[0]=1.759689 gpu[0]=1.759689 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u4] sigma_eff fixed=2.000000
+[u4] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u4] grad norms: ||grad_v||=0.314813 ||grad_mu||=0.659283 (zero = bug; huge = explosion)
+[u4] weight delta (first 4 w): |Δw_v|=0.0015040 |Δw_mu|=0.0302475 (zero = no update; huge = explosion)
+[u4] ---- Train done  minibatches=128 elapsed=202.4ms avg_critic=0.0006 avg_actor=0.9975 avg_ent=2.0000 ----
+[u5] ---- Train start  buffer=2048 batch=128 epochs=8 steps=10240 ----
+[u5] fwd-parity V: cpu=0.539446 gpu=0.539445 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u5] dMu: ||dMu||=7.763098 mean|dMu|=0.282693 max|dMu|=2.955413
+[u5] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.014846 meanRel=0.000403 worst@0: piNew=0.177687 piOld=0.162841 act=-0.159373 mu=0.802486
+[u5] mu fwd-parity: cpu[0]=0.802486 gpu[0]=0.802486 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u5] sigma_eff fixed=2.000000
+[u5] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u5] grad norms: ||grad_v||=0.174590 ||grad_mu||=0.544307 (zero = bug; huge = explosion)
+[u5] weight delta (first 4 w): |Δw_v|=0.0025351 |Δw_mu|=0.0155594 (zero = no update; huge = explosion)
+[u5] ---- Train done  minibatches=128 elapsed=151.7ms avg_critic=0.0008 avg_actor=0.9972 avg_ent=2.0000 ----
+[u6] ---- Train start  buffer=2048 batch=128 epochs=8 steps=12288 ----
+[u6] fwd-parity V: cpu=0.408891 gpu=0.408891 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u6] dMu: ||dMu||=8.006513 mean|dMu|=0.326417 max|dMu|=2.566083
+[u6] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@76: piNew=0.098691 piOld=0.098691 act=2.980682 mu=0.608039
+[u6] mu fwd-parity: cpu[0]=1.117401 gpu[0]=1.117401 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u6] sigma_eff fixed=2.000000
+[u6] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u6] grad norms: ||grad_v||=0.155128 ||grad_mu||=0.394906 (zero = bug; huge = explosion)
+[u6] weight delta (first 4 w): |Δw_v|=0.0189885 |Δw_mu|=0.0197349 (zero = no update; huge = explosion)
+[u6] ---- Train done  minibatches=128 elapsed=147.7ms avg_critic=0.0007 avg_actor=0.9931 avg_ent=2.0000 ----
+[u7] ---- Train start  buffer=2048 batch=128 epochs=8 steps=14336 ----
+[u7] fwd-parity V: cpu=0.304508 gpu=0.304508 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u7] dMu: ||dMu||=8.121342 mean|dMu|=0.294065 max|dMu|=2.409210
+[u7] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@38: piNew=0.152404 piOld=0.152404 act=0.071289 mu=1.538625
+[u7] mu fwd-parity: cpu[0]=1.341202 gpu[0]=1.341202 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u7] sigma_eff fixed=2.000000
+[u7] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u7] grad norms: ||grad_v||=0.156266 ||grad_mu||=0.587211 (zero = bug; huge = explosion)
+[u7] weight delta (first 4 w): |Δw_v|=0.0063333 |Δw_mu|=0.0159941 (zero = no update; huge = explosion)
+[u7] ---- Train done  minibatches=128 elapsed=146.7ms avg_critic=0.0009 avg_actor=0.9949 avg_ent=2.0000 ----
+[u8] ---- Train start  buffer=2048 batch=128 epochs=8 steps=16384 ----
+[u8] fwd-parity V: cpu=1.060433 gpu=1.060433 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u8] dMu: ||dMu||=8.554635 mean|dMu|=0.326349 max|dMu|=2.339180
+[u8] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@15: piNew=0.184663 piOld=0.184663 act=-0.206695 mu=0.578863
+[u8] mu fwd-parity: cpu[0]=0.119421 gpu[0]=0.119421 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u8] sigma_eff fixed=2.000000
+[u8] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u8] grad norms: ||grad_v||=0.067107 ||grad_mu||=0.294259 (zero = bug; huge = explosion)
+[u8] weight delta (first 4 w): |Δw_v|=0.0026338 |Δw_mu|=0.0704204 (zero = no update; huge = explosion)
+[u8] ---- Train done  minibatches=128 elapsed=156.0ms avg_critic=0.0014 avg_actor=0.9978 avg_ent=2.0000 ----
+[u9] ---- Train start  buffer=2048 batch=128 epochs=8 steps=18432 ----
+[u9] fwd-parity V: cpu=1.580018 gpu=1.580018 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u9] dMu: ||dMu||=10.433410 mean|dMu|=0.316808 max|dMu|=6.100076
+[u9] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@164: piNew=0.126863 piOld=0.126863 act=-2.438764 mu=-0.536006
+[u9] mu fwd-parity: cpu[0]=0.500821 gpu[0]=0.500821 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u9] sigma_eff fixed=2.000000
+[u9] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u9] grad norms: ||grad_v||=0.091431 ||grad_mu||=0.384676 (zero = bug; huge = explosion)
+[u9] weight delta (first 4 w): |Δw_v|=0.0002469 |Δw_mu|=0.0272306 (zero = no update; huge = explosion)
+[u9] ---- Train done  minibatches=128 elapsed=143.9ms avg_critic=0.0020 avg_actor=0.9956 avg_ent=2.0000 ----
+[u10] ---- Train start  buffer=2048 batch=128 epochs=8 steps=20480 ----
+[u10] fwd-parity V: cpu=1.429157 gpu=1.429158 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u10] dMu: ||dMu||=7.276978 mean|dMu|=0.288047 max|dMu|=2.153333
+[u10] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@32: piNew=0.115245 piOld=0.115245 act=1.793723 mu=-0.301238
+[u10] mu fwd-parity: cpu[0]=-0.482123 gpu[0]=-0.482123 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u10] sigma_eff fixed=2.000000
+[u10] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u10] grad norms: ||grad_v||=0.213677 ||grad_mu||=0.215230 (zero = bug; huge = explosion)
+[u10] weight delta (first 4 w): |Δw_v|=0.0012044 |Δw_mu|=0.0739564 (zero = no update; huge = explosion)
+[u10] ---- Train done  minibatches=128 elapsed=148.8ms avg_critic=0.0035 avg_actor=0.9964 avg_ent=2.0000 ----
+[u11] ---- Train start  buffer=2048 batch=128 epochs=8 steps=22528 ----
+[u11] fwd-parity V: cpu=1.588831 gpu=1.588831 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u11] dMu: ||dMu||=7.335432 mean|dMu|=0.282929 max|dMu|=2.704421
+[u11] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@9: piNew=0.172169 piOld=0.172169 act=-1.132834 mu=-0.047687
+[u11] mu fwd-parity: cpu[0]=-0.134032 gpu[0]=-0.134032 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u11] sigma_eff fixed=2.000000
+[u11] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u11] grad norms: ||grad_v||=0.120863 ||grad_mu||=0.626972 (zero = bug; huge = explosion)
+[u11] weight delta (first 4 w): |Δw_v|=0.0002885 |Δw_mu|=0.0525322 (zero = no update; huge = explosion)
+[u11] ---- Train done  minibatches=128 elapsed=160.0ms avg_critic=0.0033 avg_actor=0.9955 avg_ent=2.0000 ----
+[u12] ---- Train start  buffer=2048 batch=128 epochs=8 steps=24576 ----
+[u12] fwd-parity V: cpu=1.418274 gpu=1.418274 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u12] dMu: ||dMu||=8.213234 mean|dMu|=0.307375 max|dMu|=2.922242
+[u12] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@3: piNew=0.093810 piOld=0.093810 act=-1.956458 mu=0.500202
+[u12] mu fwd-parity: cpu[0]=0.009687 gpu[0]=0.009687 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u12] sigma_eff fixed=2.000000
+[u12] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u12] grad norms: ||grad_v||=0.243402 ||grad_mu||=0.419371 (zero = bug; huge = explosion)
+[u12] weight delta (first 4 w): |Δw_v|=0.0104311 |Δw_mu|=0.0651161 (zero = no update; huge = explosion)
+[u12] ---- Train done  minibatches=128 elapsed=139.2ms avg_critic=0.0040 avg_actor=0.9982 avg_ent=2.0000 ----
+[u13] ---- Train start  buffer=2048 batch=128 epochs=8 steps=26624 ----
+[u13] fwd-parity V: cpu=1.722200 gpu=1.722200 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u13] dMu: ||dMu||=6.100280 mean|dMu|=0.226298 max|dMu|=2.417865
+[u13] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.011686 meanRel=0.000498 worst@0: piNew=0.157760 piOld=0.146073 act=-2.001071 mu=-0.631114
+[u13] mu fwd-parity: cpu[0]=-0.631114 gpu[0]=-0.631114 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u13] sigma_eff fixed=2.000000
+[u13] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u13] grad norms: ||grad_v||=0.270769 ||grad_mu||=0.279509 (zero = bug; huge = explosion)
+[u13] weight delta (first 4 w): |Δw_v|=0.0372484 |Δw_mu|=0.0535206 (zero = no update; huge = explosion)
+[u13] ---- Train done  minibatches=128 elapsed=142.4ms avg_critic=0.0035 avg_actor=0.9959 avg_ent=2.0000 ----
+[u14] ---- Train start  buffer=2048 batch=128 epochs=8 steps=28672 ----
+[u14] fwd-parity V: cpu=1.560837 gpu=1.560837 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u14] dMu: ||dMu||=8.140617 mean|dMu|=0.310925 max|dMu|=3.983804
+[u14] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.005366 meanRel=0.000107 worst@1: piNew=0.193078 piOld=0.198443 act=0.203208 mu=0.713721
+[u14] mu fwd-parity: cpu[0]=-0.715957 gpu[0]=-0.715957 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u14] sigma_eff fixed=2.000000
+[u14] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u14] grad norms: ||grad_v||=0.224219 ||grad_mu||=0.546480 (zero = bug; huge = explosion)
+[u14] weight delta (first 4 w): |Δw_v|=0.0922085 |Δw_mu|=0.0171172 (zero = no update; huge = explosion)
+[u14] ---- Train done  minibatches=128 elapsed=143.7ms avg_critic=0.0042 avg_actor=0.9954 avg_ent=2.0000 ----
+[u15] ---- Train start  buffer=2048 batch=128 epochs=8 steps=30720 ----
+[u15] fwd-parity V: cpu=1.926914 gpu=1.926914 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u15] dMu: ||dMu||=7.464910 mean|dMu|=0.296313 max|dMu|=2.376475
+[u15] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@93: piNew=0.156144 piOld=0.156144 act=-1.141310 mu=0.258373
+[u15] mu fwd-parity: cpu[0]=0.351383 gpu[0]=0.351383 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u15] sigma_eff fixed=2.000000
+[u15] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u15] grad norms: ||grad_v||=0.132552 ||grad_mu||=0.428373 (zero = bug; huge = explosion)
+[u15] weight delta (first 4 w): |Δw_v|=0.2370582 |Δw_mu|=0.0847947 (zero = no update; huge = explosion)
+[u15] ---- Train done  minibatches=128 elapsed=141.9ms avg_critic=0.0045 avg_actor=0.9995 avg_ent=2.0000 ----
+[u16] ---- Train start  buffer=2048 batch=128 epochs=8 steps=32768 ----
+[u16] fwd-parity V: cpu=2.095074 gpu=2.095074 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u16] dMu: ||dMu||=7.095798 mean|dMu|=0.270643 max|dMu|=2.645223
+[u16] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.006206 meanRel=0.000394 worst@1: piNew=0.094644 piOld=0.100850 act=-2.415186 mu=0.027014
+[u16] mu fwd-parity: cpu[0]=0.185020 gpu[0]=0.185020 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u16] sigma_eff fixed=2.000000
+[u16] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u16] grad norms: ||grad_v||=0.198833 ||grad_mu||=0.275882 (zero = bug; huge = explosion)
+[u16] weight delta (first 4 w): |Δw_v|=0.3814575 |Δw_mu|=0.0249941 (zero = no update; huge = explosion)
+[u16] ---- Train done  minibatches=128 elapsed=152.1ms avg_critic=0.0033 avg_actor=0.9965 avg_ent=2.0000 ----
+[u17] ---- Train start  buffer=2048 batch=128 epochs=8 steps=34816 ----
+[u17] fwd-parity V: cpu=1.952727 gpu=1.952727 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u17] dMu: ||dMu||=8.580413 mean|dMu|=0.326314 max|dMu|=2.819046
+[u17] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@32: piNew=0.146559 piOld=0.146559 act=1.580373 mu=0.010045
+[u17] mu fwd-parity: cpu[0]=-0.915048 gpu[0]=-0.915048 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u17] sigma_eff fixed=2.000000
+[u17] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u17] grad norms: ||grad_v||=0.487092 ||grad_mu||=0.389207 (zero = bug; huge = explosion)
+[u17] weight delta (first 4 w): |Δw_v|=0.1855997 |Δw_mu|=0.0460860 (zero = no update; huge = explosion)
+[u17] ---- Train done  minibatches=128 elapsed=162.1ms avg_critic=0.0040 avg_actor=0.9968 avg_ent=2.0000 ----
+[u18] ---- Train start  buffer=2048 batch=128 epochs=8 steps=36864 ----
+[u18] fwd-parity V: cpu=1.902421 gpu=1.902421 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u18] dMu: ||dMu||=7.486447 mean|dMu|=0.270858 max|dMu|=2.795447
+[u18] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.016945 meanRel=0.000774 worst@0: piNew=0.138589 piOld=0.121644 act=-2.680525 mu=-0.973701
+[u18] mu fwd-parity: cpu[0]=-0.973701 gpu[0]=-0.973701 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u18] sigma_eff fixed=2.000000
+[u18] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u18] grad norms: ||grad_v||=0.237377 ||grad_mu||=0.411376 (zero = bug; huge = explosion)
+[u18] weight delta (first 4 w): |Δw_v|=0.1051580 |Δw_mu|=0.0476652 (zero = no update; huge = explosion)
+[u18] ---- Train done  minibatches=128 elapsed=212.3ms avg_critic=0.0046 avg_actor=0.9962 avg_ent=2.0000 ----
+[u19] ---- Train start  buffer=2048 batch=128 epochs=8 steps=38912 ----
+[u19] fwd-parity V: cpu=2.145636 gpu=2.145636 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u19] dMu: ||dMu||=8.375654 mean|dMu|=0.301884 max|dMu|=3.911462
+[u19] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.024475 meanRel=0.000528 worst@219: piNew=0.157154 piOld=0.181629 act=-0.211574 mu=-1.592706
+[u19] mu fwd-parity: cpu[0]=-0.647954 gpu[0]=-0.647953 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u19] sigma_eff fixed=2.000000
+[u19] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u19] grad norms: ||grad_v||=0.176128 ||grad_mu||=0.708778 (zero = bug; huge = explosion)
+[u19] weight delta (first 4 w): |Δw_v|=0.0976949 |Δw_mu|=0.0972678 (zero = no update; huge = explosion)
+[u19] ---- Train done  minibatches=128 elapsed=142.0ms avg_critic=0.0044 avg_actor=0.9988 avg_ent=2.0000 ----
+[u20] ---- Train start  buffer=2048 batch=128 epochs=8 steps=40960 ----
+[u20] fwd-parity V: cpu=2.144227 gpu=2.144227 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u20] dMu: ||dMu||=7.456289 mean|dMu|=0.262907 max|dMu|=2.419619
+[u20] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.002487 meanRel=0.000062 worst@1: piNew=0.174480 piOld=0.171993 act=-1.296045 mu=-0.261206
+[u20] mu fwd-parity: cpu[0]=-2.129812 gpu[0]=-2.129812 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u20] sigma_eff fixed=2.000000
+[u20] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u20] grad norms: ||grad_v||=0.304044 ||grad_mu||=0.376173 (zero = bug; huge = explosion)
+[u20] weight delta (first 4 w): |Δw_v|=0.1814037 |Δw_mu|=0.0559408 (zero = no update; huge = explosion)
+[u20] ---- Train done  minibatches=128 elapsed=143.6ms avg_critic=0.0040 avg_actor=0.9985 avg_ent=2.0000 ----
+[u21] ---- Train start  buffer=2048 batch=128 epochs=8 steps=43008 ----
+[u21] fwd-parity V: cpu=2.165646 gpu=2.165646 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u21] dMu: ||dMu||=9.775998 mean|dMu|=0.276633 max|dMu|=6.067941
+[u21] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000948 meanRel=0.000029 worst@249: piNew=0.185808 piOld=0.186756 act=-0.709641 mu=0.043781
+[u21] mu fwd-parity: cpu[0]=0.352136 gpu[0]=0.352136 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u21] sigma_eff fixed=2.000000
+[u21] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u21] grad norms: ||grad_v||=0.200786 ||grad_mu||=0.463005 (zero = bug; huge = explosion)
+[u21] weight delta (first 4 w): |Δw_v|=0.1498396 |Δw_mu|=0.0562602 (zero = no update; huge = explosion)
+[u21] ---- Train done  minibatches=128 elapsed=163.0ms avg_critic=0.0018 avg_actor=0.9996 avg_ent=2.0000 ----
+[u22] ---- Train start  buffer=2048 batch=128 epochs=8 steps=45056 ----
+[u22] fwd-parity V: cpu=2.315956 gpu=2.315956 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u22] dMu: ||dMu||=5.939940 mean|dMu|=0.194541 max|dMu|=3.358485
+[u22] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.010137 meanRel=0.000422 worst@1: piNew=0.127333 piOld=0.137470 act=-2.133868 mu=-0.238895
+[u22] mu fwd-parity: cpu[0]=-0.604272 gpu[0]=-0.604272 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u22] sigma_eff fixed=2.000000
+[u22] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u22] grad norms: ||grad_v||=0.117350 ||grad_mu||=0.566829 (zero = bug; huge = explosion)
+[u22] weight delta (first 4 w): |Δw_v|=0.1683732 |Δw_mu|=0.0952366 (zero = no update; huge = explosion)
+[u22] ---- Train done  minibatches=128 elapsed=146.9ms avg_critic=0.0040 avg_actor=0.9963 avg_ent=2.0000 ----
+[u23] ---- Train start  buffer=2048 batch=128 epochs=8 steps=47104 ----
+[u23] fwd-parity V: cpu=2.297014 gpu=2.297014 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u23] dMu: ||dMu||=10.966850 mean|dMu|=0.278040 max|dMu|=8.611403
+[u23] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@245: piNew=0.153835 piOld=0.153835 act=2.726742 mu=1.285115
+[u23] mu fwd-parity: cpu[0]=1.399699 gpu[0]=1.399698 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u23] sigma_eff fixed=2.000000
+[u23] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u23] grad norms: ||grad_v||=0.278493 ||grad_mu||=0.980283 (zero = bug; huge = explosion)
+[u23] weight delta (first 4 w): |Δw_v|=0.0615729 |Δw_mu|=0.0747918 (zero = no update; huge = explosion)
+[u23] ---- Train done  minibatches=128 elapsed=143.4ms avg_critic=0.0021 avg_actor=0.9964 avg_ent=2.0000 ----
+[u24] ---- Train start  buffer=2048 batch=128 epochs=8 steps=49152 ----
+[u24] fwd-parity V: cpu=2.343282 gpu=2.343282 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u24] dMu: ||dMu||=8.119460 mean|dMu|=0.312996 max|dMu|=3.391746
+[u24] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@104: piNew=0.108759 piOld=0.108759 act=3.246493 mu=1.043707
+[u24] mu fwd-parity: cpu[0]=0.420168 gpu[0]=0.420168 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u24] sigma_eff fixed=2.000000
+[u24] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u24] grad norms: ||grad_v||=0.063945 ||grad_mu||=0.427404 (zero = bug; huge = explosion)
+[u24] weight delta (first 4 w): |Δw_v|=0.0412607 |Δw_mu|=0.0435038 (zero = no update; huge = explosion)
+[u24] ---- Train done  minibatches=128 elapsed=142.7ms avg_critic=0.0019 avg_actor=0.9941 avg_ent=2.0000 ----
+[u25] ---- Train start  buffer=2048 batch=128 epochs=8 steps=51200 ----
+[u25] fwd-parity V: cpu=2.355633 gpu=2.355633 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u25] dMu: ||dMu||=6.916405 mean|dMu|=0.263694 max|dMu|=1.800675
+[u25] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@102: piNew=0.139598 piOld=0.139598 act=-3.525376 mu=-1.835639
+[u25] mu fwd-parity: cpu[0]=1.434787 gpu[0]=1.434787 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u25] sigma_eff fixed=2.000000
+[u25] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u25] grad norms: ||grad_v||=0.212552 ||grad_mu||=0.344431 (zero = bug; huge = explosion)
+[u25] weight delta (first 4 w): |Δw_v|=0.0761797 |Δw_mu|=0.0615581 (zero = no update; huge = explosion)
+[u25] ---- Train done  minibatches=128 elapsed=142.1ms avg_critic=0.0030 avg_actor=0.9967 avg_ent=2.0000 ----
+[u26] ---- Train start  buffer=2048 batch=128 epochs=8 steps=53248 ----
+[u26] fwd-parity V: cpu=2.348194 gpu=2.348194 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u26] dMu: ||dMu||=11.920900 mean|dMu|=0.264272 max|dMu|=9.281665
+[u26] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.005526 meanRel=0.000289 worst@1: piNew=0.110714 piOld=0.116240 act=1.367422 mu=-0.802775
+[u26] mu fwd-parity: cpu[0]=0.162697 gpu[0]=0.162697 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u26] sigma_eff fixed=2.000000
+[u26] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u26] grad norms: ||grad_v||=0.067378 ||grad_mu||=0.904903 (zero = bug; huge = explosion)
+[u26] weight delta (first 4 w): |Δw_v|=0.0828836 |Δw_mu|=0.0405100 (zero = no update; huge = explosion)
+[u26] ---- Train done  minibatches=128 elapsed=145.2ms avg_critic=0.0021 avg_actor=0.9980 avg_ent=2.0000 ----
+[u27] ---- Train start  buffer=2048 batch=128 epochs=8 steps=55296 ----
+[u27] fwd-parity V: cpu=2.344236 gpu=2.344236 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u27] dMu: ||dMu||=7.882784 mean|dMu|=0.209168 max|dMu|=5.040704
+[u27] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.005790 meanRel=0.000333 worst@0: piNew=0.096059 piOld=0.101849 act=-3.806822 mu=-1.389039
+[u27] mu fwd-parity: cpu[0]=-1.389039 gpu[0]=-1.389039 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u27] sigma_eff fixed=2.000000
+[u27] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u27] grad norms: ||grad_v||=0.160373 ||grad_mu||=0.463263 (zero = bug; huge = explosion)
+[u27] weight delta (first 4 w): |Δw_v|=0.0275102 |Δw_mu|=0.1357786 (zero = no update; huge = explosion)
+[u27] ---- Train done  minibatches=128 elapsed=164.3ms avg_critic=0.0016 avg_actor=0.9973 avg_ent=2.0000 ----
+[u28] ---- Train start  buffer=2048 batch=128 epochs=8 steps=57344 ----
+[u28] fwd-parity V: cpu=2.390400 gpu=2.390400 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u28] dMu: ||dMu||=8.527205 mean|dMu|=0.305991 max|dMu|=2.806695
+[u28] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@0: piNew=0.118962 piOld=0.118962 act=-2.294014 mu=-0.260564
+[u28] mu fwd-parity: cpu[0]=-0.260565 gpu[0]=-0.260564 max|diff|=0.000001 (>1e-3 = forward/upload broken)
+[u28] sigma_eff fixed=2.000000
+[u28] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u28] grad norms: ||grad_v||=0.277465 ||grad_mu||=0.540165 (zero = bug; huge = explosion)
+[u28] weight delta (first 4 w): |Δw_v|=0.0151986 |Δw_mu|=0.1262411 (zero = no update; huge = explosion)
+[u28] ---- Train done  minibatches=128 elapsed=134.7ms avg_critic=0.0012 avg_actor=0.9985 avg_ent=2.0000 ----
+[u29] ---- Train start  buffer=2048 batch=128 epochs=8 steps=59392 ----
+[u29] fwd-parity V: cpu=2.408974 gpu=2.408974 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u29] dMu: ||dMu||=9.834263 mean|dMu|=0.273072 max|dMu|=5.309366
+[u29] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@168: piNew=0.143255 piOld=0.143255 act=3.454564 mu=1.827187
+[u29] mu fwd-parity: cpu[0]=0.109068 gpu[0]=0.109068 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u29] sigma_eff fixed=2.000000
+[u29] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u29] grad norms: ||grad_v||=0.092839 ||grad_mu||=0.809906 (zero = bug; huge = explosion)
+[u29] weight delta (first 4 w): |Δw_v|=0.0152746 |Δw_mu|=0.0848054 (zero = no update; huge = explosion)
+[u29] ---- Train done  minibatches=128 elapsed=166.6ms avg_critic=0.0016 avg_actor=0.9955 avg_ent=2.0000 ----
+[u30] ---- Train start  buffer=2048 batch=128 epochs=8 steps=61440 ----
+[u30] fwd-parity V: cpu=2.408670 gpu=2.408669 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u30] dMu: ||dMu||=6.915438 mean|dMu|=0.168243 max|dMu|=4.466379
+[u30] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.004499 meanRel=0.000364 worst@0: piNew=0.045527 piOld=0.050027 act=3.920728 mu=0.482876
+[u30] mu fwd-parity: cpu[0]=0.482876 gpu[0]=0.482876 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u30] sigma_eff fixed=2.000000
+[u30] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u30] grad norms: ||grad_v||=0.068967 ||grad_mu||=0.683055 (zero = bug; huge = explosion)
+[u30] weight delta (first 4 w): |Δw_v|=0.0433146 |Δw_mu|=0.0551502 (zero = no update; huge = explosion)
+[u30] ---- Train done  minibatches=128 elapsed=153.8ms avg_critic=0.0015 avg_actor=0.9993 avg_ent=2.0000 ----
+[u31] ---- Train start  buffer=2048 batch=128 epochs=8 steps=63488 ----
+[u31] fwd-parity V: cpu=1.650588 gpu=1.650588 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u31] dMu: ||dMu||=6.249877 mean|dMu|=0.166899 max|dMu|=3.929342
+[u31] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.014048 meanRel=0.000383 worst@0: piNew=0.162931 piOld=0.148884 act=0.016813 mu=1.289105
+[u31] mu fwd-parity: cpu[0]=1.289105 gpu[0]=1.289105 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u31] sigma_eff fixed=2.000000
+[u31] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u31] grad norms: ||grad_v||=0.051141 ||grad_mu||=0.344226 (zero = bug; huge = explosion)
+[u31] weight delta (first 4 w): |Δw_v|=0.0541242 |Δw_mu|=0.0330213 (zero = no update; huge = explosion)
+[u31] ---- Train done  minibatches=128 elapsed=154.2ms avg_critic=0.0008 avg_actor=0.9945 avg_ent=2.0000 ----
+[u32] ---- Train start  buffer=2048 batch=128 epochs=8 steps=65536 ----
+[u32] fwd-parity V: cpu=2.394343 gpu=2.394343 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u32] dMu: ||dMu||=8.009864 mean|dMu|=0.233451 max|dMu|=3.349817
+[u32] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@140: piNew=0.121967 piOld=0.121967 act=-0.062319 mu=-2.046092
+[u32] mu fwd-parity: cpu[0]=0.194895 gpu[0]=0.194895 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u32] sigma_eff fixed=2.000000
+[u32] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u32] grad norms: ||grad_v||=0.169061 ||grad_mu||=0.693479 (zero = bug; huge = explosion)
+[u32] weight delta (first 4 w): |Δw_v|=0.0136032 |Δw_mu|=0.0798210 (zero = no update; huge = explosion)
+[u32] ---- Train done  minibatches=128 elapsed=144.6ms avg_critic=0.0021 avg_actor=0.9959 avg_ent=2.0000 ----
+[u33] ---- Train start  buffer=2048 batch=128 epochs=8 steps=67584 ----
+[u33] fwd-parity V: cpu=2.317737 gpu=2.317736 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u33] dMu: ||dMu||=7.522819 mean|dMu|=0.282694 max|dMu|=3.145313
+[u33] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.007692 meanRel=0.000305 worst@1: piNew=0.146566 piOld=0.138874 act=0.629405 mu=-0.940805
+[u33] mu fwd-parity: cpu[0]=-1.779705 gpu[0]=-1.779704 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u33] sigma_eff fixed=2.000000
+[u33] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u33] grad norms: ||grad_v||=0.158998 ||grad_mu||=0.427494 (zero = bug; huge = explosion)
+[u33] weight delta (first 4 w): |Δw_v|=0.0245525 |Δw_mu|=0.1167986 (zero = no update; huge = explosion)
+[u33] ---- Train done  minibatches=128 elapsed=135.5ms avg_critic=0.0003 avg_actor=0.9991 avg_ent=2.0000 ----
+[u34] ---- Train start  buffer=2048 batch=128 epochs=8 steps=69632 ----
+[u34] fwd-parity V: cpu=2.424293 gpu=2.424294 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u34] dMu: ||dMu||=7.485594 mean|dMu|=0.209772 max|dMu|=2.854398
+[u34] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@10: piNew=0.156383 piOld=0.156383 act=-0.697618 mu=-2.092935
+[u34] mu fwd-parity: cpu[0]=0.551335 gpu[0]=0.551335 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u34] sigma_eff fixed=2.000000
+[u34] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u34] grad norms: ||grad_v||=0.123710 ||grad_mu||=0.502297 (zero = bug; huge = explosion)
+[u34] weight delta (first 4 w): |Δw_v|=0.0045218 |Δw_mu|=0.0350293 (zero = no update; huge = explosion)
+[u34] ---- Train done  minibatches=128 elapsed=138.8ms avg_critic=0.0007 avg_actor=0.9983 avg_ent=2.0000 ----
+[u35] ---- Train start  buffer=2048 batch=128 epochs=8 steps=71680 ----
+[u35] fwd-parity V: cpu=2.477419 gpu=2.477419 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u35] dMu: ||dMu||=7.010136 mean|dMu|=0.209698 max|dMu|=2.959541
+[u35] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@129: piNew=0.102407 piOld=0.102407 act=-0.228251 mu=2.081240
+[u35] mu fwd-parity: cpu[0]=1.798181 gpu[0]=1.798181 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u35] sigma_eff fixed=2.000000
+[u35] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u35] grad norms: ||grad_v||=0.082177 ||grad_mu||=0.842130 (zero = bug; huge = explosion)
+[u35] weight delta (first 4 w): |Δw_v|=0.0001138 |Δw_mu|=0.0217294 (zero = no update; huge = explosion)
+[u35] ---- Train done  minibatches=128 elapsed=136.1ms avg_critic=0.0023 avg_actor=0.9963 avg_ent=2.0000 ----
+[u36] ---- Train start  buffer=2048 batch=128 epochs=8 steps=73728 ----
+[u36] fwd-parity V: cpu=2.178620 gpu=2.178620 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u36] dMu: ||dMu||=7.069313 mean|dMu|=0.232293 max|dMu|=3.022045
+[u36] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.004719 meanRel=0.000106 worst@1: piNew=0.183038 piOld=0.187757 act=-0.792967 mu=0.036384
+[u36] mu fwd-parity: cpu[0]=-0.622293 gpu[0]=-0.622292 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u36] sigma_eff fixed=2.000000
+[u36] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u36] grad norms: ||grad_v||=0.050814 ||grad_mu||=0.793063 (zero = bug; huge = explosion)
+[u36] weight delta (first 4 w): |Δw_v|=0.0000000 |Δw_mu|=0.0775149 (zero = no update; huge = explosion)
+[u36] ---- Train done  minibatches=128 elapsed=154.9ms avg_critic=0.0031 avg_actor=0.9983 avg_ent=2.0000 ----
+[u37] ---- Train start  buffer=2048 batch=128 epochs=8 steps=75776 ----
+[u37] fwd-parity V: cpu=2.462960 gpu=2.462960 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u37] dMu: ||dMu||=8.059558 mean|dMu|=0.214165 max|dMu|=4.398823
+[u37] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@79: piNew=0.160653 piOld=0.160653 act=2.662627 mu=1.346803
+[u37] mu fwd-parity: cpu[0]=-0.185610 gpu[0]=-0.185610 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u37] sigma_eff fixed=2.000000
+[u37] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u37] grad norms: ||grad_v||=0.077201 ||grad_mu||=0.336067 (zero = bug; huge = explosion)
+[u37] weight delta (first 4 w): |Δw_v|=0.0000000 |Δw_mu|=0.0765158 (zero = no update; huge = explosion)
+[u37] ---- Train done  minibatches=128 elapsed=148.1ms avg_critic=0.0037 avg_actor=0.9949 avg_ent=2.0000 ----
+[u38] ---- Train start  buffer=2048 batch=128 epochs=8 steps=77824 ----
+[u38] fwd-parity V: cpu=2.384202 gpu=2.384202 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u38] dMu: ||dMu||=6.902910 mean|dMu|=0.247586 max|dMu|=2.543864
+[u38] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@180: piNew=0.114579 piOld=0.114579 act=3.660355 mu=1.554349
+[u38] mu fwd-parity: cpu[0]=-0.293227 gpu[0]=-0.293227 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u38] sigma_eff fixed=2.000000
+[u38] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u38] grad norms: ||grad_v||=0.052113 ||grad_mu||=0.555695 (zero = bug; huge = explosion)
+[u38] weight delta (first 4 w): |Δw_v|=0.0019416 |Δw_mu|=0.0161506 (zero = no update; huge = explosion)
+[u38] ---- Train done  minibatches=128 elapsed=139.1ms avg_critic=0.0010 avg_actor=0.9983 avg_ent=2.0000 ----
+[u39] ---- Train start  buffer=2048 batch=128 epochs=8 steps=79872 ----
+[u39] fwd-parity V: cpu=2.474652 gpu=2.474652 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u39] dMu: ||dMu||=8.347367 mean|dMu|=0.273670 max|dMu|=3.454743
+[u39] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@222: piNew=0.131290 piOld=0.131290 act=0.615924 mu=-1.213302
+[u39] mu fwd-parity: cpu[0]=-0.446261 gpu[0]=-0.446261 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u39] sigma_eff fixed=2.000000
+[u39] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u39] grad norms: ||grad_v||=0.055182 ||grad_mu||=0.612075 (zero = bug; huge = explosion)
+[u39] weight delta (first 4 w): |Δw_v|=0.0000682 |Δw_mu|=0.0465572 (zero = no update; huge = explosion)
+[u39] ---- Train done  minibatches=128 elapsed=151.2ms avg_critic=0.0001 avg_actor=0.9974 avg_ent=2.0000 ----
+[u40] ---- Train start  buffer=2048 batch=128 epochs=8 steps=81920 ----
+[u40] fwd-parity V: cpu=2.421151 gpu=2.421151 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u40] dMu: ||dMu||=7.965123 mean|dMu|=0.325297 max|dMu|=2.396770
+[u40] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@17: piNew=0.143234 piOld=0.143234 act=-1.616247 mu=0.011495
+[u40] mu fwd-parity: cpu[0]=-0.321088 gpu[0]=-0.321088 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u40] sigma_eff fixed=2.000000
+[u40] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u40] grad norms: ||grad_v||=0.166102 ||grad_mu||=1.028308 (zero = bug; huge = explosion)
+[u40] weight delta (first 4 w): |Δw_v|=0.0000000 |Δw_mu|=0.0163435 (zero = no update; huge = explosion)
+[u40] ---- Train done  minibatches=128 elapsed=160.1ms avg_critic=0.0003 avg_actor=0.9958 avg_ent=2.0000 ----
+[u41] ---- Train start  buffer=2048 batch=128 epochs=8 steps=83968 ----
+[u41] fwd-parity V: cpu=2.475885 gpu=2.475884 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u41] dMu: ||dMu||=7.680647 mean|dMu|=0.283850 max|dMu|=3.686501
+[u41] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@185: piNew=0.124353 piOld=0.124353 act=-0.806570 mu=-2.750881
+[u41] mu fwd-parity: cpu[0]=-0.619941 gpu[0]=-0.619941 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u41] sigma_eff fixed=2.000000
+[u41] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u41] grad norms: ||grad_v||=0.079227 ||grad_mu||=0.418401 (zero = bug; huge = explosion)
+[u41] weight delta (first 4 w): |Δw_v|=0.0323832 |Δw_mu|=0.0257476 (zero = no update; huge = explosion)
+[u41] ---- Train done  minibatches=128 elapsed=154.3ms avg_critic=0.0002 avg_actor=0.9985 avg_ent=2.0000 ----
+[u42] ---- Train start  buffer=2048 batch=128 epochs=8 steps=86016 ----
+[u42] fwd-parity V: cpu=2.192615 gpu=2.192615 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u42] dMu: ||dMu||=5.634273 mean|dMu|=0.194836 max|dMu|=2.325347
+[u42] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.013847 meanRel=0.000355 worst@1: piNew=0.176857 piOld=0.163009 act=-2.684582 mu=-1.703439
+[u42] mu fwd-parity: cpu[0]=2.197053 gpu[0]=2.197052 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u42] sigma_eff fixed=2.000000
+[u42] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u42] grad norms: ||grad_v||=0.058273 ||grad_mu||=0.667202 (zero = bug; huge = explosion)
+[u42] weight delta (first 4 w): |Δw_v|=0.0196767 |Δw_mu|=0.0163089 (zero = no update; huge = explosion)
+[u42] ---- Train done  minibatches=128 elapsed=155.0ms avg_critic=0.0001 avg_actor=0.9986 avg_ent=2.0000 ----
+[u43] ---- Train start  buffer=2048 batch=128 epochs=8 steps=88064 ----
+[u43] fwd-parity V: cpu=2.478977 gpu=2.478977 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u43] dMu: ||dMu||=4.500880 mean|dMu|=0.124427 max|dMu|=3.207314
+[u43] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@203: piNew=0.078009 piOld=0.078009 act=-0.732110 mu=-3.472685
+[u43] mu fwd-parity: cpu[0]=1.168099 gpu[0]=1.168099 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u43] sigma_eff fixed=2.000000
+[u43] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u43] grad norms: ||grad_v||=0.361244 ||grad_mu||=0.122761 (zero = bug; huge = explosion)
+[u43] weight delta (first 4 w): |Δw_v|=0.3057150 |Δw_mu|=0.0423291 (zero = no update; huge = explosion)
+[u43] ---- Train done  minibatches=128 elapsed=145.6ms avg_critic=0.0140 avg_actor=1.0008 avg_ent=2.0000 ----
+[u44] ---- Train start  buffer=2048 batch=128 epochs=8 steps=90112 ----
+[u44] fwd-parity V: cpu=2.469022 gpu=2.469022 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u44] dMu: ||dMu||=8.391566 mean|dMu|=0.300437 max|dMu|=3.101385
+[u44] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@50: piNew=0.127486 piOld=0.127486 act=3.031332 mu=1.138895
+[u44] mu fwd-parity: cpu[0]=-1.001046 gpu[0]=-1.001046 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u44] sigma_eff fixed=2.000000
+[u44] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u44] grad norms: ||grad_v||=0.053946 ||grad_mu||=0.328583 (zero = bug; huge = explosion)
+[u44] weight delta (first 4 w): |Δw_v|=0.0364345 |Δw_mu|=0.0302211 (zero = no update; huge = explosion)
+[u44] ---- Train done  minibatches=128 elapsed=157.8ms avg_critic=0.0004 avg_actor=0.9973 avg_ent=2.0000 ----
+[u45] ---- Train start  buffer=2048 batch=128 epochs=8 steps=92160 ----
+[u45] fwd-parity V: cpu=2.459844 gpu=2.459844 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u45] dMu: ||dMu||=6.796191 mean|dMu|=0.159448 max|dMu|=4.383987
+[u45] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@8: piNew=0.087701 piOld=0.087701 act=3.124282 mu=0.560323
+[u45] mu fwd-parity: cpu[0]=-2.110286 gpu[0]=-2.110286 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u45] sigma_eff fixed=2.000000
+[u45] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u45] grad norms: ||grad_v||=0.026358 ||grad_mu||=0.709038 (zero = bug; huge = explosion)
+[u45] weight delta (first 4 w): |Δw_v|=0.1349722 |Δw_mu|=0.0484374 (zero = no update; huge = explosion)
+[u45] ---- Train done  minibatches=128 elapsed=163.1ms avg_critic=0.0006 avg_actor=0.9981 avg_ent=2.0000 ----
+[u46] ---- Train start  buffer=2048 batch=128 epochs=8 steps=94208 ----
+[u46] fwd-parity V: cpu=2.462796 gpu=2.462796 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u46] dMu: ||dMu||=8.367640 mean|dMu|=0.231234 max|dMu|=3.354651
+[u46] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.000000 meanRel=0.000000 worst@65: piNew=0.107778 piOld=0.107778 act=-0.704482 mu=1.514698
+[u46] mu fwd-parity: cpu[0]=-0.403818 gpu[0]=-0.403818 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u46] sigma_eff fixed=2.000000
+[u46] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u46] grad norms: ||grad_v||=0.152982 ||grad_mu||=0.322830 (zero = bug; huge = explosion)
+[u46] weight delta (first 4 w): |Δw_v|=0.1631182 |Δw_mu|=0.0215359 (zero = no update; huge = explosion)
+[u46] ---- Train done  minibatches=128 elapsed=168.1ms avg_critic=0.0019 avg_actor=0.9982 avg_ent=2.0000 ----
+[u47] ---- Train start  buffer=2048 batch=128 epochs=8 steps=96256 ----
+[u47] fwd-parity V: cpu=2.498077 gpu=2.498077 |diff|=0.000000 (>1e-3 = forward/upload broken)
+[u47] dMu: ||dMu||=6.556890 mean|dMu|=0.267138 max|dMu|=1.734185
+[u47] piNew-vs-piOld (first mb, MUST be ~0): max|diff|=0.004875 meanRel=0.000526 worst@1: piNew=0.041779 piOld=0.036904 act=-3.282083 mu=0.254322
+[u47] mu fwd-parity: cpu[0]=0.281212 gpu[0]=0.281212 max|diff|=0.000000 (>1e-3 = forward/upload broken)
+[u47] sigma_eff fixed=2.000000
+[u47] adv (as kernel sees): mean=0.0000 std=1.0000 (normAdv=True -> expect ~0/~1)
+[u47] grad norms: ||grad_v||=0.013224 ||grad_mu||=0.456580 (zero = bug; huge = explosion)
+[u47] weight delta (first 4 w): |Δw_v|=0.0027781 |Δw_mu|=0.0712821 (zero = no update; huge = explosion)
+[u47] ---- Train done  minibatches=128 elapsed=167.3ms avg_critic=0.0001 avg_actor=0.9975 avg_ent=2.0000 ----

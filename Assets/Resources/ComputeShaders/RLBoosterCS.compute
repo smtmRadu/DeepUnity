@@ -260,11 +260,10 @@ void RMSFwd(uint3 gid : SV_GroupID, uint3 lid : SV_GroupThreadID)
 
 // =================================================================== RMSNorm backward
 // dGamma[f] += (1/B) * sum_b dY[b,f] * xhat[b,f]
-// dX[b,f]   = (gamma[f] * r) * dY[b,f] - (x[b,f] * r^3 / F) * sum_i (gamma[i] * dY[b,i] * x[b,i])
-// where r = 1/sqrt(msx+eps).
-// One threadgroup per row, reduce over F.
-
-groupshared float gsum[RMS_TG];
+// dX[b,f]   = dY[b,f] * gamma[f] * (eps + msx*(1 - 1/F)) / (msx + eps)^1.5
+// Diagonal-only backward, matching CPU RMSNorm.cs Backward exactly (the exact-Jacobian
+// form with the cross-feature row_dot term diverged from the CPU trainer's gradients).
+// One threadgroup per row.
 
 #pragma kernel RMSBwd
 [numthreads(RMS_TG, 1, 1)]
@@ -274,36 +273,13 @@ void RMSBwd(uint3 gid : SV_GroupID, uint3 lid : SV_GroupThreadID)
     if (row >= B) return;
 
     int tid = (int)lid.x;
-    float r  = rsqrt(msx[row] + eps_norm);
-    float r3 = r * r * r;
-
-    // Local sum of (gamma[i] * dY[b,i] * x[b,i])
-    float s = 0.0f;
-    for (int f = tid; f < F_; f += RMS_TG)
-    {
-        float dy = dY[row * F_ + f];
-        float xv = X[row * F_ + f];
-        s += gamma[f] * dy * xv;
-    }
-    gsum[tid] = s;
-    GroupMemoryBarrierWithGroupSync();
-
-    [unroll]
-    for (int stride = RMS_TG / 2; stride > 0; stride >>= 1)
-    {
-        if (tid < stride) gsum[tid] += gsum[tid + stride];
-        GroupMemoryBarrierWithGroupSync();
-    }
-    float row_dot = gsum[0];   // sum_i gamma[i]*dY[b,i]*x[b,i]
-    GroupMemoryBarrierWithGroupSync();
-
+    float msx_v = msx[row];
     float inv_n = 1.0f / (float)F_;
+    float coef = (eps_norm + msx_v * (1.0f - inv_n)) / pow(msx_v + eps_norm, 1.5f);
+
     for (int f2 = tid; f2 < F_; f2 += RMS_TG)
     {
-        float dy = dY[row * F_ + f2];
-        float xv = X[row * F_ + f2];
-        float dx_v = (gamma[f2] * r) * dy - (xv * r3 * inv_n) * row_dot;
-        dX[row * F_ + f2] = dx_v;
+        dX[row * F_ + f2] = dY[row * F_ + f2] * gamma[f2] * coef;
     }
 }
 

@@ -28,6 +28,9 @@ namespace DeepUnity.ReinforcementLearning
     internal sealed class PPOGPUTrainer : DeepUnityTrainer, IOnPolicy
     {
         // ------------ tuned constants (match PPOTrainer) ------------
+        // Master switch for the file (ProbeLogs/ppogpu_diag.log) + console diagnostics.
+        // Flip to true when debugging the GPU training path; all probes/readbacks compile out when false.
+        const bool DIAG = false;
         const float epsilon_adam = 1e-5f;
         const float valueWD = 0f;
         const float adamBeta1 = 0.9f;
@@ -80,6 +83,24 @@ namespace DeepUnity.ReinforcementLearning
         // Cache so we can match the same stochasticity gating as CPU PPOTrainer
         // (which forces FixedStandardDeviation if not Trainable). FullGPU only supports those two.
 
+        // ---------- file diagnostics (ProbeLogs/ppogpu_diag.log, project root) ----------
+        static string diagPath;
+        static void DiagLog(string msg)
+        {
+            try
+            {
+                if (diagPath == null)
+                {
+                    string dir = Path.Combine(Directory.GetCurrentDirectory(), "ProbeLogs");
+                    Directory.CreateDirectory(dir);
+                    diagPath = Path.Combine(dir, "ppogpu_diag.log");
+                    File.AppendAllText(diagPath, $"\n===== NEW SESSION {DateTime.Now:yyyy-MM-dd HH:mm:ss} =====\n");
+                }
+                File.AppendAllText(diagPath, msg + "\n");
+            }
+            catch { /* never let diagnostics break training */ }
+        }
+
         protected override void Initialize(string[] optimizer_states)
         {
             booster = Resources.Load<ComputeShader>("ComputeShaders/RLBoosterCS");
@@ -99,10 +120,11 @@ namespace DeepUnity.ReinforcementLearning
             kNormalizeAdvantages = ppoLoss.FindKernel("NormalizeAdvantages");
 
             // Diagnostic: -1 means FindKernel failed (kernel didn't compile or doesn't exist).
-            ConsoleMessage.Info($"[PPOGPU][DIAG kernels] ContGaussianProb={kContGaussianProb} ContSurrogateGrad={kContSurrogateGrad} " +
-                                $"SafeSoftmax={kSafeSoftmax} DiscSurrogateGrad={kDiscreteSurrogateGrad} " +
-                                $"ValueMseGrad={kValueMseGrad} NormAdv={kNormalizeAdvantages} ContSampleAndProb={kContSampleAndProb} " +
-                                $"DiscSample={kDiscreteSample} ContJointProb={kContJointProb}  (any -1 = kernel compile failure)");
+            if (DIAG)
+                ConsoleMessage.Info($"[PPOGPU][DIAG kernels] ContGaussianProb={kContGaussianProb} ContSurrogateGrad={kContSurrogateGrad} " +
+                                    $"SafeSoftmax={kSafeSoftmax} DiscSurrogateGrad={kDiscreteSurrogateGrad} " +
+                                    $"ValueMseGrad={kValueMseGrad} NormAdv={kNormalizeAdvantages} ContSampleAndProb={kContSampleAndProb} " +
+                                    $"DiscSample={kDiscreteSample} ContJointProb={kContJointProb}  (any -1 = kernel compile failure)");
 
             // Validate architecture & strip optional Tanh tail of mu (matches CPU PPOTrainer).
             if (model.muNetwork != null && model.muNetwork.Modules.Last() is Tanh)
@@ -179,15 +201,61 @@ namespace DeepUnity.ReinforcementLearning
             trainableSigma = model.stochasticity == Stochasticity.TrainableStandardDeviation;
             sigmaScale     = model.standardDeviationScale;
 
-            // Network device tags don't really matter for FullGPU but we set them for the editor:
-            if (model.muNetwork != null) model.muNetwork.Device = Device.GPU;
-            if (model.sigmaNetwork != null) model.sigmaNetwork.Device = Device.GPU;
-            if (model.discreteNetwork != null) model.discreteNetwork.Device = Device.GPU;
+            // The CPU-side Sequential networks are only used for ROLLOUT inference and GAE —
+            // the actual training math runs in the GPUMLP buffers and never reads these tags.
+            // NOTE: model.trainingDevice is editor-locked to GPU when PPOGPU is selected, but
+            // that only gates the LEGACY per-call compute-shader Dense path (per-layer buffer
+            // alloc + readback), which is far slower than CPU for rollout-sized batches. So all
+            // CPU-mirror networks follow inferenceDevice here (vNetwork included: its only CPU
+            // use is the once-per-update GAE predict).
+            model.vNetwork.Device = model.inferenceDevice;
+            if (model.muNetwork != null) model.muNetwork.Device = model.inferenceDevice;
+            if (model.sigmaNetwork != null) model.sigmaNetwork.Device = model.inferenceDevice;
+            if (model.discreteNetwork != null) model.discreteNetwork.Device = model.inferenceDevice;
 
-            // Optimizer states from disk: out of scope for v1 (CPU-format adam states aren't
-            // reusable for the GPU buffers). On first run, momentum/variance start at zero —
-            // identical to a fresh AdamW.
+            // Optimizer states from disk — same files & AdamW JSON format as the CPU PPOTrainer
+            // (see OptimStatesKey), order [v, mu, sigma, (disc)]. Missing/mismatched states fall
+            // back to fresh zeros, identical to a fresh AdamW.
+            if (optimizer_states != null)
+            {
+                try
+                {
+                    int idx = 0;
+                    LoadGpuAdam(optimizer_states[idx++], gV, oV, "v");
+                    if (model.IsUsingContinuousActions && optimizer_states.Length > idx)
+                    {
+                        LoadGpuAdam(optimizer_states[idx++], gMu, oMu, "mu");
+                        if (optimizer_states.Length > idx)
+                        {
+                            if (gSigma != null) LoadGpuAdam(optimizer_states[idx], gSigma, oSigma, "sigma");
+                            idx++;
+                        }
+                    }
+                    if (model.IsUsingDiscreteActions && optimizer_states.Length > idx)
+                        LoadGpuAdam(optimizer_states[idx], gDisc, oDisc, "discrete");
+                    ConsoleMessage.Info("[PPOGPU] Optimizer states loaded (shared CPU/GPU AdamW format).");
+                }
+                catch (Exception e)
+                {
+                    ConsoleMessage.Warning($"[PPOGPU] Failed to load optimizer states, starting fresh: {e.Message}");
+                }
+            }
+
             ConsoleMessage.Info("[PPOGPU] FullGPU PPO initialized.");
+
+            if (DIAG)
+            {
+                Func<Sequential, string> arch = net => net == null ? "null" : string.Join("->", net.Modules.Select(m => m.GetType().Name));
+                DiagLog($"[init] kernels: ContGaussianProb={kContGaussianProb} ContSurrogateGrad={kContSurrogateGrad} SafeSoftmax={kSafeSoftmax} " +
+                        $"DiscSurrGrad={kDiscreteSurrogateGrad} ValueMseGrad={kValueMseGrad} NormAdv={kNormalizeAdvantages} (-1 = compile failure)");
+                DiagLog($"[init] v={arch(model.vNetwork)}");
+                DiagLog($"[init] mu={arch(model.muNetwork)}  sigma={arch(model.sigmaNetwork)}  disc={arch(model.discreteNetwork)}");
+                DiagLog($"[init] stochasticity={model.stochasticity} trainableSigma={trainableSigma} fixedSigma={fixedSigma} sigmaScale={sigmaScale} " +
+                        $"contDim={model.continuousDim} discDim={model.discreteDim} obs={model.observationSize}x{model.stackedInputs}");
+                DiagLog($"[init] hp: buffer={hp.bufferSize} batch={hp.batchSize} epochs={hp.numEpoch} lrA={hp.actorLearningRate} lrV={hp.criticLearningRate} " +
+                        $"clipEps={hp.epsilon} beta={hp.beta} vCoeff={hp.valueCoeff} maxNorm={hp.maxNorm} normAdv={hp.normalizeAdvantages} " +
+                        $"lrSched={hp.LRSchedule} gamma={hp.gamma} lambda={hp.lambda} horizon={hp.horizon} earlyStop={hp.earlyStopping} (GPU ignores earlyStop!)");
+            }
         }
 
         static ComputeBuffer New(int n) => new ComputeBuffer(n, 4, ComputeBufferType.Structured);
@@ -196,7 +264,7 @@ namespace DeepUnity.ReinforcementLearning
         {
             foreach (var m in net.Modules)
             {
-                if (m is Dense || m is RMSNorm || m is ReLU || m is Tanh || m is SiLU || m is Softplus || m is Softmax)
+                if (m is Dense || m is RMSNorm || m is ReLU || m is Tanh || m is SiLU || m is GELU || m is Softplus || m is Softmax)
                     continue;
                 throw new Exception($"PPOGPU: network '{label}' contains '{m.GetType().Name}' which is not supported by FullGPU. " +
                                     "Use ArchitectureType.MLP or ArchitectureType.LnMLP, or switch trainer to PPO.");
@@ -257,20 +325,27 @@ namespace DeepUnity.ReinforcementLearning
             int Ad = model.discreteDim;
             int mbCount = 0;
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            ConsoleMessage.Info($"[PPOGPU] Train start  buffer={N}  batch={batch}  epochs={hp.numEpoch}");
+            if (DIAG)
+            {
+                ConsoleMessage.Info($"[PPOGPU] Train start  buffer={N}  batch={batch}  epochs={hp.numEpoch}");
+                DiagLog($"[u{updateIterations}] ---- Train start  buffer={N} batch={batch} epochs={hp.numEpoch} steps={currentSteps} ----");
+            }
 
             // [DIAG-1] Snapshot first 4 weights of v and mu networks.
             var vFirst = gV.Parameters().FirstOrDefault();
             var muFirst = gMu?.Parameters().FirstOrDefault();
-            vFirst?.P.GetData(_diagBeforeV, 0, 0, 4);
-            muFirst?.P.GetData(_diagBeforeMu, 0, 0, 4);
+            if (DIAG)
+            {
+                vFirst?.P.GetData(_diagBeforeV, 0, 0, 4);
+                muFirst?.P.GetData(_diagBeforeMu, 0, 0, 4);
+            }
             _diagDMuLogged = false;
 
             // [DIAG-3] CPU vs GPU forward parity check on the first batch element.
             //  - run CPU model.vNetwork.Predict on the first state in the buffer
             //  - read GPU vOut[0] after first UpdateValue forward
             //  - compare. They should match to within numerical noise.
-            bool didParityCheck = false;
+            bool didParityCheck = !DIAG; // true = skip
 
             for (int epoch = 0; epoch < hp.numEpoch; epoch++)
             {
@@ -304,6 +379,7 @@ namespace DeepUnity.ReinforcementLearning
                             float cpuV = model.vNetwork.Predict(firstFrame.state).ToArray()[0];
                             float diff = Mathf.Abs(gpuV - cpuV);
                             ConsoleMessage.Info($"[PPOGPU][DIAG fwd] cpuV={cpuV:0.000000}  gpuV={gpuV:0.000000}  |diff|={diff:0.000000}  (>1e-3 = bug)");
+                            DiagLog($"[u{updateIterations}] fwd-parity V: cpu={cpuV:0.000000} gpu={gpuV:0.000000} |diff|={diff:0.000000} (>1e-3 = forward/upload broken)");
                         }
                         catch (System.Exception ex) { ConsoleMessage.Warning($"[PPOGPU][DIAG fwd] readback failed: {ex.Message}"); }
                     }
@@ -315,11 +391,12 @@ namespace DeepUnity.ReinforcementLearning
                     if (model.IsUsingDiscreteActions) UpdateDiscrete(batch, S, Ad);
 
                     // [DIAG-2] Once per Train (only for first minibatch): grad-norm of v / mu.
-                    if (mbCount == 0)
+                    if (DIAG && mbCount == 0)
                     {
                         float gnV = ComputeGradNorm(gV);
                         float gnMu = gMu != null ? ComputeGradNorm(gMu) : 0f;
                         ConsoleMessage.Info($"[PPOGPU][DIAG grad] ||grad_v||={gnV:0.000000}  ||grad_mu||={gnMu:0.000000}  (zero = bug)");
+                        DiagLog($"[u{updateIterations}] grad norms: ||grad_v||={gnV:0.000000} ||grad_mu||={gnMu:0.000000} (zero = bug; huge = explosion)");
                     }
 
                     mbCount++;
@@ -337,16 +414,22 @@ namespace DeepUnity.ReinforcementLearning
                 }
             }
             sw.Stop();
-            int divisor = Mathf.Max(1, mbCount);
-            ConsoleMessage.Info($"[PPOGPU] Train done  minibatches={mbCount}  elapsed={sw.Elapsed.TotalMilliseconds:0.0}ms  " +
-                                $"avg_critic={(criticLoss / divisor):0.0000}  avg_actor={(actorLoss / divisor):0.0000}  avg_ent={(entropy / divisor):0.0000}");
+            if (DIAG)
+            {
+                int divisor = Mathf.Max(1, mbCount);
+                ConsoleMessage.Info($"[PPOGPU] Train done  minibatches={mbCount}  elapsed={sw.Elapsed.TotalMilliseconds:0.0}ms  " +
+                                    $"avg_critic={(criticLoss / divisor):0.0000}  avg_actor={(actorLoss / divisor):0.0000}  avg_ent={(entropy / divisor):0.0000}");
 
-            // [DIAG-1] Post-train weight delta — confirms optimizer is actually moving the parameters.
-            float[] afterV = new float[4]; float[] afterMu = new float[4];
-            float dV = 0f, dMu = 0f;
-            if (vFirst != null) { vFirst.P.GetData(afterV, 0, 0, 4); for (int i = 0; i < 4; i++) dV += Mathf.Abs(afterV[i] - _diagBeforeV[i]); }
-            if (muFirst != null) { muFirst.P.GetData(afterMu, 0, 0, 4); for (int i = 0; i < 4; i++) dMu += Mathf.Abs(afterMu[i] - _diagBeforeMu[i]); }
-            ConsoleMessage.Info($"[PPOGPU][DIAG step] |Δw_v|={dV:0.0000000}  |Δw_mu|={dMu:0.0000000}  (zero = no update)");
+                // [DIAG-1] Post-train weight delta — confirms optimizer is actually moving the parameters.
+                float[] afterV = new float[4]; float[] afterMu = new float[4];
+                float dV = 0f, dMu = 0f;
+                if (vFirst != null) { vFirst.P.GetData(afterV, 0, 0, 4); for (int i = 0; i < 4; i++) dV += Mathf.Abs(afterV[i] - _diagBeforeV[i]); }
+                if (muFirst != null) { muFirst.P.GetData(afterMu, 0, 0, 4); for (int i = 0; i < 4; i++) dMu += Mathf.Abs(afterMu[i] - _diagBeforeMu[i]); }
+                ConsoleMessage.Info($"[PPOGPU][DIAG step] |Δw_v|={dV:0.0000000}  |Δw_mu|={dMu:0.0000000}  (zero = no update)");
+                DiagLog($"[u{updateIterations}] weight delta (first 4 w): |Δw_v|={dV:0.0000000} |Δw_mu|={dMu:0.0000000} (zero = no update; huge = explosion)");
+                DiagLog($"[u{updateIterations}] ---- Train done  minibatches={mbCount} elapsed={sw.Elapsed.TotalMilliseconds:0.0}ms " +
+                        $"avg_critic={(criticLoss / divisor):0.0000} avg_actor={(actorLoss / divisor):0.0000} avg_ent={(entropy / divisor):0.0000} ----");
+            }
 
             train_data.Clear();
         }
@@ -409,15 +492,18 @@ namespace DeepUnity.ReinforcementLearning
             ppoLoss.SetFloat("sigma_scale", sigmaScale);
             ppoLoss.SetFloat("fixed_sigma", fixedSigma);
             ppoLoss.SetBuffer(kContGaussianProb, "mu", muOut);
+            // NOTE: dummy binds must NOT alias an already-bound buffer — D3D11 nulls the earlier
+            // UAV slot when the same resource is bound twice (mu read as 0, dMu writes dropped).
+            // bufNoise is unused during training, so it's a safe distinct dummy.
             if (trainableSigma) ppoLoss.SetBuffer(kContGaussianProb, "sigma", sigOut);
-            else ppoLoss.SetBuffer(kContGaussianProb, "sigma", muOut); // dummy bind
+            else ppoLoss.SetBuffer(kContGaussianProb, "sigma", bufNoise); // dummy bind (distinct buffer!)
             ppoLoss.SetBuffer(kContGaussianProb, "actions", bufContActions);
             ppoLoss.SetBuffer(kContGaussianProb, "piNew", bufContPiNew);
             ppoLoss.Dispatch(kContGaussianProb, (batch * Ac + 255) / 256, 1, 1);
 
             // [DIAG-5] Pre-fill bufDMu with sentinel 7777 so we can tell if ContSurrogateGrad
             // actually ran (kernel didn't run -> 7777 stays; kernel ran but produced zero -> 0).
-            if (_diagDMuLogged == false)
+            if (DIAG && _diagDMuLogged == false)
             {
                 int totSent = batch * Ac;
                 float[] sentinel = new float[totSent];
@@ -430,19 +516,19 @@ namespace DeepUnity.ReinforcementLearning
             ppoLoss.SetFloat("beta_entropy", hp.beta);
             ppoLoss.SetBuffer(kContSurrogateGrad, "mu", muOut);
             if (trainableSigma) ppoLoss.SetBuffer(kContSurrogateGrad, "sigma", sigOut);
-            else ppoLoss.SetBuffer(kContSurrogateGrad, "sigma", muOut);
+            else ppoLoss.SetBuffer(kContSurrogateGrad, "sigma", bufNoise); // dummy bind (distinct buffer!)
             ppoLoss.SetBuffer(kContSurrogateGrad, "actions", bufContActions);
             ppoLoss.SetBuffer(kContSurrogateGrad, "piNew", bufContPiNew);
             ppoLoss.SetBuffer(kContSurrogateGrad, "piOld", bufContPiOld);
             ppoLoss.SetBuffer(kContSurrogateGrad, "advantages", bufAdv);
             ppoLoss.SetBuffer(kContSurrogateGrad, "dMu", bufDMu);
-            if (trainableSigma) ppoLoss.SetBuffer(kContSurrogateGrad, "dSigma", bufDSigma);
-            else ppoLoss.SetBuffer(kContSurrogateGrad, "dSigma", bufDMu); // dummy bind
+            // bufDSigma is always allocated, distinct, and only written when trainable_sigma != 0.
+            ppoLoss.SetBuffer(kContSurrogateGrad, "dSigma", bufDSigma);
             ppoLoss.Dispatch(kContSurrogateGrad, (batch * Ac + 255) / 256, 1, 1);
 
             // [DIAG-4] Read bufDMu after ContSurrogateGrad to isolate where the zero is.
             // If this is zero, the kernel produced no gradient. If non-zero, gMu.Backward is the culprit.
-            if (_diagDMuLogged == false)
+            if (DIAG && _diagDMuLogged == false)
             {
                 _diagDMuLogged = true;
                 int totalDiag = batch * Ac;
@@ -460,6 +546,49 @@ namespace DeepUnity.ReinforcementLearning
                 float[] muF = new float[totalDiag]; muOut.GetData(muF, 0, 0, totalDiag);
                 ConsoleMessage.Info($"[PPOGPU][DIAG inp] piNew[0..3]=[{piN[0]:0.0000},{piN[1]:0.0000},{piN[2]:0.0000}]  piOld[0..3]=[{piO[0]:0.0000},{piO[1]:0.0000},{piO[2]:0.0000}]");
                 ConsoleMessage.Info($"[PPOGPU][DIAG inp] adv[0..3]=[{adv[0]:0.0000},{adv[1]:0.0000},{adv[2]:0.0000}]  act[0..3]=[{act[0]:0.0000},{act[1]:0.0000},{act[2]:0.0000}]  mu[0..3]=[{muF[0]:0.0000},{muF[1]:0.0000},{muF[2]:0.0000}]");
+
+                DiagLog($"[u{updateIterations}] dMu: ||dMu||={Mathf.Sqrt((float)sumSq):0.000000} mean|dMu|={(sumAbs / totalDiag):0.000000} max|dMu|={maxAbs:0.000000}");
+
+                // ---- DECISIVE: piNew vs piOld over the FULL first minibatch. The policy nets have
+                // not stepped yet this Train, and piOld was collected with the same (synced) weights,
+                // so these must match to numerical noise. A mismatch = the ratio is garbage = derailment.
+                float maxAbsD = 0f; double sumRelD = 0; int worstI = 0;
+                for (int i = 0; i < totalDiag; i++)
+                {
+                    float d = Mathf.Abs(piN[i] - piO[i]);
+                    if (d > maxAbsD) { maxAbsD = d; worstI = i; }
+                    sumRelD += d / Mathf.Max(Mathf.Abs(piO[i]), 1e-8f);
+                }
+                DiagLog($"[u{updateIterations}] piNew-vs-piOld (first mb, MUST be ~0): max|diff|={maxAbsD:0.000000} meanRel={(sumRelD / totalDiag):0.000000} " +
+                        $"worst@{worstI}: piNew={piN[worstI]:0.000000} piOld={piO[worstI]:0.000000} act={act[worstI]:0.000000} mu={muF[worstI]:0.000000}");
+
+                // ---- CPU-vs-GPU mu forward parity on the first uploaded frame.
+                try
+                {
+                    float[] cpuMu = model.muNetwork.Predict(train_data.frames[0].state).ToArray();
+                    float muMaxD = 0f;
+                    for (int a = 0; a < Ac && a < cpuMu.Length; a++) muMaxD = Mathf.Max(muMaxD, Mathf.Abs(cpuMu[a] - muF[a]));
+                    DiagLog($"[u{updateIterations}] mu fwd-parity: cpu[0]={cpuMu[0]:0.000000} gpu[0]={muF[0]:0.000000} max|diff|={muMaxD:0.000000} (>1e-3 = forward/upload broken)");
+                }
+                catch (Exception ex) { DiagLog($"[u{updateIterations}] mu fwd-parity failed: {ex.Message}"); }
+
+                // ---- sigma actually used by the loss kernels this minibatch.
+                if (trainableSigma && sigOut != null)
+                {
+                    float[] sg = new float[totalDiag]; sigOut.GetData(sg, 0, 0, totalDiag);
+                    float sMin = float.MaxValue, sMax = float.MinValue; double sSum = 0;
+                    for (int i = 0; i < totalDiag; i++) { float se = sg[i] * sigmaScale; sMin = Mathf.Min(sMin, se); sMax = Mathf.Max(sMax, se); sSum += se; }
+                    DiagLog($"[u{updateIterations}] sigma_eff (net*scale): min={sMin:0.000000} mean={(sSum / totalDiag):0.000000} max={sMax:0.000000} (collapse->0 or explosion = killer)");
+                }
+                else
+                    DiagLog($"[u{updateIterations}] sigma_eff fixed={fixedSigma:0.000000}");
+
+                // ---- advantages as the surrogate kernel sees them (post-normalization if enabled).
+                double aSum = 0, aSq = 0;
+                for (int i = 0; i < batch; i++) { aSum += adv[i]; aSq += (double)adv[i] * adv[i]; }
+                double aMean = aSum / batch;
+                double aStd = Math.Sqrt(Math.Max(aSq / batch - aMean * aMean, 0));
+                DiagLog($"[u{updateIterations}] adv (as kernel sees): mean={aMean:0.0000} std={aStd:0.0000} (normAdv={hp.normalizeAdvantages} -> expect ~0/~1)");
             }
 
             // Diagnostic: read piNew & piOld to compute |LCLIP| for runtime UI.
@@ -588,10 +717,100 @@ namespace DeepUnity.ReinforcementLearning
             }
         }
 
+        // Share the optimizer-state files with the CPU PPOTrainer (same AdamW JSON format,
+        // same [v, mu, sigma, (disc)] order) so CPU↔GPU continual training is seamless.
+        public override string OptimStatesKey => "ppotrainer";
+
+        // Last successful optimizer-state snapshot. The editor's autosave (PlayModeStateChange)
+        // fires AFTER OnDestroy has released the GPU buffers, so a live readback would throw —
+        // we fall back to this snapshot (refreshed on every save attempt and in OnDestroy).
+        string[] cachedOptimStates;
+
         protected override string[] SerializeOptimizerStates()
         {
-            // GPU adam state isn't json-friendly. v1: skip; first session-restart starts fresh.
-            return Array.Empty<string>();
+            try
+            {
+                cachedOptimStates = SerializeLiveOptimStates();
+            }
+            catch (Exception e)
+            {
+                if (cachedOptimStates == null)
+                {
+                    ConsoleMessage.Warning($"[PPOGPU] GPU buffers unavailable at save time and no snapshot exists; optimizer states not saved ({e.GetType().Name}).");
+                    return Array.Empty<string>();
+                }
+            }
+            return cachedOptimStates;
+        }
+
+        string[] SerializeLiveOptimStates()
+        {
+            List<string> states = new List<string>();
+            states.Add(SerializeGpuAdam(model.vNetwork, gV, oV, hp.criticLearningRate, valueWD));
+            if (model.IsUsingContinuousActions)
+            {
+                states.Add(SerializeGpuAdam(model.muNetwork, gMu, oMu, hp.actorLearningRate, 0f));
+                // For FixedStandardDeviation gSigma is null -> a fresh (zero) state is written,
+                // matching the CPU trainer whose optim_sigma is never stepped in that mode.
+                states.Add(SerializeGpuAdam(model.sigmaNetwork, gSigma, oSigma, hp.actorLearningRate, 0f));
+            }
+            if (model.IsUsingDiscreteActions)
+                states.Add(SerializeGpuAdam(model.discreteNetwork, gDisc, oDisc, hp.actorLearningRate, 0f));
+            return states.ToArray();
+        }
+
+        /// <summary>Build a CPU-format AdamW snapshot of a GPU optimizer (m/v/t pulled from GPU buffers).</summary>
+        string SerializeGpuAdam(Sequential net, GPUMLP gnet, GPUAdamW gopt, float lr, float wd)
+        {
+            var pars = net != null ? net.Parameters() : new Parameter[0];
+            var adam = new Optimizers.AdamW(pars, lr, beta1: adamBeta1, beta2: adamBeta2, eps: epsilon_adam,
+                                            weight_decay: wd, amsgrad: false, fused: true);
+            if (gnet != null && gopt != null)
+            {
+                var gps = gnet.Parameters().ToArray();
+                Tensor[] m = adam.M, v = adam.V;
+                int n = Mathf.Min(gps.Length, m.Length);
+                for (int i = 0; i < n; i++)
+                {
+                    float[] buf = new float[gps[i].N];
+                    gps[i].M.GetData(buf);
+                    Tensor.CopyTo(Tensor.Constant(buf).Reshape(m[i].Shape), m[i]);
+                    gps[i].V.GetData(buf);
+                    Tensor.CopyTo(Tensor.Constant(buf).Reshape(v[i].Shape), v[i]);
+                }
+                adam.SetStepState(gopt.t, gopt.beta1_t, gopt.beta2_t);
+            }
+            adam.description = "(AdamW) saved by PPOGPUTrainer (CPU-compatible)";
+            return JsonUtility.ToJson(adam, true);
+        }
+
+        /// <summary>Upload a CPU-format AdamW state into the GPU optimizer buffers.</summary>
+        static void LoadGpuAdam(string json, GPUMLP gnet, GPUAdamW gopt, string label)
+        {
+            if (string.IsNullOrEmpty(json) || gnet == null || gopt == null) return;
+            var adam = JsonUtility.FromJson<Optimizers.AdamW>(json);
+            var gps = gnet.Parameters().ToArray();
+            Tensor[] m = adam.M, v = adam.V;
+            if (m == null || v == null || m.Length != gps.Length)
+            {
+                ConsoleMessage.Warning($"[PPOGPU] Optim state '{label}' param-count mismatch ({m?.Length ?? -1} vs {gps.Length}); starting fresh.");
+                return;
+            }
+            for (int i = 0; i < gps.Length; i++)
+            {
+                if (m[i].Count() != gps[i].N)
+                {
+                    ConsoleMessage.Warning($"[PPOGPU] Optim state '{label}' shape mismatch at param {i}; starting fresh.");
+                    return;
+                }
+            }
+            for (int i = 0; i < gps.Length; i++)
+            {
+                gps[i].M.SetData(m[i].ToArray());
+                gps[i].V.SetData(v[i].ToArray());
+            }
+            var (t, b1t, b2t) = adam.GetStepState();
+            gopt.t = t; gopt.beta1_t = b1t; gopt.beta2_t = b2t;
         }
 
         // ============================================================
@@ -608,6 +827,13 @@ namespace DeepUnity.ReinforcementLearning
 
         void OnDestroy()
         {
+            // Snapshot optimizer states BEFORE releasing the GPU buffers — the editor autosave
+            // (PlayModeStateChange) runs after OnDestroy and would otherwise read dead buffers.
+            try { cachedOptimStates = SerializeLiveOptimStates(); } catch { /* buffers already gone */ }
+
+            // Also make sure the CPU-side networks hold the latest GPU weights for the final save.
+            try { DownloadAllToCpu(); } catch { /* buffers already gone; last post-Train sync stands */ }
+
             gV?.Dispose(); gMu?.Dispose(); gSigma?.Dispose(); gDisc?.Dispose();
             oV?.Dispose(); oMu?.Dispose(); oSigma?.Dispose(); oDisc?.Dispose();
             bufStates?.Release(); bufAdv?.Release(); bufVTargets?.Release(); bufValuesGrad?.Release();

@@ -116,6 +116,8 @@ namespace DeepUnity.ReinforcementLearning
                         return new Tanh(in_place: true);
                     case NonLinearity.Silu:
                         return new SiLU(in_place: true);
+                    case NonLinearity.Gelu:
+                        return new GELU(in_place: true);
                     default:
                         throw new ArgumentException("Unhandles hidden activation");
                 }
@@ -129,6 +131,8 @@ namespace DeepUnity.ReinforcementLearning
                     case NonLinearity.Tanh:
                         return InitType.Xavier_Uniform;
                     case NonLinearity.Silu:
+                        return InitType.Kaiming_Uniform;
+                    case NonLinearity.Gelu:
                         return InitType.Kaiming_Uniform;
                     default:
                         throw new ArgumentException("Unhandles hidden activation");
@@ -679,7 +683,7 @@ namespace DeepUnity.ReinforcementLearning
             {
                 for (int i = 0; i < optim_states.Length; i++)
                 {
-                    File.WriteAllText(trainer_instance.optimStatesPath + $"{trainer_instance.GetType().Name.ToLower()}_optim_state_{i}.json", optim_states[i]);
+                    File.WriteAllText(trainer_instance.optimStatesPath + $"{trainer_instance.OptimStatesKey}_optim_state_{i}.json", optim_states[i]);
                 }
 
                 ConsoleMessage.Info($"<b>[AUTOSAVE]</b> Optimizer states <b><i>{trainer_instance.model.behaviourName}</i></b> saved");
@@ -741,8 +745,8 @@ namespace DeepUnity.ReinforcementLearning
                 for (int i = 0; i < optim_states.Length; i++)
                 {
                     var filePath = Path.Combine(
-                        optimDir, 
-                        $"{trainer_instance.GetType().Name.ToLower()}_optim_state_{i}.json"
+                        optimDir,
+                        $"{trainer_instance.OptimStatesKey}_optim_state_{i}.json"
                     );
 
                     File.WriteAllText(filePath, optim_states[i]);

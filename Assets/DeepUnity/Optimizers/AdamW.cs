@@ -73,6 +73,12 @@ namespace DeepUnity.Optimizers
             }
         }
 
+        // ---- state interop (used by the FullGPU trainers to save/load CPU-compatible optimizer states) ----
+        public Tensor[] M => m;
+        public Tensor[] V => v;
+        public (int t, float beta1_t, float beta2_t) GetStepState() => (t, beta1_t, beta2_t);
+        public void SetStepState(int t, float beta1_t, float beta2_t) { this.t = t; this.beta1_t = beta1_t; this.beta2_t = beta2_t; }
+
         public override void Step()
         {
             t++;

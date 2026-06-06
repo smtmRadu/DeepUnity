@@ -1,5 +1,5 @@
 {
-    "description": "(AdamW) Sigma Network Optimizer",
+    "description": "(AdamW) saved by PPOGPUTrainer (CPU-compatible)",
     "gamma": 0.00019999999494757503,
     "lambda": 0.0,
     "epsilon": 0.000009999999747378752,

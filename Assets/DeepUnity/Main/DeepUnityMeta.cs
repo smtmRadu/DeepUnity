@@ -273,7 +273,8 @@ namespace DeepUnity
     {
         Relu, // Fast end efficient
         Tanh, // Slower but stable
-        Silu // Most expressive
+        Silu, // Most expressive
+        Gelu  // Transformer-style smooth gating
     }
     public enum HiddenStates
     {

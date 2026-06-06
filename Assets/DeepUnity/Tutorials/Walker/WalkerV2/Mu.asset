@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ffdd4f9587b2d8846a37ba5240ae14b2, type: 3}
   m_Name: Mu
   m_EditorClassIdentifier: 
-  version: 56
+  version: 79
   assetCreated: 1
   serializedModules:
   - name: Dense
@@ -8929,9 +8929,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 1137978976
+      residualConnectionHash: 1257397424
     residualconnectionjoin:
-      residualConnectionHash: 1137978976
+      residualConnectionHash: 1257397424
     squeeze:
       axis: 0
     unsqueeze:
@@ -8957,6 +8957,14 @@ MonoBehaviour:
         shape: 
     conv2d:
       bias: 1
+      kernels:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+    convtranspose2d:
+      bias: 0
       kernels:
         data: []
         shape: 
@@ -9227,9 +9235,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 744838700
+      residualConnectionHash: 17482566
     residualconnectionjoin:
-      residualConnectionHash: 744838700
+      residualConnectionHash: 17482566
     squeeze:
       axis: 0
     unsqueeze:
@@ -9255,6 +9263,14 @@ MonoBehaviour:
         shape: 
     conv2d:
       bias: 1
+      kernels:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+    convtranspose2d:
+      bias: 0
       kernels:
         data: []
         shape: 
@@ -14781,9 +14797,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -1748330776
+      residualConnectionHash: 566025768
     residualconnectionjoin:
-      residualConnectionHash: -1748330776
+      residualConnectionHash: 566025768
     squeeze:
       axis: 0
     unsqueeze:
@@ -14809,6 +14825,14 @@ MonoBehaviour:
         shape: 
     conv2d:
       bias: 1
+      kernels:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+    convtranspose2d:
+      bias: 0
       kernels:
         data: []
         shape: 
@@ -15079,9 +15103,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: -1199787574
+      residualConnectionHash: 579365528
     residualconnectionjoin:
-      residualConnectionHash: -1199787574
+      residualConnectionHash: 579365528
     squeeze:
       axis: 0
     unsqueeze:
@@ -15107,6 +15131,14 @@ MonoBehaviour:
         shape: 
     conv2d:
       bias: 1
+      kernels:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+    convtranspose2d:
+      bias: 0
       kernels:
         data: []
         shape: 
@@ -18005,9 +18037,9 @@ MonoBehaviour:
       inputShape: 
       outputShape: 
     residualconnectionfork:
-      residualConnectionHash: 954365954
+      residualConnectionHash: 1138434736
     residualconnectionjoin:
-      residualConnectionHash: 954365954
+      residualConnectionHash: 1138434736
     squeeze:
       axis: 0
     unsqueeze:
@@ -18033,6 +18065,14 @@ MonoBehaviour:
         shape: 
     conv2d:
       bias: 1
+      kernels:
+        data: []
+        shape: 
+      biases:
+        data: []
+        shape: 
+    convtranspose2d:
+      bias: 0
       kernels:
         data: []
         shape: 

@@ -14,7 +14,7 @@ namespace DeepUnity.ReinforcementLearning
         [Header("Training Configuration")]
 
         [Tooltip("Algorithm used in training the agent. Note that defaults are for PPO.")]
-        public TrainerType trainer = TrainerType.PPO;
+        public TrainerType trainer = TrainerType.PPOGPU;
 
         [Tooltip("[Typical range: 1e5 - 1e7] The maximum length in steps of this training session.")]
         [Min(10_000f)] public long maxSteps = 2_000_000_000;

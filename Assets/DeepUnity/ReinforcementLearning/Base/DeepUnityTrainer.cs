@@ -148,6 +148,12 @@ namespace DeepUnity.ReinforcementLearning
         protected abstract void Initialize(string[] optimizer_states);
         protected abstract string[] SerializeOptimizerStates();
 
+        /// <summary>
+        /// Key used for naming/filtering the OptimStates json files. Trainers that share the same
+        /// optimizer-state format can override this to share files (e.g. PPOGPUTrainer ↔ PPOTrainer).
+        /// </summary>
+        public virtual string OptimStatesKey => GetType().Name.ToLower();
+
         protected abstract void OnBeforeFixedUpdate();
         IEnumerator DrawDotsToLearningText()
         {
@@ -218,7 +224,7 @@ namespace DeepUnity.ReinforcementLearning
                         "- If needed, you can safely remove these files.");
                 }
                 string[] files_names = Directory.GetFiles(Instance.optimStatesPath, "*.json");
-                files_names = files_names.Where(x => x.Contains(Instance.GetType().Name.ToLower())).ToArray();
+                files_names = files_names.Where(x => Path.GetFileName(x).StartsWith(Instance.OptimStatesKey + "_")).OrderBy(x => x).ToArray();
                 List<string> file_contents = new();
                 foreach (var file in files_names)
                 {
@@ -377,6 +383,111 @@ namespace DeepUnity.ReinforcementLearning
                 ag.Timestep.prob_discrete = valuesd.Item2;
             }
             // PARALLEL ACTION PROCESS --------------------------------- [END]
+        }
+
+        // ============================================================================
+        // Subset-batched inference for decisionPeriod > 1.
+        //
+        // Agents "subscribe" by their own decision clock (EpisodeFixedFramesCount %
+        // decisionPeriod == 0); episodes can be phase-offset from one another. Each
+        // physics cycle, the first due agent triggers ONE batched forward over exactly
+        // the agents due this cycle; the rest consume from the cache when their own
+        // PerformDecision runs later in the same cycle.
+        //
+        // The decision state is each agent's LastState — captured on its frame-before-
+        // decision and frozen during the current cycle — identical to the solo path, so
+        // the result is order-independent and GetState() is never called here (no
+        // StatesBuffer side effects on stacked inputs).
+        //
+        // Agents on their first decision after an episode reset have LastState == null
+        // (their state only exists post-reset): they return false and use the solo path.
+        // ============================================================================
+
+        readonly HashSet<Agent> tickedThisCycle = new();
+        int decisionCycleID = 0;
+        int lastSubsetCycleID = -1;
+        readonly Dictionary<Agent, (Tensor, Tensor)> subsetContCache = new();
+        readonly Dictionary<Agent, (Tensor, Tensor)> subsetDiscCache = new();
+
+        /// <summary>Called by each learning agent at the start of its FixedUpdate. Detects the
+        /// physics-cycle boundary (an agent ticking twice) without relying on script execution order.</summary>
+        public void NotifyAgentTick(Agent ag)
+        {
+            if (!tickedThisCycle.Add(ag))
+            {
+                tickedThisCycle.Clear();
+                tickedThisCycle.Add(ag);
+                decisionCycleID++;
+            }
+        }
+
+        /// <summary>Batched forward over the agents due a decision this cycle. Returns false if
+        /// <paramref name="ag"/> must take the solo path (first decision of a fresh episode).</summary>
+        public bool ParallelInferenceSubset(Agent ag)
+        {
+            if (ag.LastState == null)
+                return false;
+
+            bool contReady = !model.IsUsingContinuousActions || subsetContCache.ContainsKey(ag);
+            bool discReady = !model.IsUsingDiscreteActions || subsetDiscCache.ContainsKey(ag);
+            if (lastSubsetCycleID == decisionCycleID && contReady && discReady)
+            {
+                AssignFromSubsetCache(ag);
+                return true;
+            }
+
+            // Build this cycle's subscriber list. For agents that already ran FixedUpdate this
+            // cycle the clock is post-increment; for the rest it increments when their turn comes.
+            List<Agent> subscribers = parallelAgents.Where(x =>
+                x.behaviourType == BehaviourType.Learn &&
+                x.LastState != null &&
+                (x.EpisodeFixedFramesCount + (tickedThisCycle.Contains(x) ? 0 : 1)) % x.DecisionRequester.decisionPeriod == 0
+            ).ToList();
+            if (!subscribers.Contains(ag))
+                subscribers.Add(ag); // ag is requesting right now; never drop it
+
+            lastSubsetCycleID = decisionCycleID;
+            subsetContCache.Clear();
+            subsetDiscCache.Clear();
+
+            Tensor stateBatch = Tensor.Concat(null, subscribers.Select(x => x.LastState).ToArray());
+
+            if (model.IsUsingContinuousActions)
+            {
+                model.ContinuousEval(stateBatch, out Tensor aBatch, out Tensor pBatch);
+                Tensor[] acts = Tensor.Split(aBatch, 0, 1);
+                Tensor[] probs = pBatch != null ? Tensor.Split(pBatch, 0, 1) : null;
+                for (int i = 0; i < subscribers.Count; i++)
+                    subsetContCache[subscribers[i]] = (acts[i].Squeeze(0), probs != null ? probs[i].Squeeze(0) : null);
+            }
+            if (model.IsUsingDiscreteActions)
+            {
+                model.DiscreteEval(stateBatch, out Tensor aBatch, out Tensor pBatch);
+                Tensor[] acts = Tensor.Split(aBatch, 0, 1);
+                Tensor[] probs = pBatch != null ? Tensor.Split(pBatch, 0, 1) : null;
+                for (int i = 0; i < subscribers.Count; i++)
+                    subsetDiscCache[subscribers[i]] = (acts[i].Squeeze(0), probs != null ? probs[i].Squeeze(0) : null);
+            }
+
+            AssignFromSubsetCache(ag);
+            return true;
+        }
+
+        void AssignFromSubsetCache(Agent ag)
+        {
+            ag.Timestep.state = ag.LastState; // same reference semantics as the solo path
+            if (model.IsUsingContinuousActions)
+            {
+                var valuesc = subsetContCache[ag];
+                ag.Timestep.action_continuous = valuesc.Item1;
+                ag.Timestep.prob_continuous = valuesc.Item2;
+            }
+            if (model.IsUsingDiscreteActions)
+            {
+                var valuesd = subsetDiscCache[ag];
+                ag.Timestep.action_discrete = valuesd.Item1;
+                ag.Timestep.prob_discrete = valuesd.Item2;
+            }
         }
     }
 
