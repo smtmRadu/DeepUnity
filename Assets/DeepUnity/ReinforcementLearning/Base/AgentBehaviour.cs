@@ -656,7 +656,8 @@ namespace DeepUnity.ReinforcementLearning
         /// Updates the state of the Behaviour parameters.
         /// </summary>
         /// <param name="optim_states">Can be nullable</param>
-        public void Save(string[] optim_states, DeepUnityTrainer trainer_instance)
+        /// <param name="incrementVersion">When false, the save does not bump the version counter — used when adopting an already-trained version (e.g. pulling weights from the Desktop) rather than producing a new one.</param>
+        public void Save(string[] optim_states, DeepUnityTrainer trainer_instance, bool incrementVersion = true)
         {
             if (!assetCreated)
             {
@@ -664,7 +665,8 @@ namespace DeepUnity.ReinforcementLearning
                 return;
             }
 
-            version++;
+            if (incrementVersion)
+                version++;
             ConsoleMessage.Info($"<b>[AUTOSAVE]</b> Agent behaviour <b><i>{behaviourName}</i></b> saved");
 
 #if UNITY_EDITOR
@@ -970,7 +972,7 @@ namespace DeepUnity.ReinforcementLearning
             JsonUtility.FromJsonOverwrite(jsonDataBeh, this);
 
             TryReassignReference_EditorOnly();
-            Save(null, null);
+            Save(null, null, incrementVersion: false);
             ConsoleMessage.Info($"<b>[OVERWRITE]</b> Agent behaviour <b><i>{behaviourName}</i></b> was overriden with the new weights from Desktop");
             // well this complete reassignation.. a lot of stuff going on i'm to lazy to implement it for now.
         }

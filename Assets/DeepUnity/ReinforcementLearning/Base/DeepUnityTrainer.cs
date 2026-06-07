@@ -64,7 +64,7 @@ namespace DeepUnity.ReinforcementLearning
         private float _windowSum = 0f;                                   // reward sum over the current window
         private float _sessionMaxReward = float.NegativeInfinity;       // all-time best episode reward this session
         private bool _episodeHooksAttached = false;
-        string _rewardStatsText = "[Max Episode Reward: N/A | Mean Reward: N/A]";
+        string _rewardStatsText = "Max Episode Reward: N/A\nMean Reward: N/A";
 
         private AudioClip trainingSound;
 
@@ -157,10 +157,27 @@ namespace DeepUnity.ReinforcementLearning
             // Subscribe to per-episode rewards (retries each frame until the agents are registered).
             AttachEpisodeHooks();
 
+            TimeSpan elapsed = DateTime.Now - timeWhenTheTrainingStarted;
+            string sessionTime = $"{(int)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
+
             if (DeepUnityTrainer.Instance is IOnPolicy)
-                _runtimeStatsText = $"[Trainer: {hp.trainer} | No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {MemoriesCount}/{hp.bufferSize} ({(MemoriesCount * 100f / hp.bufferSize).ToString("0.00")}%) | Steps: {currentSteps} ({currentSteps / hp.bufferSize} buffers)]";
+                _runtimeStatsText =
+                    $"Behaviour: {model.behaviourName} (v{model.Version})\n" +
+                    $"Trainer: {hp.trainer}\n" +
+                    $"No. agents: {parallelAgents.Count}\n" +
+                    $"Timescale: {Time.timeScale.ToString("0.0")}\n" +
+                    $"Time: {sessionTime}\n" +
+                    $"Buffer: {MemoriesCount}/{hp.bufferSize} ({(MemoriesCount * 100f / hp.bufferSize).ToString("0.00")}%)\n" +
+                    $"Steps: {currentSteps} ({currentSteps / hp.bufferSize} buffers)";
             else if (DeepUnityTrainer.Instance is IOffPolicy)
-                _runtimeStatsText = $"[Trainer: {hp.trainer} | No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {train_data.Count}/{hp.replayBufferSize} ({(train_data.Count * 100f / hp.replayBufferSize).ToString("0.00")}%) | Steps: {currentSteps} ({currentSteps / hp.replayBufferSize} buffers)]";
+                _runtimeStatsText =
+                    $"Behaviour: {model.behaviourName} (v{model.Version})\n" +
+                    $"Trainer: {hp.trainer}\n" +
+                    $"No. agents: {parallelAgents.Count}\n" +
+                    $"Timescale: {Time.timeScale.ToString("0.0")}\n" +
+                    $"Time: {sessionTime}\n" +
+                    $"Buffer: {train_data.Count}/{hp.replayBufferSize} ({(train_data.Count * 100f / hp.replayBufferSize).ToString("0.00")}%)\n" +
+                    $"Steps: {currentSteps} ({currentSteps / hp.replayBufferSize} buffers)";
             else
                 throw new NotImplementedException("Unhandled trainer type");
 
@@ -194,7 +211,7 @@ namespace DeepUnity.ReinforcementLearning
             if (_windowCount >= REWARD_WINDOW)
             {
                 float mean = _windowSum / _windowCount;
-                _rewardStatsText = $"[Max Episode Reward: {_sessionMaxReward.ToString("0.00")} | Mean Reward (over {REWARD_WINDOW} ep): {mean.ToString("0.00")}]";
+                _rewardStatsText = $"Max Episode Reward: {_sessionMaxReward.ToString("0.00")}\nMean Reward (over {REWARD_WINDOW} ep): {mean.ToString("0.00")}";
                 _windowCount = 0;
                 _windowSum = 0f;
             }
@@ -202,7 +219,7 @@ namespace DeepUnity.ReinforcementLearning
         public void OnGUI()
         {
             GUI.Label(new Rect(10, Screen.height - 65, 400, 60), _learningText, _learningTextStyle);
-            GUI.Label(new Rect(10, 10, 800, 90), _runtimeStatsText, _runtimeStatsStyle);
+            GUI.Label(new Rect(10, 10, 800, 320), _runtimeStatsText, _runtimeStatsStyle);
             GUI.Label(new Rect(Screen.width - 410, 10, 400, 60), _fpsText, _fpsStyle);
 
             if (_stopButtonStyle == null)

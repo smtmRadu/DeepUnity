@@ -1,0 +1,247 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
+  m_Name: _Crawler
+  m_EditorClassIdentifier: 
+  version: 35
+  behaviourName: Crawler
+  assetCreated: 1
+  observationSize: 94
+  stackedInputs: 1
+  continuousDim: 20
+  discreteDim: 0
+  config: {fileID: 11400000, guid: 6e00131addc0fec47bf0064ac9370c29, type: 2}
+  vNetwork: {fileID: 11400000, guid: ce53bd4fbc9decc45ab9625b77397cd9, type: 2}
+  q1Network: {fileID: 11400000, guid: 44f97c996a73b324184ce4ad6f258b94, type: 2}
+  q2Network: {fileID: 11400000, guid: 58c4829acdfae4a49a8cff47fda0c8cb, type: 2}
+  muNetwork: {fileID: 11400000, guid: 67cccc98220837c41bdb0ea2a0948090, type: 2}
+  sigmaNetwork: {fileID: 11400000, guid: 8c3cadd939a4f484f8f9aaa479c534a7, type: 2}
+  discreteNetwork: {fileID: 0}
+  inferenceDevice: 0
+  trainingDevice: 1
+  targetFPS: 50
+  clipping: 5
+  normalize: 0
+  observationsNormalizer:
+    step: 0
+    eps: 0.00000001
+    mean:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 5e000000
+    m2:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 5e000000
+  rewardsNormalizer:
+    gamma: 0.99
+    returnsNormalizer:
+      step: 0
+      eps: 0.00000001
+      mean:
+        data:
+        - 0
+        shape: 01000000
+      m2:
+        data:
+        - 0
+        shape: 01000000
+  stochasticity: 1
+  standardDeviationValue: 1
+  standardDeviationScale: 1.5
+  noiseValue: 0.1

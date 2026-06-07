@@ -60,18 +60,23 @@ float scale;      // generic scalar (used by ScaleGrads)
 
 
 // =================================================================== Activations
+// Numerically-stable tanh: never overflows. Raw HLSL tanh() of a large argument can return NaN
+// (Inf/Inf in the exp-based intrinsic) — that is exactly what was poisoning GELU with NaNs. This is the
+// same safe_tanh used by the LLM inference kernels.
+float safe_tanh(float z)
+{
+    float a = abs(z);
+    float e = exp(-2.0f * a);
+    return sign(z) * ((1.0f - e) / (1.0f + e));
+}
+
 float fwd_act(float z, int kind)
 {
     if (kind == 0) return z > 0 ? z : 0.0f;                         // ReLU
-    if (kind == 1)
-    {
-        // numerically-stable tanh
-        float a = abs(z);
-        float e = exp(-2.0f * a);
-        return sign(z) * ((1.0f - e) / (1.0f + e));
-    }
+    if (kind == 1) return safe_tanh(z);                             // Tanh (numerically stable)
     if (kind == 2) return z / (1.0f + exp(-z));                     // SiLU
-    if (kind == 3) return 0.5f * z * (1.0f + tanh(0.79788456f * (z + 0.044715f * z * z * z))); // GELU
+    // GELU (tanh approximation) — safe_tanh so large pre-activations can't overflow to NaN.
+    if (kind == 3) return 0.5f * z * (1.0f + safe_tanh(0.79788456f * (z + 0.044715f * z * z * z)));
     return z;                                                       // linear
 }
 
@@ -80,9 +85,7 @@ float bwd_act(float z, int kind)
     if (kind == 0) return z > 0 ? 1.0f : 0.0f;                      // ReLU'
     if (kind == 1)
     {
-        float a = abs(z);
-        float e = exp(-2.0f * a);
-        float th = sign(z) * ((1.0f - e) / (1.0f + e));
+        float th = safe_tanh(z);
         return 1.0f - th * th;                                      // Tanh'
     }
     if (kind == 2)
@@ -92,11 +95,11 @@ float bwd_act(float z, int kind)
     }
     if (kind == 3)
     {
-        // GELU' (tanh-approx)
+        // GELU' (tanh-approx) — same safe_tanh as the forward so large z can't overflow to NaN.
         float k0 = 0.79788456f;
         float k1 = 0.044715f;
         float u  = k0 * (z + k1 * z * z * z);
-        float t  = tanh(u);
+        float t  = safe_tanh(u);
         float du = k0 * (1.0f + 3.0f * k1 * z * z);
         return 0.5f * (1.0f + t) + 0.5f * z * (1.0f - t * t) * du;
     }

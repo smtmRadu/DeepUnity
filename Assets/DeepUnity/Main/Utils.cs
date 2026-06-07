@@ -516,34 +516,15 @@ namespace DeepUnity
         /// </summary>
         public static class Hyperbolics
         {
-            public static float Sinh(float x)
-            {
-                return (1f - MathF.Exp(-2f * x)) / (2f * MathF.Exp(-x));
-            }
-            public static float Cosh(float x)
-            {
-                return (1f + MathF.Exp(-2f * x)) / (2f * MathF.Exp(-x));
-            }
-            
-            public static float Csch(float x)
-            {
-                return 2f * MathF.Exp(x) / (MathF.Exp(2f * x) - 1f);
-            }
-            public static float Sech(float x)
-            {
-                return 2f * MathF.Exp(x) / (MathF.Exp(2f * x) + 1f);
-            }
-
-            public static float Tanh(float x)
-            {
-                float e2x = MathF.Exp(2f * x);
-                return (e2x - 1f) / (e2x + 1f);
-            }
-            public static float Coth(float x)
-            {
-                float e2x = MathF.Exp(2f * x);
-                return (e2x + 1f) / (e2x - 1f);
-            }
+            // Delegate to the standard library: these are numerically stable at any magnitude. The old
+            // exp-ratio forms overflowed for large x (exp(2x) -> Inf, then Inf/Inf = NaN), which poisoned
+            // GELU/Mish/Tanh with NaNs once a pre-activation got large.
+            public static float Sinh(float x) => MathF.Sinh(x);
+            public static float Cosh(float x) => MathF.Cosh(x);
+            public static float Tanh(float x) => MathF.Tanh(x);
+            public static float Csch(float x) => 1f / MathF.Sinh(x);
+            public static float Sech(float x) => 1f / MathF.Cosh(x);
+            public static float Coth(float x) => 1f / MathF.Tanh(x);
         }
 
         /// <summary>
