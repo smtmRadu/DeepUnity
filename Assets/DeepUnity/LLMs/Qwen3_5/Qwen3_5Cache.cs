@@ -66,6 +66,9 @@ namespace DeepUnity
             public void Reset()
             {
                 CachedTokenCount = 0;
+                // DIAGNOSTIC bypass: skip the per-layer SSM zero-fill (the only cache-related main-thread
+                // SetData burst at init) when the KV cache is deactivated.
+                if (!Qwen3_5Config.USE_KV_CACHE) return;
                 for (int i = 0; i < numLayers; i++)
                 {
                     if (convStates[i] != null)

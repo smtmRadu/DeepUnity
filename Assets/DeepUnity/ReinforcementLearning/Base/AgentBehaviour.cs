@@ -974,12 +974,29 @@ namespace DeepUnity.ReinforcementLearning
             ConsoleMessage.Info($"<b>[OVERWRITE]</b> Agent behaviour <b><i>{behaviourName}</i></b> was overriden with the new weights from Desktop");
             // well this complete reassignation.. a lot of stuff going on i'm to lazy to implement it for now.
         }
+
+        /// <summary>Current version counter of this behaviour (incremented on each save).</summary>
+        public int Version => version;
+
+        [Serializable] private struct VersionProbe { public int version; }
+
+        /// <summary>
+        /// Reads the version stored in the trained copy on the Desktop
+        /// (Desktop/{behaviourName}_Trained/_{behaviourName}.json). Returns -1 if it's missing or unreadable.
+        /// </summary>
+        public int ReadDesktopVersion()
+        {
+            string behPath = Path.Combine(Utils.GetDesktopPath(), $"{behaviourName}_Trained", $"_{behaviourName}.json");
+            if (!File.Exists(behPath))
+                return -1;
+            try { return JsonUtility.FromJson<VersionProbe>(File.ReadAllText(behPath)).version; }
+            catch { return -1; }
+        }
     }
 #if UNITY_EDITOR
     [UnityEditor.CustomEditor(typeof(AgentBehaviour), true), UnityEditor.CanEditMultipleObjects]
     sealed class CustomAgentBehaviourEditor : UnityEditor.Editor
     {
-        const string updateButtonMessage = "A (new) version of this behavior is available on the desktop. \nPRESS this button to update the weights to that version.";
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -987,12 +1004,29 @@ namespace DeepUnity.ReinforcementLearning
 
             AgentBehaviour script = (AgentBehaviour)target;
 
-            
-            if(Directory.Exists(Path.Combine(Utils.GetDesktopPath(), $"{script.behaviourName}_Trained")) && GUILayout.Button(updateButtonMessage))
+            // A build that trained this behaviour dumps a newer copy on the Desktop. Show an update button
+            // that reports the available version, and keep it pressable only when that version is actually
+            // newer than the one currently in the project.
+            if (Directory.Exists(Path.Combine(Utils.GetDesktopPath(), $"{script.behaviourName}_Trained")))
             {
-                // GUILayout.Box .HelpBox("A new version of this behavior is available on your desktop. Press the button above to take the new weights.", MessageType.Info);
-                script.TryUpdateWeightsAndOptimStatesFromDesktop();
-              
+                int desktopVersion = script.ReadDesktopVersion();
+                int currentVersion = script.Version;
+                bool canUpdate = desktopVersion > currentVersion;
+
+                string versionInfo = desktopVersion >= 0
+                    ? $"(v{desktopVersion}, current v{currentVersion})"
+                    : $"(version unknown, current v{currentVersion})";
+                string message =
+                    $"A (new) version of this behaviour is available on the desktop {versionInfo}.\n" +
+                    (canUpdate
+                        ? "PRESS this button to update the weights to that version."
+                        : "Already up to date — the desktop version is not newer.");
+
+                using (new EditorGUI.DisabledScope(!canUpdate))
+                {
+                    if (GUILayout.Button(message))
+                        script.TryUpdateWeightsAndOptimStatesFromDesktop();
+                }
             }
 
             if(SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)

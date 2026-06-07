@@ -164,6 +164,9 @@ namespace DeepUnity.ReinforcementLearning
                 TrainingStatistics pf;
                 TryGetComponent(out pf);
                 DeepUnityTrainer.Subscribe(this, model.config.trainer);
+
+                if (model.config.showAgentRewardLabels)
+                    AgentRewardLabel.Attach(this);
             }
 
             OnEpisodeBegin();

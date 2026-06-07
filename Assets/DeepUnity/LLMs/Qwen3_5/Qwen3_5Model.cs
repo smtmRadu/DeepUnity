@@ -23,6 +23,7 @@ namespace DeepUnity
             int kGateUp, kDown, kGateUp1, kDown1;
             int kLm, kLm1, kArgMax, kSample;
             int kZero, kCopy, kCopySlice, kAddRes;
+            int kApplyPenalty, kMarkSeen, kZeroSeen;
 
             public Qwen3_5Weights weights;
             public Qwen3_5Cache cache;
@@ -33,6 +34,7 @@ namespace DeepUnity
             // Common scratch
             ComputeBuffer hiddenBuf, skipBuf, normOutBuf, attnOutBuf, mlpInterBuf;
             ComputeBuffer logitsBuf, probsBuf, argmaxBuf, tokenIdsBuf;
+            ComputeBuffer tokenSeenBuf; // [vocab] occurrence counts of generated tokens, for presence/repetition penalties
             ComputeBuffer lastHiddenBuf, normSingleBuf;
 
             // Full-attention scratch
@@ -58,7 +60,13 @@ namespace DeepUnity
             readonly int cacheCapacity;
             readonly Qwen3_5LayerType[] layerTypes;
 
-            public bool IsReady => weights.IsReady;
+            // RoPE table is computed on a background thread and uploaded when ready, so it never blocks
+            // the construction frame. Both must be ready before the first forward.
+            volatile bool ropeReady;
+            volatile bool _ropeComputed;
+            uint[] _ropeCosData, _ropeSinData;
+
+            public bool IsReady => weights.IsReady && ropeReady;
 
             public Qwen3_5Model(string paramsPath, int cacheCapacity)
             {
@@ -83,22 +91,39 @@ namespace DeepUnity
                 headKDim   = Qwen3_5Config.LINEAR_KEY_HEAD_DIM;
                 headVDim   = Qwen3_5Config.LINEAR_VALUE_HEAD_DIM;
 
+                var swPhase = System.Diagnostics.Stopwatch.StartNew();
                 cs = DeepUnityMeta.Qwen3_5CS;
                 CacheKernelIds();
+                double tKernels = swPhase.Elapsed.TotalMilliseconds;
 
-                weights = new Qwen3_5Weights(paramsPath);
+                weights = new Qwen3_5Weights(paramsPath); // sets weights.allocMs internally
+
+                swPhase.Restart();
                 cache = new Qwen3_5Cache(
                     cacheCapacity, layerTypes,
                     headsKV, headDim,
                     convDim, convKernel,
                     numVHeads, headKDim, headVDim);
+                double tCache = swPhase.Elapsed.TotalMilliseconds;
 
-                PrecomputeRoPE();
+                swPhase.Restart();
+                PrecomputeRoPEAsync();   // background compute + async upload; ~0 blocking here
+                double tRope = swPhase.Elapsed.TotalMilliseconds;
 
+                swPhase.Restart();
                 probsBuf = new ComputeBuffer(vocab, 4, ComputeBufferType.Structured);
                 argmaxBuf = new ComputeBuffer(1, 4, ComputeBufferType.Structured);
                 lastHiddenBuf = new ComputeBuffer(hiddenSize, 4, ComputeBufferType.Structured);
                 normSingleBuf = new ComputeBuffer(hiddenSize, 4, ComputeBufferType.Structured);
+                tokenSeenBuf = new ComputeBuffer(vocab, 4, ComputeBufferType.Structured); // per-token occurrence counts for penalties
+                double tScratch = swPhase.Elapsed.TotalMilliseconds;
+
+                // Surface per-phase boot timings to the weights object; the single consolidated
+                // "model booted up" log (in Qwen3_5ForCausalLM.InitializeChat) reads them.
+                weights.bootKernelsMs = tKernels;
+                weights.bootCacheMs   = tCache;
+                weights.bootRopeMs    = tRope;
+                weights.bootScratchMs = tScratch;
             }
 
             void CacheKernelIds()
@@ -140,42 +165,96 @@ namespace DeepUnity
                 kCopy        = cs.FindKernel("CopyBuffer");
                 kCopySlice   = cs.FindKernel("CopySlice");
                 kAddRes      = cs.FindKernel("AddResidual");
+                kApplyPenalty = cs.FindKernel("ApplyRepetitionPresencePenalty");
+                kMarkSeen     = cs.FindKernel("MarkSampledTokenSeen");
+                kZeroSeen     = cs.FindKernel("ZeroTokenSeen");
             }
 
-            void PrecomputeRoPE()
+            // Allocates the RoPE buffers on the main thread (cheap), computes the cos/sin table on a
+            // background thread (pure managed math), then uploads it via a main-thread coroutine when ready.
+            // Keeps the ~hundreds-of-ms compute off the construction frame.
+            void PrecomputeRoPEAsync()
             {
                 int maxSeq = Mathf.Max(cacheCapacity, 8192);
                 int rd2 = ropeRotDim / 2; // 32
+                int rotDim = ropeRotDim;
                 float theta = Qwen3_5Config.ROPE_THETA;
+                int packedLen = (maxSeq * rd2) / 2;
 
-                ushort[] cArr = new ushort[maxSeq * rd2];
-                ushort[] sArr = new ushort[maxSeq * rd2];
+                ropeCos = new ComputeBuffer(packedLen, 4, ComputeBufferType.Structured);
+                ropeSin = new ComputeBuffer(packedLen, 4, ComputeBufferType.Structured);
 
-                Parallel.For(0, maxSeq, pos =>
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                _ = Task.Run(() =>
                 {
+                    // Inverse frequencies depend only on i (not pos) — computed once. (Base is head_dim,
+                    // matching HF partial-rotation RoPE.) Each pos owns its own run of packed uints.
+                    float[] invFreq = new float[rd2];
                     for (int i = 0; i < rd2; i++)
+                        invFreq[i] = 1f / MathF.Pow(theta, 2f * i / rotDim);
+
+                    uint[] c = new uint[packedLen];
+                    uint[] s = new uint[packedLen];
+                    for (int pos = 0; pos < maxSeq; pos++)
                     {
-                        // Standard frequency formula uses head_dim base, not rot_dim,
-                        // matching HF's apply_rotary_pos_emb behaviour for partial rotation.
-                        float f = 1f / MathF.Pow(theta, 2f * i / ropeRotDim);
-                        int idx = pos * rd2 + i;
-                        cArr[idx] = Mathf.FloatToHalf(MathF.Cos(pos * f));
-                        sArr[idx] = Mathf.FloatToHalf(MathF.Sin(pos * f));
+                        int baseU = pos * (rd2 / 2);
+                        for (int j = 0; j < rd2 / 2; j++)
+                        {
+                            float a0 = pos * invFreq[2 * j];
+                            float a1 = pos * invFreq[2 * j + 1];
+                            c[baseU + j] = (uint)F32ToF16(MathF.Cos(a0)) | ((uint)F32ToF16(MathF.Cos(a1)) << 16);
+                            s[baseU + j] = (uint)F32ToF16(MathF.Sin(a0)) | ((uint)F32ToF16(MathF.Sin(a1)) << 16);
+                        }
                     }
+                    _ropeCosData = c;
+                    _ropeSinData = s;
+                    _ropeComputed = true;
                 });
 
-                ropeCos = new ComputeBuffer((maxSeq * rd2) / 2, 4, ComputeBufferType.Structured);
-                ropeSin = new ComputeBuffer((maxSeq * rd2) / 2, 4, ComputeBufferType.Structured);
+                DeepUnityDispatcher.Run(UploadRopeWhenReady(sw));
+            }
 
-                uint[] cPacked = new uint[(maxSeq * rd2) / 2];
-                uint[] sPacked = new uint[(maxSeq * rd2) / 2];
-                for (int i = 0; i < cPacked.Length; i++)
+            System.Collections.IEnumerator UploadRopeWhenReady(System.Diagnostics.Stopwatch sw)
+            {
+                while (!_ropeComputed) yield return null;   // wait for the background compute (overlaps upload)
+                ropeCos.SetData(_ropeCosData);
+                ropeSin.SetData(_ropeSinData);
+                _ropeCosData = null; _ropeSinData = null;
+                weights.ropeAsyncMs = sw.Elapsed.TotalMilliseconds; // compute + upload wall time (async, non-blocking)
+                ropeReady = true;
+            }
+
+            // Managed IEEE-754 float32 -> float16 (round to nearest). Replaces Unity's Mathf.FloatToHalf,
+            // whose per-call native overhead made RoPE precompute the largest blocking item at boot.
+            static ushort F32ToF16(float value)
+            {
+                int i = BitConverter.SingleToInt32Bits(value);
+                int s = (i >> 16) & 0x00008000;
+                int e = ((i >> 23) & 0x000000ff) - (127 - 15);
+                int m = i & 0x007fffff;
+                if (e <= 0)
                 {
-                    cPacked[i] = (uint)cArr[2 * i] | ((uint)cArr[2 * i + 1] << 16);
-                    sPacked[i] = (uint)sArr[2 * i] | ((uint)sArr[2 * i + 1] << 16);
+                    if (e < -10) return (ushort)s;          // underflow -> signed zero
+                    m |= 0x00800000;
+                    int t = 14 - e;
+                    int a = (1 << (t - 1)) - 1;
+                    int b = (m >> t) & 1;
+                    m = (m + a + b) >> t;                    // round to nearest even
+                    return (ushort)(s | m);
                 }
-                ropeCos.SetData(cPacked);
-                ropeSin.SetData(sPacked);
+                else if (e == 0xff - (127 - 15))
+                {
+                    if (m == 0) return (ushort)(s | 0x7c00); // inf
+                    m >>= 13;
+                    return (ushort)(s | 0x7c00 | m | (m == 0 ? 1 : 0)); // nan
+                }
+                else
+                {
+                    m = m + 0x00000fff + ((m >> 13) & 1);    // round to nearest even
+                    if ((m & 0x00800000) != 0) { m = 0; e += 1; }
+                    if (e > 30) return (ushort)(s | 0x7c00); // overflow -> inf
+                    return (ushort)(s | (e << 10) | (m >> 13));
+                }
             }
 
             void Realloc(ref ComputeBuffer buf, int count)
@@ -673,18 +752,42 @@ namespace DeepUnity
                 else    cs.Dispatch(k, (vocab + 31) / 32, (seqLen + 7) / 8, 1);
             }
 
-            public int SampleGreedy()
+            // Penalize already-generated tokens in-place on the logits (GPU). repetition_penalty=1 and
+            // presence_penalty=0 are both no-ops, so this is free when penalties are disabled.
+            void ApplyPenalties(float presencePenalty, float repetitionPenalty)
             {
+                cs.SetInt("vocab_size", vocab);
+                cs.SetFloat("presence_penalty", presencePenalty);
+                cs.SetFloat("repetition_penalty", repetitionPenalty);
+                cs.SetBuffer(kApplyPenalty, "logits_buf", logitsBuf);
+                cs.SetBuffer(kApplyPenalty, "token_seen", tokenSeenBuf);
+                cs.Dispatch(kApplyPenalty, (vocab + 255) / 256, 1, 1);
+            }
+
+            // Record the token just written to argmax_result so it is penalized on subsequent steps.
+            void MarkSampledSeen()
+            {
+                cs.SetBuffer(kMarkSeen, "argmax_result", argmaxBuf);
+                cs.SetBuffer(kMarkSeen, "token_seen", tokenSeenBuf);
+                cs.Dispatch(kMarkSeen, 1, 1, 1);
+            }
+
+            public int SampleGreedy(float presencePenalty = 0f, float repetitionPenalty = 1f)
+            {
+                ApplyPenalties(presencePenalty, repetitionPenalty);
                 cs.SetInt("vocab_size", vocab);
                 cs.SetBuffer(kArgMax, "logits_buf", logitsBuf);
                 cs.SetBuffer(kArgMax, "argmax_result", argmaxBuf);
                 cs.Dispatch(kArgMax, 1, 1, 1);
+                MarkSampledSeen();
                 uint[] r = new uint[1]; argmaxBuf.GetData(r);
                 return (int)r[0];
             }
 
-            public int SampleStochastic(float temperature, int topK, float topP, float minP)
+            public int SampleStochastic(float temperature, int topK, float topP, float minP,
+                                        float presencePenalty = 0f, float repetitionPenalty = 1f)
             {
+                ApplyPenalties(presencePenalty, repetitionPenalty);
                 cs.SetInt("vocab_size", vocab);
                 cs.SetFloat("temperature", temperature);
                 cs.SetInt("top_k_val", topK);
@@ -695,17 +798,56 @@ namespace DeepUnity
                 cs.SetBuffer(kSample, "probs_buf", probsBuf);
                 cs.SetBuffer(kSample, "argmax_result", argmaxBuf);
                 cs.Dispatch(kSample, 1, 1, 1);
+                MarkSampledSeen();
                 uint[] r = new uint[1]; argmaxBuf.GetData(r);
                 return (int)r[0];
             }
 
-            public int Sample(float temperature, int topK, float topP, float minP)
-                => temperature == 0f ? SampleGreedy() : SampleStochastic(temperature, topK, topP, minP);
+            public int Sample(float temperature, int topK, float topP, float minP,
+                              float presencePenalty = 0f, float repetitionPenalty = 1f)
+                => temperature == 0f
+                    ? SampleGreedy(presencePenalty, repetitionPenalty)
+                    : SampleStochastic(temperature, topK, topP, minP, presencePenalty, repetitionPenalty);
 
             public Tensor ReadLogits(int seqLen)
                 => seqLen == 1 ? Tensor.Constant(logitsBuf, vocab) : Tensor.Constant(logitsBuf, seqLen, vocab);
 
-            public void ResetCache() => cache.Reset();
+            public void ResetCache()
+            {
+                cache.Reset();
+                // Clear generated-token history so penalties start fresh for the new sequence.
+                cs.SetInt("vocab_size", vocab);
+                cs.SetBuffer(kZeroSeen, "token_seen", tokenSeenBuf);
+                cs.Dispatch(kZeroSeen, (vocab + 255) / 256, 1, 1);
+            }
+
+            bool _warmedUp;
+            // Runs throwaway forwards + both sampler paths so the driver compiles every compute kernel
+            // (the one-time first-dispatch cost) here, behind the loading screen, instead of when the user
+            // first interacts. Two token counts cover both kernel variants — multi-token (prefill: non-vec
+            // MLP / conv-prefill / multi-token attention) and single-token (generation: the *1Vec kernels).
+            // Output is discarded; per-layer yields keep the UI alive; idempotent (runs once per model).
+            public System.Collections.IEnumerator Warmup()
+            {
+                if (_warmedUp) yield break;
+                while (!IsReady) yield return null;
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+
+                foreach (int n in new[] { 4, 1 })
+                {
+                    // Match the real inference path (useCache) so the cache-write/update kernels warm too.
+                    var e = ForwardYielding(Tensor.Constant(new float[n]), useCache: Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
+                    while (e.MoveNext()) yield return e.Current;
+                    SampleStochastic(1f, 20, 1f, 0f, 0f, 1f); // warms penalty + stochastic sampler kernels
+                    yield return null;
+                }
+                SampleGreedy(); // warms the greedy (temperature==0) path too
+                yield return null;
+
+                ResetCache(); // undo the warmup's token_seen marks / cache writes
+                weights.warmupMs = sw.Elapsed.TotalMilliseconds;
+                _warmedUp = true;
+            }
 
             public void Dispose()
             {
@@ -714,6 +856,7 @@ namespace DeepUnity
                 hiddenBuf?.Release(); skipBuf?.Release(); normOutBuf?.Release(); attnOutBuf?.Release();
                 mlpInterBuf?.Release();
                 logitsBuf?.Release(); probsBuf?.Release(); argmaxBuf?.Release(); tokenIdsBuf?.Release();
+                tokenSeenBuf?.Release();
                 lastHiddenBuf?.Release(); normSingleBuf?.Release();
                 qBuf?.Release(); kBuf?.Release(); vBuf?.Release(); gateBuf?.Release();
                 qNormBuf?.Release(); kNormBuf?.Release();

@@ -8,53 +8,75 @@ namespace DeepUnity
 {
     // Qwen3.5-0.8B (text-only) FP16, full-GPU inference. Hybrid architecture:
     // 18 Gated DeltaNet layers + 6 full-attention layers (interval 4).
-    public class Qwen3_5ForCausalLM
+    public class Qwen3_5ForCausalLM : LLM
     {
+        private static readonly Qwen3_5ConfigDescriptor _config = new();
         private string path;
         public Qwen3_5Modeling.Qwen3_5Model model;
         public Qwen3_5TokenizerFast tokenizer;
         private bool isFreshlyInitialized;
 
-        public bool IsReady => model.IsReady && (tokenizer == null || tokenizer.IsReady);
-        public float TokensPerSecond { get; private set; }
+        public override LLMConfig Config => _config;
+        public override bool IsReady => model.IsReady && (tokenizer == null || tokenizer.IsReady);
 
+        /// <summary>
+        /// Qwen3.5-0.8B (text-only), full-GPU FP16 inference.
+        ///
+        /// Recommended sampling presets (set these on <see cref="Chat"/> / <see cref="Generate"/>):
+        ///
+        ///   Non-thinking, text tasks:
+        ///     temperature=1.0, top_p=1.00, top_k=20, min_p=0.0, presence_penalty=2.0, repetition_penalty=1.0
+        ///   Non-thinking, VL tasks:
+        ///     temperature=0.7, top_p=0.80, top_k=20, min_p=0.0, presence_penalty=1.5, repetition_penalty=1.0
+        ///   Thinking, text tasks:
+        ///     temperature=1.0, top_p=0.95, top_k=20, min_p=0.0, presence_penalty=1.5, repetition_penalty=1.0
+        ///   Thinking, VL or precise coding (e.g. WebDev) tasks:
+        ///     temperature=0.6, top_p=0.95, top_k=20, min_p=0.0, presence_penalty=0.0, repetition_penalty=1.0
+        ///
+        /// Defaults below are the "non-thinking, text" preset. presence_penalty is subtractive
+        /// (OpenAI/vLLM style); repetition_penalty is multiplicative (CTRL/HF style, 1.0 = off). Both
+        /// run on the GPU over already-generated tokens. Set temperature=0 for greedy decoding.
+        /// </summary>
+        /// <param name="maxModelLength">
+        /// Maximum sequence length (in tokens) the model supports in a single conversation. This sizes the
+        /// KV cache, which is pre-allocated up front to this capacity. NOTE: the KV cache is currently a fixed
+        /// pre-allocation; in the future we may make it dynamic (grow on demand, array-list style) so memory
+        /// scales with the actual context length instead of always reserving the maximum.
+        /// </param>
         public Qwen3_5ForCausalLM(
             string params_path = "Assets/DeepUnity/LLMs/Qwen3_5/params_it",
             string tokenizer_path = "Assets/DeepUnity/LLMs/Qwen3_5/Qwen3_5TokenizerFast.json",
-            int cacheCapacity = 8192)
+            int maxModelLength = 8192)
         {
             this.path = params_path;
+            WarnIfNotInResources("weights", params_path);
+            WarnIfNotInResources("tokenizer", tokenizer_path);
             // Tokenizer is optional during early bring-up — when the JSON isn't present yet,
             // skip it so the model can still be exercised via Predict() with token-id Tensors.
             if (System.IO.File.Exists(tokenizer_path))
                 this.tokenizer = new Qwen3_5TokenizerFast(tokenizer_path, load_async: true);
 
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeChanged;
-#endif
-            Stopwatch sw = Stopwatch.StartNew();
-            model = new Qwen3_5Modeling.Qwen3_5Model(params_path, cacheCapacity);
-            ConsoleMessage.Info($"Qwen3.5 model created ({sw.Elapsed.TotalSeconds:0.00} s)");
+            model = new Qwen3_5Modeling.Qwen3_5Model(params_path, maxModelLength);
+            // Feed the tokenizer's main-thread ctor cost to the weights object; the single consolidated
+            // "model booted up" log is emitted from InitializeChat once everything is ready.
+            model.weights.bootTokenizerMs = tokenizer?.ctorMs ?? 0;
         }
 
-        ~Qwen3_5ForCausalLM()
+        /// <inheritdoc/>
+        public override void Release()
         {
             model?.Dispose();
             ConsoleMessage.Info("Qwen3.5 released from GPU");
         }
 
-#if UNITY_EDITOR
-        private void OnPlayModeChanged(UnityEditor.PlayModeStateChange state)
-        {
-            if (state == UnityEditor.PlayModeStateChange.ExitingPlayMode)
-            {
-                model?.Dispose();
-                ConsoleMessage.Info("Qwen3.5 released from GPU");
-            }
-        }
-#endif
+        /// <summary>
+        /// Compiles every compute kernel (one-time first-dispatch cost) behind the loading screen so the
+        /// first real Chat/Generate reply is fast. Yields per layer; idempotent. Call once after creating
+        /// the model, before InitializeChat. Waits internally for IsReady.
+        /// </summary>
+        public override IEnumerator Warmup() => model.Warmup();
 
-        public Tensor Predict(Tensor input_ids, Tensor attn_mask = null)
+        public override Tensor Predict(Tensor input_ids, Tensor attn_mask = null)
         {
             if (!IsReady) throw new Exception("Qwen3.5 is not ready. Check IsReady first.");
             int seqLen = input_ids.Size(-1);
@@ -62,17 +84,18 @@ namespace DeepUnity
             return model.ReadLogits(seqLen);
         }
 
-        public IEnumerator Generate(Tensor input_ids, Action<string> onTokenGenerated,
-            int max_new_tokens = 128, float temperature = 1f, int top_k = -1, float top_p = 1f, float min_p = 0f)
+        public override IEnumerator Generate(Tensor input_ids, Action<string> onTokenGenerated,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = 20, float top_p = 1f, float min_p = 0f,
+            float presence_penalty = 2f, float repetition_penalty = 1f)
         {
             while (!IsReady) yield return new WaitForSeconds(0.01f);
 
             model.ResetCache();
 
-            var e = model.ForwardYielding(input_ids, useCache: true, lastPosOnly: true);
+            var e = model.ForwardYielding(input_ids, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
             while (e.MoveNext()) yield return e.Current;
 
-            int tokenId = model.Sample(temperature, top_k, top_p, min_p);
+            int tokenId = model.Sample(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
             if (tokenizer != null)
                 onTokenGenerated?.Invoke(tokenizer.Decode(Tensor.Constant(tokenId))[0]);
             else
@@ -83,10 +106,10 @@ namespace DeepUnity
             {
                 Stopwatch sw = Stopwatch.StartNew();
                 Tensor nextInput = Tensor.Constant(tokenId);
-                e = model.ForwardYielding(nextInput, useCache: true, lastPosOnly: true);
+                e = model.ForwardYielding(nextInput, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
                 while (e.MoveNext()) yield return e.Current;
 
-                tokenId = model.Sample(temperature, top_k, top_p, min_p);
+                tokenId = model.Sample(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
                 if (tokenId == Qwen3_5Modeling.Qwen3_5Config.EOS_TOKEN_ID) break;
 
                 if (tokenizer != null)
@@ -101,7 +124,7 @@ namespace DeepUnity
             yield return true;
         }
 
-        public IEnumerator InitializeChat(string system_prompt = "")
+        public override IEnumerator InitializeChat(string system_prompt = "")
         {
             while (!IsReady) yield return new WaitForSeconds(0.01f);
             Assert.AreNotEqual(system_prompt, null);
@@ -110,6 +133,7 @@ namespace DeepUnity
 
             if (string.IsNullOrEmpty(system_prompt))
             {
+                LogBootSummary(0);
                 isFreshlyInitialized = true;
                 yield return true;
                 yield break;
@@ -126,18 +150,18 @@ namespace DeepUnity
             AppendTextTokens("\n", ids);
 
             Tensor input_ids = Tensor.Constant(ids.ToArray());
-            var e = model.ForwardYielding(input_ids, useCache: true, lastPosOnly: true);
+            var e = model.ForwardYielding(input_ids, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
             while (e.MoveNext()) yield return e.Current;
 
-            ConsoleMessage.Info($"Qwen3.5 system prompt computed ({sw.Elapsed.TotalSeconds:0.00} s).");
+            LogBootSummary(sw.Elapsed.TotalMilliseconds);
 
             isFreshlyInitialized = true;
             yield return true;
         }
 
-        public IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
-            int max_new_tokens = 128, float temperature = 1f, int top_k = -1, float top_p = 1f, float min_p = 0f,
-            bool enable_thinking = false)
+        public override IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = 20, float top_p = 1f, float min_p = 0f,
+            float presence_penalty = 2f, float repetition_penalty = 1f, bool enable_thinking = false)
         {
             if (!IsReady) throw new Exception("Call InitializeChat before Chat.");
 
@@ -175,10 +199,10 @@ namespace DeepUnity
             }
 
             Tensor input_ids = Tensor.Constant(ids.ToArray());
-            var e = model.ForwardYielding(input_ids, useCache: true, lastPosOnly: true);
+            var e = model.ForwardYielding(input_ids, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
             while (e.MoveNext()) yield return e.Current;
 
-            int tokenId = model.Sample(temperature, top_k, top_p, min_p);
+            int tokenId = model.Sample(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
             string tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
             onTokenGenerated?.Invoke(tokenStr);
             yield return null;
@@ -187,10 +211,10 @@ namespace DeepUnity
             {
                 Stopwatch sw = Stopwatch.StartNew();
                 Tensor nextInput = Tensor.Constant(tokenId);
-                e = model.ForwardYielding(nextInput, useCache: true, lastPosOnly: true);
+                e = model.ForwardYielding(nextInput, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
                 while (e.MoveNext()) yield return e.Current;
 
-                tokenId = model.Sample(temperature, top_k, top_p, min_p);
+                tokenId = model.Sample(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
                 if (tokenId == Qwen3_5Modeling.Qwen3_5Config.EOS_TOKEN_ID)
                 {
                     ConsoleMessage.Info("Qwen3.5 ended the response.");
@@ -205,6 +229,28 @@ namespace DeepUnity
 
             TokensPerSecond = 0f;
             yield return true;
+        }
+
+        // Single consolidated boot log: total + per-step breakdown. The construction steps run in one
+        // synchronous frame ("blocking"); the weight upload streams across frames afterward.
+        void LogBootSummary(double systemPromptMs)
+        {
+            var w = model.weights;
+            double blocking = w.bootTokenizerMs + w.bootKernelsMs + w.allocMs + w.bootCacheMs + w.bootRopeMs + w.bootScratchMs;
+            double total = blocking + w.uploadMs + systemPromptMs;
+            ConsoleMessage.Info(
+                $"Qwen3.5 model booted up — {total:0} ms total\n" +
+                $"   tokenizer ctor (main thread) : {w.bootTokenizerMs:0} ms\n" +
+                $"   compute kernels lookup       : {w.bootKernelsMs:0} ms\n" +
+                $"   weight buffers alloc         : {w.allocMs:0} ms\n" +
+                $"   kv cache alloc               : {w.bootCacheMs:0} ms\n" +
+                $"   rope kick (async)            : {w.bootRopeMs:0} ms\n" +
+                $"   scratch buffers alloc        : {w.bootScratchMs:0} ms\n" +
+                $"   = blocking (one frame)       : {blocking:0} ms\n" +
+                $"   rope compute (async)         : {w.ropeAsyncMs:0} ms (overlaps upload)\n" +
+                $"   weight upload (async, GPU)   : {w.uploadMs:0} ms over {w.uploadFrames} frames, worst frame {w.worstUploadMs:0.0} ms\n" +
+                $"   kernel warmup (behind load)  : {w.warmupMs:0} ms (0 = warmup didn't run)\n" +
+                $"   system prompt cache          : {systemPromptMs:0} ms");
         }
 
         void AppendTextTokens(string text, System.Collections.Generic.List<float> dst)

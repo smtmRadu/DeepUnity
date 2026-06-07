@@ -28,6 +28,7 @@ namespace DeepUnity
         public static readonly int EOS_TOKEN_ID       = Qwen3_5Modeling.Qwen3_5Config.EOS_TOKEN_ID;
 
         public bool IsReady { get; private set; }
+        public double ctorMs; // main-thread construction cost (regex compile etc.); parse runs in background
 
         readonly Dictionary<string, int> vocab = new();
         readonly Dictionary<int, string> idToToken = new();
@@ -47,6 +48,9 @@ namespace DeepUnity
 
         public Qwen3_5TokenizerFast(string path = "Assets/DeepUnity/LLMs/Qwen3_5/Qwen3_5TokenizerFast.json", bool load_async = false)
         {
+            // Main-thread ctor cost (RegexOptions.Compiled JITs here). The 13 MB JSON parse runs in the
+            // background via LoadAsync, so it is NOT counted on this thread when load_async.
+            var swCtor = System.Diagnostics.Stopwatch.StartNew();
             BuildByteMaps();
             preTokRegex = new Regex(PRETOK_PATTERN, RegexOptions.Compiled);
 
@@ -55,6 +59,8 @@ namespace DeepUnity
 
             if (load_async) _ = LoadAsync(path);
             else LoadSync(path);
+
+            ctorMs = swCtor.Elapsed.TotalMilliseconds;
         }
 
         // -------- byte map --------

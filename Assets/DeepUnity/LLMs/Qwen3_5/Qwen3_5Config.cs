@@ -60,6 +60,11 @@ namespace DeepUnity
             // Misc
             public static bool TIE_EMBEDDING = true;
 
+            // DIAGNOSTIC: set false to bypass the KV cache (skips ResetCache zero-fill + the full-attention
+            // cache write/read; forward runs with useCache:false). Use only to isolate boot/inference stalls
+            // — multi-token generation output is NOT correct while this is off.
+            public static bool USE_KV_CACHE = true;
+
             // 24 layers, full_attention every 4th. Pattern: L L L F  L L L F  ...
             public static Qwen3_5LayerType[] layer_types = new Qwen3_5LayerType[]
             {
@@ -89,6 +94,25 @@ namespace DeepUnity
                 Qwen3_5LayerType.FullAttention,
             };
         }
+    }
+
+    // Model-agnostic descriptor for Qwen3.5 — forwards to the static Qwen3_5Config above.
+    // Sampling defaults are the "non-thinking text" preset (only presence_penalty differs from the base).
+    public sealed class Qwen3_5ConfigDescriptor : LLMConfig
+    {
+        public override int HiddenSize            => Qwen3_5Modeling.Qwen3_5Config.HIDDEN_SIZE;
+        public override int VocabSize             => Qwen3_5Modeling.Qwen3_5Config.VOCAB_SIZE;
+        public override int NumLayers             => Qwen3_5Modeling.Qwen3_5Config.NUM_LAYERS;
+        public override int MaxPositionEmbeddings => Qwen3_5Modeling.Qwen3_5Config.MAX_POSITION_EMBEDDINGS;
+        public override int HeadDim               => Qwen3_5Modeling.Qwen3_5Config.HEAD_DIM;
+        public override float RmsEps              => Qwen3_5Modeling.Qwen3_5Config.RMS_EPS;
+        public override bool TieEmbedding         => Qwen3_5Modeling.Qwen3_5Config.TIE_EMBEDDING;
+
+        public override int EosTokenId            => Qwen3_5Modeling.Qwen3_5Config.EOS_TOKEN_ID;
+        public override int PadTokenId            => Qwen3_5Modeling.Qwen3_5Config.ENDOFTEXT_TOKEN_ID;
+        public override int BosTokenId            => Qwen3_5Modeling.Qwen3_5Config.IM_START_TOKEN_ID; // Qwen has no classic BOS; <|im_start|> opens a sequence.
+
+        public override float DefaultPresencePenalty => 2f;
     }
 }
 

@@ -44,4 +44,5 @@ MonoBehaviour:
   policyDelay: 2
   timescaleAdjustment: 0
   timescale: 1
+  showAgentRewardLabels: 0
   debug: 0

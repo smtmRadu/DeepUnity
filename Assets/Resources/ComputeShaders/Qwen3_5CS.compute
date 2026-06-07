@@ -50,6 +50,8 @@ int top_k_val;
 float top_p_val;
 float min_p_val;
 int rng_seed;
+float presence_penalty;     // OpenAI/vLLM-style, subtractive; fires once per already-generated token
+float repetition_penalty;   // CTRL/HF-style multiplicative; 1.0 = disabled
 int activation_type;        // 0 silu, 1 gelu
 
 
@@ -144,9 +146,10 @@ RWStructuredBuffer<float>   linear_y_norm;     // post RMSNormGated   == [seq, v
 StructuredBuffer<float>     lm_input;
 RWStructuredBuffer<float>   lm_output;
 
-StructuredBuffer<float>     logits_buf;
+RWStructuredBuffer<float>   logits_buf;      // RW so penalties can be applied in place pre-sampling
 RWStructuredBuffer<float>   probs_buf;
 RWStructuredBuffer<uint>    argmax_result;
+RWStructuredBuffer<uint>    token_seen;      // [vocab] occurrence counts of already-generated tokens
 
 RWStructuredBuffer<float>   buf_a;
 StructuredBuffer<float>     buf_b;
@@ -1026,6 +1029,40 @@ void SampleToken(uint3 id : SV_DispatchThreadID)
         if (cdf >= r) { sampled = i; break; }
     }
     argmax_result[0] = sampled;
+}
+
+// Applies repetition + presence penalty in place to the logits, for tokens already generated this
+// sequence. Run once over the vocab before ArgMax/SampleToken. Both penalties no-op at their defaults
+// (repetition_penalty=1.0, presence_penalty=0.0), so this is harmless when disabled.
+#pragma kernel ApplyRepetitionPresencePenalty
+[numthreads(256, 1, 1)]
+void ApplyRepetitionPresencePenalty(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= vocab_size) return;
+    if (token_seen[i] == 0u) return;
+    float l = logits_buf[i];
+    l = (l > 0.0) ? (l / repetition_penalty) : (l * repetition_penalty); // CTRL/HF repetition penalty
+    l -= presence_penalty;                                               // OpenAI/vLLM presence penalty
+    logits_buf[i] = l;
+}
+
+// Marks the just-sampled token (in argmax_result[0]) as seen so it is penalized on later steps.
+#pragma kernel MarkSampledTokenSeen
+[numthreads(1, 1, 1)]
+void MarkSampledTokenSeen(uint3 id : SV_DispatchThreadID)
+{
+    token_seen[argmax_result[0]] += 1u;
+}
+
+// Clears the per-token occurrence counts (new sequence / cache reset).
+#pragma kernel ZeroTokenSeen
+[numthreads(256, 1, 1)]
+void ZeroTokenSeen(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= vocab_size) return;
+    token_seen[i] = 0u;
 }
 
 

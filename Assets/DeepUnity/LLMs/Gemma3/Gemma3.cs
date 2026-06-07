@@ -10,48 +10,44 @@ namespace DeepUnity
     // (every kernel reads/writes ComputeBuffers — no per-step CPU<->GPU bounces).
     // System-prompt KV cache is persisted as packed FP16 .bin under Assets/Resources/Cache/.
     // Supersedes the earlier hybrid GPU/CPU `Gemma3OriginalForCausalLM`.
-    public class Gemma3ForCausalLM
+    public class Gemma3ForCausalLM : LLM
     {
+        private static readonly Gemma3ConfigDescriptor _config = new();
         private string path;
         public Gemma3Modeling.Gemma3Model model;
         public Gemma3TokenizerFast tokenizer;
         private bool isFreshlyInitialized;
 
-        public bool IsReady => model.IsReady && tokenizer.IsReady;
-        public float TokensPerSecond { get; private set; }
+        public override LLMConfig Config => _config;
+        public override bool IsReady => model.IsReady && tokenizer.IsReady;
 
+        /// <param name="maxModelLength">
+        /// Maximum sequence length (in tokens) the model supports in a single conversation. This sizes the
+        /// KV cache, which is pre-allocated up front to this capacity. NOTE: the KV cache is currently a fixed
+        /// pre-allocation; in the future we may make it dynamic (grow on demand, array-list style) so memory
+        /// scales with the actual context length instead of always reserving the maximum.
+        /// </param>
         public Gemma3ForCausalLM(
             string params_path = "Assets/DeepUnity/LLMs/Gemma3/params_it",
             string tokenizer_path = "Assets/DeepUnity/LLMs/Gemma3/Gemma3TokenizerFast.json",
-            int cacheCapacity = 2048)
+            int maxModelLength = 2048)
         {
             this.path = params_path;
+            WarnIfNotInResources("weights", params_path);
+            WarnIfNotInResources("tokenizer", tokenizer_path);
             this.tokenizer = new Gemma3TokenizerFast(tokenizer_path, load_async: true);
 
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeChanged;
-#endif
             Stopwatch sw = Stopwatch.StartNew();
-            model = new Gemma3Modeling.Gemma3Model(params_path, cacheCapacity);
+            model = new Gemma3Modeling.Gemma3Model(params_path, maxModelLength);
             ConsoleMessage.Info($"Gemma3 model created ({sw.Elapsed.TotalSeconds:0.00} s)");
         }
 
-        ~Gemma3ForCausalLM()
+        /// <inheritdoc/>
+        public override void Release()
         {
             model?.Dispose();
             ConsoleMessage.Info("Gemma3 released from GPU");
         }
-
-#if UNITY_EDITOR
-        private void OnPlayModeChanged(UnityEditor.PlayModeStateChange state)
-        {
-            if (state == UnityEditor.PlayModeStateChange.ExitingPlayMode)
-            {
-                model?.Dispose();
-                ConsoleMessage.Info("Gemma3 released from GPU");
-            }
-        }
-#endif
 
         public int ParameterCount()
         {
@@ -78,7 +74,7 @@ namespace DeepUnity
             return p;
         }
 
-        public Tensor Predict(Tensor input_ids, Tensor attn_mask = null)
+        public override Tensor Predict(Tensor input_ids, Tensor attn_mask = null)
         {
             if (!IsReady)
                 throw new Exception("Gemma3 is not ready. Check IsReady first.");
@@ -87,8 +83,11 @@ namespace DeepUnity
             return model.ReadLogits(seqLen);
         }
 
-        public IEnumerator Generate(Tensor input_ids, Action<string> onTokenGenerated,
-            int max_new_tokens = 128, float temperature = 1f, int top_k = -1, float top_p = 1f, float min_p = 0f)
+        // presence_penalty / repetition_penalty are accepted for API parity with other LLMs but ignored —
+        // Gemma3's sampler has no penalty support.
+        public override IEnumerator Generate(Tensor input_ids, Action<string> onTokenGenerated,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = -1, float top_p = 1f, float min_p = 0f,
+            float presence_penalty = 0f, float repetition_penalty = 1f)
         {
             while (!IsReady) yield return new WaitForSeconds(0.01f);
 
@@ -122,7 +121,7 @@ namespace DeepUnity
             yield return true;
         }
 
-        public IEnumerator InitializeChat(string system_prompt = "")
+        public override IEnumerator InitializeChat(string system_prompt = "")
         {
             while (!IsReady) yield return new WaitForSeconds(0.01f);
             Assert.AreNotEqual(system_prompt, null);
@@ -174,8 +173,11 @@ namespace DeepUnity
             }
         }
 
-        public IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
-            int max_new_tokens = 128, float temperature = 1f, int top_k = -1, float top_p = 1f, float min_p = 0f)
+        // presence_penalty / repetition_penalty / enable_thinking are accepted for API parity with other LLMs
+        // but ignored — Gemma3-270m has no penalty or thinking support.
+        public override IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = -1, float top_p = 1f, float min_p = 0f,
+            float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false)
         {
             if (!IsReady) throw new Exception("Call InitializeChat before Chat.");
 

@@ -59,6 +59,26 @@ namespace DeepUnity
             }; 
         }
     }
+
+    // Model-agnostic descriptor for Gemma3 — forwards to the static Gemma3Config above.
+    // Sampling defaults mirror Gemma's generation_config (top_k=64, top_p=0.95).
+    public sealed class Gemma3ConfigDescriptor : LLMConfig
+    {
+        public override int HiddenSize            => Gemma3Modeling.Gemma3Config.HIDDEN_SIZE;
+        public override int VocabSize             => Gemma3Modeling.Gemma3Config.VOCAB_SIZE;
+        public override int NumLayers             => Gemma3Modeling.Gemma3Config.NUM_LAYERS;
+        public override int MaxPositionEmbeddings => Gemma3Modeling.Gemma3Config.MAX_POSITION_EMBEDDINGS;
+        public override int HeadDim               => Gemma3Modeling.Gemma3Config.HEAD_DIM;
+        public override float RmsEps              => Gemma3Modeling.Gemma3Config.RMS_EPS;
+        public override bool TieEmbedding         => Gemma3Modeling.Gemma3Config.TIE_EMBEDDING;
+
+        public override int EosTokenId            => Gemma3Modeling.Gemma3Config.EOS_IDX;
+        public override int PadTokenId            => Gemma3Modeling.Gemma3Config.PAD_IDX;
+        public override int BosTokenId            => Gemma3Modeling.Gemma3Config.BOS_IDX;
+
+        public override int   DefaultTopK => 64;
+        public override float DefaultTopP => 0.95f;
+    }
 }
 
 // Total params = 268 098 176

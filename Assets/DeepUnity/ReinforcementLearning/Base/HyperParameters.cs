@@ -123,6 +123,9 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("Timescale of the training session.")]
         [Min(0.1f)] public float timescale = 1f;
 
+        [Tooltip("If on, in Learn mode each agent gets a floating billboard label above it showing its live episode reward. Heuristically positioned and scaled to the agent's mesh; works for 2D and 3D agents. Default off.")]
+        public bool showAgentRewardLabels = false;
+
 
         [HideInInspector]
         [Tooltip("Debug the train_data into a file.")]

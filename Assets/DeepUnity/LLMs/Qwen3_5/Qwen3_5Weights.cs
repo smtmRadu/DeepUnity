@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -40,11 +41,36 @@ namespace DeepUnity
 
             public bool IsReady { get; private set; }
 
+            // Boot timings (ms), filled across construction + upload, read once by the consolidated
+            // "model booted up" log emitted from Qwen3_5ForCausalLM.InitializeChat.
+            public double allocMs, bootTokenizerMs, bootKernelsMs, bootCacheMs, bootRopeMs, bootScratchMs;
+            public double uploadMs, worstUploadMs, ropeAsyncMs, warmupMs;
+            public int uploadFrames;
+
             readonly int numLayers, hidden, headDim, headsQ, headsKV, intermediate, vocab;
             readonly int keyDim, valueDim, qkvLinDim, convDim, kernelSize, numVHeads, headVDim;
             readonly Qwen3_5LayerType[] layerTypes;
 
             const int EMBED_NUM_CHUNKS = 16;
+            // Per-frame GPU upload budget (packed uints; 1 uint = 4 bytes => ~24 MB/frame). Every weight
+            // buffer is streamed to the GPU through this budget so no single frame stalls on SetData.
+            const int UPLOAD_BUDGET_UINTS = 24 * 1024 * 1024 / 4;
+
+            // Background readers fill this queue; the main-thread UploadPump coroutine drains it under the
+            // per-frame budget. ConcurrentQueue so readers can enqueue from threadpool threads safely.
+            readonly System.Collections.Concurrent.ConcurrentQueue<UploadJob> _uploads
+                = new System.Collections.Concurrent.ConcurrentQueue<UploadJob>();
+            volatile bool _allReadsEnqueued;
+
+            struct UploadJob
+            {
+                public ComputeBuffer target;
+                public uint[] data;
+                public int dstOffset;   // packed-uint offset within target (for sharded buffers like the embedding)
+            }
+
+            void Enqueue(ComputeBuffer target, uint[] data, int dstOffset = 0)
+                => _uploads.Enqueue(new UploadJob { target = target, data = data, dstOffset = dstOffset });
 
             public Qwen3_5Weights(string paramsPath)
             {
@@ -65,7 +91,8 @@ namespace DeepUnity
                 numVHeads = Qwen3_5Config.LINEAR_NUM_VALUE_HEADS;
                 headVDim  = Qwen3_5Config.LINEAR_VALUE_HEAD_DIM;
 
-                // Allocate
+                // Allocate (GPU buffer creation is main-thread only; timed to confirm it isn't the boot hitch).
+                var swAlloc = System.Diagnostics.Stopwatch.StartNew();
                 embedLmHead    = HalfBuf(vocab * hidden);
                 finalNormGamma = HalfBuf(hidden);
 
@@ -126,6 +153,11 @@ namespace DeepUnity
                     }
                 }
 
+                allocMs = swAlloc.Elapsed.TotalMilliseconds;
+
+                // Start the drain coroutine before the reads so it idles until the first shard lands,
+                // then kick off the background file reads (which enqueue upload jobs as they complete).
+                DeepUnityDispatcher.Run(UploadPump());
                 _ = LoadAllAsync(paramsPath);
             }
 
@@ -149,49 +181,88 @@ namespace DeepUnity
 
             async Task LoadAllAsync(string paramsPath)
             {
-                Task tEmbed = LoadEmbeddingAsync(paramsPath);
-                Task<uint[]> tNorm = Task.Run(() => ReadFP16Packed(paramsPath + "/norm.bin", hidden));
+                var tasks = new System.Collections.Generic.List<Task>(numLayers + 2);
 
-                Task[] layerTasks = new Task[numLayers];
+                // All reads run on background threads and enqueue (buffer, data) jobs as they finish.
+                // The GPU upload itself is done exclusively by UploadPump on the main thread, budgeted.
+                tasks.Add(ReadEmbeddingAsync(paramsPath));
+                tasks.Add(Task.Run(() => Enqueue(finalNormGamma, ReadFP16Packed(paramsPath + "/norm.bin", hidden))));
                 for (int i = 0; i < numLayers; i++)
                 {
                     int idx = i;
-                    layerTasks[i] = LoadLayerAsync(paramsPath, idx);
+                    tasks.Add(LoadLayerAsync(paramsPath, idx));
                 }
 
-                await Task.WhenAll(tEmbed, tNorm, Task.WhenAll(layerTasks));
-                finalNormGamma.SetData(tNorm.Result);
-                IsReady = true;
-                ConsoleMessage.Info("Qwen3.5 weights loaded.");
+                await Task.WhenAll(tasks);
+                _allReadsEnqueued = true; // once the queue drains, UploadPump knows nothing more is coming
             }
 
-            async Task LoadEmbeddingAsync(string paramsPath)
+            // Reads the 16 embedding shards on background threads and enqueues each at its slot offset.
+            async Task ReadEmbeddingAsync(string paramsPath)
             {
                 int totalHalves = vocab * hidden;
                 int perChunk = totalHalves / EMBED_NUM_CHUNKS; // exactly divisible for 0.8B
+                int perChunkPacked = perChunk / 2;
 
-                Task<uint[]>[] tasks = new Task<uint[]>[EMBED_NUM_CHUNKS];
+                Task[] tasks = new Task[EMBED_NUM_CHUNKS];
                 for (int i = 0; i < EMBED_NUM_CHUNKS; i++)
                 {
                     int idx = i;
-                    tasks[i] = Task.Run(() => ReadFP16Packed($"{paramsPath}/embed_tokens/part_{idx}.bin", perChunk));
+                    tasks[i] = Task.Run(() =>
+                        Enqueue(embedLmHead, ReadFP16Packed($"{paramsPath}/embed_tokens/part_{idx}.bin", perChunk), idx * perChunkPacked));
                 }
-                uint[][] results = await Task.WhenAll(tasks);
+                await Task.WhenAll(tasks);
+            }
 
-                uint[] combined = await Task.Run(() =>
+            // Single main-thread consumer: drains the upload queue, capping GPU SetData at ~24 MB/frame.
+            // Large buffers (embedding shards, MLP/QKV) are sliced with the partial SetData overload so a
+            // single buffer can never blow the per-frame budget. Flips IsReady once everything is uploaded.
+            IEnumerator UploadPump()
+            {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var slice = new System.Diagnostics.Stopwatch();
+                int frames = 0;
+                double worstSliceMs = 0;
+                int budget = UPLOAD_BUDGET_UINTS;
+
+                while (true)
                 {
-                    int totalPacked = totalHalves / 2;
-                    uint[] r = new uint[totalPacked];
-                    int offset = 0;
-                    for (int i = 0; i < EMBED_NUM_CHUNKS; i++)
+                    if (_uploads.TryDequeue(out UploadJob job))
                     {
-                        Array.Copy(results[i], 0, r, offset, results[i].Length);
-                        offset += results[i].Length;
+                        int src = 0, len = job.data.Length;
+                        while (src < len)
+                        {
+                            if (budget <= 0)
+                            {
+                                yield return null;               // hand the frame back to rendering
+                                frames++;
+                                budget = UPLOAD_BUDGET_UINTS;
+                            }
+                            int count = Math.Min(budget, len - src);
+                            slice.Restart();
+                            job.target.SetData(job.data, src, job.dstOffset + src, count);
+                            double ms = slice.Elapsed.TotalMilliseconds; // one SetData; spikes here = first-touch GPU commit
+                            if (ms > worstSliceMs) worstSliceMs = ms;
+                            src += count;
+                            budget -= count;
+                        }
                     }
-                    return r;
-                });
+                    else if (_allReadsEnqueued)
+                    {
+                        break;                                   // queue empty and no more reads in flight => done
+                    }
+                    else
+                    {
+                        yield return null;                       // reads still in flight; check again next frame
+                        frames++;
+                        budget = UPLOAD_BUDGET_UINTS;
+                    }
+                }
 
-                embedLmHead.SetData(combined);
+                uploadFrames = frames;
+                uploadMs = sw.Elapsed.TotalMilliseconds;
+                worstUploadMs = worstSliceMs;
+                IsReady = true;
             }
 
             async Task LoadLayerAsync(string paramsPath, int i)
@@ -219,17 +290,17 @@ namespace DeepUnity
 
                     await Task.WhenAll(tInLn, tPALn, tGate, tUp, tDown, tQ, tK, tV, tO, tQN, tKN);
 
-                    inputLnGamma[i].SetData(tInLn.Result);
-                    postAttnLnGamma[i].SetData(tPALn.Result);
-                    mlpGate[i].SetData(tGate.Result);
-                    mlpUp[i].SetData(tUp.Result);
-                    mlpDown[i].SetData(tDown.Result);
-                    W_Q[i].SetData(tQ.Result);
-                    W_K[i].SetData(tK.Result);
-                    W_V[i].SetData(tV.Result);
-                    W_O[i].SetData(tO.Result);
-                    qNormGamma[i].SetData(tQN.Result);
-                    kNormGamma[i].SetData(tKN.Result);
+                    Enqueue(inputLnGamma[i], tInLn.Result);
+                    Enqueue(postAttnLnGamma[i], tPALn.Result);
+                    Enqueue(mlpGate[i], tGate.Result);
+                    Enqueue(mlpUp[i], tUp.Result);
+                    Enqueue(mlpDown[i], tDown.Result);
+                    Enqueue(W_Q[i], tQ.Result);
+                    Enqueue(W_K[i], tK.Result);
+                    Enqueue(W_V[i], tV.Result);
+                    Enqueue(W_O[i], tO.Result);
+                    Enqueue(qNormGamma[i], tQN.Result);
+                    Enqueue(kNormGamma[i], tKN.Result);
                 }
                 else
                 {
@@ -245,20 +316,20 @@ namespace DeepUnity
 
                     await Task.WhenAll(tInLn, tPALn, tGate, tUp, tDown, tQKV, tZ, tA, tB, tCv, tDt, tAlog, tNm, tOut);
 
-                    inputLnGamma[i].SetData(tInLn.Result);
-                    postAttnLnGamma[i].SetData(tPALn.Result);
-                    mlpGate[i].SetData(tGate.Result);
-                    mlpUp[i].SetData(tUp.Result);
-                    mlpDown[i].SetData(tDown.Result);
-                    W_inProjQKV[i].SetData(tQKV.Result);
-                    W_inProjZ[i].SetData(tZ.Result);
-                    W_inProjA[i].SetData(tA.Result);
-                    W_inProjB[i].SetData(tB.Result);
-                    convWeight[i].SetData(tCv.Result);
-                    dtBias[i].SetData(tDt.Result);
-                    ALog[i].SetData(tAlog.Result);
-                    linearNormGamma[i].SetData(tNm.Result);
-                    W_outProj[i].SetData(tOut.Result);
+                    Enqueue(inputLnGamma[i], tInLn.Result);
+                    Enqueue(postAttnLnGamma[i], tPALn.Result);
+                    Enqueue(mlpGate[i], tGate.Result);
+                    Enqueue(mlpUp[i], tUp.Result);
+                    Enqueue(mlpDown[i], tDown.Result);
+                    Enqueue(W_inProjQKV[i], tQKV.Result);
+                    Enqueue(W_inProjZ[i], tZ.Result);
+                    Enqueue(W_inProjA[i], tA.Result);
+                    Enqueue(W_inProjB[i], tB.Result);
+                    Enqueue(convWeight[i], tCv.Result);
+                    Enqueue(dtBias[i], tDt.Result);
+                    Enqueue(ALog[i], tAlog.Result);
+                    Enqueue(linearNormGamma[i], tNm.Result);
+                    Enqueue(W_outProj[i], tOut.Result);
                 }
             }
 

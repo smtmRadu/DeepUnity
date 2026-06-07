@@ -1,5 +1,5 @@
 # DeepUnity (2022.3.43f1 lts)
-![version](https://img.shields.io/badge/version-v0.12.2.1-yellow)
+![version](https://img.shields.io/badge/version-v0.12.2.2-yellow)
 [Reference Papers](https://github.com/smtmRadu/Policy-Gradient-Methods-Insights-and-Optimization-Strategies)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using state-of-the-art algorithms.
@@ -52,7 +52,7 @@ public class Tutorial : MonoBehaviour
 ```
 ## Large Language Models
 
-DeepUnity provides inference implementations for [Gemma3-270M](https://huggingface.co/google/gemma-3-270m) and [Qwen3-0.6B](Qwen/Qwen3-0.6B), along with SFT scripts w/ QLoRA. Current implementations are not optimized yet (~9 tok/s).
+DeepUnity provides inference implementations for [Gemma3-270M](https://huggingface.co/google/gemma-3-270m-it) and [Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B), along with SFT scripts w/ QLoRA. Current implementations are not optimized yet (~9 tok/s).
 
 #### Behaviour script overriding example
 

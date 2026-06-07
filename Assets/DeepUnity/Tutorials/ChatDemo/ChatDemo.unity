@@ -1101,7 +1101,7 @@ MonoBehaviour:
     giving advice to apprentices. Does NOT know about modern technology (smartphones,
     computers, cars), real\u2011world events outside his world, the politics of distant
     kingdoms, or the secret location of the Heart of the Mountain. Forbidden topics:
-    any detail about the Heart of the Mountain, the Council of Stones, and the high
+    any detail about the Heart of the Mountain, the Council of Stoness, and the high
     elves' hidden magics."
   chatWindow: {fileID: 1941194339}
   temperature: 0.9
@@ -4692,6 +4692,6 @@ SceneRoots:
   - {fileID: 690454331}
   - {fileID: 122226902}
   - {fileID: 203083371}
-  - {fileID: 1316610565}
   - {fileID: 777725042}
+  - {fileID: 1316610565}
   - {fileID: 989199483}

@@ -57,6 +57,15 @@ namespace DeepUnity.ReinforcementLearning
         GUIStyle _fpsStyle;
         GUIStyle _stopButtonStyle;
 
+        // Episode-reward read-outs for the top-left overlay (works in editor and build). Stats are computed
+        // per non-overlapping window of REWARD_WINDOW episodes and only refresh when a window fills up.
+        const int REWARD_WINDOW = 256;
+        private int _windowCount = 0;                                    // episodes accumulated in the current window
+        private float _windowSum = 0f;                                   // reward sum over the current window
+        private float _sessionMaxReward = float.NegativeInfinity;       // all-time best episode reward this session
+        private bool _episodeHooksAttached = false;
+        string _rewardStatsText = "[Max Episode Reward: N/A | Mean Reward: N/A]";
+
         private AudioClip trainingSound;
 
       
@@ -145,17 +154,55 @@ namespace DeepUnity.ReinforcementLearning
             else
                 _fpsStyle.normal.textColor = Color.Lerp(Color.green, Color.blue, Mathf.InverseLerp(80f, 100f, fps));
 
+            // Subscribe to per-episode rewards (retries each frame until the agents are registered).
+            AttachEpisodeHooks();
+
             if (DeepUnityTrainer.Instance is IOnPolicy)
-                _runtimeStatsText = $"[Trainer: {hp.trainer} | No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {MemoriesCount}/{hp.bufferSize} ({(MemoriesCount * 100f / hp.bufferSize).ToString("0.00")}%)]";
+                _runtimeStatsText = $"[Trainer: {hp.trainer} | No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {MemoriesCount}/{hp.bufferSize} ({(MemoriesCount * 100f / hp.bufferSize).ToString("0.00")}%) | Steps: {currentSteps} ({currentSteps / hp.bufferSize} buffers)]";
             else if (DeepUnityTrainer.Instance is IOffPolicy)
-                _runtimeStatsText = $"[Trainer: {hp.trainer} | No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {train_data.Count}/{hp.replayBufferSize} ({(train_data.Count * 100f / hp.replayBufferSize).ToString("0.00")}%)]";
+                _runtimeStatsText = $"[Trainer: {hp.trainer} | No. agents {parallelAgents.Count} | Timescale: {Time.timeScale.ToString("0.0")} | Buffer: {train_data.Count}/{hp.replayBufferSize} ({(train_data.Count * 100f / hp.replayBufferSize).ToString("0.00")}%) | Steps: {currentSteps} ({currentSteps / hp.replayBufferSize} buffers)]";
             else
                 throw new NotImplementedException("Unhandled trainer type");
+
+            _runtimeStatsText += "\n" + _rewardStatsText;
+        }
+
+        // Hooks each registered agent's OnEpisodeEnd once, to track the session's max and rolling-mean episode reward.
+        private void AttachEpisodeHooks()
+        {
+            if (_episodeHooksAttached || parallelAgents == null || parallelAgents.Count == 0)
+                return;
+            foreach (var ag in parallelAgents)
+                ag.OnEpisodeEnd += OnAnyAgentEpisodeEnd;
+            _episodeHooksAttached = true;
+        }
+
+        private void OnAnyAgentEpisodeEnd(object sender, EventArgs e)
+        {
+            Agent ag = (Agent)sender;
+            // OnEpisodeEnd fires before the final reward is folded into EpisodeCumulativeReward, so add it back here.
+            float episodeReward = ag.EpisodeCumulativeReward + ag.Timestep.reward[0];
+
+            // All-time session best — tracked every episode, never reset.
+            if (episodeReward > _sessionMaxReward)
+                _sessionMaxReward = episodeReward;
+
+            // Mean is windowed; refresh the read-out (both the all-time max and the window mean) only once a
+            // full window of 256 episodes has been collected, then start accumulating the next window.
+            _windowCount++;
+            _windowSum += episodeReward;
+            if (_windowCount >= REWARD_WINDOW)
+            {
+                float mean = _windowSum / _windowCount;
+                _rewardStatsText = $"[Max Episode Reward: {_sessionMaxReward.ToString("0.00")} | Mean Reward (over {REWARD_WINDOW} ep): {mean.ToString("0.00")}]";
+                _windowCount = 0;
+                _windowSum = 0f;
+            }
         }
         public void OnGUI()
         {
             GUI.Label(new Rect(10, Screen.height - 65, 400, 60), _learningText, _learningTextStyle);
-            GUI.Label(new Rect(10, 10, 800, 60), _runtimeStatsText, _runtimeStatsStyle);
+            GUI.Label(new Rect(10, 10, 800, 90), _runtimeStatsText, _runtimeStatsStyle);
             GUI.Label(new Rect(Screen.width - 410, 10, 400, 60), _fpsText, _fpsStyle);
 
             if (_stopButtonStyle == null)
