@@ -27,7 +27,9 @@ namespace DeepUnity.Tutorials.ChatDemo
         TMP_Text pressIToInteractText;
         [SerializeField] ChatWindow chatWindow;
         [SerializeField] private float temperature = 0.8f;
-        private Gemma3ForCausalLM llm; // V35 GPU-accelerated inference
+        [Tooltip("Keep the model resident on the GPU (~1.6 GB VRAM) after closing the chat — re-interactions skip the load entirely. Off = release on close and reload (~2-3 s) every interaction.")]
+        [SerializeField] private bool keepModelLoaded = false;
+        private Qwen3_5ForCausalLM llm; // Qwen3.5-0.8B, full-GPU inference (streaming, hitch-free loader)
 
 
         [ViewOnly, SerializeField] KnightScript player;
@@ -35,6 +37,11 @@ namespace DeepUnity.Tutorials.ChatDemo
         {
             trigger = GetComponent<CircleCollider2D>();
             pressIToInteractText = GetComponent<TMP_Text>();
+
+            // Scene-start prewarm: compiles the model's compute kernels (one per frame) and parses
+            // the tokenizer in the background while the player walks around, so pressing "interact"
+            // later loads without hitches. One call — everything else is internal to the model.
+            StartCoroutine(Qwen3_5ForCausalLM.Prewarm());
         }
 
         private void Update()
@@ -55,17 +62,18 @@ namespace DeepUnity.Tutorials.ChatDemo
         }
         IEnumerator LoadLLM()
         {
-
             yield return new WaitForSeconds(player.cam.TransitionDuration + 0.01f);
 
             chatWindow.SetInfoText("Loading LLM...");
             chatWindow.gameObject.SetActive(true);
             yield return null;
 
-            llm = new Gemma3ForCausalLM();
-            chatWindow.SetInfoText($"Initializing {npc_name}...");
-            yield return null;
+            if (llm == null)
+                llm = new Qwen3_5ForCausalLM(); // cheap; weights stream to the GPU over the next frames
 
+            chatWindow.SetInfoText($"Initializing {npc_name}...");
+            // Waits for the weight stream, warms the kernels and caches the system prompt — all
+            // budgeted per frame, so the game keeps rendering smoothly behind the loading text.
             yield return llm.InitializeChat(system_prompt: system_prompt);
             chatWindow.SetInfoText("");
             state = NPCState.WaitingInInteraction;
@@ -130,8 +138,12 @@ namespace DeepUnity.Tutorials.ChatDemo
             // Debug.Log("No longer interacting");
             state = NPCState.Idle;
 
-            llm = null;
-            GC.Collect();
+            if (!keepModelLoaded)
+            {
+                llm?.Release(); // free the GPU buffers now (the finalizer can't call Unity APIs safely)
+                llm = null;
+                StartCoroutine(CollectGarbageIncremental());
+            }
             chatWindow.Clear();
             chatWindow.gameObject.SetActive(false);
             pressIToInteractText.enabled = true;
@@ -147,6 +159,15 @@ namespace DeepUnity.Tutorials.ChatDemo
 
 
 
+
+        // Spreads the post-conversation cleanup over ~2 ms slices per frame instead of one
+        // blocking GC.Collect (~400 ms). Incremental GC is enabled in Project Settings; if it
+        // were disabled, CollectIncremental no-ops and the next natural collection handles it.
+        IEnumerator CollectGarbageIncremental()
+        {
+            while (UnityEngine.Scripting.GarbageCollector.CollectIncremental(2_000_000UL))
+                yield return null;
+        }
 
         private void OnTriggerEnter2D(Collider2D other)
         {

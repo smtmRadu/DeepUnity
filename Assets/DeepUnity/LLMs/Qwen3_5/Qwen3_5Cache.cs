@@ -61,27 +61,12 @@ namespace DeepUnity
                 CachedTokenCount = 0;
             }
 
-            // Zero everything that has been written into so far.
-            // Doesn't reallocate; just resets the logical token count and zero-fills SSM state.
+            // Resets the logical token count only. The SSM state zero-fill is done GPU-side by
+            // Qwen3_5Model.ResetCache (ZeroBuffer kernel) — the old CPU path allocated ~19 MB of
+            // managed zero arrays and SetData'd them on the main thread on every reset.
             public void Reset()
             {
                 CachedTokenCount = 0;
-                // DIAGNOSTIC bypass: skip the per-layer SSM zero-fill (the only cache-related main-thread
-                // SetData burst at init) when the KV cache is deactivated.
-                if (!Qwen3_5Config.USE_KV_CACHE) return;
-                for (int i = 0; i < numLayers; i++)
-                {
-                    if (convStates[i] != null)
-                    {
-                        float[] z = new float[convStates[i].count];
-                        convStates[i].SetData(z);
-                    }
-                    if (recurrentStates[i] != null)
-                    {
-                        float[] z = new float[recurrentStates[i].count];
-                        recurrentStates[i].SetData(z);
-                    }
-                }
             }
 
             public void Dispose()

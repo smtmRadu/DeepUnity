@@ -44,7 +44,14 @@ namespace DeepUnity
             readonly int slidingWindow;
             readonly float rmsEps, embedScale, attnScaling;
 
-            public bool IsReady => weights.IsReady;
+            // RoPE tables are computed on a background thread and uploaded by a main-thread
+            // coroutine when ready, so the ~tens-of-MB trig + fp16 conversion never blocks the
+            // construction frame. Both weights and RoPE must be ready before the first forward.
+            volatile bool ropeReady;
+            volatile bool _ropeComputed;
+            uint[] _ropeCF, _ropeSF, _ropeCL, _ropeSL;
+
+            public bool IsReady => weights.IsReady && ropeReady;
 
             public Gemma3Model(string paramsPath, int cacheCapacity)
             {
@@ -70,7 +77,7 @@ namespace DeepUnity
                 weights = new Gemma3Weights(paramsPath);
                 cache = new Gemma3Cache(numLayers, cacheCapacity, headsKV, headDim);
 
-                PrecomputeRoPE();
+                PrecomputeRoPEAsync();
 
                 // Fixed-size FP32 buffers
                 probsBuf = new ComputeBuffer(vocabSize, 4, ComputeBufferType.Structured);
@@ -113,46 +120,89 @@ namespace DeepUnity
                 return new ComputeBuffer(halfCount / 2, 4, ComputeBufferType.Structured);
             }
 
-            static void UploadHalfs(ComputeBuffer buf, ushort[] data)
-            {
-                uint[] packed = new uint[data.Length / 2];
-                for (int i = 0; i < packed.Length; i++)
-                    packed[i] = (uint)data[2 * i] | ((uint)data[2 * i + 1] << 16);
-                buf.SetData(packed);
-            }
-
-            void PrecomputeRoPE()
+            // Allocates the RoPE buffers (cheap), computes the four cos/sin tables on a background
+            // thread (pure managed math — Unity's Mathf.FloatToHalf has per-call native overhead,
+            // so a managed converter is used), then uploads via a main-thread coroutine when ready.
+            void PrecomputeRoPEAsync()
             {
                 int maxSeq = Gemma3Modeling.Gemma3Config.MAX_POSITION_EMBEDDINGS;
                 int hd2 = headDim / 2;
+                int hDim = headDim;
                 int thetaFull = Gemma3Modeling.Gemma3Config.ROPE_THETA;
                 int thetaLocal = Gemma3Modeling.Gemma3Config.ROPE_LOCAL_BASE_FREQUENCY;
-
-                ushort[] cF = new ushort[maxSeq * hd2];
-                ushort[] sF = new ushort[maxSeq * hd2];
-                ushort[] cL = new ushort[maxSeq * hd2];
-                ushort[] sL = new ushort[maxSeq * hd2];
-
-                Parallel.For(0, maxSeq, pos =>
-                {
-                    for (int i = 0; i < hd2; i++)
-                    {
-                        int idx = pos * hd2 + i;
-                        float fF = 1f / MathF.Pow(thetaFull, 2f * i / headDim);
-                        float fL = 1f / MathF.Pow(thetaLocal, 2f * i / headDim);
-                        cF[idx] = Mathf.FloatToHalf(MathF.Cos(pos * fF));
-                        sF[idx] = Mathf.FloatToHalf(MathF.Sin(pos * fF));
-                        cL[idx] = Mathf.FloatToHalf(MathF.Cos(pos * fL));
-                        sL[idx] = Mathf.FloatToHalf(MathF.Sin(pos * fL));
-                    }
-                });
+                int packedLen = (maxSeq * hd2) / 2;
 
                 ropeCosFull = PackedHalfBuf(maxSeq * hd2);
                 ropeSinFull = PackedHalfBuf(maxSeq * hd2);
                 ropeCosLocal = PackedHalfBuf(maxSeq * hd2);
                 ropeSinLocal = PackedHalfBuf(maxSeq * hd2);
-                UploadHalfs(ropeCosFull, cF); UploadHalfs(ropeSinFull, sF);
-                UploadHalfs(ropeCosLocal, cL); UploadHalfs(ropeSinLocal, sL);
+
+                _ = Task.Run(() =>
+                {
+                    uint[] cF = new uint[packedLen], sF = new uint[packedLen];
+                    uint[] cL = new uint[packedLen], sL = new uint[packedLen];
+                    Parallel.For(0, maxSeq, pos =>
+                    {
+                        int baseU = pos * (hd2 / 2);
+                        for (int j = 0; j < hd2 / 2; j++)
+                        {
+                            int i0 = 2 * j, i1 = 2 * j + 1;
+                            float fF0 = 1f / MathF.Pow(thetaFull, 2f * i0 / hDim);
+                            float fF1 = 1f / MathF.Pow(thetaFull, 2f * i1 / hDim);
+                            float fL0 = 1f / MathF.Pow(thetaLocal, 2f * i0 / hDim);
+                            float fL1 = 1f / MathF.Pow(thetaLocal, 2f * i1 / hDim);
+                            cF[baseU + j] = (uint)F32ToF16(MathF.Cos(pos * fF0)) | ((uint)F32ToF16(MathF.Cos(pos * fF1)) << 16);
+                            sF[baseU + j] = (uint)F32ToF16(MathF.Sin(pos * fF0)) | ((uint)F32ToF16(MathF.Sin(pos * fF1)) << 16);
+                            cL[baseU + j] = (uint)F32ToF16(MathF.Cos(pos * fL0)) | ((uint)F32ToF16(MathF.Cos(pos * fL1)) << 16);
+                            sL[baseU + j] = (uint)F32ToF16(MathF.Sin(pos * fL0)) | ((uint)F32ToF16(MathF.Sin(pos * fL1)) << 16);
+                        }
+                    });
+                    _ropeCF = cF; _ropeSF = sF; _ropeCL = cL; _ropeSL = sL;
+                    _ropeComputed = true;
+                });
+
+                DeepUnityDispatcher.Run(UploadRopeWhenReady());
+            }
+
+            IEnumerator UploadRopeWhenReady()
+            {
+                while (!_ropeComputed) yield return null;
+                ropeCosFull.SetData(_ropeCF); ropeSinFull.SetData(_ropeSF);
+                ropeCosLocal.SetData(_ropeCL); ropeSinLocal.SetData(_ropeSL);
+                _ropeCF = _ropeSF = _ropeCL = _ropeSL = null;
+                ropeReady = true;
+            }
+
+            // Managed IEEE-754 float32 -> float16 (round to nearest), same as Qwen3_5Model.
+            static ushort F32ToF16(float value)
+            {
+                int i = BitConverter.SingleToInt32Bits(value);
+                int s = (i >> 16) & 0x00008000;
+                int e = ((i >> 23) & 0x000000ff) - (127 - 15);
+                int m = i & 0x007fffff;
+                if (e <= 0)
+                {
+                    if (e < -10) return (ushort)s;
+                    m |= 0x00800000;
+                    int t = 14 - e;
+                    int a = (1 << (t - 1)) - 1;
+                    int b = (m >> t) & 1;
+                    m = (m + a + b) >> t;
+                    return (ushort)(s | m);
+                }
+                else if (e == 0xff - (127 - 15))
+                {
+                    if (m == 0) return (ushort)(s | 0x7c00);
+                    m >>= 13;
+                    return (ushort)(s | 0x7c00 | m | (m == 0 ? 1 : 0));
+                }
+                else
+                {
+                    m = m + 0x00000fff + ((m >> 13) & 1);
+                    if ((m & 0x00800000) != 0) { m = 0; e += 1; }
+                    if (e > 30) return (ushort)(s | 0x7c00);
+                    return (ushort)(s | (e << 10) | (m >> 13));
+                }
             }
 
             // FP32 buffer management (same as Gemma3GPU)
@@ -519,35 +569,62 @@ namespace DeepUnity
                 else cs.Dispatch(k, (vocabSize + 31) / 32, (seqLen + 7) / 8, 1);
             }
 
-            public int SampleGreedy()
+            // Queues the sampler kernel; the chosen token id lands in argmaxBuf on the GPU.
+            // Reading it back is the caller's job (sync or async).
+            void DispatchSampleKernels(float temperature, int topK, float topP, float minP)
             {
                 cs.SetInt("vocab_size", vocabSize);
-                cs.SetBuffer(kArgMax, "logits_buf", logitsBuf);
-                cs.SetBuffer(kArgMax, "argmax_result", argmaxBuf);
-                cs.Dispatch(kArgMax, 1, 1, 1);
-                uint[] r = new uint[1]; argmaxBuf.GetData(r);
-                return (int)r[0];
+                if (temperature == 0f)
+                {
+                    cs.SetBuffer(kArgMax, "logits_buf", logitsBuf);
+                    cs.SetBuffer(kArgMax, "argmax_result", argmaxBuf);
+                    cs.Dispatch(kArgMax, 1, 1, 1);
+                }
+                else
+                {
+                    cs.SetFloat("temperature", temperature);
+                    cs.SetInt("top_k_val", topK);
+                    cs.SetFloat("top_p_val", topP);
+                    cs.SetFloat("min_p_val", minP);
+                    cs.SetInt("rng_seed", UnityEngine.Random.Range(int.MinValue, int.MaxValue));
+                    cs.SetBuffer(kSampleToken, "logits_buf", logitsBuf);
+                    cs.SetBuffer(kSampleToken, "probs_buf", probsBuf);
+                    cs.SetBuffer(kSampleToken, "argmax_result", argmaxBuf);
+                    cs.Dispatch(kSampleToken, 1, 1, 1);
+                }
             }
+
+            public int SampleGreedy() => Sample(0f, 0, 1f, 0f);
 
             public int SampleStochastic(float temperature, int topK, float topP, float minP)
+                => Sample(temperature, topK, topP, minP);
+
+            // Synchronous sample: blocks the main thread until every queued GPU dispatch has
+            // finished. Interactive paths should prefer SampleYielding.
+            public int Sample(float temperature, int topK, float topP, float minP)
             {
-                cs.SetInt("vocab_size", vocabSize);
-                cs.SetFloat("temperature", temperature);
-                cs.SetInt("top_k_val", topK);
-                cs.SetFloat("top_p_val", topP);
-                cs.SetFloat("min_p_val", minP);
-                cs.SetInt("rng_seed", UnityEngine.Random.Range(int.MinValue, int.MaxValue));
-                cs.SetBuffer(kSampleToken, "logits_buf", logitsBuf);
-                cs.SetBuffer(kSampleToken, "probs_buf", probsBuf);
-                cs.SetBuffer(kSampleToken, "argmax_result", argmaxBuf);
-                cs.Dispatch(kSampleToken, 1, 1, 1);
+                DispatchSampleKernels(temperature, topK, topP, minP);
                 uint[] r = new uint[1]; argmaxBuf.GetData(r);
                 return (int)r[0];
             }
 
-            public int Sample(float temperature, int topK, float topP, float minP)
+            // Async sample: the 4-byte token id comes back via AsyncGPUReadback, so the main thread
+            // never blocks on the in-flight GPU queue. Writes result[0].
+            public IEnumerator SampleYielding(float temperature, int topK, float topP, float minP, int[] result)
             {
-                return temperature == 0f ? SampleGreedy() : SampleStochastic(temperature, topK, topP, minP);
+                DispatchSampleKernels(temperature, topK, topP, minP);
+                if (SystemInfo.supportsAsyncGPUReadback)
+                {
+                    var req = UnityEngine.Rendering.AsyncGPUReadback.Request(argmaxBuf);
+                    while (!req.done) yield return null;
+                    if (!req.hasError)
+                    {
+                        result[0] = (int)req.GetData<uint>()[0];
+                        yield break;
+                    }
+                }
+                uint[] r = new uint[1]; argmaxBuf.GetData(r); // fallback: sync readback
+                result[0] = (int)r[0];
             }
 
             public Tensor ReadLogits(int seqLen)
@@ -559,6 +636,110 @@ namespace DeepUnity
             }
 
             public void ResetCache() => cache.Reset();
+
+            // Every buffer property name in Gemma3CS.compute; used by PrewarmKernels (SetBuffer on a
+            // name a kernel doesn't use is a no-op; distinct dummies because D3D11 forbids the same
+            // UAV in two slots of one dispatch).
+            static readonly string[] WARMUP_BUFFER_NAMES =
+            {
+                "embed_weights", "norm_gamma", "W_QKV", "W_O", "mlp_weights", "lm_weights",
+                "rope_cos", "rope_sin",
+                "token_ids", "embed_output", "norm_output", "norm_input",
+                "qkv_packed", "split_q", "split_k", "split_v", "rope_buf",
+                "kv_cache", "kv_new",
+                "X", "QKV", "Q", "K", "V",
+                "AttentionWeights", "AttendedValues", "O",
+                "input", "intermediate",
+                "lm_input", "lm_output",
+                "logits_buf", "probs_buf", "argmax_result",
+                "buf_a", "buf_b",
+            };
+
+            // Every integer uniform that gates a kernel's thread guards; zeroed so every warmup
+            // dispatch is degenerate (all threads early-out) and binding dummies is safe.
+            static readonly string[] WARMUP_SIZE_UNIFORMS =
+            {
+                "seq_len", "hidden_size", "head_dim", "num_heads_q", "num_heads_kv", "vocab_size",
+                "position_offset", "cache_len", "cache_capacity", "buffer_size", "qkv_proj_dim",
+                "num_vectors", "rope_num_heads", "seq_len_q", "seq_len_k", "sliding_window_size",
+                "bidirectional", "copy_src_offset", "embedding_dim", "inner_embedding_dim",
+                "intermediate_size", "sequence_length_q", "sequence_length_k", "sequence_length_v",
+                "batch_size", "top_k_val", "rng_seed", "activation_type",
+            };
+
+            static readonly string[] ALL_KERNEL_NAMES =
+            {
+                "EmbeddingLookup", "RmsNormHidden", "RmsNormHead", "SplitQKV",
+                "ApplyRopeSplitHalf", "WriteCacheFull", "WriteCacheSliding", "ApplyMask", "SoftmaxRows",
+                "QKVProj", "ComputeAttentionScores", "AttendValues", "OProj",
+                "GateUp", "Down", "GateUp1Vec", "Down1Vec",
+                "LmHeadPredict", "LmHeadPredict1Vec", "ArgMax", "SampleToken",
+                "ZeroBuffer", "CopyBuffer", "CopySlice", "AddResidual",
+            };
+
+            static bool _kernelsPrewarmed;
+
+            // The driver compiles each kernel's ISA on its FIRST dispatch — a one-time per-session
+            // cost. This dispatches every kernel once with zero-size uniforms, ONE kernel compile
+            // per frame. Static, needs no model or weights — run it at scene start (see
+            // Gemma3ForCausalLM.Prewarm); Warmup() also runs it (idempotent).
+            public static IEnumerator PrewarmKernels()
+            {
+                if (_kernelsPrewarmed) yield break;
+                _kernelsPrewarmed = true;
+
+                ComputeShader shader = DeepUnityMeta.Gemma3CS;
+
+                var dummies = new ComputeBuffer[WARMUP_BUFFER_NAMES.Length];
+                for (int i = 0; i < dummies.Length; i++)
+                    dummies[i] = new ComputeBuffer(256, 4, ComputeBufferType.Structured);
+
+                foreach (string u in WARMUP_SIZE_UNIFORMS) shader.SetInt(u, 0);
+
+                foreach (string name in ALL_KERNEL_NAMES)
+                {
+                    int k = shader.FindKernel(name);
+                    for (int i = 0; i < WARMUP_BUFFER_NAMES.Length; i++)
+                        shader.SetBuffer(k, WARMUP_BUFFER_NAMES[i], dummies[i]);
+                    shader.Dispatch(k, 1, 1, 1);
+                    yield return null;
+                }
+
+                foreach (var d in dummies) d.Release();
+            }
+
+            bool _warmedUp;
+
+            // Compiles every compute kernel behind the loading screen so the first real reply is
+            // fast: one degenerate dispatch per kernel per frame (the driver-compile cost,
+            // overlapping the weight stream), then throwaway forwards + both sampler paths over the
+            // real code paths. Two token counts cover both kernel variants — multi-token (prefill)
+            // and single-token (generation, the *1Vec kernels). Idempotent (runs once per model).
+            public IEnumerator Warmup()
+            {
+                if (_warmedUp) yield break;
+
+                var pk = PrewarmKernels();              // no weights needed — overlaps the upload
+                while (pk.MoveNext()) yield return pk.Current;
+
+                while (!IsReady) yield return null;
+
+                int[] tok = new int[1];
+                foreach (int n in new[] { 4, 1 })
+                {
+                    var e = ForwardYielding(Tensor.Constant(new float[n]), useCache: true, lastPosOnly: true);
+                    while (e.MoveNext()) yield return e.Current;
+                    // Async readback: a sync Sample here would block on the queued forward.
+                    var s = SampleYielding(1f, 64, 0.95f, 0f, tok);
+                    while (s.MoveNext()) yield return s.Current;
+                }
+                var g = SampleYielding(0f, 0, 1f, 0f, tok); // greedy (temperature==0) path
+                while (g.MoveNext()) yield return g.Current;
+                yield return null;
+
+                ResetCache(); // undo the warmup's cache writes
+                _warmedUp = true;
+            }
 
             public void Dispose()
             {

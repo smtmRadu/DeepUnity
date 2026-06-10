@@ -29,7 +29,7 @@ namespace DeepUnity.Tutorials
 
         private IEnumerator Run()
         {
-            yield return model.InitializeChat(system_prompt);
+            yield return model.InitializeChat(system_prompt); // streams weights, warms kernels, caches the system prompt
 
             if (display != null)
                 display.text = $"User:\n{user_prompt}\n\nAssistant:\n";

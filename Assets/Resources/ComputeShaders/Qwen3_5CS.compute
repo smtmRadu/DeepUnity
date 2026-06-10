@@ -922,23 +922,40 @@ void LmHeadPredict1Vec(uint3 id : SV_DispatchThreadID)
     lm_output[v] = sum;
 }
 
+// ============================== SAMPLERS ==============================
+// One thread GROUP of 256 threads (still Dispatch(1,1,1)). The previous single-thread versions
+// made dozens of serial passes over the 248k-token vocab — ~200 ms of GPU per sampled token,
+// which was both a per-token frame stall and the tok/s ceiling.
+#define SAMPLER_THREADS 256
+#define SAMPLER_MAX_TOPK 64
+groupshared float smp_val[SAMPLER_THREADS];
+groupshared uint  smp_idx[SAMPLER_THREADS];
+groupshared float smp_cand_p[SAMPLER_MAX_TOPK];
+groupshared uint  smp_cand_i[SAMPLER_MAX_TOPK];
+groupshared float smp_scalar;
+
 #pragma kernel ArgMax
-[numthreads(1, 1, 1)]
-void ArgMax(uint3 id : SV_DispatchThreadID)
+[numthreads(SAMPLER_THREADS, 1, 1)]
+void ArgMax(uint3 gtid : SV_GroupThreadID)
 {
-    float best_val = logits_buf[0];
-    uint  best_idx = 0;
-    for (uint i = 1; i < vocab_size; i++)
+    uint tid = gtid.x;
+    float bv = -3.0e38; uint bi = 0;
+    for (uint i = tid; i < vocab_size; i += SAMPLER_THREADS)
+    { float v = logits_buf[i]; if (v > bv) { bv = v; bi = i; } }
+    smp_val[tid] = bv; smp_idx[tid] = bi;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint s = SAMPLER_THREADS / 2; s > 0; s >>= 1)
     {
-        float v = logits_buf[i];
-        if (v > best_val) { best_val = v; best_idx = i; }
+        if (tid < s && smp_val[tid + s] > smp_val[tid])
+        { smp_val[tid] = smp_val[tid + s]; smp_idx[tid] = smp_idx[tid + s]; }
+        GroupMemoryBarrierWithGroupSync();
     }
-    argmax_result[0] = best_idx;
+    if (tid == 0) argmax_result[0] = smp_idx[0];
 }
 
-#pragma kernel SampleToken
-[numthreads(1, 1, 1)]
-void SampleToken(uint3 id : SV_DispatchThreadID)
+// Reference single-thread sampler — kept verbatim as the fallback for exotic configs
+// (top_k <= 0 or > SAMPLER_MAX_TOPK), where the candidate set isn't bounded.
+void SampleTokenSerial()
 {
     float max_l = logits_buf[0];
     for (uint i = 1; i < vocab_size; i++)
@@ -1029,6 +1046,115 @@ void SampleToken(uint3 id : SV_DispatchThreadID)
         if (cdf >= r) { sampled = i; break; }
     }
     argmax_result[0] = sampled;
+}
+
+// Parallel sampler. Math identical to SampleTokenSerial for 1 <= top_k <= SAMPLER_MAX_TOPK:
+// probabilities are normalized over the FULL vocab (so top-p/min-p thresholds match), only the
+// top-k candidates can ever be sampled, candidates come out sorted descending so the nucleus
+// (top-p) cut is a prefix walk. ~45 serial vocab passes become 2 reductions + k argmax passes.
+#pragma kernel SampleToken
+[numthreads(SAMPLER_THREADS, 1, 1)]
+void SampleToken(uint3 gtid : SV_GroupThreadID)
+{
+    uint tid = gtid.x;
+
+    bool fast = (top_k_val >= 1 && top_k_val <= SAMPLER_MAX_TOPK);
+    if (!fast)
+    {
+        if (tid == 0) SampleTokenSerial();
+        return;
+    }
+
+    float inv_temp = 1.0 / temperature;
+
+    // 1. Scaled logits -> probs_buf (scratch) + global max, parallel reduce.
+    //    max(scaled) == max(logit)*inv_temp, so exp(s - gmax) == exp((logit - max_l)/T).
+    float bv = -3.0e38;
+    for (uint i = tid; i < vocab_size; i += SAMPLER_THREADS)
+    {
+        float sc = logits_buf[i] * inv_temp;
+        probs_buf[i] = sc;
+        bv = max(bv, sc);
+    }
+    smp_val[tid] = bv;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint s1 = SAMPLER_THREADS / 2; s1 > 0; s1 >>= 1)
+    {
+        if (tid < s1) smp_val[tid] = max(smp_val[tid], smp_val[tid + s1]);
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (tid == 0) smp_scalar = smp_val[0];
+    GroupMemoryBarrierWithGroupSync();
+    float gmax = smp_scalar;
+
+    // 2. Full-vocab sum of exp (parallel reduce) — the top-p/min-p thresholds are defined on
+    //    full-vocab-normalized probabilities, so the full sum is required even though only the
+    //    top-k candidates can ever win.
+    float acc = 0.0;
+    for (uint i2 = tid; i2 < vocab_size; i2 += SAMPLER_THREADS)
+        acc += exp(probs_buf[i2] - gmax);
+    smp_val[tid] = acc;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint s2 = SAMPLER_THREADS / 2; s2 > 0; s2 >>= 1)
+    {
+        if (tid < s2) smp_val[tid] += smp_val[tid + s2];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (tid == 0) smp_scalar = max(smp_val[0], 1e-12);
+    GroupMemoryBarrierWithGroupSync();
+    float sum_exp = smp_scalar;
+
+    // 3. Top-k: k parallel argmax passes; each winner is knocked out of the scratch buffer.
+    uint K = (uint)top_k_val;
+    for (uint k = 0; k < K; k++)
+    {
+        float lv = -3.0e38; uint li = 0;
+        for (uint i3 = tid; i3 < vocab_size; i3 += SAMPLER_THREADS)
+        { float v = probs_buf[i3]; if (v > lv) { lv = v; li = i3; } }
+        smp_val[tid] = lv; smp_idx[tid] = li;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint s3 = SAMPLER_THREADS / 2; s3 > 0; s3 >>= 1)
+        {
+            if (tid < s3 && smp_val[tid + s3] > smp_val[tid])
+            { smp_val[tid] = smp_val[tid + s3]; smp_idx[tid] = smp_idx[tid + s3]; }
+            GroupMemoryBarrierWithGroupSync();
+        }
+        if (tid == 0)
+        {
+            uint wi = smp_idx[0];
+            smp_cand_i[k] = wi;
+            smp_cand_p[k] = exp(smp_val[0] - gmax) / sum_exp;   // full-vocab-normalized prob
+            if (wi < vocab_size) probs_buf[wi] = -3.0e38;       // knock out for the next pass
+        }
+        AllMemoryBarrierWithGroupSync(); // knock-out write must be visible to every thread's next pass
+    }
+
+    // 4. min-p / top-p / draw over <= 64 sorted candidates — trivial serial work on thread 0.
+    if (tid == 0)
+    {
+        float min_thresh = (min_p_val > 0.0) ? smp_cand_p[0] * min_p_val : 0.0;
+        float cum = 0.0;
+        uint count = 0;
+        for (uint c = 0; c < K; c++)
+        {
+            float p = smp_cand_p[c];
+            if (min_p_val > 0.0 && p < min_thresh) break;   // sorted descending: the rest fail too
+            if (top_p_val < 1.0 && cum >= top_p_val) break; // nucleus reached (crossing token kept)
+            cum += p;
+            count++;
+        }
+        if (count == 0) count = 1;
+
+        float r = runif() * cum;   // == renormalizing kept probs then drawing U(0,1)
+        float cdf = 0.0;
+        uint sampled = smp_cand_i[count - 1];
+        for (uint c2 = 0; c2 < count; c2++)
+        {
+            cdf += smp_cand_p[c2];
+            if (cdf >= r) { sampled = smp_cand_i[c2]; break; }
+        }
+        argmax_result[0] = sampled;
+    }
 }
 
 // Applies repetition + presence penalty in place to the logits, for tokens already generated this

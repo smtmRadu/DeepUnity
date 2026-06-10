@@ -53,8 +53,8 @@ namespace DeepUnity
             WarnIfNotInResources("tokenizer", tokenizer_path);
             // Tokenizer is optional during early bring-up — when the JSON isn't present yet,
             // skip it so the model can still be exercised via Predict() with token-id Tensors.
-            if (System.IO.File.Exists(tokenizer_path))
-                this.tokenizer = new Qwen3_5TokenizerFast(tokenizer_path, load_async: true);
+            // Cached per path in the LLM base (see GetOrCreateTokenizer for why).
+            this.tokenizer = GetOrCreateTokenizer(tokenizer_path, p => new Qwen3_5TokenizerFast(p, load_async: true));
 
             model = new Qwen3_5Modeling.Qwen3_5Model(params_path, maxModelLength);
             // Feed the tokenizer's main-thread ctor cost to the weights object; the single consolidated
@@ -62,10 +62,26 @@ namespace DeepUnity
             model.weights.bootTokenizerMs = tokenizer?.ctorMs ?? 0;
         }
 
+        /// <summary>
+        /// One-call scene-start prewarm — run this as a coroutine while the player is doing
+        /// something else (walking around, in a menu) and constructing/loading the model later
+        /// becomes hitch-free. It (a) starts the background tokenizer parse and caches the result
+        /// (the parse garbage otherwise triggers a ~300 ms GC collection mid-load), and (b) compiles
+        /// every compute kernel, one per frame (the driver's one-time first-dispatch cost — up to
+        /// ~800 ms for the biggest kernel — would otherwise land inside the loading window).
+        /// Idempotent; needs no model instance and no weights.
+        /// </summary>
+        public static IEnumerator Prewarm(string tokenizer_path = "Assets/DeepUnity/LLMs/Qwen3_5/Qwen3_5TokenizerFast.json")
+        {
+            GetOrCreateTokenizer(tokenizer_path, p => new Qwen3_5TokenizerFast(p, load_async: true));
+            yield return Qwen3_5Modeling.Qwen3_5Model.PrewarmKernels();
+        }
+
         /// <inheritdoc/>
         public override void Release()
         {
             model?.Dispose();
+            OnReleased(); // unhook editor event + suppress the finalizer (it would double-release off-thread)
             ConsoleMessage.Info("Qwen3.5 released from GPU");
         }
 
@@ -95,7 +111,10 @@ namespace DeepUnity
             var e = model.ForwardYielding(input_ids, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
             while (e.MoveNext()) yield return e.Current;
 
-            int tokenId = model.Sample(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
+            int[] sampled = new int[1];
+            var s = model.SampleYielding(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty, sampled);
+            while (s.MoveNext()) yield return s.Current;
+            int tokenId = sampled[0];
             if (tokenizer != null)
                 onTokenGenerated?.Invoke(tokenizer.Decode(Tensor.Constant(tokenId))[0]);
             else
@@ -109,7 +128,9 @@ namespace DeepUnity
                 e = model.ForwardYielding(nextInput, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
                 while (e.MoveNext()) yield return e.Current;
 
-                tokenId = model.Sample(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
+                s = model.SampleYielding(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty, sampled);
+                while (s.MoveNext()) yield return s.Current;
+                tokenId = sampled[0];
                 if (tokenId == Qwen3_5Modeling.Qwen3_5Config.EOS_TOKEN_ID) break;
 
                 if (tokenizer != null)
@@ -126,6 +147,10 @@ namespace DeepUnity
 
         public override IEnumerator InitializeChat(string system_prompt = "")
         {
+            // Warmup is part of initialization: kernel compiles + throwaway forwards happen here,
+            // behind the caller's loading screen, never on the first reply. Idempotent.
+            yield return Warmup();
+
             while (!IsReady) yield return new WaitForSeconds(0.01f);
             Assert.AreNotEqual(system_prompt, null);
 
@@ -149,8 +174,7 @@ namespace DeepUnity
             ids.Add(Qwen3_5Modeling.Qwen3_5Config.IM_END_TOKEN_ID);
             AppendTextTokens("\n", ids);
 
-            Tensor input_ids = Tensor.Constant(ids.ToArray());
-            var e = model.ForwardYielding(input_ids, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
+            var e = ForwardPromptChunked(ids);
             while (e.MoveNext()) yield return e.Current;
 
             LogBootSummary(sw.Elapsed.TotalMilliseconds);
@@ -198,11 +222,13 @@ namespace DeepUnity
                 AppendTextTokens("\n\n", ids);
             }
 
-            Tensor input_ids = Tensor.Constant(ids.ToArray());
-            var e = model.ForwardYielding(input_ids, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
+            var e = ForwardPromptChunked(ids);
             while (e.MoveNext()) yield return e.Current;
 
-            int tokenId = model.Sample(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
+            int[] sampled = new int[1];
+            var s = model.SampleYielding(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty, sampled);
+            while (s.MoveNext()) yield return s.Current;
+            int tokenId = sampled[0];
             string tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
             onTokenGenerated?.Invoke(tokenStr);
             yield return null;
@@ -214,7 +240,9 @@ namespace DeepUnity
                 e = model.ForwardYielding(nextInput, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
                 while (e.MoveNext()) yield return e.Current;
 
-                tokenId = model.Sample(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
+                s = model.SampleYielding(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty, sampled);
+                while (s.MoveNext()) yield return s.Current;
+                tokenId = sampled[0];
                 if (tokenId == Qwen3_5Modeling.Qwen3_5Config.EOS_TOKEN_ID)
                 {
                     ConsoleMessage.Info("Qwen3.5 ended the response.");
@@ -242,15 +270,40 @@ namespace DeepUnity
                 $"Qwen3.5 model booted up — {total:0} ms total\n" +
                 $"   tokenizer ctor (main thread) : {w.bootTokenizerMs:0} ms\n" +
                 $"   compute kernels lookup       : {w.bootKernelsMs:0} ms\n" +
-                $"   weight buffers alloc         : {w.allocMs:0} ms\n" +
+                $"   weight manifest build        : {w.allocMs:0} ms (buffers created lazily during upload)\n" +
                 $"   kv cache alloc               : {w.bootCacheMs:0} ms\n" +
                 $"   rope kick (async)            : {w.bootRopeMs:0} ms\n" +
                 $"   scratch buffers alloc        : {w.bootScratchMs:0} ms\n" +
                 $"   = blocking (one frame)       : {blocking:0} ms\n" +
                 $"   rope compute (async)         : {w.ropeAsyncMs:0} ms (overlaps upload)\n" +
-                $"   weight upload (async, GPU)   : {w.uploadMs:0} ms over {w.uploadFrames} frames, worst frame {w.worstUploadMs:0.0} ms\n" +
+                $"   weight stream (async)        : {w.uploadMs:0} ms over {w.uploadFrames} frames, worst slice {w.worstUploadMs:0.0} ms\n" +
                 $"   kernel warmup (behind load)  : {w.warmupMs:0} ms (0 = warmup didn't run)\n" +
                 $"   system prompt cache          : {systemPromptMs:0} ms");
+        }
+
+        // Forwards a prompt in small chunks — the KV cache / SSM states carry context between them —
+        // so each yielded frame's GPU work is one layer of CHUNK tokens instead of one layer of the
+        // whole prompt. A ~60-token prompt forwarded whole costs ~70 ms of GPU per layer-frame
+        // (~14 fps for ~1.5 s during InitializeChat); chunked, frames stay within a 60 fps budget.
+        IEnumerator ForwardPromptChunked(System.Collections.Generic.List<float> ids)
+        {
+            if (!Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE)
+            {
+                // Chunking needs the cache to carry state; without it, forward the whole prompt.
+                var all = model.ForwardYielding(Tensor.Constant(ids.ToArray()), useCache: false, lastPosOnly: true);
+                while (all.MoveNext()) yield return all.Current;
+                yield break;
+            }
+
+            const int CHUNK = 8;
+            for (int start = 0; start < ids.Count; start += CHUNK)
+            {
+                int len = Math.Min(CHUNK, ids.Count - start);
+                float[] part = new float[len];
+                for (int i = 0; i < len; i++) part[i] = ids[start + i];
+                var e = model.ForwardYielding(Tensor.Constant(part), useCache: true, lastPosOnly: true);
+                while (e.MoveNext()) yield return e.Current;
+            }
         }
 
         void AppendTextTokens(string text, System.Collections.Generic.List<float> dst)

@@ -52,9 +52,32 @@ namespace DeepUnity
         /// <summary>
         /// Compiles every compute kernel (the one-time first-dispatch cost) behind a loading screen so the
         /// first real reply isn't a freeze. Default is a no-op; models with a warmup path override it.
-        /// Idempotent — call once after construction, before <see cref="InitializeChat"/>.
+        /// Idempotent. <see cref="InitializeChat"/> runs it automatically — call it yourself only when
+        /// you want the warmup to happen at a different moment (e.g. earlier, behind your own UI).
         /// </summary>
         public virtual IEnumerator Warmup() { yield break; }
+
+        // One parse per tokenizer file per session. Tokenizers are immutable vocab data, but parsing
+        // one (10+ MB of JSON into ~250k dictionary entries) both costs ~1 s and feeds the GC enough
+        // garbage to trigger a full stop-the-world collection — re-doing that on every model
+        // construction caused visible frame freezes. Keyed by path; shared by all LLM subclasses.
+        static readonly Dictionary<string, object> _tokenizerCache = new Dictionary<string, object>();
+
+        /// <summary>
+        /// Returns the cached tokenizer for <paramref name="path"/>, creating (and caching) it via
+        /// <paramref name="create"/> on first use. Returns null when the file doesn't exist (models
+        /// treat the tokenizer as optional during bring-up). Main-thread only.
+        /// </summary>
+        protected static T GetOrCreateTokenizer<T>(string path, Func<string, T> create) where T : class
+        {
+            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
+                return null;
+            if (_tokenizerCache.TryGetValue(path, out object cached))
+                return (T)cached;
+            T tok = create(path);
+            _tokenizerCache[path] = tok;
+            return tok;
+        }
 
         /// <summary>Single forward pass over <paramref name="input_ids"/>; returns the logits tensor.</summary>
         public abstract Tensor Predict(Tensor input_ids, Tensor attn_mask = null);
@@ -83,6 +106,20 @@ namespace DeepUnity
 
         /// <summary>Releases all GPU buffers held by the model. Safe to call more than once.</summary>
         public abstract void Release();
+
+        /// <summary>
+        /// Call at the end of a concrete <see cref="Release"/>: unhooks the editor play-mode event
+        /// (a static event keeps the dead model alive — handlers accumulate per construction) and
+        /// suppresses the finalizer (which would call Release again, off the main thread, where
+        /// Unity GPU APIs are illegal).
+        /// </summary>
+        protected void OnReleased()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeChanged;
+#endif
+            GC.SuppressFinalize(this);
+        }
 
         private static readonly HashSet<string> _resourcesWarned = new HashSet<string>();
 

@@ -772,42 +772,72 @@ namespace DeepUnity
                 cs.Dispatch(kMarkSeen, 1, 1, 1);
             }
 
-            public int SampleGreedy(float presencePenalty = 0f, float repetitionPenalty = 1f)
+            // Queues the penalty + sampler (+ mark-seen) kernels; the chosen token id lands in
+            // argmaxBuf on the GPU. Reading it back is the caller's job (sync or async).
+            void DispatchSampleKernels(float temperature, int topK, float topP, float minP,
+                                       float presencePenalty, float repetitionPenalty)
             {
                 ApplyPenalties(presencePenalty, repetitionPenalty);
                 cs.SetInt("vocab_size", vocab);
-                cs.SetBuffer(kArgMax, "logits_buf", logitsBuf);
-                cs.SetBuffer(kArgMax, "argmax_result", argmaxBuf);
-                cs.Dispatch(kArgMax, 1, 1, 1);
+                if (temperature == 0f)
+                {
+                    cs.SetBuffer(kArgMax, "logits_buf", logitsBuf);
+                    cs.SetBuffer(kArgMax, "argmax_result", argmaxBuf);
+                    cs.Dispatch(kArgMax, 1, 1, 1);
+                }
+                else
+                {
+                    cs.SetFloat("temperature", temperature);
+                    cs.SetInt("top_k_val", topK);
+                    cs.SetFloat("top_p_val", topP);
+                    cs.SetFloat("min_p_val", minP);
+                    cs.SetInt("rng_seed", UnityEngine.Random.Range(int.MinValue, int.MaxValue));
+                    cs.SetBuffer(kSample, "logits_buf", logitsBuf);
+                    cs.SetBuffer(kSample, "probs_buf", probsBuf);
+                    cs.SetBuffer(kSample, "argmax_result", argmaxBuf);
+                    cs.Dispatch(kSample, 1, 1, 1);
+                }
                 MarkSampledSeen();
-                uint[] r = new uint[1]; argmaxBuf.GetData(r);
-                return (int)r[0];
             }
+
+            public int SampleGreedy(float presencePenalty = 0f, float repetitionPenalty = 1f)
+                => Sample(0f, 0, 1f, 0f, presencePenalty, repetitionPenalty);
 
             public int SampleStochastic(float temperature, int topK, float topP, float minP,
                                         float presencePenalty = 0f, float repetitionPenalty = 1f)
+                => Sample(temperature, topK, topP, minP, presencePenalty, repetitionPenalty);
+
+            // Synchronous sample: blocks the main thread until every queued GPU dispatch (the whole
+            // forward) has finished. Fine for offline use; interactive paths should prefer
+            // SampleYielding, which waits on an AsyncGPUReadback instead of stalling the frame.
+            public int Sample(float temperature, int topK, float topP, float minP,
+                              float presencePenalty = 0f, float repetitionPenalty = 1f)
             {
-                ApplyPenalties(presencePenalty, repetitionPenalty);
-                cs.SetInt("vocab_size", vocab);
-                cs.SetFloat("temperature", temperature);
-                cs.SetInt("top_k_val", topK);
-                cs.SetFloat("top_p_val", topP);
-                cs.SetFloat("min_p_val", minP);
-                cs.SetInt("rng_seed", UnityEngine.Random.Range(int.MinValue, int.MaxValue));
-                cs.SetBuffer(kSample, "logits_buf", logitsBuf);
-                cs.SetBuffer(kSample, "probs_buf", probsBuf);
-                cs.SetBuffer(kSample, "argmax_result", argmaxBuf);
-                cs.Dispatch(kSample, 1, 1, 1);
-                MarkSampledSeen();
+                DispatchSampleKernels(temperature, topK, topP, minP, presencePenalty, repetitionPenalty);
                 uint[] r = new uint[1]; argmaxBuf.GetData(r);
                 return (int)r[0];
             }
 
-            public int Sample(float temperature, int topK, float topP, float minP,
-                              float presencePenalty = 0f, float repetitionPenalty = 1f)
-                => temperature == 0f
-                    ? SampleGreedy(presencePenalty, repetitionPenalty)
-                    : SampleStochastic(temperature, topK, topP, minP, presencePenalty, repetitionPenalty);
+            // Async sample: same kernels, but the 4-byte token id comes back via AsyncGPUReadback,
+            // so the main thread never blocks on the GPU queue (the sync GetData stalls for the
+            // entire in-flight forward — ~hundreds of ms right after a prefill). Writes result[0].
+            public IEnumerator SampleYielding(float temperature, int topK, float topP, float minP,
+                                              float presencePenalty, float repetitionPenalty, int[] result)
+            {
+                DispatchSampleKernels(temperature, topK, topP, minP, presencePenalty, repetitionPenalty);
+                if (SystemInfo.supportsAsyncGPUReadback)
+                {
+                    var req = UnityEngine.Rendering.AsyncGPUReadback.Request(argmaxBuf);
+                    while (!req.done) yield return null;
+                    if (!req.hasError)
+                    {
+                        result[0] = (int)req.GetData<uint>()[0];
+                        yield break;
+                    }
+                }
+                uint[] r = new uint[1]; argmaxBuf.GetData(r); // fallback: sync readback
+                result[0] = (int)r[0];
+            }
 
             public Tensor ReadLogits(int seqLen)
                 => seqLen == 1 ? Tensor.Constant(logitsBuf, vocab) : Tensor.Constant(logitsBuf, seqLen, vocab);
@@ -815,33 +845,147 @@ namespace DeepUnity
             public void ResetCache()
             {
                 cache.Reset();
+                // Zero the SSM states on the GPU (the KV caches need no zeroing — CachedTokenCount
+                // masks them). Done here rather than in Qwen3_5Cache so it can use the ZeroBuffer
+                // kernel instead of main-thread SetData with managed zero arrays.
+                if (Qwen3_5Config.USE_KV_CACHE)
+                {
+                    for (int i = 0; i < numLayers; i++)
+                    {
+                        if (cache.convStates[i] != null) ZeroFloatBuffer(cache.convStates[i]);
+                        if (cache.recurrentStates[i] != null) ZeroFloatBuffer(cache.recurrentStates[i]);
+                    }
+                }
                 // Clear generated-token history so penalties start fresh for the new sequence.
                 cs.SetInt("vocab_size", vocab);
                 cs.SetBuffer(kZeroSeen, "token_seen", tokenSeenBuf);
                 cs.Dispatch(kZeroSeen, (vocab + 255) / 256, 1, 1);
             }
 
+            void ZeroFloatBuffer(ComputeBuffer buf)
+            {
+                cs.SetInt("buffer_size", buf.count);
+                cs.SetBuffer(kZero, "buf_a", buf);
+                cs.Dispatch(kZero, Div256(buf.count), 1, 1);
+            }
+
             bool _warmedUp;
-            // Runs throwaway forwards + both sampler paths so the driver compiles every compute kernel
-            // (the one-time first-dispatch cost) here, behind the loading screen, instead of when the user
-            // first interacts. Two token counts cover both kernel variants — multi-token (prefill: non-vec
-            // MLP / conv-prefill / multi-token attention) and single-token (generation: the *1Vec kernels).
-            // Output is discarded; per-layer yields keep the UI alive; idempotent (runs once per model).
+
+            // Every buffer property name in Qwen3_5CS.compute; used by WarmupKernelsIndividually to
+            // bind a distinct dummy to each (SetBuffer on a name a kernel doesn't use is a no-op;
+            // distinct buffers because D3D11 forbids the same UAV in two slots of one dispatch).
+            static readonly string[] WARMUP_BUFFER_NAMES =
+            {
+                "embed_weights", "lm_weights", "norm_gamma",
+                "W_Q", "W_K", "W_V", "W_O",
+                "W_inProjQKV", "W_inProjZ", "W_inProjA", "W_inProjB",
+                "conv_weight", "dt_bias", "A_log", "W_outProj",
+                "mlp_gate_w", "mlp_up_w", "mlp_down_w",
+                "rope_cos", "rope_sin",
+                "token_ids", "embed_output", "norm_output", "norm_input",
+                "X", "Q_out", "K_out", "V_out", "gate_out", "rope_buf",
+                "kv_cache", "kv_new", "Q", "K", "V",
+                "AttentionWeights", "AttendedValues", "O", "gate_in",
+                "input", "intermediate", "mlp_input", "mlp_output",
+                "conv_state", "recurrent_state",
+                "linear_qkv", "linear_q", "linear_k", "linear_v",
+                "linear_q_norm", "linear_k_norm",
+                "linear_a", "linear_b", "linear_z",
+                "linear_a_w", "linear_b_w", "linear_z_w",
+                "linear_y", "linear_y_norm",
+                "lm_input", "lm_output",
+                "logits_buf", "probs_buf", "argmax_result", "token_seen",
+                "buf_a", "buf_b",
+            };
+
+            // Every integer uniform that gates a kernel's thread guards. Zeroing them makes every
+            // warmup dispatch degenerate (all threads early-out), so binding dummies is safe.
+            static readonly string[] WARMUP_SIZE_UNIFORMS =
+            {
+                "batch_size", "sequence_length_q", "sequence_length_k", "sequence_length_v",
+                "embedding_dim", "inner_embedding_dim", "num_heads_q", "num_heads_kv", "head_dim",
+                "seq_len", "seq_len_q", "seq_len_k", "hidden_size", "intermediate_size", "num_vectors",
+                "rope_rot_dim", "position_offset", "rope_num_heads", "cache_len",
+                "linear_conv_dim", "linear_value_dim", "linear_key_dim", "linear_num_v_heads",
+                "linear_conv_kernel", "linear_head_k_dim", "linear_head_v_dim",
+                "activation_type", "vocab_size", "top_k_val", "rng_seed",
+                "buffer_size", "copy_src_offset",
+            };
+
+            static readonly string[] ALL_KERNEL_NAMES =
+            {
+                "EmbeddingLookup", "RmsNormHidden", "RmsNormHead",
+                "QProjGated", "KProj", "VProj", "OProj",
+                "ApplyRopePartial", "WriteCacheFull", "ApplyMaskCausal", "SoftmaxRows",
+                "ComputeAttentionScores", "AttendValues", "ApplyAttnGate",
+                "LinearInProjQKV", "LinearInProjZ", "LinearInProjA", "LinearInProjB",
+                "CausalConv1DUpdate", "CausalConv1DPrefill", "SplitConvOutQKV",
+                "L2NormPerHead", "DeltaNetRecurrent", "RMSNormGated", "LinearOutProj",
+                "GateUp", "Down", "GateUp1Vec", "Down1Vec",
+                "LmHeadPredict", "LmHeadPredict1Vec", "ArgMax", "SampleToken",
+                "ZeroBuffer", "CopyBuffer", "CopySlice", "AddResidual",
+                "ApplyRepetitionPresencePenalty", "MarkSampledTokenSeen", "ZeroTokenSeen",
+            };
+
+            static bool _kernelsPrewarmed;
+
+            // The driver compiles each kernel's ISA on its FIRST dispatch — a one-time per-session
+            // cost of up to ~800 ms for the big kernels (DeltaNet). This pass dispatches every kernel
+            // once with zero-size uniforms — ONE kernel compile per frame. It is STATIC and needs no
+            // model or weights, so a game can run it at scene start (e.g. while the player walks
+            // around), long before any LLM is constructed; Warmup() also runs it (idempotent).
+            public static System.Collections.IEnumerator PrewarmKernels()
+            {
+                if (_kernelsPrewarmed) yield break;
+                _kernelsPrewarmed = true;
+
+                ComputeShader shader = DeepUnityMeta.Qwen3_5CS;
+
+                var dummies = new ComputeBuffer[WARMUP_BUFFER_NAMES.Length];
+                for (int i = 0; i < dummies.Length; i++)
+                    dummies[i] = new ComputeBuffer(256, 4, ComputeBufferType.Structured);
+
+                foreach (string u in WARMUP_SIZE_UNIFORMS) shader.SetInt(u, 0);
+
+                foreach (string name in ALL_KERNEL_NAMES)
+                {
+                    int k = shader.FindKernel(name);
+                    for (int i = 0; i < WARMUP_BUFFER_NAMES.Length; i++)
+                        shader.SetBuffer(k, WARMUP_BUFFER_NAMES[i], dummies[i]);
+                    shader.Dispatch(k, 1, 1, 1);
+                    yield return null;
+                }
+
+                foreach (var d in dummies) d.Release();
+            }
+
+            // Compiles every compute kernel behind the loading screen so the first real reply is fast:
+            // first one degenerate dispatch per kernel per frame (the actual driver-compile cost,
+            // overlapping the weight stream), then throwaway forwards + both sampler paths to exercise
+            // the real code paths. Two token counts cover both kernel variants — multi-token (prefill)
+            // and single-token (generation, the *1Vec kernels). Idempotent (runs once per model).
             public System.Collections.IEnumerator Warmup()
             {
                 if (_warmedUp) yield break;
-                while (!IsReady) yield return null;
                 var sw = System.Diagnostics.Stopwatch.StartNew();
 
+                var pk = PrewarmKernels();              // no-op if already prewarmed at scene start
+                while (pk.MoveNext()) yield return pk.Current;
+
+                while (!IsReady) yield return null;
+
+                int[] tok = new int[1];
                 foreach (int n in new[] { 4, 1 })
                 {
                     // Match the real inference path (useCache) so the cache-write/update kernels warm too.
                     var e = ForwardYielding(Tensor.Constant(new float[n]), useCache: Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
                     while (e.MoveNext()) yield return e.Current;
-                    SampleStochastic(1f, 20, 1f, 0f, 0f, 1f); // warms penalty + stochastic sampler kernels
-                    yield return null;
+                    // Async readback: a sync Sample here blocks ~200 ms waiting for the queued forward.
+                    var s = SampleYielding(1f, 20, 1f, 0f, 0f, 1f, tok);
+                    while (s.MoveNext()) yield return s.Current;
                 }
-                SampleGreedy(); // warms the greedy (temperature==0) path too
+                var g = SampleYielding(0f, 0, 1f, 0f, 0f, 1f, tok); // greedy (temperature==0) path
+                while (g.MoveNext()) yield return g.Current;
                 yield return null;
 
                 ResetCache(); // undo the warmup's token_seen marks / cache writes
