@@ -8,8 +8,9 @@ namespace DeepUnity.Tutorials
         [Button("SetPPOGPUHP")]
         // [Button("SetDefaultHP")]
         [SerializeField] Rigidbody ball;
-        
-        [SerializeField] const float rotationSpeed = 1f;
+
+        [Button("SetSACGPUHP")]
+        [SerializeField] float rotationSpeed = 1f;
 
         public override void CollectObservations(StateVector sensorBuffer)
         {
@@ -71,13 +72,51 @@ namespace DeepUnity.Tutorials
 
         public void SetSACHP()
         {
+            SetSACGPUHP();
+            model.config.trainer = TrainerType.SAC; // same verified setup, CPU trainer (~10x slower)
+            print("Config changed for Balance ball (SAC CPU)");
+        }
+
+        // Verified-convergent SAC setup (2026-06-10, see ReinforcementLearning/FIXES.md):
+        // takeoff at ~30k decisions, episodes then reach the 10k maxStep cap.
+        public void SetSACGPUHP()
+        {
             Utils.Random.Seed = 0;
-            model.config.trainer = TrainerType.SAC;
+
+            model.config.trainer = TrainerType.SACGPU;
             model.config.actorLearningRate = 1e-3f;
             model.config.criticLearningRate = 1e-3f;
+            model.config.gamma = 0.99f;
+            model.config.LRSchedule = false;
+            model.config.replayBufferSize = 1_000_000;
+            model.config.minibatchSize = 64;
+            model.config.updateInterval = 1;      // UTD ~1 (the old default of 50 undertrains 50x)
+            model.config.updateAfter = 1024;
+            model.config.updatesNum = 1;
+            model.config.alpha = 0.005f;          // scaled to the 0.025/step reward
+            model.config.tau = 0.005f;
+            model.config.timescaleAdjustment = TimescaleAdjustmentType.Constant;
             model.config.timescale = 20;
 
-            print("Config changed for Balance ball");
+            model.standardDeviationScale = 1.5f;
+            model.normalize = false;
+            model.trainingDevice = Device.GPU;
+
+            var requester = GetComponent<DecisionRequester>();
+            if (requester != null)
+            {
+                requester.decisionPeriod = 5;     // action repeat: decisive for dQ/da signal
+                requester.takeActionsBetweenDecisions = true;
+                requester.maxStep = 10_000;
+            }
+
+#if UNITY_EDITOR
+            UnityEditor.EditorUtility.SetDirty(model.config);
+            UnityEditor.EditorUtility.SetDirty(model);
+            UnityEditor.EditorUtility.SetDirty(this);
+            if (requester != null) UnityEditor.EditorUtility.SetDirty(requester);
+#endif
+            print("Config changed for Balance ball (SACGPU): updateInterval=1, alpha=0.005, decisionPeriod=5");
         }
     }
 

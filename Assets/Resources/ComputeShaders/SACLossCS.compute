@@ -1,0 +1,220 @@
+// SACLossCS -- SAC loss-shaped kernels for the FullGPU training path (SACGPUTrainer).
+//
+// All buffers are FP32. Gradient scale convention matches the CPU stack:
+// loss kernels emit PER-SAMPLE gradients (no 1/B); RLBoosterCS.DenseBwdW/DenseBwdB
+// average over the batch internally, identical to the CPU Dense.Backward.
+//
+// SAC math (mirrors SACTrainer.cs, verified against finite differences):
+//   sigma_pre = sigma_net_out * sigma_scale
+//   sigma     = clamp(sigma_pre, SIGMA_LO, SIGMA_HI)
+//   u         = mu + sigma * ksi              (ksi ~ N(0,1), uploaded from CPU)
+//   a         = tanh(u)
+//   logpi     = -A/2*ln(2pi) - sum(ln sigma) - 0.5*sum(ksi^2)
+//               - sum( 2*(ln2 - u - softplus(-2u)) )
+//   target    y = r + gamma * (1 - done + truncated) * (min(Q1t,Q2t) - alpha*logpi')
+//   critic    dQ = (Q - y)                    (== 0.5 * d/dQ (Q-y)^2 * 2, per-sample)
+//   actor     J = min(Q1,Q2) - alpha*logpi    (maximized; we emit -dJ for the minimizer)
+//     dQ/du            = dQ/da * (1 - a^2)
+//     dlogpi/dmu       = 2*a
+//     dlogpi/dsigma    = 2*a*ksi - 1/sigma
+//     dJ/dmu           = dQ/du - alpha * dlogpi/dmu
+//     dJ/dsigma        = dQ/du * ksi - alpha * dlogpi/dsigma
+//     dJ/dsigma_netout = dJ/dsigma * clip_mask(sigma_pre) * sigma_scale
+
+// =================================================================== Buffers
+RWStructuredBuffer<float> muBuf;      // [B, A] mu network output
+RWStructuredBuffer<float> sigBuf;     // [B, A] sigma network RAW output (pre sigma_scale)
+RWStructuredBuffer<float> noiseBuf;   // [B, A] standard-normal ksi
+RWStructuredBuffer<float> actBuf;     // [B, A] out: a = tanh(mu + sigma*ksi)
+RWStructuredBuffer<float> logPiBuf;   // [B]    out: per-row log pi
+RWStructuredBuffer<float> stateBuf;   // [B, S] states (or next-states)
+RWStructuredBuffer<float> pairBuf;    // [B, S+A] out: concat(state, action)
+
+RWStructuredBuffer<float> q1Buf;      // [B] Q1 head output
+RWStructuredBuffer<float> q2Buf;      // [B] Q2 head output
+RWStructuredBuffer<float> rewBuf;     // [B] rewards
+RWStructuredBuffer<float> doneBuf;    // [B] done flags
+RWStructuredBuffer<float> truncBuf;   // [B] truncated flags
+RWStructuredBuffer<float> yBuf;       // [B] out: Q targets
+RWStructuredBuffer<float> dQ1Buf;     // [B] out: grad wrt Q1 output
+RWStructuredBuffer<float> dQ2Buf;     // [B] out: grad wrt Q2 output
+RWStructuredBuffer<float> jBuf;       // [B] out: per-row J (logging)
+
+RWStructuredBuffer<float> dPairBuf;   // [B, S+A] summed input grad of Q nets
+RWStructuredBuffer<float> srcBuf;     // generic source for AddInto / Polyak
+RWStructuredBuffer<float> dQdaBuf;    // [B, A] out: action slice of dPairBuf
+RWStructuredBuffer<float> dMuBuf;     // [B, A] out: per-sample grad passed to mu net backward
+RWStructuredBuffer<float> dSigBuf;    // [B, A] out: per-sample grad passed to sigma net backward
+
+// =================================================================== Uniforms
+int B;            // batch size
+int S_;           // state dim
+int A_;           // continuous action dim
+int N_;           // generic element count (AddInto / Polyak)
+float alpha;      // entropy temperature
+float gamma_;     // discount
+float sigma_scale;
+float tau_;       // polyak factor
+
+#define LN_2PI   1.83787706640934548356065947281124f
+#define LN_2     0.69314718055994530941723212145818f
+#define SIGMA_LO 1e-6f
+#define SIGMA_HI 10.0f
+
+float softplus_stable(float x)
+{
+    // matches the standalone-verified guard: exact for large x, no overflow
+    return x > 20.0f ? x : log(1.0f + exp(x));
+}
+
+// =================================================================== Sample + logpi
+// One thread per row. A_ is small (continuous action dim), serial loop is fine.
+// Reads muBuf/sigBuf/noiseBuf, writes actBuf and logPiBuf.
+#pragma kernel SacSampleLogPi
+[numthreads(256, 1, 1)]
+void SacSampleLogPi(uint3 dt : SV_DispatchThreadID)
+{
+    int b = (int)dt.x;
+    if (b >= B) return;
+
+    float logGauss = -0.5f * (float)A_ * LN_2PI;
+    float corr = 0.0f;
+
+    for (int a = 0; a < A_; ++a)
+    {
+        int idx = b * A_ + a;
+        float s = clamp(sigBuf[idx] * sigma_scale, SIGMA_LO, SIGMA_HI);
+        float ksi = noiseBuf[idx];
+        float u = muBuf[idx] + s * ksi;
+        float at = tanh(u);
+        actBuf[idx] = at;
+
+        logGauss += -log(s) - 0.5f * ksi * ksi;
+        corr += 2.0f * (LN_2 - u - softplus_stable(-2.0f * u));
+    }
+    logPiBuf[b] = logGauss - corr;
+}
+
+// =================================================================== Concat(state, action) -> pair
+// One thread per element of pairBuf [B, S+A].
+#pragma kernel WritePairSA
+[numthreads(256, 1, 1)]
+void WritePairSA(uint3 dt : SV_DispatchThreadID)
+{
+    int idx = (int)dt.x;
+    int row_len = S_ + A_;
+    int total = B * row_len;
+    if (idx >= total) return;
+
+    int b = idx / row_len;
+    int col = idx % row_len;
+    pairBuf[idx] = col < S_ ? stateBuf[b * S_ + col] : actBuf[b * A_ + (col - S_)];
+}
+
+// =================================================================== Q target
+// y = r + gamma * (1 - done + truncated) * (min(Q1t,Q2t) - alpha*logpi')
+// (bootstrap restored for max-step truncations, zeroed for true terminals)
+#pragma kernel SacQTarget
+[numthreads(256, 1, 1)]
+void SacQTarget(uint3 dt : SV_DispatchThreadID)
+{
+    int b = (int)dt.x;
+    if (b >= B) return;
+
+    float bootstrap = 1.0f - doneBuf[b] + truncBuf[b];
+    float minQ = min(q1Buf[b], q2Buf[b]);
+    yBuf[b] = rewBuf[b] + gamma_ * bootstrap * (minQ - alpha * logPiBuf[b]);
+}
+
+// =================================================================== Critic grad
+// Per-sample: dQ = (Q - y). Equals CPU `Loss.MSE.Grad * 0.5` (= 2(Q-y)*0.5).
+#pragma kernel SacCriticGrad
+[numthreads(256, 1, 1)]
+void SacCriticGrad(uint3 dt : SV_DispatchThreadID)
+{
+    int b = (int)dt.x;
+    if (b >= B) return;
+    dQ1Buf[b] = q1Buf[b] - yBuf[b];
+    dQ2Buf[b] = q2Buf[b] - yBuf[b];
+}
+
+// =================================================================== min(Q1,Q2) select grads + J
+// dmin/dQ1 = [Q1 <= Q2], dmin/dQ2 = 1 - that (same tie-break as CPU SACTrainer).
+// Also logs J = minQ - alpha*logpi per row.
+#pragma kernel SacMinQSelect
+[numthreads(256, 1, 1)]
+void SacMinQSelect(uint3 dt : SV_DispatchThreadID)
+{
+    int b = (int)dt.x;
+    if (b >= B) return;
+    float q1 = q1Buf[b];
+    float q2 = q2Buf[b];
+    float m1 = q1 <= q2 ? 1.0f : 0.0f;
+    dQ1Buf[b] = m1;
+    dQ2Buf[b] = 1.0f - m1;
+    jBuf[b] = min(q1, q2) - alpha * logPiBuf[b];
+}
+
+// =================================================================== dst += src (generic)
+#pragma kernel AddInto
+[numthreads(256, 1, 1)]
+void AddInto(uint3 dt : SV_DispatchThreadID)
+{
+    int idx = (int)dt.x;
+    if (idx >= N_) return;
+    dPairBuf[idx] += srcBuf[idx];
+}
+
+// =================================================================== Slice action columns of dPair
+#pragma kernel SliceActionGrad
+[numthreads(256, 1, 1)]
+void SliceActionGrad(uint3 dt : SV_DispatchThreadID)
+{
+    int idx = (int)dt.x;
+    int total = B * A_;
+    if (idx >= total) return;
+    int b = idx / A_;
+    int a = idx % A_;
+    dQdaBuf[idx] = dPairBuf[b * (S_ + A_) + S_ + a];
+}
+
+// =================================================================== Actor grads
+// Emits per-sample -dJ/dmu and -dJ/dsigma_netout (minimizer convention),
+// matching SACTrainer.UpdatePolicy exactly.
+#pragma kernel SacActorGrad
+[numthreads(256, 1, 1)]
+void SacActorGrad(uint3 dt : SV_DispatchThreadID)
+{
+    int idx = (int)dt.x;
+    int total = B * A_;
+    if (idx >= total) return;
+
+    float s_pre = sigBuf[idx] * sigma_scale;
+    float s = clamp(s_pre, SIGMA_LO, SIGMA_HI);
+    float clip_mask = (s_pre >= SIGMA_LO && s_pre <= SIGMA_HI) ? 1.0f : 0.0f;
+
+    float at = actBuf[idx];
+    float ksi = noiseBuf[idx];
+    float dQda = dQdaBuf[idx];
+
+    float dQdu = dQda * (1.0f - at * at);
+    float dLogPi_dMu = 2.0f * at;
+    float dLogPi_dSigma = 2.0f * at * ksi - 1.0f / s;
+
+    float dJ_dMu = dQdu - alpha * dLogPi_dMu;
+    float dJ_dSigma = dQdu * ksi - alpha * dLogPi_dSigma;
+
+    dMuBuf[idx] = -dJ_dMu;
+    dSigBuf[idx] = -dJ_dSigma * clip_mask * sigma_scale;
+}
+
+// =================================================================== Polyak soft update
+// dPairBuf (bound to target param P) = (1-tau)*target + tau*online (srcBuf).
+#pragma kernel Polyak
+[numthreads(256, 1, 1)]
+void Polyak(uint3 dt : SV_DispatchThreadID)
+{
+    int idx = (int)dt.x;
+    if (idx >= N_) return;
+    dPairBuf[idx] = (1.0f - tau_) * dPairBuf[idx] + tau_ * srcBuf[idx];
+}

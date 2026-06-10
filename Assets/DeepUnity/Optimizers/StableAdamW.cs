@@ -7,6 +7,7 @@ namespace DeepUnity.Optimizers
     // Stable and low-precision training for large-scale vision-language models Mitchell Wortsman∗1 Tim Dettmers∗1 Luke Zettlemoyer12 Ari Morcos†2
     // Ali Farhadi†1 Ludwig Schmidt†134
     // https://optimi.benjaminwarner.dev/optimizers/stableadamw/
+    [System.Serializable]
     public sealed class StableAdamW : Optimizer
     {
         [SerializeField]private float beta1;

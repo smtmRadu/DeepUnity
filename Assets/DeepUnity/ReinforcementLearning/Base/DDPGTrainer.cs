@@ -42,9 +42,21 @@ namespace DeepUnity.ReinforcementLearning
             }
 
 
-            // Initialize optimizers
-            optim_q1 = new StableAdamW(model.q1Network.Parameters(), hp.criticLearningRate, weight_decay: 0f);
-            optim_mu = new StableAdamW(model.muNetwork.Parameters(), hp.actorLearningRate, weight_decay: 0f);
+            // Initialize optimizers (resume moments from disk when available — order
+            // matches SerializeOptimizerStates: [q1, mu])
+            if (optimizer_states == null || optimizer_states.Length < 2)
+            {
+                optim_q1 = new StableAdamW(model.q1Network.Parameters(), hp.criticLearningRate, weight_decay: 0f);
+                optim_mu = new StableAdamW(model.muNetwork.Parameters(), hp.actorLearningRate, weight_decay: 0f);
+            }
+            else
+            {
+                optim_q1 = JsonUtility.FromJson<StableAdamW>(optimizer_states[0]);
+                optim_q1.parameters = model.q1Network.Parameters();
+
+                optim_mu = JsonUtility.FromJson<StableAdamW>(optimizer_states[1]);
+                optim_mu.parameters = model.muNetwork.Parameters();
+            }
 
             // Initialize schedulers
             int totalGradientSteps = Math.Max(1, (int)Math.Min(int.MaxValue, (long)hp.maxSteps * hp.updatesNum / Math.Max(1, hp.updateInterval)));

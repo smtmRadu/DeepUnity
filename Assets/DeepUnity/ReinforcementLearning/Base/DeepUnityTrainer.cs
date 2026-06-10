@@ -279,6 +279,9 @@ namespace DeepUnity.ReinforcementLearning
                     case TrainerType.SAC:
                         Instance = go.AddComponent<SACTrainer>();
                         break;
+                    case TrainerType.SACGPU:
+                        Instance = go.AddComponent<SACGPUTrainer>();
+                        break;
                     case TrainerType.TD3:
                         Instance = go.AddComponent<TD3Trainer>();
                         break;
@@ -299,6 +302,7 @@ namespace DeepUnity.ReinforcementLearning
                     TrainerType.PPO => Instance.hp.bufferSize,
                     TrainerType.PPOGPU => Instance.hp.bufferSize,
                     TrainerType.SAC => Instance.hp.replayBufferSize,
+                    TrainerType.SACGPU => Instance.hp.replayBufferSize,
                     TrainerType.TD3 => Instance.hp.replayBufferSize,
                     TrainerType.DDPG => Instance.hp.replayBufferSize,
                     TrainerType.VPG => Instance.hp.bufferSize,

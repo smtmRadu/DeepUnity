@@ -70,6 +70,8 @@ namespace DeepUnity.ReinforcementLearning
             Directory.CreateDirectory(reportDirectory);
 
             TrainingStatistics stats = GetComponent<TrainingStatistics>();
+            if (stats == null)
+                stats = FindObjectOfType<TrainingStatistics>(); // batch runners attach it to the agent, not this controller
             DeepUnityTrainer trainer = DeepUnityTrainer.Instance;
 
             string reportPath = Path.Combine(reportDirectory, "report.md");

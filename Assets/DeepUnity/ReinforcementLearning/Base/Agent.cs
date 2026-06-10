@@ -586,6 +586,7 @@ namespace DeepUnity.ReinforcementLearning
                     EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
                 }
                 else if (DeepUnityTrainer.Instance.GetType() == typeof(SACTrainer)
+                    || DeepUnityTrainer.Instance.GetType() == typeof(SACGPUTrainer)
                     || DeepUnityTrainer.Instance.GetType() == typeof(TD3Trainer)
                     || DeepUnityTrainer.Instance.GetType() == typeof(DDPGTrainer))
                 {

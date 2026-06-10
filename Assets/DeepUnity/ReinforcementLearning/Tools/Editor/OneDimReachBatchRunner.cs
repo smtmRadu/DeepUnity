@@ -26,6 +26,7 @@ namespace DeepUnity.ReinforcementLearning
             public float actorLearningRate;
             public float criticLearningRate;
             public int timescale;
+            public TrainerType trainer = TrainerType.SAC;
         }
 
         public static void RunOneDimReachSacBaseline()
@@ -67,6 +68,50 @@ namespace DeepUnity.ReinforcementLearning
                 actorLearningRate = 1e-3f,
                 criticLearningRate = 1e-3f,
                 timescale = 20,
+            });
+        }
+
+        public static void RunOneDimReachSacGpuBaseline()
+        {
+            StartRun(new RunSpec
+            {
+                scenario = "sacgpu_baseline",
+                agentCount = 1,
+                targetSteps = 5000,
+                timeoutSeconds = 240f,
+                updateInterval = 50,
+                updateAfter = 1024,
+                updatesNum = 1,
+                minibatchSize = 64,
+                replayBufferSize = 100_000,
+                alpha = 0.2f,
+                tau = 0.005f,
+                actorLearningRate = 1e-3f,
+                criticLearningRate = 1e-3f,
+                timescale = 20,
+                trainer = TrainerType.SACGPU,
+            });
+        }
+
+        public static void RunOneDimReachSacGpuDenseUpdates()
+        {
+            StartRun(new RunSpec
+            {
+                scenario = "sacgpu_dense_updates",
+                agentCount = 1,
+                targetSteps = 5000,
+                timeoutSeconds = 240f,
+                updateInterval = 1,
+                updateAfter = 1024,
+                updatesNum = 1,
+                minibatchSize = 64,
+                replayBufferSize = 100_000,
+                alpha = 0.2f,
+                tau = 0.005f,
+                actorLearningRate = 1e-3f,
+                criticLearningRate = 1e-3f,
+                timescale = 20,
+                trainer = TrainerType.SACGPU,
             });
         }
 
@@ -210,7 +255,7 @@ namespace DeepUnity.ReinforcementLearning
         private static void ConfigureBehaviour(AgentBehaviour behaviour, RunSpec spec)
         {
             behaviour.inferenceDevice = Device.CPU;
-            behaviour.trainingDevice = Device.CPU;
+            behaviour.trainingDevice = spec.trainer == TrainerType.SACGPU ? Device.GPU : Device.CPU;
             behaviour.targetFPS = 50;
             behaviour.clipping = 5f;
             behaviour.normalize = false;
@@ -220,7 +265,7 @@ namespace DeepUnity.ReinforcementLearning
             behaviour.noiseValue = 0f;
 
             Hyperparameters hp = behaviour.config;
-            hp.trainer = TrainerType.SAC;
+            hp.trainer = spec.trainer;
             hp.maxSteps = int.MaxValue;
             hp.actorLearningRate = spec.actorLearningRate;
             hp.criticLearningRate = spec.criticLearningRate;

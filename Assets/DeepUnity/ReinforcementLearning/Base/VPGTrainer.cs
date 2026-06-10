@@ -55,7 +55,7 @@ namespace DeepUnity.ReinforcementLearning
             if (model.IsUsingDiscreteActions)
             {
                 // optim_discrete = new AdamW(model.discreteNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, amsgrad: amsGrad, weight_decay: 0F, fused: true);
-                optim_discrete = new StableAdamW(model.muNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, weight_decay: 0F, fused: true);
+                optim_discrete = new StableAdamW(model.discreteNetwork.Parameters(), hp.actorLearningRate, eps: epsilon, weight_decay: 0F, fused: true);
                 optim_discrete.Scheduler = new LinearAnnealing(optim_discrete, start_factor: 1f, end_factor: 0f, total_iters: total_epochs);
             }
 
@@ -70,7 +70,7 @@ namespace DeepUnity.ReinforcementLearning
             if (model.discreteNetwork != null)
                 model.discreteNetwork.Device = model.inferenceDevice;
 
-            if (model.stochasticity != Stochasticity.FixedStandardDeviation || model.stochasticity != Stochasticity.TrainableStandardDeviation)
+            if (model.stochasticity != Stochasticity.FixedStandardDeviation && model.stochasticity != Stochasticity.TrainableStandardDeviation)
                 model.stochasticity = Stochasticity.FixedStandardDeviation;
 
         }
@@ -149,12 +149,18 @@ namespace DeepUnity.ReinforcementLearning
                 tasks.AddLast(valueTargetsTask);
                 Task<Tensor[]> contActTask = null;
                 Task<Tensor[]> discActTask = null;
+                Task<Tensor[]> contProbsTask = null;
+                Task<Tensor[]> discProbsTask = null;
                 if (model.IsUsingContinuousActions)
                 {
                     contActTask = Task.Run(() =>
                         Utils.Split(train_data.ContinuousActions, hp.batchSize).Select(x => Tensor.Concat(null, x)).ToArray()
                     );
                     tasks.AddLast(contActTask);
+                    contProbsTask = Task.Run(() =>
+                        Utils.Split(train_data.ContinuousProbabilities, hp.batchSize).Select(x => Tensor.Concat(null, x)).ToArray()
+                    );
+                    tasks.AddLast(contProbsTask);
                 }
 
 
@@ -164,6 +170,10 @@ namespace DeepUnity.ReinforcementLearning
                                         Utils.Split(train_data.DiscreteActions, hp.batchSize).Select(x => Tensor.Concat(null, x)).ToArray()
                                     );
                     tasks.AddLast(discActTask);
+                    discProbsTask = Task.Run(() =>
+                                        Utils.Split(train_data.DiscreteProbabilities, hp.batchSize).Select(x => Tensor.Concat(null, x)).ToArray()
+                                    );
+                    tasks.AddLast(discProbsTask);
                 }
 
                 Task.WaitAll(tasks.ToArray());
@@ -172,6 +182,8 @@ namespace DeepUnity.ReinforcementLearning
                 Tensor[] value_targets_batches = valueTargetsTask.Result;
                 Tensor[] cont_act_batches = model.IsUsingContinuousActions ? contActTask.Result : null;
                 Tensor[] disc_act_batches = model.IsUsingDiscreteActions ? discActTask.Result : null;
+                Tensor[] cont_probs_batches = model.IsUsingContinuousActions ? contProbsTask.Result : null;
+                Tensor[] disc_probs_batches = model.IsUsingDiscreteActions ? discProbsTask.Result : null;
 
                 // θ new. New probabilities of the policy used for early stopping/rollback
                 Tensor cont_probs_new_kle = null;
@@ -195,7 +207,7 @@ namespace DeepUnity.ReinforcementLearning
                     }
                     if (model.IsUsingDiscreteActions)
                     {
-                        tasks_kle.AddLast(Task.Run(() => disc_kle_cache = model.sigmaNetwork.Parameters().Select(x => x.param.Clone() as Tensor).ToArray()));
+                        tasks_kle.AddLast(Task.Run(() => disc_kle_cache = model.discreteNetwork.Parameters().Select(x => x.param.Clone() as Tensor).ToArray()));
                     }
 
                     Task.WaitAll(tasks_kle.ToArray());
@@ -214,6 +226,7 @@ namespace DeepUnity.ReinforcementLearning
                             normalized_advantages,
                             cont_act_batches[b],
                             out cont_probs_new_kle);
+                        cont_probs_old_kle = cont_probs_batches[b];
                     }
                     if (model.IsUsingDiscreteActions)
                     {
@@ -222,6 +235,7 @@ namespace DeepUnity.ReinforcementLearning
                             normalized_advantages,
                             disc_act_batches[b],
                             out disc_probs_new_kle);
+                        disc_probs_old_kle = disc_probs_batches[b];
                     }
 
                 }
@@ -346,12 +360,17 @@ namespace DeepUnity.ReinforcementLearning
             // Forwards pass
             Tensor mu, sigma;
             model.ContinuousForward(states, out mu, out sigma);
-            pi = Tensor.Probability(actions, mu, sigma);
+            pi = Tensor.Probability(actions, mu, sigma); // kept for the KLE check
             Tensor sigmaSquared = sigma.Square();
 
             advantages = advantages.Expand(-1, continuous_actions_num);
 
-            Tensor Objective = pi.Log() * advantages;
+            // log πθ(a|s) computed directly (stable for tiny densities, unlike Log(Probability)):
+            // log N(a|μ,σ) = -1/2 log(2π) - log σ - 1/2 ((a-μ)/σ)^2
+            Tensor zScore = (actions - mu) / sigma;
+            Tensor logPi = -0.5f * MathF.Log(2f * MathF.PI) - sigma.Log() - 0.5f * zScore.Square();
+
+            Tensor Objective = logPi * advantages;
             float lossItem = Objective.Abs().Average();
 
             if (float.IsNaN(lossItem))
@@ -361,25 +380,16 @@ namespace DeepUnity.ReinforcementLearning
             }
             actorLoss += lossItem;
 
-
-            // Computing ∂-Objective / ∂πθ(a|s)
-            Tensor dmObjective_dPi = -1f * advantages / pi;
-            dmObjective_dPi /= dmObjective_dPi.Norm()[0]; // the loss explodes and i decided to normalize it.. quite sad.
-
             // Entropy bonus added if σ is trainable
             // H(πθ(a|s)) = - integral( πθ(a|s) log πθ(a|s) ) = 1/2 * log(2πeσ^2) // https://en.wikipedia.org/wiki/Differential_entropy
-            // Tensor H = 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2)); 
-            entropy += sigma.Average(); // H.Average(); // i modified it because is simply to understand since it is sigma         
+            // Tensor H = 0.5f * Tensor.Log(2f * MathF.PI * MathF.E * sigma.Pow(2));
+            entropy += sigma.Average(); // H.Average(); // i modified it because is simply to understand since it is sigma
 
-            // if (dmObjective_dPi.Contains(float.NaN)) return;
-
-
-            // ∂πθ(a|s) / ∂μ = πθ(a|s) * (x - μ) / σ^2
-            Tensor dPi_dMu = pi * (actions - mu) / sigmaSquared;
-
-
-            // ∂-Objective / ∂μ = (∂-Objective / ∂πθ(a|s)) * (∂πθ(a|s) / ∂μ)
-            Tensor dmObjective_dMu = dmObjective_dPi * dPi_dMu;
+            // ∂-(logπ·A) / ∂μ = -A(a-μ)/σ²
+            // The π factors of (∂-Obj/∂π)·(∂π/∂μ) cancel analytically. Computing them
+            // separately (-A/π with π→0) overflowed, which the old unit-norm hack masked
+            // while destroying the gradient scale — that hack is gone.
+            Tensor dmObjective_dMu = -advantages * (actions - mu) / sigmaSquared;
             optim_mu.ZeroGrad();
             model.muNetwork.Backward(dmObjective_dMu);
             // optim_mu.ClipGradNorm(hp.maxNorm);
@@ -387,14 +397,11 @@ namespace DeepUnity.ReinforcementLearning
 
             if (model.stochasticity == Stochasticity.TrainableStandardDeviation)
             {
-                // ∂πθ(a|s) / ∂σ = πθ(a|s) * ((x - μ)^2 - σ^2) / σ^3    (Simple statistical gradient-following for connectionst Reinforcement Learning (pag 14))
-                Tensor dPi_dSigma = pi * ((actions - mu).Square() - sigmaSquared) / (sigmaSquared * sigma);
-
+                // ∂-(logπ·A) / ∂σ = -A((a-μ)² - σ²)/σ³    (Simple statistical gradient-following for connectionist Reinforcement Learning (pag 14))
                 // ∂-H / ∂σ = -1/σ
                 Tensor dmH_dSigma = sigma.Select(x => -1f / x);
 
-                // ∂-Objective / ∂σ = (∂-Objective / ∂πθ(a|s)) * (∂πθ(a|s) / ∂σ) + β * (∂-H / ∂σ)
-                Tensor dmObjective_dSigma = dmObjective_dPi * dPi_dSigma + hp.beta * dmH_dSigma;
+                Tensor dmObjective_dSigma = -advantages * ((actions - mu).Square() - sigmaSquared) / (sigmaSquared * sigma) + hp.beta * dmH_dSigma;
 
                 optim_sigma.ZeroGrad();
                 model.sigmaNetwork.Backward(dmObjective_dSigma);

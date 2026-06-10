@@ -1383,3 +1383,61 @@ Current status:
 - User constraint: final fix should keep the same BalanceBall input PPO uses.
 - Therefore observation edits are diagnostic only, not the accepted solution path.
 - Next resume branch: SAC-specific internals under unchanged BalanceBall input (fixed-std vs trainable-std, warmup stochasticity transition, replay/target/bootstrap behavior).
+
+---
+
+## Claude | 2026-06-10 (VPG BUGS FOUND + SACGPU IMPLEMENTED)
+
+**User reported VPG also fails (on-policy!). Investigated — VPG has its own standalone bugs, NOT a shared-infrastructure bug:**
+
+1. **VPGTrainer.cs:367** — `dmObjective_dPi /= dmObjective_dPi.Norm()[0]` ("the loss explodes and i decided to normalize it.. quite sad"). Whole-batch unit-norm normalization AFTER dividing by `pi` (a density that can be ~0): gradient scale destroyed, one outlier sample dominates each batch. The clean fix is computing `dObjective/dMu = -A*(a-mu)/sigma^2` directly (the `pi` factors cancel analytically) instead of going through `-A/pi * pi*(a-mu)/sigma^2`.
+2. **VPGTrainer.cs:58** — copy-paste bug: `optim_discrete = new StableAdamW(model.muNetwork.Parameters(), ...)` — should be `discreteNetwork`. Discrete VPG never updates its network.
+3. **VPGTrainer.cs:73** — `if (stoch != Fixed || stoch != Trainable)` is always true (`||` should be `&&`).
+
+Since PPO shares the exact same Dense/Sequential/optimizer stack and works, VPG failing does not implicate the shared infra.
+
+**NEW: SACGPU trainer (FullGPU SAC) implemented on the proven PPOGPU stack:**
+- `Assets/Resources/ComputeShaders/SACLossCS.compute` — SacSampleLogPi (tanh-Gaussian sample + logpi), WritePairSA, SacQTarget (with truncation bootstrap), SacCriticGrad, SacMinQSelect, SliceActionGrad, SacActorGrad (full -dJ/dmu, -dJ/dsigma assembly), Polyak.
+- `Assets/DeepUnity/ReinforcementLearning/FullGPU/SACGPUTrainer.cs` — GPUMLP q1/q2 + GPU target nets + mu/sigma, GPUAdamW (weight_decay=0, NO grad clip — canonical SAC by construction), gradient-step LR schedule, optimizer states shared with CPU SAC ("sactrainer" key), replay/warmup/squash-at-insert semantics identical to SACTrainer for 1:1 comparability.
+- Wired: TrainerType.SACGPU (enum appended), DeepUnityTrainer.Subscribe, AgentBehaviour (q1/q2/mu/sigma branch + GPU device lock in editor), Hyperparameters editor, TrainingStatistics, Agent inspector.
+- Gradient-scale convention verified: loss kernels emit per-sample grads; DenseBwdW/DenseBwdB average over B (same as CPU Dense.Backward).
+- `OneDimReachBatchRunner` extended with `RunOneDimReachSacGpuBaseline` / `RunOneDimReachSacGpuDenseUpdates` (note: SACGPU batch runs need `-batchmode` WITHOUT `-nographics`).
+- Project compiles clean (sacgpu_compile2.log, 0 errors).
+
+Smoke run in progress.
+
+---
+
+## Claude | 2026-06-10 (SACGPU VERIFIED + BALANCEBALL ROOT-CAUSE NARROWED)
+
+**SACGPU verification results:**
+1. **OneDimReach 5k steps (dense, UTD 0.8):** SACGPU quartile rewards 10.39→15.61 (last25 14.68) vs CPU SAC 10.19→14.48 (last25 13.65). GPU ~3x faster wall-clock (9s vs 30s of training). The FullGPU SAC implementation is functionally correct and learns.
+2. **BalanceBall 20k steps, alpha=0.2:** SACGPU plateaus EXACTLY like CPU SAC (ep len ~85, reward ~2.1, J→5.1 > reward-only Qmax 2.5). Two independent implementations, same plateau → **the plateau is NOT an implementation bug.**
+3. **BalanceBall 20k steps, alpha=0.005 (reward-scaled):** still flat at random level, BUT diagnostics changed completely: J = 0.30→0.41 rising steadily, critic loss 1e-4. The entropy domination is gone; the critic is just SLOW.
+
+**Root-cause analysis for the BalanceBall plateau (two compounding causes):**
+- **(a) Reward scale vs alpha:** BalanceBall pays 0.025/step; alpha=0.2 makes the entropy term ~20x the task reward (confirmed: J→5.1 with alpha=0.2 vs J→0.41 with alpha=0.005). SAC's canonical alpha assumes rewards ~1/step. PPO is immune (normalized advantages). Every env that learned (bandit, OneDimReach) pays ~1/step.
+- **(b) TD propagation horizon:** with tau=0.005, value information propagates ~1 bootstrap hop per ~1/tau=200 updates. BalanceBall's ~85-step survival horizon (pure survival reward, signal only at termination) needs ~17k+ updates before Q reflects the full horizon — ALL historical runs (5k-20k steps) ended before the hockey stick. True V(random)≈1.3; critic was at 0.41 and still climbing at 19k updates. PPO/GAE propagates whole trajectories per update, hence the 1-minute success.
+
+**Prediction being tested:** 100k-step SACGPU run with alpha=0.005 (`RunBalanceBallSacGpuLong`) should show reward takeoff somewhere past ~30-50k steps.
+
+**Practical guidance for SAC in DeepUnity:** scale alpha to the per-step reward magnitude (or scale rewards to ~1), use updateInterval=1, and run survival-style envs 10-50x longer than PPO before judging. Consider implementing auto-alpha (SAC v2 target-entropy) to remove the manual tuning.
+
+---
+
+## Claude | 2026-06-10 (BALANCEBALL SAC CONVERGED — CASE CLOSED)
+
+40k-decision SACGPU run (`balanceball_runtime_sacgpu_mlagents_parity_20260610_065406`), config: decisionPeriod=5, fallPenalty=-1, alpha=0.005, updateInterval=1, tau=0.005, lr=1e-3:
+- Deciles of mean episode length: ~20 decisions flat until ~30k decisions, then hockey stick: D8=32, D9=40, D10=843 decisions.
+- Last-25 mean: 1076 decisions (~5.4k physics frames). Best episode hit the 10,000-decision maxStep cap (truncated, not fallen).
+- Mean reward last 10: 34.07.
+
+Ablations that did NOT unlock it alone (all SACGPU, all flat at random ~85 frames): alpha=0.2 20k; alpha=0.005 20k; alpha=0.005 100k; fallPenalty -1 at dp=1 30k.
+
+**Final root cause of the historical "SAC doesn't work" on BalanceBall (after all the real code bugs previously fixed): environment/config setup, three compounding factors:**
+1. decisionPeriod=1 → each action tilts the platform ≤1°, so Q(s,a) is nearly flat in `a`; dQ/da below TD noise floor. dp=5 action repeat (ML-Agents 3DBall parity) is the decisive factor.
+2. No fall penalty → terminal signal only via missing bootstrap on ~1% of samples. -1 on fall gives the critic a dense cliff.
+3. alpha=0.2 vs 0.025/step reward → entropy term ~20x task reward (J inflated to 5+ vs reward-only Qmax 2.5).
+PPO is insensitive to all three (normalized advantages + trajectory-level returns), which is why it always worked and SAC always "looked broken".
+
+The SACGPU trainer itself is verified correct and ~3x faster than CPU SAC. CPU SAC should converge with the same env config (untested today; expect ~10x wall-clock).

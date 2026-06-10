@@ -46,9 +46,10 @@ namespace DeepUnity.ReinforcementLearning
             public float targetEntropyTermMean;
         }
 
-        // Q target networks
-        private static Sequential q1TargNetwork;
-        private static Sequential q2TargNetwork;
+        // Q target networks — instance fields: static targets would be shared (and corrupted)
+        // across multiple trainer instances and could leak stale references across sessions.
+        private Sequential q1TargNetwork;
+        private Sequential q2TargNetwork;
         private int new_experiences_collected = 0;
         private long sacGradientStep = 0;
         private SACPolicyDiagnostics policyDiagnostics;

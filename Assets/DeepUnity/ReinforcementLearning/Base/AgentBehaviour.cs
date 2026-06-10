@@ -793,7 +793,7 @@ namespace DeepUnity.ReinforcementLearning
                 }
 
             }
-            else if (trainer == TrainerType.SAC)
+            else if (trainer == TrainerType.SAC || trainer == TrainerType.SACGPU)
             {
                 if (!q1Network)
                     whatIsMissing.Add("Q Network 1");
@@ -1042,20 +1042,21 @@ namespace DeepUnity.ReinforcementLearning
             // FullGPU PPO runs the entire training step on the GPU, so trainingDevice is
             // locked. Inference (when the model is later deployed outside training) stays
             // user-configurable — runtime inference is decoupled from the training path.
-            if (script.config != null && script.config.trainer == TrainerType.PPOGPU)
+            if (script.config != null && (script.config.trainer == TrainerType.PPOGPU || script.config.trainer == TrainerType.SACGPU))
             {
+                string gpuTrainerName = script.config.trainer.ToString();
                 if (script.trainingDevice != Device.GPU)
                 {
                     script.trainingDevice = Device.GPU;
                     EditorUtility.SetDirty(script);
                 }
                 EditorGUILayout.HelpBox(
-                    "PPOGPU runs forward, backward and AdamW step entirely on the GPU. " +
+                    gpuTrainerName + " runs forward, backward and AdamW step entirely on the GPU. " +
                     "Training Device is locked to GPU. Inference Device stays user-configurable " +
                     "so the trained model can run on CPU when deployed outside training.",
                     MessageType.Info);
                 dontDrawMe.Add("trainingDevice");
-                EditorGUILayout.LabelField("Training Device", "GPU (locked by PPOGPU)");
+                EditorGUILayout.LabelField("Training Device", $"GPU (locked by {gpuTrainerName})");
             }
             // See or not standard deviation
             if (!script.IsUsingContinuousActions)

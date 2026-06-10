@@ -90,8 +90,8 @@ namespace DeepUnity.ReinforcementLearning
         [Tooltip("[Typical range: 1 - 8] Number of mini-batches sampled on policy model update. This can be increased while also increasing updateEvery.")]
         [MinMax(1, 8)] public int updatesNum = 1;
 
-        [Tooltip("[Typicall range: (Continuous) 0.5 - 1.0 ~(Discrete) 0.05 - 0.5] Entropy tradeoff coefficient. Lower alpha means low exploration.")]
-        [MinMax(1e-8f, 0.5f)] public float alpha = 0.2f;
+        [Tooltip("Entropy tradeoff coefficient. MUST scale with your per-step reward magnitude: the literature's 0.2 assumes rewards ~1/step; for small rewards (e.g. 0.025/step) use ~0.005 or the entropy term swamps the task reward and SAC learns nothing. Lower alpha means less exploration.")]
+        [MinMax(1e-8f, 0.5f)] public float alpha = 5e-3f;
 
         [Tooltip("[Typicall range: 0.001 - 0.01] How aggresively to update the target network used for boostraping value estimation.")]
         [MinMax(0.001f, 0.01f)] public float tau = 0.005f;
@@ -205,7 +205,7 @@ namespace DeepUnity.ReinforcementLearning
                 dontDrawMe.Add("policyDelay");
 
             }
-            else if (script.trainer == TrainerType.SAC)
+            else if (script.trainer == TrainerType.SAC || script.trainer == TrainerType.SACGPU)
             {
                 dontDrawMe.Add("batchSize");
                 dontDrawMe.Add("bufferSize");

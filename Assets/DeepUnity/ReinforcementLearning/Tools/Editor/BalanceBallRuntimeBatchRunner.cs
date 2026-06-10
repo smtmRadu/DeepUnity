@@ -31,6 +31,8 @@ namespace DeepUnity.ReinforcementLearning
             public Device inferenceDevice;
             public Device trainingDevice;
             public bool disableBallNoise;
+            public TrainerType trainer = TrainerType.SAC;
+            public int decisionPeriod = 1;
         }
 
         public static void RunBalanceBallSacBaseline()
@@ -122,6 +124,157 @@ namespace DeepUnity.ReinforcementLearning
             });
         }
 
+        public static void RunBalanceBallSacGpuDenseUpdates()
+        {
+            StartRun(new RunSpec
+            {
+                scenario = "sacgpu_dense_updates",
+                targetSteps = 20000,
+                timeoutSeconds = 600f,
+                updateInterval = 1,
+                updateAfter = 1024,
+                updatesNum = 1,
+                minibatchSize = 64,
+                replayBufferSize = 1_000_000,
+                alpha = 0.2f,
+                tau = 0.005f,
+                actorLearningRate = 1e-3f,
+                criticLearningRate = 1e-3f,
+                timescale = 20,
+                inferenceDevice = Device.CPU,
+                trainingDevice = Device.GPU,
+                trainer = TrainerType.SACGPU,
+            });
+        }
+
+        // Reward-scale hypothesis: BalanceBall pays 0.025/step while alpha=0.2 makes the
+        // entropy term ~20x the task reward. Canonical-SAC envs pay ~1/step. Scale alpha
+        // to the reward magnitude and SAC should finally see the task.
+        public static void RunBalanceBallSacGpuLowAlpha()
+        {
+            StartRun(new RunSpec
+            {
+                scenario = "sacgpu_low_alpha",
+                targetSteps = 20000,
+                timeoutSeconds = 600f,
+                updateInterval = 1,
+                updateAfter = 1024,
+                updatesNum = 1,
+                minibatchSize = 64,
+                replayBufferSize = 1_000_000,
+                alpha = 0.005f,
+                tau = 0.005f,
+                actorLearningRate = 1e-3f,
+                criticLearningRate = 1e-3f,
+                timescale = 20,
+                inferenceDevice = Device.CPU,
+                trainingDevice = Device.GPU,
+                trainer = TrainerType.SACGPU,
+            });
+        }
+
+        // Long-horizon test: with tau=0.005 the TD value needs ~horizon/tau updates to
+        // propagate (~17k for an 85-step survival horizon), so 5k-20k step runs end
+        // before the hockey stick. 100k steps gives the critic room to converge.
+        public static void RunBalanceBallSacGpuLong()
+        {
+            StartRun(new RunSpec
+            {
+                scenario = "sacgpu_long",
+                targetSteps = 100_000,
+                timeoutSeconds = 2400f,
+                updateInterval = 1,
+                updateAfter = 1024,
+                updatesNum = 1,
+                minibatchSize = 64,
+                replayBufferSize = 1_000_000,
+                alpha = 0.005f,
+                tau = 0.005f,
+                actorLearningRate = 1e-3f,
+                criticLearningRate = 1e-3f,
+                timescale = 20,
+                inferenceDevice = Device.CPU,
+                trainingDevice = Device.GPU,
+                trainer = TrainerType.SACGPU,
+            });
+        }
+
+        // ML-Agents 3DBall parity: decisionPeriod=5 (action repeat -> each decision moves the
+        // platform ~5x, much stronger dQ/da) + reward-scaled alpha.
+        // (The historical converging runs also used a -1 fall penalty; the env field was
+        // removed afterwards at the user's request to keep the PPO-tuned reward.)
+        public static void RunBalanceBallSacGpuMlAgentsParity()
+        {
+            StartRun(new RunSpec
+            {
+                scenario = "sacgpu_mlagents_parity",
+                targetSteps = 40000, // decisions (200k env frames at decisionPeriod=5)
+                timeoutSeconds = 2400f,
+                updateInterval = 1,
+                updateAfter = 1024,
+                updatesNum = 1,
+                minibatchSize = 64,
+                replayBufferSize = 1_000_000,
+                alpha = 0.005f,
+                tau = 0.005f,
+                actorLearningRate = 1e-3f,
+                criticLearningRate = 1e-3f,
+                timescale = 20,
+                inferenceDevice = Device.CPU,
+                trainingDevice = Device.GPU,
+                trainer = TrainerType.SACGPU,
+                decisionPeriod = 5,
+            });
+        }
+
+        // Same winning config as RunBalanceBallSacGpuMlAgentsParity but on the CPU SACTrainer.
+        public static void RunBalanceBallSacCpuMlAgentsParity()
+        {
+            StartRun(new RunSpec
+            {
+                scenario = "saccpu_mlagents_parity",
+                targetSteps = 40000,
+                timeoutSeconds = 2400f,
+                updateInterval = 1,
+                updateAfter = 1024,
+                updatesNum = 1,
+                minibatchSize = 64,
+                replayBufferSize = 1_000_000,
+                alpha = 0.005f,
+                tau = 0.005f,
+                actorLearningRate = 1e-3f,
+                criticLearningRate = 1e-3f,
+                timescale = 20,
+                inferenceDevice = Device.CPU,
+                trainingDevice = Device.CPU,
+                trainer = TrainerType.SAC,
+                decisionPeriod = 5,
+            });
+        }
+
+        public static void RunBalanceBallSacCpuLowAlpha()
+        {
+            StartRun(new RunSpec
+            {
+                scenario = "saccpu_low_alpha",
+                targetSteps = 20000,
+                timeoutSeconds = 600f,
+                updateInterval = 1,
+                updateAfter = 1024,
+                updatesNum = 1,
+                minibatchSize = 64,
+                replayBufferSize = 1_000_000,
+                alpha = 0.005f,
+                tau = 0.005f,
+                actorLearningRate = 1e-3f,
+                criticLearningRate = 1e-3f,
+                timescale = 20,
+                inferenceDevice = Device.CPU,
+                trainingDevice = Device.CPU,
+                trainer = TrainerType.SAC,
+            });
+        }
+
         private static void StartRun(RunSpec spec)
         {
             string runId = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
@@ -166,7 +319,7 @@ namespace DeepUnity.ReinforcementLearning
             if (requester == null)
                 throw new InvalidOperationException("BalanceBall agent is missing DecisionRequester.");
 
-            requester.decisionPeriod = 1;
+            requester.decisionPeriod = spec.decisionPeriod;
             requester.takeActionsBetweenDecisions = true;
             requester.maxStep = 10_000;
 
@@ -215,7 +368,9 @@ namespace DeepUnity.ReinforcementLearning
             int archType = serializedAgent.FindProperty("archType").enumValueIndex;
             int stateSize = serializedAgent.FindProperty("spaceSize").intValue;
             int continuousActions = serializedAgent.FindProperty("continuousActions").intValue;
-            return archType == (int)ArchitectureType.MLP && stateSize == 10 && continuousActions == 2;
+            // MLP and LnMLP are both supported by the CPU trainers and the FullGPU path (GPUMLP handles RMSNorm).
+            return (archType == (int)ArchitectureType.MLP || archType == (int)ArchitectureType.LnMLP)
+                && stateSize == 10 && continuousActions == 2;
         }
 
         private static AgentBehaviour CreateFreshBehaviourFromAgent(BalanceBall agent, string behaviourName)
@@ -276,7 +431,7 @@ namespace DeepUnity.ReinforcementLearning
             behaviour.noiseValue = 0f;
 
             Hyperparameters hp = behaviour.config;
-            hp.trainer = TrainerType.SAC;
+            hp.trainer = spec.trainer;
             hp.maxSteps = int.MaxValue;
             hp.actorLearningRate = spec.actorLearningRate;
             hp.criticLearningRate = spec.criticLearningRate;

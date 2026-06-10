@@ -14,9 +14,11 @@ namespace DeepUnity.ReinforcementLearning
 {
     internal sealed class TD3Trainer : DeepUnityTrainer, IOffPolicy
     {
-        private static Sequential q1TargNetwork;
-        private static Sequential q2TargNetwork;
-        private static Sequential muTargNetwork;
+        // Instance fields: static target networks would be shared (and corrupted) across
+        // multiple trainer instances and could leak stale references across sessions.
+        private Sequential q1TargNetwork;
+        private Sequential q2TargNetwork;
+        private Sequential muTargNetwork;
 
         public Optimizer optim_q1 { get; set; }
         public Optimizer optim_q2 { get; set; }
@@ -32,10 +34,25 @@ namespace DeepUnity.ReinforcementLearning
                 model.muNetwork.Modules = model.muNetwork.Modules.Concat(new IModule[] { new Tanh() }).ToArray();
 
 
-            // Initialize optimizers
-            optim_q1 = new Adam(model.q1Network.Parameters(), hp.criticLearningRate);
-            optim_q2 = new Adam(model.q2Network.Parameters(), hp.criticLearningRate);
-            optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate);
+            // Initialize optimizers (resume Adam moments from disk when available — order
+            // matches SerializeOptimizerStates: [q1, q2, mu])
+            if (optimizer_states == null || optimizer_states.Length < 3)
+            {
+                optim_q1 = new Adam(model.q1Network.Parameters(), hp.criticLearningRate);
+                optim_q2 = new Adam(model.q2Network.Parameters(), hp.criticLearningRate);
+                optim_mu = new Adam(model.muNetwork.Parameters(), hp.actorLearningRate);
+            }
+            else
+            {
+                optim_q1 = JsonUtility.FromJson<Adam>(optimizer_states[0]);
+                optim_q1.parameters = model.q1Network.Parameters();
+
+                optim_q2 = JsonUtility.FromJson<Adam>(optimizer_states[1]);
+                optim_q2.parameters = model.q2Network.Parameters();
+
+                optim_mu = JsonUtility.FromJson<Adam>(optimizer_states[2]);
+                optim_mu.parameters = model.muNetwork.Parameters();
+            }
 
             // Initialize schedulers
             int totalGradientSteps = Math.Max(1, (int)Math.Min(int.MaxValue, (long)hp.maxSteps * hp.updatesNum / Math.Max(1, hp.updateInterval)));
@@ -209,6 +226,9 @@ namespace DeepUnity.ReinforcementLearning
         }
         private void UpdatePolicy(Tensor states)
         {
+            // Q1 weights are frozen during the policy update — only input grads are needed.
+            model.q1Network.RequiresGrad = false;
+
             actorLoss = 0; // put it here because of the policy delay, so the loss holds
             // ObjectiveLoss = 1/|B| Σ Q1(s, mu(s))
             Tensor mu_s = model.muNetwork.Forward(states);
@@ -218,10 +238,12 @@ namespace DeepUnity.ReinforcementLearning
             Tensor objectiveLossGrad = -Tensor.Ones(q1_s_mu_s.Shape); // gradient ascent (grad of Mean()) -> mean is computed already on each layer (mean of the batch)
             Tensor s_mu_s_grad = model.q1Network.Backward(objectiveLossGrad);
             Tensor mu_grad = ExtractActionFromStateAction(s_mu_s_grad, states.Size(-1), mu_s.Size(-1));
-            
+
             optim_mu.ZeroGrad();
             model.muNetwork.Backward(mu_grad);
             optim_mu.Step();
+
+            model.q1Network.RequiresGrad = true;
         }
         public void UpdateTargetNetworks()
         {

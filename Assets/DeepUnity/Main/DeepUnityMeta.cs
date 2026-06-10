@@ -8,80 +8,43 @@ namespace DeepUnity
 {
     public static class DeepUnityMeta
     {
-        internal readonly static ComputeShader TensorCS;
-        internal readonly static ComputeShader DenseCS;
-        internal readonly static ComputeShader Conv2DCS;
-        internal readonly static ComputeShader RNNCellCS;
-        internal readonly static ComputeShader ConvTranpose2DCS;
-        
+        // Compute shaders are loaded LAZILY, each on first access. The old eager static ctor loaded
+        // all 13 shaders the first time anything touched DeepUnityMeta, so e.g. constructing an LLM
+        // paid ~100 ms of Resources.Load for shaders it never uses — a visible frame hitch.
+        internal static ComputeShader TensorCS          => Get(ref _tensorCS, "TensorCS");
+        internal static ComputeShader DenseCS           => Get(ref _denseCS, "DenseCS");
+        internal static ComputeShader Conv2DCS          => Get(ref _conv2DCS, "Conv2DCS");
+        internal static ComputeShader RNNCellCS         => Get(ref _rnnCellCS, "RNNCellCS");
+        internal static ComputeShader ConvTranpose2DCS  => Get(ref _convTranspose2DCS, "ConvTranspose2DCS");
 
-        internal readonly static ComputeShader GQAInferenceCS;
-        internal readonly static ComputeShader GLUInferenceCS;
-        internal readonly static ComputeShader FFNInferenceCS;
-        internal readonly static ComputeShader LmHeadInferenceCS;
-        internal readonly static ComputeShader Gemma3FP32CS;
-        internal readonly static ComputeShader Gemma3CS;
-        internal readonly static ComputeShader Gemma3OriginalCS;
-        internal readonly static ComputeShader Qwen3_5CS;
+        internal static ComputeShader GQAInferenceCS    => Get(ref _gqaInferenceCS, "GQAInferenceCS");
+        internal static ComputeShader GLUInferenceCS    => Get(ref _gluInferenceCS, "GLUInferenceCS");
+        internal static ComputeShader FFNInferenceCS    => Get(ref _ffnInferenceCS, "FFNInferenceCS");
+        internal static ComputeShader LmHeadInferenceCS => Get(ref _lmHeadInferenceCS, "LmHeadInferenceCS");
+        internal static ComputeShader Gemma3FP32CS      => Get(ref _gemma3FP32CS, "Gemma3FP32CS");
+        internal static ComputeShader Gemma3CS          => Get(ref _gemma3CS, "Gemma3CS");
+        internal static ComputeShader Gemma3OriginalCS  => Get(ref _gemma3OriginalCS, "Gemma3OriginalCS");
+        internal static ComputeShader Qwen3_5CS         => Get(ref _qwen3_5CS, "Qwen3_5CS");
+
+        static ComputeShader _tensorCS, _denseCS, _conv2DCS, _rnnCellCS, _convTranspose2DCS;
+        static ComputeShader _gqaInferenceCS, _gluInferenceCS, _ffnInferenceCS, _lmHeadInferenceCS;
+        static ComputeShader _gemma3FP32CS, _gemma3CS, _gemma3OriginalCS, _qwen3_5CS;
+
+        static ComputeShader Get(ref ComputeShader field, string name)
+        {
+            if (field == null)
+            {
+                field = Resources.Load<ComputeShader>("ComputeShaders/" + name);
+                if (field == null)
+                    ConsoleMessage.Error($"Compute Shader '{name}' was not found in Resources/ComputeShaders. " +
+                                         "Make sure DeepUnity framework files were not modified or deleted.");
+            }
+            return field;
+        }
 
         internal readonly static int THREADS_NUM = 256;
         internal readonly static Lazy<ParallelOptions> MULTITHREADS_8 = new Lazy<ParallelOptions>(() => new ParallelOptions { MaxDegreeOfParallelism = 8 });
         internal readonly static Lazy<ParallelOptions> MULTITHREADS_4 = new Lazy<ParallelOptions>(() => new ParallelOptions { MaxDegreeOfParallelism = 4 });
-        static DeepUnityMeta()
-        {
-            try
-            {
-                // I have no clue how can i make them loadable using Resouces.Load without moving them into a folder called Resources
-
-                TensorCS = Resources.Load<ComputeShader>("ComputeShaders/TensorCS");
-                DenseCS = Resources.Load<ComputeShader>("ComputeShaders/DenseCS");
-                Conv2DCS = Resources.Load<ComputeShader>("ComputeShaders/Conv2DCS");
-                RNNCellCS = Resources.Load<ComputeShader>("ComputeShaders/RNNCellCS");
-                ConvTranpose2DCS = Resources.Load<ComputeShader>("ComputeShaders/ConvTranspose2DCS");
-                
-
-                GQAInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/GQAInferenceCS");
-                GLUInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/GLUInferenceCS");
-                FFNInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/FFNInferenceCS");
-                LmHeadInferenceCS = Resources.Load<ComputeShader>("ComputeShaders/LmHeadInferenceCS");
-                Gemma3FP32CS = Resources.Load<ComputeShader>("ComputeShaders/Gemma3FP32CS");
-                Gemma3CS = Resources.Load<ComputeShader>("ComputeShaders/Gemma3CS");
-                Gemma3OriginalCS = Resources.Load<ComputeShader>("ComputeShaders/Gemma3OriginalCS");
-                Qwen3_5CS = Resources.Load<ComputeShader>("ComputeShaders/Qwen3_5CS");
-  
-                if (TensorCS == null)
-                    throw new Exception("The Compute Shader scripts were moved from Resources/ComputeShaders folder. Please move them back or modify this script that finds them by adjusting the path.");
-
-
-                // var csguid = UnityEditor.AssetDatabase.FindAssets("TensorCS")[0];
-                // var cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
-                // TensorCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
-                // 
-                // csguid = UnityEditor.AssetDatabase.FindAssets("DenseCS")[0];
-                // cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
-                // DenseCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
-                // 
-                // csguid = UnityEditor.AssetDatabase.FindAssets("Conv2DCS")[0]; 
-                // cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
-                // Conv2DCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
-                // 
-                // csguid = UnityEditor.AssetDatabase.FindAssets("RNNCellCS")[0];
-                // cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
-                // RNNCellCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
-                // 
-                // csguid = UnityEditor.AssetDatabase.FindAssets("ConvTranspose2DCS")[0];
-                // cspath = UnityEditor.AssetDatabase.GUIDToAssetPath(csguid);
-                // ConvTranpose2DCS = UnityEditor.AssetDatabase.LoadAssetAtPath(cspath, typeof(ComputeShader)) as ComputeShader;
-            }
-            catch(Exception e) {
-            
-                
-                ConsoleMessage.Error($"{e}. Compute Shader files where not found! Make sure DeepUnity framework files were not modified or deleted.");          
-            }
-        }
-
-
-        
     }
 
 
@@ -260,6 +223,8 @@ namespace DeepUnity
         VPG,
         [Tooltip("Proximal Policy Optimization — FullGPU path. Forward, backward and AdamW step run entirely on GPU. MLP / LnMLP networks only.")]
         PPOGPU,
+        [Tooltip("Soft Actor-Critic — FullGPU path. Forward, backward and AdamW step run entirely on GPU. MLP / LnMLP networks only.")]
+        SACGPU,
     }
 
     public enum TimescaleAdjustmentType
