@@ -33,9 +33,12 @@ namespace DeepUnity
         ///   Thinking, VL or precise coding (e.g. WebDev) tasks:
         ///     temperature=0.6, top_p=0.95, top_k=20, min_p=0.0, presence_penalty=0.0, repetition_penalty=1.0
         ///
-        /// Defaults below are the "non-thinking, text" preset. presence_penalty is subtractive
-        /// (OpenAI/vLLM style); repetition_penalty is multiplicative (CTRL/HF style, 1.0 = off). Both
-        /// run on the GPU over already-generated tokens. Set temperature=0 for greedy decoding.
+        /// The <see cref="Chat"/>/<see cref="Generate"/> signature defaults are NEUTRAL (no truncation,
+        /// no penalties — see <see cref="LLM"/>); pass one of the presets above explicitly. The
+        /// "non-thinking, text" preset (the mode this demo runs) is also exposed via Config.Default*.
+        /// presence_penalty is subtractive (OpenAI/vLLM style); repetition_penalty is multiplicative
+        /// (CTRL/HF style, 1.0 = off). Both run on the GPU over already-generated tokens.
+        /// Set temperature=0 for greedy decoding.
         /// </summary>
         /// <param name="maxModelLength">
         /// Maximum sequence length (in tokens) the model supports in a single conversation. This sizes the
@@ -101,8 +104,8 @@ namespace DeepUnity
         }
 
         public override IEnumerator Generate(Tensor input_ids, Action<string> onTokenGenerated,
-            int max_new_tokens = 128, float temperature = 1f, int top_k = 20, float top_p = 1f, float min_p = 0f,
-            float presence_penalty = 2f, float repetition_penalty = 1f)
+            int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
+            float presence_penalty = 0f, float repetition_penalty = 1f)
         {
             while (!IsReady) yield return new WaitForSeconds(0.01f);
 
@@ -149,9 +152,11 @@ namespace DeepUnity
         {
             // Warmup is part of initialization: kernel compiles + throwaway forwards happen here,
             // behind the caller's loading screen, never on the first reply. Idempotent.
+            CurrentPhase = "boot (weights+warmup)";
             yield return Warmup();
 
             while (!IsReady) yield return new WaitForSeconds(0.01f);
+            CurrentPhase = "idle";
             Assert.AreNotEqual(system_prompt, null);
 
             model.ResetCache();
@@ -174,18 +179,52 @@ namespace DeepUnity
             ids.Add(Qwen3_5Modeling.Qwen3_5Config.IM_END_TOKEN_ID);
             AppendTextTokens("\n", ids);
 
-            var e = ForwardPromptChunked(ids);
-            while (e.MoveNext()) yield return e.Current;
+            // Disk-cached system prompt: same prompt + same weights -> restore the KV/SSM state
+            // (one frame-budgeted upload per layer) instead of recomputing the chunked prefill.
+            bool restoredFromDisk = false;
+            string cacheFile = null;
+            if (SystemPromptDiskCache && Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE)
+            {
+                string dir = System.IO.Path.Combine(Application.persistentDataPath, "DeepUnity");
+                System.IO.Directory.CreateDirectory(dir);
+                cacheFile = System.IO.Path.Combine(dir, $"qwen35_prompt_{PromptCacheKey(ids)}.kv");
+                if (System.IO.File.Exists(cacheFile))
+                {
+                    CurrentPhase = "kv-restore";
+                    var load = model.cache.LoadYielding(cacheFile, ok => restoredFromDisk = ok);
+                    while (load.MoveNext()) yield return load.Current;
+                    if (!restoredFromDisk)
+                    {
+                        try { System.IO.File.Delete(cacheFile); } catch { }
+                        model.ResetCache();   // a partial upload may have dirtied the state
+                    }
+                }
+            }
 
-            LogBootSummary(sw.Elapsed.TotalMilliseconds);
+            if (!restoredFromDisk)
+            {
+                CurrentPhase = "prefill";
+                var e = ForwardPromptChunked(ids);
+                while (e.MoveNext()) yield return e.Current;
+
+                if (cacheFile != null)
+                {
+                    CurrentPhase = "kv-save";
+                    var save = model.cache.SaveYielding(cacheFile);
+                    while (save.MoveNext()) yield return save.Current;
+                }
+            }
+
+            CurrentPhase = "idle";
+            LogBootSummary(sw.Elapsed.TotalMilliseconds, restoredFromDisk);
 
             isFreshlyInitialized = true;
             yield return true;
         }
 
         public override IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
-            int max_new_tokens = 128, float temperature = 1f, int top_k = 20, float top_p = 1f, float min_p = 0f,
-            float presence_penalty = 2f, float repetition_penalty = 1f, bool enable_thinking = false)
+            int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
+            float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false)
         {
             if (!IsReady) throw new Exception("Call InitializeChat before Chat.");
 
@@ -222,6 +261,7 @@ namespace DeepUnity
                 AppendTextTokens("\n\n", ids);
             }
 
+            CurrentPhase = "decode";
             var e = ForwardPromptChunked(ids);
             while (e.MoveNext()) yield return e.Current;
 
@@ -256,29 +296,59 @@ namespace DeepUnity
             }
 
             TokensPerSecond = 0f;
+            CurrentPhase = "idle";
             yield return true;
         }
 
-        // Single consolidated boot log: total + per-step breakdown. The construction steps run in one
-        // synchronous frame ("blocking"); the weight upload streams across frames afterward.
-        void LogBootSummary(double systemPromptMs)
+        /// <summary>
+        /// When on (default), InitializeChat persists the system prompt's KV/SSM state to
+        /// persistentDataPath after the first prefill and restores it on later inits with the
+        /// same prompt + weights — turning the prompt prefill into a fast, hitch-free disk load.
+        /// </summary>
+        public static bool SystemPromptDiskCache = true;
+
+        // FNV-1a over the prompt token ids, weight path and cache capacity — any of these
+        // changing must invalidate the cached state.
+        string PromptCacheKey(System.Collections.Generic.List<float> ids)
+        {
+            ulong h = 14695981039346656037UL;
+            void Mix(ulong v) { h ^= v; h *= 1099511628211UL; }
+            foreach (var id in ids) Mix((ulong)(long)id);
+            foreach (char c in path) Mix(c);
+            Mix((ulong)model.cache.Capacity);
+            return h.ToString("x16");
+        }
+
+        // Boot log: load time + system prompt (computed vs restored from disk, with token count).
+        void LogBootSummary(double systemPromptMs, bool promptFromDisk = false)
         {
             var w = model.weights;
-            double blocking = w.bootTokenizerMs + w.bootKernelsMs + w.allocMs + w.bootCacheMs + w.bootRopeMs + w.bootScratchMs;
-            double total = blocking + w.uploadMs + systemPromptMs;
-            ConsoleMessage.Info(
-                $"Qwen3.5 model booted up — {total:0} ms total\n" +
-                $"   tokenizer ctor (main thread) : {w.bootTokenizerMs:0} ms\n" +
-                $"   compute kernels lookup       : {w.bootKernelsMs:0} ms\n" +
-                $"   weight manifest build        : {w.allocMs:0} ms (buffers created lazily during upload)\n" +
-                $"   kv cache alloc               : {w.bootCacheMs:0} ms\n" +
-                $"   rope kick (async)            : {w.bootRopeMs:0} ms\n" +
-                $"   scratch buffers alloc        : {w.bootScratchMs:0} ms\n" +
-                $"   = blocking (one frame)       : {blocking:0} ms\n" +
-                $"   rope compute (async)         : {w.ropeAsyncMs:0} ms (overlaps upload)\n" +
-                $"   weight stream (async)        : {w.uploadMs:0} ms over {w.uploadFrames} frames, worst slice {w.worstUploadMs:0.0} ms\n" +
-                $"   kernel warmup (behind load)  : {w.warmupMs:0} ms (0 = warmup didn't run)\n" +
-                $"   system prompt cache          : {systemPromptMs:0} ms");
+            double loadMs = w.bootTokenizerMs + w.bootKernelsMs + w.allocMs + w.bootCacheMs + w.bootRopeMs + w.bootScratchMs + w.uploadMs;
+            int promptTokens = model.cache != null ? model.cache.CachedTokenCount : 0;
+            string prompt = systemPromptMs <= 0
+                ? "no system prompt"
+                : (promptFromDisk
+                    ? $"system prompt restored from disk ({promptTokens} tokens, {systemPromptMs:0} ms)"
+                    : $"system prompt computed ({promptTokens} tokens, {systemPromptMs:0} ms)");
+            ConsoleMessage.Info($"Qwen3.5 ready — load {loadMs:0} ms, {prompt}");
+
+            // Detailed per-step breakdown, kept for debugging:
+            // double blocking = w.bootTokenizerMs + w.bootKernelsMs + w.allocMs + w.bootCacheMs + w.bootRopeMs + w.bootScratchMs;
+            // double total = blocking + w.uploadMs + systemPromptMs;
+            // ConsoleMessage.Info(
+            //     $"Qwen3.5 model booted up — {total:0} ms total\n" +
+            //     $"   tokenizer ctor (main thread) : {w.bootTokenizerMs:0} ms\n" +
+            //     $"   compute kernels lookup       : {w.bootKernelsMs:0} ms\n" +
+            //     $"   weight manifest build        : {w.allocMs:0} ms (buffers created lazily during upload)\n" +
+            //     $"   kv cache alloc               : {w.bootCacheMs:0} ms\n" +
+            //     $"   rope kick (async)            : {w.bootRopeMs:0} ms\n" +
+            //     $"   scratch buffers alloc        : {w.bootScratchMs:0} ms\n" +
+            //     $"   = blocking (one frame)       : {blocking:0} ms\n" +
+            //     $"   rope compute (async)         : {w.ropeAsyncMs:0} ms (overlaps upload)\n" +
+            //     $"   weight stream (async)        : {w.uploadMs:0} ms over {w.uploadFrames} frames, worst slice {w.worstUploadMs:0.0} ms\n" +
+            //     $"   kernel warmup (behind load)  : {w.warmupMs:0} ms (0 = warmup didn't run)\n" +
+            //     $"   system prompt cache          : {systemPromptMs:0} ms" +
+            //     (promptFromDisk ? " (restored from disk)" : ""));
         }
 
         // Forwards a prompt in small chunks — the KV cache / SSM states carry context between them —

@@ -502,7 +502,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &577540059
 Transform:
   m_ObjectHideFlags: 0
@@ -630,6 +630,7 @@ MonoBehaviour:
   onEpisodeEnd: 2
   useSensors: 0
   ball: {fileID: 313351778}
+  rotationSpeed: 1
 --- !u!114 &578915764
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -981,12 +982,13 @@ MonoBehaviour:
   archType: 1
   numLayers: 2
   hidUnits: 32
-  activation: 3
-  model: {fileID: 11400000, guid: 9a1cdfb5978d50c4b8c5f3a21293ac00, type: 2}
+  activation: 2
+  model: {fileID: 11400000, guid: 27aa362eff3a8684daf1fe4200ab2445, type: 2}
   behaviourType: 2
   onEpisodeEnd: 2
   useSensors: 0
   ball: {fileID: 1198115738}
+  rotationSpeed: 1
 --- !u!114 &742690638
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1000,7 +1002,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxStep: 10000
-  decisionPeriod: 2
+  decisionPeriod: 5
   takeActionsBetweenDecisions: 1
 --- !u!54 &742690639
 Rigidbody:
@@ -1875,7 +1877,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1417222485
 Transform:
   m_ObjectHideFlags: 0
@@ -2156,6 +2158,7 @@ MonoBehaviour:
   onEpisodeEnd: 2
   useSensors: 0
   ball: {fileID: 259517802}
+  rotationSpeed: 1
 --- !u!114 &2111581113
 MonoBehaviour:
   m_ObjectHideFlags: 0

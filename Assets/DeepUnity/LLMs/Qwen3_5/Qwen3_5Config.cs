@@ -112,6 +112,9 @@ namespace DeepUnity
         public override int PadTokenId            => Qwen3_5Modeling.Qwen3_5Config.ENDOFTEXT_TOKEN_ID;
         public override int BosTokenId            => Qwen3_5Modeling.Qwen3_5Config.IM_START_TOKEN_ID; // Qwen has no classic BOS; <|im_start|> opens a sequence.
 
+        // Official Qwen3.5 card (Best Practices), NON-THINKING text preset — the mode we run:
+        //   t=1.0, top_p=1.0, top_k=20, min_p=0, presence_penalty=2.0, repetition_penalty=1.0.
+        // (presence 1.5 is the THINKING-mode / VL preset — don't "fix" this to 1.5.)
         public override float DefaultPresencePenalty => 2f;
     }
 }

@@ -1,0 +1,79 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fed261b4951c884bb038da17e2bbfcd, type: 3}
+  m_Name: _BalanceBall
+  m_EditorClassIdentifier: 
+  version: 5
+  behaviourName: BalanceBall
+  assetCreated: 1
+  observationSize: 10
+  stackedInputs: 1
+  continuousDim: 2
+  discreteDim: 0
+  config: {fileID: 11400000, guid: 93c956f058470934db74335b3a6e9efd, type: 2}
+  vNetwork: {fileID: 11400000, guid: 75b079f0488e853449fd25199effefe9, type: 2}
+  q1Network: {fileID: 11400000, guid: 58cd9b348d00316449c34cbae423b92e, type: 2}
+  q2Network: {fileID: 11400000, guid: 2766821a15ea8af469e65174264b2819, type: 2}
+  muNetwork: {fileID: 11400000, guid: 510b0ef9217d7044a82ebaa68141ba40, type: 2}
+  sigmaNetwork: {fileID: 11400000, guid: f915bbaf1c576e145979177b9a2e7f69, type: 2}
+  discreteNetwork: {fileID: 0}
+  inferenceDevice: 0
+  trainingDevice: 1
+  targetFPS: 50
+  clipping: 5
+  normalize: 0
+  observationsNormalizer:
+    step: 0
+    eps: 0.00000001
+    mean:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 0a000000
+    m2:
+      data:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      shape: 0a000000
+  rewardsNormalizer:
+    gamma: 0.99
+    returnsNormalizer:
+      step: 0
+      eps: 0.00000001
+      mean:
+        data:
+        - 0
+        shape: 01000000
+      m2:
+        data:
+        - 0
+        shape: 01000000
+  stochasticity: 0
+  standardDeviationValue: 1
+  standardDeviationScale: 1.5
+  noiseValue: 0.1

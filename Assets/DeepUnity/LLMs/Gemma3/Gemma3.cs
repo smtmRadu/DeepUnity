@@ -101,9 +101,10 @@ namespace DeepUnity
         }
 
         // presence_penalty / repetition_penalty are accepted for API parity with other LLMs but ignored —
-        // Gemma3's sampler has no penalty support. top_k default mirrors Gemma's generation_config (64).
+        // Gemma3's sampler has no penalty support. Gemma's recommended top_k (64, from its
+        // generation_config) lives in Config.DefaultTopK; the shared signature defaults stay neutral.
         public override IEnumerator Generate(Tensor input_ids, Action<string> onTokenGenerated,
-            int max_new_tokens = 128, float temperature = 1f, int top_k = 64, float top_p = 1f, float min_p = 0f,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
             float presence_penalty = 0f, float repetition_penalty = 1f)
         {
             while (!IsReady) yield return new WaitForSeconds(0.01f);
@@ -164,42 +165,45 @@ namespace DeepUnity
         {
             // Warmup is part of initialization: kernel compiles + throwaway forwards happen here,
             // behind the caller's loading screen, never on the first reply. Idempotent.
+            CurrentPhase = "boot (weights+warmup)";
             yield return Warmup();
 
             while (!IsReady) yield return new WaitForSeconds(0.01f);
+            CurrentPhase = "idle";
             Assert.AreNotEqual(system_prompt, null);
 
             model.ResetCache();
 
-            string cacheFolder = SystemPromptCacheFolder(system_prompt);
-            bool loaded = false;
-            yield return model.cache.TryLoadAsync(cacheFolder, r => loaded = r);
-            if (loaded)
-            {
-                ConsoleMessage.Info($"Gemma3 system prompt cache hit ({model.cache.CachedTokenCount} tokens).");
-                isFreshlyInitialized = true;
-                yield return true;
-                yield break;
-            }
-
             Stopwatch sw = Stopwatch.StartNew();
 
-            (Tensor, Tensor) tok = tokenizer.Encode(system_prompt, add_special_tokens: false, truncation: true, max_length: 2048);
-            Tensor prefix = Tensor.Constant(new float[]
+            string cacheFolder = SystemPromptCacheFolder(system_prompt);
+            bool loaded = false;
+            CurrentPhase = "kv-restore";
+            yield return model.cache.TryLoadAsync(cacheFolder, r => loaded = r);
+
+            if (!loaded)
             {
-                Gemma3TokenizerFast.BOS_TOKEN_ID,
-                Gemma3TokenizerFast.START_OF_TURN_TOKEN_ID,
-                2364f, 107f
-            });
-            Tensor input_ids = Tensor.Concat(-1, prefix, tok.Item1);
+                CurrentPhase = "prefill";
+                (Tensor, Tensor) tok = tokenizer.Encode(system_prompt, add_special_tokens: false, truncation: true, max_length: 2048);
+                Tensor prefix = Tensor.Constant(new float[]
+                {
+                    Gemma3TokenizerFast.BOS_TOKEN_ID,
+                    Gemma3TokenizerFast.START_OF_TURN_TOKEN_ID,
+                    2364f, 107f
+                });
+                Tensor input_ids = Tensor.Concat(-1, prefix, tok.Item1);
 
-            var e = ForwardPromptChunked(input_ids);
-            while (e.MoveNext()) yield return e.Current;
+                var e = ForwardPromptChunked(input_ids);
+                while (e.MoveNext()) yield return e.Current;
 
-            ConsoleMessage.Info($"Gemma3 system prompt computed ({sw.Elapsed.TotalSeconds:0.00} s).");
+                CurrentPhase = "kv-save";
+                yield return model.cache.SaveAsync(cacheFolder);
+            }
 
-            yield return model.cache.SaveAsync(cacheFolder);
-            ConsoleMessage.Info($"Gemma3 system prompt cache saved ({model.cache.CachedTokenCount} tokens).");
+            CurrentPhase = "idle";
+            ConsoleMessage.Info("Gemma3 ready — system prompt " + (loaded
+                ? $"restored from disk ({model.cache.CachedTokenCount} tokens, {sw.Elapsed.TotalMilliseconds:0} ms)"
+                : $"computed ({model.cache.CachedTokenCount} tokens, {sw.Elapsed.TotalMilliseconds:0} ms)"));
 
             isFreshlyInitialized = true;
             yield return true;
@@ -217,10 +221,10 @@ namespace DeepUnity
         }
 
         // presence_penalty / repetition_penalty / enable_thinking are accepted for API parity with other LLMs
-        // but ignored — Gemma3-270m has no penalty or thinking support. top_k default mirrors Gemma's
-        // generation_config (64).
+        // but ignored — Gemma3-270m has no penalty or thinking support. Gemma's recommended top_k (64, from
+        // its generation_config) lives in Config.DefaultTopK; the shared signature defaults stay neutral.
         public override IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
-            int max_new_tokens = 128, float temperature = 1f, int top_k = 64, float top_p = 1f, float min_p = 0f,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
             float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false)
         {
             if (!IsReady) throw new Exception("Call InitializeChat before Chat.");
@@ -253,6 +257,7 @@ namespace DeepUnity
             (Tensor, Tensor) tok = tokenizer.Encode(prompt, add_special_tokens: false, truncation: true, max_length: 2048);
             Tensor input_ids = Tensor.Concat(-1, prefixT, tok.Item1, postfixT);
 
+            CurrentPhase = "decode";
             var e = ForwardPromptChunked(input_ids);
             while (e.MoveNext()) yield return e.Current;
 
@@ -287,6 +292,7 @@ namespace DeepUnity
             }
 
             TokensPerSecond = 0f;
+            CurrentPhase = "idle";
             yield return true;
         }
     }

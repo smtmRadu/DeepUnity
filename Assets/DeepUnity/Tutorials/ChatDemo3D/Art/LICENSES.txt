@@ -1,0 +1,18 @@
+ChatDemo3D third-party art (all CC0 / public domain, by Quaternius - quaternius.com):
+- Characters/KnightCharacter.fbx, Weapons/Sword.fbx : Animated Knight Pack
+- Characters/Monk.fbx + Monk_Texture.png            : RPG Characters Pack (Humanoid Rig version)
+- Weapons/Shield_Heater.fbx                          : Medieval Weapons Pack
+- Animations/UAL1.fbx                                : Universal Animation Library
+- Animations/UAL2.fbx                                : Universal Animation Library 2
+- Ruins/*.fbx                                        : Ultimate Modular Ruins Pack
+
+Fonts/Cinzel.ttf: Cinzel by Natanael Gama, SIL Open Font License 1.1 (see Fonts/OFL_Cinzel.txt)
+
+Audio:
+- Audio/Footsteps/footstep_concrete_*.ogg, Audio/roll.ogg : Kenney "Impact Sounds" pack (CC0, kenney.nl)
+- Audio/UI/*.ogg                         : Kenney "Interface Sounds" pack (CC0, kenney.nl)
+- Audio/you_died.ogg                     : Elden Ring "YOU DIED" sting (c) FromSoftware / Bandai Namco — local use only, gitignored.
+- Audio/limgrave_theme.ogg               : Elden Ring "Limgrave" OST excerpt (c) FromSoftware / Bandai Namco.
+- Audio/boss_theme.ogg                   : Elden Ring "Margit, the Fell Omen" OST excerpt (c) FromSoftware / Bandai Namco.
+                                           Both COPYRIGHTED - local/personal use only, NOT redistributable, kept
+                                           out of version control via .gitignore.

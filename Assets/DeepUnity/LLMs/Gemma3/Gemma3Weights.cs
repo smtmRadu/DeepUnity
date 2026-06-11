@@ -48,7 +48,9 @@ namespace DeepUnity
             readonly int innerEmbDim, qkvProjDim, intermediateSize, vocabSize;
 
             // Per-frame main-thread GPU budget in BYTES (lazy buffer creation + SetData slices).
-            const int UPLOAD_BUDGET_BYTES = 24 * 1024 * 1024;
+            // Lower = smoother frames while the model streams in, longer load (see the Qwen
+            // counterpart — 24 MB slices caused visible fps dips mid-game).
+            const int UPLOAD_BUDGET_BYTES = 8 * 1024 * 1024;
             // Max files simultaneously in flight (being read or queued) — bounds boot RAM.
             const int MAX_IO_JOBS = 4;
 

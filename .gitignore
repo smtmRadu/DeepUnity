@@ -74,3 +74,20 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# copyrighted audio, personal use only - never commit
+Assets/DeepUnity/Tutorials/ChatDemo3D/Art/Audio/limgrave_theme.ogg
+Assets/DeepUnity/Tutorials/ChatDemo3D/Art/Audio/limgrave_theme.ogg.meta
+
+# Claude Code editor bridge runtime files
+ClaudeBridge/
+Assets/DeepUnity/Tutorials/ChatDemo3D/Art/Audio/boss_theme.ogg
+Assets/DeepUnity/Tutorials/ChatDemo3D/Art/Audio/boss_theme.ogg.meta
+Assets/DeepUnity/Tutorials/ChatDemo3D/Art/Audio/you_died.ogg
+Assets/DeepUnity/Tutorials/ChatDemo3D/Art/Audio/you_died.ogg.meta
+
+# dev/runtime artifacts - never commit
+ProbeLogs/
+Assets/Resources/Cache/
+Assets/DeepUnity/ReinforcementLearning/Base/debug-*.log
+Assets/DeepUnity/ReinforcementLearning/Base/debug-*.log.meta

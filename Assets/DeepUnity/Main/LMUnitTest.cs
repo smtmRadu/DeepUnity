@@ -42,6 +42,8 @@ namespace DeepUnity.Tutorials
             },
             max_new_tokens: max_completion_tokens,
             temperature: temperature,
+            top_k: 20,                                              // base defaults are neutral —
+            presence_penalty: model.Config.DefaultPresencePenalty,  // pass Qwen's recommended preset
             enable_thinking: enable_thinking);
         }
     }

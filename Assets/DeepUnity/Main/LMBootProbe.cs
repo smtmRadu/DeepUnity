@@ -79,8 +79,11 @@ namespace DeepUnity
             yield return model.InitializeChat("You are a grumpy tavern owner in a medieval fantasy town. Stay in character.");
             phase = "chat";
             var reply = new StringBuilder();
+            // temperature 0 = greedy, but penalties apply before the argmax — keep the presence
+            // penalty this probe always ran with so its reply stays comparable across runs
             yield return model.Chat("Hello! What's on the menu today?", t => reply.Append(t),
-                max_new_tokens: chatTokens, temperature: 0f);
+                max_new_tokens: chatTokens, temperature: 0f,
+                presence_penalty: model.Config.DefaultPresencePenalty);
             phase = "done";
             WriteReport(reply.ToString(), success: true);
             Exit(0);

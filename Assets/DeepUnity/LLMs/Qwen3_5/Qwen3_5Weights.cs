@@ -73,8 +73,10 @@ namespace DeepUnity
             const int EMBED_NUM_CHUNKS = 16;
             // Per-frame main-thread GPU budget in BYTES. Both lazy buffer creation (charged at full
             // buffer size) and SetData slices count against it, so no frame ever does more than
-            // ~24 MB of GPU work during boot.
-            const int UPLOAD_BUDGET_BYTES = 24 * 1024 * 1024;
+            // this much GPU work during boot. Lower = smoother frames while the model streams in,
+            // longer load: 24 MB gave a ~10.7 ms worst slice (visible fps dip mid-game), 8 MB
+            // keeps slices ~3x smaller.
+            const int UPLOAD_BUDGET_BYTES = 8 * 1024 * 1024;
             // Max files simultaneously in flight (being read or sitting in the upload queue). This
             // bounds boot-time managed memory to ~MAX_IO_JOBS * largest-file (~30 MB embed shards).
             const int MAX_IO_JOBS = 4;

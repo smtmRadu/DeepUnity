@@ -49,6 +49,37 @@ namespace DeepUnity
         /// <summary>Rolling decode speed of the most recent generation step (0 while idle).</summary>
         public float TokensPerSecond { get; protected set; }
 
+        // ---- prompt-cache hitch tuning (shared by every model's KV disk cache) ----------------
+        // Saving/restoring the system-prompt KV state is spread across frames so it can run
+        // behind gameplay. If it ever drops frames again, these are the knobs — every model's
+        // cache (Qwen3_5Cache, Gemma3Cache, ...) reads them, so one nudge behaves the same
+        // across models. All trade restore latency for smoothness; turn DOWN for smaller
+        // per-frame cost:
+        //   UploadFrameBudgetMs   max milliseconds of SetData copy work per frame while
+        //                         restoring.
+        //   UploadChunkFloats     floats per SetData call; smaller chunks let the budget cut
+        //                         finer (64k floats = 256 KB ≈ 0.05-0.15 ms per call).
+        //   SaveReadbacksInFlight max concurrent GPU readbacks while saving — also caps how
+        //                         many readback→managed copies can land on a single frame
+        //                         (results must be copied the frame they complete; deferring
+        //                         isn't an option).
+        // The weight STREAMING budget is separate: UPLOAD_BUDGET_BYTES in each model's
+        // *Weights.cs — that one governs the boot-time worst slice, not these.
+        // If the knobs ever stop being enough, the next lever is streaming the restore: parse
+        // layer i on the worker WHILE layer i-1 uploads (reused scratch arrays) instead of
+        // parsing the whole file up front — less transient managed memory, less GC.
+        public static float UploadFrameBudgetMs = 0.5f;
+        public static int UploadChunkFloats = 64 * 1024;
+        public static int SaveReadbacksInFlight = 1;
+
+        /// <summary>
+        /// Coarse, frame-accurate tag of what the LLM machinery is doing right now ("idle" when
+        /// nothing). Models write it around their long-running phases (kernel prewarm, weight
+        /// stream + warmup, kv restore/save, prefill, decode) so a frame-spike probe can attribute
+        /// slow frames to a phase instead of guessing.
+        /// </summary>
+        public static string CurrentPhase = "idle";
+
         /// <summary>
         /// Compiles every compute kernel (the one-time first-dispatch cost) behind a loading screen so the
         /// first real reply isn't a freeze. Default is a no-op; models with a warmup path override it.
@@ -82,13 +113,21 @@ namespace DeepUnity
         /// <summary>Single forward pass over <paramref name="input_ids"/>; returns the logits tensor.</summary>
         public abstract Tensor Predict(Tensor input_ids, Tensor attn_mask = null);
 
+        // NOTE for new models: overrides must repeat these NEUTRAL defaults exactly. C# resolves
+        // default arguments from the STATIC type at the call site — an override with different
+        // defaults silently samples differently through an LLM-typed reference than through the
+        // concrete type. Defaults mean "no effect" (temperature 1, no top-k/top-p/min-p
+        // truncation, no penalties); a model's recommended preset lives in Config.Default* for
+        // callers to pass explicitly.
+
         /// <summary>
         /// Free-form generation from raw token ids, streaming decoded text via <paramref name="onTokenGenerated"/>.
-        /// <paramref name="presence_penalty"/> / <paramref name="repetition_penalty"/> are honored by models that
-        /// support them and ignored by those that don't.
+        /// Defaults are neutral (plain temperature-1 sampling) — pass the model's recommended preset from
+        /// <see cref="Config"/>.Default* when you want it. <paramref name="presence_penalty"/> /
+        /// <paramref name="repetition_penalty"/> are honored by models that support them and ignored by those that don't.
         /// </summary>
         public abstract IEnumerator Generate(Tensor input_ids, Action<string> onTokenGenerated,
-            int max_new_tokens = 128, float temperature = 1f, int top_k = 20, float top_p = 1f, float min_p = 0f,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
             float presence_penalty = 0f, float repetition_penalty = 1f);
 
         /// <summary>
@@ -98,10 +137,12 @@ namespace DeepUnity
 
         /// <summary>
         /// One chat turn: encodes <paramref name="prompt"/> with the model's chat template and streams the reply.
-        /// <paramref name="enable_thinking"/> and the penalty knobs are honored only by models that support them.
+        /// Defaults are neutral (plain temperature-1 sampling) — pass the model's recommended preset from
+        /// <see cref="Config"/>.Default* when you want it. <paramref name="enable_thinking"/> and the penalty
+        /// knobs are honored only by models that support them.
         /// </summary>
         public abstract IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
-            int max_new_tokens = 128, float temperature = 1f, int top_k = 20, float top_p = 1f, float min_p = 0f,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
             float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false);
 
         /// <summary>Releases all GPU buffers held by the model. Safe to call more than once.</summary>
@@ -118,6 +159,7 @@ namespace DeepUnity
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeChanged;
 #endif
+            CurrentPhase = "idle";   // an interrupted coroutine must not leave a stale phase tag
             GC.SuppressFinalize(this);
         }
 
