@@ -58,6 +58,16 @@ namespace DeepUnity
             public ComputeBuffer[] linearNormGamma; // [head_v_dim]
             public ComputeBuffer[] W_outProj;       // [value_dim, hidden]
 
+            // INT8 mode only (see import_params.py --quant int8): one fp16 scale per output row of
+            // each quantized matrix; the weight buffers above then hold int8 packed 4-per-uint.
+            // All null in FP16 mode. Norm gammas / conv / dt_bias / A_log / in_proj_a/b stay FP16.
+            public readonly LLMQuant Quant;
+            public ComputeBuffer embedScales => _embedScalesSlot[0];
+            readonly ComputeBuffer[] _embedScalesSlot = new ComputeBuffer[1];
+            public ComputeBuffer[] W_QScales, W_KScales, W_VScales, W_OScales;
+            public ComputeBuffer[] W_inProjQKVScales, W_inProjZScales, W_outProjScales;
+            public ComputeBuffer[] mlpGateScales, mlpUpScales, mlpDownScales;
+
             public bool IsReady { get; private set; }
 
             // Boot timings (ms), filled across construction + upload, read once by the consolidated
@@ -71,12 +81,9 @@ namespace DeepUnity
             readonly Qwen3_5LayerType[] layerTypes;
 
             const int EMBED_NUM_CHUNKS = 16;
-            // Per-frame main-thread GPU budget in BYTES. Both lazy buffer creation (charged at full
-            // buffer size) and SetData slices count against it, so no frame ever does more than
-            // this much GPU work during boot. Lower = smoother frames while the model streams in,
-            // longer load: 24 MB gave a ~10.7 ms worst slice (visible fps dip mid-game), 8 MB
-            // keeps slices ~3x smaller.
-            const int UPLOAD_BUDGET_BYTES = 8 * 1024 * 1024;
+            // Per-frame main-thread GPU budget in BYTES — the boot-vs-framedrop knob now lives on
+            // the shared LLM base (LLM.UploadBudgetBytes) so it can be swept between boots; read
+            // live each frame in UploadPump below.
             // Max files simultaneously in flight (being read or sitting in the upload queue). This
             // bounds boot-time managed memory to ~MAX_IO_JOBS * largest-file (~30 MB embed shards).
             const int MAX_IO_JOBS = 4;
@@ -113,8 +120,18 @@ namespace DeepUnity
             volatile bool _disposed;
             int _jobsUploaded;
 
-            public Qwen3_5Weights(string paramsPath)
+            public Qwen3_5Weights(string paramsPath, LLMQuant quant = LLMQuant.FP16)
             {
+                // The exported params are large and may not be checked into the repo — point the
+                // user at the exporter scripts instead of letting 270 file-not-found errors rain.
+                if (!Directory.Exists(paramsPath))
+                    throw new DirectoryNotFoundException(
+                        $"Qwen3.5 weights folder not found: '{paramsPath}'. Generate it with " +
+                        "Assets/DeepUnity/LLMs/import_params.py — e.g. `python import_params.py Qwen/Qwen3.5-0.8B " +
+                        "--quant fp16|int8|int4` downloads the checkpoint and exports the params folder under " +
+                        "Assets/Resources/DeepUnity/LLMs/Qwen3_5/.");
+
+                Quant = quant;
                 hidden = Qwen3_5Config.HIDDEN_SIZE;
                 headDim = Qwen3_5Config.HEAD_DIM;
                 headsQ = Qwen3_5Config.HEADS_Q;
@@ -160,6 +177,17 @@ namespace DeepUnity
                 linearNormGamma = new ComputeBuffer[numLayers];
                 W_outProj = new ComputeBuffer[numLayers];
 
+                W_QScales = new ComputeBuffer[numLayers];
+                W_KScales = new ComputeBuffer[numLayers];
+                W_VScales = new ComputeBuffer[numLayers];
+                W_OScales = new ComputeBuffer[numLayers];
+                W_inProjQKVScales = new ComputeBuffer[numLayers];
+                W_inProjZScales = new ComputeBuffer[numLayers];
+                W_outProjScales = new ComputeBuffer[numLayers];
+                mlpGateScales = new ComputeBuffer[numLayers];
+                mlpUpScales = new ComputeBuffer[numLayers];
+                mlpDownScales = new ComputeBuffer[numLayers];
+
                 BuildManifest(paramsPath);
 
                 allocMs = swAlloc.Elapsed.TotalMilliseconds;
@@ -184,13 +212,45 @@ namespace DeepUnity
                 });
             }
 
+            // One big matmul weight, sized in the manifest's 2-byte "half" unit:
+            //   FP16: <base>.bin       rows*cols halves
+            //   INT8: <base>.int8.bin  rows*cols bytes  -> rows*cols/2 halves (4 int8 per uint)
+            //         + .scales.bin    one fp16 scale per output row
+            //   INT4: <base>.int4.bin  rows*cols/2 bytes -> rows*cols/4 halves (8 nibbles per uint)
+            //         + .scales.bin    one fp16 scale per 32-weight group = rows*cols/32 halves
+            void AddW(string basePath, ComputeBuffer[] slot, ComputeBuffer[] scaleSlot, int i, int rows, int cols)
+            {
+                switch (Quant)
+                {
+                    case LLMQuant.FP16:
+                        Add(basePath + ".bin", slot, i, rows * cols);
+                        break;
+                    case LLMQuant.INT8:
+                        Add(basePath + ".int8.bin", slot, i, rows * cols / 2);
+                        Add(basePath + ".scales.bin", scaleSlot, i, rows);
+                        break;
+                    case LLMQuant.INT4:
+                        Add(basePath + ".int4.bin", slot, i, rows * cols / 4);
+                        Add(basePath + ".scales.bin", scaleSlot, i, rows * cols / 32);
+                        break;
+                }
+            }
+
             void BuildManifest(string p)
             {
-                // Embedding: 16 shards into one buffer at consecutive offsets.
-                int totalHalves = vocab * hidden;
+                // Embedding: 16 shards into one buffer at consecutive offsets (row-aligned chunks
+                // in every mode, plus one scales file covering the whole matrix when quantized).
+                string embedExt = Quant == LLMQuant.INT8 ? ".int8.bin"
+                                : Quant == LLMQuant.INT4 ? ".int4.bin" : ".bin";
+                int divisor = Quant == LLMQuant.INT8 ? 2 : Quant == LLMQuant.INT4 ? 4 : 1;
+                int totalHalves = vocab * hidden / divisor;
                 int perChunk = totalHalves / EMBED_NUM_CHUNKS; // exactly divisible for 0.8B
                 for (int i = 0; i < EMBED_NUM_CHUNKS; i++)
-                    Add($"{p}/embed_tokens/part_{i}.bin", _embedSlot, 0, totalHalves, perChunk, i * perChunk * 2);
+                    Add($"{p}/embed_tokens/part_{i}{embedExt}", _embedSlot, 0, totalHalves, perChunk, i * perChunk * 2);
+                if (Quant == LLMQuant.INT8)
+                    Add($"{p}/embed_tokens/scales.bin", _embedScalesSlot, 0, vocab);
+                else if (Quant == LLMQuant.INT4)
+                    Add($"{p}/embed_tokens/scales.bin", _embedScalesSlot, 0, vocab * hidden / 32);
 
                 Add(p + "/norm.bin", _finalNormSlot, 0, hidden);
 
@@ -203,30 +263,30 @@ namespace DeepUnity
                     string lp = $"{p}/layer_{i}";
                     Add(lp + "/input_layernorm.bin",          inputLnGamma,    i, hidden);
                     Add(lp + "/post_attention_layernorm.bin", postAttnLnGamma, i, hidden);
-                    Add(lp + "/mlp_gate_proj.bin", mlpGate, i, hidden * intermediate);
-                    Add(lp + "/mlp_up_proj.bin",   mlpUp,   i, hidden * intermediate);
-                    Add(lp + "/mlp_down_proj.bin", mlpDown, i, intermediate * hidden);
+                    AddW(lp + "/mlp_gate_proj", mlpGate, mlpGateScales, i, intermediate, hidden);
+                    AddW(lp + "/mlp_up_proj",   mlpUp,   mlpUpScales,   i, intermediate, hidden);
+                    AddW(lp + "/mlp_down_proj", mlpDown, mlpDownScales, i, hidden, intermediate);
 
                     if (layerTypes[i] == Qwen3_5LayerType.FullAttention)
                     {
-                        Add(lp + "/self_attn_q_proj.bin", W_Q, i, hidden * qProjOut);
-                        Add(lp + "/self_attn_k_proj.bin", W_K, i, hidden * kvProjOut);
-                        Add(lp + "/self_attn_v_proj.bin", W_V, i, hidden * kvProjOut);
-                        Add(lp + "/self_attn_o_proj.bin", W_O, i, oIn * hidden);
+                        AddW(lp + "/self_attn_q_proj", W_Q, W_QScales, i, qProjOut, hidden);
+                        AddW(lp + "/self_attn_k_proj", W_K, W_KScales, i, kvProjOut, hidden);
+                        AddW(lp + "/self_attn_v_proj", W_V, W_VScales, i, kvProjOut, hidden);
+                        AddW(lp + "/self_attn_o_proj", W_O, W_OScales, i, hidden, oIn);
                         Add(lp + "/self_attn_q_norm.bin", qNormGamma, i, headDim);
                         Add(lp + "/self_attn_k_norm.bin", kNormGamma, i, headDim);
                     }
                     else
                     {
-                        Add(lp + "/linear_in_proj_qkv.bin", W_inProjQKV, i, hidden * qkvLinDim);
-                        Add(lp + "/linear_in_proj_z.bin",   W_inProjZ,   i, hidden * valueDim);
+                        AddW(lp + "/linear_in_proj_qkv", W_inProjQKV, W_inProjQKVScales, i, qkvLinDim, hidden);
+                        AddW(lp + "/linear_in_proj_z",   W_inProjZ,   W_inProjZScales,   i, valueDim, hidden);
                         Add(lp + "/linear_in_proj_a.bin",   W_inProjA,   i, hidden * numVHeads);
                         Add(lp + "/linear_in_proj_b.bin",   W_inProjB,   i, hidden * numVHeads);
                         Add(lp + "/linear_conv1d.bin",      convWeight,  i, convDim * kernelSize);
                         Add(lp + "/linear_dt_bias.bin",     dtBias,      i, numVHeads);
                         Add(lp + "/linear_A_log.bin",       ALog,        i, numVHeads);
                         Add(lp + "/linear_norm.bin",        linearNormGamma, i, headVDim);
-                        Add(lp + "/linear_out_proj.bin",    W_outProj,   i, valueDim * hidden);
+                        AddW(lp + "/linear_out_proj",    W_outProj, W_outProjScales, i, hidden, valueDim);
                     }
                 }
             }
@@ -312,7 +372,7 @@ namespace DeepUnity
                 var slice = new System.Diagnostics.Stopwatch();
                 int frames = 0;
                 double worstSliceMs = 0;
-                long budget = UPLOAD_BUDGET_BYTES;
+                long budget = LLM.UploadBudgetBytes;
 
                 while (true)
                 {
@@ -322,7 +382,7 @@ namespace DeepUnity
                     {
                         if (job.slot[job.slotIndex] == null)
                         {
-                            if (budget <= 0) { yield return null; frames++; budget = UPLOAD_BUDGET_BYTES; }
+                            if (budget <= 0) { yield return null; frames++; budget = LLM.UploadBudgetBytes; }
                             slice.Restart();
                             job.slot[job.slotIndex] = HalfBuf(job.bufferHalfCount);
                             double cms = slice.Elapsed.TotalMilliseconds; // spikes here = driver allocation
@@ -339,7 +399,7 @@ namespace DeepUnity
                             {
                                 yield return null;               // hand the frame back to rendering
                                 frames++;
-                                budget = UPLOAD_BUDGET_BYTES;
+                                budget = LLM.UploadBudgetBytes;
                             }
                             int count = (int)Math.Min(budget, len - src);
                             slice.Restart();
@@ -362,7 +422,7 @@ namespace DeepUnity
                     {
                         yield return null;                       // reads still in flight; check again next frame
                         frames++;
-                        budget = UPLOAD_BUDGET_BYTES;
+                        budget = LLM.UploadBudgetBytes;
                     }
                 }
 
@@ -384,6 +444,7 @@ namespace DeepUnity
 
                 _embedSlot[0]?.Release();
                 _finalNormSlot[0]?.Release();
+                _embedScalesSlot[0]?.Release();
                 for (int i = 0; i < numLayers; i++)
                 {
                     inputLnGamma[i]?.Release();
@@ -406,6 +467,16 @@ namespace DeepUnity
                     ALog[i]?.Release();
                     linearNormGamma[i]?.Release();
                     W_outProj[i]?.Release();
+                    W_QScales[i]?.Release();
+                    W_KScales[i]?.Release();
+                    W_VScales[i]?.Release();
+                    W_OScales[i]?.Release();
+                    W_inProjQKVScales[i]?.Release();
+                    W_inProjZScales[i]?.Release();
+                    W_outProjScales[i]?.Release();
+                    mlpGateScales[i]?.Release();
+                    mlpUpScales[i]?.Release();
+                    mlpDownScales[i]?.Release();
                 }
             }
         }

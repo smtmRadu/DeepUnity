@@ -444,7 +444,7 @@ namespace DeepUnity.ReinforcementLearning
         /// <param name="stateVector"></param>
         public virtual void CollectObservations(StateVector stateVector) { }
         /// <summary>
-        /// Set a custom shaped state by setting up the state <see cref="Tensor"/>. Note that cannot be used in parallel with the <see cref="StateVector"/> arg method, and it works for <see cref="TrainerType.PPO"/> only.
+        /// Set a custom shaped state by setting up the state <see cref="Tensor"/>. Note that cannot be used in parallel with the <see cref="StateVector"/> arg method, and it works for <see cref="TrainerType.PPODepr"/> only.
         /// </summary>
         /// <param name="stateTensor">The <see cref="Tensor"/> observation input.</param>
         public virtual void CollectObservations(out Tensor stateTensor) { stateTensor = null; }
@@ -528,8 +528,8 @@ namespace DeepUnity.ReinforcementLearning
                 EditorGUILayout.HelpBox(cumReward, MessageType.None);
 
                 // Draw buffer  
-                if (DeepUnityTrainer.Instance.GetType() == typeof(PPOTrainer) ||
-                    DeepUnityTrainer.Instance.GetType() == typeof(PPOGPUTrainer) ||
+                if (DeepUnityTrainer.Instance.GetType() == typeof(PPOTrainerDepr) ||
+                    DeepUnityTrainer.Instance.GetType() == typeof(PPOTrainer) ||
                     DeepUnityTrainer.Instance.GetType() == typeof(VPGTrainer))
                 {
                     int buff_count = DeepUnityTrainer.MemoriesCount;
@@ -585,8 +585,8 @@ namespace DeepUnity.ReinforcementLearning
                     EditorGUILayout.HelpBox(sb.ToString(), MessageType.None);
                     EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
                 }
-                else if (DeepUnityTrainer.Instance.GetType() == typeof(SACTrainer)
-                    || DeepUnityTrainer.Instance.GetType() == typeof(SACGPUTrainer)
+                else if (DeepUnityTrainer.Instance.GetType() == typeof(SACTrainerDepr)
+                    || DeepUnityTrainer.Instance.GetType() == typeof(SACTrainer)
                     || DeepUnityTrainer.Instance.GetType() == typeof(TD3Trainer)
                     || DeepUnityTrainer.Instance.GetType() == typeof(DDPGTrainer))
                 {

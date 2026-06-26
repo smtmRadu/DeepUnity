@@ -20,14 +20,14 @@ MonoBehaviour:
   LRSchedule: 0
   bufferSize: 40960
   batchSize: 1024
-  numEpoch: 5
+  numEpoch: 8
   horizon: -1
   beta: 0.005
   epsilon: 0.2
   lambda: 0.96
   valueCoeff: 0.5
   maxNorm: 0.5
-  earlyStopping: 1
+  earlyStopping: 0
   targetKL: 0.015
   normalizeAdvantages: 1
   replayBufferSize: 1000000

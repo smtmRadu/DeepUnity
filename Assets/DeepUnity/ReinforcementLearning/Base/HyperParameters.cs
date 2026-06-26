@@ -14,7 +14,7 @@ namespace DeepUnity.ReinforcementLearning
         [Header("Training Configuration")]
 
         [Tooltip("Algorithm used in training the agent. Note that defaults are for PPO.")]
-        public TrainerType trainer = TrainerType.PPOGPU;
+        public TrainerType trainer = TrainerType.PPO;
 
         [Tooltip("[Typical range: 1e5 - 1e7] The maximum length in steps of this training session.")]
         [Min(10_000f)] public long maxSteps = 2_000_000_000;
@@ -185,7 +185,28 @@ namespace DeepUnity.ReinforcementLearning
 
             Hyperparameters script = (Hyperparameters)target;
 
-            if (script.trainer == TrainerType.PPO || script.trainer == TrainerType.PPOGPU)
+            // Trainer selector: PPO and SAC (the full-GPU implementations) are the only unlocked
+            // choices. Deprecated/legacy trainers (PPODepr, SACDepr, TD3, DDPG, VPG) still run if
+            // an old Config.asset selects them, but they can't be picked here — only escaped from.
+            dontDrawMe.Add("trainer");
+            var trainerProp = serializedObject.FindProperty("trainer");
+            TrainerType currentTrainer = (TrainerType)trainerProp.intValue;
+            if (currentTrainer == TrainerType.PPO || currentTrainer == TrainerType.SAC)
+            {
+                int sel = EditorGUILayout.Popup("Trainer", currentTrainer == TrainerType.SAC ? 1 : 0,
+                                                new[] { "PPO", "SAC" });
+                trainerProp.intValue = (int)(sel == 1 ? TrainerType.SAC : TrainerType.PPO);
+            }
+            else
+            {
+                EditorGUILayout.HelpBox($"{currentTrainer} is a locked legacy trainer, kept only so old configs keep running. Switch to PPO or SAC — the full-GPU standards.", MessageType.Warning);
+                int sel = EditorGUILayout.Popup("Trainer", 0,
+                                                new[] { $"{currentTrainer} (locked)", "PPO", "SAC" });
+                if (sel == 1) trainerProp.intValue = (int)TrainerType.PPO;
+                else if (sel == 2) trainerProp.intValue = (int)TrainerType.SAC;
+            }
+
+            if (script.trainer == TrainerType.PPODepr || script.trainer == TrainerType.PPO)
             {
                 if (script.earlyStopping == (int)EarlyStopType.Off)
                     dontDrawMe.Add("targetKL");
@@ -205,7 +226,7 @@ namespace DeepUnity.ReinforcementLearning
                 dontDrawMe.Add("policyDelay");
 
             }
-            else if (script.trainer == TrainerType.SAC || script.trainer == TrainerType.SACGPU)
+            else if (script.trainer == TrainerType.SACDepr || script.trainer == TrainerType.SAC)
             {
                 dontDrawMe.Add("batchSize");
                 dontDrawMe.Add("bufferSize");
@@ -289,7 +310,7 @@ namespace DeepUnity.ReinforcementLearning
             else
                 throw new NotImplementedException("Unhandled trainer type");
 
-            if (script.trainer != TrainerType.SAC)
+            if (script.trainer != TrainerType.SACDepr)
             {
                 dontDrawMe.Add("sacDebugMetrics");
                 dontDrawMe.Add("sacDebugEveryNUpdates");

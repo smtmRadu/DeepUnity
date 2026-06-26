@@ -31,7 +31,7 @@ namespace DeepUnity.ReinforcementLearning
             public Device inferenceDevice;
             public Device trainingDevice;
             public bool disableBallNoise;
-            public TrainerType trainer = TrainerType.SAC;
+            public TrainerType trainer = TrainerType.SACDepr;
             public int decisionPeriod = 1;
         }
 
@@ -143,7 +143,7 @@ namespace DeepUnity.ReinforcementLearning
                 timescale = 20,
                 inferenceDevice = Device.CPU,
                 trainingDevice = Device.GPU,
-                trainer = TrainerType.SACGPU,
+                trainer = TrainerType.SAC,
             });
         }
 
@@ -169,7 +169,7 @@ namespace DeepUnity.ReinforcementLearning
                 timescale = 20,
                 inferenceDevice = Device.CPU,
                 trainingDevice = Device.GPU,
-                trainer = TrainerType.SACGPU,
+                trainer = TrainerType.SAC,
             });
         }
 
@@ -195,7 +195,7 @@ namespace DeepUnity.ReinforcementLearning
                 timescale = 20,
                 inferenceDevice = Device.CPU,
                 trainingDevice = Device.GPU,
-                trainer = TrainerType.SACGPU,
+                trainer = TrainerType.SAC,
             });
         }
 
@@ -222,12 +222,12 @@ namespace DeepUnity.ReinforcementLearning
                 timescale = 20,
                 inferenceDevice = Device.CPU,
                 trainingDevice = Device.GPU,
-                trainer = TrainerType.SACGPU,
+                trainer = TrainerType.SAC,
                 decisionPeriod = 5,
             });
         }
 
-        // Same winning config as RunBalanceBallSacGpuMlAgentsParity but on the CPU SACTrainer.
+        // Same winning config as RunBalanceBallSacGpuMlAgentsParity but on the CPU SACTrainerDepr.
         public static void RunBalanceBallSacCpuMlAgentsParity()
         {
             StartRun(new RunSpec
@@ -247,7 +247,7 @@ namespace DeepUnity.ReinforcementLearning
                 timescale = 20,
                 inferenceDevice = Device.CPU,
                 trainingDevice = Device.CPU,
-                trainer = TrainerType.SAC,
+                trainer = TrainerType.SACDepr,
                 decisionPeriod = 5,
             });
         }
@@ -271,7 +271,7 @@ namespace DeepUnity.ReinforcementLearning
                 timescale = 20,
                 inferenceDevice = Device.CPU,
                 trainingDevice = Device.CPU,
-                trainer = TrainerType.SAC,
+                trainer = TrainerType.SACDepr,
             });
         }
 

@@ -42,15 +42,26 @@ namespace DeepUnity
             public ComputeBuffer[] preFfnLnGamma;
             public ComputeBuffer[] postFfnLnGamma;
 
+            // Quantized modes only (see import_params.py --quant int8|int4). INT8: one fp16 scale
+            // per output row; the concatenated W_QKV / mlpWeights buffers hold int8 packed 4-per-uint.
+            // INT4 (GGUF Q4_0): weights packed 8-per-uint + one fp16 scale per 32-weight group, the
+            // scales concatenated in the same q|k|v / gate|up|down order as the weights. All null in
+            // FP16 mode. Norm gammas stay FP16 in every mode.
+            public readonly LLMQuant Quant;
+            public ComputeBuffer embedScales => _embedScalesSlot[0];   // [vocab]; tied lm_head shares it
+            readonly ComputeBuffer[] _embedScalesSlot = new ComputeBuffer[1];
+            public ComputeBuffer[] W_QKVScales;   // [qkv_proj_dim]
+            public ComputeBuffer[] W_OScales;     // [hidden]
+            public ComputeBuffer[] mlpScales;     // [2*intermediate + hidden]
+
             public bool IsReady { get; private set; }
 
             readonly int numLayers, hiddenSize, headDim, headsQ, headsKV;
             readonly int innerEmbDim, qkvProjDim, intermediateSize, vocabSize;
 
-            // Per-frame main-thread GPU budget in BYTES (lazy buffer creation + SetData slices).
-            // Lower = smoother frames while the model streams in, longer load (see the Qwen
-            // counterpart — 24 MB slices caused visible fps dips mid-game).
-            const int UPLOAD_BUDGET_BYTES = 8 * 1024 * 1024;
+            // Per-frame main-thread GPU budget in BYTES (lazy buffer creation + SetData slices) —
+            // the boot-vs-framedrop knob now lives on the shared LLM base (LLM.UploadBudgetBytes)
+            // so it can be swept between boots; read live each frame in UploadPump below.
             // Max files simultaneously in flight (being read or queued) — bounds boot RAM.
             const int MAX_IO_JOBS = 4;
 
@@ -82,8 +93,18 @@ namespace DeepUnity
             volatile bool _disposed;
             int _jobsUploaded;
 
-            public Gemma3Weights(string paramsPath)
+            public Gemma3Weights(string paramsPath, LLMQuant quant = LLMQuant.FP16)
             {
+                // The exported params are large and may not be checked into the repo — point the
+                // user at the exporter script instead of letting hundreds of file errors rain.
+                if (!System.IO.Directory.Exists(paramsPath))
+                    throw new System.IO.DirectoryNotFoundException(
+                        $"Gemma3 weights folder not found: '{paramsPath}'. Generate it with " +
+                        "Assets/DeepUnity/LLMs/import_params.py — e.g. `python import_params.py google/gemma-3-270m-it " +
+                        "--quant fp16|int8|int4` downloads the checkpoint and exports the params folder under " +
+                        "Assets/Resources/DeepUnity/LLMs/Gemma3/.");
+
+                Quant = quant;
                 numLayers = Gemma3Config.NUM_LAYERS;
                 hiddenSize = Gemma3Config.HIDDEN_SIZE;
                 headDim = Gemma3Config.HEAD_DIM;
@@ -106,6 +127,10 @@ namespace DeepUnity
                 preFfnLnGamma = new ComputeBuffer[numLayers];
                 postFfnLnGamma = new ComputeBuffer[numLayers];
 
+                W_QKVScales = new ComputeBuffer[numLayers];
+                W_OScales = new ComputeBuffer[numLayers];
+                mlpScales = new ComputeBuffer[numLayers];
+
                 BuildManifest(paramsPath);
 
                 DeepUnityDispatcher.Run(UploadPump());
@@ -126,47 +151,141 @@ namespace DeepUnity
                 });
             }
 
+            // One group of row-partitioned matmul weights written into ONE weight buffer + ONE
+            // scale buffer, concatenated by output row (q|k|v, gate|up|down, or a single matrix).
+            // Sizes are in the manifest's 2-byte "half" unit:
+            //   FP16: <bp>.bin       rows*cols halves
+            //   INT8: <bp>.int8.bin  rows*cols bytes -> rows*cols/2 halves (4 int8 per uint)
+            //         + <bp>.scales.bin  one fp16 scale per output row
+            //   INT4: <bp>.int4.bin  rows*cols/2 bytes -> rows*cols/4 halves (8 nibbles per uint)
+            //         + <bp>.scales.bin  one fp16 scale per 32-weight group = rows*cols/32 halves
+            // dstByteOffsets walk the parts in order. The shader's wScale row index is the part's
+            // row offset within this concatenation (q|k|v / gate|up|down) for INT8; INT4 folds
+            // wScale to 1.0 and indexes the group scale by the flat weight index >> 5, which lines
+            // up because both weights and scales are concatenated in the same part order.
+            void AddConcatW(ComputeBuffer[] wSlot, ComputeBuffer[] sSlot, int i, (string bp, int rows, int cols)[] parts)
+            {
+                int totElems = 0, totRows = 0;
+                foreach (var pp in parts) { totElems += pp.rows * pp.cols; totRows += pp.rows; }
+
+                if (Quant == LLMQuant.FP16)
+                {
+                    int bytePos = 0;
+                    foreach (var pp in parts)
+                    {
+                        int elems = pp.rows * pp.cols;
+                        Add(pp.bp + ".bin", wSlot, i, totElems, elems, bytePos);
+                        bytePos += elems * 2;               // fp16 = 2 bytes/elem
+                    }
+                    return;
+                }
+
+                if (Quant == LLMQuant.INT8)
+                {
+                    // weights packed 4-per-uint (1 byte/elem) + one fp16 scale per output row.
+                    int wPos = 0;
+                    foreach (var pp in parts)
+                    {
+                        int elems = pp.rows * pp.cols;
+                        Add(pp.bp + ".int8.bin", wSlot, i, totElems / 2, elems / 2, wPos);
+                        wPos += elems;                      // int8 = 1 byte/elem
+                    }
+                    int sPos = 0;
+                    foreach (var pp in parts)
+                    {
+                        Add(pp.bp + ".scales.bin", sSlot, i, totRows, pp.rows, sPos);
+                        sPos += pp.rows * 2;                // fp16 scale = 2 bytes/row
+                    }
+                    return;
+                }
+
+                // INT4: weights packed 8-per-uint (0.5 byte/elem) + one fp16 scale per 32-weight
+                // group. Every part's cols are a multiple of 32, so groups never straddle a part.
+                int wPos4 = 0;
+                foreach (var pp in parts)
+                {
+                    int elems = pp.rows * pp.cols;
+                    Add(pp.bp + ".int4.bin", wSlot, i, totElems / 4, elems / 4, wPos4);
+                    wPos4 += elems / 2;                     // int4 = 0.5 byte/elem
+                }
+                int sPos4 = 0;
+                foreach (var pp in parts)
+                {
+                    int groups = pp.rows * pp.cols / 32;
+                    Add(pp.bp + ".scales.bin", sSlot, i, totElems / 32, groups, sPos4);
+                    sPos4 += groups * 2;                    // fp16 scale = 2 bytes/group
+                }
+            }
+
             void BuildManifest(string p)
             {
-                // lm_head shards (uneven sizes) into one tied embedding buffer at running offsets.
-                int[] partSizes =
+                // Tied embedding/lm_head shards into one buffer at running offsets. Unified
+                // convention (import_params.py): embed_tokens/part_{0..15}[.int8].bin, 16 equal
+                // row-aligned shards (+ one scales.bin covering the whole matrix when int8).
+                // Legacy export: lm_head/part_{0..13}.bin, 14 torch.chunk shards (uneven, fp16
+                // only). Detect by which folder exists.
+                if (Directory.Exists(Path.Combine(p, "embed_tokens")))
                 {
-                    11_983_726, 11_983_726, 11_983_726, 11_983_726,
-                    11_983_726, 11_983_726, 11_983_726, 11_983_726,
-                    11_983_726, 11_983_726, 11_983_726, 11_983_726,
-                    11_983_726, 11_983_722
-                };
-                int embedHalves = vocabSize * hiddenSize;
-                int offset = 0;
-                for (int i = 0; i < partSizes.Length; i++)
+                    string ext = Quant == LLMQuant.INT8 ? ".int8.bin"
+                               : Quant == LLMQuant.INT4 ? ".int4.bin" : ".bin";
+                    // halves per weight: fp16 1, int8 0.5 (2 per half), int4 0.25 (4 per half).
+                    int divisor = Quant == LLMQuant.INT8 ? 2 : Quant == LLMQuant.INT4 ? 4 : 1;
+                    int totalHalves = vocabSize * hiddenSize / divisor;
+                    int perChunk = totalHalves / 16;
+                    for (int i = 0; i < 16; i++)
+                        Add($"{p}/embed_tokens/part_{i}{ext}", _embedSlot, 0, totalHalves, perChunk, i * perChunk * 2);
+                    if (Quant == LLMQuant.INT8)
+                        Add($"{p}/embed_tokens/scales.bin", _embedScalesSlot, 0, vocabSize);
+                    else if (Quant == LLMQuant.INT4)
+                        Add($"{p}/embed_tokens/scales.bin", _embedScalesSlot, 0, vocabSize * hiddenSize / 32);
+                }
+                else
                 {
-                    Add($"{p}/lm_head/part_{i}.bin", _embedSlot, 0, embedHalves, partSizes[i], offset);
-                    offset += partSizes[i] * 2;
+                    int embedHalves = vocabSize * hiddenSize;
+                    int[] partSizes =
+                    {
+                        11_983_726, 11_983_726, 11_983_726, 11_983_726,
+                        11_983_726, 11_983_726, 11_983_726, 11_983_726,
+                        11_983_726, 11_983_726, 11_983_726, 11_983_726,
+                        11_983_726, 11_983_722
+                    };
+                    int offset = 0;
+                    for (int i = 0; i < partSizes.Length; i++)
+                    {
+                        Add($"{p}/lm_head/part_{i}.bin", _embedSlot, 0, embedHalves, partSizes[i], offset);
+                        offset += partSizes[i] * 2;
+                    }
                 }
 
                 Add(p + "/norm.bin", _finalNormSlot, 0, hiddenSize);
 
-                int qHalves = hiddenSize * innerEmbDim;
-                int kvHalves = hiddenSize * innerEmbDim * headsKV / headsQ;
-                int qkvHalves = hiddenSize * qkvProjDim;
-                int oHalves = innerEmbDim * hiddenSize;
-                int mlpPart = hiddenSize * intermediateSize;
+                int qOut = innerEmbDim;                          // q_proj output rows
+                int kvOut = innerEmbDim * headsKV / headsQ;      // k/v_proj output rows
 
                 for (int i = 0; i < numLayers; i++)
                 {
                     string lp = $"{p}/layer_{i}";
 
-                    // q|k|v concatenated into one W_QKV buffer
-                    Add(lp + "/self_attn_q_proj.bin", W_QKV, i, qkvHalves, qHalves, 0);
-                    Add(lp + "/self_attn_k_proj.bin", W_QKV, i, qkvHalves, kvHalves, qHalves * 2);
-                    Add(lp + "/self_attn_v_proj.bin", W_QKV, i, qkvHalves, kvHalves, (qHalves + kvHalves) * 2);
+                    // q|k|v concatenated into one W_QKV buffer (+ q|k|v scales when int8)
+                    AddConcatW(W_QKV, W_QKVScales, i, new[]
+                    {
+                        (lp + "/self_attn_q_proj", qOut,  hiddenSize),
+                        (lp + "/self_attn_k_proj", kvOut, hiddenSize),
+                        (lp + "/self_attn_v_proj", kvOut, hiddenSize),
+                    });
 
-                    Add(lp + "/self_attn_o_proj.bin", W_O, i, oHalves);
+                    AddConcatW(W_O, W_OScales, i, new[]
+                    {
+                        (lp + "/self_attn_o_proj", hiddenSize, innerEmbDim),
+                    });
 
-                    // gate|up|down concatenated into one mlpWeights buffer
-                    Add(lp + "/mlp_gate_proj.bin", mlpWeights, i, mlpPart * 3, mlpPart, 0);
-                    Add(lp + "/mlp_up_proj.bin",   mlpWeights, i, mlpPart * 3, mlpPart, mlpPart * 2);
-                    Add(lp + "/mlp_down_proj.bin", mlpWeights, i, mlpPart * 3, mlpPart, mlpPart * 4);
+                    // gate|up|down concatenated into one mlpWeights buffer (+ scales when int8)
+                    AddConcatW(mlpWeights, mlpScales, i, new[]
+                    {
+                        (lp + "/mlp_gate_proj", intermediateSize, hiddenSize),
+                        (lp + "/mlp_up_proj",   intermediateSize, hiddenSize),
+                        (lp + "/mlp_down_proj", hiddenSize,       intermediateSize),
+                    });
 
                     Add(lp + "/self_attn_q_norm.bin", qNormGamma, i, headDim);
                     Add(lp + "/self_attn_k_norm.bin", kNormGamma, i, headDim);
@@ -254,7 +373,7 @@ namespace DeepUnity
             // job's array and IO slot. Flips IsReady once everything is uploaded.
             IEnumerator UploadPump()
             {
-                long budget = UPLOAD_BUDGET_BYTES;
+                long budget = LLM.UploadBudgetBytes;
 
                 while (true)
                 {
@@ -264,7 +383,7 @@ namespace DeepUnity
                     {
                         if (job.slot[job.slotIndex] == null)
                         {
-                            if (budget <= 0) { yield return null; budget = UPLOAD_BUDGET_BYTES; }
+                            if (budget <= 0) { yield return null; budget = LLM.UploadBudgetBytes; }
                             job.slot[job.slotIndex] = HalfBuf(job.bufferHalfCount);
                             budget -= (long)job.bufferHalfCount * 2;
                         }
@@ -277,7 +396,7 @@ namespace DeepUnity
                             if (budget <= 0)
                             {
                                 yield return null;               // hand the frame back to rendering
-                                budget = UPLOAD_BUDGET_BYTES;
+                                budget = LLM.UploadBudgetBytes;
                             }
                             int count = (int)Math.Min(budget, len - src);
                             target.SetData(job.data, src, job.dstByteOffset + src, count);
@@ -296,7 +415,7 @@ namespace DeepUnity
                     else
                     {
                         yield return null;
-                        budget = UPLOAD_BUDGET_BYTES;
+                        budget = LLM.UploadBudgetBytes;
                     }
                 }
 
@@ -306,7 +425,7 @@ namespace DeepUnity
                     ConsoleMessage.Warning($"Gemma3 weights: only {_jobsUploaded}/{_manifest.Count} weight files uploaded " +
                                            "(missing or failed reads — see earlier exceptions). Model output will be invalid.");
                 else
-                    ConsoleMessage.Info("Gemma3 weights streamed to GPU.");
+                    ConsoleMessage.Info($"Gemma3-270m {Quant} weights streamed to GPU.");
 
                 IsReady = true;
             }
@@ -317,12 +436,14 @@ namespace DeepUnity
 
                 _embedSlot[0]?.Release();
                 _finalNormSlot[0]?.Release();
+                _embedScalesSlot[0]?.Release();
                 for (int i = 0; i < numLayers; i++)
                 {
                     W_QKV[i]?.Release(); W_O[i]?.Release(); mlpWeights[i]?.Release();
                     qNormGamma[i]?.Release(); kNormGamma[i]?.Release();
                     inputLnGamma[i]?.Release(); postAttnLnGamma[i]?.Release();
                     preFfnLnGamma[i]?.Release(); postFfnLnGamma[i]?.Release();
+                    W_QKVScales[i]?.Release(); W_OScales[i]?.Release(); mlpScales[i]?.Release();
                 }
             }
         }

@@ -5,11 +5,11 @@ namespace DeepUnity.Tutorials
 {
     public class BalanceBall : Agent
     {
-        [Button("SetPPOGPUHP")]
+        [Button("SetPPOHP")]
         // [Button("SetDefaultHP")]
         [SerializeField] Rigidbody ball;
 
-        [Button("SetSACGPUHP")]
+        [Button("SetSACHP")]
         [SerializeField] float rotationSpeed = 1f;
 
         public override void CollectObservations(StateVector sensorBuffer)
@@ -56,10 +56,10 @@ namespace DeepUnity.Tutorials
 
 
         // This exist because balance ball is the best env for testing out. (in 1 minute it must get around 273 mean steps)
-        public void SetPPOGPUHP()
+        public void SetPPOHP()
         {
             Utils.Random.Seed = 0;
-            model.config.trainer = TrainerType.PPOGPU;
+            model.config.trainer = TrainerType.PPO;
             model.config.actorLearningRate = 1e-3f;
             model.config.criticLearningRate = 1e-3f;
             model.config.batchSize = 128;
@@ -70,20 +70,20 @@ namespace DeepUnity.Tutorials
             print("Config changed for Balance ball");
         }
 
-        public void SetSACHP()
+        public void SetSACDeprHP()
         {
-            SetSACGPUHP();
-            model.config.trainer = TrainerType.SAC; // same verified setup, CPU trainer (~10x slower)
-            print("Config changed for Balance ball (SAC CPU)");
+            SetSACHP();
+            model.config.trainer = TrainerType.SACDepr; // same verified setup, deprecated CPU trainer (~10x slower)
+            print("Config changed for Balance ball (SAC CPU, deprecated)");
         }
 
         // Verified-convergent SAC setup (2026-06-10, see ReinforcementLearning/FIXES.md):
         // takeoff at ~30k decisions, episodes then reach the 10k maxStep cap.
-        public void SetSACGPUHP()
+        public void SetSACHP()
         {
             Utils.Random.Seed = 0;
 
-            model.config.trainer = TrainerType.SACGPU;
+            model.config.trainer = TrainerType.SAC;
             model.config.actorLearningRate = 1e-3f;
             model.config.criticLearningRate = 1e-3f;
             model.config.gamma = 0.99f;
@@ -116,7 +116,7 @@ namespace DeepUnity.Tutorials
             UnityEditor.EditorUtility.SetDirty(this);
             if (requester != null) UnityEditor.EditorUtility.SetDirty(requester);
 #endif
-            print("Config changed for Balance ball (SACGPU): updateInterval=1, alpha=0.005, decisionPeriod=5");
+            print("Config changed for Balance ball (SAC): updateInterval=1, alpha=0.005, decisionPeriod=5");
         }
     }
 

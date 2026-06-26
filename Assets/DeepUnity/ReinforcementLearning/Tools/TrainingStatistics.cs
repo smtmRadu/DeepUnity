@@ -211,9 +211,9 @@ namespace DeepUnity.ReinforcementLearning
             y += 50;
             svgBuilder.AppendLine($@"<text x=""10"" y=""{y}"" font-family=""Arial"" font-size=""16"" fill=""black"">[Hyperparameters]</text>");
             y += 20;
-            if (hp.trainer == TrainerType.PPO || hp.trainer == TrainerType.PPOGPU)
+            if (hp.trainer == TrainerType.PPODepr || hp.trainer == TrainerType.PPO)
                 svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Buffer Size: {hp.bufferSize}        [Batch Size: {hp.batchSize}       (x{hp.bufferSize / hp.batchSize})]</text>");
-            else if (hp.trainer == TrainerType.SAC || hp.trainer == TrainerType.SACGPU || hp.trainer == TrainerType.TD3 || hp.trainer == TrainerType.DDPG)
+            else if (hp.trainer == TrainerType.SACDepr || hp.trainer == TrainerType.SAC || hp.trainer == TrainerType.TD3 || hp.trainer == TrainerType.DDPG)
                 svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Replay Buffer Size: {hp.replayBufferSize}        [Batch Size: {hp.minibatchSize}       (x{hp.replayBufferSize / hp.minibatchSize})]</text>");
             y += 20;
             svgBuilder.AppendLine($@"<text x=""50"" y=""{y}"" font-family=""Arial"" font-size=""12"" fill=""black"">Num Epoch: {hp.numEpoch}</text>");
@@ -353,12 +353,12 @@ namespace DeepUnity.ReinforcementLearning
 
             /*if(EditorApplication.isPlaying)
             {
-                float sessionProgress = script.stepCount / ((float)PPOTrainer.SessionMaxSteps) * 100f;
+                float sessionProgress = script.stepCount / ((float)PPOTrainerDepr.SessionMaxSteps) * 100f;
                 StringBuilder sb = new StringBuilder();
                 sb.Append("Progress [");
                 sb.Append(script.stepCount);
                 sb.Append(" / ");
-                sb.Append(PPOTrainer.SessionMaxSteps);
+                sb.Append(PPOTrainerDepr.SessionMaxSteps);
                 sb.Append($"] \n[");
                 for (float i = 1.25f; i <= 100f; i += 1.25f)
                 {

@@ -54,6 +54,49 @@ float readH(StructuredBuffer<uint> buf, uint index)
 }
 
 
+// ================================ INT8 WEIGHT PATH ================================
+// Weight-only int8 (see import_params.py --quant int8): the big matmul weights are packed
+// 4 int8 per uint + one fp16 scale per OUTPUT ROW (symmetric: w = q * scale_row). Kernels
+// read raw weights via readW and apply the row scale ONCE per dot product via wScale — in
+// the FP16 variant wScale folds to 1.0 and the scale buffers are stripped, so the FP16 path
+// needs no scale bindings. Norm gammas / RoPE caches stay FP16 in both variants (plain readH).
+// Gemma keeps the concatenated W_QKV (q|k|v) and mlp_weights (gate|up|down) buffers, so the
+// row index passed to wScale is the row's position in the CONCATENATED matrix (the scale
+// buffers are likewise q|k|v / gate|up|down concatenated, one fp16 scale per output row).
+#pragma multi_compile _ INT8_WEIGHTS INT4_WEIGHTS
+
+float readQ8(StructuredBuffer<uint> buf, uint index)
+{
+    uint word = buf[index >> 2];
+    int q = (int)((word >> ((index & 3u) * 8u)) & 0xFFu);
+    return (float)((q << 24) >> 24);   // sign-extend low byte
+}
+
+// INT4 (GGUF Q4_0-style, see import_params.py --quant int4): nibble i lives in uint i>>3 at
+// shift (i&7)*4 and stores q+8; value = (nibble - 8) * group_scale. Scales are row-major
+// [rows, cols/32] over the same q|k|v / gate|up|down concatenation as the weights, so the
+// group index is just the flat weight index >> 5 (and groups never cross a concat part since
+// every part's cols are a multiple of 32).
+float readQ4(StructuredBuffer<uint> buf, uint index)
+{
+    return (float)((buf[index >> 3] >> ((index & 7u) * 4u)) & 0xFu) - 8.0;
+}
+
+// readW takes the weight buffer AND its scale buffer: INT8 applies the per-ROW scale once per
+// dot product via wScale; INT4 applies its per-GROUP scale per element inside readW (one fp16
+// read per 32 MACs) and wScale folds to 1.0; FP16 uses neither.
+#if defined(INT8_WEIGHTS)
+    #define readW(buf, sbuf, idx) readQ8(buf, idx)
+    #define wScale(sbuf, row)     readH(sbuf, row)
+#elif defined(INT4_WEIGHTS)
+    #define readW(buf, sbuf, idx) (readQ4(buf, idx) * readH(sbuf, (idx) >> 5))
+    #define wScale(sbuf, row)     1.0
+#else
+    #define readW(buf, sbuf, idx) readH(buf, idx)
+    #define wScale(sbuf, row)     1.0
+#endif
+
+
 // ================================ BUFFERS ================================
 
 // -- FP16 packed weights (read-only, stride 4, count = N/2) --
@@ -65,6 +108,14 @@ StructuredBuffer<uint>      mlp_weights;    // packed FP16 gate+up+down
 StructuredBuffer<uint>      lm_weights;     // packed FP16 (= embed_weights, tied)
 StructuredBuffer<uint>      rope_cos;       // packed FP16
 StructuredBuffer<uint>      rope_sin;       // packed FP16
+
+// -- fp16 scales (packed 2 per uint) — bound only in the INT8_WEIGHTS / INT4_WEIGHTS variants.
+//    INT8: one scale per OUTPUT ROW (sizes below). INT4: one scale per 32-weight GROUP, i.e.
+//    rows*cols/32 entries laid out [rows, cols/32] in the same concatenation order. --
+StructuredBuffer<uint>      embed_scales;   // [vocab]            (INT8) / [vocab*hidden/32]      (INT4)
+StructuredBuffer<uint>      W_QKV_scales;   // [qkv_proj_dim]     (INT8) / qkv_proj_dim*hidden/32 (INT4)
+StructuredBuffer<uint>      W_O_scales;     // [hidden]           (INT8) / hidden*inner/32        (INT4)
+StructuredBuffer<uint>      mlp_scales;     // [2*intermediate+hidden] / per-group equivalent     (INT4)
 
 // -- FP32 activations (read-write, stride 4, count = N) --
 StructuredBuffer<uint>      token_ids;      // uint
@@ -142,7 +193,8 @@ void EmbeddingLookup(uint3 id : SV_DispatchThreadID)
     uint pos = idx / hidden_size;
     uint h = idx % hidden_size;
     uint tok = token_ids[pos];
-    embed_output[idx] = readH(embed_weights, tok * hidden_size + h) * embed_scale;
+    embed_output[idx] = readW(embed_weights, embed_scales, tok * hidden_size + h)
+                        * wScale(embed_scales, tok) * embed_scale;
 }
 
 
@@ -344,7 +396,8 @@ void QKVProj(uint3 id : SV_DispatchThreadID)
     float sum = 0.0;
     uint x_base = ((b * sequence_length_q + l) * embedding_dim);
     for (uint e = 0; e < embedding_dim; e++)
-        sum += X[x_base + e] * readH(W_QKV, p * embedding_dim + e);
+        sum += X[x_base + e] * readW(W_QKV, W_QKV_scales, p * embedding_dim + e);
+    sum *= wScale(W_QKV_scales, p);
 
     QKV[((b * sequence_length_q + l) * qkv_proj_dim + p)] = sum;
 }
@@ -399,6 +452,119 @@ void AttendValues(uint3 id : SV_DispatchThreadID)
 }
 
 
+// ========================= FlashAttention ====================================
+// FlashAttention-1 style fused attention: QK^T, causal/sliding-window masking,
+// softmax and the V-weighted sum run in ONE kernel using an online (running-
+// rescale) softmax over KV tiles — the [heads, seq_q, seq_k] score matrix is
+// never materialized, replacing the ComputeAttentionScores -> ApplyMask ->
+// SoftmaxRows -> AttendValues chain (4 dispatches -> 1, and SoftmaxRows'
+// one-thread-per-row serial passes become a tree reduction).
+// One threadgroup per (query position, q head). Each tile of FA_THREADS KV
+// positions: phase 1 — one score per thread (q row cached in groupshared);
+// phase 2 — threads switch roles to output dims (thread tid owns dim tid, so
+// V reads are coalesced). Running max m / denominator l / accumulator follow
+// the FlashAttention update: alpha = exp(m_old - m_new) rescales both.
+// Sliding-window layers clamp the KV walk to [abs_q - window, abs_q], so
+// out-of-window tiles are never read at all (the legacy path computed scores
+// for the WHOLE cache and then masked them off).
+// Constraint: head_dim <= FA_THREADS (Gemma3: 256). C# falls back otherwise.
+#define FA_THREADS 256
+groupshared float fa_q[FA_THREADS];    // query row, pre-scaled (head_dim <= FA_THREADS)
+groupshared float fa_p[FA_THREADS];    // tile probabilities exp(s - m_new)
+groupshared float fa_red[FA_THREADS];  // tree-reduction scratch
+
+#pragma kernel FlashAttention
+[numthreads(FA_THREADS, 1, 1)]
+void FlashAttention(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint q_pos = gid.x;
+    uint hq    = gid.y;
+    uint tid   = gtid.x;
+
+    uint hkv    = hq / max(num_heads_q / max(num_heads_kv, 1u), 1u);
+    uint kv_len = max(seq_len_k, 1u);  // degenerate prewarm dispatch (all uniforms 0) must terminate
+    uint abs_q  = (kv_len - seq_len_q) + q_pos;
+
+    // Valid KV range for this query — must mirror ApplyMask exactly:
+    // causal: masked iff k > abs_q; SW: masked iff (abs_q - k) > window
+    // (bidirectional: SW applies symmetrically, |abs_q - k| > window).
+    uint j_hi = (bidirectional == 0u) ? min(abs_q, kv_len - 1u) : (kv_len - 1u);
+    uint j_lo = 0u;
+    if (sliding_window_size > 0u)
+    {
+        if (abs_q > sliding_window_size) j_lo = abs_q - sliding_window_size;
+        if (bidirectional != 0u)         j_hi = min(j_hi, abs_q + sliding_window_size);
+    }
+
+    // q row -> groupshared, with the attention scale folded in
+    uint q_base = (q_pos * num_heads_q + hq) * head_dim;
+    for (uint dq = tid; dq < head_dim; dq += FA_THREADS)
+        fa_q[dq] = Q[q_base + dq] * scale;
+    GroupMemoryBarrierWithGroupSync();
+
+    float m   = -3.0e38;  // running row max
+    float l   = 0.0;      // running softmax denominator
+    float acc = 0.0;      // this thread's output component (dim = tid)
+
+    for (uint tile = j_lo; tile <= j_hi; tile += FA_THREADS)
+    {
+        // phase 1: one KV position per thread
+        uint j = tile + tid;
+        float s = -3.0e38;
+        if (j <= j_hi)
+        {
+            uint k_base = (j * num_heads_kv + hkv) * head_dim;
+            float dot = 0.0;
+            for (uint d = 0; d < head_dim; d++)
+                dot += fa_q[d] * K[k_base + d];
+            s = dot;
+        }
+
+        // tile max
+        fa_red[tid] = s;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r1 = FA_THREADS / 2; r1 > 0; r1 >>= 1)
+        {
+            if (tid < r1) fa_red[tid] = max(fa_red[tid], fa_red[tid + r1]);
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float m_new = max(m, fa_red[0]);
+        GroupMemoryBarrierWithGroupSync();  // every thread read fa_red[0] before it is rewritten
+
+        // tile probabilities + their sum
+        float p = (j <= j_hi) ? exp(s - m_new) : 0.0;
+        fa_p[tid] = p;
+        fa_red[tid] = p;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r2 = FA_THREADS / 2; r2 > 0; r2 >>= 1)
+        {
+            if (tid < r2) fa_red[tid] += fa_red[tid + r2];
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float tile_sum = fa_red[0];
+
+        // online rescale (first tile: m = -3e38 -> alpha underflows to 0, empty state scales away)
+        float alpha = exp(m - m_new);
+        l = l * alpha + tile_sum;
+
+        // phase 2: thread tid accumulates output dim tid (coalesced V reads)
+        if (tid < head_dim)
+        {
+            float a = acc * alpha;
+            uint n_valid = min(FA_THREADS, j_hi - tile + 1u);
+            for (uint jj = 0; jj < n_valid; jj++)
+                a += fa_p[jj] * V[((tile + jj) * num_heads_kv + hkv) * head_dim + tid];
+            acc = a;
+        }
+        m = m_new;
+        GroupMemoryBarrierWithGroupSync();  // fa_p / fa_red are rewritten next tile
+    }
+
+    if (tid < head_dim)
+        AttendedValues[(q_pos * num_heads_q + hq) * head_dim + tid] = acc / max(l, 1e-12);
+}
+
+
 // ========================= OProj =============================================
 // Reads FP16 W_O weights
 #pragma kernel OProj
@@ -414,8 +580,9 @@ void OProj(uint3 id : SV_DispatchThreadID)
         uint hq = ie / head_dim;
         uint d  = ie % head_dim;
         sum += AttendedValues[(((b * sequence_length_q + l) * num_heads_q + hq) * head_dim + d)]
-             * readH(W_O, e * inner_embedding_dim + ie);
+             * readW(W_O, W_O_scales, e * inner_embedding_dim + ie);
     }
+    sum *= wScale(W_O_scales, e);
     O[((b * sequence_length_q + l) * embedding_dim + e)] = sum;
 }
 
@@ -436,9 +603,11 @@ void GateUp(uint3 id : SV_DispatchThreadID)
     for (uint k = 0; k < H; k++)
     {
         float x = input[input_base + k];
-        g += x * readH(mlp_weights, gate_off + i_idx * H + k);
-        u += x * readH(mlp_weights, up_off   + i_idx * H + k);
+        g += x * readW(mlp_weights, mlp_scales, gate_off + i_idx * H + k);
+        u += x * readW(mlp_weights, mlp_scales, up_off   + i_idx * H + k);
     }
+    g *= wScale(mlp_scales, i_idx);       // gate rows [0, I)
+    u *= wScale(mlp_scales, I + i_idx);   // up rows   [I, 2I)
 
     uint out_idx = ((b_idx * seq_len) + l_idx) * I + i_idx;
     if (activation_type == 0) intermediate[out_idx] = silu(g) * u;
@@ -459,7 +628,8 @@ void Down(uint3 id : SV_DispatchThreadID)
 
     float acc = 0.0;
     for (uint i = 0; i < intermediate_size; i++)
-        acc += intermediate[inter_base + i] * readH(mlp_weights, down_off + h_idx * intermediate_size + i);
+        acc += intermediate[inter_base + i] * readW(mlp_weights, mlp_scales, down_off + h_idx * intermediate_size + i);
+    acc *= wScale(mlp_scales, 2u * intermediate_size + h_idx);   // down rows [2I, 2I+H)
 
     input[((b_idx * seq_len) + l_idx) * hidden_size + h_idx] = acc;
 }
@@ -478,9 +648,11 @@ void GateUp1Vec(uint3 id : SV_DispatchThreadID)
     for (uint k = 0; k < H; k++)
     {
         float x = input[k];
-        g += x * readH(mlp_weights, i_idx * H + k);
-        u += x * readH(mlp_weights, H * I + i_idx * H + k);
+        g += x * readW(mlp_weights, mlp_scales, i_idx * H + k);
+        u += x * readW(mlp_weights, mlp_scales, H * I + i_idx * H + k);
     }
+    g *= wScale(mlp_scales, i_idx);       // gate rows [0, I)
+    u *= wScale(mlp_scales, I + i_idx);   // up rows   [I, 2I)
     if (activation_type == 0) intermediate[i_idx] = silu(g) * u;
     else                      intermediate[i_idx] = gelu(g) * u;
 }
@@ -497,7 +669,8 @@ void Down1Vec(uint3 id : SV_DispatchThreadID)
     uint down_off = 2u * hidden_size * intermediate_size;
     float acc = 0.0;
     for (uint i = 0; i < intermediate_size; i++)
-        acc += intermediate[i] * readH(mlp_weights, down_off + h_idx * intermediate_size + i);
+        acc += intermediate[i] * readW(mlp_weights, mlp_scales, down_off + h_idx * intermediate_size + i);
+    acc *= wScale(mlp_scales, 2u * intermediate_size + h_idx);   // down rows [2I, 2I+H)
     input[h_idx] = acc;
 }
 
@@ -514,7 +687,8 @@ void LmHeadPredict(uint3 id : SV_DispatchThreadID)
     float sum = 0.0;
     uint in_base = ((b * seq_len) + l) * hidden_size;
     for (uint h = 0; h < hidden_size; h++)
-        sum += lm_input[in_base + h] * readH(lm_weights, v * hidden_size + h);
+        sum += lm_input[in_base + h] * readW(lm_weights, embed_scales, v * hidden_size + h);
+    sum *= wScale(embed_scales, v);
     lm_output[((b * seq_len) + l) * vocab_size + v] = sum;
 }
 
@@ -529,7 +703,8 @@ void LmHeadPredict1Vec(uint3 id : SV_DispatchThreadID)
 
     float sum = 0.0;
     for (uint h = 0; h < hidden_size; h++)
-        sum += lm_input[h] * readH(lm_weights, v * hidden_size + h);
+        sum += lm_input[h] * readW(lm_weights, embed_scales, v * hidden_size + h);
+    sum *= wScale(embed_scales, v);
     lm_output[v] = sum;
 }
 

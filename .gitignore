@@ -91,3 +91,12 @@ ProbeLogs/
 Assets/Resources/Cache/
 Assets/DeepUnity/ReinforcementLearning/Base/debug-*.log
 Assets/DeepUnity/ReinforcementLearning/Base/debug-*.log.meta
+
+# LLM model weights — large binaries regenerated via the param-export script (import_params.py).
+# Loaded from Resources at runtime; intentionally NOT tracked (too large for git, never pushed).
+Assets/Resources/DeepUnity/LLMs/**/weights_*/
+Assets/Resources/DeepUnity/LLMs/**/weights_*.meta
+Assets/DeepUnity/LLMs/**/weights_*/
+Assets/DeepUnity/LLMs/**/weights_*.meta
+Assets/DeepUnity/LLMs/**/params_*/
+Assets/DeepUnity/LLMs/**/params_*.meta

@@ -244,7 +244,7 @@ namespace DeepUnity.ReinforcementLearning
 
         /// <summary>
         /// Key used for naming/filtering the OptimStates json files. Trainers that share the same
-        /// optimizer-state format can override this to share files (e.g. PPOGPUTrainer ↔ PPOTrainer).
+        /// optimizer-state format can override this to share files (e.g. PPOTrainer ↔ PPOTrainerDepr).
         /// </summary>
         public virtual string OptimStatesKey => GetType().Name.ToLower();
 
@@ -268,19 +268,24 @@ namespace DeepUnity.ReinforcementLearning
 #endif
                 GameObject go = new GameObject($"[DeepUnity] Trainer - {trainer}");
 
+                // PPO and SAC (full-GPU) are the standards; everything else is deprecated/legacy,
+                // kept only so old configs keep training, and warns when used.
+                if (trainer != TrainerType.PPO && trainer != TrainerType.SAC)
+                    ConsoleMessage.Warning($"TrainerType.{trainer} is deprecated/legacy — switch the Config asset to PPO or SAC (the full-GPU standards)");
+
                 switch (trainer)
                 {
+                    case TrainerType.PPODepr:
+                        Instance = go.AddComponent<PPOTrainerDepr>();
+                        break;
                     case TrainerType.PPO:
                         Instance = go.AddComponent<PPOTrainer>();
                         break;
-                    case TrainerType.PPOGPU:
-                        Instance = go.AddComponent<PPOGPUTrainer>();
+                    case TrainerType.SACDepr:
+                        Instance = go.AddComponent<SACTrainerDepr>();
                         break;
                     case TrainerType.SAC:
                         Instance = go.AddComponent<SACTrainer>();
-                        break;
-                    case TrainerType.SACGPU:
-                        Instance = go.AddComponent<SACGPUTrainer>();
                         break;
                     case TrainerType.TD3:
                         Instance = go.AddComponent<TD3Trainer>();
@@ -299,10 +304,10 @@ namespace DeepUnity.ReinforcementLearning
                 Instance.hp = agent.model.config;
                 Instance.train_data = new ExperienceBuffer(Instance.hp.trainer switch
                 {
+                    TrainerType.PPODepr => Instance.hp.bufferSize,
                     TrainerType.PPO => Instance.hp.bufferSize,
-                    TrainerType.PPOGPU => Instance.hp.bufferSize,
+                    TrainerType.SACDepr => Instance.hp.replayBufferSize,
                     TrainerType.SAC => Instance.hp.replayBufferSize,
-                    TrainerType.SACGPU => Instance.hp.replayBufferSize,
                     TrainerType.TD3 => Instance.hp.replayBufferSize,
                     TrainerType.DDPG => Instance.hp.replayBufferSize,
                     TrainerType.VPG => Instance.hp.bufferSize,

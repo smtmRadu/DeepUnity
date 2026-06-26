@@ -8,12 +8,12 @@
 //     var emb = new Gemma3ForEmbeddings();
 //     yield return emb.EncodeQuery("hello world", v => Debug.Log(v.Norm()));
 //
-// Expected disk layout under `params_embedding/` (everything FP16 on disk, like params_it):
+// Expected disk layout under `params_embedding/` (everything FP16 on disk, like weights_gemma3_270M_fp16):
 //     embed_tokens/part_{0..15}.bin    — packed FP16  [vocab*hidden]
 //     norm.bin                          — packed FP16  [hidden]
 //     dense_1.bin                       — packed FP16  [hf_intermediate * hidden]   (up: H -> I)
 //     dense_2.bin                       — packed FP16  [hidden * hf_intermediate]   (down: I -> H)
-//     layer_{i}/                        — same names as Gemma3 (params_it) + extra {pre,post}_feedforward_layernorm.bin
+//     layer_{i}/                        — same names as Gemma3 (weights_gemma3_270M_fp16) + extra {pre,post}_feedforward_layernorm.bin
 // FFNInferenceCS reads the dense-head weights as packed FP16 (StructuredBuffer<uint>),
 // so end-to-end inference stays in FP16 for weights and FP32 for activations.
 //

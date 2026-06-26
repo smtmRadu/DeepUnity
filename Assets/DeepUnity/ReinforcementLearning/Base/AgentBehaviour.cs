@@ -772,7 +772,7 @@ namespace DeepUnity.ReinforcementLearning
             var trainer = config.trainer;
             var whatIsMissing = new List<string>();
 
-            if (trainer == TrainerType.PPO || trainer == TrainerType.PPOGPU)
+            if (trainer == TrainerType.PPODepr || trainer == TrainerType.PPO)
             {
                 if (!vNetwork)
                     whatIsMissing.Add("Value Network");
@@ -793,7 +793,7 @@ namespace DeepUnity.ReinforcementLearning
                 }
 
             }
-            else if (trainer == TrainerType.SAC || trainer == TrainerType.SACGPU)
+            else if (trainer == TrainerType.SACDepr || trainer == TrainerType.SAC)
             {
                 if (!q1Network)
                     whatIsMissing.Add("Q Network 1");
@@ -1042,7 +1042,7 @@ namespace DeepUnity.ReinforcementLearning
             // FullGPU PPO runs the entire training step on the GPU, so trainingDevice is
             // locked. Inference (when the model is later deployed outside training) stays
             // user-configurable — runtime inference is decoupled from the training path.
-            if (script.config != null && (script.config.trainer == TrainerType.PPOGPU || script.config.trainer == TrainerType.SACGPU))
+            if (script.config != null && (script.config.trainer == TrainerType.PPO || script.config.trainer == TrainerType.SAC))
             {
                 string gpuTrainerName = script.config.trainer.ToString();
                 if (script.trainingDevice != Device.GPU)
@@ -1120,7 +1120,7 @@ namespace DeepUnity.ReinforcementLearning
             }
 
             // In the future I need to change this, and store raw and normaized values separately in the off policy algs buffers
-            if(script.normalize == true && script.config != null && script.config.trainer != TrainerType.PPO && script.config.trainer != TrainerType.PPOGPU)
+            if(script.normalize == true && script.config != null && script.config.trainer != TrainerType.PPODepr && script.config.trainer != TrainerType.PPO)
             {
                 EditorGUILayout.HelpBox("'Normalize' is not yet compatible but with PPO / PPOGPU.", MessageType.Warning);
 

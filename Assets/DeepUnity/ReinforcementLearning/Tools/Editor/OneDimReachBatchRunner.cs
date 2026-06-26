@@ -26,7 +26,7 @@ namespace DeepUnity.ReinforcementLearning
             public float actorLearningRate;
             public float criticLearningRate;
             public int timescale;
-            public TrainerType trainer = TrainerType.SAC;
+            public TrainerType trainer = TrainerType.SACDepr;
         }
 
         public static void RunOneDimReachSacBaseline()
@@ -89,7 +89,7 @@ namespace DeepUnity.ReinforcementLearning
                 actorLearningRate = 1e-3f,
                 criticLearningRate = 1e-3f,
                 timescale = 20,
-                trainer = TrainerType.SACGPU,
+                trainer = TrainerType.SAC,
             });
         }
 
@@ -111,7 +111,7 @@ namespace DeepUnity.ReinforcementLearning
                 actorLearningRate = 1e-3f,
                 criticLearningRate = 1e-3f,
                 timescale = 20,
-                trainer = TrainerType.SACGPU,
+                trainer = TrainerType.SAC,
             });
         }
 
@@ -255,7 +255,7 @@ namespace DeepUnity.ReinforcementLearning
         private static void ConfigureBehaviour(AgentBehaviour behaviour, RunSpec spec)
         {
             behaviour.inferenceDevice = Device.CPU;
-            behaviour.trainingDevice = spec.trainer == TrainerType.SACGPU ? Device.GPU : Device.CPU;
+            behaviour.trainingDevice = spec.trainer == TrainerType.SAC ? Device.GPU : Device.CPU;
             behaviour.targetFPS = 50;
             behaviour.clipping = 5f;
             behaviour.normalize = false;

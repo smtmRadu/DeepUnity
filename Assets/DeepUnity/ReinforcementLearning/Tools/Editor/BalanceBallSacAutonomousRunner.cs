@@ -141,7 +141,7 @@ namespace DeepUnity.ReinforcementLearning
         private static void ApplySacConfig(AgentBehaviour behaviour)
         {
             Hyperparameters hp = behaviour.config;
-            hp.trainer = TrainerType.SAC;
+            hp.trainer = TrainerType.SACDepr;
             hp.maxSteps = 2_000_000_000;
             hp.actorLearningRate = 1e-3f;
             hp.criticLearningRate = 1e-3f;

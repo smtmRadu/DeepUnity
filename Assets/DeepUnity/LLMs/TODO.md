@@ -35,6 +35,38 @@ Payoff: meaningfully faster single-stream generation (the tavern/NPC use case).
 
 ---
 
+## KV cache precision — currently FP32 in EVERY mode (should be ≥ FP16)
+
+Status (verified 2026-06-25): the live KV cache is **FP32 regardless of weight quant**. Buffers are
+allocated stride-4 in `Qwen3_5Cache.cs` (kCaches/vCaches + DeltaNet conv/recurrent states) and
+`Gemma3Cache.cs` (`// FP32 activations — stride 4`). Weight quantization is weight-ONLY (dequantized
+in-register in the matmuls); it never touches the cache. So INT8/INT4 shrink weight VRAM but the KV
+cache costs the same FP32 bytes/token as FP16 — no cache savings, and the FP32 cache dominates memory
++ bandwidth at long context (it's what drives the decode-speed decay; see `LMDecodeDecayProbe`).
+
+Goal: store the KV cache at **FP16 by default in every mode** (≈ halves cache VRAM and the per-step
+read bandwidth), with optional fp8 for the int modes later. The disk cache already round-trips
+FP32↔FP16 (`Gemma3Cache` pack path) — reuse that packing knowledge for the in-VRAM layout.
+
+- [ ] **FP16 KV (default everywhere).** Change kCaches/vCaches to half storage (stride 2): pack to
+      half in the append/write step, unpack half→float in-register where attention reads K/V (mirror
+      the existing weight `readH` helper). Applies to Qwen3.5's 6 full-attention layers and Gemma3's
+      attention. Validate with a QuantProbe-style logit diff + greedy-decode equality vs FP32 KV.
+- [ ] **DeltaNet conv/recurrent states (Qwen3.5).** These accumulate recurrently — FP16 may drift.
+      Probe accuracy; likely keep FP32 (or bf16) even when attention KV goes FP16.
+- [ ] **Optional fp8 KV** for INT8/INT4 weight modes (e4m3 + scale). Higher risk on these small models
+      (cf. INT4 weights being lossy here) — probe before shipping; never default-on without numbers.
+- [ ] **Selection knob.** Add a `KVPrecision` enum (FP32 / FP16 / FP8) decoupled from `LLMQuant`
+      (weight quant ≠ cache quant), defaulting to FP16. Thread it through cache alloc + the kernels.
+- [ ] **Re-measure** with `LMDecodeDecayProbe` + `QuantProbe` after the change: VRAM/token, decode
+      tok/s vs context, and logit/decode accuracy delta.
+
+Implementation note: this is a kernel change, not just a buffer change — every shader that reads or
+writes the K/V buffers (attention score/AV, the cache-append) must pack/unpack half. That's the bulk
+of the work and the reason it's not already FP16.
+
+---
+
 ## System-prompt KV disk cache (implemented 2026-06-10) — NEEDS TESTING
 
 `InitializeChat` now persists the system prompt's KV + SSM state to
@@ -52,8 +84,9 @@ models and live in `Base/LLM.cs` ("prompt-cache hitch tuning" block), turn them 
 - `LLM.UploadChunkFloats` (default 64k = 256 KB) — SetData granularity the budget cuts at.
 - `LLM.SaveReadbacksInFlight` (default 1) — concurrent GPU readbacks while saving; caps per-frame
   readback→managed copies (results must be copied the frame they complete, so deferring isn't an option).
-SEPARATE knob for boot: `UPLOAD_BUDGET_BYTES` in Qwen3_5Weights.cs / Gemma3Weights.cs (per-frame bytes of
-weight streaming; was 24 MB → ~10.7 ms worst slice and a mid-game fps dip, now 8 MB). 2026-06-11 second
+SEPARATE knob for boot: `LLM.UploadBudgetBytes` (promoted from the old per-model `UPLOAD_BUDGET_BYTES`
+const so it can be swept between boots — see LMBootKnobProbe; per-frame bytes of weight streaming; was
+24 MB → ~10.7 ms worst slice and a mid-game fps dip, now 8 MB). 2026-06-11 second
 nudge after a 58-fps-minimum report: KV knobs 1.0→0.5 ms / 128k→64k / 2→1 + the 24→8 MB weight budget.
 Boot log simplified to one line (`Qwen3.5 ready — load X ms, system prompt restored/computed (N tokens, Y ms)`);
 the old per-step breakdown is commented out inside LogBootSummary for debugging.

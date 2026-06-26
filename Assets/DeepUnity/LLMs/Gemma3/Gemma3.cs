@@ -27,11 +27,23 @@ namespace DeepUnity
         /// pre-allocation; in the future we may make it dynamic (grow on demand, array-list style) so memory
         /// scales with the actual context length instead of always reserving the maximum.
         /// </param>
+        /// <param name="quantization">
+        /// Weight format: FP16 (weights_gemma3_270M_fp16), weight-only INT8 (..._int8, per-output-row
+        /// scales, ~half the VRAM/disk) or weight-only INT4 (..._int4, GGUF Q4_0 groups of 32, ~quarter
+        /// the VRAM/disk). Activations stay FP32 in every mode. One quant mode per session — the
+        /// keyword lives on the shared compute shader.
+        /// </param>
+        /// <param name="params_path">Optional override; null resolves from quantization.</param>
         public Gemma3ForCausalLM(
-            string params_path = "Assets/DeepUnity/LLMs/Gemma3/params_it",
+            LLMQuant quantization = LLMQuant.FP16,
+            string params_path = null,   // null resolves Resources-first (import_params.py convention), legacy fallback
             string tokenizer_path = "Assets/DeepUnity/LLMs/Gemma3/Gemma3TokenizerFast.json",
             int maxModelLength = 2048)
         {
+            // Self-describing folder name weights_<model>_<size>_<quant> (matches import_params.py).
+            string q = quantization == LLMQuant.INT8 ? "int8"
+                     : quantization == LLMQuant.INT4 ? "int4" : "fp16";
+            params_path ??= ResolveParamsDir("Gemma3", $"weights_gemma3_270M_{q}");
             this.path = params_path;
             WarnIfNotInResources("weights", params_path);
             WarnIfNotInResources("tokenizer", tokenizer_path);
@@ -40,7 +52,7 @@ namespace DeepUnity
 
             // Cheap: builds the weight-file manifest and kicks the background stream; the weights
             // upload to the GPU over subsequent frames under a per-frame budget.
-            model = new Gemma3Modeling.Gemma3Model(params_path, maxModelLength);
+            model = new Gemma3Modeling.Gemma3Model(params_path, maxModelLength, quantization);
         }
 
         /// <summary>
@@ -201,7 +213,7 @@ namespace DeepUnity
             }
 
             CurrentPhase = "idle";
-            ConsoleMessage.Info("Gemma3 ready — system prompt " + (loaded
+            ConsoleMessage.Info($"Gemma3-270m {model.Quant} ready — system prompt " + (loaded
                 ? $"restored from disk ({model.cache.CachedTokenCount} tokens, {sw.Elapsed.TotalMilliseconds:0} ms)"
                 : $"computed ({model.cache.CachedTokenCount} tokens, {sw.Elapsed.TotalMilliseconds:0} ms)"));
 

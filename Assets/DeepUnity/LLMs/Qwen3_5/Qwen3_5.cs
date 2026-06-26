@@ -6,12 +6,22 @@ using UnityEngine.Assertions;
 
 namespace DeepUnity
 {
-    // Qwen3.5-0.8B (text-only) FP16, full-GPU inference. Hybrid architecture:
+    /// <summary>Qwen3.5 model size. Only sizes with exported params are listed.</summary>
+    public enum Qwen3_5Size
+    {
+        /// <summary>Qwen3.5-0.8B (text-only).</summary>
+        [Tooltip("Qwen3.5-0.8B (text-only) — the only size exported so far.")]
+        B0_8,
+    }
+
+    // Qwen3.5-0.8B (text-only), full-GPU inference. Hybrid architecture:
     // 18 Gated DeltaNet layers + 6 full-attention layers (interval 4).
+    // Weights run as packed FP16 or weight-only INT8 (see LLMQuant / import_params.py --quant int8).
     public class Qwen3_5ForCausalLM : LLM
     {
         private static readonly Qwen3_5ConfigDescriptor _config = new();
         private string path;
+        private readonly Qwen3_5Size size;
         public Qwen3_5Modeling.Qwen3_5Model model;
         public Qwen3_5TokenizerFast tokenizer;
         private bool isFreshlyInitialized;
@@ -40,6 +50,13 @@ namespace DeepUnity
         /// (CTRL/HF style, 1.0 = off). Both run on the GPU over already-generated tokens.
         /// Set temperature=0 for greedy decoding.
         /// </summary>
+        /// <param name="size">Model size; resolves the default params folder (only 0.8B exported so far).</param>
+        /// <param name="quantization">
+        /// Weight format: FP16 (weights_qwen3.5_0.8B_fp16) or weight-only INT8 (..._int8, ~half the VRAM and
+        /// disk; per-output-row scales, activations stay FP32). One quant mode per session — the
+        /// keyword lives on the shared compute shader.
+        /// </param>
+        /// <param name="params_path">Optional override; null resolves from size + quantization.</param>
         /// <param name="maxModelLength">
         /// Maximum sequence length (in tokens) the model supports in a single conversation. This sizes the
         /// KV cache, which is pre-allocated up front to this capacity. NOTE: the KV cache is currently a fixed
@@ -47,10 +64,14 @@ namespace DeepUnity
         /// scales with the actual context length instead of always reserving the maximum.
         /// </param>
         public Qwen3_5ForCausalLM(
-            string params_path = "Assets/DeepUnity/LLMs/Qwen3_5/params_it",
+            Qwen3_5Size size = Qwen3_5Size.B0_8,
+            LLMQuant quantization = LLMQuant.FP16,
+            string params_path = null,
             string tokenizer_path = "Assets/DeepUnity/LLMs/Qwen3_5/Qwen3_5TokenizerFast.json",
             int maxModelLength = 8192)
         {
+            params_path ??= ResolveParamsPath(size, quantization);
+            this.size = size;
             this.path = params_path;
             WarnIfNotInResources("weights", params_path);
             WarnIfNotInResources("tokenizer", tokenizer_path);
@@ -59,10 +80,26 @@ namespace DeepUnity
             // Cached per path in the LLM base (see GetOrCreateTokenizer for why).
             this.tokenizer = GetOrCreateTokenizer(tokenizer_path, p => new Qwen3_5TokenizerFast(p, load_async: true));
 
-            model = new Qwen3_5Modeling.Qwen3_5Model(params_path, maxModelLength);
+            model = new Qwen3_5Modeling.Qwen3_5Model(params_path, maxModelLength, quantization);
             // Feed the tokenizer's main-thread ctor cost to the weights object; the single consolidated
             // "model booted up" log is emitted from InitializeChat once everything is ready.
             model.weights.bootTokenizerMs = tokenizer?.ctorMs ?? 0;
+        }
+
+        // Human-readable model size for boot logs / UI (the enum's own name is terse).
+        static string SizeLabel(Qwen3_5Size size) => size switch
+        {
+            Qwen3_5Size.B0_8 => "0.8B",
+            _ => size.ToString(),
+        };
+
+        static string ResolveParamsPath(Qwen3_5Size size, LLMQuant quant)
+        {
+            // Self-describing folder name weights_<model>_<size>_<quant> (e.g.
+            // weights_qwen3.5_0.8B_int8), matching import_params.py; resolved Resources-first
+            // with a legacy fallback. The size grows as more exports land (see SizeLabel).
+            string q = quant == LLMQuant.INT8 ? "int8" : quant == LLMQuant.INT4 ? "int4" : "fp16";
+            return ResolveParamsDir("Qwen3_5", $"weights_qwen3.5_{SizeLabel(size)}_{q}");
         }
 
         /// <summary>
@@ -330,7 +367,7 @@ namespace DeepUnity
                 : (promptFromDisk
                     ? $"system prompt restored from disk ({promptTokens} tokens, {systemPromptMs:0} ms)"
                     : $"system prompt computed ({promptTokens} tokens, {systemPromptMs:0} ms)");
-            ConsoleMessage.Info($"Qwen3.5 ready — load {loadMs:0} ms, {prompt}");
+            ConsoleMessage.Info($"Qwen3.5-{SizeLabel(size)} {model.Quant} ready — load {loadMs:0} ms, {prompt}");
 
             // Detailed per-step breakdown, kept for debugging:
             // double blocking = w.bootTokenizerMs + w.bootKernelsMs + w.allocMs + w.bootCacheMs + w.bootRopeMs + w.bootScratchMs;

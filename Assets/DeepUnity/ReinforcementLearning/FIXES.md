@@ -2,7 +2,14 @@
 
 Log of every bug found during the SAC/off-policy investigation (March 2026) and the
 follow-up session (June 2026) that built the FullGPU SAC trainer and closed the
-BalanceBall case. Full investigation narrative: `../../AGENT_COLLAB.md`.
+BalanceBall case. (The AGENT_COLLAB.md investigation channel this log distilled was
+removed 2026-06-11.)
+
+> **Naming note (2026-06-11):** the full-GPU trainers became the standards and took the
+> plain names — `TrainerType.PPO`/`PPOTrainer` and `TrainerType.SAC`/`SACTrainer` now mean
+> the FullGPU implementations (everything below written as PPOGPU/SACGPU). The old CPU
+> implementations are `PPODepr`/`SACDepr` (`PPOTrainerDepr`/`SACTrainerDepr`), locked in the
+> inspector alongside TD3/DDPG/VPG. Names below are kept as they were at the time of writing.
 
 ---
 

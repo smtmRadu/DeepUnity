@@ -94,3 +94,60 @@ Same surface on `Gemma3ForCausalLM`. Generalized pieces live in the abstract `LL
 Measured end state (Qwen3.5 0.8B, 1.5 GB weights, in-editor): load mean ~1 ms/frame, ctor frame
 ~50–150 ms (one-time JIT), no sampler stalls, prefill within 60 fps budget, GC hits only at
 scene start / incremental on close.
+
+## FlashAttention-1 fused attention (Gemma3, June 2026)
+
+The legacy attention was 4 dispatches per layer (`ComputeAttentionScores` -> `ApplyMask` ->
+`SoftmaxRows` -> `AttendValues`) with the full `[heads, seq_q, seq_k]` score matrix written,
+masked, softmaxed and re-read from global memory — and `SoftmaxRows` ran **one thread per row**
+making 3 serial passes over the whole KV length. On sliding-window layers (15 of Gemma3's 18)
+scores were computed for the ENTIRE cache and then masked off.
+
+**Fix** (`FlashAttention` kernel in `Gemma3CS.compute`, toggled by
+`Gemma3Model.UseFlashAttention`, on by default, requires `head_dim <= 256`): all four steps fused
+into one dispatch per layer using the FlashAttention-1 online-softmax recurrence — running max
+`m`, denominator `l`, accumulator rescaled by `exp(m_old - m_new)` per 256-wide KV tile, score
+matrix never materialized. One threadgroup per (query, head); within a tile each thread scores
+one KV position (q row in groupshared, scale pre-folded), then threads switch roles to output
+dims so V reads coalesce. Sliding-window layers clamp the KV walk to `[abs_q - 512, abs_q]`, so
+out-of-window tiles are never read at all.
+
+Measured (Gemma3-270m, RTX 4060 laptop, D3D11; `FlashAttnProbeRunner.Run` via bridge):
+- equivalence: worst |Δlogit| 1.8e-4 over 262k logits x 8 steps, all greedy argmax matches
+- sync decode (Forward+Sample): cache 120: 62 -> 64 tok/s (~par); cache 1900: 42 -> **53 tok/s (1.26x)**
+- production `Generate()` (per-layer-yielding): short prompt 23.7 -> 25.3 tok/s; 1800-token
+  prompt 20.7 -> **24.2 tok/s (1.17x)**
+- the gap between sync 53 tok/s and Generate() 24 tok/s is frame pacing (~19 yields/token in
+  `ForwardYielding`), not GPU time — the next lever for generation speed is yield granularity,
+  not attention.
+
+The win grows with context (legacy attention work is O(kv_len) on every layer; flash is O(512)
+on SW layers + O(kv_len) on the 3 full layers).
+
+**Qwen3.5 port** (same kernel minus the sliding-window logic in `Qwen3_5CS.compute`, toggled by
+`Qwen3_5Model.UseFlashAttention`): equivalent (worst |Δlogit| 6.3e-5, all greedy tokens match)
+but speed-NEUTRAL — 0.94x sync decode @ 120 ctx, 1.03x @ 1900 (`FlashAttnProbeRunner.RunQwen`).
+Reason: only 6 of 24 layers are full attention; the 18 DeltaNet linear-attention layers already
+cost O(1) per token regardless of context, so attention is a small slice of Qwen's GPU time and
+the fused kernel's lower occupancy at short KV (one threadgroup per query x head) eats the
+dispatch savings. Kept ON by default anyway: it can only pull ahead as contexts approach Qwen's
+8k max, and one kernel maintained for both models beats two paths diverging.
+
+## Weight-only quantization (Qwen3.5, June 2026)
+
+Weights dequantize IN-REGISTER inside the matmul kernels (`readQ8`/`readQ4` next to `readH`;
+`INT8_WEIGHTS`/`INT4_WEIGHTS` multi_compile variants — the FP16 variant compiles to the exact
+pre-quant code). Activations/KV stay fp32. `new Qwen3_5ForCausalLM(size, LLMQuant.X)` picks the
+params folder and keyword; one quant mode per session. Schemes (the convention for all models):
+- **INT8** — symmetric, ONE fp16 scale per output row (factors out of the dot product). 721 MB
+  vs 1.5 GB. Measured ~lossless: greedy story identical to fp16, logit noise ~0.07 mean,
+  speed 0.99x (0.8B decode is DISPATCH-bound, ~700+ dispatches/token through the DeltaNet
+  chain — quantization buys VRAM, not tok/s, at this size).
+- **INT4** — Q4_0-style, scale per 32-weight group, index = flat idx >> 5. 406 MB, but on 0.8B:
+  logit noise 0.53 mean, greedy text diverges immediately into repetitive prose, AND 0.76x
+  (per-element scale read in the inner loop). NOT shippable as-is on small models; salvage
+  levers if 2B size ever demands it: hoist the group scale via a group-loop restructure +
+  keep embed/lm_head at int8 (Q4_K_M-style mixed precision).
+- Verdict: **int8 is the sweet spot**; 2B@int8 ~2.2 GB fits the 4060. Probes:
+  `FlashAttnProbeRunner.RunQwenInt8` / `RunQwenInt4` (QuantProbe — full-vocab logit diff vs
+  fp16, sync tok/s, side-by-side greedy stories).

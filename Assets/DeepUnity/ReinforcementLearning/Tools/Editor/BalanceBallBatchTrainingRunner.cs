@@ -204,7 +204,7 @@ namespace DeepUnity.ReinforcementLearning
             behaviour.noiseValue = 0f;
 
             Hyperparameters config = behaviour.config;
-            config.trainer = TrainerType.SAC;
+            config.trainer = TrainerType.SACDepr;
             config.maxSteps = int.MaxValue;
             config.actorLearningRate = spec.actorLearningRate;
             config.criticLearningRate = spec.criticLearningRate;

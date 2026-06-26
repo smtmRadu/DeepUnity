@@ -11,12 +11,22 @@ namespace DeepUnity
         // a standard GQA + attn-output-gate full attention and a Gated DeltaNet linear layer.
         public class Qwen3_5Model : IDisposable
         {
+            // FlashAttention-1 fused path for the full-attention layers (scores+mask+softmax+AV
+            // in one dispatch, online softmax, no materialized score matrix; DeltaNet layers are
+            // unaffected). Static so probes can A/B it against the legacy 4-dispatch path; the
+            // kernel requires head_dim <= 256 — DispatchFullAttention falls back to legacy otherwise.
+            public static bool UseFlashAttention = true;
+
+            // Weight format this instance runs (set in the ctor; INT8 enables the INT8_WEIGHTS
+            // shader keyword and binds the per-row scale buffers next to each weight buffer).
+            public readonly LLMQuant Quant;
+
             ComputeShader cs;
 
             // Kernel ids (cached)
             int kEmbed, kRmsHidden, kRmsHead;
             int kQProjGated, kKProj, kVProj, kOProj;
-            int kRopePartial, kWriteCache, kMaskCausal, kSoftmax, kAttnScores, kAttend, kAttnGate;
+            int kRopePartial, kWriteCache, kMaskCausal, kSoftmax, kAttnScores, kAttend, kAttnGate, kFlashAttn;
             int kInProjQKV, kInProjZ, kInProjA, kInProjB;
             int kConvUpdate, kConvPrefill, kSplitConv;
             int kL2NormHead, kDeltaNet, kRMSGated, kLinearOut;
@@ -68,8 +78,9 @@ namespace DeepUnity
 
             public bool IsReady => weights.IsReady && ropeReady;
 
-            public Qwen3_5Model(string paramsPath, int cacheCapacity)
+            public Qwen3_5Model(string paramsPath, int cacheCapacity, LLMQuant quant = LLMQuant.FP16)
             {
+                Quant = quant;
                 hiddenSize = Qwen3_5Config.HIDDEN_SIZE;
                 headDim = Qwen3_5Config.HEAD_DIM;
                 headsQ = Qwen3_5Config.HEADS_Q;
@@ -93,10 +104,14 @@ namespace DeepUnity
 
                 var swPhase = System.Diagnostics.Stopwatch.StartNew();
                 cs = DeepUnityMeta.Qwen3_5CS;
+                // Keyword state lives on the shared shader asset — one quant mode per session;
+                // don't run two differently-quantized Qwen instances simultaneously.
+                if (quant == LLMQuant.INT8) cs.EnableKeyword("INT8_WEIGHTS"); else cs.DisableKeyword("INT8_WEIGHTS");
+                if (quant == LLMQuant.INT4) cs.EnableKeyword("INT4_WEIGHTS"); else cs.DisableKeyword("INT4_WEIGHTS");
                 CacheKernelIds();
                 double tKernels = swPhase.Elapsed.TotalMilliseconds;
 
-                weights = new Qwen3_5Weights(paramsPath); // sets weights.allocMs internally
+                weights = new Qwen3_5Weights(paramsPath, quant); // sets weights.allocMs internally
 
                 swPhase.Restart();
                 cache = new Qwen3_5Cache(
@@ -141,6 +156,7 @@ namespace DeepUnity
                 kSoftmax     = cs.FindKernel("SoftmaxRows");
                 kAttnScores  = cs.FindKernel("ComputeAttentionScores");
                 kAttend      = cs.FindKernel("AttendValues");
+                kFlashAttn   = cs.FindKernel("FlashAttention");
                 kAttnGate    = cs.FindKernel("ApplyAttnGate");
                 kInProjQKV   = cs.FindKernel("LinearInProjQKV");
                 kInProjZ     = cs.FindKernel("LinearInProjZ");
@@ -313,6 +329,13 @@ namespace DeepUnity
 
             static int Div256(int n) => (n + 255) / 256;
 
+            // Quantized modes: bind the scale buffer next to its weight buffer (per-row for INT8,
+            // per-32-group for INT4). No-op in FP16 — that variant never references the resources.
+            void BindScales(int kernel, string name, ComputeBuffer scales)
+            {
+                if (Quant != LLMQuant.FP16) cs.SetBuffer(kernel, name, scales);
+            }
+
             // ===================== FULL-ATTENTION DISPATCH =====================
             void DispatchFullAttention(int li, int seqLen, int totalKvLen, bool useCache, int cacheLen)
             {
@@ -329,6 +352,7 @@ namespace DeepUnity
                 cs.SetInt("head_dim", headDim);
                 cs.SetBuffer(kQProjGated, "X", normOutBuf);
                 cs.SetBuffer(kQProjGated, "W_Q", weights.W_Q[li]);
+                BindScales(kQProjGated, "W_Q_scales", weights.W_QScales[li]);
                 cs.SetBuffer(kQProjGated, "Q_out", qBuf);
                 cs.SetBuffer(kQProjGated, "gate_out", gateBuf);
                 cs.Dispatch(kQProjGated, 1, (seqLen + 7) / 8, (qOutDim + 31) / 32);
@@ -336,11 +360,13 @@ namespace DeepUnity
                 cs.SetInt("num_heads_kv", headsKV);
                 cs.SetBuffer(kKProj, "X", normOutBuf);
                 cs.SetBuffer(kKProj, "W_K", weights.W_K[li]);
+                BindScales(kKProj, "W_K_scales", weights.W_KScales[li]);
                 cs.SetBuffer(kKProj, "K_out", kBuf);
                 cs.Dispatch(kKProj, 1, (seqLen + 7) / 8, (kvOutDim + 31) / 32);
 
                 cs.SetBuffer(kVProj, "X", normOutBuf);
                 cs.SetBuffer(kVProj, "W_V", weights.W_V[li]);
+                BindScales(kVProj, "W_V_scales", weights.W_VScales[li]);
                 cs.SetBuffer(kVProj, "V_out", vBuf);
                 cs.Dispatch(kVProj, 1, (seqLen + 7) / 8, (kvOutDim + 31) / 32);
 
@@ -401,6 +427,23 @@ namespace DeepUnity
                     vForAttn = vBuf;
                 }
 
+                if (UseFlashAttention && headDim <= 256)
+                {
+                    // Scores+mask+softmax+attend fused: FlashAttention (one threadgroup per query x head)
+                    cs.SetInt("seq_len_q", seqLen);
+                    cs.SetInt("seq_len_k", kvLen);
+                    cs.SetInt("num_heads_q", headsQ);
+                    cs.SetInt("num_heads_kv", headsKV);
+                    cs.SetInt("head_dim", headDim);
+                    cs.SetFloat("scale", attnScale);
+                    cs.SetBuffer(kFlashAttn, "Q", qNormBuf);
+                    cs.SetBuffer(kFlashAttn, "K", kForAttn);
+                    cs.SetBuffer(kFlashAttn, "V", vForAttn);
+                    cs.SetBuffer(kFlashAttn, "AttendedValues", attendedBuf);
+                    cs.Dispatch(kFlashAttn, seqLen, headsQ, 1);
+                }
+                else
+                {
                 // Attention scores
                 cs.SetInt("batch_size", 1);
                 cs.SetInt("sequence_length_q", seqLen);
@@ -431,6 +474,7 @@ namespace DeepUnity
                 cs.SetBuffer(kAttend, "V", vForAttn);
                 cs.SetBuffer(kAttend, "AttendedValues", attendedBuf);
                 cs.Dispatch(kAttend, (headDim + 63) / 64, (seqLen + 3) / 4, (headsQ + 3) / 4);
+                }
 
                 // Output gate (sigmoid(gate) * attended) — Qwen3.5 specific
                 cs.SetInt("batch_size", 1);
@@ -446,6 +490,7 @@ namespace DeepUnity
                 cs.SetInt("embedding_dim", hiddenSize);
                 cs.SetBuffer(kOProj, "AttendedValues", attendedBuf);
                 cs.SetBuffer(kOProj, "W_O", weights.W_O[li]);
+                BindScales(kOProj, "W_O_scales", weights.W_OScales[li]);
                 cs.SetBuffer(kOProj, "O", attnOutBuf);
                 cs.Dispatch(kOProj, 1, (seqLen + 3) / 4, (hiddenSize + 31) / 32);
             }
@@ -460,6 +505,7 @@ namespace DeepUnity
                 cs.SetInt("linear_conv_dim", convDim);
                 cs.SetBuffer(kInProjQKV, "X", normOutBuf);
                 cs.SetBuffer(kInProjQKV, "W_inProjQKV", weights.W_inProjQKV[li]);
+                BindScales(kInProjQKV, "W_inProjQKV_scales", weights.W_inProjQKVScales[li]);
                 cs.SetBuffer(kInProjQKV, "linear_qkv", linearQkvBuf);
                 cs.Dispatch(kInProjQKV, 1, (seqLen + 7) / 8, (convDim + 31) / 32);
 
@@ -467,6 +513,7 @@ namespace DeepUnity
                 cs.SetInt("linear_value_dim", valueDim);
                 cs.SetBuffer(kInProjZ, "X", normOutBuf);
                 cs.SetBuffer(kInProjZ, "W_inProjZ", weights.W_inProjZ[li]);
+                BindScales(kInProjZ, "W_inProjZ_scales", weights.W_inProjZScales[li]);
                 cs.SetBuffer(kInProjZ, "linear_z_w", linearZBuf);
                 cs.Dispatch(kInProjZ, 1, (seqLen + 7) / 8, (valueDim + 31) / 32);
 
@@ -558,6 +605,7 @@ namespace DeepUnity
                 cs.SetInt("embedding_dim", hiddenSize);
                 cs.SetBuffer(kLinearOut, "linear_y_norm", linearYNormBuf);
                 cs.SetBuffer(kLinearOut, "W_outProj", weights.W_outProj[li]);
+                BindScales(kLinearOut, "W_outProj_scales", weights.W_outProjScales[li]);
                 cs.SetBuffer(kLinearOut, "O", attnOutBuf);
                 cs.Dispatch(kLinearOut, 1, (seqLen + 3) / 4, (hiddenSize + 31) / 32);
             }
@@ -630,12 +678,15 @@ namespace DeepUnity
                 cs.SetBuffer(kGU, "input", hiddenBuf);
                 cs.SetBuffer(kGU, "mlp_gate_w", weights.mlpGate[li]);
                 cs.SetBuffer(kGU, "mlp_up_w",   weights.mlpUp[li]);
+                BindScales(kGU, "mlp_gate_scales", weights.mlpGateScales[li]);
+                BindScales(kGU, "mlp_up_scales",   weights.mlpUpScales[li]);
                 cs.SetBuffer(kGU, "intermediate", mlpInterBuf);
                 if (vec1) cs.Dispatch(kGU, (intermediate + 255) / 256, 1, 1);
                 else      cs.Dispatch(kGU, (intermediate + 63) / 64, (seqLen + 7) / 8, 1);
 
                 cs.SetBuffer(kDN, "input", hiddenBuf);
                 cs.SetBuffer(kDN, "mlp_down_w", weights.mlpDown[li]);
+                BindScales(kDN, "mlp_down_scales", weights.mlpDownScales[li]);
                 cs.SetBuffer(kDN, "intermediate", mlpInterBuf);
                 if (vec1) cs.Dispatch(kDN, (hiddenSize + 255) / 256, 1, 1);
                 else      cs.Dispatch(kDN, (hiddenSize + 63) / 64, (seqLen + 7) / 8, 1);
@@ -659,6 +710,7 @@ namespace DeepUnity
                 cs.SetInt("hidden_size", hiddenSize);
                 cs.SetBuffer(kEmbed, "token_ids", tokenIdsBuf);
                 cs.SetBuffer(kEmbed, "embed_weights", weights.embedLmHead);
+                BindScales(kEmbed, "embed_scales", weights.embedScales);
                 cs.SetBuffer(kEmbed, "embed_output", hiddenBuf);
                 cs.Dispatch(kEmbed, Div256(seqLen * hiddenSize), 1, 1);
 
@@ -684,6 +736,7 @@ namespace DeepUnity
                 cs.SetInt("hidden_size", hiddenSize);
                 cs.SetBuffer(kEmbed, "token_ids", tokenIdsBuf);
                 cs.SetBuffer(kEmbed, "embed_weights", weights.embedLmHead);
+                BindScales(kEmbed, "embed_scales", weights.embedScales);
                 cs.SetBuffer(kEmbed, "embed_output", hiddenBuf);
                 cs.Dispatch(kEmbed, Div256(seqLen * hiddenSize), 1, 1);
                 yield return null;
@@ -723,6 +776,7 @@ namespace DeepUnity
                 cs.SetInt("hidden_size", hiddenSize);
                 cs.SetInt("vocab_size", vocab);
                 cs.SetBuffer(kLm1, "lm_weights", weights.embedLmHead);
+                BindScales(kLm1, "embed_scales", weights.embedScales);
                 cs.SetBuffer(kLm1, "lm_input", normSingleBuf);
                 cs.SetBuffer(kLm1, "lm_output", logitsBuf);
                 cs.Dispatch(kLm1, (vocab + 511) / 512, 1, 1);
@@ -746,6 +800,7 @@ namespace DeepUnity
                 cs.SetInt("hidden_size", hiddenSize);
                 cs.SetInt("vocab_size", vocab);
                 cs.SetBuffer(k, "lm_weights", weights.embedLmHead);
+                BindScales(k, "embed_scales", weights.embedScales);
                 cs.SetBuffer(k, "lm_input", normOutBuf);
                 cs.SetBuffer(k, "lm_output", logitsBuf);
                 if (v1) cs.Dispatch(k, (vocab + 511) / 512, 1, 1);
@@ -877,6 +932,9 @@ namespace DeepUnity
             static readonly string[] WARMUP_BUFFER_NAMES =
             {
                 "embed_weights", "lm_weights", "norm_gamma",
+                "embed_scales", "W_Q_scales", "W_K_scales", "W_V_scales", "W_O_scales",
+                "W_inProjQKV_scales", "W_inProjZ_scales", "W_outProj_scales",
+                "mlp_gate_scales", "mlp_up_scales", "mlp_down_scales",
                 "W_Q", "W_K", "W_V", "W_O",
                 "W_inProjQKV", "W_inProjZ", "W_inProjA", "W_inProjB",
                 "conv_weight", "dt_bias", "A_log", "W_outProj",
@@ -917,7 +975,7 @@ namespace DeepUnity
                 "EmbeddingLookup", "RmsNormHidden", "RmsNormHead",
                 "QProjGated", "KProj", "VProj", "OProj",
                 "ApplyRopePartial", "WriteCacheFull", "ApplyMaskCausal", "SoftmaxRows",
-                "ComputeAttentionScores", "AttendValues", "ApplyAttnGate",
+                "ComputeAttentionScores", "FlashAttention", "AttendValues", "ApplyAttnGate",
                 "LinearInProjQKV", "LinearInProjZ", "LinearInProjA", "LinearInProjB",
                 "CausalConv1DUpdate", "CausalConv1DPrefill", "SplitConvOutQKV",
                 "L2NormPerHead", "DeltaNetRecurrent", "RMSNormGated", "LinearOutProj",

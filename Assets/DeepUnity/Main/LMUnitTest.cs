@@ -4,25 +4,37 @@ using UnityEngine.UI;
 
 namespace DeepUnity.Tutorials
 {
-    // Bring-up harness for Qwen3.5-0.8B (text-only).
+    // Bring-up harness for the text-only LLMs — pick the model from the inspector dropdown.
     public class LMUnitTest : MonoBehaviour
     {
+        public enum LM { Gemma3_270m, Qwen3_5 }
+
+        [Tooltip("Which LLM to boot.")]
+        [SerializeField] private LM lm = LM.Gemma3_270m;
+        [Tooltip("Qwen only (Gemma = 270m). Sizes with exported params.")]
+        [SerializeField] private Qwen3_5Size size = Qwen3_5Size.B0_8;
+        [Tooltip("FP16 = reference; INT8 = per-row, ~lossless, half VRAM (recommended). INT4 = Qwen only (32-group, lossy + slower on small models).")]
+        [SerializeField] private LLMQuant quantization = LLMQuant.FP16;
         [SerializeField] private Text display;
         [SerializeField] private Text paramsDisplay;
         [Multiline]
         [SerializeField] private string system_prompt = "";
         [SerializeField] private string user_prompt = "Who are you?";
         [SerializeField] private int max_completion_tokens = 32;
-        [SerializeField] private float temperature = 0f;
-        [SerializeField] private bool enable_thinking = false;
+        [SerializeField] private bool enable_thinking = false;   // Qwen3.5 only; Gemma3 ignores it
 
-        private Qwen3_5ForCausalLM model;
+        private LLM model;
 
         private void Start()
         {
+            if (lm == LM.Gemma3_270m && quantization == LLMQuant.INT4)
+                Debug.LogWarning("[LMUnitTest] Gemma3 has no INT4 runtime — running FP16.");
+
             Benckmark.Start();
-            model = new Qwen3_5ForCausalLM();
-            Benckmark.Stop("Qwen3.5 model init");
+            model = lm == LM.Gemma3_270m
+                ? (LLM)new Gemma3ForCausalLM(quantization)
+                : new Qwen3_5ForCausalLM(size, quantization);
+            Benckmark.Stop($"{lm} {(lm == LM.Gemma3_270m ? $"{quantization} " : $"{size} {quantization} ")}model init");
 
             StartCoroutine(Run());
         }
@@ -41,9 +53,10 @@ namespace DeepUnity.Tutorials
                     paramsDisplay.text = $"Inference: {model.TokensPerSecond:0.0} tok/s";
             },
             max_new_tokens: max_completion_tokens,
-            temperature: temperature,
-            top_k: 20,                                              // base defaults are neutral —
-            presence_penalty: model.Config.DefaultPresencePenalty,  // pass Qwen's recommended preset
+            temperature: model.Config.DefaultTemperature,           // each model's recommended preset
+            top_k: model.Config.DefaultTopK,
+            top_p: model.Config.DefaultTopP,                        // (Gemma 64/0.95, Qwen 20/1.0)
+            presence_penalty: model.Config.DefaultPresencePenalty,
             enable_thinking: enable_thinking);
         }
     }

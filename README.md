@@ -61,27 +61,29 @@ using UnityEngine;
 using DeepUnity;
 using UnityEngine.UI;
 
-public class ChatWithGemma : MonoBehaviour
+public class ChatWithQwen : MonoBehaviour
 {
     [SerializeField] private Text display;
     [SerializeField] private Text uiText;
     [SerializeField] private float temperature = 0.7f;
-    [SerializeField] private float top_p = 0.95;
-    private Gemma3ForCausalLM model;
+    [SerializeField] private float top_p = 0.95f;
+    private Qwen3_5ForCausalLM model;
     public void Start()
     {
-        model = new Gemma3ForCausalLM();
+        // INT8 weights: ~half the VRAM/disk of FP16, ~lossless quality. Export with
+        // `python import_params.py Qwen/Qwen3.5-0.8B --quant int8`.
+        model = new Qwen3_5ForCausalLM(Qwen3_5Size.B0_8, LLMQuant.INT8);
 
         StartCoroutine(model.Generate(
-            prompt: "Explain quantum entanglement in just 5 words.", 
+            prompt: "Explain quantum entanglement in just 5 words.",
             onTokenGenerated: (x) => {  display.text += x;  },
-            temperature:temperature, 
-            top_p:top_p))
+            temperature: temperature,
+            top_p: top_p));
     }
 }
 ```
 
-###### _You can finetune your own SLMs with the HuggingFace trainer (full or with adapters) for role-playing or other content generation, [merge the base model with the adapters,] then use the **build_params.ipynb** notebook to replace the **/params** folder with the serialized new weights._
+###### _You can finetune your own SLMs with the HuggingFace trainer (full or with adapters) for role-playing or other content generation, [merge the base model with the adapters,] then use the **import_params.py** script to replace the **/params** folder with the serialized new weights (`--quant fp16|int8|int4`)._
 
 ## Reinforcement Learning
 

@@ -211,20 +211,24 @@ namespace DeepUnity
 
     public enum TrainerType
     {
-        [Tooltip("Proximal Policy Optimization")]
-        PPO,
-        [Tooltip("Soft Actor-Critic")]
-        SAC,
-        [Tooltip("Twin Delayed Deep Deterministic Policy Gradient")]
-        TD3,
-        [Tooltip("Deep Deterministic Policy Gradient")]
-        DDPG,
-        [Tooltip("Vanilla Policy Gradient")]
-        VPG,
-        [Tooltip("Proximal Policy Optimization — FullGPU path. Forward, backward and AdamW step run entirely on GPU. MLP / LnMLP networks only.")]
-        PPOGPU,
-        [Tooltip("Soft Actor-Critic — FullGPU path. Forward, backward and AdamW step run entirely on GPU. MLP / LnMLP networks only.")]
-        SACGPU,
+        // Explicit values: enums serialize as ints, so existing Config.asset files must keep
+        // pointing at the SAME implementation across the 2026-06 rename (the full-GPU trainers
+        // took the standard PPO/SAC names; the old CPU implementations became *Depr and the
+        // legacy trainers are locked in the inspector).
+        [Tooltip("DEPRECATED CPU Proximal Policy Optimization — locked; use PPO (full-GPU).")]
+        PPODepr = 0,
+        [Tooltip("DEPRECATED CPU Soft Actor-Critic — locked; use SAC (full-GPU).")]
+        SACDepr = 1,
+        [Tooltip("Twin Delayed Deep Deterministic Policy Gradient — legacy, locked.")]
+        TD3 = 2,
+        [Tooltip("Deep Deterministic Policy Gradient — legacy, locked.")]
+        DDPG = 3,
+        [Tooltip("Vanilla Policy Gradient — legacy, locked.")]
+        VPG = 4,
+        [Tooltip("Proximal Policy Optimization (standard, full-GPU). Forward, backward and AdamW step run entirely on GPU. MLP / LnMLP networks only.")]
+        PPO = 5,
+        [Tooltip("Soft Actor-Critic (standard, full-GPU). Forward, backward and AdamW step run entirely on GPU. MLP / LnMLP networks only.")]
+        SAC = 6,
     }
 
     public enum TimescaleAdjustmentType

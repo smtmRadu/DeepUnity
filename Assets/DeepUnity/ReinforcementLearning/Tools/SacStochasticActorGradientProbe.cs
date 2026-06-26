@@ -12,7 +12,7 @@ namespace DeepUnity.ReinforcementLearning
     /// <summary>
     /// Numerically validates the full stochastic SAC actor objective
     /// J = min(Q1, Q2)(s, tanh(mu + sigma * eps)) - alpha * log pi(a|s)
-    /// against the manual derivative path used by SACTrainer.
+    /// against the manual derivative path used by SACTrainerDepr.
     /// </summary>
     public sealed class SacStochasticActorGradientProbe : MonoBehaviour
     {

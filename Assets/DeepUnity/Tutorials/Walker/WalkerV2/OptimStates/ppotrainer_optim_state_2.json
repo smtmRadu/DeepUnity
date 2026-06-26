@@ -1,5 +1,5 @@
 {
-    "description": "(AdamW) saved by PPOGPUTrainer (CPU-compatible)",
+    "description": "(AdamW) saved by PPOTrainer (CPU-compatible)",
     "gamma": 0.00004999999873689376,
     "lambda": 0.0,
     "epsilon": 0.000009999999747378752,
