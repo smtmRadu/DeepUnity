@@ -21,6 +21,12 @@ namespace DeepUnity
             // shader keyword and binds the per-row scale buffers next to each weight buffer).
             public readonly LLMQuant Quant;
 
+            // KV-cache precision for the full-attention layers' K/V (independent of the weight Quant
+            // above). FP16 enables the KV_FP16 shader keyword (KVCache.hlsl) and halves the KV
+            // buffers / per-step read bandwidth. DeltaNet conv/recurrent states stay FP32 regardless.
+            // Named KV (not KVQuant) to avoid clashing with the KVQuant type name. Mirrors Qwen3_5Cache.KV.
+            public readonly KVQuant KV;
+
             ComputeShader cs;
 
             // Kernel ids (cached)
@@ -78,9 +84,11 @@ namespace DeepUnity
 
             public bool IsReady => weights.IsReady && ropeReady;
 
-            public Qwen3_5Model(string paramsPath, int cacheCapacity, LLMQuant quant = LLMQuant.FP16)
+            public Qwen3_5Model(string paramsPath, int cacheCapacity, LLMQuant quant = LLMQuant.FP16,
+                                KVQuant kvQuant = KVQuant.FP16)
             {
                 Quant = quant;
+                KV = kvQuant;
                 hiddenSize = Qwen3_5Config.HIDDEN_SIZE;
                 headDim = Qwen3_5Config.HEAD_DIM;
                 headsQ = Qwen3_5Config.HEADS_Q;
@@ -108,6 +116,7 @@ namespace DeepUnity
                 // don't run two differently-quantized Qwen instances simultaneously.
                 if (quant == LLMQuant.INT8) cs.EnableKeyword("INT8_WEIGHTS"); else cs.DisableKeyword("INT8_WEIGHTS");
                 if (quant == LLMQuant.INT4) cs.EnableKeyword("INT4_WEIGHTS"); else cs.DisableKeyword("INT4_WEIGHTS");
+                KVQuantUtil.SetKeyword(cs, kvQuant);   // KV_FP16 (or none for FP32) — KV precision is independent of the weight quant
                 CacheKernelIds();
                 double tKernels = swPhase.Elapsed.TotalMilliseconds;
 
@@ -118,7 +127,8 @@ namespace DeepUnity
                     cacheCapacity, layerTypes,
                     headsKV, headDim,
                     convDim, convKernel,
-                    numVHeads, headKDim, headVDim);
+                    numVHeads, headKDim, headVDim,
+                    kvQuant);
                 double tCache = swPhase.Elapsed.TotalMilliseconds;
 
                 swPhase.Restart();
@@ -333,7 +343,18 @@ namespace DeepUnity
             // per-32-group for INT4). No-op in FP16 — that variant never references the resources.
             void BindScales(int kernel, string name, ComputeBuffer scales)
             {
-                if (Quant != LLMQuant.FP16) cs.SetBuffer(kernel, name, scales);
+                if (Quant != LLMQuant.FP16 && scales != null) cs.SetBuffer(kernel, name, scales);  // embed/lm_head scales are null (always fp16)
+            }
+
+            // INT8 KV only: the attention read kernels dequantize K/V via the per-(token,head) scale/zp
+            // buffers, so they MUST be bound (under the KV_INT8 keyword the shader references them; an
+            // unbound StructuredBuffer is a D3D11 error). No-op for FP32/FP16. Only ever called on
+            // full-attention layers, where cache.kScaleZp/vScaleZp[li] are allocated under INT8.
+            void BindKvScaleZp(int kernel, int li)
+            {
+                if (KV != KVQuant.INT8) return;
+                cs.SetBuffer(kernel, "k_scale_zp", cache.kScaleZp[li]);
+                cs.SetBuffer(kernel, "v_scale_zp", cache.vScaleZp[li]);
             }
 
             // ===================== FULL-ATTENTION DISPATCH =====================
@@ -410,13 +431,27 @@ namespace DeepUnity
                     cs.SetInt("num_heads_kv", headsKV);
                     cs.SetInt("head_dim", headDim);
                     cs.SetInt("cache_len", cacheLen);
+                    // INT8 KV quantizes on write: ONE group per (token, kv-head) (the shader reduces
+                    // min/max over head_dim there), and the per-(token,head) scale/zp is written through
+                    // kv_scale_zp_w. FP32/FP16 write one uint per thread (WriteUnits = uint count).
+                    bool kvInt8 = KV == KVQuant.INT8;
                     cs.SetBuffer(kWriteCache, "kv_new", kNormBuf);
                     cs.SetBuffer(kWriteCache, "kv_cache", cache.kCaches[li]);
-                    cs.Dispatch(kWriteCache, Div256(seqLen * headsKV * headDim), 1, 1);
+                    if (kvInt8)
+                    {
+                        cs.SetBuffer(kWriteCache, "kv_scale_zp_w", cache.kScaleZp[li]);
+                        cs.Dispatch(kWriteCache, seqLen * headsKV, 1, 1);
+                    }
+                    else cs.Dispatch(kWriteCache, Div256(KVQuantUtil.WriteUnits(seqLen * headsKV * headDim, KV)), 1, 1);
 
                     cs.SetBuffer(kWriteCache, "kv_new", vBuf);
                     cs.SetBuffer(kWriteCache, "kv_cache", cache.vCaches[li]);
-                    cs.Dispatch(kWriteCache, Div256(seqLen * headsKV * headDim), 1, 1);
+                    if (kvInt8)
+                    {
+                        cs.SetBuffer(kWriteCache, "kv_scale_zp_w", cache.vScaleZp[li]);
+                        cs.Dispatch(kWriteCache, seqLen * headsKV, 1, 1);
+                    }
+                    else cs.Dispatch(kWriteCache, Div256(KVQuantUtil.WriteUnits(seqLen * headsKV * headDim, KV)), 1, 1);
 
                     kForAttn = cache.kCaches[li];
                     vForAttn = cache.vCaches[li];
@@ -439,6 +474,7 @@ namespace DeepUnity
                     cs.SetBuffer(kFlashAttn, "Q", qNormBuf);
                     cs.SetBuffer(kFlashAttn, "K", kForAttn);
                     cs.SetBuffer(kFlashAttn, "V", vForAttn);
+                    BindKvScaleZp(kFlashAttn, li);   // INT8 KV: K and V both dequantized here
                     cs.SetBuffer(kFlashAttn, "AttendedValues", attendedBuf);
                     cs.Dispatch(kFlashAttn, seqLen, headsQ, 1);
                 }
@@ -454,6 +490,7 @@ namespace DeepUnity
                 cs.SetFloat("scale", attnScale);
                 cs.SetBuffer(kAttnScores, "Q", qNormBuf);
                 cs.SetBuffer(kAttnScores, "K", kForAttn);
+                BindKvScaleZp(kAttnScores, li);   // INT8 KV: K dequantized here (binds both; only k used)
                 cs.SetBuffer(kAttnScores, "AttentionWeights", attnScoresBuf);
                 cs.Dispatch(kAttnScores, (seqLen + 3) / 4, (kvLen + 31) / 32, (headsQ + 3) / 4);
 
@@ -472,6 +509,7 @@ namespace DeepUnity
                 cs.SetInt("sequence_length_v", kvLen);
                 cs.SetBuffer(kAttend, "AttentionWeights", attnScoresBuf);
                 cs.SetBuffer(kAttend, "V", vForAttn);
+                BindKvScaleZp(kAttend, li);   // INT8 KV: V dequantized here (binds both; only v used)
                 cs.SetBuffer(kAttend, "AttendedValues", attendedBuf);
                 cs.Dispatch(kAttend, (headDim + 63) / 64, (seqLen + 3) / 4, (headsQ + 3) / 4);
                 }
@@ -943,6 +981,7 @@ namespace DeepUnity
                 "token_ids", "embed_output", "norm_output", "norm_input",
                 "X", "Q_out", "K_out", "V_out", "gate_out", "rope_buf",
                 "kv_cache", "kv_new", "Q", "K", "V",
+                "k_scale_zp", "v_scale_zp", "kv_scale_zp_w",   // INT8 KV variant only (no-op names otherwise)
                 "AttentionWeights", "AttendedValues", "O", "gate_in",
                 "input", "intermediate", "mlp_input", "mlp_output",
                 "conv_state", "recurrent_state",

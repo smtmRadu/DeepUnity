@@ -21,10 +21,10 @@ namespace DeepUnity
     public static class LMProbeCommon
     {
         /// <summary>Constructs the selected model at the given quant. Boot proceeds across frames; poll IsReady.</summary>
-        public static LLM Build(ProbeModelKind kind, LLMQuant quant) => kind switch
+        public static LLM Build(ProbeModelKind kind, LLMQuant quant, KVQuant kv = KVQuant.FP16) => kind switch
         {
-            ProbeModelKind.Qwen3_5_0_8B => new Qwen3_5ForCausalLM(Qwen3_5Size.B0_8, quant),
-            ProbeModelKind.Gemma3_270M  => new Gemma3ForCausalLM(quant),
+            ProbeModelKind.Qwen3_5_0_8B => new Qwen3_5ForCausalLM(Qwen3_5Size.B0_8, quant, kv_quant: kv),
+            ProbeModelKind.Gemma3_270M  => new Gemma3ForCausalLM(quant, kv_quant: kv),
             _ => throw new System.ArgumentOutOfRangeException(nameof(kind), kind, "unknown probe model"),
         };
 

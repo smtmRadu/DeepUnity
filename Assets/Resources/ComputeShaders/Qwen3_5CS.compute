@@ -73,6 +73,11 @@ float readH(StructuredBuffer<uint> buf, uint index)
 // dt_bias/A_log and in_proj_a/b stay FP16 in both variants (plain readH).
 #pragma multi_compile _ INT8_WEIGHTS INT4_WEIGHTS
 
+// KV-cache precision (independent of the weight quant above); see KVCache.hlsl. Only the
+// full-attention layers' K/V are affected — the DeltaNet conv/recurrent states stay FP32.
+//   _        FP32 KV   KV_FP16  packed fp16 KV   KV_INT8  asymmetric uint8 KV + per-(token,head) scale/zp
+#pragma multi_compile _ KV_FP16 KV_INT8
+
 float readQ8(StructuredBuffer<uint> buf, uint index)
 {
     uint word = buf[index >> 2];
@@ -161,12 +166,12 @@ RWStructuredBuffer<float>   gate_out;     // attention output gate (sigmoid inpu
 
 RWStructuredBuffer<float>   rope_buf;
 
-RWStructuredBuffer<float>   kv_cache;
-StructuredBuffer<float>     kv_new;
+// K / V / kv_cache (typed by the KV_FP16 keyword) + kv_new are declared in the shared include.
+// Placed AFTER head_dim / num_heads_kv (declared at the top of this file) as the include requires.
+// Only the full-attention layers use these; the DeltaNet conv/recurrent state buffers below stay FP32.
+#include "KVCache.hlsl"
 
 StructuredBuffer<float>     Q;
-StructuredBuffer<float>     K;
-StructuredBuffer<float>     V;
 RWStructuredBuffer<float>   AttentionWeights;
 RWStructuredBuffer<float>   AttendedValues;
 RWStructuredBuffer<float>   O;
@@ -244,7 +249,8 @@ void EmbeddingLookup(uint3 id : SV_DispatchThreadID)
     uint pos = idx / hidden_size;
     uint h = idx % hidden_size;
     uint tok = token_ids[pos];
-    embed_output[idx] = readW(embed_weights, embed_scales, tok * hidden_size + h) * wScale(embed_scales, tok);
+    // embed/lm_head are ALWAYS fp16 (never quantized) — read directly with readH in every variant.
+    embed_output[idx] = readH(embed_weights, tok * hidden_size + h);
 }
 
 
@@ -389,10 +395,106 @@ void ApplyRopePartial(uint3 id : SV_DispatchThreadID)
 
 
 // ========================= WriteCacheFull ====================================
+// KV_INT8 quantizes on write: ONE threadgroup per (token, kv-head) reduces min/max over the
+// head_dim values, derives the asymmetric uint8 scale/zero-point, and packs the row 4-per-uint.
+// KV_PACKED (FP16) / FP32 keep the element-per-thread write (one whole uint per thread). KV_INT8
+// must be tested BEFORE KV_PACKED — KV_PACKED is defined for BOTH FP16 and INT8. (See the matching
+// kernel in Gemma3CS.compute; Qwen3.5 has no sliding-window write — full attention is pure causal.)
 #pragma kernel WriteCacheFull
+#if defined(KV_INT8)
+groupshared float kvq_min[KV_WRITE_INT8_THREADS];
+groupshared float kvq_max[KV_WRITE_INT8_THREADS];
+groupshared float kvq_scale;   // shared scale for the whole (token,head) row
+groupshared float kvq_zp;      // shared zero-point (already rounded+clamped)
+[numthreads(KV_WRITE_INT8_THREADS, 1, 1)]
+void WriteCacheFull(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint blk = KV_WRITE_INT8_THREADS;
+    uint tid = gtid.x;
+    // Degenerate prewarm dispatch (all uniforms 0) must terminate without dividing by zero; a real
+    // dispatch is exactly seq_len*num_heads_kv groups so gid.x is always in range here.
+    if (num_heads_kv == 0u || head_dim == 0u || gid.x >= seq_len * num_heads_kv) return;
+    uint h   = gid.x % num_heads_kv;
+    uint l   = gid.x / num_heads_kv;
+    uint cache_pos = cache_len + l;
+    uint src_row   = (l * num_heads_kv + h) * head_dim;             // kv_new row base
+    uint sz_idx    = cache_pos * num_heads_kv + h;                  // matches kv_unpack8's e/head_dim
+    uint cache_u0  = (cache_pos * num_heads_kv + h) * (head_dim / 4u); // first uint of this row
+
+    // 1. cooperative min/max over the head_dim values of kv_new[src_row + d]
+    float vmin =  3.0e38;
+    float vmax = -3.0e38;
+    for (uint d = tid; d < head_dim; d += blk)
+    {
+        float x = kv_new[src_row + d];
+        vmin = min(vmin, x);
+        vmax = max(vmax, x);
+    }
+    kvq_min[tid] = vmin;
+    kvq_max[tid] = vmax;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint r = blk / 2u; r > 0u; r >>= 1)
+    {
+        if (tid < r)
+        {
+            kvq_min[tid] = min(kvq_min[tid], kvq_min[tid + r]);
+            kvq_max[tid] = max(kvq_max[tid], kvq_max[tid + r]);
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    // 2. thread 0 derives + publishes scale/zp, and writes the packed (scale|zp) for this row
+    if (tid == 0u)
+    {
+        float mn = kvq_min[0];
+        float mx = kvq_max[0];
+        float scale = (mx - mn) / 255.0;
+        if (scale < 1e-9) scale = 1e-9;
+        float zp = round(-mn / scale);
+        zp = clamp(zp, 0.0, 255.0);
+        kvq_scale = scale;
+        kvq_zp    = zp;
+        kv_scale_zp_w[sz_idx] = KV_PACK_SCALEZP(scale, zp);
+    }
+    GroupMemoryBarrierWithGroupSync();
+    float scale = kvq_scale;
+    float zp    = kvq_zp;
+    float inv_scale = 1.0 / scale;
+
+    // 3. quantize + pack: thread tid owns uints u = tid, tid+blk, ... (4 head-dim elems each).
+    //    uint u covers elements [4u, 4u+3]; the flat cache element index of 4u+k is
+    //    e = (cache_pos*num_heads_kv+h)*head_dim + 4u+k, so e>>2 == cache_u0 + u and the four
+    //    elements land in bytes 0..3 of that uint — exactly what kv_unpack8 reads back.
+    uint nu = head_dim / 4u;
+    for (uint u = tid; u < nu; u += blk)
+    {
+        uint s = src_row + 4u * u;
+        uint q0 = (uint)clamp(round(kv_new[s + 0u] * inv_scale) + zp, 0.0, 255.0);
+        uint q1 = (uint)clamp(round(kv_new[s + 1u] * inv_scale) + zp, 0.0, 255.0);
+        uint q2 = (uint)clamp(round(kv_new[s + 2u] * inv_scale) + zp, 0.0, 255.0);
+        uint q3 = (uint)clamp(round(kv_new[s + 3u] * inv_scale) + zp, 0.0, 255.0);
+        kv_cache[cache_u0 + u] = q0 | (q1 << 8) | (q2 << 16) | (q3 << 24);
+    }
+}
+#else
 [numthreads(256, 1, 1)]
 void WriteCacheFull(uint3 id : SV_DispatchThreadID)
 {
+#if defined(KV_PACKED)
+    // Packed KV: one thread writes one uint = TWO consecutive head-dim elements.
+    uint u = id.x;
+    uint total = seq_len * num_heads_kv * (head_dim / 2u);
+    if (u >= total) return;
+    uint d2  = u % (head_dim / 2u);
+    uint tmp = u / (head_dim / 2u);
+    uint h   = tmp % num_heads_kv;
+    uint l   = tmp / num_heads_kv;
+    uint d   = d2 * 2u;
+    uint cache_pos = cache_len + l;
+    uint e   = (cache_pos * num_heads_kv + h) * head_dim + d;   // even-aligned flat cache index
+    uint src = (l * num_heads_kv + h) * head_dim + d;
+    KV_WRITE2(kv_cache, e, kv_new[src], kv_new[src + 1u]);
+#else
     uint idx = id.x;
     uint total = seq_len * num_heads_kv * head_dim;
     if (idx >= total) return;
@@ -402,7 +504,9 @@ void WriteCacheFull(uint3 id : SV_DispatchThreadID)
     uint l   = tmp / num_heads_kv;
     uint cache_pos = cache_len + l;
     kv_cache[(cache_pos * num_heads_kv + h) * head_dim + d] = kv_new[idx];
+#endif
 }
+#endif
 
 
 // ========================= ApplyMaskCausal ===================================
@@ -467,7 +571,7 @@ void ComputeAttentionScores(uint3 id : SV_DispatchThreadID)
     uint q_base = (((b * sequence_length_q + id.x) * num_heads_q + hq) * head_dim);
     uint k_base = (((b * sequence_length_k + id.y) * num_heads_kv + hkv) * head_dim);
     for (uint d = 0; d < head_dim; d++)
-        dot += Q[q_base + d] * K[k_base + d];
+        dot += Q[q_base + d] * KV_READ_K(k_base + d);
 
     AttentionWeights[((((b * num_heads_q + hq) * sequence_length_q) + id.x) * sequence_length_k + id.y)] = dot * scale;
 }
@@ -491,7 +595,7 @@ void AttendValues(uint3 id : SV_DispatchThreadID)
     for (uint j = 0; j < sequence_length_v; j++)
     {
         float w = AttentionWeights[((((b * num_heads_q + hq) * sequence_length_q) + id.y) * sequence_length_k + j)];
-        float vv = V[(((b * sequence_length_k + j) * num_heads_kv + hkv) * head_dim + id.x)];
+        float vv = KV_READ_V((((b * sequence_length_k + j) * num_heads_kv + hkv) * head_dim + id.x));
         acc += w * vv;
     }
     AttendedValues[(((b * sequence_length_q + id.y) * num_heads_q + hq) * head_dim + id.x)] = acc;
@@ -546,7 +650,7 @@ void FlashAttention(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
             uint k_base = (j * num_heads_kv + hkv) * head_dim;
             float dot = 0.0;
             for (uint d = 0; d < head_dim; d++)
-                dot += fa_q[d] * K[k_base + d];
+                dot += fa_q[d] * KV_READ_K(k_base + d);
             s = dot;
         }
 
@@ -583,7 +687,7 @@ void FlashAttention(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
             float a = acc * alpha;
             uint n_valid = min(FA_THREADS, j_hi - tile + 1u);
             for (uint jj = 0; jj < n_valid; jj++)
-                a += fa_p[jj] * V[((tile + jj) * num_heads_kv + hkv) * head_dim + tid];
+                a += fa_p[jj] * KV_READ_V(((tile + jj) * num_heads_kv + hkv) * head_dim + tid);
             acc = a;
         }
         m = m_new;
@@ -1060,8 +1164,8 @@ void LmHeadPredict(uint3 id : SV_DispatchThreadID)
     float sum = 0.0;
     uint in_base = ((b * seq_len) + l) * hidden_size;
     for (uint h = 0; h < hidden_size; h++)
-        sum += lm_input[in_base + h] * readW(lm_weights, embed_scales, v * hidden_size + h);
-    lm_output[((b * seq_len) + l) * vocab_size + v] = sum * wScale(embed_scales, v);
+        sum += lm_input[in_base + h] * readH(lm_weights, v * hidden_size + h);   // lm_head always fp16
+    lm_output[((b * seq_len) + l) * vocab_size + v] = sum;
 }
 
 #pragma kernel LmHeadPredict1Vec
@@ -1072,8 +1176,8 @@ void LmHeadPredict1Vec(uint3 id : SV_DispatchThreadID)
     if (v >= vocab_size) return;
     float sum = 0.0;
     for (uint h = 0; h < hidden_size; h++)
-        sum += lm_input[h] * readW(lm_weights, embed_scales, v * hidden_size + h);
-    lm_output[v] = sum * wScale(embed_scales, v);
+        sum += lm_input[h] * readH(lm_weights, v * hidden_size + h);   // lm_head always fp16
+    lm_output[v] = sum;
 }
 
 // ============================== SAMPLERS ==============================

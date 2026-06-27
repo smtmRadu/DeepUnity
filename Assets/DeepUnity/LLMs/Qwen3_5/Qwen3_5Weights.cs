@@ -238,19 +238,14 @@ namespace DeepUnity
 
             void BuildManifest(string p)
             {
-                // Embedding: 16 shards into one buffer at consecutive offsets (row-aligned chunks
-                // in every mode, plus one scales file covering the whole matrix when quantized).
-                string embedExt = Quant == LLMQuant.INT8 ? ".int8.bin"
-                                : Quant == LLMQuant.INT4 ? ".int4.bin" : ".bin";
-                int divisor = Quant == LLMQuant.INT8 ? 2 : Quant == LLMQuant.INT4 ? 4 : 1;
-                int totalHalves = vocab * hidden / divisor;
+                // Tied embedding/lm_head is ALWAYS fp16 in every quant mode (it doubles as the
+                // lm_head; quantizing it poisons every logit and collapses small models — only the
+                // transformer-block linear weights are quantized). 16 row-aligned fp16 shards into
+                // one buffer at consecutive offsets, no scales.
+                int totalHalves = vocab * hidden;
                 int perChunk = totalHalves / EMBED_NUM_CHUNKS; // exactly divisible for 0.8B
                 for (int i = 0; i < EMBED_NUM_CHUNKS; i++)
-                    Add($"{p}/embed_tokens/part_{i}{embedExt}", _embedSlot, 0, totalHalves, perChunk, i * perChunk * 2);
-                if (Quant == LLMQuant.INT8)
-                    Add($"{p}/embed_tokens/scales.bin", _embedScalesSlot, 0, vocab);
-                else if (Quant == LLMQuant.INT4)
-                    Add($"{p}/embed_tokens/scales.bin", _embedScalesSlot, 0, vocab * hidden / 32);
+                    Add($"{p}/embed_tokens/part_{i}.bin", _embedSlot, 0, totalHalves, perChunk, i * perChunk * 2);
 
                 Add(p + "/norm.bin", _finalNormSlot, 0, hidden);
 

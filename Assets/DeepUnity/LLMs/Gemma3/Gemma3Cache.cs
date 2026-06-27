@@ -13,7 +13,13 @@ namespace DeepUnity
         {
             public ComputeBuffer[] kCaches;
             public ComputeBuffer[] vCaches;
+            // INT8 KV only: per-(token, kv-head) fp16 scale + fp16 zero-point for K and V (asymmetric).
+            // null unless KV == INT8. Laid out [capacity, headsKV].
+            public ComputeBuffer[] kScaleZp;
+            public ComputeBuffer[] vScaleZp;
             public int CachedTokenCount { get; set; }
+
+            public readonly KVQuant KV;
 
             readonly int numLayers;
             readonly int headsKV;
@@ -23,22 +29,41 @@ namespace DeepUnity
             const int FILE_MAGIC = 0x47334B56; // "G3KV"
             const int FILE_VERSION = 1;
 
-            public Gemma3Cache(int numLayers, int capacity, int headsKV, int headDim)
+            public Gemma3Cache(int numLayers, int capacity, int headsKV, int headDim, KVQuant kv = KVQuant.FP32)
             {
                 this.numLayers = numLayers;
                 this.headsKV = headsKV;
                 this.headDim = headDim;
                 this.capacity = capacity;
+                this.KV = kv;
 
                 kCaches = new ComputeBuffer[numLayers];
                 vCaches = new ComputeBuffer[numLayers];
 
-                // FP32 activations — stride 4, full count
-                int bufSize = capacity * headsKV * headDim;
+                // Element count of one K (or V) cache across `capacity` tokens. Storage width depends
+                // on KV precision (all buffers are stride-4 uint; the count is what shrinks):
+                //   FP32 -> 4 B/elem            -> count = elems
+                //   FP16 -> 2 B/elem (2 / uint) -> count = elems / 2   (head_dim even, so exact)
+                //   INT8 -> 1 B/elem (4 / uint) -> count = elems / 4   + per-(token,head) scale+zp
+                int elems = capacity * headsKV * headDim;
+                int uintCount = KVQuantUtil.UIntCount(elems, kv);
                 for (int i = 0; i < numLayers; i++)
                 {
-                    kCaches[i] = new ComputeBuffer(bufSize, 4, ComputeBufferType.Structured);
-                    vCaches[i] = new ComputeBuffer(bufSize, 4, ComputeBufferType.Structured);
+                    kCaches[i] = new ComputeBuffer(uintCount, 4, ComputeBufferType.Structured);
+                    vCaches[i] = new ComputeBuffer(uintCount, 4, ComputeBufferType.Structured);
+                }
+
+                if (kv == KVQuant.INT8)
+                {
+                    // one fp16 scale + one fp16 zero-point per (token, kv-head) → 2 halves = 1 uint each
+                    kScaleZp = new ComputeBuffer[numLayers];
+                    vScaleZp = new ComputeBuffer[numLayers];
+                    int szCount = capacity * headsKV;   // uints (scale|zp packed 2 halves per uint)
+                    for (int i = 0; i < numLayers; i++)
+                    {
+                        kScaleZp[i] = new ComputeBuffer(szCount, 4, ComputeBufferType.Structured);
+                        vScaleZp[i] = new ComputeBuffer(szCount, 4, ComputeBufferType.Structured);
+                    }
                 }
 
                 CachedTokenCount = 0;
@@ -58,6 +83,9 @@ namespace DeepUnity
             // the FP32→FP16 packing + all file writes happen on a worker thread.
             public IEnumerator SaveAsync(string folder)
             {
+                // Disk prompt-cache currently supports FP32 KV only (readback + on-disk format
+                // assume 4-byte floats). For quantized KV it's skipped — the prompt is recomputed.
+                if (KV != KVQuant.FP32) yield break;
                 int tokens = CachedTokenCount;
                 if (tokens <= 0) yield break;
 
@@ -134,6 +162,7 @@ namespace DeepUnity
             // via onComplete (true = loaded, false = missing/mismatch/IO error).
             public IEnumerator TryLoadAsync(string folder, Action<bool> onComplete)
             {
+                if (KV != KVQuant.FP32) { onComplete?.Invoke(false); yield break; }   // FP32-only for now
                 string metaPath = Path.Combine(folder, "meta.bin");
                 if (!File.Exists(metaPath)) { onComplete?.Invoke(false); yield break; }
 
@@ -237,6 +266,8 @@ namespace DeepUnity
                 {
                     kCaches[i]?.Release();
                     vCaches[i]?.Release();
+                    kScaleZp?[i]?.Release();
+                    vScaleZp?[i]?.Release();
                 }
             }
         }

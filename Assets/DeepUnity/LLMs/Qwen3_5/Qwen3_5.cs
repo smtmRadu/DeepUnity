@@ -28,6 +28,7 @@ namespace DeepUnity
 
         public override LLMConfig Config => _config;
         public override bool IsReady => model.IsReady && (tokenizer == null || tokenizer.IsReady);
+        public override bool TokenizerReady => tokenizer == null || tokenizer.IsReady;
 
         /// <summary>
         /// Qwen3.5-0.8B (text-only), full-GPU FP16 inference.
@@ -63,12 +64,18 @@ namespace DeepUnity
         /// pre-allocation; in the future we may make it dynamic (grow on demand, array-list style) so memory
         /// scales with the actual context length instead of always reserving the maximum.
         /// </param>
+        /// <param name="kv_quant">
+        /// KV-cache precision (independent of the weight <paramref name="quantization"/>): FP16 (default,
+        /// ~lossless, half the KV VRAM/bandwidth) or FP32 (reference). Only the 6 full-attention layers'
+        /// K/V are affected; DeltaNet states stay FP32. INT8 KV is not wired up yet.
+        /// </param>
         public Qwen3_5ForCausalLM(
             Qwen3_5Size size = Qwen3_5Size.B0_8,
             LLMQuant quantization = LLMQuant.FP16,
             string params_path = null,
             string tokenizer_path = "Assets/DeepUnity/LLMs/Qwen3_5/Qwen3_5TokenizerFast.json",
-            int maxModelLength = 8192)
+            int maxModelLength = 8192,
+            KVQuant kv_quant = KVQuant.FP16)
         {
             params_path ??= ResolveParamsPath(size, quantization);
             this.size = size;
@@ -80,7 +87,7 @@ namespace DeepUnity
             // Cached per path in the LLM base (see GetOrCreateTokenizer for why).
             this.tokenizer = GetOrCreateTokenizer(tokenizer_path, p => new Qwen3_5TokenizerFast(p, load_async: true));
 
-            model = new Qwen3_5Modeling.Qwen3_5Model(params_path, maxModelLength, quantization);
+            model = new Qwen3_5Modeling.Qwen3_5Model(params_path, maxModelLength, quantization, kv_quant);
             // Feed the tokenizer's main-thread ctor cost to the weights object; the single consolidated
             // "model booted up" log is emitted from InitializeChat once everything is ready.
             model.weights.bootTokenizerMs = tokenizer?.ctorMs ?? 0;

@@ -27,15 +27,17 @@ DeepUnity convention documented on LLMQuant in LLM.cs)
     fp16   packed 2-per-uint reference format
     int8   symmetric, ONE fp16 scale per OUTPUT ROW: scale_r = max|w_r| / 127   (~lossless)
     int4   GGUF Q4_0-style, GROUPS OF 32 per row: d = w[argmax|w|] / -8, nibbles store q+8
-    Norm gammas, conv1d, dt_bias, A_log and in_proj_a/b always stay fp16 (tiny or sensitive).
+    Norm gammas, conv1d, dt_bias, A_log, in_proj_a/b AND the tied embedding/lm_head ALWAYS stay
+    fp16 in every mode. Only the transformer-block LINEAR weights (attention q/k/v/o, MLP
+    gate/up/down, DeltaNet in/out projections) are quantized — quantizing norms or the lm_head
+    poisons every logit and collapses small models (GPTQ/AWQ/QLoRA/llama.cpp all keep them high).
 
 OUTPUT LAYOUT (the unified convention every DeepUnity LLM loader reads; the C# resolves
 this Resources location first and falls back to the legacy Assets/DeepUnity/LLMs/ one)
     Assets/Resources/DeepUnity/LLMs/<Arch>/weights_<model>_<size>_<quant>/
         e.g.  .../LLMs/Qwen3_5/weights_qwen3.5_0.8B_int8/   .../LLMs/Gemma3/weights_gemma3_270M_fp16/
         norm.bin                                  final RMSNorm gamma (fp16)
-        embed_tokens/part_{0..15}[.intN].bin      tied embedding / lm_head, 16 row-aligned shards
-        embed_tokens/scales.bin                   (quantized modes only)
+        embed_tokens/part_{0..15}.bin             tied embedding / lm_head, 16 fp16 shards (ALWAYS fp16)
         layer_{i}/<tensor>.bin                    fp16 tensors
         layer_{i}/<tensor>.intN.bin + .scales.bin quantized matmul weights
 
@@ -234,31 +236,21 @@ class Exporter:
         self._track(qp, err, rel)
         self._track(sp)
 
-    # tied embedding/lm_head [vocab, hidden] -> 16 row-aligned shards (+ one scales file)
+    # tied embedding/lm_head [vocab, hidden] -> 16 row-aligned fp16 shards.
+    # ALWAYS fp16, in EVERY quant mode: this tensor doubles as the lm_head, so its error lands
+    # directly on every one of the 248k-262k output logits and collapses small models. Only the
+    # transformer-block LINEAR weights are quantized; embeddings/lm_head + norms stay fp16 — the
+    # GPTQ/AWQ/QLoRA/llama.cpp convention (see OPTIMIZATIONS.md "What stays higher-precision").
     def embedding(self, embed):
         vocab, hidden = embed.shape
         assert vocab % EMBED_CHUNKS == 0, f"vocab {vocab} not divisible by {EMBED_CHUNKS}"
         rows = vocab // EMBED_CHUNKS
         d = os.path.join(self.out, "embed_tokens")
         os.makedirs(d, exist_ok=True)
-        scales = None
         for k in tqdm(range(EMBED_CHUNKS), desc="embed_tokens", unit="shard"):
-            w = embed[k * rows:(k + 1) * rows].astype(np.float32)
-            if self.quant == "fp16":
-                path = os.path.join(d, f"part_{k}.bin")
-                w.astype(np.float16).tofile(path)
-                self._track(path)
-                continue
-            q, s, err = (quantize_int8(w) if self.quant == "int8" else quantize_int4(w))
-            if scales is None:
-                scales = np.empty((EMBED_CHUNKS,) + s.shape, dtype=np.float16)
-            scales[k] = s
-            path = os.path.join(d, f"part_{k}.int8.bin" if self.quant == "int8" else f"part_{k}.int4.bin")
-            q.tofile(path)
-            self._track(path, err, "embed_tokens")
-        if scales is not None:
-            path = os.path.join(d, "scales.bin")
-            scales.tofile(path)
+            w = embed[k * rows:(k + 1) * rows].astype(np.float16)
+            path = os.path.join(d, f"part_{k}.bin")
+            w.tofile(path)
             self._track(path)
 
 
@@ -361,7 +353,7 @@ def main():
 
     print(f"\nDone - {ex.bytes_written / 1024 / 1024:.0f} MB written to:\n  {out}")
     print("Layout: norm.bin + embed_tokens/part_0..15 + layer_i/<tensor> "
-          + ("(.bin fp16)" if args.quant == "fp16" else f"(.{args.quant}.bin + .scales.bin, fp16 passthrough for norms etc.)"))
+          + ("(.bin fp16)" if args.quant == "fp16" else f"(.{args.quant}.bin + .scales.bin; norms + embeddings/lm_head stay fp16)"))
     if args.quant != "fp16":
         print(f"Worst per-element reconstruction error: {ex.worst[0]:.6f} ({ex.worst[1]})")
     print("\nUse it in Unity (the loaders resolve this Resources folder automatically):")

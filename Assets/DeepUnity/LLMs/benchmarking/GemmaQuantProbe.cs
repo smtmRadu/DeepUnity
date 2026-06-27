@@ -32,6 +32,13 @@ namespace DeepUnity
         public string reportDirectory;
         public LLMQuant quant = LLMQuant.INT8;   // the format A/B'd against FP16
 
+        // Standard benchmark pairing (see BENCHMARK.md): quantized weights ship with INT8 KV, the
+        // fp16 reference keeps fp16 KV. So this A/B reports the drift of the FULL shipped config
+        // (int8/int4 weights + int8 KV) vs the fp16 reference config — not weight-only. INT8 KV is
+        // near-lossless, so the weight-quant story is unchanged; this just keeps Table 3 consistent
+        // with the kv=int8 speed/boot rows and reflects what actually runs.
+        readonly KVQuant kvForQuant = KVQuant.INT8;
+
         const int PREFILL_TOKENS = 500;
         const int COMPARE_STEPS = 8;
         const int BENCH_TOKENS = 64;
@@ -210,7 +217,7 @@ namespace DeepUnity
 
             // ---------------- FP16 reference ----------------
             Status("constructing FP16 Gemma3");
-            var fp16 = new Gemma3ForCausalLM(LLMQuant.FP16);
+            var fp16 = new Gemma3ForCausalLM(LLMQuant.FP16, kv_quant: KVQuant.FP16);
             var refLogits = new float[COMPARE_STEPS][];
             var refTok = new int[COMPARE_STEPS];
             var fp16Ms = new double[1];
@@ -222,7 +229,7 @@ namespace DeepUnity
 
             // ---------------- quantized ----------------
             Status($"constructing {quant} Gemma3");
-            var int8 = new Gemma3ForCausalLM(quant);
+            var int8 = new Gemma3ForCausalLM(quant, kv_quant: kvForQuant);
             var qLogits = new float[COMPARE_STEPS][];
             var qTok = new int[COMPARE_STEPS];
             var int8Ms = new double[1];
@@ -237,6 +244,7 @@ namespace DeepUnity
             report.AppendLine("|---|---|---|---|---|");
             int matches = 0;
             float worst = 0f;
+            double meanDiffSum = 0;
             for (int k = 0; k < COMPARE_STEPS; k++)
             {
                 float maxd = 0f; double sumd = 0;
@@ -246,6 +254,7 @@ namespace DeepUnity
                     if (d > maxd) maxd = d;
                     sumd += d;
                 }
+                meanDiffSum += sumd / V;
                 bool match = qTok[k] == refTok[k];
                 if (match) matches++;
                 if (maxd > worst) worst = maxd;
@@ -271,6 +280,7 @@ namespace DeepUnity
             report.AppendLine("## Summary");
             report.AppendLine($"- worst logit diff {worst:0.0000}, argmax match {matches}/{COMPARE_STEPS} -> {(pass ? "PASS" : "FAIL")}");
 
+            WriteSummary(worst, meanDiffSum / COMPARE_STEPS, matches, div, fp16Ms[0], int8Ms[0]);
             WriteReport(pass);
             Status($"DONE {(pass ? "PASS" : "FAIL")} — report at {reportDirectory}");
             BatchExit(pass ? 0 : 1);
@@ -289,6 +299,41 @@ namespace DeepUnity
             {
                 Debug.LogException(e);
             }
+        }
+
+        // Machine-readable headline metrics for BENCHMARK.md aggregation. Invariant culture so a
+        // comma-decimal locale (e.g. RO on the Pavilion box) can't emit invalid JSON.
+        void WriteSummary(float maxDiff, double meanDiff, int matches, int divChar, double fp16Ms, double quantMs)
+        {
+            var prev = System.Threading.Thread.CurrentThread.CurrentCulture;
+            System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+            try
+            {
+                double fpTokS = fp16Ms > 0 ? 1000.0 / fp16Ms : 0;
+                double qTokS = quantMs > 0 ? 1000.0 / quantMs : 0;
+                var js = new StringBuilder();
+                js.Append("{\n");
+                js.Append("  \"probe\": \"quant_quality\",\n");
+                js.Append("  \"model\": \"gemma3-270M\",\n");
+                js.Append("  \"quant\": ").Append(LMProbeCommon.JsonStr(quant.ToString())).Append(",\n");
+                js.Append("  \"kv\": ").Append(LMProbeCommon.JsonStr(kvForQuant.ToString())).Append(",\n");
+                js.Append("  \"success\": ").Append(pass ? "true" : "false").Append(",\n");
+                js.Append("  \"compare_steps\": ").Append(COMPARE_STEPS).Append(",\n");
+                js.Append($"  \"max_logit_diff\": {maxDiff:0.0000},\n");
+                js.Append($"  \"mean_logit_diff\": {meanDiff:0.000000},\n");
+                js.Append($"  \"argmax_match\": {matches},\n");
+                js.Append($"  \"argmax_match_pct\": {100.0 * matches / COMPARE_STEPS:0.0},\n");
+                js.Append($"  \"divergence_char\": {divChar},\n");
+                js.Append($"  \"fp16_decode_ms\": {fp16Ms:0.00}, \"fp16_decode_tok_s\": {fpTokS:0.0},\n");
+                js.Append($"  \"quant_decode_ms\": {quantMs:0.00}, \"quant_decode_tok_s\": {qTokS:0.0},\n");
+                js.Append($"  \"decode_speedup\": {(quantMs > 0 ? fp16Ms / quantMs : 0):0.00},\n");
+                js.Append("  \"machine\": ").Append(LMProbeCommon.MachineJson()).Append("\n");
+                js.Append("}\n");
+                Directory.CreateDirectory(reportDirectory);
+                File.WriteAllText(Path.Combine(reportDirectory, "summary.json"), js.ToString());
+            }
+            catch (Exception e) { Debug.LogException(e); }
+            finally { System.Threading.Thread.CurrentThread.CurrentCulture = prev; }
         }
     }
 }

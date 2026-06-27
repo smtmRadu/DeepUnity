@@ -329,6 +329,11 @@ namespace DeepUnity
 
                 cs = DeepUnityMeta.Gemma3CS;
                 denseCs = DeepUnityMeta.FFNInferenceCS;
+                // This model binds FP32 scratch buffers to the shared shader's K/V — force the FP32
+                // KV variant so a causal Gemma3 (which may have left KV_FP16/KV_INT8 enabled on the
+                // shared asset) can't make us misread FP32 K/V as packed. Same one-mode-per-session
+                // convention as the weight INT8_WEIGHTS/INT4_WEIGHTS keywords.
+                KVQuantUtil.SetKeyword(cs, KVQuant.FP32);
                 CacheKernelIds();
 
                 weights = new EmbeddingGemmaWeights(paramsPath);

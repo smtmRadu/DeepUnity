@@ -59,6 +59,62 @@ namespace DeepUnity
     }
 
     /// <summary>
+    /// KV-cache storage format, chosen INDEPENDENTLY of the weight <see cref="LLMQuant"/> — a model
+    /// can run e.g. int4 weights with int8 KV. Unlike weights (static, ~zero-centered), the KV cache
+    /// is dynamic/activation-like and read-grown every decode step, so its int8 scheme differs from
+    /// the weight one (asymmetric + per-token, see INT8). Applies only to the attention layers' K/V;
+    /// Qwen3.5's DeltaNet conv/recurrent states stay FP32 (they accumulate recurrently and drift
+    /// under quantization). Decode at long context is KV-bandwidth-bound, so this trades a little
+    /// accuracy for decode speed + KV VRAM.
+    /// </summary>
+    public enum KVQuant
+    {
+        /// <summary>FP32 KV (4 bytes/elem). Reference: bit-exact, largest, highest read bandwidth.</summary>
+        [Tooltip("Reference fp32 KV — exact, largest, slowest decode at long context.")]
+        FP32,
+
+        /// <summary>FP16 KV, packed 2 halves per uint (2 bytes/elem). ~Lossless; halves KV VRAM and
+        /// the per-step KV read bandwidth. Packed/unpacked in-kernel (f32tof16 / f16tof32).</summary>
+        [Tooltip("Packed fp16 KV — ~lossless, half the KV VRAM/bandwidth.")]
+        FP16,
+
+        /// <summary>Asymmetric uint8 KV (1 byte/elem) + per-token scale & zero-point: q = round(x/s)+zp,
+        /// x ~= (q-zp)*s. ASYMMETRIC (not symmetric like weight-INT8) because K/V are activation-like
+        /// and not zero-centered; PER-TOKEN because their outliers are token-consistent. Quarter the
+        /// FP32 KV bytes. Error accumulates over context, so quality is gated by logit-diff vs FP32.</summary>
+        [Tooltip("Per-token asymmetric uint8 KV — quarter the fp32 KV bytes; validated vs fp32.")]
+        INT8,
+    }
+
+    /// <summary>
+    /// Shared KV-cache-quantization helpers so Qwen3.5 and Gemma3 (and any future model) don't
+    /// duplicate the precision→layout math or the shader-keyword wiring. All K/V cache buffers are
+    /// stride-4 <c>uint</c> regardless of precision; only the element packing (and thus the uint
+    /// count + the per-thread WriteCache fan-out) changes. The compute side mirrors this in the
+    /// shared <c>KVCache.hlsl</c> include (KV_READ / KV_WRITE + the KV_FP16 / KV_INT8 keywords).
+    /// </summary>
+    public static class KVQuantUtil
+    {
+        /// <summary>Elements packed into one stride-4 uint at this precision: FP32→1, FP16→2, INT8→4.</summary>
+        public static int ElemsPerUInt(KVQuant kv) => kv == KVQuant.FP32 ? 1 : kv == KVQuant.FP16 ? 2 : 4;
+
+        /// <summary>uint count to store <paramref name="elems"/> K (or V) values at this precision.
+        /// (head_dim is even and a multiple of 4, so the division is always exact.)</summary>
+        public static int UIntCount(int elems, KVQuant kv) => elems / ElemsPerUInt(kv);
+
+        /// <summary>WriteCache dispatch units for <paramref name="elems"/> new K/V values: one GPU
+        /// thread writes one whole uint (1/2/4 packed elements), so it equals the uint count.</summary>
+        public static int WriteUnits(int elems, KVQuant kv) => UIntCount(elems, kv);
+
+        /// <summary>Sets the mutually-exclusive KV_FP16 / KV_INT8 shader keywords (none = FP32).</summary>
+        public static void SetKeyword(UnityEngine.ComputeShader cs, KVQuant kv)
+        {
+            if (kv == KVQuant.FP16) cs.EnableKeyword("KV_FP16"); else cs.DisableKeyword("KV_FP16");
+            if (kv == KVQuant.INT8) cs.EnableKeyword("KV_INT8"); else cs.DisableKeyword("KV_INT8");
+        }
+    }
+
+    /// <summary>
     /// Abstract base for every DeepUnity full-GPU causal LLM (Gemma3, Qwen3.5, ...).
     ///
     /// It pins down the shared public surface so models drop in interchangeably and expose
@@ -99,6 +155,10 @@ namespace DeepUnity
 
         /// <summary>True once the weights are uploaded and the tokenizer (if any) has finished loading.</summary>
         public abstract bool IsReady { get; }
+
+        /// <summary>True once the (async) tokenizer parse has finished. Read-only; lets benchmarks
+        /// separate tokenizer-ready from weights-ready in boot timing. Default true (no tokenizer).</summary>
+        public virtual bool TokenizerReady => true;
 
         /// <summary>Rolling decode speed of the most recent generation step (0 while idle).</summary>
         public float TokensPerSecond { get; protected set; }

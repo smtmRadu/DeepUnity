@@ -21,8 +21,9 @@ namespace DeepUnity
 
         // ---- batch entry points (read -model/-quant from the command line) --------------------
         public static void RunBootKnobProbe()    => LaunchBoot(ParseModel(), ParseQuant());
-        public static void RunPrefillProbe()     => LaunchPrefill(ParseModel(), ParseQuant());
-        public static void RunDecodeDecayProbe() => LaunchDecodeDecay(ParseModel(), ParseQuant());
+        public static void RunPrefillProbe()     => LaunchPrefill(ParseModel(), ParseQuant(), ParseKV(ParseQuant()));
+        public static void RunDecodeDecayProbe() => LaunchDecodeDecay(ParseModel(), ParseQuant(), ParseKV(ParseQuant()));
+        public static void RunBootProbe()        => LaunchBootLoad(ParseModel(), ParseQuant(), ParseKV(ParseQuant()));
 
         // ---- interactive menu items -----------------------------------------------------------
         [MenuItem("Tools/DeepUnity/Benchmarks/Boot Knob Probe/Qwen3.5 FP16")] static void B_Q_FP16() => LaunchBoot(ProbeModelKind.Qwen3_5_0_8B, LLMQuant.FP16);
@@ -46,6 +47,13 @@ namespace DeepUnity
         [MenuItem("Tools/DeepUnity/Benchmarks/Decode Decay Probe/Gemma3 INT8")]  static void D_G_INT8() => LaunchDecodeDecay(ProbeModelKind.Gemma3_270M, LLMQuant.INT8);
         [MenuItem("Tools/DeepUnity/Benchmarks/Decode Decay Probe/Gemma3 INT4")]  static void D_G_INT4() => LaunchDecodeDecay(ProbeModelKind.Gemma3_270M, LLMQuant.INT4);
 
+        [MenuItem("Tools/DeepUnity/Benchmarks/Boot Load Probe/Qwen3.5 FP16")] static void BL_Q_FP16() => LaunchBootLoad(ProbeModelKind.Qwen3_5_0_8B, LLMQuant.FP16);
+        [MenuItem("Tools/DeepUnity/Benchmarks/Boot Load Probe/Qwen3.5 INT8")] static void BL_Q_INT8() => LaunchBootLoad(ProbeModelKind.Qwen3_5_0_8B, LLMQuant.INT8);
+        [MenuItem("Tools/DeepUnity/Benchmarks/Boot Load Probe/Qwen3.5 INT4")] static void BL_Q_INT4() => LaunchBootLoad(ProbeModelKind.Qwen3_5_0_8B, LLMQuant.INT4);
+        [MenuItem("Tools/DeepUnity/Benchmarks/Boot Load Probe/Gemma3 FP16")]  static void BL_G_FP16() => LaunchBootLoad(ProbeModelKind.Gemma3_270M, LLMQuant.FP16);
+        [MenuItem("Tools/DeepUnity/Benchmarks/Boot Load Probe/Gemma3 INT8")]  static void BL_G_INT8() => LaunchBootLoad(ProbeModelKind.Gemma3_270M, LLMQuant.INT8);
+        [MenuItem("Tools/DeepUnity/Benchmarks/Boot Load Probe/Gemma3 INT4")]  static void BL_G_INT4() => LaunchBootLoad(ProbeModelKind.Gemma3_270M, LLMQuant.INT4);
+
         // ---- launchers ------------------------------------------------------------------------
         static void LaunchBoot(ProbeModelKind kind, LLMQuant quant)
         {
@@ -59,29 +67,44 @@ namespace DeepUnity
             });
         }
 
-        static void LaunchPrefill(ProbeModelKind kind, LLMQuant quant)
+        static void LaunchPrefill(ProbeModelKind kind, LLMQuant quant, KVQuant kv = KVQuant.FP16)
         {
-            Launch($"prefill_{LMProbeCommon.ModelLabel(kind)}_{quant}", dir =>
+            Launch($"prefill_{LMProbeCommon.ModelLabel(kind)}_{quant}_kv{kv}", dir =>
             {
                 var go = new GameObject("LMPrefillProbe");
                 var probe = go.AddComponent<LMPrefillProbe>();
                 probe.model = kind;
                 probe.quant = quant;
+                probe.kvQuant = kv;
                 probe.reportDirectory = dir;
             });
         }
 
-        static void LaunchDecodeDecay(ProbeModelKind kind, LLMQuant quant)
+        static void LaunchDecodeDecay(ProbeModelKind kind, LLMQuant quant, KVQuant kv = KVQuant.FP16)
         {
             // Gemma3 KV capacity is 2048; keep maxTokens safely under it. Qwen3.5 is 8192.
             int maxTokens = kind == ProbeModelKind.Gemma3_270M ? 2000 : 4096;
-            Launch($"decodedecay_{LMProbeCommon.ModelLabel(kind)}_{quant}", dir =>
+            Launch($"decodedecay_{LMProbeCommon.ModelLabel(kind)}_{quant}_kv{kv}", dir =>
             {
                 var go = new GameObject("LMDecodeDecayProbe");
                 var probe = go.AddComponent<LMDecodeDecayProbe>();
                 probe.model = kind;
                 probe.quant = quant;
+                probe.kvQuant = kv;
                 probe.maxTokens = maxTokens;
+                probe.reportDirectory = dir;
+            });
+        }
+
+        static void LaunchBootLoad(ProbeModelKind kind, LLMQuant quant, KVQuant kv = KVQuant.FP16)
+        {
+            Launch($"bootload_{LMProbeCommon.ModelLabel(kind)}_{quant}_kv{kv}", dir =>
+            {
+                var go = new GameObject("LMBootProbe");
+                var probe = go.AddComponent<LMBootProbe>();
+                probe.model = kind;
+                probe.quant = quant;
+                probe.kvQuant = kv;
                 probe.reportDirectory = dir;
             });
         }
@@ -124,6 +147,21 @@ namespace DeepUnity
             if (v == "int8") return LLMQuant.INT8;
             if (v == "int4") return LLMQuant.INT4;
             return LLMQuant.FP16; // default
+        }
+
+        // Standard benchmark weight→KV pairing (the combos we always benchmark):
+        //   fp16 weights → fp16 KV   |   int8 weights → int8 KV   |   int4 weights → int8 KV
+        static KVQuant StandardKV(LLMQuant weight) => weight == LLMQuant.FP16 ? KVQuant.FP16 : KVQuant.INT8;
+
+        // -kvquant fp32|fp16|int8 overrides (for one-off KV-precision experiments); otherwise the
+        // standard pairing for the weight quant is used.
+        static KVQuant ParseKV(LLMQuant weight)
+        {
+            string v = ArgValue("-kvquant")?.ToLowerInvariant();
+            if (v == "fp32") return KVQuant.FP32;
+            if (v == "fp16") return KVQuant.FP16;
+            if (v == "int8") return KVQuant.INT8;
+            return StandardKV(weight);
         }
 
         static string ArgValue(string flag)

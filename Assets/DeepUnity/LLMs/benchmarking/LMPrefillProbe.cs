@@ -21,9 +21,11 @@ namespace DeepUnity
         [Header("What to boot (one model per editor run)")]
         public ProbeModelKind model = ProbeModelKind.Qwen3_5_0_8B;
         public LLMQuant quant = LLMQuant.FP16;
+        public KVQuant kvQuant = KVQuant.FP16;
 
         [Header("Prefill")]
         public int prefillTokens = 2048;
+        public int prefillChunk = 32;  // tokens per Forward (production InitializeChat chunks the prompt too)
         public int warmupRuns = 2;     // untimed prefills (stabilize lazy/first-dispatch costs)
         public int timedRuns = 5;      // timed prefills; report best + median
 
@@ -84,7 +86,7 @@ namespace DeepUnity
         IEnumerator Run()
         {
             Status($"constructing {LMProbeCommon.ModelLabel(model)} {quant}");
-            LLM lm = LMProbeCommon.Build(model, quant);
+            LLM lm = LMProbeCommon.Build(model, quant, kvQuant);
             while (!lm.IsReady) yield return null;
 
             Status("warmup (kernel compile)");
@@ -99,13 +101,47 @@ namespace DeepUnity
                 case ProbeModelKind.Qwen3_5_0_8B:
                 {
                     var m = ((Qwen3_5ForCausalLM)lm).model;
-                    prefill = ids => { m.ResetCache(); m.Forward(Tensor.Constant(ids), useCache: true, lastPosOnly: true); var _ = m.ReadLogits(1); };
+                    // Chunked prefill: feed the prompt in prefillChunk-token Forwards, each followed
+                    // by a blocking SampleGreedy() readback (argmaxBuf.GetData). A single 2048-token
+                    // Forward measured unreliably (repeated runs collapsed to ~1 ms — the giant scan
+                    // dispatch wasn't being forced to complete), whereas small Forward+SampleGreedy
+                    // steps time correctly (proven by the 4096-step decode-decay probe). This is also
+                    // how production InitializeChat actually prefills, so it's the representative path.
+                    prefill = ids =>
+                    {
+                        m.ResetCache();
+                        for (int s = 0; s < ids.Length; s += prefillChunk)
+                        {
+                            int len = System.Math.Min(prefillChunk, ids.Length - s);
+                            var part = new float[len];
+                            System.Array.Copy(ids, s, part, 0, len);
+                            m.Forward(Tensor.Constant(part), useCache: true, lastPosOnly: true);
+                            m.SampleGreedy();
+                        }
+                    };
                     break;
                 }
                 case ProbeModelKind.Gemma3_270M:
                 {
                     var m = ((Gemma3ForCausalLM)lm).model;
-                    prefill = ids => { m.ResetCache(); m.Forward(Tensor.Constant(ids), useCache: true, lastPosOnly: true); var _ = m.ReadLogits(1); };
+                    // Chunked prefill: feed the prompt in prefillChunk-token Forwards, each followed
+                    // by a blocking SampleGreedy() readback (argmaxBuf.GetData). A single 2048-token
+                    // Forward measured unreliably (repeated runs collapsed to ~1 ms — the giant scan
+                    // dispatch wasn't being forced to complete), whereas small Forward+SampleGreedy
+                    // steps time correctly (proven by the 4096-step decode-decay probe). This is also
+                    // how production InitializeChat actually prefills, so it's the representative path.
+                    prefill = ids =>
+                    {
+                        m.ResetCache();
+                        for (int s = 0; s < ids.Length; s += prefillChunk)
+                        {
+                            int len = System.Math.Min(prefillChunk, ids.Length - s);
+                            var part = new float[len];
+                            System.Array.Copy(ids, s, part, 0, len);
+                            m.Forward(Tensor.Constant(part), useCache: true, lastPosOnly: true);
+                            m.SampleGreedy();
+                        }
+                    };
                     break;
                 }
                 default: throw new ArgumentOutOfRangeException();
@@ -181,6 +217,7 @@ namespace DeepUnity
                 js.Append("  \"probe\": \"prefill_speed\",\n");
                 js.Append("  \"model\": ").Append(LMProbeCommon.JsonStr(LMProbeCommon.ModelLabel(model))).Append(",\n");
                 js.Append("  \"quant\": ").Append(LMProbeCommon.JsonStr(quant.ToString())).Append(",\n");
+                js.Append("  \"kv\": ").Append(LMProbeCommon.JsonStr(kvQuant.ToString())).Append(",\n");
                 js.Append("  \"success\": ").Append(success ? "true" : "false").Append(",\n");
                 if (note != null) js.Append("  \"note\": ").Append(LMProbeCommon.JsonStr(note)).Append(",\n");
                 js.Append("  \"prefill_tokens\": ").Append(prefillTokens).Append(",\n");

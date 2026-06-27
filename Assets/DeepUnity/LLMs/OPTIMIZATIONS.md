@@ -84,7 +84,7 @@ Same surface on `Gemma3ForCausalLM`. Generalized pieces live in the abstract `LL
 ## How to measure (the pipeline that found all of this)
 
 1. Drop a `FrameSpikeLogger` in the scene (`DeepUnity.FrameSpikeLogger.Ensure()`, opt-in, in
-   `Main/FrameSpikeLogger.cs`) — logs every frame > 20 ms with whether a GC collection ran on it.
+   `LLMs/benchmarking/FrameSpikeLogger.cs`) — logs every frame > 20 ms with whether a GC collection ran on it.
 2. Add one `Debug.Log` phase marker per load step.
 3. Reproduce, then read Editor.log: match spike frames to phases; `GC: YES` ⇒ allocation problem,
    no GC + around a sampler/prefill ⇒ GPU-bound frame.
@@ -151,3 +151,82 @@ params folder and keyword; one quant mode per session. Schemes (the convention f
 - Verdict: **int8 is the sweet spot**; 2B@int8 ~2.2 GB fits the 4060. Probes:
   `FlashAttnProbeRunner.RunQwenInt8` / `RunQwenInt4` (QuantProbe — full-vocab logit diff vs
   fp16, sync tok/s, side-by-side greedy stories).
+
+### What stays higher-precision, and why (standard practice + references)
+
+The universal rule in production PTQ: **quantize only the transformer-block linear weight
+matrices** (attention `q/k/v/o`, MLP `gate/up/down`) and keep **normalization, token
+embeddings, and the LM head** at higher precision. Papers/tools that explicitly do this:
+
+- **GPTQ** — Frantar et al., [arXiv 2210.17323](https://arxiv.org/abs/2210.17323). Layer-wise PTQ
+  applied to the `nn.Linear` weights *inside* the blocks; norms, embeddings and the head are not in
+  the quantized set.
+- **AWQ** — Lin et al., [arXiv 2306.00978](https://arxiv.org/abs/2306.00978). Protects salient
+  weight channels; standard AWQ pipelines put **`lm_head` in the ignore list** (e.g. LLM Compressor
+  `ignore: ["lm_head"]`).
+- **QLoRA / NF4** — Dettmers et al., [arXiv 2305.14314](https://arxiv.org/abs/2305.14314). NF4 applied
+  to the base linear weights only; bitsandbytes keeps `modules_to_not_convert` (defaults include
+  **`lm_head`**) and LayerNorm params in fp32.
+- **LLM.int8()** — Dettmers et al., [arXiv 2208.07339](https://arxiv.org/abs/2208.07339). Mixed
+  precision: emergent outlier feature dims stay fp16.
+- **SmoothQuant** — Xiao et al., [arXiv 2211.10438](https://arxiv.org/abs/2211.10438). Quantizes the
+  block linear layers (after migrating activation outliers into the weights); norms/embeddings/head
+  untouched.
+- **llama.cpp GGUF** — `--leave-output-tensor` / `--output-tensor-type` / `--token-embedding-type`;
+  the `_M` k-quant mixes deliberately raise the bit-width on `output.weight` (and embeddings).
+  ([quantize README](https://github.com/ggml-org/llama.cpp/blob/master/tools/quantize/README.md))
+
+**Why norms especially must never be quantized:** a norm gamma *multiplies the entire hidden
+vector element-wise*, so its quantization error is **not** averaged away inside a dot-product sum
+— it rescales a whole activation channel and compounds layer-over-layer. Norms are also ~0.1% of
+params, so quantizing them saves essentially nothing. Pure downside.
+
+**DeepUnity status vs the above (`import_params.py`):**
+- ✅ **Norms already correct** — every `*layernorm` / `q_norm` / `k_norm` / final `norm` (and the
+  DeltaNet `A_log`/`dt_bias`/`conv1d`/`in_proj_a/b`) go through `Exporter.fp16` in *every* quant
+  mode. We do **not** quantize norms.
+- ✅ **RESOLVED (2026-06-26): embed_tokens/lm_head is now fp16 in EVERY mode.** Previously it was
+  int8/int4-quantized — and since it doubles as the lm_head mapping to 248k–262k logits, int4 error
+  there poisoned every logit (prime suspect for the int4 decode collapse, esp. Gemma3-270M where the
+  tied embedding is 63% of the model). Now only the transformer-block linear weights are quantized.
+  Implemented across: `import_params.py` (`Exporter.embedding` → always fp16), both `*Weights.cs`
+  loaders (embed manifest fp16, no scales), both `*CS.compute` (embed-lookup + `LmHeadPredict[1Vec]`
+  read via `readH` in all INT8/INT4 variants, `embed_scales` dropped), both `*Model.cs`
+  (`BindScales` null-guard). New on-disk sizes vs fp16 (Qwen 1436 / Gemma 512 MB):
+  **Qwen int8 963 (-33%) / int4 755 (-47%); Gemma int8 417 (-19%) / int4 375 (-27%).**
+  Note: with the embedding fp16, **int4 barely beats int8 on Gemma** (375 vs 417 MB) because the
+  321 MB fp16 embedding dominates both — int4 only pays off on models where the block linears, not
+  the embedding, hold most of the weight. **Next: re-measure decode quality with `QuantProbe`** —
+  does int4 (and int8) now produce coherent text on Gemma, vs the old collapse?
+
+## KV-cache quantization (2026-06-26)
+
+KV-cache precision is a SEPARATE axis from weight quant, chosen via `KVQuant {FP32, FP16, INT8}` in
+the model ctor (independent of `LLMQuant`). Shared, DRY: the precision→layout math + keyword wiring
+live in `KVQuantUtil` (Base/LLM.cs); the pack/unpack lives once in the `KVCache.hlsl` compute include
+(`KV_READ_K`/`KV_READ_V`/`KV_WRITE2`, selected by the `KV_FP16`/`KV_INT8` multi_compile). Applies only
+to the attention layers' K/V (Qwen3.5's 6 full-attn layers + Gemma3's attention). **DeltaNet
+conv/recurrent state stays FP32 always** — it's fixed-size (doesn't grow with context, so no
+bandwidth/VRAM win) and recurrently accumulated (error compounds), and every engine keeps it fp32
+(fla keeps the scan state fp32 even in bf16 mode; Mamba/Quamba keep the selective-scan state high
+precision). Disk prompt-cache is FP32-only for now (quantized KV → recompute prompt).
+
+**FP16 KV (the default).** Packed 2 halves/uint, in-kernel f32tof16/f16tof32. Measured (RTX 4060):
+- **~Lossless**: Qwen greedy reply BIT-IDENTICAL to FP32 KV (24 tokens); Gemma matches the opening
+  then diverges to a coherent continuation (small fp16 rounding, more attention layers).
+- **VRAM**: halves the KV cache — Qwen 192→**96 MB** (@8k cap), Gemma 72→**36 MB** (@2k cap).
+- **Speed: NEUTRAL** — decode 31.0/27.3 vs FP32's 30.9/27.2 (Qwen), 57.8/51.3 vs 57.4/51.1 (Gemma);
+  decay ~12% both. This **corrects the earlier "decode is KV-bandwidth-bound" assumption**: at these
+  model sizes/contexts decode is **dispatch-bound** (hundreds of small kernel launches per token,
+  esp. Qwen's DeltaNet chain), so halving KV *bytes* doesn't change tok/s — same reason int8 *weights*
+  were speed-neutral. ⇒ **FP16 KV's payoff is VRAM, not speed.** Default since it's lossless + free.
+
+**INT8 KV (optional, `KVQuant.INT8`).** Asymmetric uint8 + per-(token,head) scale/zp (K/V are
+activation-like, not zero-centered → asymmetric, unlike symmetric weight-int8). Buys a further KV
+VRAM cut (Qwen 96→48, Gemma 36→18 MB) but — being dispatch-bound — likely **also speed-neutral**, and
+it's lossy (error accumulates over context). So it's a marginal VRAM option for tight-VRAM cases, NOT
+the default. (Status: implemented — the quantizing write is `WriteCacheFull` under the `KV_INT8`
+keyword: one threadgroup per (token, kv-head) reduces head_dim min/max, packs uint8 4/uint into
+`kv_cache` and the fp16 scale|zp into `kv_scale_zp_w` = `cache.kScaleZp/vScaleZp`; attention reads
+dequantize via `kv_unpack8`. Pending: human in-editor validation of decode vs FP32; the FP32-only KV
+disk cache is not yet extended to INT8 — an INT8-cache prompt is recomputed, not restored.)

@@ -20,6 +20,7 @@ namespace DeepUnity
 
         public override LLMConfig Config => _config;
         public override bool IsReady => model.IsReady && (tokenizer == null || tokenizer.IsReady);
+        public override bool TokenizerReady => tokenizer == null || tokenizer.IsReady;
 
         /// <param name="maxModelLength">
         /// Maximum sequence length (in tokens) the model supports in a single conversation. This sizes the
@@ -34,11 +35,16 @@ namespace DeepUnity
         /// keyword lives on the shared compute shader.
         /// </param>
         /// <param name="params_path">Optional override; null resolves from quantization.</param>
+        /// <param name="kv_quant">
+        /// KV-cache precision (independent of the weight <paramref name="quantization"/>): FP16 (default,
+        /// ~lossless, half the KV VRAM/bandwidth) or FP32 (reference). INT8 KV is not wired up yet.
+        /// </param>
         public Gemma3ForCausalLM(
             LLMQuant quantization = LLMQuant.FP16,
             string params_path = null,   // null resolves Resources-first (import_params.py convention), legacy fallback
             string tokenizer_path = "Assets/DeepUnity/LLMs/Gemma3/Gemma3TokenizerFast.json",
-            int maxModelLength = 2048)
+            int maxModelLength = 2048,
+            KVQuant kv_quant = KVQuant.FP16)
         {
             // Self-describing folder name weights_<model>_<size>_<quant> (matches import_params.py).
             string q = quantization == LLMQuant.INT8 ? "int8"
@@ -52,7 +58,7 @@ namespace DeepUnity
 
             // Cheap: builds the weight-file manifest and kicks the background stream; the weights
             // upload to the GPU over subsequent frames under a per-frame budget.
-            model = new Gemma3Modeling.Gemma3Model(params_path, maxModelLength, quantization);
+            model = new Gemma3Modeling.Gemma3Model(params_path, maxModelLength, quantization, kv_quant);
         }
 
         /// <summary>

@@ -226,18 +226,12 @@ namespace DeepUnity
                 // only). Detect by which folder exists.
                 if (Directory.Exists(Path.Combine(p, "embed_tokens")))
                 {
-                    string ext = Quant == LLMQuant.INT8 ? ".int8.bin"
-                               : Quant == LLMQuant.INT4 ? ".int4.bin" : ".bin";
-                    // halves per weight: fp16 1, int8 0.5 (2 per half), int4 0.25 (4 per half).
-                    int divisor = Quant == LLMQuant.INT8 ? 2 : Quant == LLMQuant.INT4 ? 4 : 1;
-                    int totalHalves = vocabSize * hiddenSize / divisor;
+                    // Tied embedding/lm_head is ALWAYS fp16 in every quant mode (it's the lm_head;
+                    // quantizing it poisons every logit). 16 row-aligned fp16 shards, no scales.
+                    int totalHalves = vocabSize * hiddenSize;
                     int perChunk = totalHalves / 16;
                     for (int i = 0; i < 16; i++)
-                        Add($"{p}/embed_tokens/part_{i}{ext}", _embedSlot, 0, totalHalves, perChunk, i * perChunk * 2);
-                    if (Quant == LLMQuant.INT8)
-                        Add($"{p}/embed_tokens/scales.bin", _embedScalesSlot, 0, vocabSize);
-                    else if (Quant == LLMQuant.INT4)
-                        Add($"{p}/embed_tokens/scales.bin", _embedScalesSlot, 0, vocabSize * hiddenSize / 32);
+                        Add($"{p}/embed_tokens/part_{i}.bin", _embedSlot, 0, totalHalves, perChunk, i * perChunk * 2);
                 }
                 else
                 {

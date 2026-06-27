@@ -26,6 +26,7 @@ namespace DeepUnity
         [Header("What to boot (one model per editor run)")]
         public ProbeModelKind model = ProbeModelKind.Qwen3_5_0_8B;
         public LLMQuant quant = LLMQuant.FP16;
+        public KVQuant kvQuant = KVQuant.FP16;
 
         [Header("Decode")]
         public int maxTokens = 4096;   // total tokens to decode; keep under model KV capacity
@@ -82,7 +83,7 @@ namespace DeepUnity
         IEnumerator Run()
         {
             Status($"constructing {LMProbeCommon.ModelLabel(model)} {quant}");
-            LLM lm = LMProbeCommon.Build(model, quant);
+            LLM lm = LMProbeCommon.Build(model, quant, kvQuant);
             while (!lm.IsReady) yield return null;
 
             Status("warmup (kernel compile)");
@@ -204,6 +205,7 @@ namespace DeepUnity
                 js.Append("  \"probe\": \"decode_decay\",\n");
                 js.Append("  \"model\": ").Append(LMProbeCommon.JsonStr(LMProbeCommon.ModelLabel(model))).Append(",\n");
                 js.Append("  \"quant\": ").Append(LMProbeCommon.JsonStr(quant.ToString())).Append(",\n");
+                js.Append("  \"kv\": ").Append(LMProbeCommon.JsonStr(kvQuant.ToString())).Append(",\n");
                 js.Append("  \"success\": ").Append(success ? "true" : "false").Append(",\n");
                 if (note != null) js.Append("  \"note\": ").Append(LMProbeCommon.JsonStr(note)).Append(",\n");
                 js.Append("  \"decoded_tokens\": ").Append(perToken?.Length ?? 0).Append(",\n");

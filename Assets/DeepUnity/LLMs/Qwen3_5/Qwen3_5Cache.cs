@@ -24,11 +24,21 @@ namespace DeepUnity
             public ComputeBuffer[] kCaches; // length numLayers; null on linear layers
             public ComputeBuffer[] vCaches; // length numLayers; null on linear layers
 
+            // INT8 KV only: per-(token, kv-head) fp16 scale + fp16 zero-point for K and V (asymmetric),
+            // packed 2 halves per uint. null unless KV == INT8. Laid out [capacity, headsKV] per full layer.
+            public ComputeBuffer[] kScaleZp;
+            public ComputeBuffer[] vScaleZp;
+
             public ComputeBuffer[] convStates;      // length numLayers; null on full layers
             public ComputeBuffer[] recurrentStates; // length numLayers; null on full layers
 
             public int CachedTokenCount { get; set; }
             public int Capacity => capacity;
+
+            // KV-cache precision for the full-attention layers' K/V (independent of weight quant).
+            // FP16 packs 2 halves/uint (half the buffer + read bandwidth). DeltaNet conv/recurrent
+            // states are always FP32 regardless of this.
+            public readonly KVQuant KV;
 
             readonly int numLayers;
             readonly int capacity;
@@ -45,17 +55,24 @@ namespace DeepUnity
                 Qwen3_5LayerType[] layerTypes,
                 int headsKV, int headDim,
                 int convDim, int convKernelSize,
-                int numVHeads, int headKDim, int headVDim)
+                int numVHeads, int headKDim, int headVDim,
+                KVQuant kv = KVQuant.FP32)
             {
                 this.numLayers = layerTypes.Length;
                 this.capacity = capacity;
+                this.KV = kv;
 
                 kCaches = new ComputeBuffer[numLayers];
                 vCaches = new ComputeBuffer[numLayers];
                 convStates = new ComputeBuffer[numLayers];
                 recurrentStates = new ComputeBuffer[numLayers];
 
-                int kvFloats = capacity * headsKV * headDim;
+                // K/V storage width depends on KV precision (all buffers are stride-4 uint; the count
+                // is what shrinks): FP32 -> count = elems; FP16 -> elems/2; INT8 -> elems/4 + scale/zp.
+                // (head_dim is even and a multiple of 4, so the division is always exact.) DeltaNet
+                // conv/recurrent states stay FP32.
+                int kvElems = capacity * headsKV * headDim;
+                int kvUints = KVQuantUtil.UIntCount(kvElems, kv);
                 int convFloats = convDim * (convKernelSize - 1);
                 int recFloats = numVHeads * headKDim * headVDim;
 
@@ -63,13 +80,28 @@ namespace DeepUnity
                 {
                     if (layerTypes[i] == Qwen3_5LayerType.FullAttention)
                     {
-                        kCaches[i] = new ComputeBuffer(kvFloats, 4, ComputeBufferType.Structured);
-                        vCaches[i] = new ComputeBuffer(kvFloats, 4, ComputeBufferType.Structured);
+                        kCaches[i] = new ComputeBuffer(kvUints, 4, ComputeBufferType.Structured);
+                        vCaches[i] = new ComputeBuffer(kvUints, 4, ComputeBufferType.Structured);
                     }
                     else // LinearAttention
                     {
                         convStates[i]      = new ComputeBuffer(convFloats, 4, ComputeBufferType.Structured);
                         recurrentStates[i] = new ComputeBuffer(recFloats, 4, ComputeBufferType.Structured);
+                    }
+                }
+
+                if (kv == KVQuant.INT8)
+                {
+                    // one fp16 scale + one fp16 zero-point per (token, kv-head) → 2 halves = 1 uint each,
+                    // on the full-attention layers only.
+                    kScaleZp = new ComputeBuffer[numLayers];
+                    vScaleZp = new ComputeBuffer[numLayers];
+                    int szCount = capacity * headsKV;   // uints (scale|zp packed 2 halves per uint)
+                    for (int i = 0; i < numLayers; i++)
+                    {
+                        if (layerTypes[i] != Qwen3_5LayerType.FullAttention) continue;
+                        kScaleZp[i] = new ComputeBuffer(szCount, 4, ComputeBufferType.Structured);
+                        vScaleZp[i] = new ComputeBuffer(szCount, 4, ComputeBufferType.Structured);
                     }
                 }
 
@@ -90,6 +122,8 @@ namespace DeepUnity
                 {
                     kCaches[i]?.Release();
                     vCaches[i]?.Release();
+                    kScaleZp?[i]?.Release();
+                    vScaleZp?[i]?.Release();
                     convStates[i]?.Release();
                     recurrentStates[i]?.Release();
                 }
@@ -105,6 +139,11 @@ namespace DeepUnity
             /// </summary>
             public IEnumerator SaveYielding(string path)
             {
+                // Disk prompt-cache currently supports FP32 KV only (readback + on-disk format
+                // assume 4-byte floats; the K/V row-size math below divides the buffer count by
+                // capacity, which is wrong for packed FP16/INT8). For quantized KV it's skipped —
+                // the prompt is recomputed. Mirrors Gemma3Cache.
+                if (KV != KVQuant.FP32) yield break;
                 int tokens = CachedTokenCount;
                 if (tokens <= 0) yield break;
 
@@ -180,6 +219,7 @@ namespace DeepUnity
             /// </summary>
             public IEnumerator LoadYielding(string path, Action<bool> onLoaded)
             {
+                if (KV != KVQuant.FP32) { onLoaded?.Invoke(false); yield break; }   // FP32-only disk cache for now
                 int n = numLayers;
                 var first = new float[n][];    // K or conv
                 var second = new float[n][];   // V or recurrent
