@@ -39,6 +39,11 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         private Coroutine slideCoroutine;
         private float shownX, hiddenX;
 
+        private TMP_Text sendLabel;
+        private string sendLabelIdle;
+        private Coroutine sendLoadingCoroutine;
+        private static readonly string[] loadingFrames = { ".", ". .", ". . ." };
+
         private void Awake()
         {
             if (panel == null) panel = (RectTransform)transform;
@@ -46,8 +51,49 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             hiddenX = shownX + panel.rect.width + 60f;
             panel.anchoredPosition = new Vector2(hiddenX, panel.anchoredPosition.y);
             if (messageTemplate != null) messageTemplate.SetActive(false);
-            if (inputField != null) inputField.onValueChanged.AddListener(_ => PlayTypeTick());
+            if (inputField != null)
+            {
+                inputField.onValueChanged.AddListener(_ => PlayTypeTick());
+                // refocusing (e.g. after the model finishes loading) must not select the
+                // half-typed question — the next keystroke would erase it
+                inputField.onFocusSelectAll = false;
+            }
             gameObject.SetActive(false);
+        }
+
+        /// <summary>Send-button "loading" mode while the model streams in: the button is disabled
+        /// and its label pulses dots, but the input field stays usable so the first question can
+        /// be typed before the model is ready. Turning it off restores the original label.</summary>
+        public void SetSendLoading(bool loading)
+        {
+            if (sendButton == null) return;
+            if (sendLabel == null)
+            {
+                sendLabel = sendButton.GetComponentInChildren<TMP_Text>();
+                sendLabelIdle = sendLabel != null ? sendLabel.text : "";
+            }
+
+            if (sendLoadingCoroutine != null)
+            {
+                StopCoroutine(sendLoadingCoroutine);
+                sendLoadingCoroutine = null;
+            }
+
+            sendButton.interactable = !loading;
+            if (loading && sendLabel != null && isActiveAndEnabled)
+                sendLoadingCoroutine = StartCoroutine(PulseSendLabel());
+            else if (sendLabel != null)
+                sendLabel.text = sendLabelIdle;
+        }
+
+        private IEnumerator PulseSendLabel()
+        {
+            var step = new WaitForSeconds(0.4f);
+            for (int i = 0; ; i = (i + 1) % loadingFrames.Length)
+            {
+                sendLabel.text = loadingFrames[i];
+                yield return step;
+            }
         }
 
         /// <summary>Hooked to the Speak/Leave buttons by the scene builder.</summary>

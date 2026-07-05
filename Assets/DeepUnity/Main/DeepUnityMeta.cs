@@ -26,9 +26,14 @@ namespace DeepUnity
         internal static ComputeShader Gemma3OriginalCS  => Get(ref _gemma3OriginalCS, "Gemma3OriginalCS");
         internal static ComputeShader Qwen3_5CS         => Get(ref _qwen3_5CS, "Qwen3_5CS");
 
+        // Chatterbox-Turbo TTS (Assets/DeepUnity/TTS)
+        internal static ComputeShader T3CS              => Get(ref _t3CS, "T3CS");
+        internal static ComputeShader ChatterboxS3GenCS => Get(ref _chatterboxS3GenCS, "ChatterboxS3GenCS");
+
         static ComputeShader _tensorCS, _denseCS, _conv2DCS, _rnnCellCS, _convTranspose2DCS;
         static ComputeShader _gqaInferenceCS, _gluInferenceCS, _ffnInferenceCS, _lmHeadInferenceCS;
         static ComputeShader _gemma3FP32CS, _gemma3CS, _gemma3OriginalCS, _qwen3_5CS;
+        static ComputeShader _t3CS, _chatterboxS3GenCS;
 
         static ComputeShader Get(ref ComputeShader field, string name)
         {
