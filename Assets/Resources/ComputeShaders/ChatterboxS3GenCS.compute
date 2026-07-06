@@ -1,0 +1,694 @@
+// ChatterboxS3GenCS.compute
+// ======================================================================================
+// Chatterbox-Turbo S3Gen inference kernels: UpsampleConformerEncoder (rel-pos attention),
+// meanflow ConditionalDecoder estimator (causal convs + plain MHA), HiFTGenerator vocoder
+// (NSF + iSTFTNet, n_fft=16 -> direct 16-point DFT, no generic FFT needed).
+// Port spec: Assets/DeepUnity/TTS/SPEC.md (§3, §6, §7).
+//
+// Conventions (Gemma3CS style): fp16 weights packed 2-per-uint (readH), FP32 activations.
+// ALL activation buffers are [T, C] row-major (t*C + c). Conv weights keep native torch
+// layouts: Conv1d [out,in,k], ConvTranspose1d [in,out,k], Linear [out,in]. Batch is always 1
+// and offline masks are all-ones, so no mask logic exists anywhere.
+// ======================================================================================
+
+// ================================ PARAMETERS ================================
+uint seq_len;         // positions of the OUTPUT of the current op
+uint in_len;          // conv input length
+uint in_dim;          // linear/conv in channels
+uint out_dim;         // linear/conv out channels
+uint conv_kernel;
+uint conv_stride;
+uint conv_dilation;
+int  pad_left;        // conv left padding (causal: k-1; same: (k*d-d)/2)
+uint norm_dim;        // LayerNormT channel count
+uint num_heads;       // 8
+uint head_dim;        // 64
+uint buffer_size;
+uint copy_src_offset;
+uint copy_dst_offset;
+uint pack_dst_dim;    // PackChannels dst row stride
+uint pack_dst_off;    // PackChannels dst channel offset
+uint factor;          // RepeatTime upsample factor
+uint n_frames;        // STFT/ISTFT frame count
+uint sample_len;      // waveform length
+uint gauss_offset;    // GaussNoise element offset (decorrelates successive fills)
+int  activation_type; // 0 none 1 silu 2 gelu_exact 3 mish 4 leaky 5 abs 6 tanh 7 elu
+int  has_bias;
+float norm_eps;
+float scale;          // attention scale
+float scale_val;      // ScaleBuf multiplier
+float leaky_slope;
+float t_scalar;       // SinusTimeEmb input (already 0..1)
+float dt_val;         // EulerStep dt
+float sine_amp;       // 0.1
+float noise_std;      // 0.003
+float voiced_threshold; // 10
+float audio_limit;    // 0.99
+int   rng_seed;
+
+// ================================ WEIGHT / IO BUFFERS ================================
+StructuredBuffer<uint>      emb_weights;    // token embedding [6561, 512]
+StructuredBuffer<uint>      W;              // linear/conv weight
+StructuredBuffer<uint>      W_bias;         // linear/conv bias
+StructuredBuffer<uint>      ln_gamma;
+StructuredBuffer<uint>      ln_beta;
+StructuredBuffer<uint>      pos_bias_u;     // [8, 64]
+StructuredBuffer<uint>      pos_bias_v;     // [8, 64]
+StructuredBuffer<uint>      snake_alpha;    // [C]
+StructuredBuffer<uint>      nsf_w;          // m_source.l_linear [1, 9]
+StructuredBuffer<uint>      nsf_b;          // [1]
+
+StructuredBuffer<uint>      token_ids;
+RWStructuredBuffer<float>   embed_output;
+StructuredBuffer<float>     X;              // op input
+RWStructuredBuffer<float>   Y;              // op output
+StructuredBuffer<float>     norm_input;
+RWStructuredBuffer<float>   norm_output;
+StructuredBuffer<float>     Q;              // [T, H, D]
+StructuredBuffer<float>     K;
+StructuredBuffer<float>     V;
+StructuredBuffer<float>     P;              // projected rel-pos emb [2T-1, H, D]
+RWStructuredBuffer<float>   AttendedValues;
+RWStructuredBuffer<float>   buf_a;
+StructuredBuffer<float>     buf_b;
+RWStructuredBuffer<float>   inout_buf;      // in-place ops (activations, euler, fades)
+StructuredBuffer<float>     theta_in;       // NSF phases [samples, 9]
+StructuredBuffer<float>     phase_vec;      // NSF per-harmonic random phase [9]
+StructuredBuffer<float>     f0_up;          // upsampled F0 [samples]
+StructuredBuffer<float>     nsf_noise;      // N(0,1) [samples, 9] (+1 col for the noise branch)
+RWStructuredBuffer<float>   theta_out;
+
+// ================================ HELPERS ================================
+float readH(StructuredBuffer<uint> buf, uint index)
+{
+    uint word = buf[index >> 1];
+    uint shift = (index & 1u) * 16u;
+    return f16tof32(word >> shift);
+}
+float safe_tanh(float x)
+{
+    float a = abs(x);
+    float e = exp(-2.0 * a);
+    return sign(x) * ((1.0 - e) / (1.0 + e));
+}
+float erf_approx(float x)   // Abramowitz&Stegun 7.1.26, max abs err 1.5e-7
+{
+    float s = sign(x);
+    float a = abs(x);
+    float t = 1.0 / (1.0 + 0.3275911 * a);
+    float y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * exp(-a * a);
+    return s * y;
+}
+float gelu_exact(float x) { return 0.5 * x * (1.0 + erf_approx(x * 0.70710678)); }
+float silu(float x) { return x / (1.0 + exp(-x)); }
+float softplus(float x) { return x > 20.0 ? x : log(1.0 + exp(x)); }
+float mish(float x) { return x * safe_tanh(softplus(x)); }
+float apply_act(float v)
+{
+    if (activation_type == 1) return silu(v);
+    if (activation_type == 2) return gelu_exact(v);
+    if (activation_type == 3) return mish(v);
+    if (activation_type == 4) return v > 0.0 ? v : leaky_slope * v;
+    if (activation_type == 5) return abs(v);
+    if (activation_type == 6) return safe_tanh(v);
+    if (activation_type == 7) return v > 0.0 ? v : exp(v) - 1.0;   // ELU alpha=1
+    return v;
+}
+// hash-based N(0,1) (Box-Muller over two PCG-ish uints)
+float2 gauss2(uint idx, uint seed)
+{
+    uint s = idx * 747796405u + seed * 2891336453u + 1u;
+    s = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+    uint u1 = (s >> 22u) ^ s;
+    s = u1 * 747796405u + 2891336453u;
+    s = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+    uint u2 = (s >> 22u) ^ s;
+    float f1 = max((float)u1 / 4294967295.0, 1e-7);
+    float f2 = (float)u2 / 4294967295.0;
+    float r = sqrt(-2.0 * log(f1));
+    return float2(r * cos(6.28318530718 * f2), r * sin(6.28318530718 * f2));
+}
+
+// ========================= TokenEmbed =========================================
+#pragma kernel TokenEmbed
+[numthreads(256, 1, 1)]
+void TokenEmbed(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * in_dim) return;   // in_dim = 512
+    uint pos = idx / in_dim;
+    uint c = idx % in_dim;
+    uint tok = token_ids[pos];
+    embed_output[idx] = readH(emb_weights, tok * in_dim + c);
+}
+
+// ========================= LinearBias =========================================
+// Y[t, p] = act( X[t, :in_dim] · W[p, :] (+ b[p]) )
+#pragma kernel LinearBias
+[numthreads(1, 8, 32)]
+void LinearBias(uint3 id : SV_DispatchThreadID)
+{
+    uint t = id.y; uint p = id.z;
+    if (t >= seq_len || p >= out_dim) return;
+    float sum = has_bias != 0 ? readH(W_bias, p) : 0.0;
+    uint x_base = t * in_dim;
+    uint w_base = p * in_dim;
+    for (uint e = 0; e < in_dim; e++)
+        sum += X[x_base + e] * readH(W, w_base + e);
+    Y[t * out_dim + p] = apply_act(sum);
+}
+
+// ========================= LayerNormT =========================================
+// Plain LayerNorm over the channel dim of a [T, C] buffer (gamma direct + beta).
+#pragma kernel LayerNormT
+[numthreads(256, 1, 1)]
+void LayerNormT(uint3 id : SV_DispatchThreadID)
+{
+    uint pos = id.x;
+    if (pos >= seq_len) return;
+    uint base_idx = pos * norm_dim;
+
+    float mean = 0.0;
+    for (uint i = 0; i < norm_dim; i++)
+        mean += norm_input[base_idx + i];
+    mean /= (float)norm_dim;
+
+    float var = 0.0;
+    for (uint j = 0; j < norm_dim; j++)
+    {
+        float d = norm_input[base_idx + j] - mean;
+        var += d * d;
+    }
+    float rstd = rsqrt(var / (float)norm_dim + norm_eps);
+
+    for (uint k = 0; k < norm_dim; k++)
+        norm_output[base_idx + k] = (norm_input[base_idx + k] - mean) * rstd * readH(ln_gamma, k) + readH(ln_beta, k);
+}
+
+// ========================= Conv1D =============================================
+// [T,C]-layout conv: Y[t, oc] = act( b[oc] + sum_ic sum_k W[oc,ic,k] * X[t*stride + k*dil - pad_left, ic] )
+// Zero padding outside [0, in_len). Weights flat: oc*(in_dim*K) + ic*K + k.
+#pragma kernel Conv1D
+[numthreads(256, 1, 1)]
+void Conv1D(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * out_dim) return;
+    uint t = idx / out_dim;
+    uint oc = idx % out_dim;
+
+    float sum = has_bias != 0 ? readH(W_bias, oc) : 0.0;
+    int base_t = (int)(t * conv_stride) - pad_left;
+    uint w_base = oc * in_dim * conv_kernel;
+    for (uint k = 0; k < conv_kernel; k++)
+    {
+        int ti = base_t + (int)(k * conv_dilation);
+        if (ti < 0 || ti >= (int)in_len) continue;
+        uint x_base = (uint)ti * in_dim;
+        for (uint ic = 0; ic < in_dim; ic++)
+            sum += X[x_base + ic] * readH(W, w_base + ic * conv_kernel + k);
+    }
+    Y[idx] = apply_act(sum);
+}
+
+// ========================= ConvTranspose1D ====================================
+// Y[t, oc] = b[oc] + sum_ic sum_k W[ic,oc,k] * X[(t + pad_left - k)/stride, ic]
+// where (t + pad_left - k) divisible by stride and quotient in [0, in_len).
+// Weights flat (torch ConvT layout [in,out,k]): ic*(out_dim*K) + oc*K + k.
+#pragma kernel ConvTranspose1D
+[numthreads(256, 1, 1)]
+void ConvTranspose1D(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * out_dim) return;
+    uint t = idx / out_dim;
+    uint oc = idx % out_dim;
+
+    float sum = has_bias != 0 ? readH(W_bias, oc) : 0.0;
+    for (uint k = 0; k < conv_kernel; k++)
+    {
+        int num = (int)t + pad_left - (int)k;
+        if (num < 0) continue;
+        if ((uint)num % conv_stride != 0u) continue;
+        uint ti = (uint)num / conv_stride;
+        if (ti >= in_len) continue;
+        uint x_base = ti * in_dim;
+        for (uint ic = 0; ic < in_dim; ic++)
+            sum += X[x_base + ic] * readH(W, (ic * out_dim + oc) * conv_kernel + k);
+    }
+    Y[idx] = sum;
+}
+
+// ========================= RelPosAttention ====================================
+// ESPnet RelPositionMultiHeadedAttention, fused (online softmax), bidirectional, no mask.
+// score(i,j) = [ (q_i+u)·k_j + (q_i+v)·p_{(T-1)-(i-j)} ] * scale     (rel_shift folded into the
+// direct P index). One threadgroup per (query pos, head). P is linear_pos(pos_emb): [2T-1, H, D].
+#define ATT_THREADS 256
+groupshared float ra_qu[64];    // q + pos_bias_u   (head_dim <= 64)
+groupshared float ra_qv[64];    // q + pos_bias_v
+groupshared float ra_p[ATT_THREADS];
+groupshared float ra_red[ATT_THREADS];
+
+#pragma kernel RelPosAttention
+[numthreads(ATT_THREADS, 1, 1)]
+void RelPosAttention(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint q_pos = gid.x;
+    uint h     = gid.y;
+    uint tid   = gtid.x;
+    uint T     = max(seq_len, 1u);
+
+    uint q_base = (q_pos * num_heads + h) * head_dim;
+    for (uint dq = tid; dq < head_dim; dq += ATT_THREADS)
+    {
+        float qv = Q[q_base + dq];
+        ra_qu[dq] = qv + readH(pos_bias_u, h * head_dim + dq);
+        ra_qv[dq] = qv + readH(pos_bias_v, h * head_dim + dq);
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    float m = -3.0e38;
+    float l = 0.0;
+    float acc = 0.0;
+
+    for (uint tile = 0; tile < T; tile += ATT_THREADS)
+    {
+        uint j = tile + tid;
+        float s = -3.0e38;
+        if (j < T)
+        {
+            uint k_base = (j * num_heads + h) * head_dim;
+            // p index: (T-1) - (i-j)  in [0, 2T-2]
+            uint p_base = ((T - 1u) - q_pos + j) * num_heads * head_dim + h * head_dim;
+            float dot = 0.0;
+            for (uint d = 0; d < head_dim; d++)
+                dot += ra_qu[d] * K[k_base + d] + ra_qv[d] * P[p_base + d];
+            s = dot * scale;
+        }
+
+        ra_red[tid] = s;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r1 = ATT_THREADS / 2; r1 > 0; r1 >>= 1)
+        {
+            if (tid < r1) ra_red[tid] = max(ra_red[tid], ra_red[tid + r1]);
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float m_new = max(m, ra_red[0]);
+        GroupMemoryBarrierWithGroupSync();
+
+        float p = (j < T) ? exp(s - m_new) : 0.0;
+        ra_p[tid] = p;
+        ra_red[tid] = p;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r2 = ATT_THREADS / 2; r2 > 0; r2 >>= 1)
+        {
+            if (tid < r2) ra_red[tid] += ra_red[tid + r2];
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float tile_sum = ra_red[0];
+
+        float alpha = exp(m - m_new);
+        l = l * alpha + tile_sum;
+
+        if (tid < head_dim)
+        {
+            float a = acc * alpha;
+            uint n_valid = min(ATT_THREADS, T - tile);
+            for (uint jj = 0; jj < n_valid; jj++)
+                a += ra_p[jj] * V[((tile + jj) * num_heads + h) * head_dim + tid];
+            acc = a;
+        }
+        m = m_new;
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (tid < head_dim)
+        AttendedValues[(q_pos * num_heads + h) * head_dim + tid] = acc / max(l, 1e-12);
+}
+
+// ========================= BidirAttention =====================================
+// Plain full-bidirectional MHA (estimator BasicTransformerBlocks): softmax((QK^T)*scale)V.
+#pragma kernel BidirAttention
+[numthreads(ATT_THREADS, 1, 1)]
+void BidirAttention(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint q_pos = gid.x;
+    uint h     = gid.y;
+    uint tid   = gtid.x;
+    uint T     = max(seq_len, 1u);
+
+    uint q_base = (q_pos * num_heads + h) * head_dim;
+    for (uint dq = tid; dq < head_dim; dq += ATT_THREADS)
+        ra_qu[dq] = Q[q_base + dq] * scale;
+    GroupMemoryBarrierWithGroupSync();
+
+    float m = -3.0e38;
+    float l = 0.0;
+    float acc = 0.0;
+
+    for (uint tile = 0; tile < T; tile += ATT_THREADS)
+    {
+        uint j = tile + tid;
+        float s = -3.0e38;
+        if (j < T)
+        {
+            uint k_base = (j * num_heads + h) * head_dim;
+            float dot = 0.0;
+            for (uint d = 0; d < head_dim; d++)
+                dot += ra_qu[d] * K[k_base + d];
+            s = dot;
+        }
+
+        ra_red[tid] = s;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r1 = ATT_THREADS / 2; r1 > 0; r1 >>= 1)
+        {
+            if (tid < r1) ra_red[tid] = max(ra_red[tid], ra_red[tid + r1]);
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float m_new = max(m, ra_red[0]);
+        GroupMemoryBarrierWithGroupSync();
+
+        float p = (j < T) ? exp(s - m_new) : 0.0;
+        ra_p[tid] = p;
+        ra_red[tid] = p;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r2 = ATT_THREADS / 2; r2 > 0; r2 >>= 1)
+        {
+            if (tid < r2) ra_red[tid] += ra_red[tid + r2];
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float tile_sum = ra_red[0];
+
+        float alpha = exp(m - m_new);
+        l = l * alpha + tile_sum;
+
+        if (tid < head_dim)
+        {
+            float a = acc * alpha;
+            uint n_valid = min(ATT_THREADS, T - tile);
+            for (uint jj = 0; jj < n_valid; jj++)
+                a += ra_p[jj] * V[((tile + jj) * num_heads + h) * head_dim + tid];
+            acc = a;
+        }
+        m = m_new;
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (tid < head_dim)
+        AttendedValues[(q_pos * num_heads + h) * head_dim + tid] = acc / max(l, 1e-12);
+}
+
+// ========================= SinusTimeEmb =======================================
+// SinusoidalPosEmb(320) with scale=1000: half=160, e_i = exp(-ln(10000)*i/159),
+// out = [sin(1000*t*e_i)... , cos(1000*t*e_i)...]. Y = [320].
+#pragma kernel SinusTimeEmb
+[numthreads(256, 1, 1)]
+void SinusTimeEmb(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    uint half_dim = out_dim / 2u;            // out_dim = 320
+    if (i >= out_dim) return;
+    uint j = i < half_dim ? i : i - half_dim;
+    float e = exp(-9.210340371976184 * (float)j / (float)(half_dim - 1u));   // ln(10000)
+    float ang = 1000.0 * t_scalar * e;
+    Y[i] = i < half_dim ? sin(ang) : cos(ang);
+}
+
+// ========================= SnakeAct ===========================================
+// x + sin^2(alpha*x)/(alpha+1e-9), per-channel alpha, in-place on [T, C].
+#pragma kernel SnakeAct
+[numthreads(256, 1, 1)]
+void SnakeAct(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * norm_dim) return;
+    uint c = idx % norm_dim;
+    float a = readH(snake_alpha, c);
+    float x = inout_buf[idx];
+    float sn = sin(x * a);
+    inout_buf[idx] = x + sn * sn / (a + 1e-9);
+}
+
+// ========================= Activate ===========================================
+// Standalone in-place activation (leaky/elu/tanh/abs/...).
+#pragma kernel Activate
+[numthreads(256, 1, 1)]
+void Activate(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    inout_buf[id.x] = apply_act(inout_buf[id.x]);
+}
+
+// ========================= AddBroadcastCh =====================================
+// inout[t*C + c] += buf_b[c]   (time-embedding injection: C = norm_dim)
+#pragma kernel AddBroadcastCh
+[numthreads(256, 1, 1)]
+void AddBroadcastCh(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * norm_dim) return;
+    inout_buf[idx] += buf_b[idx % norm_dim];
+}
+
+// ========================= PackChannels =======================================
+// dst[t*pack_dst_dim + pack_dst_off + c] = src[t*in_dim + c] — concat along channels.
+#pragma kernel PackChannels
+[numthreads(256, 1, 1)]
+void PackChannels(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * in_dim) return;
+    uint t = idx / in_dim;
+    uint c = idx % in_dim;
+    buf_a[t * pack_dst_dim + pack_dst_off + c] = buf_b[idx];
+}
+
+// ========================= SliceChannels ======================================
+// dst[t*out_dim + c] = src[t*pack_dst_dim + pack_dst_off + c]
+#pragma kernel SliceChannels
+[numthreads(256, 1, 1)]
+void SliceChannels(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * out_dim) return;
+    uint t = idx / out_dim;
+    uint c = idx % out_dim;
+    buf_a[idx] = buf_b[t * pack_dst_dim + pack_dst_off + c];
+}
+
+// ========================= RepeatTime =========================================
+// Nearest-neighbor time upsample on [T, C]: Y[t, c] = X[t/factor, c].
+#pragma kernel RepeatTime
+[numthreads(256, 1, 1)]
+void RepeatTime(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * in_dim) return;
+    uint t = idx / in_dim;
+    uint c = idx % in_dim;
+    Y[idx] = X[(t / factor) * in_dim + c];
+}
+
+// ========================= GaussNoise =========================================
+// buf_a[i] = N(0,1) from (gauss_offset + i, rng_seed) — deterministic per seed for parity.
+#pragma kernel GaussNoise
+[numthreads(256, 1, 1)]
+void GaussNoise(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[id.x] = gauss2(gauss_offset + id.x, (uint)rng_seed).x;
+}
+
+// ========================= EulerStep ==========================================
+// inout += dt * buf_b   (meanflow: x <- x + (r - t) * dxdt)
+#pragma kernel EulerStep
+[numthreads(256, 1, 1)]
+void EulerStep(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    inout_buf[id.x] += dt_val * buf_b[id.x];
+}
+
+// ========================= NSF: CumsumPhase ===================================
+// One thread per harmonic h (9 threads): sequential fractional cumsum of f0*(h+1)/sr.
+// theta_out[t*9 + h] = 2*pi*frac(sum). frac() kept inside the loop for fp32 stability.
+#pragma kernel CumsumPhase
+[numthreads(16, 1, 1)]
+void CumsumPhase(uint3 id : SV_DispatchThreadID)
+{
+    uint h = id.x;
+    if (h >= 9u) return;
+    float mult = (float)(h + 1u) / 24000.0;
+    float cum = 0.0;
+    for (uint t = 0; t < sample_len; t++)
+    {
+        cum = frac(cum + f0_up[t] * mult);
+        theta_out[t * 9u + h] = 6.28318530718 * cum;
+    }
+}
+
+// ========================= NSF: SineMerge =====================================
+// Per sample: uv = f0>thr; s_h = amp*sin(theta_h + phase_h)*uv + noise_amp*noise_h;
+// out[t] = tanh( sum_h w[h]*s_h + b ). noise_amp = uv*noise_std + (1-uv)*amp/3.
+#pragma kernel SineMerge
+[numthreads(256, 1, 1)]
+void SineMerge(uint3 id : SV_DispatchThreadID)
+{
+    uint t = id.x;
+    if (t >= sample_len) return;
+    float uv = f0_up[t] > voiced_threshold ? 1.0 : 0.0;
+    float noise_amp = uv * noise_std + (1.0 - uv) * sine_amp / 3.0;
+    float sum = readH(nsf_b, 0);
+    for (uint h = 0; h < 9u; h++)
+    {
+        float sine = sine_amp * sin(theta_in[t * 9u + h] + phase_vec[h]);
+        float s = sine * uv + noise_amp * nsf_noise[t * 9u + h];
+        sum += s * readH(nsf_w, h);
+    }
+    Y[t] = safe_tanh(sum);
+}
+
+// ========================= STFT16 =============================================
+// torch.stft(s, n_fft=16, hop=4, win=hann16 periodic, center=True reflect pad 8).
+// Input X = waveform [sample_len]. Output Y[frame*18 + bin] with re bins 0..8, im bins 9..17.
+// frame count = sample_len/4 + 1 (set n_frames from C#).
+#pragma kernel STFT16
+[numthreads(256, 1, 1)]
+void STFT16(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= n_frames * 9u) return;
+    uint f = idx / 9u;
+    uint b = idx % 9u;
+
+    float re = 0.0, im = 0.0;
+    int start = (int)(f * 4u) - 8;
+    int L = (int)sample_len;
+    for (uint n = 0; n < 16u; n++)
+    {
+        int ti = start + (int)n;
+        if (ti < 0) ti = -ti;                       // reflect pad
+        if (ti >= L) ti = 2 * L - 2 - ti;
+        float w = 0.5 * (1.0 - cos(6.28318530718 * (float)n / 16.0));  // hann periodic
+        float xv = X[ti] * w;
+        float ang = 6.28318530718 * (float)(b * n) / 16.0;
+        re += xv * cos(ang);
+        im -= xv * sin(ang);
+    }
+    Y[f * 18u + b] = re;
+    Y[f * 18u + 9u + b] = im;
+}
+
+// ========================= MagPhase ===========================================
+// conv_post output [frames, 18] -> complex spec: mag = min(exp(x[:9]), 1e2); phase = sin(x[9:]);
+// re = mag*cos(phase), im = mag*sin(phase). In-place layout preserved [frames, 18].
+#pragma kernel MagPhase
+[numthreads(256, 1, 1)]
+void MagPhase(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= n_frames * 9u) return;
+    uint f = idx / 9u;
+    uint b = idx % 9u;
+    float mag = min(exp(inout_buf[f * 18u + b]), 100.0);
+    float ph = sin(inout_buf[f * 18u + 9u + b]);
+    inout_buf[f * 18u + b] = mag * cos(ph);
+    inout_buf[f * 18u + 9u + b] = mag * sin(ph);
+}
+
+// ========================= ISTFT16 ============================================
+// torch.istft(n_fft=16, hop=4, hann16, center=True): per output sample (post-trim index n,
+// full index m = n+8): sum over frames f with 0 <= m-4f < 16 of w[j]*y_f[j], normalized by
+// sum w^2[j], where y_f = irfft16 of the onesided spectrum X[f*18 ...] (re 0..8, im 9..17).
+// Output length = (n_frames-1)*4 (= sample_len of the final waveform), then clamp(+-audio_limit).
+#pragma kernel ISTFT16
+[numthreads(256, 1, 1)]
+void ISTFT16(uint3 id : SV_DispatchThreadID)
+{
+    uint n = id.x;
+    if (n >= sample_len) return;    // sample_len = (n_frames-1)*4
+    uint m = n + 8u;
+
+    float num = 0.0, den = 0.0;
+    uint f_lo = m >= 15u ? (m - 15u + 3u) / 4u : 0u;
+    uint f_hi = min(m / 4u, n_frames - 1u);
+    for (uint f = f_lo; f <= f_hi; f++)
+    {
+        uint j = m - f * 4u;
+        if (j >= 16u) continue;
+        // irfft16 at sample j
+        float y = X[f * 18u];                        // k=0: re only
+        for (uint k = 1; k < 8u; k++)
+        {
+            float ang = 6.28318530718 * (float)(k * j) / 16.0;
+            y += 2.0 * (X[f * 18u + k] * cos(ang) - X[f * 18u + 9u + k] * sin(ang));
+        }
+        y += X[f * 18u + 8u] * cos(3.14159265359 * (float)j);   // Nyquist
+        y /= 16.0;
+        float w = 0.5 * (1.0 - cos(6.28318530718 * (float)j / 16.0));
+        num += w * y;
+        den += w * w;
+    }
+    float v = num / max(den, 1e-9);
+    Y[n] = clamp(v, -audio_limit, audio_limit);
+}
+
+// ========================= TrimFade ===========================================
+// wav[:960] *= trim_fade — first 480 zeroed, next 480 half-cosine rise (linspace(pi,0,480)).
+#pragma kernel TrimFade
+[numthreads(256, 1, 1)]
+void TrimFade(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= 960u || i >= sample_len) return;
+    float g;
+    if (i < 480u) g = 0.0;
+    else
+    {
+        float ang = 3.14159265359 * (float)(479u - (i - 480u)) / 479.0;
+        g = (cos(ang) + 1.0) * 0.5;
+    }
+    inout_buf[i] *= g;
+}
+
+// ========================= utils ==============================================
+#pragma kernel ZeroBuffer
+[numthreads(256, 1, 1)]
+void ZeroBuffer(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[id.x] = 0.0;
+}
+
+#pragma kernel CopyBuffer
+[numthreads(256, 1, 1)]
+void CopyBuffer(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[id.x] = buf_b[id.x];
+}
+
+#pragma kernel CopySlice
+[numthreads(256, 1, 1)]
+void CopySlice(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[copy_dst_offset + id.x] = buf_b[copy_src_offset + id.x];
+}
+
+#pragma kernel AddResidual
+[numthreads(256, 1, 1)]
+void AddResidual(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[id.x] += buf_b[id.x];
+}
+
+#pragma kernel ScaleBuf
+[numthreads(256, 1, 1)]
+void ScaleBuf(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    inout_buf[id.x] *= scale_val;
+}

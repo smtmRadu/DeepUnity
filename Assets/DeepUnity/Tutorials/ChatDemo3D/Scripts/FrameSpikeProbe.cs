@@ -10,9 +10,12 @@ namespace DeepUnity.Tutorials.ChatDemo3D
     /// dips get attributed to a phase ("boot", "kv-restore", "decode", or plain "idle" gameplay)
     /// instead of guessed at. Logs a compact summary to the console every 10 s while spikes keep
     /// happening, and dumps the full list to ProbeLogs/frame_spikes.csv when the scene ends.
+    /// Opt-in: does nothing unless `record` is ticked in the inspector.
     /// </summary>
     public class FrameSpikeProbe : MonoBehaviour
     {
+        [Tooltip("Diagnostic only — flip on when hunting fps dips. Off = no console reports, no CSV, near-zero overhead.")]
+        [SerializeField] bool record = false;
         [SerializeField] float spikeMs = 18f;
 
         readonly List<string> rows = new List<string>(1024);
@@ -24,6 +27,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 
         private void Update()
         {
+            if (!record) return;
             float ms = Time.unscaledDeltaTime * 1000f;
             int gc = System.GC.CollectionCount(0);
             bool gcThisFrame = gc != lastGcCount;

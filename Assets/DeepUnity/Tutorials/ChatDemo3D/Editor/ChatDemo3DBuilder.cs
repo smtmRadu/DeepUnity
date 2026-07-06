@@ -330,8 +330,8 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             ambience.spatialBlend = 0f;
 
             // LLM frame-pacing helpers: compile the compute kernels at scene start (one visible
-            // hitch here instead of mid-game on first chat open) + record any slow frame with the
-            // LLM phase active at the time (ProbeLogs/frame_spikes.csv) so dips get attributed.
+            // hitch here instead of mid-game on first chat open) + a dormant frame-spike probe
+            // (tick its `record` in the inspector when hunting fps dips).
             var llmHelper = new GameObject("LLMBootHelper");
             llmHelper.AddComponent<LLMPrewarm>();
             llmHelper.AddComponent<FrameSpikeProbe>();

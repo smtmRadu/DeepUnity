@@ -5,7 +5,8 @@ using UnityEngine;
 namespace DeepUnity.Tutorials.ChatDemo3D
 {
     /// <summary>
-    /// Souls-style dialogue NPC backed by Qwen3.5-0.8B (full local GPU inference).
+    /// Souls-style dialogue NPC backed by a local full-GPU LLM (Qwen3.5-0.8B or Gemma3-270M,
+    /// selectable in the inspector together with the weight quantization).
     /// Walk into the trigger and press I: the camera blends to a fixed dialogue framing and the
     /// chat panel slides in from the right. Escape (or the Leave button) closes the dialogue at
     /// any time, even mid-reply. The 3D twin of the 2D ChatDemo's NPCInteractor.
@@ -18,6 +19,12 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             PreparingForInteraction,
             WaitingInInteraction,
             TalkingInInteraction,
+        }
+
+        public enum NPCModel
+        {
+            [InspectorName("Qwen3.5-0.8B")] Qwen3_5_0_8B,
+            [InspectorName("Gemma3-270M")] Gemma3_270M,
         }
 
         [SerializeField, ViewOnly] private NPCState state = NPCState.Idle;
@@ -33,14 +40,31 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             "the boss, you foreshadow it with morbid delight — urging the lambkin onward while clearly expecting them to die. " +
             "Stay in character at all times. Keep your replies to one to three short sentences.";
 
+        [Header("Model")]
+        [Tooltip("Which local LLM voices Velmire. Sampling presets come from each model's Config.")]
+        [SerializeField] private NPCModel model = NPCModel.Qwen3_5_0_8B;
+        [Tooltip("Weight format. INT8 is ~lossless at half the VRAM — the recommended default. INT4 is lossy on models this small (Gemma int4 collapses outright).")]
+        [SerializeField] private LLMQuant quantization = LLMQuant.INT8;
+
         [SerializeField] private SoulsChatWindow chatWindow;
         [SerializeField] private GameObject interactPrompt;        // screen-space "[I] Speak" box
         [SerializeField] private Transform dialogueCameraPoint;    // fixed viewpoint framing the NPC
         [SerializeField] private float temperature = 0.8f;
-        [Tooltip("Keep the model resident on the GPU (~1.6 GB VRAM) after closing the chat — re-interactions skip the load entirely. Off = release on close and reload (~2-3 s) every interaction.")]
+        [Tooltip("Keep the model resident on the GPU (~0.7-1.6 GB VRAM depending on model/quant) after closing the chat — re-interactions skip the load entirely. Off = release on close and reload (~2-3 s) every interaction.")]
         [SerializeField] private bool keepModelLoaded = false;
 
-        private Qwen3_5ForCausalLM llm;
+        [Header("Voice (Chatterbox-Turbo TTS)")]
+        [Tooltip("Speak replies aloud through a ChatterboxVoice on this NPC — clauses are synthesized and heard WHILE the rest of the reply is still generating.")]
+        [SerializeField] private bool speakReplies = false;
+        [Tooltip("Playback pitch for this NPC. 1 = natural (use the cloned voice's own timbre); <1 = deeper/slower.")]
+        [SerializeField] private float voicePitch = 1.0f;
+        [Tooltip("Voice conds: \"conds\" = baked default (female); \"conds_elder\" = elder voice baked by validation/make_voice.py. Falls back to default if not baked.")]
+        [SerializeField] private string ttsVoice = "conds_elder";
+        [Tooltip("TTS weight format. INT8 = T3 matmuls int8 (~300 MB less, parity-validated); s3gen stays fp16 either way.")]
+        [SerializeField] private LLMQuant ttsQuantization = LLMQuant.INT8;
+
+        private LLM llm;
+        private ChatterboxVoice voice;
         [ViewOnly, SerializeField] private SoulsPlayerController player;
         private Animator npcAnimator;
         private Coroutine dialogueCoroutine;
@@ -62,7 +86,27 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             // Scene-start prewarm: compiles the model's compute kernels (one per frame) and parses
             // the tokenizer in the background while the player walks around, so the dialogue
             // later opens without hitches.
-            StartCoroutine(Qwen3_5ForCausalLM.Prewarm());
+            StartCoroutine(model == NPCModel.Gemma3_270M
+                ? Gemma3ForCausalLM.Prewarm()
+                : Qwen3_5ForCausalLM.Prewarm());
+
+            // Voice: ChatterboxVoice on this NPC's GameObject (adds its AudioSource). Constructing
+            // it here starts the TTS weight stream alongside the LLM prewarm, so the first spoken
+            // reply doesn't pay the ~1 GB load. Spatial audio so he is heard AT the NPC.
+            if (speakReplies)
+            {
+                voice = GetComponent<ChatterboxVoice>();
+                if (voice == null) voice = gameObject.AddComponent<ChatterboxVoice>();
+                voice.streaming = true;
+                voice.pitch = voicePitch;
+                voice.voiceName = ttsVoice;   // applied in ChatterboxVoice.Start (TTS is lazy-built)
+                voice.quantization = ttsQuantization;
+                var src = GetComponent<AudioSource>();
+                src.spatialBlend = 1f;           // 3D: voice comes from the NPC
+                src.minDistance = 2f;
+                src.maxDistance = 20f;
+                src.rolloffMode = AudioRolloffMode.Linear;
+            }
 
             if (interactPrompt != null) interactPrompt.SetActive(false);
             if (chatWindow != null) chatWindow.SetTitle(npc_name);
@@ -132,17 +176,30 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 
             chatWindow.Open();
             chatWindow.SetInfoText("The pale figure regards you in silence...");
+            // model still loading: Speak pulses dots and stays disabled, but the input field is
+            // live so the first question can be typed while the weights stream in
+            chatWindow.SetSendLoading(true);
+            chatWindow.InputField.ActivateInputField();
 
             if (llm == null)
-                llm = new Qwen3_5ForCausalLM();   // cheap; weights stream to the GPU over the next frames
+            {
+                // ctor is cheap; weights stream to the GPU over the next frames.
+                // Standard KV pairing from the benchmark matrix: fp16 weights → fp16 KV, int8/int4 → int8 KV.
+                KVQuant kv = quantization == LLMQuant.FP16 ? KVQuant.FP16 : KVQuant.INT8;
+                llm = model == NPCModel.Gemma3_270M
+                    ? new Gemma3ForCausalLM(quantization, kv_quant: kv)
+                    : new Qwen3_5ForCausalLM(quantization: quantization, kv_quant: kv);
+            }
 
             // Waits for the weight stream, warms the kernels and caches the system prompt — all
             // budgeted per frame, so the game keeps rendering smoothly behind the dialogue.
             yield return llm.InitializeChat(system_prompt: system_prompt);
 
             chatWindow.SetInfoText("");
+            chatWindow.SetSendLoading(false);
             state = NPCState.WaitingInInteraction;
-            chatWindow.InputField.ActivateInputField();
+            if (!chatWindow.InputField.isFocused)
+                chatWindow.InputField.ActivateInputField();
             dialogueCoroutine = null;
         }
 
@@ -168,12 +225,15 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 
             bool isFirstToken = true;
             StringBuilder response = new StringBuilder();
-            // base Chat defaults are neutral — pass Qwen's recommended top_k/presence preset explicitly
-            yield return llm.Chat(question, max_new_tokens: 128, temperature: temperature, top_k: 20, top_p: 0.95f,
+            // base Chat defaults are neutral — pull the selected model's recommended preset from its Config
+            yield return llm.Chat(question, max_new_tokens: 128, temperature: temperature,
+                top_k: llm.Config.DefaultTopK, top_p: llm.Config.DefaultTopP,
                 presence_penalty: llm.Config.DefaultPresencePenalty,
                 onTokenGenerated: (token) =>
                 {
                     response.Append(token);
+                    // real-time speech: completed clauses synthesize + play while the rest streams
+                    if (speakReplies && voice != null) voice.FeedText(token);
                     if (isFirstToken)
                     {
                         chatWindow.AddMessage(npc_name, response.ToString());
@@ -185,6 +245,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
                         chatWindow.AddMessage(npc_name, response.ToString());
                     }
                 });
+            if (speakReplies && voice != null) voice.FlushText();   // speak the trailing clause
 
             PlayNPCAnimation("Idle");
             chatWindow.SendButton.interactable = true;
@@ -207,6 +268,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 
             state = NPCState.Idle;
             PlayNPCAnimation("Idle");
+            voice?.StopSpeaking();   // cut speech mid-word when the dialogue closes
 
             if (!keepModelLoaded || interrupted)
             {
@@ -215,6 +277,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
                 StartCoroutine(CollectGarbageIncremental());
             }
 
+            chatWindow.SetSendLoading(false);   // Escape mid-load: stop the pulse, restore the label
             chatWindow.Clear();
             chatWindow.Close();
             chatWindow.SendButton.interactable = true;

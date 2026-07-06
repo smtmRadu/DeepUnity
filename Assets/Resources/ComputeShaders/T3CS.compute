@@ -1,0 +1,646 @@
+// T3CS.compute
+// ======================================================================================
+// Chatterbox-Turbo T3 (speech-token decoder) inference kernels — GPT2-medium backbone.
+// hidden 1024, 24 layers, 16 heads x 64 (MHA), MLP 4096 gelu_new, LayerNorm(+bias) eps 1e-5,
+// learned absolute positions (wpe), fused biased QKV, untied biased speech head (vocab 6563).
+// Port spec: Assets/DeepUnity/TTS/SPEC.md (§2). Conventions follow Gemma3CS.compute:
+// fp16 weights packed 2-per-uint in StructuredBuffer<uint> (readH), FP32 activations.
+// INT8_WEIGHTS variant: the four per-layer matmuls (the generic W buffer) run weight-only
+// int8 (readW/wScale below); everything else stays fp16 in both variants.
+// ======================================================================================
+
+// ================================ PARAMETERS ================================
+uint seq_len;
+uint hidden_size;          // 1024
+uint head_dim;             // 64
+uint num_heads_q;          // 16
+uint num_heads_kv;         // 16 (MHA — kept for KVCache.hlsl layout)
+uint vocab_size;           // 6563 (speech head)
+uint position_offset;      // absolute position of this chunk's first token (wpe + KV write)
+uint cache_len;
+uint cache_capacity;
+uint buffer_size;
+uint qkv_proj_dim;         // 3072
+uint in_dim;               // ProjBias input dim
+uint out_dim;              // ProjBias output dim
+uint seq_len_q;
+uint seq_len_k;
+uint sliding_window_size;  // always 0 (kept for FlashAttention parity with Gemma3CS)
+uint bidirectional;        // always 0 (causal)
+uint copy_src_offset;
+uint copy_dst_offset;
+uint embed_dst_offset;     // element offset into embed_output where this segment starts
+uint gen_count;            // #unique generated speech tokens (repetition penalty)
+uint spk_in_dim;           // 256
+int  activation_type;      // ProjBias: 0 none, 1 gelu_new
+float norm_eps;            // 1e-5
+float scale;               // attention scale 1/sqrt(64)
+float temperature;
+int   top_k_val;
+float top_p_val;
+float rep_penalty;
+int   rng_seed;
+
+// ================================ FP16 WEIGHT HELPER ================================
+float readH(StructuredBuffer<uint> buf, uint index)
+{
+    uint word = buf[index >> 1];
+    uint shift = (index & 1u) * 16u;
+    return f16tof32(word >> shift);
+}
+
+// ================================ INT8 WEIGHT PATH ================================
+// Weight-only int8 for the generic W matmuls (qkv/attn_out/fc/mlp_out — import_params.py
+// --quant int8): 4 int8 per uint + one fp16 scale per OUTPUT ROW (symmetric, w = q*scale_row).
+// The row scale is applied ONCE per dot product via wScale, BEFORE the bias. Embeddings, wpe,
+// spkr_enc, speech_head, norms and biases stay fp16 in both variants (plain readH).
+#pragma multi_compile _ INT8_WEIGHTS
+
+float readQ8(StructuredBuffer<uint> buf, uint index)
+{
+    uint word = buf[index >> 2];
+    int q = (int)((word >> ((index & 3u) * 8u)) & 0xFFu);
+    return (float)((q << 24) >> 24);   // sign-extend low byte
+}
+
+#if defined(INT8_WEIGHTS)
+    #define readW(buf, sbuf, idx) readQ8(buf, idx)
+    #define wScale(sbuf, row)     readH(sbuf, row)
+#else
+    #define readW(buf, sbuf, idx) readH(buf, idx)
+    #define wScale(sbuf, row)     1.0
+#endif
+
+// KV-cache precision keywords (KVCache.hlsl) — FP16 KV by default from C#.
+#pragma multi_compile _ KV_FP16 KV_INT8
+
+// ================================ BUFFERS ================================
+// fp16 packed weights
+StructuredBuffer<uint>      emb_weights;    // text_emb or speech_emb (bound per segment)
+StructuredBuffer<uint>      wpe;            // [8196, 1024]
+StructuredBuffer<uint>      ln_gamma;       // LayerNorm weight  [dim]
+StructuredBuffer<uint>      ln_beta;        // LayerNorm bias    [dim]
+StructuredBuffer<uint>      W;              // ProjBias weight [out_dim, in_dim] (int8-packed in the INT8_WEIGHTS variant)
+StructuredBuffer<uint>      W_bias;         // ProjBias bias   [out_dim]
+StructuredBuffer<uint>      W_scales;       // fp16 per-row scales [out_dim] — bound only under INT8_WEIGHTS
+StructuredBuffer<uint>      lm_weights;     // speech_head.w [6563, 1024]
+StructuredBuffer<uint>      lm_bias;        // speech_head.b [6563]
+StructuredBuffer<uint>      spk_w;          // spkr_enc.w [1024, 256]
+StructuredBuffer<uint>      spk_b;          // spkr_enc.b [1024]
+
+// FP32 activations
+StructuredBuffer<uint>      token_ids;
+RWStructuredBuffer<float>   embed_output;
+StructuredBuffer<float>     norm_input;
+RWStructuredBuffer<float>   norm_output;
+StructuredBuffer<float>     X;              // ProjBias input
+RWStructuredBuffer<float>   Y;              // ProjBias output
+StructuredBuffer<float>     qkv_packed;
+RWStructuredBuffer<float>   split_q;
+RWStructuredBuffer<float>   split_k;
+RWStructuredBuffer<float>   split_v;
+StructuredBuffer<float>     Q;
+RWStructuredBuffer<float>   AttendedValues;
+StructuredBuffer<float>     spk_input;      // speaker embedding [256]
+StructuredBuffer<float>     lm_input;
+RWStructuredBuffer<float>   lm_output;
+RWStructuredBuffer<float>   logits_buf;     // RW: repetition penalty edits in place
+RWStructuredBuffer<float>   probs_buf;
+RWStructuredBuffer<uint>    argmax_result;
+StructuredBuffer<uint>      gen_ids;        // unique generated token ids (deduped on C#)
+RWStructuredBuffer<float>   buf_a;
+StructuredBuffer<float>     buf_b;
+
+// K / V / kv_cache / kv_new declared by the shared include (needs head_dim/num_heads_kv above).
+#include "KVCache.hlsl"
+
+// ================================ HELPERS ================================
+float safe_tanh(float x)
+{
+    float a = abs(x);
+    float e = exp(-2.0 * a);
+    return sign(x) * ((1.0 - e) / (1.0 + e));
+}
+// gelu_new / gelu_pytorch_tanh — exactly GPT2's activation
+float gelu(float x)
+{
+    return 0.5 * x * (1.0 + safe_tanh(0.7978845608 * (x + 0.044715 * x * x * x)));
+}
+float runif()
+{
+    rng_seed ^= 2747636419u;
+    rng_seed *= 2654435769u;
+    rng_seed ^= rng_seed >> 16;
+    rng_seed *= 2654435769u;
+    rng_seed ^= rng_seed >> 16;
+    rng_seed *= 2654435769u;
+    return float(rng_seed) / 4294967295.0 + 0.5;
+}
+
+// ========================= EmbedToken =========================================
+// embed_output[embed_dst_offset + pos*H + h] = emb[token_ids[pos]] — NO scaling (GPT2).
+// wpe is added separately over the whole sequence by AddWpe.
+#pragma kernel EmbedToken
+[numthreads(256, 1, 1)]
+void EmbedToken(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * hidden_size) return;
+    uint pos = idx / hidden_size;
+    uint h = idx % hidden_size;
+    uint tok = token_ids[pos];
+    embed_output[embed_dst_offset + idx] = readH(emb_weights, tok * hidden_size + h);
+}
+
+// ========================= AddWpe =============================================
+// embed_output[embed_dst_offset + pos*H + h] += wpe[(position_offset + pos), h]
+#pragma kernel AddWpe
+[numthreads(256, 1, 1)]
+void AddWpe(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * hidden_size) return;
+    uint pos = idx / hidden_size;
+    uint h = idx % hidden_size;
+    embed_output[embed_dst_offset + idx] += readH(wpe, (position_offset + pos) * hidden_size + h);
+}
+
+// ========================= SpkrProj ===========================================
+// Conditioning position 0: hidden[h] = spkr_enc(speaker_emb) = W[h,:]·spk + b[h]
+#pragma kernel SpkrProj
+[numthreads(256, 1, 1)]
+void SpkrProj(uint3 id : SV_DispatchThreadID)
+{
+    uint h = id.x;
+    if (h >= hidden_size) return;
+    float sum = readH(spk_b, h);
+    for (uint i = 0; i < spk_in_dim; i++)
+        sum += spk_input[i] * readH(spk_w, h * spk_in_dim + i);
+    embed_output[embed_dst_offset + h] = sum;
+}
+
+// ========================= LayerNorm ==========================================
+// Plain LayerNorm (mean/var over hidden), gamma applied DIRECTLY (not Gemma's 1+g), plus beta.
+#pragma kernel LayerNorm
+[numthreads(256, 1, 1)]
+void LayerNorm(uint3 id : SV_DispatchThreadID)
+{
+    uint pos = id.x;
+    if (pos >= seq_len) return;
+    uint base_idx = pos * hidden_size;
+
+    float mean = 0.0;
+    for (uint i = 0; i < hidden_size; i++)
+        mean += norm_input[base_idx + i];
+    mean /= (float)hidden_size;
+
+    float var = 0.0;
+    for (uint j = 0; j < hidden_size; j++)
+    {
+        float d = norm_input[base_idx + j] - mean;
+        var += d * d;
+    }
+    float rstd = rsqrt(var / (float)hidden_size + norm_eps);
+
+    for (uint k = 0; k < hidden_size; k++)
+        norm_output[base_idx + k] = (norm_input[base_idx + k] - mean) * rstd * readH(ln_gamma, k) + readH(ln_beta, k);
+}
+
+// ========================= ProjBias ===========================================
+// Y[l, p] = X[l, :] · W[p, :] + b[p]  (+ optional gelu_new). Generic in/out dims — used for
+// qkv (1024->3072), attn_out (1024->1024), fc (1024->4096, gelu), mlp_out (4096->1024).
+#pragma kernel ProjBias
+[numthreads(1, 8, 32)]
+void ProjBias(uint3 id : SV_DispatchThreadID)
+{
+    uint l = id.y; uint p = id.z;
+    if (l >= seq_len || p >= out_dim) return;
+
+    float sum = 0.0;
+    uint x_base = l * in_dim;
+    uint w_base = p * in_dim;
+    for (uint e = 0; e < in_dim; e++)
+        sum += X[x_base + e] * readW(W, W_scales, w_base + e);
+    sum = sum * wScale(W_scales, p) + readH(W_bias, p);   // row scale on the dot only, not the bias
+    if (activation_type == 1) sum = gelu(sum);
+    Y[l * out_dim + p] = sum;
+}
+
+// ========================= ProjBias1Vec =======================================
+#pragma kernel ProjBias1Vec
+[numthreads(256, 1, 1)]
+void ProjBias1Vec(uint3 id : SV_DispatchThreadID)
+{
+    uint p = id.x;
+    if (p >= out_dim) return;
+    float sum = 0.0;
+    uint w_base = p * in_dim;
+    for (uint e = 0; e < in_dim; e++)
+        sum += X[e] * readW(W, W_scales, w_base + e);
+    sum = sum * wScale(W_scales, p) + readH(W_bias, p);   // row scale on the dot only, not the bias
+    if (activation_type == 1) sum = gelu(sum);
+    Y[p] = sum;
+}
+
+// ========================= SplitQKV ==========================================
+#pragma kernel SplitQKV
+[numthreads(256, 1, 1)]
+void SplitQKV(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    uint total = seq_len * qkv_proj_dim;
+    if (idx >= total) return;
+
+    uint l = idx / qkv_proj_dim;
+    uint p = idx % qkv_proj_dim;
+    float val = qkv_packed[idx];
+    uint q_size = num_heads_q * head_dim;
+    uint k_size = num_heads_kv * head_dim;
+
+    if (p < q_size)
+        split_q[l * q_size + p] = val;
+    else if (p < q_size + k_size)
+        split_k[l * k_size + (p - q_size)] = val;
+    else if (p < q_size + 2u * k_size)
+        split_v[l * k_size + (p - q_size - k_size)] = val;
+}
+
+// ========================= WriteCacheFull ====================================
+// Copied from Gemma3CS.compute (KV_INT8 group-quantized path + FP16/FP32 element path).
+#pragma kernel WriteCacheFull
+#if defined(KV_INT8)
+groupshared float kvq_min[KV_WRITE_INT8_THREADS];
+groupshared float kvq_max[KV_WRITE_INT8_THREADS];
+groupshared float kvq_scale;
+groupshared float kvq_zp;
+[numthreads(KV_WRITE_INT8_THREADS, 1, 1)]
+void WriteCacheFull(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint blk = KV_WRITE_INT8_THREADS;
+    uint tid = gtid.x;
+    if (num_heads_kv == 0u || head_dim == 0u || gid.x >= seq_len * num_heads_kv) return;
+    uint h   = gid.x % num_heads_kv;
+    uint l   = gid.x / num_heads_kv;
+    uint cache_pos = cache_len + l;
+    uint src_row   = (l * num_heads_kv + h) * head_dim;
+    uint sz_idx    = cache_pos * num_heads_kv + h;
+    uint cache_u0  = (cache_pos * num_heads_kv + h) * (head_dim / 4u);
+
+    float vmin =  3.0e38;
+    float vmax = -3.0e38;
+    for (uint d = tid; d < head_dim; d += blk)
+    {
+        float x = kv_new[src_row + d];
+        vmin = min(vmin, x);
+        vmax = max(vmax, x);
+    }
+    kvq_min[tid] = vmin;
+    kvq_max[tid] = vmax;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint r = blk / 2u; r > 0u; r >>= 1)
+    {
+        if (tid < r)
+        {
+            kvq_min[tid] = min(kvq_min[tid], kvq_min[tid + r]);
+            kvq_max[tid] = max(kvq_max[tid], kvq_max[tid + r]);
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (tid == 0u)
+    {
+        float mn = kvq_min[0];
+        float mx = kvq_max[0];
+        float scl = (mx - mn) / 255.0;
+        if (scl < 1e-9) scl = 1e-9;
+        float zp = clamp(round(-mn / scl), 0.0, 255.0);
+        kvq_scale = scl;
+        kvq_zp    = zp;
+        kv_scale_zp_w[sz_idx] = KV_PACK_SCALEZP(scl, zp);
+    }
+    GroupMemoryBarrierWithGroupSync();
+    float scl = kvq_scale;
+    float zp  = kvq_zp;
+    float inv_scale = 1.0 / scl;
+    uint nu = head_dim / 4u;
+    for (uint u = tid; u < nu; u += blk)
+    {
+        uint s = src_row + 4u * u;
+        uint q0 = (uint)clamp(round(kv_new[s + 0u] * inv_scale) + zp, 0.0, 255.0);
+        uint q1 = (uint)clamp(round(kv_new[s + 1u] * inv_scale) + zp, 0.0, 255.0);
+        uint q2 = (uint)clamp(round(kv_new[s + 2u] * inv_scale) + zp, 0.0, 255.0);
+        uint q3 = (uint)clamp(round(kv_new[s + 3u] * inv_scale) + zp, 0.0, 255.0);
+        kv_cache[cache_u0 + u] = q0 | (q1 << 8) | (q2 << 16) | (q3 << 24);
+    }
+}
+#else
+[numthreads(256, 1, 1)]
+void WriteCacheFull(uint3 id : SV_DispatchThreadID)
+{
+#if defined(KV_PACKED)
+    uint u = id.x;
+    uint total = seq_len * num_heads_kv * (head_dim / 2u);
+    if (u >= total) return;
+    uint d2  = u % (head_dim / 2u);
+    uint tmp = u / (head_dim / 2u);
+    uint h   = tmp % num_heads_kv;
+    uint l   = tmp / num_heads_kv;
+    uint d   = d2 * 2u;
+    uint cache_pos = cache_len + l;
+    uint e   = (cache_pos * num_heads_kv + h) * head_dim + d;
+    uint src = (l * num_heads_kv + h) * head_dim + d;
+    KV_WRITE2(kv_cache, e, kv_new[src], kv_new[src + 1u]);
+#else
+    uint idx = id.x;
+    uint total = seq_len * num_heads_kv * head_dim;
+    if (idx >= total) return;
+    uint d   = idx % head_dim;
+    uint tmp2 = idx / head_dim;
+    uint h   = tmp2 % num_heads_kv;
+    uint l   = tmp2 / num_heads_kv;
+    uint cache_pos = cache_len + l;
+    kv_cache[(cache_pos * num_heads_kv + h) * head_dim + d] = kv_new[idx];
+#endif
+}
+#endif
+
+// ========================= FlashAttention ====================================
+// Copied from Gemma3CS.compute (online-softmax fused attention). T3: causal, no sliding window,
+// MHA (num_heads_kv == num_heads_q), head_dim 64 <= FA_THREADS.
+#define FA_THREADS 256
+groupshared float fa_q[FA_THREADS];
+groupshared float fa_p[FA_THREADS];
+groupshared float fa_red[FA_THREADS];
+
+#pragma kernel FlashAttention
+[numthreads(FA_THREADS, 1, 1)]
+void FlashAttention(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint q_pos = gid.x;
+    uint hq    = gid.y;
+    uint tid   = gtid.x;
+
+    uint hkv    = hq / max(num_heads_q / max(num_heads_kv, 1u), 1u);
+    uint kv_len = max(seq_len_k, 1u);
+    uint abs_q  = (kv_len - seq_len_q) + q_pos;
+
+    uint j_hi = (bidirectional == 0u) ? min(abs_q, kv_len - 1u) : (kv_len - 1u);
+    uint j_lo = 0u;
+    if (sliding_window_size > 0u)
+    {
+        if (abs_q > sliding_window_size) j_lo = abs_q - sliding_window_size;
+        if (bidirectional != 0u)         j_hi = min(j_hi, abs_q + sliding_window_size);
+    }
+
+    uint q_base = (q_pos * num_heads_q + hq) * head_dim;
+    for (uint dq = tid; dq < head_dim; dq += FA_THREADS)
+        fa_q[dq] = Q[q_base + dq] * scale;
+    GroupMemoryBarrierWithGroupSync();
+
+    float m   = -3.0e38;
+    float l   = 0.0;
+    float acc = 0.0;
+
+    for (uint tile = j_lo; tile <= j_hi; tile += FA_THREADS)
+    {
+        uint j = tile + tid;
+        float s = -3.0e38;
+        if (j <= j_hi)
+        {
+            uint k_base = (j * num_heads_kv + hkv) * head_dim;
+            float dot = 0.0;
+            for (uint d = 0; d < head_dim; d++)
+                dot += fa_q[d] * KV_READ_K(k_base + d);
+            s = dot;
+        }
+
+        fa_red[tid] = s;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r1 = FA_THREADS / 2; r1 > 0; r1 >>= 1)
+        {
+            if (tid < r1) fa_red[tid] = max(fa_red[tid], fa_red[tid + r1]);
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float m_new = max(m, fa_red[0]);
+        GroupMemoryBarrierWithGroupSync();
+
+        float p = (j <= j_hi) ? exp(s - m_new) : 0.0;
+        fa_p[tid] = p;
+        fa_red[tid] = p;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r2 = FA_THREADS / 2; r2 > 0; r2 >>= 1)
+        {
+            if (tid < r2) fa_red[tid] += fa_red[tid + r2];
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float tile_sum = fa_red[0];
+
+        float alpha = exp(m - m_new);
+        l = l * alpha + tile_sum;
+
+        if (tid < head_dim)
+        {
+            float a = acc * alpha;
+            uint n_valid = min(FA_THREADS, j_hi - tile + 1u);
+            for (uint jj = 0; jj < n_valid; jj++)
+                a += fa_p[jj] * KV_READ_V(((tile + jj) * num_heads_kv + hkv) * head_dim + tid);
+            acc = a;
+        }
+        m = m_new;
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (tid < head_dim)
+        AttendedValues[(q_pos * num_heads_q + hq) * head_dim + tid] = acc / max(l, 1e-12);
+}
+
+// ========================= LmHeadBias1Vec =====================================
+// Speech head: logits[v] = ln_f(hidden_last) · lm_w[v,:] + lm_b[v]. Decode always samples the
+// LAST position only, so only the 1Vec variant exists.
+#pragma kernel LmHeadBias1Vec
+[numthreads(512, 1, 1)]
+void LmHeadBias1Vec(uint3 id : SV_DispatchThreadID)
+{
+    uint v = id.x;
+    if (v >= vocab_size) return;
+    float sum = readH(lm_bias, v);
+    for (uint h = 0; h < hidden_size; h++)
+        sum += lm_input[h] * readH(lm_weights, v * hidden_size + h);
+    lm_output[v] = sum;
+}
+
+// ========================= RepetitionPenalty ==================================
+// HF RepetitionPenaltyLogitsProcessor: for each PREVIOUSLY GENERATED token id (deduped on C#):
+// logit > 0 ? logit/p : logit*p. In-place on logits_buf.
+#pragma kernel RepetitionPenalty
+[numthreads(256, 1, 1)]
+void RepetitionPenalty(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= gen_count) return;
+    uint tok = gen_ids[i];
+    if (tok >= vocab_size) return;
+    float l = logits_buf[tok];
+    logits_buf[tok] = l > 0.0 ? l / rep_penalty : l * rep_penalty;
+}
+
+// ========================= ArgMax ============================================
+#define SAMPLER_THREADS 256
+groupshared float smp_val[SAMPLER_THREADS];
+groupshared uint  smp_idx[SAMPLER_THREADS];
+groupshared float smp_scalar;
+
+#pragma kernel ArgMax
+[numthreads(SAMPLER_THREADS, 1, 1)]
+void ArgMax(uint3 gtid : SV_GroupThreadID)
+{
+    uint tid = gtid.x;
+    float bv = -3.0e38; uint bi = 0;
+    for (uint i = tid; i < vocab_size; i += SAMPLER_THREADS)
+    { float v = logits_buf[i]; if (v > bv) { bv = v; bi = i; } }
+    smp_val[tid] = bv; smp_idx[tid] = bi;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint s = SAMPLER_THREADS / 2; s > 0; s >>= 1)
+    {
+        if (tid < s && smp_val[tid + s] > smp_val[tid])
+        { smp_val[tid] = smp_val[tid + s]; smp_idx[tid] = smp_idx[tid + s]; }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (tid == 0) argmax_result[0] = smp_idx[0];
+}
+
+// ========================= SampleToken ========================================
+// Turbo speech sampler: temperature -> full-vocab softmax -> nucleus walk (iterative parallel
+// argmax over the 6.5k vocab, sorted-descending) until cum >= top_p or top_k candidates, then
+// draw. Repetition penalty runs BEFORE this via the RepetitionPenalty kernel. The walk's
+// early-exit at the nucleus makes top_k=1000 cheap: the 0.95-nucleus is typically tens of
+// tokens. Candidate cap bounds groupshared memory; the crossing token is kept (HF semantics).
+#define T3_CAND_MAX 1024
+groupshared float t3_cand_p[T3_CAND_MAX];
+groupshared uint  t3_cand_i[T3_CAND_MAX];
+
+#pragma kernel SampleToken
+[numthreads(SAMPLER_THREADS, 1, 1)]
+void SampleToken(uint3 gtid : SV_GroupThreadID)
+{
+    uint tid = gtid.x;
+    float inv_temp = 1.0 / max(temperature, 1e-6);
+
+    // 1. scaled logits -> probs_buf scratch + global max
+    float bv = -3.0e38;
+    for (uint i = tid; i < vocab_size; i += SAMPLER_THREADS)
+    {
+        float sc = logits_buf[i] * inv_temp;
+        probs_buf[i] = sc;
+        bv = max(bv, sc);
+    }
+    smp_val[tid] = bv;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint s1 = SAMPLER_THREADS / 2; s1 > 0; s1 >>= 1)
+    {
+        if (tid < s1) smp_val[tid] = max(smp_val[tid], smp_val[tid + s1]);
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (tid == 0) smp_scalar = smp_val[0];
+    GroupMemoryBarrierWithGroupSync();
+    float gmax = smp_scalar;
+
+    // 2. full-vocab sum of exp
+    float acc = 0.0;
+    for (uint i2 = tid; i2 < vocab_size; i2 += SAMPLER_THREADS)
+        acc += exp(probs_buf[i2] - gmax);
+    smp_val[tid] = acc;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint s2 = SAMPLER_THREADS / 2; s2 > 0; s2 >>= 1)
+    {
+        if (tid < s2) smp_val[tid] += smp_val[tid + s2];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (tid == 0) smp_scalar = max(smp_val[0], 1e-12);
+    GroupMemoryBarrierWithGroupSync();
+    float sum_exp = smp_scalar;
+
+    // 3. nucleus walk: parallel argmax passes until cum >= top_p or K candidates
+    uint K = (uint)clamp(top_k_val, 1, T3_CAND_MAX);
+    uint count = 0;
+    float cum = 0.0;
+    for (uint k = 0; k < K; k++)
+    {
+        float lv = -3.0e38; uint li = 0;
+        for (uint i3 = tid; i3 < vocab_size; i3 += SAMPLER_THREADS)
+        { float v = probs_buf[i3]; if (v > lv) { lv = v; li = i3; } }
+        smp_val[tid] = lv; smp_idx[tid] = li;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint s3 = SAMPLER_THREADS / 2; s3 > 0; s3 >>= 1)
+        {
+            if (tid < s3 && smp_val[tid + s3] > smp_val[tid])
+            { smp_val[tid] = smp_val[tid + s3]; smp_idx[tid] = smp_idx[tid + s3]; }
+            GroupMemoryBarrierWithGroupSync();
+        }
+        if (tid == 0)
+        {
+            uint wi = smp_idx[0];
+            float p = exp(smp_val[0] - gmax) / sum_exp;   // full-vocab-normalized prob
+            t3_cand_i[k] = wi;
+            t3_cand_p[k] = p;
+            if (wi < vocab_size) probs_buf[wi] = -3.0e38;
+            cum += p;
+            count = k + 1u;
+            smp_scalar = cum;
+        }
+        AllMemoryBarrierWithGroupSync();
+        // nucleus reached (crossing token kept)? every thread reads the shared cum
+        if (top_p_val < 1.0 && smp_scalar >= top_p_val) break;
+    }
+
+    // 4. draw over the kept candidates (thread 0)
+    if (tid == 0)
+    {
+        if (count == 0) count = 1;
+        float total = 0.0;
+        for (uint c0 = 0; c0 < count; c0++) total += t3_cand_p[c0];
+
+        float r = runif() * total;
+        float cdf = 0.0;
+        uint sampled = t3_cand_i[count - 1];
+        for (uint c = 0; c < count; c++)
+        {
+            cdf += t3_cand_p[c];
+            if (cdf >= r) { sampled = t3_cand_i[c]; break; }
+        }
+        argmax_result[0] = sampled;
+    }
+}
+
+// ========================= utils =============================================
+#pragma kernel ZeroBuffer
+[numthreads(256, 1, 1)]
+void ZeroBuffer(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[id.x] = 0.0;
+}
+
+#pragma kernel CopyBuffer
+[numthreads(256, 1, 1)]
+void CopyBuffer(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[id.x] = buf_b[id.x];
+}
+
+// buf_a[copy_dst_offset + i] = buf_b[copy_src_offset + i]
+#pragma kernel CopySlice
+[numthreads(256, 1, 1)]
+void CopySlice(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[copy_dst_offset + id.x] = buf_b[copy_src_offset + id.x];
+}
+
+#pragma kernel AddResidual
+[numthreads(256, 1, 1)]
+void AddResidual(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[id.x] += buf_b[id.x];
+}
