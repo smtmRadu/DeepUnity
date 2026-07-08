@@ -285,6 +285,15 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        static void SetString(Component c, string field, string value)
+        {
+            var so = new SerializedObject(c);
+            var prop = so.FindProperty(field);
+            if (prop == null) throw new Exception($"No serialized field '{field}' on {c.GetType().Name}");
+            prop.stringValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         static float Range(float min, float max) => min + (float)rng.NextDouble() * (max - min);
         static T Pick<T>(params T[] options) => options[rng.Next(options.Length)];
 
@@ -309,9 +318,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             GameObject player = BuildPlayer(playerCtrl);
             GameObject cameraRig = BuildCamera(player);
             GameObject npc = BuildNpc(npcCtrl);
+            GameObject witch = BuildWitchNpc(npcCtrl);
             GameObject boss = BuildBoss(bossCtrl, bossSwings);
 
-            BuildUI(cinzel, vignette, npc, player);
+            BuildUI(cinzel, vignette, npc, witch, player);
 
             // ambient exploration music, quiet and looping; streamed — it's a 6-minute track
             var audioImp = AssetImporter.GetAtPath(ART + "/Audio/limgrave_theme.ogg") as AudioImporter;
@@ -1520,6 +1530,81 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             return root;
         }
 
+        // Secondary dialogue NPC: a witch across the courtyard from Velmire. Same NPCInteractor3D
+        // component and the same Qwen3.5-0.8B (int8) — only the serialized personality differs.
+        // Reuses the Monk mesh with a dark violet tint (no dedicated witch model in the CC0 set).
+        static GameObject BuildWitchNpc(RuntimeAnimatorController ctrl)
+        {
+            var root = new GameObject("NPC_Morwenna");
+            root.layer = 2;
+            Vector3 npcPos = new Vector3(-7.0f, 0f, 6.0f);
+            root.transform.position = npcPos;
+            // face the player spawn
+            Vector3 toPlayer = new Vector3(0, 0, -9f) - npcPos; toPlayer.y = 0;
+            root.transform.rotation = Quaternion.LookRotation(toPlayer.normalized);
+
+            var body = root.AddComponent<CapsuleCollider>();
+            body.center = new Vector3(0, 0.9f, 0);
+            body.height = 1.8f;
+            body.radius = 0.4f;
+
+            var trigger = root.AddComponent<SphereCollider>();
+            trigger.isTrigger = true;
+            trigger.radius = 2.2f;
+            trigger.center = new Vector3(0, 1f, 0);
+
+            var model = (GameObject)PrefabUtility.InstantiatePrefab(LoadModel("Characters/Monk.fbx"));
+            model.name = "WitchModel";
+            model.transform.SetParent(root.transform, false);
+            SetLayerRecursive(model, 2);
+            Bounds b = RenderererSafeBounds(model);
+            // slightly shorter and hunched-looking than Velmire
+            float scale = b.size.y > 0.01f ? 1.7f / b.size.y : 1f;
+            model.transform.localScale *= scale;
+            GroundModel(model, root.transform.position.y);
+
+            // mottled violet robes — reads as hedge-witch next to Velmire's bone-white
+            ApplyCharacterTexture(model, "Monk_Texture.png", "NpcWitch", new Color(0.52f, 0.42f, 0.62f));
+
+            var anim = model.GetComponent<Animator>();
+            if (anim == null) anim = model.AddComponent<Animator>();
+            anim.runtimeAnimatorController = ctrl;
+            anim.applyRootMotion = false;
+            anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+
+            // her corner: a ring of candles, bones and a dead tree (parented to the environment —
+            // the NPC root rotates toward the player at runtime and must not drag props with it)
+            PlacePiece("Candles_1", npcPos + root.transform.right * 0.8f + root.transform.forward * 0.3f, Range(0, 360), envRoot, collider: false);
+            PlacePiece("Candles_1", npcPos - root.transform.right * 0.7f + root.transform.forward * 0.5f, Range(0, 360), envRoot, collider: false);
+            PlacePiece("Skull", npcPos + root.transform.right * 0.4f - root.transform.forward * 0.4f, Range(0, 360), envRoot, collider: false);
+            PlacePiece("Skull", npcPos - root.transform.right * 1.1f, Range(0, 360), envRoot, collider: false);
+            PlacePiece("DeadTree_1", npcPos - root.transform.forward * 1.6f + root.transform.right * 1.4f, Range(0, 360), envRoot, collider: false);
+
+            // dialogue camera: over the player's shoulder, framing the witch
+            var camPoint = new GameObject("DialogueCameraPoint").transform;
+            camPoint.SetParent(root.transform, false);
+            Vector3 worldCamPos = npcPos + root.transform.forward * 2.4f + root.transform.right * 1.0f + Vector3.up * 1.65f;
+            camPoint.position = worldCamPos;
+            camPoint.rotation = Quaternion.LookRotation((npcPos + Vector3.up * 1.45f) - worldCamPos);
+
+            root.AddComponent<BreathingIdle>();
+            var npc = root.AddComponent<NPCInteractor3D>();
+            SetRef(npc, "dialogueCameraPoint", camPoint);
+            SetString(npc, "npc_name", "Morwenna, the Hollow Witch");
+            SetString(npc, "system_prompt",
+                "You are Morwenna, the Hollow Witch: a crooked, sharp-tongued crone crouched among candles and bones in a " +
+                "corner of the ruined courtyard. You mutter over your brews, barter in riddles, and treat every question as a " +
+                "foolish waste of your time — yet you cannot resist showing off how much you know. You call the player " +
+                "'little morsel' or 'wet-eared pup', and you speak in short, cackling, earthy sentences full of herbs, bones " +
+                "and bad omens. You despise Velmire, the Pale Herald who lingers by the gate, and warn the player never to " +
+                "trust his honeyed tongue. You too know what waits beyond the wall of golden mist at the northern arch: the " +
+                "Sentinel of the Mist, a towering hollow knight with a halberd — you claim you cursed it yourself long ago, " +
+                "and cackle that the player's bones will make a fine addition to your collection when it fells them. " +
+                "Stay in character at all times. Keep your replies to one to three short sentences.");
+            SetString(npc, "approach_text", "The crone squints at you over her candles, muttering...");
+            return root;
+        }
+
         // ---------------------------------------------------------------- UI
 
         static GameObject s_mistPrompt;
@@ -1528,7 +1613,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
         static CanvasGroup s_bossBarGroup;
         static DeathScreen s_deathScreen;
 
-        static void BuildUI(TMP_FontAsset cinzel, Sprite vignette, GameObject npcGO, GameObject playerGO)
+        static void BuildUI(TMP_FontAsset cinzel, Sprite vignette, GameObject npcGO, GameObject witchGO, GameObject playerGO)
         {
             var canvasGO = new GameObject("UI", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             var canvas = canvasGO.GetComponent<Canvas>();
@@ -1717,15 +1802,22 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                     AssetDatabase.LoadAssetAtPath<AudioClip>(ART + "/Audio/UI/" + typeFiles[i]);
             winSO.ApplyModifiedPropertiesWithoutUndo();
 
+            // Both dialogue NPCs share the one chat window, prompt box and buttons. Every
+            // listener fires on both interactors, but only the one actually in interaction
+            // reacts: AskNPC guards on WaitingInInteraction and CloseInteraction is a no-op
+            // for an NPC that is already Idle (its coroutine/llm/player are all null).
             var npc = npcGO.GetComponent<NPCInteractor3D>();
-            SetRef(npc, "chatWindow", win);
-            SetRef(npc, "interactPrompt", promptGO);
-
-            UnityEventTools.AddPersistentListener(sendBtn.onClick, new UnityAction(npc.AskNPC));
-            UnityEventTools.AddPersistentListener(leaveBtn.onClick, new UnityAction(npc.CloseInteraction));
+            var witch = witchGO.GetComponent<NPCInteractor3D>();
+            foreach (var it in new[] { npc, witch })
+            {
+                SetRef(it, "chatWindow", win);
+                SetRef(it, "interactPrompt", promptGO);
+                UnityEventTools.AddPersistentListener(sendBtn.onClick, new UnityAction(it.AskNPC));
+                UnityEventTools.AddPersistentListener(leaveBtn.onClick, new UnityAction(it.CloseInteraction));
+                UnityEventTools.AddVoidPersistentListener(inputField.onSubmit, new UnityAction(it.AskNPC));
+            }
             UnityEventTools.AddPersistentListener(sendBtn.onClick, new UnityAction(win.PlayButtonClick));
             UnityEventTools.AddPersistentListener(leaveBtn.onClick, new UnityAction(win.PlayButtonClick));
-            UnityEventTools.AddVoidPersistentListener(inputField.onSubmit, new UnityAction(npc.AskNPC));
 
             BuildHud(canvasGO.transform, gold, win, playerGO);
         }

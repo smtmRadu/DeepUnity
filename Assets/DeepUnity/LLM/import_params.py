@@ -15,6 +15,8 @@ USAGE
 SUPPORTED MODELS                                                fp16   int8   int4
     gemma3    google/gemma-3-270m-it (and 270m mirrors)          OK     OK     OK    (*)
     qwen3_5   Qwen/Qwen3.5-0.8B, unsloth/Qwen3.5-0.8B            OK     OK     OK    (*)
+    qwen3_5   Qwen/Qwen3.5-2B (size auto-detected by hidden dim) OK     OK     OK    (*)
+    minicpm5  openbmb/MiniCPM5-1B (or -SFT; vanilla llama arch)  OK     OK     OK    (*)
 
     (*)  int4 (GGUF Q4_0, groups of 32) trades quality for ~quarter the VRAM/disk and was
          measured LOSSY on these small models (story quality visibly drops, and it decodes
@@ -64,18 +66,44 @@ EMBED_CHUNKS = 16
 G4 = 32  # int4 group size
 
 # What the Unity-side *Config.cs constants currently expect (config.json key -> value).
+# qwen3_5 lists only the dims shared by every exported size; hidden/intermediate are
+# size-dependent and validated via QWEN3_5_SIZES below.
 EXPECTED_DIMS = {
     "gemma3": {"hidden_size": 640, "num_hidden_layers": 18, "num_attention_heads": 4,
                "num_key_value_heads": 1, "head_dim": 256, "intermediate_size": 2048,
                "vocab_size": 262144},
-    "qwen3_5": {"hidden_size": 1024, "num_hidden_layers": 24, "num_attention_heads": 8,
-                "num_key_value_heads": 2, "head_dim": 256, "intermediate_size": 3584,
-                "vocab_size": 248320},
+    "qwen3_5": {"num_hidden_layers": 24, "num_attention_heads": 8,
+                "num_key_value_heads": 2, "head_dim": 256, "vocab_size": 248320},
+    "minicpm5": {"hidden_size": 1536, "num_hidden_layers": 24, "num_attention_heads": 16,
+                 "num_key_value_heads": 2, "head_dim": 128, "intermediate_size": 4608,
+                 "vocab_size": 130560},
 }
-ARCH_FOLDER = {"gemma3": "Gemma3", "qwen3_5": "Qwen3_5"}
-# Human model name + size designation baked into the self-describing output folder name
-# (weights_<model>_<size>_<quant>, e.g. weights_qwen3.5_0.8B_int8). Add a row per new size.
-MODEL_LABEL = {"gemma3": ("gemma3", "270M"), "qwen3_5": ("qwen3.5", "0.8B")}
+# Qwen3.5 exported sizes, keyed by the checkpoint's hidden_size:
+# hidden_size -> (folder size label, expected intermediate_size).
+# Must mirror Qwen3_5Config.ApplySize in Unity. Add a row per new size.
+QWEN3_5_SIZES = {1024: ("0.8B", 3584), 2048: ("2B", 6144)}
+ARCH_FOLDER = {"gemma3": "Gemma3", "qwen3_5": "Qwen3_5", "minicpm5": "MiniCPM5"}
+# Human model name + default size designation baked into the self-describing output folder
+# name (weights_<model>_<size>_<quant>). qwen3_5's size is resolved per-checkpoint by
+# resolve_size(); the entry here is just the model-name half.
+MODEL_LABEL = {"gemma3": ("gemma3", "270M"), "qwen3_5": ("qwen3.5", "0.8B"),
+               "minicpm5": ("minicpm5", "1B")}
+
+
+def resolve_size(arch, cfg):
+    """Folder size label for the checkpoint; validates size-dependent dims where they vary."""
+    if arch == "qwen3_5":
+        hs = cfg.get("hidden_size")
+        if hs not in QWEN3_5_SIZES:
+            sys.exit(f"ERROR: unsupported Qwen3.5 hidden_size={hs}; known sizes: "
+                     + ", ".join(f"{k}->{v[0]}" for k, v in sorted(QWEN3_5_SIZES.items()))
+                     + ". Add the variant to QWEN3_5_SIZES here AND Qwen3_5Config.ApplySize in Unity.")
+        sz, inter = QWEN3_5_SIZES[hs]
+        got = cfg.get("intermediate_size")
+        if got is not None and got != inter:
+            sys.exit(f"ERROR: Qwen3.5-{sz} expects intermediate_size={inter}, checkpoint has {got}")
+        return sz
+    return MODEL_LABEL[arch][1]
 
 
 # ----------------------------------------------------------------------------- model source
@@ -156,7 +184,11 @@ def detect_arch(cfg, reader, override):
         return "gemma3"
     if "qwen3" in mt or "qwen3" in archs:
         return "qwen3_5"
-    sys.exit(f"ERROR: unrecognized architecture (model_type='{mt}'). Pass --arch gemma3|qwen3_5.")
+    # MiniCPM5 checkpoints ship plain LlamaForCausalLM configs — the only llama-arch family we
+    # export, so map llama -> minicpm5 (check_dims screams if the dims aren't MiniCPM5-1B's).
+    if "llama" in mt or "llama" in archs or "minicpm" in mt:
+        return "minicpm5"
+    sys.exit(f"ERROR: unrecognized architecture (model_type='{mt}'). Pass --arch gemma3|qwen3_5|minicpm5.")
 
 
 def find_prefix(reader):
@@ -243,13 +275,14 @@ class Exporter:
     # directly on every one of the 248k-262k output logits and collapses small models. Only the
     # transformer-block LINEAR weights are quantized; embeddings/lm_head + norms stay fp16 — the
     # GPTQ/AWQ/QLoRA/llama.cpp convention (see OPTIMIZATIONS.md "What stays higher-precision").
-    def embedding(self, embed):
+    def embedding(self, embed, folder="embed_tokens"):
+        # folder="lm_head" exports an UNTIED output head with the same 16-shard fp16 layout.
         vocab, hidden = embed.shape
         assert vocab % EMBED_CHUNKS == 0, f"vocab {vocab} not divisible by {EMBED_CHUNKS}"
         rows = vocab // EMBED_CHUNKS
-        d = os.path.join(self.out, "embed_tokens")
+        d = os.path.join(self.out, folder)
         os.makedirs(d, exist_ok=True)
-        for k in tqdm(range(EMBED_CHUNKS), desc="embed_tokens", unit="shard"):
+        for k in tqdm(range(EMBED_CHUNKS), desc=folder, unit="shard"):
             w = embed[k * rows:(k + 1) * rows].astype(np.float16)
             path = os.path.join(d, f"part_{k}.bin")
             w.tofile(path)
@@ -257,6 +290,40 @@ class Exporter:
 
 
 # ----------------------------------------------------------------------------- arch exports
+def export_minicpm5(reader, cfg, ex):
+    """MiniCPM5 = vanilla llama: q/k/v/o + gate/up/down + 2 norms per layer, UNTIED lm_head."""
+    pf = find_prefix(reader)  # 'model.' on the official checkpoints
+    n = cfg.get("num_hidden_layers", 24)
+
+    # NORM CONVENTION SHIM: the shared RmsNorm kernels (Gemma3CS.compute) compute
+    # x_hat * (1 + gamma) — Gemma's convention. Llama applies x_hat * gamma, so every llama norm
+    # gamma is exported as (gamma - 1); the kernel's (1 + g') then reconstructs gamma EXACTLY.
+    # (fp16 precision actually improves: values near 1 move near 0, where fp16 is densest.)
+    def norm_m1(t):
+        return t.astype(np.float32) - 1.0
+
+    ex.fp16("norm", norm_m1(reader.load_fp16(pf + "norm.weight")))
+    ex.embedding(reader.load_fp16(pf + "embed_tokens.weight"))
+    # Untied output head — same always-fp16 16-shard layout, own folder. lm_head.weight lives at
+    # the checkpoint root (outside the transformer prefix).
+    ex.embedding(reader.load_fp16("lm_head.weight"), folder="lm_head")
+
+    for i in tqdm(range(n), desc="layers", unit="layer"):
+        lp = f"layer_{i}"
+        os.makedirs(os.path.join(ex.out, lp), exist_ok=True)
+        kp = f"{pf}layers.{i}."
+        ex.fp16(f"{lp}/input_layernorm", norm_m1(reader.load_fp16(kp + "input_layernorm.weight")))
+        ex.fp16(f"{lp}/post_attention_layernorm", norm_m1(reader.load_fp16(kp + "post_attention_layernorm.weight")))
+        for src, dst in [("self_attn.q_proj.weight", "self_attn_q_proj"),
+                         ("self_attn.k_proj.weight", "self_attn_k_proj"),
+                         ("self_attn.v_proj.weight", "self_attn_v_proj"),
+                         ("self_attn.o_proj.weight", "self_attn_o_proj"),
+                         ("mlp.gate_proj.weight", "mlp_gate_proj"),
+                         ("mlp.up_proj.weight", "mlp_up_proj"),
+                         ("mlp.down_proj.weight", "mlp_down_proj")]:
+            ex.weight(f"{lp}/{dst}", reader.load_fp16(kp + src))
+
+
 def export_qwen3_5(reader, cfg, ex):
     pf = find_prefix(reader)  # 'model.language_model.' on the official checkpoints
     layer_types = cfg.get("layer_types") or (["linear_attention"] * 3 + ["full_attention"]) * 6
@@ -636,7 +703,7 @@ def main():
     ap = argparse.ArgumentParser(description="Export a HF checkpoint into DeepUnity params (see module docstring).")
     ap.add_argument("model", help="HF hub id (e.g. Qwen/Qwen3.5-0.8B) or local checkpoint folder")
     ap.add_argument("--quant", choices=["fp16", "int8", "int4"], default="fp16")
-    ap.add_argument("--arch", choices=["gemma3", "qwen3_5", "chatterbox"], default=None,
+    ap.add_argument("--arch", choices=["gemma3", "qwen3_5", "minicpm5", "chatterbox"], default=None,
                     help="override architecture auto-detection")
     ap.add_argument("--out", default=None, help="override the output folder")
     args = ap.parse_args()
@@ -652,15 +719,16 @@ def main():
 
     check_dims(arch, cfg)
 
-    mdl, sz = MODEL_LABEL[arch]
-    folder = f"weights_{mdl}_{sz}_{args.quant}"   # e.g. weights_qwen3.5_0.8B_int8
+    mdl = MODEL_LABEL[arch][0]
+    sz = resolve_size(arch, cfg)
+    folder = f"weights_{mdl}_{sz}_{args.quant}"   # e.g. weights_qwen3.5_0.8B_int8, weights_qwen3.5_2B_int8
     out = args.out or os.path.normpath(os.path.join(
         HERE, "..", "..", "Resources", "DeepUnity", "LLM", ARCH_FOLDER[arch], folder))
     os.makedirs(out, exist_ok=True)
     print(f"[out]    {out}\n[quant]  {args.quant}\n")
 
     ex = Exporter(out, args.quant)
-    (export_gemma3 if arch == "gemma3" else export_qwen3_5)(reader, cfg, ex)
+    {"gemma3": export_gemma3, "qwen3_5": export_qwen3_5, "minicpm5": export_minicpm5}[arch](reader, cfg, ex)
 
     print(f"\nDone - {ex.bytes_written / 1024 / 1024:.0f} MB written to:\n  {out}")
     print("Layout: norm.bin + embed_tokens/part_0..15 + layer_i/<tensor> "
@@ -671,8 +739,11 @@ def main():
     q = {"fp16": "LLMQuant.FP16", "int8": "LLMQuant.INT8", "int4": "LLMQuant.INT4"}[args.quant]
     if arch == "gemma3":
         print(f"  var llm = new Gemma3ForCausalLM({q});")
+    elif arch == "minicpm5":
+        print(f"  var llm = new MiniCPM5ForCausalLM({q});")
     else:
-        print(f"  var llm = new Qwen3_5ForCausalLM(Qwen3_5Size.B0_8, {q});")
+        size_enum = "Qwen3_5Size.B2" if sz == "2B" else "Qwen3_5Size.B0_8"
+        print(f"  var llm = new Qwen3_5ForCausalLM({size_enum}, {q});")
 
 
 if __name__ == "__main__":

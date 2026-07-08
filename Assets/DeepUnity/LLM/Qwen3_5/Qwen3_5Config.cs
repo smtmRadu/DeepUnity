@@ -24,12 +24,27 @@ namespace DeepUnity
                 VISION_START_TOKEN_ID = 248053,
                 VISION_END_TOKEN_ID = 248054;
 
-            // Model dims
+            // Model dims — HIDDEN_SIZE / MLP_INTERMEDIATE_SIZE are the only dims that differ
+            // between the exported sizes; ApplySize (called by the Qwen3_5ForCausalLM ctor) sets
+            // them before any weights/model construction reads them. Defaults = 0.8B.
             public static int
                 HIDDEN_SIZE = 1024,
                 MLP_INTERMEDIATE_SIZE = 3584,
                 NUM_LAYERS = 24,
                 MAX_POSITION_EMBEDDINGS = 262_144;
+
+            // Size presets (from each checkpoint's config.json, text_config). Everything else —
+            // layer count/pattern, heads, head_dim, DeltaNet dims, rope, vocab — is identical
+            // across 0.8B and 2B. Mutating statics matches the one-model-per-session design
+            // (same constraint as the shared compute-shader quant keyword).
+            public static void ApplySize(Qwen3_5Size size)
+            {
+                switch (size)
+                {
+                    case Qwen3_5Size.B0_8: HIDDEN_SIZE = 1024; MLP_INTERMEDIATE_SIZE = 3584; break;
+                    case Qwen3_5Size.B2:   HIDDEN_SIZE = 2048; MLP_INTERMEDIATE_SIZE = 6144; break;
+                }
+            }
 
             // Full-attention layer
             public static int
@@ -119,7 +134,8 @@ namespace DeepUnity
     }
 }
 
-// Reference (config.json, text_config):
+// Reference (config.json, text_config) — values shown for 0.8B; the 2B checkpoint differs ONLY in
+// "hidden_size": 2048 and "intermediate_size": 6144 (see Qwen3_5Config.ApplySize):
 // {
 //   "attn_output_gate": true,
 //   "head_dim": 256,

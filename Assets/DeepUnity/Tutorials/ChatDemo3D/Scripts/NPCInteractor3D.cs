@@ -39,6 +39,8 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             "hollow knight wielding a halberd, who has felled every challenger before. If asked about the mist, the arch or " +
             "the boss, you foreshadow it with morbid delight — urging the lambkin onward while clearly expecting them to die. " +
             "Stay in character at all times. Keep your replies to one to three short sentences.";
+        [Tooltip("Flavor line shown in the chat window while the model loads (per NPC).")]
+        [SerializeField] private string approach_text = "The pale figure regards you in silence...";
 
         [Header("Model")]
         [Tooltip("Which local LLM voices Velmire. Sampling presets come from each model's Config.")]
@@ -175,7 +177,9 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             yield return new WaitForSeconds(player.cam.TransitionDuration + 0.01f);
 
             chatWindow.Open();
-            chatWindow.SetInfoText("The pale figure regards you in silence...");
+            // several NPCs share the one chat window — stamp THIS NPC's name every interaction
+            chatWindow.SetTitle(npc_name);
+            chatWindow.SetInfoText(approach_text);
             // model still loading: Speak pulses dots and stays disabled, but the input field is
             // live so the first question can be typed while the weights stream in
             chatWindow.SetSendLoading(true);

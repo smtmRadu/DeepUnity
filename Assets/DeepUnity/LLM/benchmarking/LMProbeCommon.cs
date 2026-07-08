@@ -8,7 +8,9 @@ namespace DeepUnity
     public enum ProbeModelKind
     {
         Qwen3_5_0_8B,
+        Qwen3_5_2B,
         Gemma3_270M,
+        MiniCPM5_1B,
     }
 
     /// <summary>
@@ -24,7 +26,9 @@ namespace DeepUnity
         public static LLM Build(ProbeModelKind kind, LLMQuant quant, KVQuant kv = KVQuant.FP16) => kind switch
         {
             ProbeModelKind.Qwen3_5_0_8B => new Qwen3_5ForCausalLM(Qwen3_5Size.B0_8, quant, kv_quant: kv),
+            ProbeModelKind.Qwen3_5_2B   => new Qwen3_5ForCausalLM(Qwen3_5Size.B2, quant, kv_quant: kv),
             ProbeModelKind.Gemma3_270M  => new Gemma3ForCausalLM(quant, kv_quant: kv),
+            ProbeModelKind.MiniCPM5_1B  => new MiniCPM5ForCausalLM(quant, kv_quant: kv),
             _ => throw new System.ArgumentOutOfRangeException(nameof(kind), kind, "unknown probe model"),
         };
 
@@ -37,14 +41,18 @@ namespace DeepUnity
         public static IEnumerator Prewarm(ProbeModelKind kind) => kind switch
         {
             ProbeModelKind.Qwen3_5_0_8B => Qwen3_5ForCausalLM.Prewarm(),
+            ProbeModelKind.Qwen3_5_2B   => Qwen3_5ForCausalLM.Prewarm(),
             ProbeModelKind.Gemma3_270M  => Gemma3ForCausalLM.Prewarm(),
+            ProbeModelKind.MiniCPM5_1B  => MiniCPM5ForCausalLM.Prewarm(),
             _ => throw new System.ArgumentOutOfRangeException(nameof(kind), kind, "unknown probe model"),
         };
 
         public static string ModelLabel(ProbeModelKind kind) => kind switch
         {
             ProbeModelKind.Qwen3_5_0_8B => "qwen3.5-0.8B",
+            ProbeModelKind.Qwen3_5_2B   => "qwen3.5-2B",
             ProbeModelKind.Gemma3_270M  => "gemma3-270M",
+            ProbeModelKind.MiniCPM5_1B  => "minicpm5-1B",
             _ => kind.ToString(),
         };
 

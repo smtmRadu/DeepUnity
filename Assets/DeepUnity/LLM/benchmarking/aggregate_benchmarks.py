@@ -21,7 +21,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.normpath(os.path.join(HERE, "..", "..", "..", ".."))  # Assets/DeepUnity/LLM/benchmarking -> root
 
-MODEL_ORDER = ["qwen3.5-0.8B", "gemma3-270M"]
+MODEL_ORDER = ["qwen3.5-2B", "minicpm5-1B", "qwen3.5-0.8B", "gemma3-270M"]  # largest first
 QUANT_ORDER = ["FP16", "INT8", "INT4"]
 KV_ORDER = ["FP32", "FP16", "INT8"]   # KV-cache precision (independent of weight quant)
 BEGIN, END = "<!-- BEGIN:AUTO -->", "<!-- END:AUTO -->"

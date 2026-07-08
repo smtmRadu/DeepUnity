@@ -10,8 +10,11 @@ namespace DeepUnity
     public enum Qwen3_5Size
     {
         /// <summary>Qwen3.5-0.8B (text-only).</summary>
-        [Tooltip("Qwen3.5-0.8B (text-only) — the only size exported so far.")]
+        [Tooltip("Qwen3.5-0.8B (text-only).")]
         B0_8,
+        /// <summary>Qwen3.5-2B (text-only). Same architecture as 0.8B; only hidden/intermediate dims grow.</summary>
+        [Tooltip("Qwen3.5-2B (text-only) — ~4 GB fp16 / ~2.2 GB int8 / ~1.2 GB int4 on device.")]
+        B2,
     }
 
     // Qwen3.5-0.8B (text-only), full-GPU inference. Hybrid architecture:
@@ -51,7 +54,7 @@ namespace DeepUnity
         /// (CTRL/HF style, 1.0 = off). Both run on the GPU over already-generated tokens.
         /// Set temperature=0 for greedy decoding.
         /// </summary>
-        /// <param name="size">Model size; resolves the default params folder (only 0.8B exported so far).</param>
+        /// <param name="size">Model size (0.8B or 2B); resolves the default params folder.</param>
         /// <param name="quantization">
         /// Weight format: FP16 (weights_qwen3.5_0.8B_fp16) or weight-only INT8 (..._int8, ~half the VRAM and
         /// disk; per-output-row scales, activations stay FP32). One quant mode per session — the
@@ -77,6 +80,8 @@ namespace DeepUnity
             int maxModelLength = 8192,
             KVQuant kv_quant = KVQuant.FP16)
         {
+            // Size preset first: weights/model/cache construction below all read the config statics.
+            Qwen3_5Modeling.Qwen3_5Config.ApplySize(size);
             params_path ??= ResolveParamsPath(size, quantization);
             this.size = size;
             this.path = params_path;
@@ -97,6 +102,7 @@ namespace DeepUnity
         static string SizeLabel(Qwen3_5Size size) => size switch
         {
             Qwen3_5Size.B0_8 => "0.8B",
+            Qwen3_5Size.B2   => "2B",
             _ => size.ToString(),
         };
 

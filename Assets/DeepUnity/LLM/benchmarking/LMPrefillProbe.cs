@@ -99,6 +99,7 @@ namespace DeepUnity
             switch (model)
             {
                 case ProbeModelKind.Qwen3_5_0_8B:
+                case ProbeModelKind.Qwen3_5_2B:
                 {
                     var m = ((Qwen3_5ForCausalLM)lm).model;
                     // Chunked prefill: feed the prompt in prefillChunk-token Forwards, each followed
@@ -130,6 +131,24 @@ namespace DeepUnity
                     // dispatch wasn't being forced to complete), whereas small Forward+SampleGreedy
                     // steps time correctly (proven by the 4096-step decode-decay probe). This is also
                     // how production InitializeChat actually prefills, so it's the representative path.
+                    prefill = ids =>
+                    {
+                        m.ResetCache();
+                        for (int s = 0; s < ids.Length; s += prefillChunk)
+                        {
+                            int len = System.Math.Min(prefillChunk, ids.Length - s);
+                            var part = new float[len];
+                            System.Array.Copy(ids, s, part, 0, len);
+                            m.Forward(Tensor.Constant(part), useCache: true, lastPosOnly: true);
+                            m.SampleGreedy();
+                        }
+                    };
+                    break;
+                }
+                case ProbeModelKind.MiniCPM5_1B:
+                {
+                    var m = ((MiniCPM5ForCausalLM)lm).model;
+                    // Same chunked prefill rationale as the other families.
                     prefill = ids =>
                     {
                         m.ResetCache();

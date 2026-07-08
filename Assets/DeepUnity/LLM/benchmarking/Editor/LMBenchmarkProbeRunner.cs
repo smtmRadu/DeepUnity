@@ -67,6 +67,15 @@ namespace DeepUnity
             });
         }
 
+        // -timeout <seconds> overrides a probe's default wall-clock. The defaults were tuned for
+        // the sub-1B models; the 1-2B models on an entry GPU legitimately need 2400-3600 s.
+        static float ParseTimeout(float fallback)
+        {
+            string v = ArgValue("-timeout");
+            return v != null && float.TryParse(v, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out float s) && s > 0 ? s : fallback;
+        }
+
         static void LaunchPrefill(ProbeModelKind kind, LLMQuant quant, KVQuant kv = KVQuant.FP16)
         {
             Launch($"prefill_{LMProbeCommon.ModelLabel(kind)}_{quant}_kv{kv}", dir =>
@@ -76,6 +85,7 @@ namespace DeepUnity
                 probe.model = kind;
                 probe.quant = quant;
                 probe.kvQuant = kv;
+                probe.timeoutSeconds = ParseTimeout(probe.timeoutSeconds);
                 probe.reportDirectory = dir;
             });
         }
@@ -92,6 +102,7 @@ namespace DeepUnity
                 probe.quant = quant;
                 probe.kvQuant = kv;
                 probe.maxTokens = maxTokens;
+                probe.timeoutSeconds = ParseTimeout(probe.timeoutSeconds);
                 probe.reportDirectory = dir;
             });
         }
@@ -138,6 +149,8 @@ namespace DeepUnity
         {
             string v = ArgValue("-model")?.ToLowerInvariant();
             if (v != null && v.Contains("gemma")) return ProbeModelKind.Gemma3_270M;
+            if (v != null && (v.Contains("minicpm") || v.Contains("cpm"))) return ProbeModelKind.MiniCPM5_1B;
+            if (v != null && v.Contains("2b")) return ProbeModelKind.Qwen3_5_2B; // e.g. -model qwen2b
             return ProbeModelKind.Qwen3_5_0_8B; // default
         }
 

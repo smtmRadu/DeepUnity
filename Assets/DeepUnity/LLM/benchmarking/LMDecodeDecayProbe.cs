@@ -96,6 +96,7 @@ namespace DeepUnity
             switch (model)
             {
                 case ProbeModelKind.Qwen3_5_0_8B:
+                case ProbeModelKind.Qwen3_5_2B:
                 {
                     var m = ((Qwen3_5ForCausalLM)lm).model;
                     reset = () => m.ResetCache();
@@ -105,6 +106,13 @@ namespace DeepUnity
                 case ProbeModelKind.Gemma3_270M:
                 {
                     var m = ((Gemma3ForCausalLM)lm).model;
+                    reset = () => m.ResetCache();
+                    step = t => { m.Forward(Tensor.Constant((float)t), useCache: true, lastPosOnly: true); return m.SampleGreedy(); };
+                    break;
+                }
+                case ProbeModelKind.MiniCPM5_1B:
+                {
+                    var m = ((MiniCPM5ForCausalLM)lm).model;
                     reset = () => m.ResetCache();
                     step = t => { m.Forward(Tensor.Constant((float)t), useCache: true, lastPosOnly: true); return m.SampleGreedy(); };
                     break;

@@ -30,6 +30,10 @@ namespace DeepUnity
     {
         public string reportDirectory;
         public LLMQuant quant = LLMQuant.INT8;   // the format A/B'd against FP16
+        public Qwen3_5Size size = Qwen3_5Size.B0_8; // which Qwen3.5 export is probed
+
+        // Aggregator-facing model tag, matching LMProbeCommon.ModelLabel.
+        string ModelTag => size == Qwen3_5Size.B2 ? "qwen3.5-2B" : "qwen3.5-0.8B";
 
         // Standard benchmark pairing (see BENCHMARK.md): quantized weights ship with INT8 KV, the
         // fp16 reference keeps fp16 KV. So this A/B reports the drift of the FULL shipped config
@@ -208,7 +212,7 @@ namespace DeepUnity
             int V = Qwen3_5Modeling.Qwen3_5Config.VOCAB_SIZE;
             float[] prompt = SyntheticIds(PREFILL_TOKENS);
 
-            report.AppendLine($"# {quant} vs FP16 probe (Qwen3.5-0.8B)");
+            report.AppendLine($"# {quant} vs FP16 probe ({ModelTag})");
             report.AppendLine();
             report.AppendLine($"- prefill {PREFILL_TOKENS} synthetic tokens, identical greedy token feed (FP16's choices)");
             report.AppendLine($"- GPU: {SystemInfo.graphicsDeviceName} | {SystemInfo.graphicsDeviceType}");
@@ -216,7 +220,7 @@ namespace DeepUnity
 
             // ---------------- FP16 reference ----------------
             Status("constructing FP16 Qwen3.5");
-            var fp16 = new Qwen3_5ForCausalLM(Qwen3_5Size.B0_8, LLMQuant.FP16, kv_quant: KVQuant.FP16);
+            var fp16 = new Qwen3_5ForCausalLM(size, LLMQuant.FP16, kv_quant: KVQuant.FP16);
             var refLogits = new float[COMPARE_STEPS][];
             var refTok = new int[COMPARE_STEPS];
             var fp16Ms = new double[1];
@@ -228,7 +232,7 @@ namespace DeepUnity
 
             // ---------------- quantized ----------------
             Status($"constructing {quant} Qwen3.5");
-            var int8 = new Qwen3_5ForCausalLM(Qwen3_5Size.B0_8, quant, kv_quant: kvForQuant);
+            var int8 = new Qwen3_5ForCausalLM(size, quant, kv_quant: kvForQuant);
             var qLogits = new float[COMPARE_STEPS][];
             var qTok = new int[COMPARE_STEPS];
             var int8Ms = new double[1];
@@ -313,7 +317,7 @@ namespace DeepUnity
                 var js = new StringBuilder();
                 js.Append("{\n");
                 js.Append("  \"probe\": \"quant_quality\",\n");
-                js.Append("  \"model\": \"qwen3.5-0.8B\",\n");
+                js.Append("  \"model\": ").Append(LMProbeCommon.JsonStr(ModelTag)).Append(",\n");
                 js.Append("  \"quant\": ").Append(LMProbeCommon.JsonStr(quant.ToString())).Append(",\n");
                 js.Append("  \"kv\": ").Append(LMProbeCommon.JsonStr(kvForQuant.ToString())).Append(",\n");
                 js.Append("  \"success\": ").Append(pass ? "true" : "false").Append(",\n");
