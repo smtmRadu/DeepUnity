@@ -22,6 +22,12 @@ one-off KV-precision experiments. Fill order: fp16 config first (all models, bot
 | **4060** | Victus (hostname rpc, Win11) | RTX 4060 Laptop 8 GB | primary dev box, D3D11 |
 | **pavilion** | Pavilion Gaming 15-dk0xxx (Win10) | GTX 1650 Laptop 4 GB (i5-9300H) | second GPU, D3D11 |
 
+> **!!! DISSERTATION NOTE — ALL GPUs BENCHMARKED HERE ARE MOBILE (LAPTOP) VARIANTS !!!**
+> Both the **RTX 4060 Laptop** and the **GTX 1650 Laptop** are mobile silicon — lower power, clock and
+> memory-bandwidth envelopes than their desktop namesakes. **Every** tok/s, boot and frame-pacing figure in
+> this document is a mobile-GPU number and must be reported as such in the dissertation; do NOT read them as
+> desktop-4060 / desktop-1650 performance.
+
 Each probe stamps the exact GPU/CPU/driver into its `summary.json` `machine` block — the aggregator
 keys rows off `machine.gpu`, so a row can always be traced to the box it ran on.
 
@@ -184,18 +190,74 @@ markers** — re-run the aggregator to refresh. One block per distinct GPU (`mac
 | gemma3-270M | int8 | int8 | 1.83 | 316.1 | 1508.3 | 89.6 | 1.19 | 91.75 | 2 | 3 |
 | gemma3-270M | int4 | int8 | 1.88 | 340.0 | 1544.9 | 104.8 | 1.21 | 110.08 | 2 | 3 |
 
+### GPU: `NVIDIA GeForce RTX 4060 Laptop GPU`
+
+#### Table 2 — Speed
+
+| model | weight | kv | prefill tok/s (2048) | decode tok/s (ctx≈0) | decode tok/s (max ctx) | decay % |
+|---|---|---|---:|---:|---:|---:|
+| qwen3.5-2B | fp16 | fp16 | 46.4 | 17.1 | 15.7 | 8.0 |
+| qwen3.5-2B | int8 | int8 | 48.4 | 17.1 | 15.6 | 9.0 |
+| qwen3.5-2B | int4 | int8 | 24.8 | 10.7 | 10.8 | -0.8 |
+| minicpm5-1B | fp16 | fp16 | 84.6 | 23.8 | 18.2 | 23.3 |
+| minicpm5-1B | int8 | int8 | 81.9 | 24.1 | 17.4 | 27.8 |
+| minicpm5-1B | int4 | int8 | 66.6 | 20.5 | 15.7 | 23.6 |
+| qwen3.5-0.8B | fp16 | fp16 | 134.4 | 31.3 | 27.6 | 11.8 |
+| qwen3.5-0.8B | int8 | int8 | 133.8 | 31.3 | 26.8 | 14.2 |
+| qwen3.5-0.8B | int4 | int8 | 101.3 | 25.1 | 22.1 | 11.9 |
+| gemma3-270M | fp16 | fp16 | 416.9 | 59.0 | 52.2 | 11.4 |
+| gemma3-270M | int8 | int8 | 409.5 | 58.7 | 50.3 | 14.3 |
+| gemma3-270M | int4 | int8 | 352.4 | 46.0 | 40.9 | 11.1 |
+
+#### Table 3 — Quality vs fp16 (fp16 = 0 reference)
+
+| model | weight | kv | max logit Δ | mean logit Δ | argmax match | greedy div (char) | decode speedup |
+|---|---|---|---:|---:|---:|---:|---:|
+| qwen3.5-2B | int8 | int8 | 0.5007 | 0.063713 | 8/8 | -1 | 0.98x |
+| qwen3.5-2B | int4 | int8 | 3.0684 | 0.477537 | 4/8 | 1 | 0.63x |
+| minicpm5-1B | int8 | int8 | 0.9556 | 0.103492 | 8/8 | 101 | 1.01x |
+| minicpm5-1B | int4 | int8 | 6.2644 | 1.007999 | 7/8 | 97 | 0.8x |
+| qwen3.5-0.8B | int8 | int8 | 0.4596 | 0.075648 | 7/8 | -1 | 1.01x |
+| qwen3.5-0.8B | int4 | int8 | 3.3893 | 0.503522 | 7/8 | 1 | 0.8x |
+| gemma3-270M | int8 | int8 | 3.8474 | 0.757592 | 8/8 | 7 | 0.98x |
+| gemma3-270M | int4 | int8 | 24.9383 | 3.775131 | 1/8 | 1 | 0.77x |
+
+#### Table 4 — Boot / load & frame pacing
+
+| model | weight | kv | total boot s | prewarm ms | tokenizer ready ms | ctor ms | stream s | stream worst ms | stream >33ms | GC |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| qwen3.5-2B | fp16 | fp16 | 2.53 | 803.2 | 1124.4 | 321.2 | 1.01 | 323.19 | 1 | 4 |
+| qwen3.5-2B | int8 | int8 | 1.98 | 448.6 | 777.9 | 329.3 | 0.86 | 331.49 | 2 | 4 |
+| qwen3.5-2B | int4 | int8 | 1.97 | 453.1 | 739.6 | 286.4 | 0.75 | 288.71 | 2 | 4 |
+| minicpm5-1B | fp16 | fp16 | 1.06 | 447.5 | 492.0 | 44.3 | 0.41 | 49.9 | 1 | 2 |
+| minicpm5-1B | int8 | int8 | 0.77 | 234.9 | 280.9 | 45.9 | 0.34 | 51.1 | 1 | 2 |
+| minicpm5-1B | int4 | int8 | 0.7 | 207.2 | 250.8 | 43.5 | 0.29 | 48.87 | 1 | 2 |
+| qwen3.5-0.8B | fp16 | fp16 | 1.86 | 511.0 | 577.8 | 66.7 | 0.58 | 73.73 | 1 | 3 |
+| qwen3.5-0.8B | int8 | int8 | 2.06 | 496.9 | 651.9 | 155.0 | 0.74 | 159.03 | 2 | 3 |
+| qwen3.5-0.8B | int4 | int8 | 2.0 | 477.7 | 598.7 | 121.0 | 0.65 | 124.68 | 1 | 3 |
+| gemma3-270M | fp16 | fp16 | 1.21 | 215.1 | 1011.6 | 54.3 | 0.8 | 58.15 | 2 | 3 |
+| gemma3-270M | int8 | int8 | 1.36 | 220.4 | 1139.6 | 89.7 | 0.92 | 96.87 | 2 | 3 |
+| gemma3-270M | int4 | int8 | 1.36 | 225.3 | 1129.5 | 87.2 | 0.9 | 91.11 | 2 | 3 |
 <!-- END:AUTO -->
 
 ---
 
 ## Status
 
-**4060 (Victus) matrix — ✅ COMPLETE.** All 3 standard tiers × 2 models populated above (fp16→fp16 KV,
-int8→int8 KV, int4→int8 KV): speed (Table 2), quality (Table 3, int8/int4 only), boot (Table 4). 22
-`summary.json` records. Quality probes now A/B the full shipped config (quant weights + int8 KV vs fp16+fp16 KV)
-and tag `kv` accordingly.
+**4060 (Victus) matrix — ✅ COMPLETE (all 4 models).** All 3 standard tiers × **4 models** populated above
+(fp16→fp16 KV, int8→int8 KV, int4→int8 KV): speed (Table 2), quality (Table 3, int8/int4 only), boot (Table 4).
+44 `summary.json` records. The two scaling models (**Qwen3.5-2B + MiniCPM5-1B**) were added on the 4060 on
+**2026-07-08** (weights re-exported via `import_params.py` — 3.6/2.3/1.7 GB qwen2b, 2.1/1.4/1.2 GB minicpm);
+the qwen3.5-0.8B + gemma3-270M cells date from the original run. Quality probes A/B the full shipped config
+(quant weights + int8 KV vs fp16+fp16 KV) and tag `kv` accordingly.
 
 Headline reads:
+- **New scaling models (4060, 2026-07-08)** — **qwen2b fp16 RUNS on the 8 GB card** (46.4 prefill / 17.1 decode
+  tok/s; ~4 GB VRAM used of 8, comfortable headroom) — the contrast cell that spilled to shared memory and never completed on the
+  4 GB 1650. int8 is speed-neutral & quality-safe on both (qwen2b 8/8 argmax, maxΔ 0.50; minicpm 8/8, maxΔ 0.96);
+  int4 is the usual memory-only play that *slows* decode (qwen2b 24.8→10.7, minicpm 66.6→20.5 tok/s) and is
+  lossy — **qwen2b int4 is a genuine quality regression (4/8 argmax, marked `success:false`)**, minicpm int4
+  holds at 7/8. minicpm5-1B is the faster of the two (~85 prefill / 24 decode fp16).
 - **Speed** — decode is dispatch-bound: int8 is speed-neutral vs fp16; **int4 is *slower*** (Q4_0 group
   dequant overhead with no bandwidth win at this size — qwen 0.80×, gemma 0.77× decode). int4 is a
   memory-footprint play, not a speed play.
@@ -236,8 +298,8 @@ zero shader changes; only `import_params.py` + a config record). Probe timeouts 
 - ✅ **Pavilion GPU** — done (GTX 1650 block above).
 - ✅ KV cache size formula (Table 1, second sub-table) — filled from configs.
 - ✅ **Qwen3.5-2B + MiniCPM5-1B scaling campaign** (1650) — done, see above.
-- ⬜ **4060 (Victus) cells for the two new models** — run `run_bench_2b_minicpm.sh` there (2B fp16 should
-  FIT in 8 GB — the interesting contrast cell).
+- ✅ **4060 (Victus) cells for the two new models** — done 2026-07-08. 2B fp16 **fits & runs** in 8 GB
+  (46.4 prefill / 17.1 decode tok/s, ~4 GB VRAM); full 4-model 4060 block above.
 - ⬜ (optional) KL divergence + fixed-text perplexity in the quant probes for a stronger quality axis.
 - ⬜ (cleanup) `qwen int4 decode` 1650 cell shows 0.0 (timed out) — re-run with `-timeout 3600` for a real number, or annotate.
 
