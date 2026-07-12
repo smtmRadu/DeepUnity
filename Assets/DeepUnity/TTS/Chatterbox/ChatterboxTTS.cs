@@ -75,7 +75,7 @@ namespace DeepUnity
         static string ResolveParamsDir(LLMQuant quant)
         {
             string q = quant == LLMQuant.INT8 ? "int8" : quant == LLMQuant.INT4 ? "int4" : "fp16";
-            string res = $"Assets/Resources/DeepUnity/TTS/Chatterbox/weights_chatterbox_turbo_{q}";
+            string res = $"Assets/Resources/Weights/weights_chatterbox_turbo_{q}";
             return System.IO.Directory.Exists(res) ? res
                  : $"Assets/DeepUnity/TTS/Chatterbox/weights_chatterbox_turbo_{q}";
         }

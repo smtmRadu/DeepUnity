@@ -597,7 +597,6 @@ namespace DeepUnity.ReinforcementLearning
             bufContPiNew.GetData(_scratchPi, 0, 0, total);
             bufContPiOld.GetData(_scratchPiOld, 0, 0, total);
             float surrSum = 0f;
-            float entSum = 0f;
             float invB = 1f / batch;
             for (int i = 0; i < total; i++)
             {

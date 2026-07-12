@@ -834,7 +834,22 @@ namespace DeepUnity
 
             public void Dispose()
             {
-                weights?.Dispose(); cache?.Dispose();
+                weights?.Dispose();
+                DisposeRuntime();
+            }
+
+            /// <summary>Budgeted teardown: the small runtime buffers (cache/rope/scratch) free
+            /// synchronously, the big weight set trickles per Gemma3Weights.DisposeSlow.</summary>
+            public System.Collections.IEnumerator DisposeSlow(long bytesPerFrame)
+            {
+                var w = weights; weights = null;
+                DisposeRuntime();
+                if (w != null) yield return w.DisposeSlow(bytesPerFrame);
+            }
+
+            void DisposeRuntime()
+            {
+                cache?.Dispose();
                 ropeCosFull?.Release(); ropeSinFull?.Release();
                 ropeCosLocal?.Release(); ropeSinLocal?.Release();
                 hiddenBuf?.Release(); skipBuf?.Release(); normOutBuf?.Release();

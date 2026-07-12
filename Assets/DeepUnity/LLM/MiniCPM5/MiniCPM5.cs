@@ -22,7 +22,6 @@ namespace DeepUnity
         private string path;
         public MiniCPM5Modeling.MiniCPM5Model model;
         public MiniCPM5TokenizerFast tokenizer;
-        private bool isFreshlyInitialized;
 
         public override LLMConfig Config => _config;
         public override bool IsReady => model.IsReady && (tokenizer == null || tokenizer.IsReady);
@@ -71,7 +70,20 @@ namespace DeepUnity
         {
             GetOrCreateTokenizer(tokenizer_path, p => new MiniCPM5TokenizerFast(p, load_async: true));
             yield return MiniCPM5Modeling.MiniCPM5Model.PrewarmKernels();
+            // Sweep the tokenizer-parse garbage NOW, spread over frames — otherwise the first big
+            // load-time allocation triggers one blocking GC collection mid-walk-up.
+            while (UnityEngine.Scripting.GarbageCollector.CollectIncremental(2_000_000UL))
+                yield return null;
         }
+
+        // Self-registering LLMRegistry catalog entry (auto-discovered by model pickers).
+        [LLMEntry(20)]
+        static LLMRegistry.Entry RegistryEntry() => new LLMRegistry.Entry
+        {
+            id = "MiniCPM5-1B",
+            create = (q, kv) => new MiniCPM5ForCausalLM(quantization: q, kv_quant: kv),
+            prewarm = () => Prewarm(),
+        };
 
         /// <inheritdoc/>
         public override IEnumerator Warmup() => model.Warmup();
@@ -205,7 +217,6 @@ namespace DeepUnity
             ConsoleMessage.Info($"MiniCPM5-1B {model.Quant} ready — system prompt computed " +
                                 $"({model.cache.CachedTokenCount} tokens)");
 
-            isFreshlyInitialized = true;
             yield return true;
         }
 
@@ -215,7 +226,6 @@ namespace DeepUnity
             float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false)
         {
             if (!IsReady) throw new Exception("Call InitializeChat before Chat.");
-            isFreshlyInitialized = false;
 
             // ChatML turn: user message, then open the assistant turn for generation.
             string turn = $"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n";

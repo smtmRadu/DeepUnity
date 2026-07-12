@@ -119,6 +119,14 @@ namespace DeepUnity
             volatile bool _allReadsEnqueued;
             volatile bool _disposed;
             int _jobsUploaded;
+            string _rootPath;      // weights folder — identity for the standardized [GPU] log lines
+            long _bytesUploaded;
+            long _bytesTotal;
+
+            /// <summary>Total manifest bytes / bytes already resident — surfaced through
+            /// LLM.TotalWeightBytes so game code can pace the stream (NPC walk-up prefetch).</summary>
+            public long BytesTotal => _bytesTotal;
+            public long BytesUploaded => _bytesUploaded;
 
             public Qwen3_5Weights(string paramsPath, LLMQuant quant = LLMQuant.FP16)
             {
@@ -129,7 +137,7 @@ namespace DeepUnity
                         $"Qwen3.5 weights folder not found: '{paramsPath}'. Generate it with " +
                         "Assets/DeepUnity/LLM/import_params.py — e.g. `python import_params.py Qwen/Qwen3.5-0.8B " +
                         "--quant fp16|int8|int4` downloads the checkpoint and exports the params folder under " +
-                        "Assets/Resources/DeepUnity/LLM/Qwen3_5/.");
+                        "Assets/Resources/Weights/.");
 
                 Quant = quant;
                 hidden = Qwen3_5Config.HIDDEN_SIZE;
@@ -189,13 +197,23 @@ namespace DeepUnity
                 mlpDownScales = new ComputeBuffer[numLayers];
 
                 BuildManifest(paramsPath);
+                foreach (var j in _manifest) _bytesTotal += (long)j.fileHalfCount * 2;
+                _rootPath = paramsPath;
 
                 allocMs = swAlloc.Elapsed.TotalMilliseconds;
+                Qwen3_5ForCausalLM.Trace($"[w.alloc:{allocMs:0.0}] ");
 
                 // Start the drain coroutine before the reads so it idles until the first file lands,
                 // then kick off the background file reads (which enqueue upload jobs as they complete).
+                ResidencyLog.Loading(ResidencyLog.Label(_rootPath), _bytesTotal, LLM.UploadBudgetBytes);
+                Qwen3_5ForCausalLM.Trace($"[w.log:{swAlloc.Elapsed.TotalMilliseconds:0.0}] ");
                 DeepUnityDispatcher.Run(UploadPump());
-                _ = LoadAllAsync();
+                Qwen3_5ForCausalLM.Trace($"[w.pump:{swAlloc.Elapsed.TotalMilliseconds:0.0}] ");
+                // kicked on the THREAD POOL: an async method's synchronous prefix (task fan-out + the
+                // first MAX_IO_JOBS reads, which pass the io-gate synchronously) otherwise runs the
+                // first file reads on the MAIN thread — measured 80-280 ms = the zone-entry freeze.
+                _ = Task.Run(() => LoadAllAsync());
+                Qwen3_5ForCausalLM.Trace($"[w.iokick:{swAlloc.Elapsed.TotalMilliseconds:0.0}] ");
             }
 
             void Add(string path, ComputeBuffer[] slot, int slotIndex, int bufferHalves,
@@ -378,6 +396,9 @@ namespace DeepUnity
                         if (job.slot[job.slotIndex] == null)
                         {
                             if (budget <= 0) { yield return null; frames++; budget = LLM.UploadBudgetBytes; }
+                            // big allocations right after a release stall the driver mid-cleanup
+                            // (measured 250-550 ms single-frame spikes) — give it one present first
+                            if ((long)job.bufferHalfCount * 2 > 48_000_000) { yield return null; frames++; }
                             slice.Restart();
                             job.slot[job.slotIndex] = HalfBuf(job.bufferHalfCount);
                             double cms = slice.Elapsed.TotalMilliseconds; // spikes here = driver allocation
@@ -397,6 +418,8 @@ namespace DeepUnity
                                 budget = LLM.UploadBudgetBytes;
                             }
                             int count = (int)Math.Min(budget, len - src);
+                            count &= ~3;                 // SetData needs stride(4)-aligned byte counts
+                            if (count == 0) count = 4;   // never stall on a sub-word budget
                             slice.Restart();
                             target.SetData(job.data, src, job.dstByteOffset + src, count);
                             double ms = slice.Elapsed.TotalMilliseconds; // spikes here = first-touch GPU commit
@@ -408,6 +431,7 @@ namespace DeepUnity
                         ReturnToPool(job.data);
                         _ioGate.Release();                       // frees a slot for the next background read
                         _jobsUploaded++;
+                        _bytesUploaded += len;
                     }
                     else if (_allReadsEnqueued && _uploads.IsEmpty)
                     {
@@ -430,48 +454,68 @@ namespace DeepUnity
                 uploadFrames = frames;
                 uploadMs = sw.Elapsed.TotalMilliseconds;
                 worstUploadMs = worstSliceMs;
+                ResidencyLog.Resident(ResidencyLog.Label(_rootPath), _bytesUploaded,
+                                      uploadMs, uploadFrames, worstUploadMs);
                 IsReady = true;
+            }
+
+            // Every weight buffer this loader owns (shared by the sync and budgeted teardowns).
+            IEnumerable<ComputeBuffer> OwnedBuffers()
+            {
+                yield return _embedSlot[0];
+                yield return _finalNormSlot[0];
+                yield return _embedScalesSlot[0];
+                for (int i = 0; i < numLayers; i++)
+                {
+                    yield return inputLnGamma[i]; yield return postAttnLnGamma[i];
+                    yield return mlpGate[i]; yield return mlpUp[i]; yield return mlpDown[i];
+                    yield return W_Q[i]; yield return W_K[i]; yield return W_V[i]; yield return W_O[i];
+                    yield return qNormGamma[i]; yield return kNormGamma[i];
+                    yield return W_inProjQKV[i]; yield return W_inProjZ[i];
+                    yield return W_inProjA[i]; yield return W_inProjB[i];
+                    yield return convWeight[i]; yield return dtBias[i]; yield return ALog[i];
+                    yield return linearNormGamma[i]; yield return W_outProj[i];
+                    yield return W_QScales[i]; yield return W_KScales[i]; yield return W_VScales[i];
+                    yield return W_OScales[i]; yield return W_inProjQKVScales[i];
+                    yield return W_inProjZScales[i]; yield return W_outProjScales[i];
+                    yield return mlpGateScales[i]; yield return mlpUpScales[i]; yield return mlpDownScales[i];
+                }
+            }
+
+            bool _buffersFreed;
+            void BeginDispose()
+            {
+                _disposed = true; // stops the UploadPump before buffers vanish under it
+                if (_bytesUploaded > 0)
+                {
+                    ResidencyLog.Released(ResidencyLog.Label(_rootPath), _bytesUploaded);
+                    _bytesUploaded = 0;
+                }
             }
 
             public void Dispose()
             {
-                _disposed = true; // stops the UploadPump before buffers vanish under it
+                BeginDispose();
+                if (_buffersFreed) return;
+                _buffersFreed = true;
+                foreach (var b in OwnedBuffers()) b?.Release();
+            }
 
-                _embedSlot[0]?.Release();
-                _finalNormSlot[0]?.Release();
-                _embedScalesSlot[0]?.Release();
-                for (int i = 0; i < numLayers; i++)
+            /// <summary>Budgeted teardown: ~bytesPerFrame of buffers freed per frame — the driver
+            /// digests the release incrementally instead of stalling the NEXT model's big
+            /// allocations (measured 250-550 ms single-frame spikes after monolithic frees).</summary>
+            public IEnumerator DisposeSlow(long bytesPerFrame)
+            {
+                BeginDispose();
+                if (_buffersFreed) yield break;
+                _buffersFreed = true;
+                long spent = 0;
+                foreach (var b in OwnedBuffers())
                 {
-                    inputLnGamma[i]?.Release();
-                    postAttnLnGamma[i]?.Release();
-                    mlpGate[i]?.Release();
-                    mlpUp[i]?.Release();
-                    mlpDown[i]?.Release();
-                    W_Q[i]?.Release();
-                    W_K[i]?.Release();
-                    W_V[i]?.Release();
-                    W_O[i]?.Release();
-                    qNormGamma[i]?.Release();
-                    kNormGamma[i]?.Release();
-                    W_inProjQKV[i]?.Release();
-                    W_inProjZ[i]?.Release();
-                    W_inProjA[i]?.Release();
-                    W_inProjB[i]?.Release();
-                    convWeight[i]?.Release();
-                    dtBias[i]?.Release();
-                    ALog[i]?.Release();
-                    linearNormGamma[i]?.Release();
-                    W_outProj[i]?.Release();
-                    W_QScales[i]?.Release();
-                    W_KScales[i]?.Release();
-                    W_VScales[i]?.Release();
-                    W_OScales[i]?.Release();
-                    W_inProjQKVScales[i]?.Release();
-                    W_inProjZScales[i]?.Release();
-                    W_outProjScales[i]?.Release();
-                    mlpGateScales[i]?.Release();
-                    mlpUpScales[i]?.Release();
-                    mlpDownScales[i]?.Release();
+                    if (b == null) continue;
+                    spent += (long)b.count * b.stride;
+                    b.Release();
+                    if (spent >= bytesPerFrame) { spent = 0; yield return null; }
                 }
             }
         }

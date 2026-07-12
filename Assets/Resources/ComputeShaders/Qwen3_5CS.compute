@@ -275,7 +275,7 @@ void RmsNormHidden(uint3 id : SV_DispatchThreadID)
     }
     float rms = rsqrt(sum_sq / (float)hidden_size + norm_eps);
 
-    for (uint i = 0; i < hidden_size; i++)
+    for (i = 0; i < hidden_size; i++)
         norm_output[base_idx + i] = norm_input[base_idx + i] * rms * (1.0 + readH(norm_gamma, i));
 }
 
@@ -298,7 +298,7 @@ void RmsNormHead(uint3 id : SV_DispatchThreadID)
     }
     float rms = rsqrt(sum_sq / (float)head_dim + norm_eps);
 
-    for (uint i = 0; i < head_dim; i++)
+    for (i = 0; i < head_dim; i++)
         norm_output[base_idx + i] = norm_input[base_idx + i] * rms * (1.0 + readH(norm_gamma, i));
 }
 
@@ -541,14 +541,14 @@ void SoftmaxRows(uint3 id : SV_DispatchThreadID)
         max_val = max(max_val, AttentionWeights[base_idx + j]);
 
     float sum_exp = 0.0;
-    for (uint j = 0; j < seq_len_k; j++)
+    for (j = 0; j < seq_len_k; j++)
     {
         float e = exp(AttentionWeights[base_idx + j] - max_val);
         AttentionWeights[base_idx + j] = e;
         sum_exp += e;
     }
     float inv_sum = 1.0 / max(sum_exp, 1e-12);
-    for (uint j = 0; j < seq_len_k; j++)
+    for (j = 0; j < seq_len_k; j++)
         AttentionWeights[base_idx + j] *= inv_sum;
 }
 
@@ -840,7 +840,7 @@ void CausalConv1DUpdate(uint3 id : SV_DispatchThreadID)
     linear_qkv[c] = silu(acc);
 
     // Shift state left and append x_now
-    for (uint t = 0; t < K1 - 1u; t++)
+    for (t = 0; t < K1 - 1u; t++)
         conv_state[c * K1 + t] = conv_state[c * K1 + t + 1u];
     conv_state[c * K1 + (K1 - 1u)] = x_now;
 }
@@ -861,7 +861,7 @@ void CausalConv1DPrefill(uint3 id : SV_DispatchThreadID)
     // Snapshot current state (we'll mutate the buffer as we slide)
     float win[8]; // up to kernel_size; here K=4 so [w0,w1,w2,w3]
     [unroll] for (uint t = 0; t < 8u; t++) win[t] = 0.0;
-    for (uint t = 0; t < K1; t++)
+    for (t = 0; t < K1; t++)
         win[t] = conv_state[c * K1 + t];
 
     for (uint l = 0; l < sequence_length_q; l++)
@@ -870,18 +870,18 @@ void CausalConv1DPrefill(uint3 id : SV_DispatchThreadID)
         float x_now = linear_qkv[idx];
         // window = [win[0..K-2], x_now]
         float acc = 0.0;
-        for (uint t = 0; t < K1; t++)
+        for (t = 0; t < K1; t++)
             acc += win[t] * readH(conv_weight, c * K + t);
         acc += x_now * readH(conv_weight, c * K + K1);
         linear_qkv[idx] = silu(acc);
 
         // shift window
-        for (uint t = 0; t < K1 - 1u; t++) win[t] = win[t + 1u];
+        for (t = 0; t < K1 - 1u; t++) win[t] = win[t + 1u];
         win[K1 - 1u] = x_now;
     }
 
     // Persist last (K-1) inputs back to conv_state
-    for (uint t = 0; t < K1; t++)
+    for (t = 0; t < K1; t++)
         conv_state[c * K1 + t] = win[t];
 }
 
@@ -948,7 +948,7 @@ void L2NormPerHead(uint3 id : SV_DispatchThreadID)
     }
     float inv = rsqrt(sum_sq + 1e-6) * scale;   // 'scale' uniform reused here as out_scale
 
-    for (uint i = 0; i < head_dim; i++)
+    for (i = 0; i < head_dim; i++)
         norm_output[base_idx + i] = norm_input[base_idx + i] * inv;
 }
 
@@ -995,7 +995,7 @@ void DeltaNetRecurrent(uint3 id : SV_DispatchThreadID, uint3 gid : SV_GroupID)
 
         // 2) v_pred[d] from DECAYED state.
         float v_pred = 0.0;
-        for (uint p = 0; p < kdim; p++)
+        for (p = 0; p < kdim; p++)
         {
             float kp = linear_k[(t * linear_num_v_heads + h) * kdim + p];
             v_pred += recurrent_state[S_base + p * vdim + d] * kp;
@@ -1005,7 +1005,7 @@ void DeltaNetRecurrent(uint3 id : SV_DispatchThreadID, uint3 gid : SV_GroupID)
         float delta_d = (v_d - v_pred) * beta_h;
 
         // 3) Add outer(k, beta*(v - v_pred)) to S (no extra decay).
-        for (uint p = 0; p < kdim; p++)
+        for (p = 0; p < kdim; p++)
         {
             float kp = linear_k[(t * linear_num_v_heads + h) * kdim + p];
             recurrent_state[S_base + p * vdim + d] += kp * delta_d;
@@ -1015,7 +1015,7 @@ void DeltaNetRecurrent(uint3 id : SV_DispatchThreadID, uint3 gid : SV_GroupID)
         // Q is already pre-scaled by 1/sqrt(head_k_dim) in the L2-norm pass,
         // matching the HF reference order: l2norm → multiply by scale → enter recurrence.
         float y_d = 0.0;
-        for (uint p = 0; p < kdim; p++)
+        for (p = 0; p < kdim; p++)
         {
             float qp = linear_q[(t * linear_num_v_heads + h) * kdim + p];
             y_d += recurrent_state[S_base + p * vdim + d] * qp;
@@ -1049,7 +1049,7 @@ void RMSNormGated(uint3 id : SV_DispatchThreadID)
     }
     float rms = rsqrt(sum_sq / (float)linear_head_v_dim + norm_eps);
 
-    for (uint i = 0; i < linear_head_v_dim; i++)
+    for (i = 0; i < linear_head_v_dim; i++)
     {
         float zi = linear_z[z_base + i];
         float yi = linear_y[y_base + i];
@@ -1221,37 +1221,37 @@ void SampleTokenSerial()
 
     float inv_temp = 1.0 / temperature;
     float sum_exp = 0.0;
-    for (uint i = 0; i < vocab_size; i++)
+    for (i = 0; i < vocab_size; i++)
     {
         float e = exp((logits_buf[i] - max_l) * inv_temp);
         probs_buf[i] = e;
         sum_exp += e;
     }
     float inv_sum = 1.0 / max(sum_exp, 1e-12);
-    for (uint i = 0; i < vocab_size; i++)
+    for (i = 0; i < vocab_size; i++)
         probs_buf[i] *= inv_sum;
 
     float max_prob = 0.0;
-    for (uint i = 0; i < vocab_size; i++)
+    for (i = 0; i < vocab_size; i++)
         max_prob = max(max_prob, probs_buf[i]);
 
     uint cand_count = 0;
     if (min_p_val > 0.0)
     {
         float min_thresh = max_prob * min_p_val;
-        for (uint i = 0; i < vocab_size; i++)
+        for (i = 0; i < vocab_size; i++)
         { if (probs_buf[i] >= min_thresh) cand_count++; else probs_buf[i] = 0.0; }
     }
     else
     {
-        for (uint i = 0; i < vocab_size; i++)
+        for (i = 0; i < vocab_size; i++)
             if (probs_buf[i] > 0.0) cand_count++;
     }
 
     if (cand_count == 0)
     {
         float best = logits_buf[0]; uint bi = 0;
-        for (uint i = 1; i < vocab_size; i++) { float v = logits_buf[i]; if (v > best) { best = v; bi = i; } }
+        for (i = 1; i < vocab_size; i++) { float v = logits_buf[i]; if (v > best) { best = v; bi = i; } }
         argmax_result[0] = bi; return;
     }
 
@@ -1260,11 +1260,11 @@ void SampleTokenSerial()
         for (int k = 0; k < top_k_val; k++)
         {
             float best = -1.0; uint best_idx = 0;
-            for (uint i = 0; i < vocab_size; i++)
+            for (i = 0; i < vocab_size; i++)
             { if (probs_buf[i] > best) { best = probs_buf[i]; best_idx = i; } }
             probs_buf[best_idx] = -probs_buf[best_idx];
         }
-        for (uint i = 0; i < vocab_size; i++)
+        for (i = 0; i < vocab_size; i++)
             probs_buf[i] = (probs_buf[i] < 0.0) ? -probs_buf[i] : 0.0;
     }
 
@@ -1274,31 +1274,31 @@ void SampleTokenSerial()
         while (cum < top_p_val)
         {
             float best = 0.0; uint best_idx = 0;
-            for (uint i = 0; i < vocab_size; i++)
+            for (i = 0; i < vocab_size; i++)
             { if (probs_buf[i] > best) { best = probs_buf[i]; best_idx = i; } }
             if (best <= 0.0) break;
             cum += best;
             probs_buf[best_idx] = -best;
         }
-        for (uint i = 0; i < vocab_size; i++)
+        for (i = 0; i < vocab_size; i++)
             probs_buf[i] = (probs_buf[i] < 0.0) ? -probs_buf[i] : 0.0;
     }
 
     float new_sum = 0.0;
-    for (uint i = 0; i < vocab_size; i++) new_sum += probs_buf[i];
+    for (i = 0; i < vocab_size; i++) new_sum += probs_buf[i];
     if (new_sum <= 0.0)
     {
         float best = logits_buf[0]; uint bi = 0;
-        for (uint i = 1; i < vocab_size; i++) { float v = logits_buf[i]; if (v > best) { best = v; bi = i; } }
+        for (i = 1; i < vocab_size; i++) { float v = logits_buf[i]; if (v > best) { best = v; bi = i; } }
         argmax_result[0] = bi; return;
     }
     float inv_new = 1.0 / new_sum;
-    for (uint i = 0; i < vocab_size; i++) probs_buf[i] *= inv_new;
+    for (i = 0; i < vocab_size; i++) probs_buf[i] *= inv_new;
 
     float r = runif();
     float cdf = 0.0;
     uint sampled = 0;
-    for (uint i = 0; i < vocab_size; i++)
+    for (i = 0; i < vocab_size; i++)
     {
         cdf += probs_buf[i];
         if (cdf >= r) { sampled = i; break; }

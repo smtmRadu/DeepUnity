@@ -1,6 +1,9 @@
 ChatDemo3D third-party art (all CC0 / public domain, by Quaternius - quaternius.com):
 - Characters/KnightCharacter.fbx, Weapons/Sword.fbx : Animated Knight Pack
 - Characters/Monk.fbx + Monk_Texture.png            : RPG Characters Pack (Humanoid Rig version)
+- Characters/Wizard.fbx + Wizard_Texture.png         : RPG Characters Pack (unused; kept for reference)
+- Characters/Witch.fbx                               : Ultimate Modular Women Pack, Apr 2022 (witch NPC Morwenna)
+- Characters/Rogue.fbx + Rogue_Texture.png           : RPG Characters Pack (forest-fork beggar NPC)
 - Weapons/Shield_Heater.fbx                          : Medieval Weapons Pack
 - Animations/UAL1.fbx                                : Universal Animation Library
 - Animations/UAL2.fbx                                : Universal Animation Library 2

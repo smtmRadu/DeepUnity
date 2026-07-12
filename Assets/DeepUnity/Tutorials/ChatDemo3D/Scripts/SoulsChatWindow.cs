@@ -9,10 +9,16 @@ namespace DeepUnity.Tutorials.ChatDemo3D
     /// <summary>
     /// Dark-souls styled chat panel docked to the right edge of the screen; slides in when the
     /// dialogue starts and out when it ends. Message API mirrors the 2D demo's ChatWindow
-    /// (AddMessage / PopLastMessage / Clear / SetInfoText).
+    /// (AddMessage / PopLastMessage / Clear / SetInfoText) — both implement
+    /// <see cref="INPCChatWindow"/>, the surface NPCChatBase drives.
     /// </summary>
-    public class SoulsChatWindow : MonoBehaviour
+    public class SoulsChatWindow : MonoBehaviour, INPCChatWindow
     {
+        [Header("Reasoning models")]
+        [Tooltip("Render <think> reasoning content in the window (dimmed italic). It is never spoken by the TTS either way.")]
+        [SerializeField] private bool showThinkingTokens = false;
+        public bool ShowThinkingTokens => showThinkingTokens;
+
         [Header("UI References (wired by the scene builder)")]
         [SerializeField] private RectTransform panel;
         [SerializeField] private Transform messageContainer;
@@ -44,6 +50,14 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         private Coroutine sendLoadingCoroutine;
         private static readonly string[] loadingFrames = { ".", ". .", ". . ." };
 
+        // input-state feedback caches (dim while the send button is loading, restore after)
+        private Color inputTextIdle;
+        private bool inputIdleCached;
+        private string placeholderIdle;
+
+        // gold/parchment accent used by the scene builder — the caret must be unmissable
+        private static readonly Color CaretGold = new Color(0.77f, 0.66f, 0.42f);
+
         private void Awake()
         {
             if (panel == null) panel = (RectTransform)transform;
@@ -58,7 +72,20 @@ namespace DeepUnity.Tutorials.ChatDemo3D
                 // half-typed question — the next keystroke would erase it
                 inputField.onFocusSelectAll = false;
             }
+            ConfigureCaret();
             gameObject.SetActive(false);
+        }
+
+        /// <summary>Thick, clearly blinking gold caret so it's obvious when typing is possible.
+        /// The builder bakes the same settings; this re-applies them defensively so
+        /// runtime-created/replaced input fields get the treatment too.</summary>
+        private void ConfigureCaret()
+        {
+            if (inputField == null) return;
+            inputField.customCaretColor = true;
+            inputField.caretColor = CaretGold;
+            inputField.caretWidth = 3;
+            inputField.caretBlinkRate = 0.85f;
         }
 
         /// <summary>Send-button "loading" mode while the model streams in: the button is disabled
@@ -84,6 +111,29 @@ namespace DeepUnity.Tutorials.ChatDemo3D
                 sendLoadingCoroutine = StartCoroutine(PulseSendLabel());
             else if (sendLabel != null)
                 sendLabel.text = sendLabelIdle;
+
+            SetInputLoadingLook(loading);
+        }
+
+        /// <summary>Subtle input-state feedback while the model streams in: the typed text dims
+        /// slightly and the placeholder becomes "…"; both restore when Send is interactable
+        /// again. The field itself stays usable (the first question can be typed early).</summary>
+        private void SetInputLoadingLook(bool loading)
+        {
+            if (inputField == null) return;
+            var txt = inputField.textComponent;
+            if (txt != null)
+            {
+                if (!inputIdleCached) { inputTextIdle = txt.color; inputIdleCached = true; }
+                txt.color = loading
+                    ? new Color(inputTextIdle.r, inputTextIdle.g, inputTextIdle.b, inputTextIdle.a * 0.55f)
+                    : inputTextIdle;
+            }
+            if (inputField.placeholder is TMP_Text ph)
+            {
+                if (placeholderIdle == null) placeholderIdle = ph.text;
+                ph.text = loading ? "…" : placeholderIdle;
+            }
         }
 
         private IEnumerator PulseSendLabel()
@@ -121,6 +171,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         {
             gameObject.SetActive(true);
             IsOpen = true;
+            ConfigureCaret();   // defensive: fields wired/replaced at runtime get the caret too
             SlideTo(shownX, null);
         }
 

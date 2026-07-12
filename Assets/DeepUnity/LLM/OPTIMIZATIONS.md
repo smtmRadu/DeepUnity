@@ -209,7 +209,9 @@ to the attention layers' K/V (Qwen3.5's 6 full-attn layers + Gemma3's attention)
 conv/recurrent state stays FP32 always** — it's fixed-size (doesn't grow with context, so no
 bandwidth/VRAM win) and recurrently accumulated (error compounds), and every engine keeps it fp32
 (fla keeps the scan state fp32 even in bf16 mode; Mamba/Quamba keep the selective-scan state high
-precision). Disk prompt-cache is FP32-only for now (quantized KV → recompute prompt).
+precision). Disk KV cache: Qwen3.5's v2 file format persists FP32/FP16/INT8 KV (incl. the INT8
+scale/zp planes) for both the system-prompt cache and whole-conversation snapshots (WS-G);
+Gemma3/MiniCPM5 caches are still FP32-only (quantized KV → recompute prompt).
 
 **FP16 KV (the default).** Packed 2 halves/uint, in-kernel f32tof16/f16tof32. Measured (RTX 4060):
 - **~Lossless**: Qwen greedy reply BIT-IDENTICAL to FP32 KV (24 tokens); Gemma matches the opening
@@ -228,5 +230,6 @@ it's lossy (error accumulates over context). So it's a marginal VRAM option for 
 the default. (Status: implemented — the quantizing write is `WriteCacheFull` under the `KV_INT8`
 keyword: one threadgroup per (token, kv-head) reduces head_dim min/max, packs uint8 4/uint into
 `kv_cache` and the fp16 scale|zp into `kv_scale_zp_w` = `cache.kScaleZp/vScaleZp`; attention reads
-dequantize via `kv_unpack8`. Pending: human in-editor validation of decode vs FP32; the FP32-only KV
-disk cache is not yet extended to INT8 — an INT8-cache prompt is recomputed, not restored.)
+dequantize via `kv_unpack8`. Pending: human in-editor validation of decode vs FP32. The Qwen3.5 KV
+disk cache (v2) persists INT8 KV including kScaleZp/vScaleZp, so INT8-cache prompts/conversations
+restore from disk; Gemma's FP32-only cache still recomputes.)

@@ -112,13 +112,16 @@ namespace DeepUnity
 
                 var swPhase = System.Diagnostics.Stopwatch.StartNew();
                 cs = DeepUnityMeta.Qwen3_5CS;
+                Qwen3_5ForCausalLM.Trace($"[meta:{swPhase.Elapsed.TotalMilliseconds:0.0}] ");
                 // Keyword state lives on the shared shader asset — one quant mode per session;
                 // don't run two differently-quantized Qwen instances simultaneously.
                 if (quant == LLMQuant.INT8) cs.EnableKeyword("INT8_WEIGHTS"); else cs.DisableKeyword("INT8_WEIGHTS");
                 if (quant == LLMQuant.INT4) cs.EnableKeyword("INT4_WEIGHTS"); else cs.DisableKeyword("INT4_WEIGHTS");
                 KVQuantUtil.SetKeyword(cs, kvQuant);   // KV_FP16 (or none for FP32) — KV precision is independent of the weight quant
+                Qwen3_5ForCausalLM.Trace($"[keywords:{swPhase.Elapsed.TotalMilliseconds:0.0}] ");
                 CacheKernelIds();
                 double tKernels = swPhase.Elapsed.TotalMilliseconds;
+                Qwen3_5ForCausalLM.Trace($"[kernels_end:{tKernels:0.0}] ");
 
                 weights = new Qwen3_5Weights(paramsPath, quant); // sets weights.allocMs internally
 
@@ -962,6 +965,51 @@ namespace DeepUnity
                 cs.Dispatch(kZero, Div256(buf.count), 1, 1);
             }
 
+            // ---------------- conversation-persistence helpers (WS-G) ----------------
+            // The KV/SSM prefix lives in Qwen3_5Cache, but a restored conversation must also
+            // sample like a true resume: tokenSeenBuf (per-vocab-entry occurrence counts feeding
+            // the presence/repetition penalties) rides along in the conversation cache file's
+            // extra-state blob via these two helpers.
+
+            public int VocabSize => vocab;
+
+            /// <summary>
+            /// Async readback of tokenSeenBuf. Hands back the raw bytes (vocab uints, ~0.6-1 MB)
+            /// or null on readback error. No pipeline stall; the single managed copy lands on the
+            /// completion frame.
+            /// </summary>
+            public IEnumerator ReadTokenSeenRaw(Action<byte[]> onDone)
+            {
+                var req = UnityEngine.Rendering.AsyncGPUReadback.Request(tokenSeenBuf);
+                while (!req.done) yield return null;
+                onDone?.Invoke(req.hasError ? null : req.GetData<byte>().ToArray());
+            }
+
+            /// <summary>
+            /// Budgeted upload of counts captured by <see cref="ReadTokenSeenRaw"/> (must be exactly
+            /// vocab uints; anything else is ignored — the caller zeroed the buffer via ResetCache).
+            /// Chunked under the shared LLM.UploadFrameBudgetMs / LLM.UploadChunkFloats knobs.
+            /// </summary>
+            public IEnumerator UploadTokenSeenRaw(byte[] raw)
+            {
+                if (raw == null || raw.Length != vocab * 4) yield break;
+                var data = new uint[vocab];
+                Buffer.BlockCopy(raw, 0, data, 0, raw.Length);
+                var budget = System.Diagnostics.Stopwatch.StartNew();
+                int offset = 0;
+                while (offset < data.Length)
+                {
+                    if (budget.Elapsed.TotalMilliseconds >= LLM.UploadFrameBudgetMs)
+                    {
+                        yield return null;
+                        budget.Restart();
+                    }
+                    int count = Math.Min(LLM.UploadChunkFloats, data.Length - offset);
+                    tokenSeenBuf.SetData(data, offset, offset, count);
+                    offset += count;
+                }
+            }
+
             bool _warmedUp;
 
             // Every buffer property name in Qwen3_5CS.compute; used by WarmupKernelsIndividually to
@@ -1092,7 +1140,22 @@ namespace DeepUnity
 
             public void Dispose()
             {
-                weights?.Dispose(); cache?.Dispose();
+                weights?.Dispose();
+                DisposeRuntime();
+            }
+
+            /// <summary>Budgeted teardown: the small runtime buffers (cache/rope/scratch) free
+            /// synchronously, the big weight set trickles per Qwen3_5Weights.DisposeSlow.</summary>
+            public System.Collections.IEnumerator DisposeSlow(long bytesPerFrame)
+            {
+                var w = weights; weights = null;
+                DisposeRuntime();
+                if (w != null) yield return w.DisposeSlow(bytesPerFrame);
+            }
+
+            void DisposeRuntime()
+            {
+                cache?.Dispose();
                 ropeCos?.Release(); ropeSin?.Release();
                 hiddenBuf?.Release(); skipBuf?.Release(); normOutBuf?.Release(); attnOutBuf?.Release();
                 mlpInterBuf?.Release();

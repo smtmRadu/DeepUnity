@@ -131,7 +131,10 @@ namespace DeepUnity
                 // Total halves = 2 * hiddenSize * denseInter; packed into uint => /2 entries of 4 bytes.
                 denseHeadWeights = new ComputeBuffer((2 * hiddenSize * denseInter) / 2, 4, ComputeBufferType.Structured);
 
-                _ = LoadAllAsync(paramsPath);
+                // kicked on the THREAD POOL: an async method's synchronous prefix (task fan-out + the
+                // first MAX_IO_JOBS reads, which pass the io-gate synchronously) otherwise runs the
+                // first file reads on the MAIN thread — measured 80-280 ms = the zone-entry freeze.
+                _ = Task.Run(() => LoadAllAsync(paramsPath));
             }
 
             // ---- helpers ----
@@ -302,7 +305,7 @@ namespace DeepUnity
             int curSeqAlloc;
 
             readonly int numLayers, hiddenSize, headDim, headsQ, headsKV;
-            readonly int innerEmbDim, qkvProjDim, intermediateSize, vocabSize;
+            readonly int innerEmbDim, qkvProjDim, intermediateSize;
             readonly int slidingWindow, denseInter;
             readonly float rmsEps, embedScale, attnScaling;
 
@@ -316,7 +319,6 @@ namespace DeepUnity
                 headsQ = EmbeddingGemmaConfig.HEADS_Q;
                 headsKV = EmbeddingGemmaConfig.HEADS_KV;
                 intermediateSize = EmbeddingGemmaConfig.MLP_INTERMEDIATE_SIZE;
-                vocabSize = EmbeddingGemmaConfig.VOCAB_SIZE;
                 slidingWindow = EmbeddingGemmaConfig.SLIDING_WINDOW;
                 denseInter = EmbeddingGemmaConfig.HEAD_FFN_INTERMEDIATE_SIZE;
                 rmsEps = EmbeddingGemmaConfig.RMS_EPS;

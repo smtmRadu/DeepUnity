@@ -30,10 +30,24 @@ namespace DeepUnity
         internal static ComputeShader T3CS              => Get(ref _t3CS, "T3CS");
         internal static ComputeShader ChatterboxS3GenCS => Get(ref _chatterboxS3GenCS, "ChatterboxS3GenCS");
 
+        // Fun-CosyVoice3-0.5B TTS (Assets/DeepUnity/TTS/CosyVoice)
+        internal static ComputeShader CosyVoiceFlowCS  => Get(ref _cosyVoiceFlowCS, "CosyVoiceFlowCS");
+        internal static ComputeShader CosyVoiceLMCS    => Get(ref _cosyVoiceLMCS, "CosyVoiceLMCS");
+
+        // Parakeet-TDT STT (Assets/DeepUnity/STT/Parakeet)
+        internal static ComputeShader ParakeetCS        => Get(ref _parakeetCS, "ParakeetCS");
+
+        // Qwen3-ASR STT (Assets/DeepUnity/STT/QwenASR)
+        internal static ComputeShader QwenASRCS         => Get(ref _qwenASRCS, "QwenASRCS");
+
+        // Kokoro-82M TTS (Assets/DeepUnity/TTS/Kokoro)
+        internal static ComputeShader KokoroCS          => Get(ref _kokoroCS, "KokoroCS");
+
         static ComputeShader _tensorCS, _denseCS, _conv2DCS, _rnnCellCS, _convTranspose2DCS;
         static ComputeShader _gqaInferenceCS, _gluInferenceCS, _ffnInferenceCS, _lmHeadInferenceCS;
         static ComputeShader _gemma3FP32CS, _gemma3CS, _gemma3OriginalCS, _qwen3_5CS;
-        static ComputeShader _t3CS, _chatterboxS3GenCS;
+        static ComputeShader _t3CS, _chatterboxS3GenCS, _cosyVoiceFlowCS, _cosyVoiceLMCS;
+        static ComputeShader _parakeetCS, _qwenASRCS, _kokoroCS;
 
         static ComputeShader Get(ref ComputeShader field, string name)
         {

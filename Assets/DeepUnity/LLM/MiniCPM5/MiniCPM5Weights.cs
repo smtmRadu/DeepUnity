@@ -85,7 +85,7 @@ namespace DeepUnity
                         $"MiniCPM5 weights folder not found: '{paramsPath}'. Generate it with " +
                         "Assets/DeepUnity/LLM/import_params.py — e.g. `python import_params.py openbmb/MiniCPM5-1B " +
                         "--quant fp16|int8|int4` downloads the checkpoint and exports the params folder under " +
-                        "Assets/Resources/DeepUnity/LLM/MiniCPM5/.");
+                        "Assets/Resources/Weights/.");
 
                 Quant = quant;
                 numLayers = MiniCPM5Config.NUM_LAYERS;
@@ -112,7 +112,10 @@ namespace DeepUnity
                 BuildManifest(paramsPath);
 
                 DeepUnityDispatcher.Run(UploadPump());
-                _ = LoadAllAsync();
+                // kicked on the THREAD POOL: an async method's synchronous prefix (task fan-out + the
+                // first MAX_IO_JOBS reads, which pass the io-gate synchronously) otherwise runs the
+                // first file reads on the MAIN thread — measured 80-280 ms = the zone-entry freeze.
+                _ = Task.Run(() => LoadAllAsync());
             }
 
             void Add(string path, ComputeBuffer[] slot, int slotIndex, int bufferHalves,
@@ -318,6 +321,9 @@ namespace DeepUnity
                         if (job.slot[job.slotIndex] == null)
                         {
                             if (budget <= 0) { yield return null; budget = LLM.UploadBudgetBytes; }
+                            // big allocations right after a release stall the driver mid-cleanup
+                            // (measured 250-550 ms single-frame spikes) — give it one present first
+                            if ((long)job.bufferHalfCount * 2 > 48_000_000) yield return null;
                             job.slot[job.slotIndex] = HalfBuf(job.bufferHalfCount);
                             budget -= (long)job.bufferHalfCount * 2;
                         }
@@ -333,6 +339,8 @@ namespace DeepUnity
                                 budget = LLM.UploadBudgetBytes;
                             }
                             int count = (int)Math.Min(budget, len - src);
+                            count &= ~3;                 // SetData needs stride(4)-aligned byte counts
+                            if (count == 0) count = 4;   // never stall on a sub-word budget
                             target.SetData(job.data, src, job.dstByteOffset + src, count);
                             src += count;
                             budget -= count;

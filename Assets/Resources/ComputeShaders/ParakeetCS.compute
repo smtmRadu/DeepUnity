@@ -1,0 +1,321 @@
+// ParakeetCS.compute
+// ======================================================================================
+// Parakeet-TDT 0.6B encoder kernels: dw-striding subsampling (x8) + 24 FastConformer
+// blocks (rel-pos MHSA, GLU-conv module with folded BatchNorm) + enc_proj.
+// Port spec: Assets/DeepUnity/STT/Parakeet/SPEC.md (§2-§4). Every kernel mirrors the
+// harness-validated ParakeetCPU.cs math verbatim (transcript-exact vs the HF reference).
+//
+// The mel frontend (§1) and the TDT greedy decode loop (§5-§6, LSTM 2x640 + joint head)
+// run on the CPU in ParakeetCPU — this file is encoder-only by design.
+//
+// Conventions (ChatterboxS3GenCS style): fp16 weights packed 2-per-uint (readH), FP32
+// activations. Sequence buffers are [T, C] row-major (t*C + c); the subsampling conv
+// stack uses [C, T, F] (c*(T*F) + t*F + f) between conv stages. Linear weights [out,in].
+// Batch is always 1 (one push-to-talk utterance), no masks anywhere.
+// ======================================================================================
+
+// ================================ PARAMETERS ================================
+uint seq_len;          // rows of the OUTPUT of the current op ([T,C] ops)
+uint in_dim;           // linear in features / conv in channels
+uint out_dim;          // linear out features / conv out channels
+uint t_in;             // conv2d input frames
+uint f_in;             // conv2d input freq bins
+uint t_out;            // conv2d output frames
+uint f_out;            // conv2d output freq bins
+uint is_depthwise;     // Conv2dSub: 1 = one 3x3 filter per channel (groups = C)
+uint num_heads;        // 8
+uint head_dim;         // 128
+uint norm_dim;         // LayerNormT channel count (1024)
+uint conv_kernel;      // depthwise conv module kernel (9)
+int  activation_type;  // 0 none | 1 silu | 2 relu
+int  has_bias;
+float norm_eps;        // 1e-5
+float att_scale;       // 1/sqrt(head_dim)
+float residual_scale;  // AddScaled multiplier (0.5 for the conformer half-FFs, 1 otherwise)
+
+// ================================ WEIGHT / IO BUFFERS ================================
+StructuredBuffer<uint>      W;              // linear/conv weight (fp16 packed)
+StructuredBuffer<uint>      W_bias;         // linear/conv bias
+StructuredBuffer<uint>      ln_gamma;
+StructuredBuffer<uint>      ln_beta;
+StructuredBuffer<uint>      pos_bias_u;     // [8, 128]
+StructuredBuffer<uint>      pos_bias_v;     // [8, 128]
+StructuredBuffer<uint>      bn_scale;       // folded BatchNorm per-channel scale [1024]
+StructuredBuffer<uint>      bn_shift;       // folded BatchNorm per-channel shift [1024]
+
+StructuredBuffer<float>     X;              // op input
+RWStructuredBuffer<float>   Y;              // op output
+StructuredBuffer<float>     norm_input;
+RWStructuredBuffer<float>   norm_output;
+StructuredBuffer<float>     Q;              // [T, H, D]
+StructuredBuffer<float>     K;
+StructuredBuffer<float>     V;
+StructuredBuffer<float>     P;              // projected rel-pos emb [2T-1, H, D]
+RWStructuredBuffer<float>   AttendedValues;
+RWStructuredBuffer<float>   inout_buf;      // in-place residual adds
+
+// ================================ HELPERS ================================
+float readH(StructuredBuffer<uint> buf, uint index)
+{
+    uint word = buf[index >> 1];
+    uint shift = (index & 1u) * 16u;
+    return f16tof32(word >> shift);
+}
+float silu(float x) { return x / (1.0 + exp(-x)); }
+float apply_act(float v)
+{
+    if (activation_type == 1) return silu(v);
+    if (activation_type == 2) return max(v, 0.0);
+    return v;
+}
+
+// ========================= Conv2dSub ===========================================
+// 3x3, stride 2, pad 1 conv over a [Cin, T, F] stack (SPEC §2). Stage 0 reads the mel
+// [T,128] buffer directly as Cin=1. is_depthwise=1 -> one filter per channel (Cout==Cin).
+// Weights flat [Cout, nIn, 3, 3]: (oc*nIn + ic)*9 + kt*3 + kf. Bias always present.
+// Output ReLU only after the FULL conv (stage 0); dw stages ReLU after the pointwise.
+#pragma kernel Conv2dSub
+[numthreads(256, 1, 1)]
+void Conv2dSub(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= out_dim * t_out * f_out) return;
+    uint oc = idx / (t_out * f_out);
+    uint rem = idx % (t_out * f_out);
+    uint t = rem / f_out;
+    uint f = rem % f_out;
+
+    float acc = readH(W_bias, oc);
+    uint nIn = is_depthwise != 0 ? 1u : in_dim;
+    for (uint ic = 0; ic < nIn; ic++)
+    {
+        uint srcC = is_depthwise != 0 ? oc : ic;
+        uint w_base = (oc * nIn + ic) * 9u;
+        for (uint kt = 0; kt < 3; kt++)
+        {
+            int ti = (int)(t * 2 + kt) - 1;
+            if (ti < 0 || ti >= (int)t_in) continue;
+            for (uint kf = 0; kf < 3; kf++)
+            {
+                int fi = (int)(f * 2 + kf) - 1;
+                if (fi < 0 || fi >= (int)f_in) continue;
+                acc += readH(W, w_base + kt * 3u + kf) * X[(srcC * t_in + (uint)ti) * f_in + (uint)fi];
+            }
+        }
+    }
+    Y[idx] = apply_act(acc);
+}
+
+// ========================= Pointwise2d ========================================
+// 1x1 conv over [C, T*F]: Y[oc, i] = act( b[oc] + sum_ic W[oc,ic] * X[ic, i] ).
+// t_in carries T*F here.
+#pragma kernel Pointwise2d
+[numthreads(256, 1, 1)]
+void Pointwise2d(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= out_dim * t_in) return;
+    uint oc = idx / t_in;
+    uint i = idx % t_in;
+    float acc = readH(W_bias, oc);
+    uint w_base = oc * in_dim;
+    for (uint ic = 0; ic < in_dim; ic++)
+        acc += readH(W, w_base + ic) * X[ic * t_in + i];
+    Y[idx] = apply_act(acc);
+}
+
+// ========================= FlattenSub =========================================
+// [C, T, F] -> [T, C*F] channel-major flatten (SPEC §2), feeding sub/linear.
+#pragma kernel FlattenSub
+[numthreads(256, 1, 1)]
+void FlattenSub(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;                       // over T * C * F
+    if (idx >= t_out * in_dim * f_out) return;
+    uint t = idx / (in_dim * f_out);
+    uint rem = idx % (in_dim * f_out);
+    uint c = rem / f_out;
+    uint f = rem % f_out;
+    Y[t * (in_dim * f_out) + c * f_out + f] = X[(c * t_out + t) * f_out + f];
+}
+
+// ========================= LinearBias =========================================
+// Y[t, p] = act( X[t, :in_dim] · W[p, :] (+ b[p]) )
+#pragma kernel LinearBias
+[numthreads(1, 8, 32)]
+void LinearBias(uint3 id : SV_DispatchThreadID)
+{
+    uint t = id.y; uint p = id.z;
+    if (t >= seq_len || p >= out_dim) return;
+    float sum = has_bias != 0 ? readH(W_bias, p) : 0.0;
+    uint x_base = t * in_dim;
+    uint w_base = p * in_dim;
+    for (uint e = 0; e < in_dim; e++)
+        sum += X[x_base + e] * readH(W, w_base + e);
+    Y[t * out_dim + p] = apply_act(sum);
+}
+
+// ========================= LayerNormT =========================================
+// Plain LayerNorm over the channel dim of a [T, C] buffer (gamma direct + beta).
+#pragma kernel LayerNormT
+[numthreads(256, 1, 1)]
+void LayerNormT(uint3 id : SV_DispatchThreadID)
+{
+    uint pos = id.x;
+    if (pos >= seq_len) return;
+    uint base_idx = pos * norm_dim;
+
+    float mean = 0.0;
+    for (uint i = 0; i < norm_dim; i++)
+        mean += norm_input[base_idx + i];
+    mean /= (float)norm_dim;
+
+    float var = 0.0;
+    for (uint j = 0; j < norm_dim; j++)
+    {
+        float d = norm_input[base_idx + j] - mean;
+        var += d * d;
+    }
+    float rstd = rsqrt(var / (float)norm_dim + norm_eps);
+
+    for (uint k = 0; k < norm_dim; k++)
+        norm_output[base_idx + k] = (norm_input[base_idx + k] - mean) * rstd * readH(ln_gamma, k) + readH(ln_beta, k);
+}
+
+// ========================= AddScaled ==========================================
+// inout_buf[i] += residual_scale * X[i]   (conformer residual adds; 0.5 for the half-FFs)
+#pragma kernel AddScaled
+[numthreads(256, 1, 1)]
+void AddScaled(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * norm_dim) return;
+    inout_buf[idx] += residual_scale * X[idx];
+}
+
+// ========================= GLU ================================================
+// [T, 2C] -> [T, C]: Y[t,c] = X[t,c] * sigmoid(X[t, C+c])   (conv module gate, SPEC §4.2)
+#pragma kernel GLU
+[numthreads(256, 1, 1)]
+void GLU(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * norm_dim) return;
+    uint t = idx / norm_dim;
+    uint c = idx % norm_dim;
+    float a = X[t * 2u * norm_dim + c];
+    float b = X[t * 2u * norm_dim + norm_dim + c];
+    Y[idx] = a / (1.0 + exp(-b)) ;
+}
+
+// ========================= DepthwiseConvBnSilu ================================
+// Conv module core (SPEC §4.2): depthwise k9 pad4 over [T, C] + folded BatchNorm
+// (y = y*scale[c] + shift[c]) + SiLU, one fused pass.
+#pragma kernel DepthwiseConvBnSilu
+[numthreads(256, 1, 1)]
+void DepthwiseConvBnSilu(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * norm_dim) return;
+    uint t = idx / norm_dim;
+    uint c = idx % norm_dim;
+    int pad = (int)(conv_kernel / 2u);
+
+    float acc = 0.0;
+    for (uint k = 0; k < conv_kernel; k++)
+    {
+        int ti = (int)t + (int)k - pad;
+        if (ti < 0 || ti >= (int)seq_len) continue;
+        acc += readH(W, c * conv_kernel + k) * X[(uint)ti * norm_dim + c];
+    }
+    acc = acc * readH(bn_scale, c) + readH(bn_shift, c);
+    Y[idx] = silu(acc);
+}
+
+// ========================= RelPosAttention ====================================
+// NeMo/Transformer-XL RelPositionMultiHeadAttention (SPEC §4.1), fused online softmax,
+// bidirectional, no mask. Same convention as the validated Chatterbox kernel, head_dim 128:
+// score(i,j) = [ (q_i+u)·k_j + (q_i+v)·p_{(T-1)-(i-j)} ] * att_scale   (rel_shift folded
+// into the direct P index). One threadgroup per (query pos, head). P = linear_pos(pos_emb).
+#define ATT_THREADS 256
+groupshared float ra_qu[128];    // q + pos_bias_u   (head_dim <= 128)
+groupshared float ra_qv[128];    // q + pos_bias_v
+groupshared float ra_p[ATT_THREADS];
+groupshared float ra_red[ATT_THREADS];
+
+#pragma kernel RelPosAttention
+[numthreads(ATT_THREADS, 1, 1)]
+void RelPosAttention(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint q_pos = gid.x;
+    uint h     = gid.y;
+    uint tid   = gtid.x;
+    uint T     = max(seq_len, 1u);
+
+    uint q_base = (q_pos * num_heads + h) * head_dim;
+    for (uint dq = tid; dq < head_dim; dq += ATT_THREADS)
+    {
+        float qv = Q[q_base + dq];
+        ra_qu[dq] = qv + readH(pos_bias_u, h * head_dim + dq);
+        ra_qv[dq] = qv + readH(pos_bias_v, h * head_dim + dq);
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    float m = -3.0e38;
+    float l = 0.0;
+    float acc = 0.0;
+
+    for (uint tile = 0; tile < T; tile += ATT_THREADS)
+    {
+        uint j = tile + tid;
+        float s = -3.0e38;
+        if (j < T)
+        {
+            uint k_base = (j * num_heads + h) * head_dim;
+            // p index: (T-1) - (q_pos - j)  in [0, 2T-2]
+            uint p_base = ((T - 1u) - q_pos + j) * num_heads * head_dim + h * head_dim;
+            float dot = 0.0;
+            for (uint d = 0; d < head_dim; d++)
+                dot += ra_qu[d] * K[k_base + d] + ra_qv[d] * P[p_base + d];
+            s = dot * att_scale;
+        }
+
+        ra_red[tid] = s;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r1 = ATT_THREADS / 2; r1 > 0; r1 >>= 1)
+        {
+            if (tid < r1) ra_red[tid] = max(ra_red[tid], ra_red[tid + r1]);
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float m_new = max(m, ra_red[0]);
+        GroupMemoryBarrierWithGroupSync();
+
+        float p = (j < T) ? exp(s - m_new) : 0.0;
+        ra_p[tid] = p;
+        ra_red[tid] = p;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r2 = ATT_THREADS / 2; r2 > 0; r2 >>= 1)
+        {
+            if (tid < r2) ra_red[tid] += ra_red[tid + r2];
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float tile_sum = ra_red[0];
+
+        float alpha = exp(m - m_new);
+        l = l * alpha + tile_sum;
+
+        if (tid < head_dim)
+        {
+            float a = acc * alpha;
+            uint n_valid = min(ATT_THREADS, T - tile);
+            for (uint jj = 0; jj < n_valid; jj++)
+                a += ra_p[jj] * V[((tile + jj) * num_heads + h) * head_dim + tid];
+            acc = a;
+        }
+        m = m_new;
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (tid < head_dim)
+        AttendedValues[(q_pos * num_heads + h) * head_dim + tid] = acc / max(l, 1e-12);
+}

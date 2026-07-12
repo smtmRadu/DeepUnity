@@ -1,0 +1,24 @@
+ChatDemo2D art provenance — ALL third-party art is Kenney CC0 (Creative Commons Zero, kenney.nl):
+
+- Tiles/ground_*, tree_pine, tree_round, mushrooms, fence_*, roof_*, wall_*, sign, well:
+  Kenney "Tiny Town" pack (16px), CC0.
+- Tiles/soil_*, crop_*, seed_*, icon_hoe, icon_water, icon_harvest, icon_carrot, icon_turnip,
+  icon_tomato, char_player, char_farmer, critter_*, tree_pine_big, bush, apple_bush, sunflower,
+  grass_tuft, stones, hay:
+  Kenney "Tiny Farm" pack (16px), CC0.
+- Tiles/char_granny:
+  Kenney "Tiny Dungeon" pack (16px), CC0.
+- Fonts/Kenney Mini.ttf:
+  Kenney Fonts pack, CC0 (License_KenneyFonts.txt).
+- Audio/UI/*.ogg (button_click, type_1..3):
+  Kenney "Interface Sounds" pack, CC0.
+
+Tiles were copied out of the packs' individual-tile folders and renamed semantically
+(e.g. tile_0051.png -> soil_dry.png); no pixels were modified.
+
+Generated/ (GroundBaked.png, Vignette.png, White.png, PlotHighlight.png, Kenney Mini SDF.asset)
+is produced by Editor/ChatDemo2DBuilder.cs at build time — GroundBaked.png is composited from
+the CC0 ground tiles above.
+
+The previous demo's AI-generated village art was removed from this folder; the archived original
+set remains untouched in Tutorials/ChatDemo2D_OLD.

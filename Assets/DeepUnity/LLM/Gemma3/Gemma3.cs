@@ -19,8 +19,11 @@ namespace DeepUnity
         private bool isFreshlyInitialized;
 
         public override LLMConfig Config => _config;
-        public override bool IsReady => model.IsReady && (tokenizer == null || tokenizer.IsReady);
+        public override bool IsReady => model != null && model.IsReady && (tokenizer == null || tokenizer.IsReady);
         public override bool TokenizerReady => tokenizer == null || tokenizer.IsReady;
+        public override long TotalWeightBytes => model?.weights?.BytesTotal ?? 0;
+        public override long UploadedWeightBytes => model?.weights?.BytesUploaded ?? 0;
+        public override string WeightsLabel => ResidencyLog.Label(path);
 
         /// <param name="maxModelLength">
         /// Maximum sequence length (in tokens) the model supports in a single conversation. This sizes the
@@ -71,7 +74,20 @@ namespace DeepUnity
         {
             GetOrCreateTokenizer(tokenizer_path, p => new Gemma3TokenizerFast(p, load_async: true));
             yield return Gemma3Modeling.Gemma3Model.PrewarmKernels();
+            // Sweep the tokenizer-parse garbage NOW, spread over frames — otherwise the first big
+            // load-time allocation triggers one blocking GC collection mid-walk-up.
+            while (UnityEngine.Scripting.GarbageCollector.CollectIncremental(2_000_000UL))
+                yield return null;
         }
+
+        // Self-registering LLMRegistry catalog entry (auto-discovered by model pickers).
+        [LLMEntry(10)]
+        static LLMRegistry.Entry RegistryEntry() => new LLMRegistry.Entry
+        {
+            id = "Gemma3-270M",
+            create = (q, kv) => new Gemma3ForCausalLM(quantization: q, kv_quant: kv),
+            prewarm = () => Prewarm(),
+        };
 
         /// <inheritdoc/>
         public override IEnumerator Warmup() => model.Warmup();
@@ -80,7 +96,18 @@ namespace DeepUnity
         public override void Release()
         {
             model?.Dispose();
+            model = null;
             OnReleased(); // unhook editor event + suppress the finalizer (it would double-release off-thread)
+            ConsoleMessage.Info("Gemma3 released from GPU");
+        }
+
+        /// <inheritdoc/>
+        public override IEnumerator ReleaseSlow(long bytesPerFrame = 64_000_000)
+        {
+            var m = model;
+            model = null;      // the instance reads as released immediately; buffers trickle out
+            OnReleased();
+            if (m != null) yield return m.DisposeSlow(bytesPerFrame);
             ConsoleMessage.Info("Gemma3 released from GPU");
         }
 

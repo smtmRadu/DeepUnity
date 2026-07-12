@@ -1,0 +1,703 @@
+// QwenASRCS.compute
+// ======================================================================================
+// GPU inference kernels for Qwen3-ASR 0.6B/1.7B (speech-to-text) FP16.
+// Weights packed FP16 in StructuredBuffer<uint> (2 halves per uint). Activations FP32.
+// Decoder KV cache FP32 (v1; KV_FP16/INT8 tiers can adopt KVCache.hlsl later).
+//
+// Pipeline kernels (SPEC.md; every formula parity-validated in QwenASRCPU.cs first):
+//   §1 mel:     MelDftPower -> MelLogMel -> MelGlobalMax -> MelNormalize
+//   §2 encoder: Conv2dMelChunk / Conv2dS2 (k3 s2 p1 + erf-GELU, PER-CHUNK) -> ConvOutPos
+//               -> [LayerNorm -> MatMulBiasAct(qkv) -> EncScores/SoftmaxRows/EncAttend
+//                   -> MatMulBiasAct(out|fc1 gelu|fc2)] xN -> LayerNorm(ln_post)
+//   §3 proj:    MatMulBiasAct x2 (erf-GELU between)
+//   §4 decoder: EmbeddingLookup + CopyToOffset (audio embed scatter) -> RmsNormHidden ->
+//               MatMulBiasAct(q/k/v) -> RmsNormHead (QK-norm) -> ApplyRope (full 128 dims)
+//               -> WriteCacheFull -> FlashAttention -> MatMulBiasAct(o) -> GateUp/Down (SwiGLU)
+//               -> RmsNormHidden -> LmHeadPredict1Vec -> ArgMax (greedy only)
+// ======================================================================================
+
+// ================================ PARAMETERS ================================
+uint rows;            // generic matmul/norm row count
+uint in_dim;
+uint out_dim;
+uint act_mode;        // 0 none, 1 erf-GELU
+uint has_bias;
+
+uint seq_len;
+uint hidden_size;
+uint head_dim;
+uint num_heads_q;
+uint num_heads_kv;
+uint vocab_size;
+uint position_offset;
+uint cache_len;
+uint seq_len_q;
+uint seq_len_k;
+uint buffer_size;
+uint copy_src_offset;
+uint copy_dst_offset;
+uint num_vectors;
+uint rope_num_heads;
+uint rope_rot_dim;    // = head_dim (full rotation)
+uint intermediate_size;
+uint shard_base;      // tied embed/lm_head is 16 row-shards: first vocab row of the bound shard
+uint shard_rows;      // rows in the bound shard (151936/16)
+
+// mel frontend
+uint n_frames;        // valid stft frames T
+uint frames_padded;   // T padded to a multiple of 100
+uint n_freqs;         // 201
+uint n_fft;           // 400
+uint n_mels;          // 128
+
+// conv frontend
+uint conv_in_c, conv_in_h, conv_in_w, conv_out_c, n_chunks;
+uint n_tokens;        // packed encoder tokens N
+uint full_chunks;     // chunks entirely inside the valid region
+uint last_keep;       // Ceil3(validFrames % 100) post-CNN tokens of the partial chunk (0 if none)
+uint enc_d;           // encoder d_model
+uint enc_heads;
+uint enc_window;      // 104 = block-diagonal attention window (8 s)
+
+float norm_eps;
+float scale;
+
+// ================================ FP16 / INT8 WEIGHT HELPERS ================================
+float readH(StructuredBuffer<uint> buf, uint index)
+{
+    uint word = buf[index >> 1];
+    uint shift = (index & 1u) * 16u;
+    return f16tof32(word >> shift);
+}
+
+#pragma multi_compile _ INT8_WEIGHTS
+
+float readQ8(StructuredBuffer<uint> buf, uint index)
+{
+    uint word = buf[index >> 2];
+    int q = (int)((word >> ((index & 3u) * 8u)) & 0xFFu);
+    return (float)((q << 24) >> 24);   // sign-extend low byte
+}
+
+#if defined(INT8_WEIGHTS)
+    #define readW(buf, sbuf, idx) readQ8(buf, idx)
+    #define wScale(sbuf, row)     readH(sbuf, row)
+#else
+    #define readW(buf, sbuf, idx) readH(buf, idx)
+    #define wScale(sbuf, row)     1.0
+#endif
+
+// ================================ BUFFERS ================================
+// mel frontend
+StructuredBuffer<float>     frames;        // [T, 400] windowed frames (CPU-built, reflect-padded)
+StructuredBuffer<float>     dft_cos;       // [201, 400] DFT basis (fp32, built once at boot)
+StructuredBuffer<float>     dft_sin;
+RWStructuredBuffer<float>   power_buf;     // [T, 201]
+StructuredBuffer<uint>      mel_filters;   // [201, 128] fp16 (exported slaney bank)
+RWStructuredBuffer<float>   mel_buf;       // [128, frames_padded] (mel-major, matches dumps)
+RWStructuredBuffer<float>   gmax_buf;      // [1] global log-mel max
+
+// conv frontend
+StructuredBuffer<float>     conv_in;       // [chunks, C, H, W]
+RWStructuredBuffer<float>   conv_out_buf;  // [chunks, OC, OH, OW]
+StructuredBuffer<uint>      conv_w;        // fp16 [OC, IC, 3, 3]
+StructuredBuffer<uint>      conv_b;        // fp16 [OC]
+StructuredBuffer<uint>      pos_emb;       // fp16 [13, enc_d]
+StructuredBuffer<uint>      conv_out_w;    // fp16 [enc_d, 7680]
+RWStructuredBuffer<float>   enc_x;         // [N, enc_d] packed encoder tokens
+
+// generic matmul
+StructuredBuffer<float>     X;
+StructuredBuffer<uint>      W;             // fp16 (or int8 under keyword)
+StructuredBuffer<uint>      W_scales;      // per-row fp16 scales (INT8 only)
+StructuredBuffer<uint>      B;             // fp16 bias
+RWStructuredBuffer<float>   Y;
+
+// layer/rms norms (gamma/beta fp16)
+StructuredBuffer<float>     norm_input;
+RWStructuredBuffer<float>   norm_output;
+StructuredBuffer<uint>      norm_gamma;
+StructuredBuffer<uint>      norm_beta;
+
+// encoder attention
+StructuredBuffer<float>     Q_e;           // [N, enc_d] head-interleaved
+StructuredBuffer<float>     K_e;
+StructuredBuffer<float>     V_e;
+RWStructuredBuffer<float>   enc_scores;    // [heads, N, N]
+RWStructuredBuffer<float>   enc_att;       // [N, enc_d]
+
+// decoder
+StructuredBuffer<uint>      token_ids;
+StructuredBuffer<uint>      embed_weights; // tied embed/lm_head, ALWAYS fp16
+RWStructuredBuffer<float>   embed_output;
+StructuredBuffer<uint>      rope_cos;      // fp16 [maxSeq, head_dim/2]
+StructuredBuffer<uint>      rope_sin;
+RWStructuredBuffer<float>   rope_buf;
+StructuredBuffer<float>     kv_new;
+RWStructuredBuffer<float>   kv_cache;      // FP32 [capacity, heads_kv, head_dim]
+StructuredBuffer<float>     Q;
+StructuredBuffer<float>     K;
+StructuredBuffer<float>     V;
+RWStructuredBuffer<float>   AttendedValues;
+RWStructuredBuffer<float>   input;
+RWStructuredBuffer<float>   intermediate;
+StructuredBuffer<uint>      mlp_gate_w;
+StructuredBuffer<uint>      mlp_up_w;
+StructuredBuffer<uint>      mlp_down_w;
+StructuredBuffer<uint>      mlp_gate_scales;
+StructuredBuffer<uint>      mlp_up_scales;
+StructuredBuffer<uint>      mlp_down_scales;
+StructuredBuffer<float>     lm_input;
+RWStructuredBuffer<float>   lm_output;
+RWStructuredBuffer<float>   logits_buf;
+RWStructuredBuffer<uint>    argmax_result;
+
+RWStructuredBuffer<float>   buf_a;
+StructuredBuffer<float>     buf_b;
+
+// ================================ HELPERS ================================
+float silu(float x)    { return x / (1.0 + exp(-x)); }
+
+// erf-GELU (activation_function "gelu" is the EXACT erf form, not GPT-2's tanh — SPEC risk #1).
+// erf via Abramowitz-Stegun 7.1.26, |err| < 1.5e-7 — parity-validated in QwenASRCPU.GeluErf.
+float gelu_erf(float x)
+{
+    float z = x * 0.70710678118654752;
+    float az = abs(z);
+    float t = 1.0 / (1.0 + 0.3275911 * az);
+    float y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t
+                      - 0.284496736) * t + 0.254829592) * t * exp(-az * az);
+    float erf = z >= 0.0 ? y : -y;
+    return 0.5 * x * (1.0 + erf);
+}
+
+// ============================================================================
+//                              §1 MEL FRONTEND
+// ============================================================================
+// power[t, f] = re^2 + im^2 of the 400-tap DFT of windowed frame t (basis precomputed fp32).
+#pragma kernel MelDftPower
+[numthreads(8, 32, 1)]
+void MelDftPower(uint3 id : SV_DispatchThreadID)
+{
+    uint t = id.x, f = id.y;
+    if (t >= n_frames || f >= n_freqs) return;
+    float re = 0.0, im = 0.0;
+    uint fb = f * n_fft, tb = t * n_fft;
+    for (uint j = 0; j < n_fft; j++)
+    {
+        float v = frames[tb + j];
+        re += v * dft_cos[fb + j];
+        im += v * dft_sin[fb + j];
+    }
+    power_buf[t * n_freqs + f] = re * re + im * im;
+}
+
+// mel_buf[m, t] = log10(max(sum_f fb[f,m] * power[t,f], 1e-10))   (mel-major layout)
+#pragma kernel MelLogMel
+[numthreads(8, 32, 1)]
+void MelLogMel(uint3 id : SV_DispatchThreadID)
+{
+    uint t = id.x, m = id.y;
+    if (t >= n_frames || m >= n_mels) return;
+    float acc = 0.0;
+    for (uint f = 0; f < n_freqs; f++)
+        acc += readH(mel_filters, f * n_mels + m) * power_buf[t * n_freqs + f];
+    mel_buf[m * frames_padded + t] = log10(max(acc, 1e-10)) ;
+}
+
+// GLOBAL max over the VALID region only (padded zero columns must not win) — one group.
+#pragma kernel MelGlobalMax
+groupshared float mel_red[256];
+[numthreads(256, 1, 1)]
+void MelGlobalMax(uint3 gtid : SV_GroupThreadID)
+{
+    uint tid = gtid.x;
+    uint total = n_mels * n_frames;
+    float mx = -3.0e38;
+    for (uint i = tid; i < total; i += 256u)
+    {
+        uint m = i / n_frames, t = i % n_frames;
+        mx = max(mx, mel_buf[m * frames_padded + t]);
+    }
+    mel_red[tid] = mx;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint s = 128u; s > 0u; s >>= 1)
+    {
+        if (tid < s) mel_red[tid] = max(mel_red[tid], mel_red[tid + s]);
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (tid == 0) gmax_buf[0] = mel_red[0];
+}
+
+// x = (max(x, gmax - 8) + 4) / 4 over the valid region (pad stays 0).
+#pragma kernel MelNormalize
+[numthreads(256, 1, 1)]
+void MelNormalize(uint3 id : SV_DispatchThreadID)
+{
+    uint total = n_mels * n_frames;
+    if (id.x >= total) return;
+    uint m = id.x / n_frames, t = id.x % n_frames;
+    uint idx = m * frames_padded + t;
+    mel_buf[idx] = (max(mel_buf[idx], gmax_buf[0] - 8.0) + 4.0) / 4.0;
+}
+
+// ============================================================================
+//                     §2 CONV FRONTEND (PER 1-SECOND CHUNK)
+// ============================================================================
+// First conv reads the mel buffer directly: chunk c input = mel_buf[:, c*100 .. c*100+99],
+// zero-padded PER CHUNK (p=1). k3 s2 p1 + erf-GELU. in_c == 1.
+#pragma kernel Conv2dMelChunk
+[numthreads(64, 4, 1)]
+void Conv2dMelChunk(uint3 id : SV_DispatchThreadID)
+{
+    uint OH = (conv_in_h - 1) / 2 + 1, OW = (conv_in_w - 1) / 2 + 1;
+    uint oyx = id.x, oc = id.y, c = id.z;
+    if (oyx >= OH * OW || oc >= conv_out_c || c >= n_chunks) return;
+    uint oy = oyx / OW, ox = oyx % OW;
+
+    float acc = readH(conv_b, oc);
+    uint wb = oc * 9u;               // [OC, 1, 3, 3]
+    for (uint ky = 0; ky < 3; ky++)
+    {
+        int iy = (int)(2u * oy + ky) - 1;
+        if (iy < 0 || iy >= (int)conv_in_h) continue;
+        for (uint kx = 0; kx < 3; kx++)
+        {
+            int ix = (int)(2u * ox + kx) - 1;
+            if (ix < 0 || ix >= (int)conv_in_w) continue;
+            acc += readH(conv_w, wb + ky * 3u + kx) * mel_buf[(uint)iy * frames_padded + c * conv_in_w + (uint)ix];
+        }
+    }
+    conv_out_buf[((c * conv_out_c + oc) * OH + oy) * OW + ox] = gelu_erf(acc);
+}
+
+// Generic chunked conv2d k3 s2 p1 + erf-GELU on [chunks, C, H, W].
+#pragma kernel Conv2dS2
+[numthreads(64, 4, 1)]
+void Conv2dS2(uint3 id : SV_DispatchThreadID)
+{
+    uint OH = (conv_in_h - 1) / 2 + 1, OW = (conv_in_w - 1) / 2 + 1;
+    uint oyx = id.x, oc = id.y, c = id.z;
+    if (oyx >= OH * OW || oc >= conv_out_c || c >= n_chunks) return;
+    uint oy = oyx / OW, ox = oyx % OW;
+
+    float acc = readH(conv_b, oc);
+    for (uint ic = 0; ic < conv_in_c; ic++)
+    {
+        uint wb = ((oc * conv_in_c + ic) * 3u) * 3u;
+        uint ib = (c * conv_in_c + ic) * conv_in_h * conv_in_w;
+        for (uint ky = 0; ky < 3; ky++)
+        {
+            int iy = (int)(2u * oy + ky) - 1;
+            if (iy < 0 || iy >= (int)conv_in_h) continue;
+            for (uint kx = 0; kx < 3; kx++)
+            {
+                int ix = (int)(2u * ox + kx) - 1;
+                if (ix < 0 || ix >= (int)conv_in_w) continue;
+                acc += readH(conv_w, wb + ky * 3u + kx) * conv_in[ib + (uint)iy * conv_in_w + (uint)ix];
+            }
+        }
+    }
+    conv_out_buf[((c * conv_out_c + oc) * OH + oy) * OW + ox] = gelu_erf(acc);
+}
+
+// enc_x[c*13 + t, d] = conv_out.w[d, :] . flat(chunk c, time t)  + pos_emb[t, d]
+// flat index = ch * 16 + freq_bin (channel-major then freq), from [chunks, 480, 16, 13].
+// Partial final chunk keeps only its first `last_keep` positions (SPEC §2.1).
+#pragma kernel ConvOutPos
+[numthreads(32, 13, 1)]
+void ConvOutPos(uint3 id : SV_DispatchThreadID)
+{
+    uint d = id.x, t = id.y, c = id.z;
+    if (d >= enc_d || t >= 13u || c >= n_chunks) return;
+    uint keep = c < full_chunks ? 13u : last_keep;
+    if (t >= keep) return;
+
+    float acc = 0.0;
+    uint wb = d * 7680u;
+    uint cb = c * 480u * 16u * 13u;
+    for (uint ch = 0; ch < 480u; ch++)
+        for (uint fb2 = 0; fb2 < 16u; fb2++)
+            acc += readH(conv_out_w, wb + ch * 16u + fb2) * conv_out_buf[cb + (ch * 16u + fb2) * 13u + t];
+
+    enc_x[(c * 13u + t) * enc_d + d] = acc + readH(pos_emb, t * enc_d + d);
+}
+
+// ============================================================================
+//                    GENERIC MATMUL + LAYERNORM (encoder/proj/decoder)
+// ============================================================================
+// Y[t, o] = act(X[t, :] . W[o, :] (+ B[o]))   W row-major [out_dim, in_dim] fp16/int8.
+#pragma kernel MatMulBiasAct
+[numthreads(1, 8, 32)]
+void MatMulBiasAct(uint3 id : SV_DispatchThreadID)
+{
+    uint t = id.y, o = id.z;
+    if (t >= rows || o >= out_dim) return;
+    float acc = 0.0;
+    uint xb = t * in_dim, wb = o * in_dim;
+    for (uint i = 0; i < in_dim; i++)
+        acc += X[xb + i] * readW(W, W_scales, wb + i);
+    acc *= wScale(W_scales, o);
+    if (has_bias == 1u) acc += readH(B, o);
+    Y[t * out_dim + o] = act_mode == 1u ? gelu_erf(acc) : acc;
+}
+
+// nn.LayerNorm (mean/var, gamma+beta) — encoder norms; eps 1e-5.
+#pragma kernel LayerNorm
+[numthreads(256, 1, 1)]
+void LayerNorm(uint3 id : SV_DispatchThreadID)
+{
+    uint t = id.x;
+    if (t >= rows) return;
+    uint o = t * in_dim;
+    float mean = 0.0;
+    for (uint i = 0; i < in_dim; i++) mean += norm_input[o + i];
+    mean /= (float)in_dim;
+    float v = 0.0;
+    for (uint i = 0; i < in_dim; i++) { float d = norm_input[o + i] - mean; v += d * d; }
+    float inv = rsqrt(v / (float)in_dim + norm_eps);
+    for (uint i = 0; i < in_dim; i++)
+        norm_output[o + i] = (norm_input[o + i] - mean) * inv * readH(norm_gamma, i) + readH(norm_beta, i);
+}
+
+// ============================================================================
+//                     §2.2 ENCODER WINDOWED ATTENTION
+// ============================================================================
+// Non-causal block-diagonal windows of enc_window (=104) tokens. Q/K/V head-interleaved
+// [N, enc_d], head h at offset h*hd (hd = enc_d/enc_heads = 64). scores [h, i, j].
+#pragma kernel EncScores
+[numthreads(4, 32, 4)]
+void EncScores(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x, j = id.y, h = id.z;
+    if (i >= n_tokens || j >= n_tokens || h >= enc_heads) return;
+    uint hd = enc_d / enc_heads;
+    float s;
+    if (i / enc_window != j / enc_window)
+        s = -1e10;
+    else
+    {
+        float dot = 0.0;
+        uint qb = i * enc_d + h * hd, kb = j * enc_d + h * hd;
+        for (uint d = 0; d < hd; d++) dot += Q_e[qb + d] * K_e[kb + d];
+        s = dot * scale;
+    }
+    enc_scores[(h * n_tokens + i) * n_tokens + j] = s;
+}
+
+// softmax rows over enc_scores [enc_heads * n_tokens, n_tokens]
+#pragma kernel EncSoftmaxRows
+[numthreads(256, 1, 1)]
+void EncSoftmaxRows(uint3 id : SV_DispatchThreadID)
+{
+    uint row = id.x;
+    if (row >= enc_heads * n_tokens) return;
+    uint b = row * n_tokens;
+    float mx = enc_scores[b];
+    for (uint j = 1; j < n_tokens; j++) mx = max(mx, enc_scores[b + j]);
+    float sum = 0.0;
+    for (uint j = 0; j < n_tokens; j++)
+    {
+        float e = exp(enc_scores[b + j] - mx);
+        enc_scores[b + j] = e;
+        sum += e;
+    }
+    float inv = 1.0 / max(sum, 1e-12);
+    for (uint j = 0; j < n_tokens; j++) enc_scores[b + j] *= inv;
+}
+
+#pragma kernel EncAttend
+[numthreads(64, 4, 1)]
+void EncAttend(uint3 id : SV_DispatchThreadID)
+{
+    uint hd = enc_d / enc_heads;
+    uint d = id.x, i = id.y, h = id.z;
+    if (d >= hd || i >= n_tokens || h >= enc_heads) return;
+    // windows are block-diagonal: only this window's probs are non-zero — skip the rest
+    uint w0 = i / enc_window * enc_window;
+    uint w1 = min(w0 + enc_window, n_tokens);
+    float acc = 0.0;
+    uint sb = (h * n_tokens + i) * n_tokens;
+    for (uint j = w0; j < w1; j++)
+        acc += enc_scores[sb + j] * V_e[j * enc_d + h * hd + d];
+    enc_att[i * enc_d + h * hd + d] = acc;
+}
+
+// ============================================================================
+//                              §4 DECODER (stock Qwen3)
+// ============================================================================
+// Shard-aware: the tied embedding is 16 row-shards; one dispatch per shard, threads whose
+// token falls outside the bound shard early-out (a token is written by exactly one pass).
+#pragma kernel EmbeddingLookup
+[numthreads(256, 1, 1)]
+void EmbeddingLookup(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * hidden_size) return;
+    uint pos = idx / hidden_size;
+    uint h = idx % hidden_size;
+    uint tok = token_ids[pos];
+    if (tok < shard_base || tok >= shard_base + shard_rows) return;
+    embed_output[idx] = readH(embed_weights, (tok - shard_base) * hidden_size + h);
+}
+
+// buf_a[copy_dst_offset + i] = buf_b[copy_src_offset + i] — audio-embed scatter (contiguous
+// <|audio_pad|> run) and general slice moves.
+#pragma kernel CopyToOffset
+[numthreads(256, 1, 1)]
+void CopyToOffset(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[copy_dst_offset + id.x] = buf_b[copy_src_offset + id.x];
+}
+
+// STANDARD llama/Qwen3 RMSNorm: x_hat * gamma (NOT Qwen3.5's (1+gamma) — modeling_qwen3.py).
+#pragma kernel RmsNormHidden
+[numthreads(256, 1, 1)]
+void RmsNormHidden(uint3 id : SV_DispatchThreadID)
+{
+    uint pos = id.x;
+    if (pos >= seq_len) return;
+    uint b = pos * hidden_size;
+    float ss = 0.0;
+    for (uint i = 0; i < hidden_size; i++) { float v = norm_input[b + i]; ss += v * v; }
+    float rms = rsqrt(ss / (float)hidden_size + norm_eps);
+    for (uint i = 0; i < hidden_size; i++)
+        norm_output[b + i] = norm_input[b + i] * rms * readH(norm_gamma, i);
+}
+
+// QK-norm: per-head RMSNorm over head_dim, standard gamma; applied BEFORE RoPE.
+#pragma kernel RmsNormHead
+[numthreads(256, 1, 1)]
+void RmsNormHead(uint3 id : SV_DispatchThreadID)
+{
+    uint vec = id.x;
+    if (vec >= num_vectors) return;
+    uint b = vec * head_dim;
+    float ss = 0.0;
+    for (uint i = 0; i < head_dim; i++) { float v = norm_input[b + i]; ss += v * v; }
+    float rms = rsqrt(ss / (float)head_dim + norm_eps);
+    for (uint i = 0; i < head_dim; i++)
+        norm_output[b + i] = norm_input[b + i] * rms * readH(norm_gamma, i);
+}
+
+// Full-dim RoPE (rope_rot_dim == head_dim == 128), split-half pattern, θ=1e6 tables.
+#pragma kernel ApplyRope
+[numthreads(128, 1, 1)]
+void ApplyRope(uint3 id : SV_DispatchThreadID)
+{
+    uint hd2 = rope_rot_dim / 2u;
+    uint total = seq_len * rope_num_heads * hd2;
+    uint idx = id.x;
+    if (idx >= total) return;
+
+    uint i = idx % hd2;
+    uint tmp = idx / hd2;
+    uint h = tmp % rope_num_heads;
+    uint l = tmp / rope_num_heads;
+
+    uint base_off = (l * rope_num_heads + h) * head_dim;
+    float x1 = rope_buf[base_off + i];
+    float x2 = rope_buf[base_off + i + hd2];
+
+    uint abs_pos = position_offset + l;
+    float c = readH(rope_cos, abs_pos * hd2 + i);
+    float s = readH(rope_sin, abs_pos * hd2 + i);
+
+    rope_buf[base_off + i]       = x1 * c - x2 * s;
+    rope_buf[base_off + i + hd2] = x2 * c + x1 * s;
+}
+
+// FP32 KV cache append (v1 keeps KV FP32; quantized KV tiers later via KVCache.hlsl).
+#pragma kernel WriteCacheFull
+[numthreads(256, 1, 1)]
+void WriteCacheFull(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    uint total = seq_len * num_heads_kv * head_dim;
+    if (idx >= total) return;
+    uint d = idx % head_dim;
+    uint tmp = idx / head_dim;
+    uint h = tmp % num_heads_kv;
+    uint l = tmp / num_heads_kv;
+    kv_cache[((cache_len + l) * num_heads_kv + h) * head_dim + d] = kv_new[idx];
+}
+
+// FlashAttention-1 style fused causal attention (structure copied from Qwen3_5CS.compute,
+// FP32 KV reads, no output gate). One threadgroup per (query, q head); head_dim <= 256.
+#define FA_THREADS 256
+groupshared float fa_q[FA_THREADS];
+groupshared float fa_p[FA_THREADS];
+groupshared float fa_red[FA_THREADS];
+
+#pragma kernel FlashAttention
+[numthreads(FA_THREADS, 1, 1)]
+void FlashAttention(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint q_pos = gid.x;
+    uint hq    = gid.y;
+    uint tid   = gtid.x;
+
+    uint hkv    = hq / max(num_heads_q / max(num_heads_kv, 1u), 1u);
+    uint kv_len = max(seq_len_k, 1u);  // degenerate prewarm dispatch must terminate
+    uint abs_q  = (kv_len - seq_len_q) + q_pos;
+    uint j_hi   = min(abs_q, kv_len - 1u);   // causal: keys j <= abs_q
+
+    uint q_base = (q_pos * num_heads_q + hq) * head_dim;
+    for (uint dq = tid; dq < head_dim; dq += FA_THREADS)
+        fa_q[dq] = Q[q_base + dq] * scale;
+    GroupMemoryBarrierWithGroupSync();
+
+    float m   = -3.0e38;
+    float l   = 0.0;
+    float acc = 0.0;
+
+    for (uint tile = 0; tile <= j_hi; tile += FA_THREADS)
+    {
+        uint j = tile + tid;
+        float s = -3.0e38;
+        if (j <= j_hi)
+        {
+            uint k_base = (j * num_heads_kv + hkv) * head_dim;
+            float dot = 0.0;
+            for (uint d = 0; d < head_dim; d++)
+                dot += fa_q[d] * K[k_base + d];
+            s = dot;
+        }
+
+        fa_red[tid] = s;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r1 = FA_THREADS / 2; r1 > 0; r1 >>= 1)
+        {
+            if (tid < r1) fa_red[tid] = max(fa_red[tid], fa_red[tid + r1]);
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float m_new = max(m, fa_red[0]);
+        GroupMemoryBarrierWithGroupSync();
+
+        float p = (j <= j_hi) ? exp(s - m_new) : 0.0;
+        fa_p[tid] = p;
+        fa_red[tid] = p;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r2 = FA_THREADS / 2; r2 > 0; r2 >>= 1)
+        {
+            if (tid < r2) fa_red[tid] += fa_red[tid + r2];
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float tile_sum = fa_red[0];
+
+        float alpha = exp(m - m_new);
+        l = l * alpha + tile_sum;
+
+        if (tid < head_dim)
+        {
+            float a = acc * alpha;
+            uint n_valid = min(FA_THREADS, j_hi - tile + 1u);
+            for (uint jj = 0; jj < n_valid; jj++)
+                a += fa_p[jj] * V[((tile + jj) * num_heads_kv + hkv) * head_dim + tid];
+            acc = a;
+        }
+        m = m_new;
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (tid < head_dim)
+        AttendedValues[(q_pos * num_heads_q + hq) * head_dim + tid] = acc / max(l, 1e-12);
+}
+
+// ================================ MLP (SwiGLU, silu) ================================
+#pragma kernel GateUp
+[numthreads(64, 8, 1)]
+void GateUp(uint3 id : SV_DispatchThreadID)
+{
+    uint i_idx = id.x, l_idx = id.y;
+    if (i_idx >= intermediate_size || l_idx >= seq_len) return;
+    uint H = hidden_size;
+    uint ib = l_idx * H;
+    float g = 0.0, u = 0.0;
+    for (uint k = 0; k < H; k++)
+    {
+        float x = input[ib + k];
+        g += x * readW(mlp_gate_w, mlp_gate_scales, i_idx * H + k);
+        u += x * readW(mlp_up_w,   mlp_up_scales,   i_idx * H + k);
+    }
+    g *= wScale(mlp_gate_scales, i_idx);
+    u *= wScale(mlp_up_scales, i_idx);
+    intermediate[l_idx * intermediate_size + i_idx] = silu(g) * u;
+}
+
+#pragma kernel Down
+[numthreads(64, 8, 1)]
+void Down(uint3 id : SV_DispatchThreadID)
+{
+    uint h_idx = id.x, l_idx = id.y;
+    if (h_idx >= hidden_size || l_idx >= seq_len) return;
+    uint ib = l_idx * intermediate_size;
+    float acc = 0.0;
+    for (uint i = 0; i < intermediate_size; i++)
+        acc += intermediate[ib + i] * readW(mlp_down_w, mlp_down_scales, h_idx * intermediate_size + i);
+    input[l_idx * hidden_size + h_idx] = acc * wScale(mlp_down_scales, h_idx);
+}
+
+// ================================ LM head + greedy ================================
+// Shard-aware tied LM head: one dispatch per embed shard; v indexes within the shard and the
+// logit lands at shard_base + v.
+#pragma kernel LmHeadPredict1Vec
+[numthreads(512, 1, 1)]
+void LmHeadPredict1Vec(uint3 id : SV_DispatchThreadID)
+{
+    uint v = id.x;
+    if (v >= shard_rows) return;
+    float sum = 0.0;
+    for (uint h = 0; h < hidden_size; h++)
+        sum += lm_input[h] * readH(embed_weights, v * hidden_size + h);   // tied head, always fp16
+    logits_buf[shard_base + v] = sum;
+}
+
+#define SAMPLER_THREADS 256
+groupshared float smp_val[SAMPLER_THREADS];
+groupshared uint  smp_idx[SAMPLER_THREADS];
+
+#pragma kernel ArgMax
+[numthreads(SAMPLER_THREADS, 1, 1)]
+void ArgMax(uint3 gtid : SV_GroupThreadID)
+{
+    uint tid = gtid.x;
+    float bv = -3.0e38; uint bi = 0;
+    for (uint i = tid; i < vocab_size; i += SAMPLER_THREADS)
+    { float v = logits_buf[i]; if (v > bv) { bv = v; bi = i; } }
+    smp_val[tid] = bv; smp_idx[tid] = bi;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint s = SAMPLER_THREADS / 2; s > 0; s >>= 1)
+    {
+        if (tid < s && smp_val[tid + s] > smp_val[tid])
+        { smp_val[tid] = smp_val[tid + s]; smp_idx[tid] = smp_idx[tid + s]; }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (tid == 0) argmax_result[0] = smp_idx[0];
+}
+
+// ================================ Buffer ops ===================================
+#pragma kernel ZeroBuffer
+[numthreads(256, 1, 1)]
+void ZeroBuffer(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[id.x] = 0.0;
+}
+
+#pragma kernel CopyBuffer
+[numthreads(256, 1, 1)]
+void CopyBuffer(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[id.x] = buf_b[id.x];
+}
+
+#pragma kernel AddResidual
+[numthreads(256, 1, 1)]
+void AddResidual(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[id.x] += buf_b[id.x];
+}

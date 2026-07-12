@@ -92,6 +92,13 @@ namespace DeepUnity
             volatile bool _allReadsEnqueued;
             volatile bool _disposed;
             int _jobsUploaded;
+            long _bytesUploaded;
+            long _bytesTotal;
+
+            /// <summary>Total manifest bytes / bytes already resident — surfaced through
+            /// LLM.TotalWeightBytes so game code can pace the stream (NPC walk-up prefetch).</summary>
+            public long BytesTotal => _bytesTotal;
+            public long BytesUploaded => _bytesUploaded;
 
             public Gemma3Weights(string paramsPath, LLMQuant quant = LLMQuant.FP16)
             {
@@ -102,7 +109,7 @@ namespace DeepUnity
                         $"Gemma3 weights folder not found: '{paramsPath}'. Generate it with " +
                         "Assets/DeepUnity/LLM/import_params.py — e.g. `python import_params.py google/gemma-3-270m-it " +
                         "--quant fp16|int8|int4` downloads the checkpoint and exports the params folder under " +
-                        "Assets/Resources/DeepUnity/LLM/Gemma3/.");
+                        "Assets/Resources/Weights/.");
 
                 Quant = quant;
                 numLayers = Gemma3Config.NUM_LAYERS;
@@ -132,9 +139,13 @@ namespace DeepUnity
                 mlpScales = new ComputeBuffer[numLayers];
 
                 BuildManifest(paramsPath);
+                foreach (var j in _manifest) _bytesTotal += (long)j.fileHalfCount * 2;
 
                 DeepUnityDispatcher.Run(UploadPump());
-                _ = LoadAllAsync();
+                // kicked on the THREAD POOL: an async method's synchronous prefix (task fan-out + the
+                // first MAX_IO_JOBS reads, which pass the io-gate synchronously) otherwise runs the
+                // first file reads on the MAIN thread — measured 80-280 ms = the zone-entry freeze.
+                _ = Task.Run(() => LoadAllAsync());
             }
 
             void Add(string path, ComputeBuffer[] slot, int slotIndex, int bufferHalves,
@@ -378,6 +389,9 @@ namespace DeepUnity
                         if (job.slot[job.slotIndex] == null)
                         {
                             if (budget <= 0) { yield return null; budget = LLM.UploadBudgetBytes; }
+                            // big allocations right after a release stall the driver mid-cleanup
+                            // (measured 250-550 ms single-frame spikes) — give it one present first
+                            if ((long)job.bufferHalfCount * 2 > 48_000_000) yield return null;
                             job.slot[job.slotIndex] = HalfBuf(job.bufferHalfCount);
                             budget -= (long)job.bufferHalfCount * 2;
                         }
@@ -393,6 +407,8 @@ namespace DeepUnity
                                 budget = LLM.UploadBudgetBytes;
                             }
                             int count = (int)Math.Min(budget, len - src);
+                            count &= ~3;                 // SetData needs stride(4)-aligned byte counts
+                            if (count == 0) count = 4;   // never stall on a sub-word budget
                             target.SetData(job.data, src, job.dstByteOffset + src, count);
                             src += count;
                             budget -= count;
@@ -401,6 +417,7 @@ namespace DeepUnity
                         ReturnToPool(job.data);
                         _ioGate.Release();
                         _jobsUploaded++;
+                        _bytesUploaded += len;
                     }
                     else if (_allReadsEnqueued && _uploads.IsEmpty)
                     {
@@ -424,20 +441,47 @@ namespace DeepUnity
                 IsReady = true;
             }
 
+            // Every weight buffer this loader owns (shared by the sync and budgeted teardowns).
+            IEnumerable<ComputeBuffer> OwnedBuffers()
+            {
+                yield return _embedSlot[0];
+                yield return _finalNormSlot[0];
+                yield return _embedScalesSlot[0];
+                for (int i = 0; i < numLayers; i++)
+                {
+                    yield return W_QKV[i]; yield return W_O[i]; yield return mlpWeights[i];
+                    yield return qNormGamma[i]; yield return kNormGamma[i];
+                    yield return inputLnGamma[i]; yield return postAttnLnGamma[i];
+                    yield return preFfnLnGamma[i]; yield return postFfnLnGamma[i];
+                    yield return W_QKVScales[i]; yield return W_OScales[i]; yield return mlpScales[i];
+                }
+            }
+
+            bool _buffersFreed;
+
             public void Dispose()
             {
                 _disposed = true; // stops the UploadPump before buffers vanish under it
+                if (_buffersFreed) return;
+                _buffersFreed = true;
+                foreach (var b in OwnedBuffers()) b?.Release();
+            }
 
-                _embedSlot[0]?.Release();
-                _finalNormSlot[0]?.Release();
-                _embedScalesSlot[0]?.Release();
-                for (int i = 0; i < numLayers; i++)
+            /// <summary>Budgeted teardown: ~bytesPerFrame of buffers freed per frame — the driver
+            /// digests the release incrementally instead of stalling the NEXT model's big
+            /// allocations (measured 250-550 ms single-frame spikes after monolithic frees).</summary>
+            public IEnumerator DisposeSlow(long bytesPerFrame)
+            {
+                _disposed = true;
+                if (_buffersFreed) yield break;
+                _buffersFreed = true;
+                long spent = 0;
+                foreach (var b in OwnedBuffers())
                 {
-                    W_QKV[i]?.Release(); W_O[i]?.Release(); mlpWeights[i]?.Release();
-                    qNormGamma[i]?.Release(); kNormGamma[i]?.Release();
-                    inputLnGamma[i]?.Release(); postAttnLnGamma[i]?.Release();
-                    preFfnLnGamma[i]?.Release(); postFfnLnGamma[i]?.Release();
-                    W_QKVScales[i]?.Release(); W_OScales[i]?.Release(); mlpScales[i]?.Release();
+                    if (b == null) continue;
+                    spent += (long)b.count * b.stride;
+                    b.Release();
+                    if (spent >= bytesPerFrame) { spent = 0; yield return null; }
                 }
             }
         }

@@ -24,7 +24,7 @@ namespace DeepUnity
 
             public static void Run() => Setup<ChatterboxParityProbe>(exitWhenDone: true, Marker);
 
-            const string Int8Dir = "Assets/Resources/DeepUnity/TTS/Chatterbox/weights_chatterbox_turbo_int8";
+            const string Int8Dir = "Assets/Resources/Weights/weights_chatterbox_turbo_int8";
 
             [MenuItem("DeepUnity/TTS/Run Chatterbox Parity Probe (int8)")]
             public static void RunInteractiveInt8() => Setup<ChatterboxParityProbe>(exitWhenDone: false, Marker,

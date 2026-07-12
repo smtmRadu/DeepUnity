@@ -1,0 +1,1535 @@
+// CosyVoiceFlowCS.compute
+// ======================================================================================
+// Fun-CosyVoice3-0.5B flow + vocoder kernels, seeded from the validated ChatterboxS3GenCS
+// set (the CausalHiFT vocoder shares the whole kernel family: Conv1D has pad_left causal
+// semantics, MagPhase already computes phase=sin — CosyVoice's own head, which Chatterbox
+// inherited). A2 adds the DiT-specific kernels (AdaLN modulation, chunk-causal attention,
+// RoPE); until then the encoder/attention kernels below are unused donor code.
+// Port spec: Assets/DeepUnity/TTS/CosyVoice/SPEC.md (§2, §3).
+//
+// Conventions (Gemma3CS style): fp16 weights packed 2-per-uint (readH), FP32 activations.
+// ALL activation buffers are [T, C] row-major (t*C + c). Conv weights keep native torch
+// layouts: Conv1d [out,in,k], ConvTranspose1d [in,out,k], Linear [out,in]. Batch is always 1
+// and offline masks are all-ones, so no mask logic exists anywhere.
+// ======================================================================================
+
+// ================================ PARAMETERS ================================
+uint seq_len;         // positions of the OUTPUT of the current op
+uint in_len;          // conv input length
+uint in_dim;          // linear/conv in channels
+uint out_dim;         // linear/conv out channels
+uint conv_kernel;
+uint conv_stride;
+uint conv_dilation;
+int  pad_left;        // conv left padding (causal: k-1; same: (k*d-d)/2)
+uint norm_dim;        // LayerNormT channel count
+uint num_heads;       // 8
+uint head_dim;        // 64
+uint buffer_size;
+uint copy_src_offset;
+uint copy_dst_offset;
+uint pack_dst_dim;    // PackChannels dst row stride
+uint pack_dst_off;    // PackChannels dst channel offset
+uint factor;          // RepeatTime upsample factor
+uint n_frames;        // STFT/ISTFT frame count
+uint sample_len;      // waveform length
+uint gauss_offset;    // GaussNoise element offset (decorrelates successive fills)
+int  activation_type; // 0 none 1 silu 2 gelu_exact 3 mish 4 leaky 5 abs 6 tanh 7 elu
+int  has_bias;
+float norm_eps;
+float scale;          // attention scale
+float scale_val;      // ScaleBuf multiplier
+float leaky_slope;
+float t_scalar;       // SinusTimeEmb input (already 0..1)
+float dt_val;         // EulerStep dt
+float sine_amp;       // 0.1
+float noise_std;      // 0.003
+float voiced_threshold; // 10
+float audio_limit;    // 0.99
+int   rng_seed;
+uint n_groups;        // Conv1DGrouped group count (DiT convpos: 16)
+uint mod_scale_off;   // AdaLNModulate: offsets into mod_vec
+uint mod_shift_off;
+uint mod_gate_off;    // GateAdd
+uint attn_chunk;      // BidirAttention chunk mask: keys j < (q/chunk+1)*chunk; 0 = full bidir
+// ---- A6-max batch-2 CFG + single-pass streaming (see CosyVoiceFlow.cs) ----
+uint batch_seq;       // rows per CFG half in stacked batch-2 buffers (0 = single sequence)
+uint pos_offset;      // absolute row index of local row 0 (RoPE angles / streaming chunk mask)
+uint pack_src_row;    // PackChannels: source row offset
+uint pack_dst_row;    // PackChannels: dest row offset
+uint kv_row_off;      // WriteFlowKV: dest row within each half's plane
+uint kv_cap;          // flow K/V cache: rows per plane (per half, per K/V)
+uint kv_len;          // BidirAttentionKV: valid cache rows (attention key count)
+
+// ================================ WEIGHT / IO BUFFERS ================================
+StructuredBuffer<uint>      emb_weights;    // token embedding [6561, 512]
+StructuredBuffer<uint>      W;              // linear/conv weight
+StructuredBuffer<uint>      W_bias;         // linear/conv bias
+StructuredBuffer<uint>      W_scales;       // q8 per-output-row fp16 scales (Q8 kernels only)
+StructuredBuffer<uint>      ln_gamma;
+StructuredBuffer<uint>      ln_beta;
+StructuredBuffer<uint>      pos_bias_u;     // [8, 64]
+StructuredBuffer<uint>      pos_bias_v;     // [8, 64]
+StructuredBuffer<uint>      snake_alpha;    // [C]
+StructuredBuffer<uint>      nsf_w;          // m_source.l_linear [1, 9]
+StructuredBuffer<uint>      nsf_b;          // [1]
+
+StructuredBuffer<uint>      token_ids;
+RWStructuredBuffer<float>   embed_output;
+StructuredBuffer<float>     X;              // op input
+RWStructuredBuffer<float>   Y;              // op output
+StructuredBuffer<float>     norm_input;
+RWStructuredBuffer<float>   norm_output;
+StructuredBuffer<float>     Q;              // [T, H, D]
+StructuredBuffer<float>     K;
+StructuredBuffer<float>     V;
+StructuredBuffer<float>     P;              // projected rel-pos emb [2T-1, H, D]
+RWStructuredBuffer<float>   AttendedValues;
+RWStructuredBuffer<float>   buf_a;
+StructuredBuffer<float>     buf_b;
+RWStructuredBuffer<float>   inout_buf;      // in-place ops (activations, euler, fades)
+StructuredBuffer<float>     theta_in;       // NSF phases [samples, 9]
+StructuredBuffer<float>     phase_vec;      // NSF per-harmonic random phase [9]
+StructuredBuffer<float>     f0_up;          // upsampled F0 [samples]
+StructuredBuffer<float>     nsf_noise;      // N(0,1) [samples, 9] (+1 col for the noise branch)
+RWStructuredBuffer<float>   theta_out;
+StructuredBuffer<float>     mod_vec;        // AdaLN modulation vectors (fp32 activations)
+StructuredBuffer<uint>      rope_freqs;     // DiT rotary inv_freq [32] (fp16)
+// Streaming DiT K/V cache, ONE buffer per (Euler step, layer): fp16 packed 2/uint, four
+// row-planes of kv_cap rows each: plane (half*2 + {0=K,1=V}). Row stride = 1024 elems.
+StructuredBuffer<uint>      flow_kv;        // read view (BidirAttentionKV)
+RWStructuredBuffer<uint>    flow_kv_w;      // write view (WriteFlowKV)
+
+// ================================ HELPERS ================================
+float readH(StructuredBuffer<uint> buf, uint index)
+{
+    uint word = buf[index >> 1];
+    uint shift = (index & 1u) * 16u;
+    return f16tof32(word >> shift);
+}
+// int8 weight element (export packs 4 per uint, low byte = element 0; one fp16
+// scale per OUTPUT ROW lives in W_scales — applied once per dot product)
+float readQ8(StructuredBuffer<uint> buf, uint index)
+{
+    int q = (int)(buf[index >> 2] >> ((index & 3u) * 8u));
+    return (float)((q << 24) >> 24);   // sign-extend low byte
+}
+float safe_tanh(float x)
+{
+    float a = abs(x);
+    float e = exp(-2.0 * a);
+    return sign(x) * ((1.0 - e) / (1.0 + e));
+}
+float erf_approx(float x)   // Abramowitz&Stegun 7.1.26, max abs err 1.5e-7
+{
+    float s = sign(x);
+    float a = abs(x);
+    float t = 1.0 / (1.0 + 0.3275911 * a);
+    float y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * exp(-a * a);
+    return s * y;
+}
+float gelu_exact(float x) { return 0.5 * x * (1.0 + erf_approx(x * 0.70710678)); }
+float silu(float x) { return x / (1.0 + exp(-x)); }
+float softplus(float x) { return x > 20.0 ? x : log(1.0 + exp(x)); }
+float mish(float x) { return x * safe_tanh(softplus(x)); }
+float apply_act(float v)
+{
+    if (activation_type == 1) return silu(v);
+    if (activation_type == 2) return gelu_exact(v);
+    if (activation_type == 3) return mish(v);
+    if (activation_type == 4) return v > 0.0 ? v : leaky_slope * v;
+    if (activation_type == 5) return abs(v);
+    if (activation_type == 6) return safe_tanh(v);
+    if (activation_type == 7) return v > 0.0 ? v : exp(v) - 1.0;   // ELU alpha=1
+    if (activation_type == 8)                                      // GELU tanh approximation
+        return 0.5 * v * (1.0 + safe_tanh(0.7978845608 * (v + 0.044715 * v * v * v)));
+    return v;
+}
+// hash-based N(0,1) (Box-Muller over two PCG-ish uints)
+float2 gauss2(uint idx, uint seed)
+{
+    uint s = idx * 747796405u + seed * 2891336453u + 1u;
+    s = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+    uint u1 = (s >> 22u) ^ s;
+    s = u1 * 747796405u + 2891336453u;
+    s = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+    uint u2 = (s >> 22u) ^ s;
+    float f1 = max((float)u1 / 4294967295.0, 1e-7);
+    float f2 = (float)u2 / 4294967295.0;
+    float r = sqrt(-2.0 * log(f1));
+    return float2(r * cos(6.28318530718 * f2), r * sin(6.28318530718 * f2));
+}
+
+// ========================= TokenEmbed =========================================
+#pragma kernel TokenEmbed
+[numthreads(256, 1, 1)]
+void TokenEmbed(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * in_dim) return;   // in_dim = 512
+    uint pos = idx / in_dim;
+    uint c = idx % in_dim;
+    uint tok = token_ids[pos];
+    embed_output[idx] = readH(emb_weights, tok * in_dim + c);
+}
+
+// ========================= LinearBias =========================================
+// Y[t, p] = act( X[t, :in_dim] · W[p, :] (+ b[p]) )
+#pragma kernel LinearBias
+[numthreads(1, 8, 32)]
+void LinearBias(uint3 id : SV_DispatchThreadID)
+{
+    uint t = id.y; uint p = id.z;
+    if (t >= seq_len || p >= out_dim) return;
+    float sum = has_bias != 0 ? readH(W_bias, p) : 0.0;
+    uint x_base = t * in_dim;
+    uint w_base = p * in_dim;   // always even here (in_dim 320/1024/2048) -> whole-word reads
+    uint e = 0;
+    for (; e + 1u < in_dim; e += 2u)
+    {
+        uint word = W[(w_base + e) >> 1];
+        sum += X[x_base + e] * f16tof32(word & 0xFFFFu)
+             + X[x_base + e + 1u] * f16tof32(word >> 16);
+    }
+    if (e < in_dim) sum += X[x_base + e] * readH(W, w_base + e);
+    Y[t * out_dim + p] = apply_act(sum);
+}
+
+// ========================= LinearBiasQ8 =======================================
+// LinearBias for int8 weights (4 per uint + per-row fp16 scale). All q8 tensors
+// have in_dim % 4 == 0 (DiT: 1024/2048) -> whole-word reads, unrolled unpack.
+#pragma kernel LinearBiasQ8
+[numthreads(1, 8, 32)]
+void LinearBiasQ8(uint3 id : SV_DispatchThreadID)
+{
+    uint t = id.y; uint p = id.z;
+    if (t >= seq_len || p >= out_dim) return;
+    float sum = 0.0;
+    uint x_base = t * in_dim;
+    uint w_base = p * in_dim;
+    for (uint e = 0; e < in_dim; e += 4u)
+    {
+        int w4 = (int)W[(w_base + e) >> 2];
+        sum += X[x_base + e]      * (float)((w4 << 24) >> 24)
+             + X[x_base + e + 1u] * (float)((w4 << 16) >> 24)
+             + X[x_base + e + 2u] * (float)((w4 << 8)  >> 24)
+             + X[x_base + e + 3u] * (float)( w4        >> 24);
+    }
+    float bv = has_bias != 0 ? readH(W_bias, p) : 0.0;
+    Y[t * out_dim + p] = apply_act(sum * readH(W_scales, p) + bv);
+}
+
+// ========================= LinearTileBias =====================================
+// Tiled GEMM for the DiT's big matmuls: Y[t,p] = act(b[p] + X[t,:]·W[p,:]).
+// Group tile = 16 tokens × 32 outputs; BOTH X and W k-chunks staged through
+// groupshared with COALESCED global loads (the naive kernels' W access pattern is
+// 32 separate transactions per warp instruction — the actual flow bottleneck).
+// Each thread owns (2 tokens × 1 output). Requires in_dim EVEN (DiT: 320/1024/2048).
+#define LT_T 16
+#define LT_P 32
+#define LT_K 32
+groupshared float lt_x[LT_T][LT_K];
+groupshared float lt_w[LT_P][LT_K + 1];   // +1 pad: avoids 32-way bank conflicts on row reads
+#pragma kernel LinearTileBias
+[numthreads(32, 8, 1)]
+void LinearTileBias(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint t0 = gid.y * LT_T;
+    uint p0 = gid.x * LT_P;
+    uint tx = gtid.x, ty = gtid.y;
+    uint ltid = ty * 32u + tx;
+    float acc0 = 0.0, acc1 = 0.0;         // tokens t0+ty and t0+ty+8, output p0+tx
+
+    for (uint k0 = 0; k0 < in_dim; k0 += LT_K)
+    {
+        // X tile [16, 32]: 512 floats, 2 per thread, coalesced along k
+        for (uint l = ltid; l < LT_T * LT_K; l += 256u)
+        {
+            uint tt = l / LT_K, kk = l % LT_K;
+            uint gt = t0 + tt;
+            lt_x[tt][kk] = (gt < seq_len) ? X[gt * in_dim + k0 + kk] : 0.0;
+        }
+        // W tile [32 rows, 32 halves] = 32x16 uints, 2 per thread, coalesced per row segment
+        for (l = ltid; l < LT_P * (LT_K / 2u); l += 256u)
+        {
+            uint pp = l / (LT_K / 2u), uu = l % (LT_K / 2u);
+            uint word = (p0 + pp < out_dim) ? W[(((p0 + pp) * in_dim + k0) >> 1) + uu] : 0u;
+            lt_w[pp][2u * uu]      = f16tof32(word & 0xFFFFu);
+            lt_w[pp][2u * uu + 1u] = f16tof32(word >> 16);
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        [unroll]
+        for (uint kk = 0; kk < LT_K; kk++)
+        {
+            float w = lt_w[tx][kk];
+            acc0 += lt_x[ty][kk] * w;
+            acc1 += lt_x[ty + 8u][kk] * w;
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    uint p = p0 + tx;
+    if (p >= out_dim) return;
+    float bv = has_bias != 0 ? readH(W_bias, p) : 0.0;
+    uint ta = t0 + ty, tb = t0 + ty + 8u;
+    if (ta < seq_len) Y[ta * out_dim + p] = apply_act(acc0 + bv);
+    if (tb < seq_len) Y[tb * out_dim + p] = apply_act(acc1 + bv);
+}
+
+// ========================= LinearTileBiasQ8 ===================================
+// The tiled GEMM with int8 W (4 elems per uint): the W tile is 32 rows x 8 uints
+// = exactly one coalesced uint load per thread; unscaled MACs accumulate in the
+// k-loop and the per-row scale is applied once at writeback.
+#pragma kernel LinearTileBiasQ8
+[numthreads(32, 8, 1)]
+void LinearTileBiasQ8(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint t0 = gid.y * LT_T;
+    uint p0 = gid.x * LT_P;
+    uint tx = gtid.x, ty = gtid.y;
+    uint ltid = ty * 32u + tx;
+    float acc0 = 0.0, acc1 = 0.0;
+
+    for (uint k0 = 0; k0 < in_dim; k0 += LT_K)
+    {
+        for (uint l = ltid; l < LT_T * LT_K; l += 256u)
+        {
+            uint tt = l / LT_K, kk = l % LT_K;
+            uint gt = t0 + tt;
+            lt_x[tt][kk] = (gt < seq_len) ? X[gt * in_dim + k0 + kk] : 0.0;
+        }
+        {   // W tile [32 rows, 32 elems] = 32x8 uints, one per thread
+            uint pp = ltid / (LT_K / 4u), uu = ltid % (LT_K / 4u);
+            int w4 = (int)((p0 + pp < out_dim) ? W[(((p0 + pp) * in_dim + k0) >> 2) + uu] : 0u);
+            lt_w[pp][4u * uu]      = (float)((w4 << 24) >> 24);
+            lt_w[pp][4u * uu + 1u] = (float)((w4 << 16) >> 24);
+            lt_w[pp][4u * uu + 2u] = (float)((w4 << 8)  >> 24);
+            lt_w[pp][4u * uu + 3u] = (float)( w4        >> 24);
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        [unroll]
+        for (uint kk = 0; kk < LT_K; kk++)
+        {
+            float w = lt_w[tx][kk];
+            acc0 += lt_x[ty][kk] * w;
+            acc1 += lt_x[ty + 8u][kk] * w;
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    uint p = p0 + tx;
+    if (p >= out_dim) return;
+    float sc = readH(W_scales, p);
+    float bv = has_bias != 0 ? readH(W_bias, p) : 0.0;
+    uint ta = t0 + ty, tb = t0 + ty + 8u;
+    if (ta < seq_len) Y[ta * out_dim + p] = apply_act(acc0 * sc + bv);
+    if (tb < seq_len) Y[tb * out_dim + p] = apply_act(acc1 * sc + bv);
+}
+
+// ========================= LinearTileBias2 / LinearTileBias2Q8 ================
+// Register-blocked GEMM (A6-max Phase 3). LinearTileBias is groupshared-bandwidth
+// bound: 3 shared reads per 2 FMAs (~6 B/FMA). Here each thread owns 4 tokens x 2
+// outputs (8 accumulators): 6 shared reads per 8 FMAs (~3 B/FMA), tile 32 tokens x
+// 64 outputs. Per-(t,p) accumulation order (kk 0..31 inside sequential 32-chunks)
+// is IDENTICAL to LinearTileBias -> bit-exact.
+#define B2_T 32
+#define B2_P 64
+#define B2_K 32
+groupshared float b2_x[B2_T][B2_K + 1];   // +1 pad: bank-conflict-free column reads
+groupshared float b2_w[B2_P][B2_K + 1];
+#pragma kernel LinearTileBias2
+[numthreads(32, 8, 1)]
+void LinearTileBias2(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint t0 = gid.y * B2_T;
+    uint p0 = gid.x * B2_P;
+    uint tx = gtid.x, ty = gtid.y;
+    uint ltid = ty * 32u + tx;
+    // tokens t0 + ty + {0,8,16,24}; outputs p0 + tx + {0,32}
+    float a00 = 0.0, a01 = 0.0, a10 = 0.0, a11 = 0.0;
+    float a20 = 0.0, a21 = 0.0, a30 = 0.0, a31 = 0.0;
+
+    for (uint k0 = 0; k0 < in_dim; k0 += B2_K)
+    {
+        for (uint l = ltid; l < B2_T * B2_K; l += 256u)
+        {
+            uint tt = l / B2_K, kk = l % B2_K;
+            uint gt = t0 + tt;
+            b2_x[tt][kk] = (gt < seq_len) ? X[gt * in_dim + k0 + kk] : 0.0;
+        }
+        for (uint l2 = ltid; l2 < B2_P * (B2_K / 2u); l2 += 256u)
+        {
+            uint pp = l2 / (B2_K / 2u), uu = l2 % (B2_K / 2u);
+            uint word = (p0 + pp < out_dim) ? W[(((p0 + pp) * in_dim + k0) >> 1) + uu] : 0u;
+            b2_w[pp][2u * uu]      = f16tof32(word & 0xFFFFu);
+            b2_w[pp][2u * uu + 1u] = f16tof32(word >> 16);
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        [unroll]
+        for (uint kk = 0; kk < B2_K; kk++)
+        {
+            float w0 = b2_w[tx][kk];
+            float w1 = b2_w[tx + 32u][kk];
+            float x0 = b2_x[ty][kk];
+            float x1 = b2_x[ty + 8u][kk];
+            float x2 = b2_x[ty + 16u][kk];
+            float x3 = b2_x[ty + 24u][kk];
+            a00 += x0 * w0; a01 += x0 * w1;
+            a10 += x1 * w0; a11 += x1 * w1;
+            a20 += x2 * w0; a21 += x2 * w1;
+            a30 += x3 * w0; a31 += x3 * w1;
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    uint pA = p0 + tx, pB = p0 + tx + 32u;
+    float bA = (has_bias != 0 && pA < out_dim) ? readH(W_bias, pA) : 0.0;
+    float bB = (has_bias != 0 && pB < out_dim) ? readH(W_bias, pB) : 0.0;
+    for (uint r = 0; r < 4u; r++)
+    {
+        uint t = t0 + ty + r * 8u;
+        if (t >= seq_len) continue;
+        float aA = r == 0u ? a00 : r == 1u ? a10 : r == 2u ? a20 : a30;
+        float aB = r == 0u ? a01 : r == 1u ? a11 : r == 2u ? a21 : a31;
+        if (pA < out_dim) Y[t * out_dim + pA] = apply_act(aA + bA);
+        if (pB < out_dim) Y[t * out_dim + pB] = apply_act(aB + bB);
+    }
+}
+
+#pragma kernel LinearTileBias2Q8
+[numthreads(32, 8, 1)]
+void LinearTileBias2Q8(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint t0 = gid.y * B2_T;
+    uint p0 = gid.x * B2_P;
+    uint tx = gtid.x, ty = gtid.y;
+    uint ltid = ty * 32u + tx;
+    float a00 = 0.0, a01 = 0.0, a10 = 0.0, a11 = 0.0;
+    float a20 = 0.0, a21 = 0.0, a30 = 0.0, a31 = 0.0;
+
+    for (uint k0 = 0; k0 < in_dim; k0 += B2_K)
+    {
+        for (uint l = ltid; l < B2_T * B2_K; l += 256u)
+        {
+            uint tt = l / B2_K, kk = l % B2_K;
+            uint gt = t0 + tt;
+            b2_x[tt][kk] = (gt < seq_len) ? X[gt * in_dim + k0 + kk] : 0.0;
+        }
+        for (uint l2 = ltid; l2 < B2_P * (B2_K / 4u); l2 += 256u)
+        {
+            uint pp = l2 / (B2_K / 4u), uu = l2 % (B2_K / 4u);
+            int w4 = (int)((p0 + pp < out_dim) ? W[(((p0 + pp) * in_dim + k0) >> 2) + uu] : 0u);
+            b2_w[pp][4u * uu]      = (float)((w4 << 24) >> 24);
+            b2_w[pp][4u * uu + 1u] = (float)((w4 << 16) >> 24);
+            b2_w[pp][4u * uu + 2u] = (float)((w4 << 8)  >> 24);
+            b2_w[pp][4u * uu + 3u] = (float)( w4        >> 24);
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        [unroll]
+        for (uint kk = 0; kk < B2_K; kk++)
+        {
+            float w0 = b2_w[tx][kk];
+            float w1 = b2_w[tx + 32u][kk];
+            float x0 = b2_x[ty][kk];
+            float x1 = b2_x[ty + 8u][kk];
+            float x2 = b2_x[ty + 16u][kk];
+            float x3 = b2_x[ty + 24u][kk];
+            a00 += x0 * w0; a01 += x0 * w1;
+            a10 += x1 * w0; a11 += x1 * w1;
+            a20 += x2 * w0; a21 += x2 * w1;
+            a30 += x3 * w0; a31 += x3 * w1;
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    uint pA = p0 + tx, pB = p0 + tx + 32u;
+    float sA = (pA < out_dim) ? readH(W_scales, pA) : 0.0;
+    float sB = (pB < out_dim) ? readH(W_scales, pB) : 0.0;
+    float bA = (has_bias != 0 && pA < out_dim) ? readH(W_bias, pA) : 0.0;
+    float bB = (has_bias != 0 && pB < out_dim) ? readH(W_bias, pB) : 0.0;
+    for (uint r = 0; r < 4u; r++)
+    {
+        uint t = t0 + ty + r * 8u;
+        if (t >= seq_len) continue;
+        float aA = r == 0u ? a00 : r == 1u ? a10 : r == 2u ? a20 : a30;
+        float aB = r == 0u ? a01 : r == 1u ? a11 : r == 2u ? a21 : a31;
+        if (pA < out_dim) Y[t * out_dim + pA] = apply_act(aA * sA + bA);
+        if (pB < out_dim) Y[t * out_dim + pB] = apply_act(aB * sB + bB);
+    }
+}
+
+// ========================= LayerNormT =========================================
+// Plain LayerNorm over the channel dim of a [T, C] buffer (gamma direct + beta).
+#pragma kernel LayerNormT
+[numthreads(256, 1, 1)]
+void LayerNormT(uint3 id : SV_DispatchThreadID)
+{
+    uint pos = id.x;
+    if (pos >= seq_len) return;
+    uint base_idx = pos * norm_dim;
+
+    float mean = 0.0;
+    for (uint i = 0; i < norm_dim; i++)
+        mean += norm_input[base_idx + i];
+    mean /= (float)norm_dim;
+
+    float var = 0.0;
+    for (uint j = 0; j < norm_dim; j++)
+    {
+        float d = norm_input[base_idx + j] - mean;
+        var += d * d;
+    }
+    float rstd = rsqrt(var / (float)norm_dim + norm_eps);
+
+    for (uint k = 0; k < norm_dim; k++)
+        norm_output[base_idx + k] = (norm_input[base_idx + k] - mean) * rstd * readH(ln_gamma, k) + readH(ln_beta, k);
+}
+
+// ========================= Conv1D =============================================
+// [T,C]-layout conv: Y[t, oc] = act( b[oc] + sum_ic sum_k W[oc,ic,k] * X[t*stride + k*dil - pad_left, ic] )
+// Zero padding outside [0, in_len). Weights flat: oc*(in_dim*K) + ic*K + k.
+#pragma kernel Conv1D
+[numthreads(256, 1, 1)]
+void Conv1D(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * out_dim) return;
+    uint t = idx / out_dim;
+    uint oc = idx % out_dim;
+
+    float sum = has_bias != 0 ? readH(W_bias, oc) : 0.0;
+    int base_t = (int)(t * conv_stride) - pad_left;
+    uint w_base = oc * in_dim * conv_kernel;
+    for (uint k = 0; k < conv_kernel; k++)
+    {
+        int ti = base_t + (int)(k * conv_dilation);
+        if (ti < 0 || ti >= (int)in_len) continue;
+        uint x_base = (uint)ti * in_dim;
+        for (uint ic = 0; ic < in_dim; ic++)
+            sum += X[x_base + ic] * readH(W, w_base + ic * conv_kernel + k);
+    }
+    Y[idx] = apply_act(sum);
+}
+
+// ========================= ConvTranspose1D ====================================
+// Y[t, oc] = b[oc] + sum_ic sum_k W[ic,oc,k] * X[(t + pad_left - k)/stride, ic]
+// where (t + pad_left - k) divisible by stride and quotient in [0, in_len).
+// Weights flat (torch ConvT layout [in,out,k]): ic*(out_dim*K) + oc*K + k.
+#pragma kernel ConvTranspose1D
+[numthreads(256, 1, 1)]
+void ConvTranspose1D(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * out_dim) return;
+    uint t = idx / out_dim;
+    uint oc = idx % out_dim;
+
+    float sum = has_bias != 0 ? readH(W_bias, oc) : 0.0;
+    for (uint k = 0; k < conv_kernel; k++)
+    {
+        int num = (int)t + pad_left - (int)k;
+        if (num < 0) continue;
+        if ((uint)num % conv_stride != 0u) continue;
+        uint ti = (uint)num / conv_stride;
+        if (ti >= in_len) continue;
+        uint x_base = ti * in_dim;
+        for (uint ic = 0; ic < in_dim; ic++)
+            sum += X[x_base + ic] * readH(W, (ic * out_dim + oc) * conv_kernel + k);
+    }
+    Y[idx] = sum;
+}
+
+// ========================= RelPosAttention ====================================
+// ESPnet RelPositionMultiHeadedAttention, fused (online softmax), bidirectional, no mask.
+// score(i,j) = [ (q_i+u)·k_j + (q_i+v)·p_{(T-1)-(i-j)} ] * scale     (rel_shift folded into the
+// direct P index). One threadgroup per (query pos, head). P is linear_pos(pos_emb): [2T-1, H, D].
+#define ATT_THREADS 256
+groupshared float ra_qu[64];    // q + pos_bias_u   (head_dim <= 64)
+groupshared float ra_qv[64];    // q + pos_bias_v
+groupshared float ra_p[ATT_THREADS];
+groupshared float ra_red[ATT_THREADS];
+
+#pragma kernel RelPosAttention
+[numthreads(ATT_THREADS, 1, 1)]
+void RelPosAttention(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint q_pos = gid.x;
+    uint h     = gid.y;
+    uint tid   = gtid.x;
+    uint T     = max(seq_len, 1u);
+
+    uint q_base = (q_pos * num_heads + h) * head_dim;
+    for (uint dq = tid; dq < head_dim; dq += ATT_THREADS)
+    {
+        float qv = Q[q_base + dq];
+        ra_qu[dq] = qv + readH(pos_bias_u, h * head_dim + dq);
+        ra_qv[dq] = qv + readH(pos_bias_v, h * head_dim + dq);
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    float m = -3.0e38;
+    float l = 0.0;
+    float acc = 0.0;
+
+    for (uint tile = 0; tile < T; tile += ATT_THREADS)
+    {
+        uint j = tile + tid;
+        float s = -3.0e38;
+        if (j < T)
+        {
+            uint k_base = (j * num_heads + h) * head_dim;
+            // p index: (T-1) - (i-j)  in [0, 2T-2]
+            uint p_base = ((T - 1u) - q_pos + j) * num_heads * head_dim + h * head_dim;
+            float dot = 0.0;
+            for (uint d = 0; d < head_dim; d++)
+                dot += ra_qu[d] * K[k_base + d] + ra_qv[d] * P[p_base + d];
+            s = dot * scale;
+        }
+
+        ra_red[tid] = s;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r1 = ATT_THREADS / 2; r1 > 0; r1 >>= 1)
+        {
+            if (tid < r1) ra_red[tid] = max(ra_red[tid], ra_red[tid + r1]);
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float m_new = max(m, ra_red[0]);
+        GroupMemoryBarrierWithGroupSync();
+
+        float p = (j < T) ? exp(s - m_new) : 0.0;
+        ra_p[tid] = p;
+        ra_red[tid] = p;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r2 = ATT_THREADS / 2; r2 > 0; r2 >>= 1)
+        {
+            if (tid < r2) ra_red[tid] += ra_red[tid + r2];
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float tile_sum = ra_red[0];
+
+        float alpha = exp(m - m_new);
+        l = l * alpha + tile_sum;
+
+        if (tid < head_dim)
+        {
+            float a = acc * alpha;
+            uint n_valid = min(ATT_THREADS, T - tile);
+            for (uint jj = 0; jj < n_valid; jj++)
+                a += ra_p[jj] * V[((tile + jj) * num_heads + h) * head_dim + tid];
+            acc = a;
+        }
+        m = m_new;
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (tid < head_dim)
+        AttendedValues[(q_pos * num_heads + h) * head_dim + tid] = acc / max(l, 1e-12);
+}
+
+// ========================= BidirAttention =====================================
+// Estimator MHA: full bidirectional (attn_chunk = 0, offline) or the CosyVoice3
+// streaming chunk mask (attn_chunk = 50: frame i attends keys j < (i/50+1)*50 —
+// ALL left context, no right beyond the current 50-frame chunk).
+// batch_seq != 0 = batch-2 CFG: Q/K/V hold two stacked halves of batch_seq rows
+// (rows [0,bs) = cond, [bs,2bs) = uncond); each half attends ONLY its own keys
+// (block-diagonal over the batch), and the chunk mask uses the LOCAL row index.
+// Per-row math/accumulation order is identical to the sequential two-pass path.
+#pragma kernel BidirAttention
+[numthreads(ATT_THREADS, 1, 1)]
+void BidirAttention(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint q_pos = gid.x;
+    uint h     = gid.y;
+    uint tid   = gtid.x;
+    uint qloc  = q_pos;
+    uint krow0 = 0u;
+    uint T     = max(seq_len, 1u);
+    if (batch_seq != 0u)
+    {
+        uint half_i = q_pos / batch_seq;
+        qloc  = q_pos - half_i * batch_seq;
+        krow0 = half_i * batch_seq;
+        T     = batch_seq;
+    }
+    if (attn_chunk != 0u)
+        T = min(T, (qloc / attn_chunk + 1u) * attn_chunk);
+
+    uint q_base = (q_pos * num_heads + h) * head_dim;
+    for (uint dq = tid; dq < head_dim; dq += ATT_THREADS)
+        ra_qu[dq] = Q[q_base + dq] * scale;
+    GroupMemoryBarrierWithGroupSync();
+
+    float m = -3.0e38;
+    float l = 0.0;
+    float acc = 0.0;
+
+    for (uint tile = 0; tile < T; tile += ATT_THREADS)
+    {
+        uint j = tile + tid;
+        float s = -3.0e38;
+        if (j < T)
+        {
+            uint k_base = ((krow0 + j) * num_heads + h) * head_dim;
+            float dot = 0.0;
+            for (uint d = 0; d < head_dim; d++)
+                dot += ra_qu[d] * K[k_base + d];
+            s = dot;
+        }
+
+        ra_red[tid] = s;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r1 = ATT_THREADS / 2; r1 > 0; r1 >>= 1)
+        {
+            if (tid < r1) ra_red[tid] = max(ra_red[tid], ra_red[tid + r1]);
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float m_new = max(m, ra_red[0]);
+        GroupMemoryBarrierWithGroupSync();
+
+        float p = (j < T) ? exp(s - m_new) : 0.0;
+        ra_p[tid] = p;
+        ra_red[tid] = p;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r2 = ATT_THREADS / 2; r2 > 0; r2 >>= 1)
+        {
+            if (tid < r2) ra_red[tid] += ra_red[tid + r2];
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float tile_sum = ra_red[0];
+
+        float alpha = exp(m - m_new);
+        l = l * alpha + tile_sum;
+
+        if (tid < head_dim)
+        {
+            float a = acc * alpha;
+            uint n_valid = min(ATT_THREADS, T - tile);
+            for (uint jj = 0; jj < n_valid; jj++)
+                a += ra_p[jj] * V[((krow0 + tile + jj) * num_heads + h) * head_dim + tid];
+            acc = a;
+        }
+        m = m_new;
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (tid < head_dim)
+        AttendedValues[(q_pos * num_heads + h) * head_dim + tid] = acc / max(l, 1e-12);
+}
+
+// ========================= BidirAttentionKV ===================================
+// Single-pass streaming estimator attention: the chunk's NEW queries (Q = fp32
+// stacked halves, batch_seq rows each, absolute rows [pos_offset, pos_offset+batch_seq))
+// attend the fp16-packed per-(Euler step, layer) K/V cache holding ALL rows
+// [0, kv_len) — frozen prefix + this chunk's rows (written by WriteFlowKV first).
+// Chunk mask on the ABSOLUTE query row. Attention math stays fp32; the fp16 cache
+// halves K/V bandwidth (its ~5e-4 relative rounding is the single-pass path's only
+// numeric delta vs the full re-solve).
+#pragma kernel BidirAttentionKV
+[numthreads(ATT_THREADS, 1, 1)]
+void BidirAttentionKV(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint q_pos  = gid.x;
+    uint h      = gid.y;
+    uint tid    = gtid.x;
+    uint bs     = max(batch_seq, 1u);
+    uint half_i = q_pos / bs;
+    uint qabs   = pos_offset + (q_pos - half_i * bs);
+    uint T      = max(kv_len, 1u);
+    if (attn_chunk != 0u)
+        T = min(T, (qabs / attn_chunk + 1u) * attn_chunk);
+    uint hd     = num_heads * head_dim;           // 1024 row stride
+    uint kplane = (half_i * 2u) * kv_cap;
+    uint vplane = (half_i * 2u + 1u) * kv_cap;
+
+    uint q_base = q_pos * hd + h * head_dim;
+    for (uint dq = tid; dq < head_dim; dq += ATT_THREADS)
+        ra_qu[dq] = Q[q_base + dq] * scale;
+    GroupMemoryBarrierWithGroupSync();
+
+    float m = -3.0e38;
+    float l = 0.0;
+    float acc = 0.0;
+
+    for (uint tile = 0; tile < T; tile += ATT_THREADS)
+    {
+        uint j = tile + tid;
+        float s = -3.0e38;
+        if (j < T)
+        {
+            uint k_base = (kplane + j) * hd + h * head_dim;
+            float dot = 0.0;
+            for (uint d = 0; d < head_dim; d++)
+                dot += ra_qu[d] * readH(flow_kv, k_base + d);
+            s = dot;
+        }
+
+        ra_red[tid] = s;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r1 = ATT_THREADS / 2; r1 > 0; r1 >>= 1)
+        {
+            if (tid < r1) ra_red[tid] = max(ra_red[tid], ra_red[tid + r1]);
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float m_new = max(m, ra_red[0]);
+        GroupMemoryBarrierWithGroupSync();
+
+        float p = (j < T) ? exp(s - m_new) : 0.0;
+        ra_p[tid] = p;
+        ra_red[tid] = p;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r2 = ATT_THREADS / 2; r2 > 0; r2 >>= 1)
+        {
+            if (tid < r2) ra_red[tid] += ra_red[tid + r2];
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float tile_sum = ra_red[0];
+
+        float alpha = exp(m - m_new);
+        l = l * alpha + tile_sum;
+
+        if (tid < head_dim)
+        {
+            float a = acc * alpha;
+            uint n_valid = min(ATT_THREADS, T - tile);
+            for (uint jj = 0; jj < n_valid; jj++)
+                a += ra_p[jj] * readH(flow_kv, (vplane + tile + jj) * hd + h * head_dim + tid);
+            acc = a;
+        }
+        m = m_new;
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (tid < head_dim)
+        AttendedValues[q_pos * hd + h * head_dim + tid] = acc / max(l, 1e-12);
+}
+
+// ========================= WriteFlowKV ========================================
+// Packs a chunk's NEW post-RoPE K/V rows (fp32 [2*seq_len, 1024], CFG halves stacked)
+// into the fp16 flow K/V cache at rows [kv_row_off, kv_row_off + seq_len) of each
+// half's plane. One thread packs one uint (2 elems) of K and the matching uint of V.
+#pragma kernel WriteFlowKV
+[numthreads(256, 1, 1)]
+void WriteFlowKV(uint3 id : SV_DispatchThreadID)
+{
+    uint hd2 = (num_heads * head_dim) >> 1;       // 512 uints per row
+    uint u = id.x;
+    uint perHalf = seq_len * hd2;
+    if (u >= 2u * perHalf) return;
+    uint half_i = u / perHalf;
+    uint rem = u - half_i * perHalf;
+    uint row = rem / hd2;
+    uint c2 = rem - row * hd2;
+    uint src = (half_i * seq_len + row) * (hd2 << 1) + c2 * 2u;
+    uint dst_row = kv_row_off + row;
+    flow_kv_w[((half_i * 2u) * kv_cap + dst_row) * hd2 + c2]
+        = f32tof16(K[src]) | (f32tof16(K[src + 1u]) << 16);
+    flow_kv_w[((half_i * 2u + 1u) * kv_cap + dst_row) * hd2 + c2]
+        = f32tof16(V[src]) | (f32tof16(V[src + 1u]) << 16);
+}
+
+// ========================= BidirAttentionQT ===================================
+// Q-tiled estimator attention (A6-max Phase 3). Why: BidirAttention runs ONE query
+// per 256-thread group — the V phase uses 64/256 lanes with a serial 256-MAC loop,
+// pays ~18 barrier stages per 256-key tile PER QUERY, and re-reads K/V per query.
+// Batch-2's zero effect proved the solve is execution-bound in exactly this kernel
+// (+ the GEMM), so the fix is per-lane efficiency, not dispatch count.
+// Here 8 queries per group share each staged 64-key K tile (8x K reuse, barriers
+// amortized 8x) and V accumulation runs on ALL 256 lanes. Thread (qy,kx) scores
+// keys {kx, kx+32} and owns output dims {kx, kx+32} of query qy.
+// Per-(q,k) dot order matches BidirAttention; only the online-softmax tiling
+// (64 keys vs 256) differs -> fp32-rounding-level deltas (corr-preserving).
+// Same batch/mask semantics as BidirAttention (halves, LOCAL-row chunk mask).
+#define QT_Q 8
+#define QT_K 64
+groupshared float qt_q[QT_Q][64];
+groupshared float qt_k[QT_K][65];        // +pad: column reads bank-conflict-free
+groupshared float qt_s[QT_Q][QT_K];      // tile scores -> probabilities
+groupshared float qt_r[QT_Q][33];        // per-query reduction scratch
+
+#pragma kernel BidirAttentionQT
+[numthreads(256, 1, 1)]
+void BidirAttentionQT(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint tid = gtid.x;
+    uint qy = tid >> 5;                   // query slot 0..7
+    uint kx = tid & 31u;                  // key/dim lane 0..31
+    uint h = gid.y;
+    uint bs = max(batch_seq, 1u);
+    uint gph = (bs + QT_Q - 1u) / QT_Q;   // groups per CFG half
+    uint half_i = gid.x / gph;
+    uint q0 = (gid.x - half_i * gph) * QT_Q;
+    uint qloc = q0 + qy;
+    bool qvalid = qloc < bs;
+    uint krow0 = half_i * bs;
+    uint hd = num_heads * head_dim;       // 1024
+
+    // per-query key limit; the group loops to the LAST query's limit (monotone in q)
+    uint Tq = qvalid ? bs : 0u;
+    if (attn_chunk != 0u && qvalid) Tq = min(Tq, (qloc / attn_chunk + 1u) * attn_chunk);
+    uint qlast = min(q0 + QT_Q - 1u, bs - 1u);
+    uint Tmax = bs;
+    if (attn_chunk != 0u) Tmax = min(Tmax, (qlast / attn_chunk + 1u) * attn_chunk);
+
+    for (uint i = tid; i < QT_Q * 64u; i += 256u)
+    {
+        uint qq = i >> 6; uint d = i & 63u;
+        uint qr = q0 + qq;
+        qt_q[qq][d] = (qr < bs) ? Q[(half_i * bs + qr) * hd + h * head_dim + d] * scale : 0.0;
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    float m = -3.0e38, l = 0.0, acc0 = 0.0, acc1 = 0.0;
+
+    for (uint tile = 0; tile < Tmax; tile += QT_K)
+    {
+        for (uint i2 = tid; i2 < QT_K * 64u; i2 += 256u)
+        {
+            uint kk = i2 >> 6; uint d2 = i2 & 63u;
+            uint j = tile + kk;
+            qt_k[kk][d2] = (j < Tmax) ? K[(krow0 + j) * hd + h * head_dim + d2] : 0.0;
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        uint j0 = tile + kx, j1 = tile + kx + 32u;
+        float s0 = -3.0e38, s1 = -3.0e38;
+        if (j0 < Tq)
+        {
+            float d0 = 0.0;
+            [unroll] for (uint d = 0; d < 64u; d++) d0 += qt_q[qy][d] * qt_k[kx][d];
+            s0 = d0;
+        }
+        if (j1 < Tq)
+        {
+            float d1 = 0.0;
+            [unroll] for (uint d = 0; d < 64u; d++) d1 += qt_q[qy][d] * qt_k[kx + 32u][d];
+            s1 = d1;
+        }
+        qt_r[qy][kx] = max(s0, s1);
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r1 = 16u; r1 > 0u; r1 >>= 1)
+        {
+            if (kx < r1) qt_r[qy][kx] = max(qt_r[qy][kx], qt_r[qy][kx + r1]);
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float m_new = max(m, qt_r[qy][0]);
+        GroupMemoryBarrierWithGroupSync();   // qt_r is reused for the sum below
+
+        float p0 = (j0 < Tq) ? exp(s0 - m_new) : 0.0;
+        float p1 = (j1 < Tq) ? exp(s1 - m_new) : 0.0;
+        qt_s[qy][kx] = p0;
+        qt_s[qy][kx + 32u] = p1;
+        qt_r[qy][kx] = p0 + p1;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r2 = 16u; r2 > 0u; r2 >>= 1)
+        {
+            if (kx < r2) qt_r[qy][kx] += qt_r[qy][kx + r2];
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float alpha = exp(m - m_new);
+        l = l * alpha + qt_r[qy][0];
+
+        // full-lane V accumulation; V rows read coalesced from global (L2-resident)
+        acc0 *= alpha; acc1 *= alpha;
+        uint n_valid = min(QT_K, Tmax - tile);
+        for (uint jj = 0; jj < n_valid; jj++)
+        {
+            float p = qt_s[qy][jj];
+            uint v_base = (krow0 + tile + jj) * hd + h * head_dim;
+            acc0 += p * V[v_base + kx];
+            acc1 += p * V[v_base + kx + 32u];
+        }
+        m = m_new;
+        GroupMemoryBarrierWithGroupSync();   // qt_k/qt_s rewritten next tile
+    }
+
+    if (qvalid)
+    {
+        uint o_base = (half_i * bs + qloc) * hd + h * head_dim;
+        AttendedValues[o_base + kx] = acc0 / max(l, 1e-12);
+        AttendedValues[o_base + kx + 32u] = acc1 / max(l, 1e-12);
+    }
+}
+
+// ========================= BidirAttentionKVQT =================================
+// Q-tiled twin of BidirAttentionKV: same 8-query group structure, K/V from the
+// fp16 per-(step,layer) cache planes, chunk mask on the ABSOLUTE query row.
+#pragma kernel BidirAttentionKVQT
+[numthreads(256, 1, 1)]
+void BidirAttentionKVQT(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint tid = gtid.x;
+    uint qy = tid >> 5;
+    uint kx = tid & 31u;
+    uint h = gid.y;
+    uint bs = max(batch_seq, 1u);
+    uint gph = (bs + QT_Q - 1u) / QT_Q;
+    uint half_i = gid.x / gph;
+    uint q0 = (gid.x - half_i * gph) * QT_Q;
+    uint qloc = q0 + qy;
+    bool qvalid = qloc < bs;
+    uint hd = num_heads * head_dim;
+    uint kplane = (half_i * 2u) * kv_cap;
+    uint vplane = (half_i * 2u + 1u) * kv_cap;
+
+    uint Tq = qvalid ? max(kv_len, 1u) : 0u;
+    if (attn_chunk != 0u && qvalid)
+        Tq = min(Tq, ((pos_offset + qloc) / attn_chunk + 1u) * attn_chunk);
+    uint qlast = min(q0 + QT_Q - 1u, bs - 1u);
+    uint Tmax = max(kv_len, 1u);
+    if (attn_chunk != 0u)
+        Tmax = min(Tmax, ((pos_offset + qlast) / attn_chunk + 1u) * attn_chunk);
+
+    for (uint i = tid; i < QT_Q * 64u; i += 256u)
+    {
+        uint qq = i >> 6; uint d = i & 63u;
+        uint qr = q0 + qq;
+        qt_q[qq][d] = (qr < bs) ? Q[(half_i * bs + qr) * hd + h * head_dim + d] * scale : 0.0;
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    float m = -3.0e38, l = 0.0, acc0 = 0.0, acc1 = 0.0;
+
+    for (uint tile = 0; tile < Tmax; tile += QT_K)
+    {
+        for (uint i2 = tid; i2 < QT_K * 64u; i2 += 256u)
+        {
+            uint kk = i2 >> 6; uint d2 = i2 & 63u;
+            uint j = tile + kk;
+            qt_k[kk][d2] = (j < Tmax) ? readH(flow_kv, (kplane + j) * hd + h * head_dim + d2) : 0.0;
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        uint j0 = tile + kx, j1 = tile + kx + 32u;
+        float s0 = -3.0e38, s1 = -3.0e38;
+        if (j0 < Tq)
+        {
+            float d0 = 0.0;
+            [unroll] for (uint d = 0; d < 64u; d++) d0 += qt_q[qy][d] * qt_k[kx][d];
+            s0 = d0;
+        }
+        if (j1 < Tq)
+        {
+            float d1 = 0.0;
+            [unroll] for (uint d = 0; d < 64u; d++) d1 += qt_q[qy][d] * qt_k[kx + 32u][d];
+            s1 = d1;
+        }
+        qt_r[qy][kx] = max(s0, s1);
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r1 = 16u; r1 > 0u; r1 >>= 1)
+        {
+            if (kx < r1) qt_r[qy][kx] = max(qt_r[qy][kx], qt_r[qy][kx + r1]);
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float m_new = max(m, qt_r[qy][0]);
+        GroupMemoryBarrierWithGroupSync();
+
+        float p0 = (j0 < Tq) ? exp(s0 - m_new) : 0.0;
+        float p1 = (j1 < Tq) ? exp(s1 - m_new) : 0.0;
+        qt_s[qy][kx] = p0;
+        qt_s[qy][kx + 32u] = p1;
+        qt_r[qy][kx] = p0 + p1;
+        GroupMemoryBarrierWithGroupSync();
+        for (uint r2 = 16u; r2 > 0u; r2 >>= 1)
+        {
+            if (kx < r2) qt_r[qy][kx] += qt_r[qy][kx + r2];
+            GroupMemoryBarrierWithGroupSync();
+        }
+        float alpha = exp(m - m_new);
+        l = l * alpha + qt_r[qy][0];
+
+        acc0 *= alpha; acc1 *= alpha;
+        uint n_valid = min(QT_K, Tmax - tile);
+        for (uint jj = 0; jj < n_valid; jj++)
+        {
+            float p = qt_s[qy][jj];
+            uint v_base = (vplane + tile + jj) * hd + h * head_dim;
+            acc0 += p * readH(flow_kv, v_base + kx);
+            acc1 += p * readH(flow_kv, v_base + kx + 32u);
+        }
+        m = m_new;
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (qvalid)
+    {
+        uint o_base = (half_i * bs + qloc) * hd + h * head_dim;
+        AttendedValues[o_base + kx] = acc0 / max(l, 1e-12);
+        AttendedValues[o_base + kx + 32u] = acc1 / max(l, 1e-12);
+    }
+}
+
+// ========================= SinusTimeEmb =======================================
+// SinusoidalPosEmb(320) with scale=1000: half=160, e_i = exp(-ln(10000)*i/159),
+// out = [sin(1000*t*e_i)... , cos(1000*t*e_i)...]. Y = [320].
+#pragma kernel SinusTimeEmb
+[numthreads(256, 1, 1)]
+void SinusTimeEmb(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    uint half_dim = out_dim / 2u;            // out_dim = 320
+    if (i >= out_dim) return;
+    uint j = i < half_dim ? i : i - half_dim;
+    float e = exp(-9.210340371976184 * (float)j / (float)(half_dim - 1u));   // ln(10000)
+    float ang = 1000.0 * t_scalar * e;
+    Y[i] = i < half_dim ? sin(ang) : cos(ang);
+}
+
+// ========================= SnakeAct ===========================================
+// x + sin^2(alpha*x)/(alpha+1e-9), per-channel alpha, in-place on [T, C].
+#pragma kernel SnakeAct
+[numthreads(256, 1, 1)]
+void SnakeAct(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * norm_dim) return;
+    uint c = idx % norm_dim;
+    float a = readH(snake_alpha, c);
+    float x = inout_buf[idx];
+    float sn = sin(x * a);
+    inout_buf[idx] = x + sn * sn / (a + 1e-9);
+}
+
+// ========================= Activate ===========================================
+// Standalone in-place activation (leaky/elu/tanh/abs/...).
+#pragma kernel Activate
+[numthreads(256, 1, 1)]
+void Activate(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    inout_buf[id.x] = apply_act(inout_buf[id.x]);
+}
+
+// ========================= AddBroadcastCh =====================================
+// inout[t*C + c] += buf_b[c]   (time-embedding injection: C = norm_dim)
+#pragma kernel AddBroadcastCh
+[numthreads(256, 1, 1)]
+void AddBroadcastCh(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * norm_dim) return;
+    inout_buf[idx] += buf_b[idx % norm_dim];
+}
+
+// ========================= PackChannels =======================================
+// dst[(pack_dst_row+t)*pack_dst_dim + pack_dst_off + c] = src[(pack_src_row+t)*in_dim + c]
+// — concat along channels, with row offsets on both sides (batch-2 halves / apron builds).
+#pragma kernel PackChannels
+[numthreads(256, 1, 1)]
+void PackChannels(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * in_dim) return;
+    uint t = idx / in_dim;
+    uint c = idx % in_dim;
+    buf_a[(pack_dst_row + t) * pack_dst_dim + pack_dst_off + c] = buf_b[(pack_src_row + t) * in_dim + c];
+}
+
+// ========================= SliceChannels ======================================
+// dst[t*out_dim + c] = src[t*pack_dst_dim + pack_dst_off + c]
+#pragma kernel SliceChannels
+[numthreads(256, 1, 1)]
+void SliceChannels(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * out_dim) return;
+    uint t = idx / out_dim;
+    uint c = idx % out_dim;
+    buf_a[idx] = buf_b[t * pack_dst_dim + pack_dst_off + c];
+}
+
+// ========================= RepeatTime =========================================
+// Nearest-neighbor time upsample on [T, C]: Y[t, c] = X[t/factor, c].
+#pragma kernel RepeatTime
+[numthreads(256, 1, 1)]
+void RepeatTime(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * in_dim) return;
+    uint t = idx / in_dim;
+    uint c = idx % in_dim;
+    Y[idx] = X[(t / factor) * in_dim + c];
+}
+
+// ========================= GaussNoise =========================================
+// buf_a[i] = N(0,1) from (gauss_offset + i, rng_seed) — deterministic per seed for parity.
+#pragma kernel GaussNoise
+[numthreads(256, 1, 1)]
+void GaussNoise(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[id.x] = gauss2(gauss_offset + id.x, (uint)rng_seed).x;
+}
+
+// ========================= EulerStep ==========================================
+// inout += dt * buf_b   (meanflow: x <- x + (r - t) * dxdt)
+#pragma kernel EulerStep
+[numthreads(256, 1, 1)]
+void EulerStep(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    inout_buf[id.x] += dt_val * buf_b[id.x];
+}
+
+// ========================= NSF: CumsumPhase ===================================
+// One thread per harmonic h (9 threads): sequential fractional cumsum of f0*(h+1)/sr.
+// theta_out[t*9 + h] = 2*pi*frac(sum). frac() kept inside the loop for fp32 stability.
+#pragma kernel CumsumPhase
+[numthreads(16, 1, 1)]
+void CumsumPhase(uint3 id : SV_DispatchThreadID)
+{
+    uint h = id.x;
+    if (h >= 9u) return;
+    float mult = (float)(h + 1u) / 24000.0;
+    float cum = 0.0;
+    for (uint t = 0; t < sample_len; t++)
+    {
+        cum = frac(cum + f0_up[t] * mult);
+        theta_out[t * 9u + h] = 6.28318530718 * cum;
+    }
+}
+
+// ========================= NSF: CumsumPhaseHold ===============================
+// SineGen2 (causal=True) phase: rad accumulated at FRAME rate (the linear 1/480
+// downsample of the nearest-upsampled f0 recovers exact frame values), scaled back
+// by the upsample factor, then nearest-HELD across each frame's samples (staircase
+// phase — faithful to the reference; the smooth per-sample CumsumPhase above is the
+// Chatterbox variant). Writes theta at FRAME rate [nFrames, 9] — SineMerge does the
+// hold via theta_in[(t/factor)*9+h]. factor = samples per frame (480).
+#pragma kernel CumsumPhaseHold
+[numthreads(16, 1, 1)]
+void CumsumPhaseHold(uint3 id : SV_DispatchThreadID)
+{
+    uint h = id.x;
+    if (h >= 9u) return;
+    float mult = (float)(h + 1u) / 24000.0;
+    float cum = 0.0;
+    uint n_fr = sample_len / factor;
+    for (uint k = 0; k < n_fr; k++)
+    {
+        cum += f0_up[k * factor] * mult;           // f0 constant within the frame
+        theta_out[k * 9u + h] = 6.28318530718 * cum * (float)factor;
+    }
+}
+
+// ========================= NSF: SineMerge =====================================
+// Per sample: uv = f0>thr; s_h = amp*sin(theta_h + phase_h)*uv + noise_amp*noise_h;
+// out[t] = tanh( sum_h w[h]*s_h + b ). noise_amp = uv*noise_std + (1-uv)*amp/3.
+// theta_in is FRAME-rate [nFrames, 9] (CumsumPhaseHold), held across each frame.
+#pragma kernel SineMerge
+[numthreads(256, 1, 1)]
+void SineMerge(uint3 id : SV_DispatchThreadID)
+{
+    uint t = id.x;
+    if (t >= sample_len) return;
+    float uv = f0_up[t] > voiced_threshold ? 1.0 : 0.0;
+    float noise_amp = uv * noise_std + (1.0 - uv) * sine_amp / 3.0;
+    float sum = readH(nsf_b, 0);
+    uint fr = t / factor;
+    for (uint h = 0; h < 9u; h++)
+    {
+        float sine = sine_amp * sin(theta_in[fr * 9u + h] + phase_vec[h]);
+        float s = sine * uv + noise_amp * nsf_noise[t * 9u + h];
+        sum += s * readH(nsf_w, h);
+    }
+    Y[t] = safe_tanh(sum);
+}
+
+// ========================= STFT16 =============================================
+// torch.stft(s, n_fft=16, hop=4, win=hann16 periodic, center=True reflect pad 8).
+// Input X = waveform [sample_len]. Output Y[frame*18 + bin] with re bins 0..8, im bins 9..17.
+// frame count = sample_len/4 + 1 (set n_frames from C#).
+#pragma kernel STFT16
+[numthreads(256, 1, 1)]
+void STFT16(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= n_frames * 9u) return;
+    uint f = idx / 9u;
+    uint b = idx % 9u;
+
+    float re = 0.0, im = 0.0;
+    int start = (int)(f * 4u) - 8;
+    int L = (int)sample_len;
+    for (uint n = 0; n < 16u; n++)
+    {
+        int ti = start + (int)n;
+        if (ti < 0) ti = -ti;                       // reflect pad
+        if (ti >= L) ti = 2 * L - 2 - ti;
+        float w = 0.5 * (1.0 - cos(6.28318530718 * (float)n / 16.0));  // hann periodic
+        float xv = X[ti] * w;
+        float ang = 6.28318530718 * (float)(b * n) / 16.0;
+        re += xv * cos(ang);
+        im -= xv * sin(ang);
+    }
+    Y[f * 18u + b] = re;
+    Y[f * 18u + 9u + b] = im;
+}
+
+// ========================= MagPhase ===========================================
+// conv_post output [frames, 18] -> complex spec: mag = min(exp(x[:9]), 1e2); phase = sin(x[9:]);
+// re = mag*cos(phase), im = mag*sin(phase). In-place layout preserved [frames, 18].
+#pragma kernel MagPhase
+[numthreads(256, 1, 1)]
+void MagPhase(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= n_frames * 9u) return;
+    uint f = idx / 9u;
+    uint b = idx % 9u;
+    float mag = min(exp(inout_buf[f * 18u + b]), 100.0);
+    float ph = sin(inout_buf[f * 18u + 9u + b]);
+    inout_buf[f * 18u + b] = mag * cos(ph);
+    inout_buf[f * 18u + 9u + b] = mag * sin(ph);
+}
+
+// ========================= ISTFT16 ============================================
+// torch.istft(n_fft=16, hop=4, hann16, center=True): per output sample (post-trim index n,
+// full index m = n+8): sum over frames f with 0 <= m-4f < 16 of w[j]*y_f[j], normalized by
+// sum w^2[j], where y_f = irfft16 of the onesided spectrum X[f*18 ...] (re 0..8, im 9..17).
+// Output length = (n_frames-1)*4 (= sample_len of the final waveform), then clamp(+-audio_limit).
+#pragma kernel ISTFT16
+[numthreads(256, 1, 1)]
+void ISTFT16(uint3 id : SV_DispatchThreadID)
+{
+    uint n = id.x;
+    if (n >= sample_len) return;    // sample_len = (n_frames-1)*4
+    uint m = n + 8u;
+
+    float num = 0.0, den = 0.0;
+    uint f_lo = m >= 15u ? (m - 15u + 3u) / 4u : 0u;
+    uint f_hi = min(m / 4u, n_frames - 1u);
+    for (uint f = f_lo; f <= f_hi; f++)
+    {
+        uint j = m - f * 4u;
+        if (j >= 16u) continue;
+        // irfft16 at sample j
+        float y = X[f * 18u];                        // k=0: re only
+        for (uint k = 1; k < 8u; k++)
+        {
+            float ang = 6.28318530718 * (float)(k * j) / 16.0;
+            y += 2.0 * (X[f * 18u + k] * cos(ang) - X[f * 18u + 9u + k] * sin(ang));
+        }
+        y += X[f * 18u + 8u] * cos(3.14159265359 * (float)j);   // Nyquist
+        y /= 16.0;
+        float w = 0.5 * (1.0 - cos(6.28318530718 * (float)j / 16.0));
+        num += w * y;
+        den += w * w;
+    }
+    float v = num / max(den, 1e-9);
+    Y[n] = clamp(v, -audio_limit, audio_limit);
+}
+
+// ========================= TrimFade ===========================================
+// wav[:960] *= trim_fade — first 480 zeroed, next 480 half-cosine rise (linspace(pi,0,480)).
+#pragma kernel TrimFade
+[numthreads(256, 1, 1)]
+void TrimFade(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= 960u || i >= sample_len) return;
+    float g;
+    if (i < 480u) g = 0.0;
+    else
+    {
+        float ang = 3.14159265359 * (float)(479u - (i - 480u)) / 479.0;
+        g = (cos(ang) + 1.0) * 0.5;
+    }
+    inout_buf[i] *= g;
+}
+
+// ========================= Conv1DGrouped ======================================
+// Grouped [T,C] conv (DiT CausalConvPositionEmbedding: k31 g16). Torch layout
+// [out, in/g, k]; group of oc = oc / (out_dim / n_groups).
+// batch_seq != 0 = batch-2 CFG: the buffer holds two stacked halves of batch_seq
+// rows; the conv window never crosses the half boundary (each half zero-pads at
+// its own edges, exactly like two separate sequences).
+#pragma kernel Conv1DGrouped
+[numthreads(256, 1, 1)]
+void Conv1DGrouped(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * out_dim) return;
+    uint t = idx / out_dim;
+    uint oc = idx % out_dim;
+    uint opg = out_dim / n_groups;
+    uint ipg = in_dim / n_groups;
+    uint gbase = (oc / opg) * ipg;
+
+    uint rowBase = 0u;
+    uint limit = in_len;
+    uint tl = t;
+    if (batch_seq != 0u)
+    {
+        uint bb = t / batch_seq;
+        tl = t - bb * batch_seq;
+        rowBase = bb * batch_seq;
+        limit = batch_seq;
+    }
+
+    float sum = has_bias != 0 ? readH(W_bias, oc) : 0.0;
+    int base_t = (int)(tl * conv_stride) - pad_left;
+    uint w_base = oc * ipg * conv_kernel;
+    for (uint k = 0; k < conv_kernel; k++)
+    {
+        int ti = base_t + (int)(k * conv_dilation);
+        if (ti < 0 || ti >= (int)limit) continue;
+        uint x_base = (rowBase + (uint)ti) * in_dim + gbase;
+        for (uint icl = 0; icl < ipg; icl++)
+            sum += X[x_base + icl] * readH(W, w_base + icl * conv_kernel + k);
+    }
+    Y[idx] = apply_act(sum);
+}
+
+// ========================= AdaLNModulate ======================================
+// norm_output[t,c] = LN_noaffine(norm_input[t,:]) * (1 + mod_vec[mod_scale_off+c])
+//                    + mod_vec[mod_shift_off+c]
+// One THREADGROUP per row with cooperative mean/var reduction — a thread-per-row
+// version leaves the GPU ~95% idle at DiT sequence lengths (hundreds of rows).
+groupshared float aln_red[256];
+#pragma kernel AdaLNModulate
+[numthreads(256, 1, 1)]
+void AdaLNModulate(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint pos = gid.x;
+    uint tid = gtid.x;
+    if (pos >= seq_len) return;
+    uint base_idx = pos * norm_dim;
+
+    float s = 0.0;
+    for (uint i = tid; i < norm_dim; i += 256u) s += norm_input[base_idx + i];
+    aln_red[tid] = s;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint r = 128u; r > 0u; r >>= 1)
+    {
+        if (tid < r) aln_red[tid] += aln_red[tid + r];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    float mean = aln_red[0] / (float)norm_dim;
+    GroupMemoryBarrierWithGroupSync();
+
+    float v = 0.0;
+    for (uint j = tid; j < norm_dim; j += 256u)
+    {
+        float d = norm_input[base_idx + j] - mean;
+        v += d * d;
+    }
+    aln_red[tid] = v;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint r2 = 128u; r2 > 0u; r2 >>= 1)
+    {
+        if (tid < r2) aln_red[tid] += aln_red[tid + r2];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    float rstd = rsqrt(aln_red[0] / (float)norm_dim + norm_eps);
+
+    for (uint k = tid; k < norm_dim; k += 256u)
+        norm_output[base_idx + k] = (norm_input[base_idx + k] - mean) * rstd
+                                    * (1.0 + mod_vec[mod_scale_off + k]) + mod_vec[mod_shift_off + k];
+}
+
+// ========================= GateAdd ============================================
+// buf_a[t,c] += mod_vec[mod_gate_off + c] * buf_b[t,c]   (AdaLN-Zero gated residual)
+#pragma kernel GateAdd
+[numthreads(256, 1, 1)]
+void GateAdd(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * norm_dim) return;
+    buf_a[idx] += mod_vec[mod_gate_off + idx % norm_dim] * buf_b[idx];
+}
+
+// ========================= RopeQK =============================================
+// x_transformers rope quirk faithfully ported: applied to the FLAT [T, 1024] q/k
+// BEFORE the head split, and freqs cover only dim_head=64 -> ONLY channels 0..63
+// (head 0) rotate. x_transformers >= 1.x uses the INTERLEAVED (GPT-J) convention
+// (verified empirically vs v2.11.24): pairs (2j, 2j+1), theta_j = t * inv_freq[j].
+#pragma kernel RopeQK
+[numthreads(256, 1, 1)]
+void RopeQK(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * 32u) return;
+    uint t = idx / 32u;
+    uint j = idx % 32u;
+    // batch-2 halves share positions (t mod batch_seq); pos_offset = absolute row of
+    // local row 0 in the single-pass streaming path (frozen prefix not re-run).
+    uint pos = pos_offset + (batch_seq != 0u ? t % batch_seq : t);
+    float th = (float)pos * readH(rope_freqs, j);
+    float c = cos(th), s = sin(th);
+    uint b = t * in_dim + 2u * j;        // in_dim = row stride (1024)
+    float a0 = inout_buf[b];
+    float a1 = inout_buf[b + 1u];
+    inout_buf[b]      = a0 * c - a1 * s;
+    inout_buf[b + 1u] = a0 * s + a1 * c;
+}
+
+// ========================= EulerCfgStep =======================================
+// CFM step with classifier-free guidance folded in:
+// inout[dst_off+i] += dt_val * ((1+scale_val)*X[i] - scale_val*buf_b[src_off+i]).
+// X = cond dxdt (rows [0,M) of the batch-2 output); buf_b = the SAME stacked buffer
+// read at copy_src_offset = the uncond half; copy_dst_offset lets the single-pass
+// streaming path update only x rows [F, M).
+#pragma kernel EulerCfgStep
+[numthreads(256, 1, 1)]
+void EulerCfgStep(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    inout_buf[copy_dst_offset + id.x] += dt_val * ((1.0 + scale_val) * X[id.x] - scale_val * buf_b[copy_src_offset + id.x]);
+}
+
+// ========================= PackBroadcastCh ====================================
+// dst[t*pack_dst_dim + pack_dst_off + c] = buf_b[c] — broadcast a [C] vector into
+// a channel slice of every row (spk lane of the DiT input concat).
+#pragma kernel PackBroadcastCh
+[numthreads(256, 1, 1)]
+void PackBroadcastCh(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * in_dim) return;
+    buf_a[idx / in_dim * pack_dst_dim + pack_dst_off + idx % in_dim] = buf_b[idx % in_dim];
+}
+
+// ========================= utils ==============================================
+#pragma kernel ZeroBuffer
+[numthreads(256, 1, 1)]
+void ZeroBuffer(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[id.x] = 0.0;
+}
+
+#pragma kernel CopyBuffer
+[numthreads(256, 1, 1)]
+void CopyBuffer(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[id.x] = buf_b[id.x];
+}
+
+#pragma kernel CopySlice
+[numthreads(256, 1, 1)]
+void CopySlice(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[copy_dst_offset + id.x] = buf_b[copy_src_offset + id.x];
+}
+
+#pragma kernel AddResidual
+[numthreads(256, 1, 1)]
+void AddResidual(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    buf_a[id.x] += buf_b[id.x];
+}
+
+#pragma kernel ScaleBuf
+[numthreads(256, 1, 1)]
+void ScaleBuf(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= buffer_size) return;
+    inout_buf[id.x] *= scale_val;
+}

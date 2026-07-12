@@ -109,6 +109,15 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             })
                 ConfigureHumanoid(p, rotateClips180: p.Contains("/Animations/"));
 
+            // Nov-2020 RPG pack characters (Rogue beggar) + Ultimate-Modular-Women Witch: their
+            // feet are IK targets OUTSIDE the leg chain, so humanoid retarget is impossible —
+            // import them GENERIC and play their OWN embedded clips instead of UAL. Witch.fbx
+            // (Quaternius Apr-2022 women pack, CC0) is the REAL female model for Morwenna; its
+            // materials are flat palette colors baked in the FBX (no texture to apply).
+            foreach (string p in new[] { ART + "/Characters/Wizard.fbx", ART + "/Characters/Rogue.fbx",
+                                         ART + "/Characters/Witch.fbx" })
+                ConfigureGenericAnimated(p);
+
             // static art (weapons + every ruins piece)
             foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { ART + "/Weapons", ART + "/Ruins" }))
             {
@@ -122,6 +131,34 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 imp.SaveAndReimport();
             }
             AssetDatabase.SaveAssets();
+        }
+
+        // generic-rig import for the animated RPG-pack characters (own clips, no retargeting)
+        static void ConfigureGenericAnimated(string path)
+        {
+            var imp = AssetImporter.GetAtPath(path) as ModelImporter;
+            if (imp == null) throw new Exception("Missing model: " + path);
+            imp.animationType = ModelImporterAnimationType.Generic;
+            imp.importAnimation = true;
+            imp.importCameras = false;
+            imp.importLights = false;
+            imp.importNormals = ModelImporterNormals.Calculate;   // these FBX ship without normals
+            var clips = imp.defaultClipAnimations;
+            foreach (var c in clips)
+            {
+                string clean = c.takeName.Contains("|") ? c.takeName.Substring(c.takeName.IndexOf('|') + 1) : c.takeName;
+                c.name = clean;
+                c.loopTime = clean.Contains("Idle") || clean.StartsWith("Spell") || clean == "Walk" || clean == "Run"
+                          || clean == "Interact" || clean == "Wave";   // looping talk gestures (women pack)
+                c.keepOriginalOrientation = true;
+                c.keepOriginalPositionXZ = true;
+                c.keepOriginalPositionY = true;
+                c.lockRootRotation = true;
+                c.lockRootPositionXZ = true;
+                c.lockRootHeightY = true;
+            }
+            if (clips.Length > 0) imp.clipAnimations = clips;
+            imp.SaveAndReimport();
         }
 
         // explicit mecanim mapping — Unity's auto-mapper chokes on the Quaternius bone names
@@ -177,6 +214,23 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 else
                     unmatched.Add(humanName);
             }
+            // some Quaternius rigs (robed Wizard/Cleric) keep Foot.L/R as IK TARGETS outside the
+            // leg chain (children of Root, siblings of Body). A humanoid foot must descend from
+            // the lower leg, so fall back to the leg's end bone — these NPCs only idle in place.
+            var allT = modelGO.GetComponentsInChildren<Transform>(true);
+            foreach (string s in new[] { "L", "R" })
+            {
+                var foot = allT.FirstOrDefault(t => t.name == "Foot." + s);
+                var lower = allT.FirstOrDefault(t => t.name == "LowerLeg." + s);
+                if (foot == null || lower == null || foot.IsChildOf(lower)) continue;
+                if (!boneNames.Contains("LowerLeg." + s + "_end")) continue;
+                string side = s == "L" ? "Left" : "Right";
+                human.RemoveAll(h => h.humanName == side + "Foot");
+                human.Add(new HumanBone { humanName = side + "Foot", boneName = "LowerLeg." + s + "_end", limit = new HumanLimit { useDefaultValues = true } });
+            }
+            // the Nov-2020 pack FBX ships without normals — recalculate or they shade black
+            if (path.Contains("Wizard") || path.Contains("Rogue"))
+                imp.importNormals = ModelImporterNormals.Calculate;
             Debug.Log($"[ChatDemo3DBuilder] {Path.GetFileName(path)} mapped {human.Count} bones" +
                       (unmatched.Count > 0 ? ", unmatched: " + string.Join(",", unmatched) : "") +
                       " | hierarchy: " + HierarchyDump(modelGO.transform, 0));
@@ -282,6 +336,20 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
         {
             var so = new SerializedObject(c);
             so.FindProperty(field).floatValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        static void SetBool(Component c, string field, bool value)
+        {
+            var so = new SerializedObject(c);
+            so.FindProperty(field).boolValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        static void SetEnum(Component c, string field, int value)
+        {
+            var so = new SerializedObject(c);
+            so.FindProperty(field).enumValueIndex = value;
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -494,7 +562,6 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             if (!File.Exists(pngPath))
             {
                 const int S = 512;
-                const float REGION = 31.7f;   // noise-space size of the tile
 
                 // sample noise on a wrapped domain: blend 4 shifted perlin reads so the texture tiles
                 float TileableNoise(float u, float v, float freq, float seed)
@@ -879,6 +946,41 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             return go;
         }
 
+        // A warm flickering point light hovering over a candle piece (CandleFlicker modulates
+        // intensity + a tiny wobble at runtime), plus emissive wax so the flames read as lit.
+        static void AddCandleGlow(GameObject candle, float height, float intensity, float range)
+        {
+            if (candle == null) return;
+            Bounds b = RenderererSafeBounds(candle);
+            var glow = new GameObject("CandleGlow");
+            glow.transform.SetParent(candle.transform, false);
+            glow.transform.position = new Vector3(b.center.x, b.max.y + height, b.center.z);
+            var l = glow.AddComponent<Light>();
+            l.type = LightType.Point;
+            l.color = new Color(1f, 0.68f, 0.32f);
+            l.intensity = intensity;
+            l.range = range;
+            l.shadows = LightShadows.None;
+            glow.AddComponent<DeepUnity.Tutorials.ChatDemo3D.CandleFlicker>();
+
+            // candle meshes glow softly themselves — scene-owned material COPIES get the
+            // emission (never mutate the shared FBX-imported materials: that would bleed into
+            // every other Candles_1 in the project and doesn't persist reliably anyway)
+            foreach (var r in candle.GetComponentsInChildren<Renderer>())
+            {
+                var mats = r.sharedMaterials;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    if (mats[i] == null) continue;
+                    var m = new Material(mats[i]);
+                    m.EnableKeyword("_EMISSION");
+                    m.SetColor("_EmissionColor", new Color(0.9f, 0.55f, 0.2f) * 0.6f);
+                    mats[i] = m;
+                }
+                r.sharedMaterials = mats;
+            }
+        }
+
         static Material foliageMat;
         static Material FoliageMat()
         {
@@ -1092,6 +1194,18 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             return ctrl;
         }
 
+        // 2-state Idle/Talking controller from a GENERIC character's own embedded clips
+        static RuntimeAnimatorController CreateOwnClipAnimator(string assetName, string fbxRel,
+                                                               string idleClip, string talkClip)
+        {
+            var ctrl = AnimatorController.CreateAnimatorControllerAtPath(GEN + "/" + assetName + ".controller");
+            var sm = ctrl.layers[0].stateMachine;
+            var idle = sm.AddState("Idle"); idle.motion = Clip(fbxRel, idleClip);
+            var talk = sm.AddState("Talking"); talk.motion = Clip(fbxRel, talkClip);
+            sm.defaultState = idle;
+            return ctrl;
+        }
+
         static RuntimeAnimatorController CreateNpcAnimator()
         {
             var ctrl = AnimatorController.CreateAnimatorControllerAtPath(GEN + "/NpcAnimator.controller");
@@ -1295,6 +1409,33 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             m.color = c;
             m.SetFloat("_Metallic", metallic);
             m.SetFloat("_Glossiness", gloss);
+            return m;
+        }
+
+        // load-or-rebuild a simple cone mesh asset under Generated/ (apex up, base on y=0)
+        static Mesh ConeMeshAsset(string file, float radius, float height, int segs)
+        {
+            string p = GEN + "/" + file;
+            var m = AssetDatabase.LoadAssetAtPath<Mesh>(p);
+            if (m == null) { m = new Mesh(); AssetDatabase.CreateAsset(m, p); }
+            m.Clear();
+            var v = new List<Vector3> { Vector3.zero, Vector3.up * height };
+            for (int i = 0; i < segs; i++)
+            {
+                float a = i * Mathf.PI * 2f / segs;
+                v.Add(new Vector3(Mathf.Cos(a) * radius, 0f, Mathf.Sin(a) * radius));
+            }
+            var tris = new List<int>();
+            for (int i = 0; i < segs; i++)
+            {
+                int a = 2 + i, b = 2 + (i + 1) % segs;
+                tris.AddRange(new[] { 1, a, b });   // side
+                tris.AddRange(new[] { 0, b, a });   // base
+            }
+            m.SetVertices(v);
+            m.SetTriangles(tris, 0);
+            m.RecalculateNormals();
+            m.RecalculateBounds();
             return m;
         }
 
@@ -1527,12 +1668,43 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             root.AddComponent<BreathingIdle>();
             var npc = root.AddComponent<NPCInteractor3D>();
             SetRef(npc, "dialogueCameraPoint", camPoint);
+            // identity lives here since the NPC component became the generic NPCChatBase — the
+            // base class defaults are a nameless villager
+            SetString(npc, "npc_name", "Velmire, the Pale Herald");
+            SetString(npc, "system_prompt",
+                "You are Velmire, the Pale Herald: a white-masked, soft-spoken emissary lingering by the gate of a ruined castle. " +
+                "You greet travellers with honeyed courtesy that thinly veils mockery. You pity the player for wandering these dead " +
+                "lands guideless and lordless, and you address them as 'lambkin' or 'poor wanderer'. You speak in flowery, " +
+                "old-fashioned phrases, hint that you know more than you say, and never give a straight answer. " +
+                "You know what waits beyond the wall of golden mist at the northern arch: the Sentinel of the Mist, a towering " +
+                "hollow knight wielding a halberd, who has felled every challenger before. If asked about the mist, the arch or " +
+                "the boss, you foreshadow it with morbid delight — urging the lambkin onward while clearly expecting them to die. " +
+                "Stay in character at all times. Keep your replies to one to three short sentences.");
+            SetString(npc, "approach_text", "The pale figure regards you in silence...");
+            // history-mode A/B spread: Velmire REMEMBERS between dialogues (live KV reused
+            // while his Qwen is resident, transcript re-prefilled after a zone-exit unload)
+            SetEnum(npc, "historyMode", (int)NPCInteractor3D.HistoryMode.ContinueWhereLeftOff);
+            // Velmire speaks through Kokoro (82M non-AR, RTF ~0.3 — speaks DURING generation)
+            // with the am_onyx voicepack: the same deep Freeman-esque narrator timbre the
+            // CosyVoice "velmire" voice was baked from. CosyVoice3 stays selectable on the enum
+            // and takes over once its A6 perf work lands RTF < 1.
+            SetEnum(npc, "conversationMode", (int)NPCInteractor3D.ConversationMode.LlmPlusTts);
+            SetEnum(npc, "ttsModel", (int)NPCInteractor3D.TtsModel.Kokoro);
+            // velmire_elder = 0.5·am_onyx + 0.5·bm_george voicepack blend (deep + old); pure
+            // candidates baked too: bm_george, am_santa, am_onyx (ProbeLogs/voice_candidates)
+            SetString(npc, "ttsVoice", "velmire_elder");
+            SetFloat(npc, "voicePitch", 1.0f);
+            // residency A/B test: the big transparent-green sphere slow-prefetches Qwen+Kokoro
+            // on entry, HOLDS both on the GPU while the player is inside, and unloads both on
+            // exit; toggle off in the inspector for contact loading (talk trigger = mini zone)
+            SetBool(npc, "usePrefetchZone", true);
+            SetFloat(npc, "prefetchRadius", 10f);
             return root;
         }
 
         // Secondary dialogue NPC: a witch across the courtyard from Velmire. Same NPCInteractor3D
         // component and the same Qwen3.5-0.8B (int8) — only the serialized personality differs.
-        // Reuses the Monk mesh with a dark violet tint (no dedicated witch model in the CC0 set).
+        // Model: the actual female "Witch" from Quaternius' Ultimate Modular Women pack (CC0).
         static GameObject BuildWitchNpc(RuntimeAnimatorController ctrl)
         {
             var root = new GameObject("NPC_Morwenna");
@@ -1553,7 +1725,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             trigger.radius = 2.2f;
             trigger.center = new Vector3(0, 1f, 0);
 
-            var model = (GameObject)PrefabUtility.InstantiatePrefab(LoadModel("Characters/Monk.fbx"));
+            // the REAL witch model: Quaternius "Witch" from the Ultimate Modular Women pack
+            // (Apr-2022, CC0 — an actually FEMALE character: dress, hat, hair). Materials are
+            // the FBX's own flat palette colors (purple outfit out of the box) — no texture pass.
+            var model = (GameObject)PrefabUtility.InstantiatePrefab(LoadModel("Characters/Witch.fbx"));
             model.name = "WitchModel";
             model.transform.SetParent(root.transform, false);
             SetLayerRecursive(model, 2);
@@ -1563,22 +1738,47 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             model.transform.localScale *= scale;
             GroundModel(model, root.transform.position.y);
 
-            // mottled violet robes — reads as hedge-witch next to Velmire's bone-white
-            ApplyCharacterTexture(model, "Monk_Texture.png", "NpcWitch", new Color(0.52f, 0.42f, 0.62f));
-
+            // generic rig -> her OWN clips: calm Idle_Neutral, and the Interact
+            // lean-in gesticulation while she talks (both loop)
             var anim = model.GetComponent<Animator>();
             if (anim == null) anim = model.AddComponent<Animator>();
-            anim.runtimeAnimatorController = ctrl;
+            anim.runtimeAnimatorController = CreateOwnClipAnimator("WitchAnimator",
+                "Characters/Witch.fbx", "Idle_Neutral", "Interact");
             anim.applyRootMotion = false;
             anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
+            // the Wizard model brings its own pointed hat + staff-in-hand; just plant a spare
+            // crooked staff by her corner for set dressing
+            var staffMat = MatAsset("WitchStaff.mat", new Color(0.23f, 0.16f, 0.10f), 0f, 0.1f);
+            var staff = new GameObject("WitchStaff");
+            staff.transform.SetParent(envRoot, false);
+            staff.transform.position = npcPos + root.transform.right * 0.55f - root.transform.forward * 0.15f;
+            staff.transform.rotation = Quaternion.Euler(0f, 0f, 7f);
+            PrimPart(staff.transform, PrimitiveType.Cylinder, "Shaft",
+                     new Vector3(0, 0.75f, 0), new Vector3(0.045f, 0.75f, 0.045f), Vector3.zero, staffMat);
+            PrimPart(staff.transform, PrimitiveType.Sphere, "Knot",
+                     new Vector3(0, 1.52f, 0), Vector3.one * 0.11f, Vector3.zero, staffMat);
+
             // her corner: a ring of candles, bones and a dead tree (parented to the environment —
             // the NPC root rotates toward the player at runtime and must not drag props with it)
-            PlacePiece("Candles_1", npcPos + root.transform.right * 0.8f + root.transform.forward * 0.3f, Range(0, 360), envRoot, collider: false);
-            PlacePiece("Candles_1", npcPos - root.transform.right * 0.7f + root.transform.forward * 0.5f, Range(0, 360), envRoot, collider: false);
+            var candleA = PlacePiece("Candles_1", npcPos + root.transform.right * 0.8f + root.transform.forward * 0.3f, Range(0, 360), envRoot, collider: false);
+            var candleB = PlacePiece("Candles_1", npcPos - root.transform.right * 0.7f + root.transform.forward * 0.5f, Range(0, 360), envRoot, collider: false);
             PlacePiece("Skull", npcPos + root.transform.right * 0.4f - root.transform.forward * 0.4f, Range(0, 360), envRoot, collider: false);
             PlacePiece("Skull", npcPos - root.transform.right * 1.1f, Range(0, 360), envRoot, collider: false);
             PlacePiece("DeadTree_1", npcPos - root.transform.forward * 1.6f + root.transform.right * 1.4f, Range(0, 360), envRoot, collider: false);
+
+            // LIT candles: a warm flickering point light over each candle cluster, plus one
+            // broader fill so her whole corner reads at night instead of sitting in the dark
+            AddCandleGlow(candleA, 0.35f, 2.4f, 4.5f);
+            AddCandleGlow(candleB, 0.35f, 2.4f, 4.5f);
+            var fill = new GameObject("WitchCornerFill").AddComponent<Light>();
+            fill.transform.SetParent(envRoot, false);
+            fill.transform.position = npcPos + Vector3.up * 2.1f + root.transform.forward * 0.4f;
+            fill.type = LightType.Point;
+            fill.color = new Color(1f, 0.78f, 0.5f);
+            fill.intensity = 1.1f;
+            fill.range = 7f;
+            fill.shadows = LightShadows.None;
 
             // dialogue camera: over the player's shoulder, framing the witch
             var camPoint = new GameObject("DialogueCameraPoint").transform;
@@ -1602,6 +1802,15 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 "and cackle that the player's bones will make a fine addition to your collection when it fells them. " +
                 "Stay in character at all times. Keep your replies to one to three short sentences.");
             SetString(npc, "approach_text", "The crone squints at you over her candles, muttering...");
+            // history-mode A/B spread: the witch forgets you the moment you leave (fresh
+            // InitializeChat every opening — the pre-history-modes behavior)
+            SetEnum(npc, "historyMode", (int)NPCInteractor3D.HistoryMode.ResetEveryTime);
+            // latent loading for her too: contact loading (the old A/B "B" arm) slammed the full
+            // 8 MB/frame stream the instant the talk trigger was touched — a visible hitch. Her
+            // Qwen now streams during the walk-up like Velmire's (and the POOL means whichever
+            // of the two loads first serves both). The small sphere trigger stays interaction-only.
+            SetBool(npc, "usePrefetchZone", true);
+            SetFloat(npc, "prefetchRadius", 10f);
             return root;
         }
 
@@ -1956,8 +2165,11 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             field.textComponent = txtGO.GetComponent<TMP_Text>();
             field.placeholder = phGO.GetComponent<TMP_Text>();
             field.lineType = TMP_InputField.LineType.SingleLine;
+            // clearly visible blinking caret: gold accent, thick, unmistakable over the dark panel
             field.caretColor = new Color(0.77f, 0.66f, 0.42f);
             field.customCaretColor = true;
+            field.caretWidth = 3;
+            field.caretBlinkRate = 0.85f;
             field.selectionColor = new Color(0.45f, 0.38f, 0.22f, 0.6f);
             field.targetGraphic = bg;
             return go;

@@ -1,0 +1,1 @@
+language English<asr_text>Open the inventory and equip the iron sword before entering the dungeon.<|im_end|>

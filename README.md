@@ -1,5 +1,5 @@
 # DeepUnity (2022.3.43f1 lts)
-![version](https://img.shields.io/badge/version-v0.12.2.3-yellow)
+![version](https://img.shields.io/badge/version-v0.13.0-yellow)
 [Reference Papers](https://github.com/smtmRadu/Policy-Gradient-Methods-Insights-and-Optimization-Strategies)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using state-of-the-art algorithms.
@@ -52,7 +52,15 @@ public class Tutorial : MonoBehaviour
 ```
 ## Large Language Models
 
-DeepUnity provides inference implementations for [Gemma3-270M](https://huggingface.co/google/gemma-3-270m-it) and [Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B), along with SFT scripts w/ QLoRA. Current implementations are not optimized yet (~9 tok/s).
+DeepUnity provides full-GPU inference (HLSL compute shaders, streaming weight upload, KV caching) for the following LLMs, along with SFT scripts w/ QLoRA:
+
+| Model | Sizes | Quantization |
+|---|---|---|
+| [Qwen3.5](https://huggingface.co/Qwen/Qwen3.5-0.8B) | 0.8B, 2B | FP16, INT8, INT4 |
+| [Gemma3](https://huggingface.co/google/gemma-3-270m-it) | 270M | FP16, INT8, INT4 |
+| [MiniCPM5](https://huggingface.co/openbmb) | 1B | FP16, INT8, INT4 |
+
+All weights are exported into the engine's own format with `import_params.py` (`--quant fp16|int8|int4`) into `Assets/Resources/Weights/`. Every ported model registers itself in `LLMRegistry`, so it automatically shows up in the NPC inspector dropdowns.
 
 #### Behaviour script overriding example
 
@@ -84,6 +92,45 @@ public class ChatWithQwen : MonoBehaviour
 ```
 
 ###### _You can finetune your own SLMs with the HuggingFace trainer (full or with adapters) for role-playing or other content generation, [merge the base model with the adapters,] then use the **import_params.py** script to replace the **/params** folder with the serialized new weights (`--quant fp16|int8|int4`)._
+
+## Text To Speech
+
+DeepUnity runs TTS fully on the GPU as well, with real-time streaming synthesis (speech starts while the reply is still generating) and per-NPC voices:
+
+| Model | Size | Quantization | Notes |
+|---|---|---|---|
+| [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) | 82M | FP16, INT8 | non-autoregressive, RTF ~0.3 on an RTX 4060 — real-time with headroom; 15 voicepacks + blends |
+| [Fun-CosyVoice3](https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512) | 0.5B | FP16, INT8 | autoregressive LM + causal DiT flow, token-level streaming, voices baked offline from any reference clip |
+| [Chatterbox-Turbo](https://github.com/resemble-ai/chatterbox) | 0.5B | FP16, INT8 | offline-style synthesis with clause-level streaming |
+
+Speech-to-text ports ([Qwen3-ASR](https://huggingface.co/Qwen) 0.6B/1.7B and [Parakeet-TDT](https://huggingface.co/nvidia) 0.6B) are in progress.
+
+#### Speaking through a KokoroVoice component
+
+```csharp
+using UnityEngine;
+using DeepUnity;
+
+// Attach next to an AudioSource. The engine is shared across all voices in the
+// scene; weights stream to the GPU budgeted, without frame drops.
+public class TalkingNpc : MonoBehaviour
+{
+    [SerializeField] private KokoroVoice voice; // voiceName, speed, pitch set in the inspector
+
+    public void Start()
+    {
+        // one-shot utterance
+        voice.Say("Welcome, traveler! What brings you to the village?");
+    }
+
+    // ...or stream an LLM reply as it generates: feed token deltas and flush at the end.
+    // Each completed sentence is synthesized and played while the next one is still being written.
+    public void OnLlmToken(string delta) => voice.FeedText(delta);
+    public void OnLlmDone() => voice.FlushText();
+}
+```
+
+###### _Voices can be auditioned in the **VoiceLab** scene (menu `DeepUnity/TTS/Build VoiceLab Scene`): pick an engine + voicepack, tune pitch/speed live and save presets. The `NPCChatBase` component wires LLM + TTS together for game NPCs — prefetch zones stream the models in as the player approaches and release them on exit._
 
 ## Reinforcement Learning
 

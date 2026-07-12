@@ -25,7 +25,7 @@ namespace DeepUnity
         {
             public const string DUMP_TEXT = "Hello world! This is a test of the DeepUnity port.";
             public string dumpDir = "Assets/DeepUnity/TTS/validation/dump";
-            public string weightsDir = "Assets/Resources/DeepUnity/TTS/Chatterbox/weights_chatterbox_turbo_fp16";
+            public string weightsDir = "Assets/Resources/Weights/weights_chatterbox_turbo_fp16";
             public string reportPath = "ProbeLogs/chatterbox_parity_report.md";
             public string doneMarker = "ProbeLogs/chatterbox_parity.done";
 

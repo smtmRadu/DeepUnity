@@ -9,7 +9,7 @@ USAGE
     python import_params.py google/gemma-3-270m-it
     python import_params.py Qwen/Qwen3.5-0.8B --quant int8
     python import_params.py D:/checkpoints/my-finetuned-qwen --quant int8
-    python import_params.py ResembleAI/chatterbox-turbo          # TTS -> Resources/DeepUnity/TTS/Chatterbox/
+    python import_params.py ResembleAI/chatterbox-turbo          # TTS -> Resources/Weights/
                                                                  # (fp16 only; conds.pt export needs torch)
 
 SUPPORTED MODELS                                                fp16   int8   int4
@@ -38,7 +38,7 @@ DeepUnity convention documented on LLMQuant in LLM.cs)
 
 OUTPUT LAYOUT (the unified convention every DeepUnity LLM loader reads; the C# resolves
 this Resources location first and falls back to the legacy Assets/DeepUnity/LLM/ one)
-    Assets/Resources/DeepUnity/LLM/<Arch>/weights_<model>_<size>_<quant>/
+    Assets/Resources/Weights/weights_<model>_<size>_<quant>/
         e.g.  .../LLM/Qwen3_5/weights_qwen3.5_0.8B_int8/   .../LLM/Gemma3/weights_gemma3_270M_fp16/
         norm.bin                                  final RMSNorm gamma (fp16)
         embed_tokens/part_{0..15}.bin             tied embedding / lm_head, 16 fp16 shards (ALWAYS fp16)
@@ -50,6 +50,7 @@ Requires: numpy; huggingface_hub (only for hub ids); tqdm (optional, nicer progr
 import argparse
 import json
 import os
+import shutil
 import struct
 import sys
 
@@ -397,7 +398,7 @@ def export_gemma3(reader, cfg, ex):
 # ----------------------------------------------------------------------------- chatterbox-turbo TTS
 # Exports HF ResembleAI/chatterbox-turbo into DeepUnity TTS params (fp16, or int8 for T3's
 # four per-layer matmul families — s3gen/embeddings/head/norms stay fp16 in both modes).
-# Output: Assets/Resources/DeepUnity/TTS/Chatterbox/weights_chatterbox_turbo_<quant>/
+# Output: Assets/Resources/Weights/weights_chatterbox_turbo_<quant>/
 #   t3/         GPT2-medium T3 (HF Conv1D weights TRANSPOSED to [out,in])
 #   s3gen/enc   UpsampleConformerEncoder + flow embeddings/projections
 #   s3gen/est   ConditionalDecoder meanflow estimator
@@ -678,7 +679,7 @@ def export_chatterbox(args):
         files = {n: hf_hub_download(model, n) for n in tqdm(names, desc="download", unit="file")}
 
     out = args.out or os.path.normpath(os.path.join(
-        HERE, "..", "..", "Resources", "DeepUnity", "TTS", "Chatterbox", f"weights_chatterbox_turbo_{args.quant}"))
+        HERE, "..", "..", "Resources", "Weights", f"weights_chatterbox_turbo_{args.quant}"))
     os.makedirs(out, exist_ok=True)
     # int8 quantizes ONLY T3's four per-layer matmul families (via TTSExporter.mat); embeddings,
     # wpe, speech_head, norms, biases and ALL of s3gen stay fp16 (s3gen int8 is a separate pass).
@@ -698,17 +699,189 @@ def export_chatterbox(args):
     print("Use it in Unity:  var tts = new ChatterboxTTS();   // resolves the Resources folder automatically")
 
 
+# ----------------------------------------------------------------------------- cosyvoice3 TTS
+COSYVOICE3_REPO = "FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+
+
+def _fold_new_weight_norm(sd):
+    """Fold torch>=2 parametrized weight norm (name.parametrizations.weight.original0/1)
+    into plain '<name>.weight' entries: w = g * v / ||v||  (norm over all dims but 0)."""
+    import torch
+    out, done = {}, set()
+    for k in sd:
+        if ".parametrizations.weight.original0" in k:
+            base = k.split(".parametrizations.weight.original0")[0]
+            g = sd[f"{base}.parametrizations.weight.original0"].float()
+            v = sd[f"{base}.parametrizations.weight.original1"].float()
+            norm = v.norm(dim=tuple(range(1, v.dim())), keepdim=True)
+            out[base + ".weight"] = g * v / norm
+            done.update({f"{base}.parametrizations.weight.original0",
+                         f"{base}.parametrizations.weight.original1"})
+    for k, t in sd.items():
+        if k not in done and ".parametrizations." not in k:
+            out[k] = t
+    return out
+
+
+def _walk_export(sd, ex, prefix, mat_pred=None, skip=()):
+    """Export every tensor under manifest name '<prefix>/<key>'; mat_pred(key) True -> quantizable."""
+    n = 0
+    for k, t in sd.items():
+        if any(s in k for s in skip):
+            continue
+        arr = t.detach().float().cpu().numpy()
+        rel = f"{prefix}/{k}"
+        if mat_pred is not None and arr.ndim == 2 and mat_pred(k):
+            ex.mat(rel, arr)
+        else:
+            ex.f16(rel, arr)
+        n += 1
+    return n
+
+
+def export_cosyvoice3(args):
+    """Fun-CosyVoice3-0.5B-2512 -> Resources/Weights/weights_cosyvoice3_<quant>/.
+    Names mirror the checkpoint tree under llm/ flow/ hift/ roots (see TTS/CosyVoice/SPEC.md §6).
+    Requires torch (checkpoints are .pt pickles) — run inside the WSL 'cosyvoice' env."""
+    import torch
+    if args.quant == "int4":
+        sys.exit("ERROR: cosyvoice3 export supports --quant fp16 or int8.")
+    model = args.model if args.model.lower() in ("cosyvoice3", "cosyvoice3-0.5b") else args.model
+    llm_file = "llm.rl.pt" if args.llm_variant == "rl" else "llm.pt"
+    names = [llm_file, "flow.pt", "hift.pt",
+             "CosyVoice-BlankEN/vocab.json", "CosyVoice-BlankEN/merges.txt",
+             "CosyVoice-BlankEN/tokenizer_config.json"]
+    if os.path.isdir(model):
+        files = {n: os.path.join(model, n) for n in names}
+        missing = [n for n, p in files.items() if not os.path.isfile(p)]
+        if missing:
+            sys.exit(f"ERROR: {model} is missing {missing}")
+    else:
+        from huggingface_hub import hf_hub_download
+        repo = COSYVOICE3_REPO if not os.path.sep in model and "/" not in model else model
+        print(f"[source] HuggingFace hub: {repo}")
+        files = {n: hf_hub_download(repo, n) for n in tqdm(names, desc="download", unit="file")}
+
+    out = args.out or os.path.normpath(os.path.join(
+        HERE, "..", "..", "Resources", "Weights", f"weights_cosyvoice3_{args.quant}"))
+    os.makedirs(out, exist_ok=True)
+    print(f"[out]    {out}\n[quant]  {args.quant}  [llm]  {llm_file}\n")
+    ex = TTSExporter(out, args.quant)
+
+    # ---- LM: Qwen2.5-0.5B backbone + speech_embedding + llm_decoder ------------------
+    sd = torch.load(files[llm_file], map_location="cpu")
+    sd = sd.get("state_dict", sd) if isinstance(sd, dict) else sd
+    # locate the qwen tree root (e.g. 'llm.model.model.'), keep names below it
+    root = next(k[:-len("embed_tokens.weight")] for k in sd if k.endswith("embed_tokens.weight"))
+    qwen = {k[len(root):]: t for k, t in sd.items() if k.startswith(root)}
+    # embed_tokens sharded like the LLM exporters (16 fp16 parts) to cap loader buffers
+    emb = qwen.pop("embed_tokens.weight").float().numpy()
+    rows = emb.shape[0] // EMBED_CHUNKS
+    for i in range(EMBED_CHUNKS):
+        ex.f16(f"llm/embed_tokens/part_{i}", emb[i * rows:(i + 1) * rows])
+    big = ("q_proj.weight", "k_proj.weight", "v_proj.weight", "o_proj.weight",
+           "gate_proj.weight", "up_proj.weight", "down_proj.weight")
+    n = _walk_export(qwen, ex, "llm", mat_pred=lambda k: k.endswith(big),
+                     skip=("lm_head.weight", "rotary_emb",))  # lm_head unused (untied speech head instead)
+    for extra in ("speech_embedding.weight", "llm_decoder.weight"):
+        key = next(k for k in sd if k.endswith(extra))
+        ex.f16(f"llm/{extra.rsplit('.', 1)[0]}", sd[key].detach().float().cpu().numpy())
+    print(f"[llm]    {n + 2 + EMBED_CHUNKS} tensors (root '{root}')")
+
+    # ---- Flow: input emb + lookahead + DiT estimator ----------------------------------
+    sd = torch.load(files["flow.pt"], map_location="cpu")
+    sd = sd.get("state_dict", sd) if isinstance(sd, dict) else sd
+    sd = _fold_new_weight_norm(sd)
+    dit_big = ("to_q.weight", "to_k.weight", "to_v.weight", "to_out.0.weight",
+               "ff.ff.0.0.weight", "ff.ff.2.weight", "attn_norm.linear.weight")
+    n = _walk_export(sd, ex, "flow", mat_pred=lambda k: k.endswith(dit_big))
+    # the CFM's FIXED noise buffer (CausalConditionalCFM: set_all_random_seed(0) -> randn)
+    torch.manual_seed(0)
+    ex.f16("flow/rand_noise", torch.randn([1, 80, 50 * 300]).numpy()[0])  # stored [80, 15000]
+    print(f"[flow]   {n + 1} tensors")
+
+    # ---- HiFT vocoder ------------------------------------------------------------------
+    sd = torch.load(files["hift.pt"], map_location="cpu")
+    sd = sd.get("state_dict", sd) if isinstance(sd, dict) else sd
+    sd = _fold_new_weight_norm(sd)
+    n = _walk_export(sd, ex, "hift")   # all fp16 (small; quant not worth it)
+    print(f"[hift]   {n} tensors")
+
+    ex.save_manifest()
+
+    # ---- tokenizer files next to the C# tokenizer --------------------------------------
+    tok_dir = os.path.normpath(os.path.join(HERE, "..", "TTS", "CosyVoice"))
+    os.makedirs(tok_dir, exist_ok=True)
+    for src, dst in (("CosyVoice-BlankEN/vocab.json", "CosyVoiceTokenizer.vocab.json"),
+                     ("CosyVoice-BlankEN/merges.txt", "CosyVoiceTokenizer.merges.txt"),
+                     ("CosyVoice-BlankEN/tokenizer_config.json", "CosyVoiceTokenizer.config.json")):
+        shutil.copyfile(files[src], os.path.join(tok_dir, dst))
+    print(f"\nDone - {ex.bytes_written / 1024 / 1024:.0f} MB written to:\n  {out}")
+    print("Voices are baked separately: TTS/CosyVoice/validation/make_voice.py")
+    print("Use it in Unity:  var tts = new CosyVoiceTTS();")
+
+
+# ----------------------------------------------------------------------------- model pool
+# Downloadable pool: `python import_params.py <name> [--quant ...]` — no HF id needed.
+MODEL_POOL = {
+    # LLMs
+    "qwen3.5-0.8b":       ("llm", "Qwen/Qwen3.5-0.8B",            None),
+    "qwen3.5-2b":         ("llm", "Qwen/Qwen3.5-2B",              None),
+    "gemma3-270m":        ("llm", "google/gemma-3-270m-it",       None),
+    "minicpm5-1b":        ("llm", "openbmb/MiniCPM5-1B",          None),
+    # TTS
+    "chatterbox-turbo":   ("tts", CHATTERBOX_REPO,                "chatterbox"),
+    "cosyvoice3-0.5b":    ("tts", COSYVOICE3_REPO,                "cosyvoice3"),
+    "kokoro-82m":         ("tts", "hexgrad/Kokoro-82M",           "kokoro"),      # exporter: TTS/Kokoro/validation/import_kokoro.py (merging)
+    # STT (exporters land with the STT workstreams)
+    "qwen3asr-0.6b":      ("stt", "Qwen/Qwen3-ASR-0.6B",          "qwen3asr"),
+    "qwen3asr-1.7b":      ("stt", "Qwen/Qwen3-ASR-1.7B",          "qwen3asr"),
+    "parakeet-tdt-0.6b-v2": ("stt", "nvidia/parakeet-tdt-0.6b-v2", "parakeet"),
+    "parakeet-tdt-0.6b-v3": ("stt", "nvidia/parakeet-tdt-0.6b-v3", "parakeet"),
+}
+
+
+def print_pool():
+    print("Available models (python import_params.py <name> [--quant fp16|int8|int4]):")
+    for kind in ("llm", "tts", "stt"):
+        print(f"  {kind.upper()}:")
+        for name, (k, repo, arch) in MODEL_POOL.items():
+            if k == kind:
+                note = "   (exporter merging from its workstream)" if (k == "stt" or arch == "kokoro") else ""
+                print(f"    {name:<22} -> {repo}{note}")
+
+
 # ----------------------------------------------------------------------------- main
 def main():
     ap = argparse.ArgumentParser(description="Export a HF checkpoint into DeepUnity params (see module docstring).")
-    ap.add_argument("model", help="HF hub id (e.g. Qwen/Qwen3.5-0.8B) or local checkpoint folder")
+    ap.add_argument("model", nargs="?", default=None,
+                    help="pool name (see --list), HF hub id, or local checkpoint folder")
     ap.add_argument("--quant", choices=["fp16", "int8", "int4"], default="fp16")
-    ap.add_argument("--arch", choices=["gemma3", "qwen3_5", "minicpm5", "chatterbox"], default=None,
+    ap.add_argument("--arch", choices=["gemma3", "qwen3_5", "minicpm5", "chatterbox", "cosyvoice3"], default=None,
                     help="override architecture auto-detection")
     ap.add_argument("--out", default=None, help="override the output folder")
+    ap.add_argument("--llm-variant", choices=["rl", "base"], default="rl",
+                    help="cosyvoice3 only: llm.rl.pt (RL-tuned, default) or llm.pt")
+    ap.add_argument("--list", action="store_true", help="print the downloadable model pool and exit")
     args = ap.parse_args()
 
-    # chatterbox-turbo TTS has its own checkpoint layout (no config.json) -> dedicated path
+    if args.list or args.model is None:
+        print_pool()
+        return
+
+    # pool-name resolution
+    key = args.model.lower()
+    if key in MODEL_POOL:
+        kind, repo, arch = MODEL_POOL[key]
+        if arch == "kokoro" or kind == "stt":
+            sys.exit(f"'{key}': exporter ships with its workstream "
+                     f"(TTS/Kokoro or STT/*) — run that module's validation/import_*.py for now.")
+        args.model, args.arch = repo, arch or args.arch
+
+    # dedicated TTS paths (no HF config.json layout)
+    if args.arch == "cosyvoice3" or "cosyvoice3" in args.model.lower():
+        export_cosyvoice3(args)
+        return
     if args.arch == "chatterbox" or "chatterbox" in args.model.lower():
         export_chatterbox(args)
         return
@@ -723,7 +896,7 @@ def main():
     sz = resolve_size(arch, cfg)
     folder = f"weights_{mdl}_{sz}_{args.quant}"   # e.g. weights_qwen3.5_0.8B_int8, weights_qwen3.5_2B_int8
     out = args.out or os.path.normpath(os.path.join(
-        HERE, "..", "..", "Resources", "DeepUnity", "LLM", ARCH_FOLDER[arch], folder))
+        HERE, "..", "..", "Resources", "Weights", folder))
     os.makedirs(out, exist_ok=True)
     print(f"[out]    {out}\n[quant]  {args.quant}\n")
 

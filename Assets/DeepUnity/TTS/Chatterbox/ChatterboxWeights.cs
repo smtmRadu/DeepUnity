@@ -62,7 +62,7 @@ namespace DeepUnity
                     throw new DirectoryNotFoundException(
                         $"Chatterbox weights folder not found: '{paramsPath}'. Generate it with " +
                         "Assets/DeepUnity/LLM/import_params.py — `python import_params.py ResembleAI/chatterbox-turbo` " +
-                        "exports it under Assets/Resources/DeepUnity/TTS/Chatterbox/.");
+                        "exports it under Assets/Resources/Weights/.");
                 _root = paramsPath;
 
                 string manifest = Path.Combine(paramsPath, "manifest.tsv");
@@ -88,9 +88,18 @@ namespace DeepUnity
                 }
                 _jobsTotal = _entries.Count;
 
+                _loadWall.Restart();
+                _loadStartFrame = UnityEngine.Time.frameCount;
+                ResidencyLog.Loading(ResidencyLog.Label(_root), 0, LLM.UploadBudgetBytes);
                 DeepUnityDispatcher.Run(UploadPump());
-                _ = LoadAllAsync();
+                // kicked on the THREAD POOL: an async method's synchronous prefix (task fan-out + the
+                // first MAX_IO_JOBS reads, which pass the io-gate synchronously) otherwise runs the
+                // first file reads on the MAIN thread — measured 80-280 ms = the zone-entry freeze.
+                _ = Task.Run(() => LoadAllAsync());
             }
+
+            readonly System.Diagnostics.Stopwatch _loadWall = new System.Diagnostics.Stopwatch();
+            int _loadStartFrame;
 
             /// <summary>GPU buffer of an exported tensor (manifest name, e.g. "t3/layer_0/qkv.w").
             /// fp16 tensors: packed 2-per-uint; q8: packed 4-per-uint; i32: raw ints.
@@ -260,7 +269,9 @@ namespace DeepUnity
                     ConsoleMessage.Warning($"Chatterbox weights: only {_jobsUploaded}/{_jobsTotal} tensors uploaded " +
                                            "(missing or failed reads — see earlier exceptions). Output will be invalid.");
                 else
-                    ConsoleMessage.Info("Chatterbox-Turbo weights streamed to GPU.");
+                    ResidencyLog.Resident(ResidencyLog.Label(_root), 0,   // legacy loader: no byte tracking (WS-F)
+                                          _loadWall.Elapsed.TotalMilliseconds,
+                                          UnityEngine.Time.frameCount - _loadStartFrame);
 
                 IsReady = true;
             }

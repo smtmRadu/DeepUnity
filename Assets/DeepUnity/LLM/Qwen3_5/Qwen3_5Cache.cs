@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -15,10 +16,13 @@ namespace DeepUnity
         //         conv_state      [conv_dim * (kernel_size - 1)]   FP32
         //         recurrent_state [num_v_heads * head_k_dim * head_v_dim] FP32
         //
-        // v2: SaveYielding/LoadYielding persist the current prefix state (the system prompt) to disk,
-        // so re-initializing with the same prompt restores the cache instead of recomputing prefill.
-        // K/V layout is token-major ((pos * heads_kv + h) * head_dim + d), so the first
-        // CachedTokenCount * floatsPerToken floats are exactly the prefix — partial save is valid.
+        // SaveYielding/LoadYielding persist the current prefix state to disk (system prompt OR a
+        // whole conversation — they are prefix-agnostic), so re-initializing with the same context
+        // restores the cache instead of recomputing prefill. K/V layout is token-major
+        // ((pos * heads_kv + h) * head_dim + d) and head_dim is a multiple of 4, so at ANY packing
+        // (FP32 1 elem/uint, FP16 2, INT8 4) the first CachedTokenCount * uintsPerToken uints are
+        // exactly the prefix — partial save is valid. File format v2, see the disk-persistence
+        // section below (v1 was FP32-KV-only and is treated as a cache miss).
         public class Qwen3_5Cache : IDisposable
         {
             public ComputeBuffer[] kCaches; // length numLayers; null on linear layers
@@ -44,7 +48,7 @@ namespace DeepUnity
             readonly int capacity;
 
             const uint FILE_MAGIC = 0x51354B56;   // "Q5KV"
-            const int FILE_VERSION = 1;
+            const int FILE_VERSION = 2;           // v1 (FP32-KV-only payload) loads as a miss
 
             // Hitch tuning (frame budget, chunk size, readbacks in flight) is shared across all
             // models — the knobs live in Base/LLM.cs: LLM.UploadFrameBudgetMs,
@@ -130,28 +134,74 @@ namespace DeepUnity
             }
 
             // ------------------------------------------------------------------ disk persistence
+            //
+            // On-disk layout, FILE_VERSION 2 (little-endian; v1 files were FP32-KV-only and load
+            // as a miss so they get regenerated):
+            //   uint32 magic 'Q5KV'
+            //   int32  version              (2)
+            //   uint64 contextHash          caller-provided identity — the Qwen3.5 callers fold in
+            //                               the weights path (→ model size + weight quant), cache
+            //                               capacity, KV quant and the prompt/conversation tokens;
+            //                               any mismatch on load = miss
+            //   uint8  kvQuant              payload packing ((byte)KVQuant) — must equal the live KV
+            //   int32  tokens               CachedTokenCount at save time
+            //   int32  layerCount
+            //   int32  extraLen + bytes     opaque caller state (token-seen counts, chat flags,
+            //                               transcript, ... — 0 for the plain system-prompt cache)
+            //   per layer: uint8 kind (0 = full attention, 1 = DeltaNet), then length-prefixed blobs:
+            //     kind 0: K rows, V rows            tokens x rowUints x 4 bytes each — token-major
+            //                                       layout means the first `tokens` rows ARE the
+            //                                       prefix at any packing (FP32/FP16/INT8)
+            //             [INT8 KV only] kScaleZp, vScaleZp prefixes (tokens x headsKV uints — the
+            //                                       per-(token,head) packed fp16 scale|zp pairs)
+            //     kind 1: conv_state, recurrent_state (full FP32 buffers)
 
             /// <summary>
-            /// Writes the current prefix state (CachedTokenCount tokens of K/V + the full SSM states)
-            /// to disk. GPU reads go through AsyncGPUReadback (no pipeline stall, at most
-            /// LLM.SaveReadbacksInFlight pending) and the file write happens on a worker thread —
+            /// Writes the current prefix state (CachedTokenCount tokens of K/V — and their
+            /// scale/zero-points under INT8 KV — plus the full SSM states) to disk, tagged with
+            /// <paramref name="contextHash"/> and an optional opaque <paramref name="extraState"/>
+            /// blob. GPU reads go through AsyncGPUReadback (no pipeline stall, at most
+            /// LLM.SaveReadbacksInFlight pending) and the file write happens on a worker thread
+            /// (to a .tmp swapped in atomically, so a torn write can't shadow a good cache) —
             /// safe to run during gameplay.
             /// </summary>
-            public IEnumerator SaveYielding(string path)
+            public IEnumerator SaveYielding(string path, ulong contextHash, byte[] extraState = null)
             {
-                // Disk prompt-cache currently supports FP32 KV only (readback + on-disk format
-                // assume 4-byte floats; the K/V row-size math below divides the buffer count by
-                // capacity, which is wrong for packed FP16/INT8). For quantized KV it's skipped —
-                // the prompt is recomputed. Mirrors Gemma3Cache.
-                if (KV != KVQuant.FP32) yield break;
                 int tokens = CachedTokenCount;
                 if (tokens <= 0) yield break;
+                bool int8 = KV == KVQuant.INT8;
 
-                // sliding window of readbacks: at most LLM.SaveReadbacksInFlight pending at once
-                // (K/V only need the first `tokens` rows). Each result is copied to managed
-                // memory the same frame it completes — readback data doesn't survive past its
-                // frame — so the window size also bounds per-frame copy work.
-                int total = numLayers * 2;
+                // Readback manifest, in file order. Per-token row size in BYTES is
+                // (buf.count / capacity) * 4 — exact at any packing, because buf.count is already
+                // the packed uint count and capacity divides it evenly.
+                var bufs = new List<ComputeBuffer>();
+                var sizes = new List<int>();
+                for (int i = 0; i < numLayers; i++)
+                {
+                    if (kCaches[i] != null)
+                    {
+                        int rowBytes = (kCaches[i].count / capacity) * 4;
+                        bufs.Add(kCaches[i]); sizes.Add(tokens * rowBytes);
+                        bufs.Add(vCaches[i]); sizes.Add(tokens * rowBytes);
+                        if (int8)
+                        {
+                            int szBytes = (kScaleZp[i].count / capacity) * 4;   // headsKV uints/token
+                            bufs.Add(kScaleZp[i]); sizes.Add(tokens * szBytes);
+                            bufs.Add(vScaleZp[i]); sizes.Add(tokens * szBytes);
+                        }
+                    }
+                    else
+                    {
+                        bufs.Add(convStates[i]);      sizes.Add(convStates[i].count * 4);
+                        bufs.Add(recurrentStates[i]); sizes.Add(recurrentStates[i].count * 4);
+                    }
+                }
+
+                // sliding window of readbacks: at most LLM.SaveReadbacksInFlight pending at once.
+                // Each result is copied to managed memory the same frame it completes — readback
+                // data doesn't survive past its frame — so the window size also bounds per-frame
+                // copy work.
+                int total = bufs.Count;
                 var blobs = new byte[total][];
                 var reqs = new AsyncGPUReadbackRequest[total];
                 int nextToIssue = 0, doneCount = 0, inFlight = 0;
@@ -159,15 +209,7 @@ namespace DeepUnity
                 {
                     while (inFlight < LLM.SaveReadbacksInFlight && nextToIssue < total)
                     {
-                        int i = nextToIssue / 2;
-                        bool firstHalf = (nextToIssue & 1) == 0;
-                        if (kCaches[i] != null)
-                        {
-                            int bytes = tokens * (kCaches[i].count / capacity) * 4;
-                            reqs[nextToIssue] = AsyncGPUReadback.Request(firstHalf ? kCaches[i] : vCaches[i], bytes, 0);
-                        }
-                        else
-                            reqs[nextToIssue] = AsyncGPUReadback.Request(firstHalf ? convStates[i] : recurrentStates[i]);
+                        reqs[nextToIssue] = AsyncGPUReadback.Request(bufs[nextToIssue], sizes[nextToIssue], 0);
                         nextToIssue++; inFlight++;
                     }
                     for (int r = 0; r < nextToIssue; r++)
@@ -175,7 +217,7 @@ namespace DeepUnity
                         if (blobs[r] != null) continue;
                         if (reqs[r].hasError)
                         {
-                            ConsoleMessage.Warning("Qwen3.5 prompt-cache save aborted: GPU readback error");
+                            ConsoleMessage.Warning("Qwen3.5 KV-cache save aborted: GPU readback error");
                             yield break;
                         }
                         if (reqs[r].done)
@@ -190,106 +232,166 @@ namespace DeepUnity
                 int n = numLayers;
                 var kinds = new byte[n];
                 for (int i = 0; i < n; i++) kinds[i] = (byte)(kCaches[i] != null ? 0 : 1);
+                byte kvByte = (byte)KV;
+                int blobsPerFull = int8 ? 4 : 2;
 
                 var task = Task.Run(() =>
                 {
-                    using var bw = new BinaryWriter(File.Create(path));
-                    bw.Write(FILE_MAGIC);
-                    bw.Write(FILE_VERSION);
-                    bw.Write(tokens);
-                    bw.Write(n);
-                    for (int i = 0; i < n; i++)
+                    string tmp = path + ".tmp";
+                    using (var bw = new BinaryWriter(File.Create(tmp)))
                     {
-                        bw.Write(kinds[i]);
-                        bw.Write(blobs[i * 2].Length); bw.Write(blobs[i * 2]);
-                        bw.Write(blobs[i * 2 + 1].Length); bw.Write(blobs[i * 2 + 1]);
+                        bw.Write(FILE_MAGIC);
+                        bw.Write(FILE_VERSION);
+                        bw.Write(contextHash);
+                        bw.Write(kvByte);
+                        bw.Write(tokens);
+                        bw.Write(n);
+                        int extraLen = extraState?.Length ?? 0;
+                        bw.Write(extraLen);
+                        if (extraLen > 0) bw.Write(extraState);
+                        int b = 0;
+                        for (int i = 0; i < n; i++)
+                        {
+                            bw.Write(kinds[i]);
+                            int cnt = kinds[i] == 0 ? blobsPerFull : 2;
+                            for (int j = 0; j < cnt; j++, b++)
+                            {
+                                bw.Write(blobs[b].Length);
+                                bw.Write(blobs[b]);
+                            }
+                        }
                     }
+                    if (File.Exists(path)) File.Delete(path);
+                    File.Move(tmp, path);
                 });
                 while (!task.IsCompleted) yield return null;
                 if (task.IsFaulted)
-                    ConsoleMessage.Warning("Qwen3.5 prompt-cache save failed: " + task.Exception?.GetBaseException().Message);
+                    ConsoleMessage.Warning("Qwen3.5 KV-cache save failed: " + task.Exception?.GetBaseException().Message);
             }
 
             /// <summary>
             /// Restores a prefix state written by SaveYielding. File IO + parsing run on a worker
             /// thread; GPU uploads are chunked under a per-frame time budget (LLM.UploadFrameBudgetMs /
-            /// LLM.UploadChunkFloats) so no single frame hitches. On success
-            /// CachedTokenCount is set and onLoaded(true) fires; any mismatch reports false (caller
-            /// falls back to recomputing the prompt).
+            /// LLM.UploadChunkFloats) so no single frame hitches. The header must match this cache
+            /// exactly (version, <paramref name="expectedContextHash"/>, KV quant, layer layout,
+            /// per-blob sizes) or onLoaded(false) fires and nothing is uploaded (caller falls back
+            /// to recomputing). <paramref name="acceptExtra"/> (optional) sees the file's extra-state
+            /// blob BEFORE any GPU upload and can veto the restore by returning false.
+            /// On success CachedTokenCount is set and onLoaded(true) fires.
             /// </summary>
-            public IEnumerator LoadYielding(string path, Action<bool> onLoaded)
+            public IEnumerator LoadYielding(string path, ulong expectedContextHash, Action<bool> onLoaded,
+                                            Func<byte[], bool> acceptExtra = null)
             {
-                if (KV != KVQuant.FP32) { onLoaded?.Invoke(false); yield break; }   // FP32-only disk cache for now
                 int n = numLayers;
-                var first = new float[n][];    // K or conv
-                var second = new float[n][];   // V or recurrent
+                bool int8 = KV == KVQuant.INT8;
+                byte kvByte = (byte)KV;
+
+                // Main-thread snapshot of the live layout so the worker validates the file against
+                // it without touching Unity objects.
+                var kinds = new byte[n];
+                var rowBytes = new int[n];   // per-token K/V bytes (full layers)
+                var szBytes = new int[n];    // per-token scale/zp bytes (INT8 full layers)
+                var convBytes = new int[n];  // full conv_state bytes (linear layers)
+                var recBytes = new int[n];   // full recurrent_state bytes (linear layers)
+                for (int i = 0; i < n; i++)
+                {
+                    if (kCaches[i] != null)
+                    {
+                        kinds[i] = 0;
+                        rowBytes[i] = (kCaches[i].count / capacity) * 4;
+                        if (int8) szBytes[i] = (kScaleZp[i].count / capacity) * 4;
+                    }
+                    else
+                    {
+                        kinds[i] = 1;
+                        convBytes[i] = convStates[i].count * 4;
+                        recBytes[i] = recurrentStates[i].count * 4;
+                    }
+                }
+
+                // Up to 4 payloads per layer (K, V, kScaleZp, vScaleZp), parsed to uint[] —
+                // bit-exact for every packing; the cache buffers are stride-4 uint anyway.
+                var slots = new uint[n * 4][];
+                byte[] extra = null;
                 int tokens = 0;
                 string error = null;
 
                 var task = Task.Run(() =>
                 {
                     using var br = new BinaryReader(File.OpenRead(path));
-                    if (br.ReadUInt32() != FILE_MAGIC || br.ReadInt32() != FILE_VERSION) { error = "bad header"; return; }
+                    if (br.ReadUInt32() != FILE_MAGIC) { error = "bad magic"; return; }
+                    int ver = br.ReadInt32();
+                    if (ver != FILE_VERSION) { error = $"stale format v{ver}"; return; }   // v1 = miss
+                    if (br.ReadUInt64() != expectedContextHash) { error = "context hash mismatch"; return; }
+                    if (br.ReadByte() != kvByte) { error = "kv quant mismatch"; return; }
                     tokens = br.ReadInt32();
+                    if (tokens <= 0 || tokens > capacity) { error = "token count out of range"; return; }
                     if (br.ReadInt32() != n) { error = "layer count mismatch"; return; }
+
+                    int extraLen = br.ReadInt32();
+                    if (extraLen < 0 || extraLen > (64 << 20)) { error = "bad extra-state size"; return; }
                     byte[] scratch = null;   // reused across reads — halves the transient garbage
+                    bool ReadExact(byte[] dst, int len)
+                    {
+                        int read = 0;
+                        while (read < len)
+                        {
+                            int got = br.Read(dst, read, len - read);
+                            if (got <= 0) return false;
+                            read += got;
+                        }
+                        return true;
+                    }
+                    extra = new byte[extraLen];
+                    if (!ReadExact(extra, extraLen)) { error = "truncated file"; return; }
+
                     for (int i = 0; i < n; i++)
                     {
-                        br.ReadByte();   // kind — re-validated against live buffers below
-                        for (int half = 0; half < 2; half++)
+                        if (br.ReadByte() != kinds[i]) { error = "layer kind mismatch"; return; }
+                        int cnt = kinds[i] == 0 ? (int8 ? 4 : 2) : 2;
+                        for (int j = 0; j < cnt; j++)
                         {
+                            int want = kinds[i] == 0
+                                ? tokens * (j < 2 ? rowBytes[i] : szBytes[i])
+                                : (j == 0 ? convBytes[i] : recBytes[i]);
                             int len = br.ReadInt32();
-                            if (len < 0) { error = "truncated file"; return; }
+                            if (len != want) { error = "payload size mismatch"; return; }
                             if (scratch == null || scratch.Length < len) scratch = new byte[len];
-                            int read = 0;
-                            while (read < len)
-                            {
-                                int got = br.Read(scratch, read, len - read);
-                                if (got <= 0) { error = "truncated file"; return; }
-                                read += got;
-                            }
-                            var f = new float[len / 4];
-                            Buffer.BlockCopy(scratch, 0, f, 0, len);
-                            if (half == 0) first[i] = f; else second[i] = f;
+                            if (!ReadExact(scratch, len)) { error = "truncated file"; return; }
+                            var u = new uint[len / 4];
+                            Buffer.BlockCopy(scratch, 0, u, 0, len);
+                            slots[i * 4 + j] = u;
                         }
                     }
                 });
                 while (!task.IsCompleted) yield return null;
                 if (task.IsFaulted) error = task.Exception?.GetBaseException().Message;
 
-                // validate shapes against the live cache before touching the GPU
-                if (error == null && (tokens <= 0 || tokens > capacity)) error = "token count out of range";
-                if (error == null)
-                    for (int i = 0; i < n && error == null; i++)
-                    {
-                        if (kCaches[i] != null)
-                        {
-                            int expected = tokens * (kCaches[i].count / capacity);
-                            if (first[i].Length != expected || second[i].Length != expected) error = "k/v size mismatch";
-                        }
-                        else if (first[i].Length != convStates[i].count || second[i].Length != recurrentStates[i].count)
-                            error = "ssm state size mismatch";
-                    }
+                if (error == null && acceptExtra != null && !acceptExtra(extra))
+                    error = "extra state rejected by caller";
                 if (error != null)
                 {
-                    ConsoleMessage.Warning($"Qwen3.5 prompt-cache load failed ({error}) — recomputing the prompt");
+                    ConsoleMessage.Warning($"Qwen3.5 KV-cache load failed ({error}) — recomputing");
                     onLoaded?.Invoke(false);
                     yield break;
                 }
 
-                // budgeted upload: SetData in LLM.UploadChunkFloats-sized pieces, yielding once
-                // LLM.UploadFrameBudgetMs of main-thread copy time is spent in a frame. (The old
-                // one-LAYER-per-frame upload pushed K+V of a full layer — several MB — in a
-                // single frame and dropped play mode to ~48 fps.)
+                // budgeted upload: SetData in LLM.UploadChunkFloats-sized pieces (uints — same
+                // 4 bytes each), yielding once LLM.UploadFrameBudgetMs of main-thread copy time
+                // is spent in a frame. (The old one-LAYER-per-frame upload pushed K+V of a full
+                // layer — several MB — in a single frame and dropped play mode to ~48 fps.)
                 var budget = System.Diagnostics.Stopwatch.StartNew();
                 for (int i = 0; i < n; i++)
                 {
-                    var a = kCaches[i] != null ? kCaches[i] : convStates[i];
-                    var b = kCaches[i] != null ? vCaches[i] : recurrentStates[i];
-                    var up = UploadChunked(a, first[i], budget);
-                    while (up.MoveNext()) yield return up.Current;
-                    up = UploadChunked(b, second[i], budget);
-                    while (up.MoveNext()) yield return up.Current;
+                    int cnt = kinds[i] == 0 ? (int8 ? 4 : 2) : 2;
+                    for (int j = 0; j < cnt; j++)
+                    {
+                        ComputeBuffer dst = kinds[i] == 0
+                            ? (j == 0 ? kCaches[i] : j == 1 ? vCaches[i] : j == 2 ? kScaleZp[i] : vScaleZp[i])
+                            : (j == 0 ? convStates[i] : recurrentStates[i]);
+                        var up = UploadChunked(dst, slots[i * 4 + j], budget);
+                        while (up.MoveNext()) yield return up.Current;
+                    }
                 }
 
                 CachedTokenCount = tokens;
@@ -298,7 +400,7 @@ namespace DeepUnity
 
             // Uploads `data` into `buf` in LLM.UploadChunkFloats-sized SetData calls, yielding a
             // frame whenever the shared budget stopwatch crosses LLM.UploadFrameBudgetMs.
-            IEnumerator UploadChunked(ComputeBuffer buf, float[] data, System.Diagnostics.Stopwatch budget)
+            IEnumerator UploadChunked(ComputeBuffer buf, uint[] data, System.Diagnostics.Stopwatch budget)
             {
                 int offset = 0;
                 while (offset < data.Length)

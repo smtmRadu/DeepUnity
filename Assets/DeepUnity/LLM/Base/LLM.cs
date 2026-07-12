@@ -160,6 +160,28 @@ namespace DeepUnity
         /// separate tokenizer-ready from weights-ready in boot timing. Default true (no tokenizer).</summary>
         public virtual bool TokenizerReady => true;
 
+        /// <summary>Total exported weight bytes for the selected quant (0 when the model doesn't
+        /// report it). Together with <see cref="UploadedWeightBytes"/> this lets game code PACE the
+        /// weight stream — e.g. an NPC prefetch zone retargeting <see cref="UploadBudgetBytes"/>
+        /// each frame so the remaining bytes land in roughly the player's walk-up time.</summary>
+        public virtual long TotalWeightBytes => 0;
+        /// <summary>Bytes of weights currently resident on the GPU (0 when not reported).</summary>
+        public virtual long UploadedWeightBytes => 0;
+
+        /// <summary>Identity used by the standardized [GPU] residency log lines — models with a
+        /// weights folder return its stem (same label their loaders log with).</summary>
+        public virtual string WeightsLabel => GetType().Name;
+
+        /// <summary>Budgeted GPU teardown: frees ~bytesPerFrame of buffers per frame so the
+        /// driver digests the teardown incrementally — a monolithic free right before the next
+        /// model's big allocations measures as a 250-550 ms single-frame stall. Unloading still
+        /// STARTS immediately; it just finishes over ~10 frames. Default = synchronous Release.</summary>
+        public virtual IEnumerator ReleaseSlow(long bytesPerFrame = 64_000_000)
+        {
+            Release();
+            yield break;
+        }
+
         /// <summary>Rolling decode speed of the most recent generation step (0 while idle).</summary>
         public float TokensPerSecond { get; protected set; }
 
@@ -270,6 +292,89 @@ namespace DeepUnity
             int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
             float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false);
 
+        const string COMPACT_PROMPT =
+            "Summarize our ENTIRE conversation so far as a compact briefing for yourself: the key facts, " +
+            "decisions, names, numbers and the user's goals/preferences. No preamble, no commentary — " +
+            "just the briefing, dense and factual.";
+
+        /// <summary>
+        /// Compacts the running conversation to reclaim context: the model SUMMARIZES its own chat
+        /// history in-context (greedy, capped at <paramref name="max_summary_tokens"/>), then the chat
+        /// is re-initialized as [<paramref name="system_prompt"/> + summary briefing] — the KV cache
+        /// shrinks back to a short prefix while the NPC "remembers" what mattered.
+        /// Call it between turns (e.g. when the history nears the context limit); it is a coroutine and
+        /// yields per frame like everything else, so it can run behind gameplay.
+        /// Pass the SAME system_prompt used in <see cref="InitializeChat"/> (the base class cannot see
+        /// the concrete model's template state). Virtual: models can override with token-level history
+        /// splicing (keep-last-K-turns) or a dedicated compaction model.
+        /// [Roadmap: finetune a small background compactor model — see InferenceEngine/CLAUDE.md.]
+        /// </summary>
+        public virtual IEnumerator Compact(string system_prompt = "", Action<string> onSummary = null,
+                                           int max_summary_tokens = 256)
+        {
+            CurrentPhase = "compact";
+            var sb = new System.Text.StringBuilder();
+            // 1. in-context summary request — continues the model's tracked conversation (greedy)
+            var chat = Chat(COMPACT_PROMPT, t => sb.Append(t),
+                            max_new_tokens: max_summary_tokens, temperature: 0f);
+            while (chat.MoveNext()) yield return chat.Current;
+
+            // 2. rebuild: fresh history/KV = system prompt + the briefing
+            string summary = sb.ToString().Trim();
+            string seeded = string.IsNullOrEmpty(summary)
+                ? system_prompt
+                : (string.IsNullOrEmpty(system_prompt) ? "" : system_prompt + "\n\n")
+                  + "[Summary of the conversation so far]\n" + summary;
+            var init = InitializeChat(seeded);
+            while (init.MoveNext()) yield return init.Current;
+
+            CurrentPhase = "idle";
+            onSummary?.Invoke(summary);
+        }
+
+        // ---- whole-conversation KV disk persistence (WS-G) ------------------------------------
+
+        /// <summary>
+        /// Per-INSTANCE master switch for KV disk persistence — gates both the system-prompt
+        /// cache a model maintains inside <see cref="InitializeChat"/> and the conversation
+        /// snapshots below. Callers that own a model instance (e.g. an NPC whose cacheKVCache
+        /// toggle is off, or one prefilling a one-shot resume prompt that shouldn't litter the
+        /// cache) clear it; other instances are unaffected. Models without disk persistence
+        /// ignore it.
+        /// </summary>
+        public bool DiskKVCache = true;
+
+        /// <summary>
+        /// Persists the model's ENTIRE current conversation state to disk under
+        /// <paramref name="key"/>: the KV/SSM prefix plus whatever sampler/template state the
+        /// model needs to resume seamlessly, and <paramref name="userState"/> — an opaque caller
+        /// string (e.g. an NPC's transcript) stored verbatim and handed back on restore. The file
+        /// lands in the same directory convention as the system-prompt cache, named from the key
+        /// + a stable hash of (model, quant, kv quant, <paramref name="system_prompt"/> — null =
+        /// the prompt from the last InitializeChat). Budgeted readbacks + worker-thread IO, so it
+        /// can run behind gameplay. Base implementation: graceful no-op for models without
+        /// conversation persistence (Gemma3 — TODO: mirror the Qwen3.5 v2 format in Gemma3Cache).
+        /// </summary>
+        public virtual IEnumerator SaveConversationKV(string key, string userState = null,
+                                                      string system_prompt = null)
+        { yield break; }
+
+        /// <summary>
+        /// Restores a conversation saved by <see cref="SaveConversationKV"/> with the same key /
+        /// model / quant / kv quant / <paramref name="system_prompt"/>. Validates the file header
+        /// hash and reports false on ANY mismatch so the caller can fall back to re-prefilling
+        /// the transcript. <paramref name="acceptUserState"/> (optional) sees the saved userState
+        /// BEFORE any GPU upload and can veto the restore by returning false (e.g. the caller's
+        /// live transcript is fuller than the saved one). Waits for weights + warmup internally,
+        /// like InitializeChat. Base implementation always misses (Gemma3 — see above).
+        /// </summary>
+        public virtual IEnumerator TryRestoreConversationKV(string key, Action<bool> onResult,
+            string system_prompt = null, Func<string, bool> acceptUserState = null)
+        {
+            onResult?.Invoke(false);
+            yield break;
+        }
+
         /// <summary>Releases all GPU buffers held by the model. Safe to call more than once.</summary>
         public abstract void Release();
 
@@ -314,13 +419,15 @@ namespace DeepUnity
 
         /// <summary>
         /// Resolves a model's params folder under the unified convention written by
-        /// Assets/DeepUnity/LLM/import_params.py: <c>Assets/Resources/DeepUnity/LLM/&lt;arch&gt;/&lt;dir&gt;</c>,
-        /// falling back to the legacy in-repo location <c>Assets/DeepUnity/LLM/&lt;arch&gt;/&lt;dir&gt;</c>
-        /// so checkouts that still carry the old folders keep working without re-exporting.
+        /// Assets/DeepUnity/LLM/import_params.py: everything lands FLAT under
+        /// <c>Assets/Resources/Weights/&lt;dir&gt;</c> (folder names are self-describing:
+        /// weights_&lt;model&gt;_&lt;size&gt;_&lt;quant&gt;), falling back to the legacy in-repo
+        /// location <c>Assets/DeepUnity/LLM/&lt;arch&gt;/&lt;dir&gt;</c> so checkouts that still
+        /// carry the old folders keep working without re-exporting.
         /// </summary>
         protected static string ResolveParamsDir(string archFolder, string dirName)
         {
-            string res = $"Assets/Resources/DeepUnity/LLM/{archFolder}/{dirName}";
+            string res = $"Assets/Resources/Weights/{dirName}";
             return System.IO.Directory.Exists(res) ? res : $"Assets/DeepUnity/LLM/{archFolder}/{dirName}";
         }
     }

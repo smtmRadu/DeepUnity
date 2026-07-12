@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
+using System.IO;
 using UnityEngine;
 using UnityEngine.Assertions;
 
@@ -28,10 +29,17 @@ namespace DeepUnity
         public Qwen3_5Modeling.Qwen3_5Model model;
         public Qwen3_5TokenizerFast tokenizer;
         private bool isFreshlyInitialized;
+        // Prompt from the last InitializeChat (or a successful conversation restore) — the
+        // conversation-cache identity hash folds it in, so SaveConversationKV can be called
+        // without repeating the prompt.
+        private string lastSystemPrompt = "";
 
         public override LLMConfig Config => _config;
-        public override bool IsReady => model.IsReady && (tokenizer == null || tokenizer.IsReady);
+        public override bool IsReady => model != null && model.IsReady && (tokenizer == null || tokenizer.IsReady);
         public override bool TokenizerReady => tokenizer == null || tokenizer.IsReady;
+        public override long TotalWeightBytes => model?.weights?.BytesTotal ?? 0;
+        public override long UploadedWeightBytes => model?.weights?.BytesUploaded ?? 0;
+        public override string WeightsLabel => ResidencyLog.Label(path);
 
         /// <summary>
         /// Qwen3.5-0.8B (text-only), full-GPU FP16 inference.
@@ -81,22 +89,41 @@ namespace DeepUnity
             KVQuant kv_quant = KVQuant.FP16)
         {
             // Size preset first: weights/model/cache construction below all read the config statics.
+            var swBoot = System.Diagnostics.Stopwatch.StartNew();
+            BootTrace = ""; _lastMark = 0;
             Qwen3_5Modeling.Qwen3_5Config.ApplySize(size);
             params_path ??= ResolveParamsPath(size, quantization);
             this.size = size;
             this.path = params_path;
             WarnIfNotInResources("weights", params_path);
             WarnIfNotInResources("tokenizer", tokenizer_path);
+            Mark(swBoot, "pre");
             // Tokenizer is optional during early bring-up — when the JSON isn't present yet,
             // skip it so the model can still be exercised via Predict() with token-id Tensors.
             // Cached per path in the LLM base (see GetOrCreateTokenizer for why).
             this.tokenizer = GetOrCreateTokenizer(tokenizer_path, p => new Qwen3_5TokenizerFast(p, load_async: true));
+            Mark(swBoot, "tokenizer");
 
             model = new Qwen3_5Modeling.Qwen3_5Model(params_path, maxModelLength, quantization, kv_quant);
+            Mark(swBoot, "model_total");
             // Feed the tokenizer's main-thread ctor cost to the weights object; the single consolidated
             // "model booted up" log is emitted from InitializeChat once everything is ready.
             model.weights.bootTokenizerMs = tokenizer?.ctorMs ?? 0;
         }
+
+        /// <summary>Step-by-step wall-time trace of the LAST constructor run (freeze attribution;
+        /// the Qwen3_5Model/Qwen3_5Weights ctors append their sub-steps too). Cheap to build,
+        /// read by the zone-entry probe.</summary>
+        public static string BootTrace = "";
+        static double _lastMark;
+        internal static void Mark(System.Diagnostics.Stopwatch sw, string name)
+        {
+            double t = sw.Elapsed.TotalMilliseconds;
+            BootTrace += $"{name}:{t - _lastMark:0.0}ms ";
+            _lastMark = t;
+        }
+        /// <summary>Sub-step append hook for the nested ctors (their own stopwatch deltas).</summary>
+        internal static void Trace(string chunk) => BootTrace += chunk;
 
         // Human-readable model size for boot logs / UI (the enum's own name is terse).
         static string SizeLabel(Qwen3_5Size size) => size switch
@@ -115,6 +142,23 @@ namespace DeepUnity
             return ResolveParamsDir("Qwen3_5", $"weights_qwen3.5_{SizeLabel(size)}_{q}");
         }
 
+        // Self-registering LLMRegistry catalog entries — model pickers (NPC inspector etc.)
+        // discover these by reflection; nothing else to extend when a new size lands.
+        [LLMEntry(0)]
+        static LLMRegistry.Entry RegistryEntry0_8B() => new LLMRegistry.Entry
+        {
+            id = "Qwen3.5-0.8B",
+            create = (q, kv) => new Qwen3_5ForCausalLM(Qwen3_5Size.B0_8, quantization: q, kv_quant: kv),
+            prewarm = () => Prewarm(),
+        };
+        [LLMEntry(1)]
+        static LLMRegistry.Entry RegistryEntry2B() => new LLMRegistry.Entry
+        {
+            id = "Qwen3.5-2B",
+            create = (q, kv) => new Qwen3_5ForCausalLM(Qwen3_5Size.B2, quantization: q, kv_quant: kv),
+            prewarm = () => Prewarm(),
+        };
+
         /// <summary>
         /// One-call scene-start prewarm — run this as a coroutine while the player is doing
         /// something else (walking around, in a menu) and constructing/loading the model later
@@ -128,14 +172,27 @@ namespace DeepUnity
         {
             GetOrCreateTokenizer(tokenizer_path, p => new Qwen3_5TokenizerFast(p, load_async: true));
             yield return Qwen3_5Modeling.Qwen3_5Model.PrewarmKernels();
+            // Sweep the tokenizer-parse garbage NOW, spread over frames — otherwise the first big
+            // load-time allocation triggers one blocking ~230 ms collection mid-walk-up.
+            while (UnityEngine.Scripting.GarbageCollector.CollectIncremental(2_000_000UL))
+                yield return null;
         }
 
         /// <inheritdoc/>
         public override void Release()
         {
-            model?.Dispose();
+            model?.Dispose();   // the weights loader emits the standardized [GPU] released line
+            model = null;
             OnReleased(); // unhook editor event + suppress the finalizer (it would double-release off-thread)
-            ConsoleMessage.Info("Qwen3.5 released from GPU");
+        }
+
+        /// <inheritdoc/>
+        public override IEnumerator ReleaseSlow(long bytesPerFrame = 64_000_000)
+        {
+            var m = model;
+            model = null;      // the instance reads as released immediately; buffers trickle out
+            OnReleased();
+            if (m != null) yield return m.DisposeSlow(bytesPerFrame);
         }
 
         /// <summary>
@@ -208,6 +265,7 @@ namespace DeepUnity
             while (!IsReady) yield return new WaitForSeconds(0.01f);
             CurrentPhase = "idle";
             Assert.AreNotEqual(system_prompt, null);
+            lastSystemPrompt = system_prompt;
 
             model.ResetCache();
 
@@ -229,19 +287,21 @@ namespace DeepUnity
             ids.Add(Qwen3_5Modeling.Qwen3_5Config.IM_END_TOKEN_ID);
             AppendTextTokens("\n", ids);
 
-            // Disk-cached system prompt: same prompt + same weights -> restore the KV/SSM state
-            // (one frame-budgeted upload per layer) instead of recomputing the chunked prefill.
+            // Disk-cached system prompt: same prompt + same weights + same kv quant -> restore
+            // the KV/SSM state (frame-budgeted uploads) instead of recomputing the chunked
+            // prefill. v2 format persists FP32, FP16 AND INT8 KV, so this now triggers for every
+            // NPC config (they run FP16/INT8 KV), in every ConversationMode.
             bool restoredFromDisk = false;
             string cacheFile = null;
-            if (SystemPromptDiskCache && Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE)
+            ulong promptHash = 0;
+            if (SystemPromptDiskCache && DiskKVCache && Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE)
             {
-                string dir = System.IO.Path.Combine(Application.persistentDataPath, "DeepUnity");
-                System.IO.Directory.CreateDirectory(dir);
-                cacheFile = System.IO.Path.Combine(dir, $"qwen35_prompt_{PromptCacheKey(ids)}.kv");
+                promptHash = PromptCacheKey(ids);
+                cacheFile = System.IO.Path.Combine(CacheDir(), $"qwen35_prompt_{promptHash:x16}.kv");
                 if (System.IO.File.Exists(cacheFile))
                 {
                     CurrentPhase = "kv-restore";
-                    var load = model.cache.LoadYielding(cacheFile, ok => restoredFromDisk = ok);
+                    var load = model.cache.LoadYielding(cacheFile, promptHash, ok => restoredFromDisk = ok);
                     while (load.MoveNext()) yield return load.Current;
                     if (!restoredFromDisk)
                     {
@@ -260,7 +320,7 @@ namespace DeepUnity
                 if (cacheFile != null)
                 {
                     CurrentPhase = "kv-save";
-                    var save = model.cache.SaveYielding(cacheFile);
+                    var save = model.cache.SaveYielding(cacheFile, promptHash);
                     while (save.MoveNext()) yield return save.Current;
                 }
             }
@@ -357,16 +417,192 @@ namespace DeepUnity
         /// </summary>
         public static bool SystemPromptDiskCache = true;
 
-        // FNV-1a over the prompt token ids, weight path and cache capacity — any of these
-        // changing must invalidate the cached state.
-        string PromptCacheKey(System.Collections.Generic.List<float> ids)
+        // Shared cache directory for every Qwen3.5 disk-cached KV state (system prompts AND
+        // whole conversations) — persistentDataPath/DeepUnity.
+        static string CacheDir()
+        {
+            string dir = System.IO.Path.Combine(Application.persistentDataPath, "DeepUnity");
+            System.IO.Directory.CreateDirectory(dir);
+            return dir;
+        }
+
+        // FNV-1a over the prompt token ids, weight path (= model size + weight quant), cache
+        // capacity and KV quant — any of these changing must invalidate the cached state. The
+        // same value is the file-name suffix AND the header contextHash the load validates.
+        ulong PromptCacheKey(System.Collections.Generic.List<float> ids)
         {
             ulong h = 14695981039346656037UL;
             void Mix(ulong v) { h ^= v; h *= 1099511628211UL; }
             foreach (var id in ids) Mix((ulong)(long)id);
             foreach (char c in path) Mix(c);
             Mix((ulong)model.cache.Capacity);
-            return h.ToString("x16");
+            Mix((ulong)(int)model.KV);
+            return h;
+        }
+
+        // ---------------------------------------------------------------- conversation KV persistence (WS-G)
+
+        // Conversation identity: weight path (model size + weight quant), cache capacity, KV quant
+        // and the system prompt STRING (the transcript itself is NOT hashed — the file name must
+        // stay stable across turns so each save overwrites the previous snapshot; staleness vs the
+        // caller's live transcript is arbitrated through acceptUserState instead).
+        ulong ConversationContextHash(string systemPrompt)
+        {
+            ulong h = 14695981039346656037UL;
+            void Mix(ulong v) { h ^= v; h *= 1099511628211UL; }
+            foreach (char c in path) Mix(c);
+            Mix((ulong)model.cache.Capacity);
+            Mix((ulong)(int)model.KV);
+            foreach (char c in systemPrompt ?? "") Mix(c);
+            return h;
+        }
+
+        string ConversationCacheFile(string key, string systemPrompt)
+            => System.IO.Path.Combine(CacheDir(),
+                $"qwen35_conv_{SanitizeKey(key)}_{ConversationContextHash(systemPrompt):x16}.kv");
+
+        static string SanitizeKey(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return "npc";
+            var sb = new System.Text.StringBuilder(key.Length);
+            foreach (char c in key)
+                sb.Append(char.IsLetterOrDigit(c) || c == '-' || c == '_' ? c : '_');
+            return sb.ToString();
+        }
+
+        // Extra-state blob riding in the conversation cache file (Qwen3_5Cache stores it opaquely):
+        //   uint8  CONV_EXTRA_VERSION
+        //   uint8  isFreshlyInitialized      (open assistant turn: Chat() must emit <|im_end|> first)
+        //   int32  tokenSeen uint count (== vocab) + raw bytes (presence/repetition-penalty counts)
+        //   int32  userState UTF-8 byte count + bytes (opaque caller state, e.g. the NPC transcript)
+        const byte CONV_EXTRA_VERSION = 1;
+
+        byte[] BuildConversationExtra(byte[] tokenSeenRaw, string userState)
+        {
+            using var ms = new MemoryStream();
+            using var bw = new BinaryWriter(ms);
+            bw.Write(CONV_EXTRA_VERSION);
+            bw.Write(isFreshlyInitialized);
+            bw.Write(tokenSeenRaw.Length / 4);
+            bw.Write(tokenSeenRaw);
+            byte[] us = string.IsNullOrEmpty(userState)
+                ? Array.Empty<byte>() : System.Text.Encoding.UTF8.GetBytes(userState);
+            bw.Write(us.Length);
+            bw.Write(us);
+            bw.Flush();
+            return ms.ToArray();
+        }
+
+        bool TryParseConversationExtra(byte[] extra, out bool fresh, out byte[] tokenSeenRaw, out string userState)
+        {
+            fresh = false; tokenSeenRaw = null; userState = null;
+            try
+            {
+                if (extra == null || extra.Length < 10) return false;
+                using var br = new BinaryReader(new MemoryStream(extra));
+                if (br.ReadByte() != CONV_EXTRA_VERSION) return false;
+                fresh = br.ReadBoolean();
+                int seenUints = br.ReadInt32();
+                if (seenUints != model.VocabSize) return false;
+                tokenSeenRaw = br.ReadBytes(seenUints * 4);
+                if (tokenSeenRaw.Length != seenUints * 4) return false;
+                int usLen = br.ReadInt32();
+                if (usLen < 0 || usLen > (64 << 20)) return false;
+                byte[] us = br.ReadBytes(usLen);
+                if (us.Length != usLen) return false;
+                userState = usLen == 0 ? "" : System.Text.Encoding.UTF8.GetString(us);
+                return true;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// Persists the ENTIRE current conversation state to disk under <paramref name="key"/>:
+        /// the KV/SSM prefix (all cached tokens), the sampler's token-seen counts and the
+        /// open-assistant-turn flag, plus <paramref name="userState"/> verbatim (the NPC
+        /// transcript). Budgeted readbacks + worker-thread IO — runs behind gameplay. No-op when
+        /// <see cref="LLM.DiskKVCache"/> is off, the model isn't ready or nothing is cached.
+        /// </summary>
+        public override IEnumerator SaveConversationKV(string key, string userState = null,
+                                                       string system_prompt = null)
+        {
+            if (!DiskKVCache || !Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE) yield break;
+            if (!IsReady || model.cache.CachedTokenCount <= 0) yield break;
+
+            byte[] seen = null;
+            var rb = model.ReadTokenSeenRaw(b => seen = b);
+            while (rb.MoveNext()) yield return rb.Current;
+            if (seen == null) yield break;   // readback error — skip this save, keep the old file
+
+            string sysPrompt = system_prompt ?? lastSystemPrompt;
+            byte[] extra = BuildConversationExtra(seen, userState);
+            CurrentPhase = "kv-save";
+            var save = model.cache.SaveYielding(ConversationCacheFile(key, sysPrompt),
+                                                ConversationContextHash(sysPrompt), extra);
+            while (save.MoveNext()) yield return save.Current;
+            CurrentPhase = "idle";
+        }
+
+        /// <summary>
+        /// Restores a conversation saved by <see cref="SaveConversationKV"/> with the same key /
+        /// weights / quant / kv quant / system prompt. Waits for weights + warmup internally
+        /// (same boot path as InitializeChat), validates the header hash and every payload size,
+        /// and reports false on ANY mismatch — the caller falls back to re-prefilling. On success
+        /// the KV/SSM prefix, token-seen counts and the open-turn flag are live again and the
+        /// chat continues exactly where it left off (no InitializeChat needed).
+        /// </summary>
+        public override IEnumerator TryRestoreConversationKV(string key, Action<bool> onResult,
+            string system_prompt = null, Func<string, bool> acceptUserState = null)
+        {
+            if (!DiskKVCache || !Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE)
+            {
+                onResult?.Invoke(false);
+                yield break;
+            }
+            string sysPrompt = system_prompt ?? lastSystemPrompt;
+            string file = ConversationCacheFile(key, sysPrompt);
+            if (!System.IO.File.Exists(file)) { onResult?.Invoke(false); yield break; }
+
+            // weights + kernels must be live before any KV upload — same boot path as InitializeChat
+            CurrentPhase = "boot (weights+warmup)";
+            yield return Warmup();
+            while (!IsReady) yield return new WaitForSeconds(0.01f);
+
+            model.ResetCache();   // clean slate (zeroes SSM states + token-seen)
+
+            bool restored = false, extraFresh = false;
+            byte[] extraSeen = null;
+            string extraUserState = null;
+            CurrentPhase = "kv-restore";
+            var load = model.cache.LoadYielding(file, ConversationContextHash(sysPrompt),
+                ok => restored = ok,
+                extra =>
+                {
+                    // parse + caller veto BEFORE any GPU upload — a reject costs only the file read
+                    if (!TryParseConversationExtra(extra, out extraFresh, out extraSeen, out extraUserState))
+                        return false;
+                    return acceptUserState == null || acceptUserState(extraUserState);
+                });
+            while (load.MoveNext()) yield return load.Current;
+
+            if (!restored)
+            {
+                try { System.IO.File.Delete(file); } catch { }   // stale/corrupt/vetoed — next clean close rewrites it
+                model.ResetCache();   // a partial upload may have dirtied the state
+                CurrentPhase = "idle";
+                onResult?.Invoke(false);
+                yield break;
+            }
+
+            // sampler state rides along so a restored chat penalizes exactly like a true resume
+            var up = model.UploadTokenSeenRaw(extraSeen);
+            while (up.MoveNext()) yield return up.Current;
+
+            isFreshlyInitialized = extraFresh;
+            lastSystemPrompt = sysPrompt;
+            CurrentPhase = "idle";
+            ConsoleMessage.Info($"Qwen3.5 conversation restored from disk ({model.cache.CachedTokenCount} tokens)");
+            onResult?.Invoke(true);
         }
 
         // Boot log: load time + system prompt (computed vs restored from disk, with token count).

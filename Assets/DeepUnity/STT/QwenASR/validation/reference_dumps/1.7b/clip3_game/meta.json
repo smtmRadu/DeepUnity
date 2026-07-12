@@ -1,0 +1,24 @@
+{
+ "clip": "clip3_game",
+ "samples": 74000,
+ "seconds": 4.625,
+ "mel_frames_padded": 500,
+ "mel_frames_valid": 462,
+ "audio_tokens": 60,
+ "enc_out_shape": [
+  60,
+  1024
+ ],
+ "proj_out_shape": [
+  60,
+  2048
+ ],
+ "prompt_len": 75,
+ "step0_argmax": 11528,
+ "new_tokens": 17,
+ "raw_output": "language English<asr_text>Open the inventory and equip the iron sword before entering the dungeon.<|im_end|>",
+ "transcript": "Open the inventory and equip the iron sword before entering the dungeon.",
+ "expected_audio_tokens_formula": 60,
+ "device": "cpu",
+ "seconds_elapsed": 8.6
+}

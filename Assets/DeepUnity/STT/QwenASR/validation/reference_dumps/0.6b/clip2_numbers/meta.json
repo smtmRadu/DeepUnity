@@ -1,0 +1,24 @@
+{
+ "clip": "clip2_numbers",
+ "samples": 73760,
+ "seconds": 4.61,
+ "mel_frames_padded": 500,
+ "mel_frames_valid": 461,
+ "audio_tokens": 60,
+ "enc_out_shape": [
+  60,
+  896
+ ],
+ "proj_out_shape": [
+  60,
+  1024
+ ],
+ "prompt_len": 75,
+ "step0_argmax": 11528,
+ "new_tokens": 19,
+ "raw_output": "language English<asr_text>The meeting is on March third at half past nine, Room Forty Two.<|im_end|>",
+ "transcript": "The meeting is on March third at half past nine, Room Forty Two.",
+ "expected_audio_tokens_formula": 60,
+ "device": "cpu",
+ "seconds_elapsed": 4.0
+}
