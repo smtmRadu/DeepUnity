@@ -28,6 +28,12 @@ namespace DeepUnity
                     continue;
                 }
                 if (llmOnly && System.Array.IndexOf(VOICE_FIELDS, it.name) >= 0) continue;
+                if (it.propertyPath == "compactAfterTokens")   // only meaningful in ResumeFromCompact
+                {
+                    var hm = serializedObject.FindProperty("historyMode");
+                    if (hm == null || hm.enumValueIndex != (int)NPCChatBase.HistoryMode.ResumeFromCompact)
+                        continue;
+                }
                 if (it.propertyPath == "model") { DrawModelPopup(it); continue; }
                 if (it.propertyPath == "ttsVoice") { DrawVoicePopup(it); continue; }
                 if (it.propertyPath == "clonedVoiceClip") { DrawCloneClip(it); continue; }

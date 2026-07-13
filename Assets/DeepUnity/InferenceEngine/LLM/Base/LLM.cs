@@ -314,12 +314,14 @@ namespace DeepUnity
         /// Call it between turns (e.g. when the history nears the context limit); it is a coroutine and
         /// yields per frame like everything else, so it can run behind gameplay.
         /// Pass the SAME system_prompt used in <see cref="InitializeChat"/> (the base class cannot see
-        /// the concrete model's template state). Virtual: models can override with token-level history
-        /// splicing (keep-last-K-turns) or a dedicated compaction model.
-        /// [Roadmap: finetune a small background compactor model — see InferenceEngine/CLAUDE.md.]
+        /// the concrete model's template state). <paramref name="post_summary_context"/> is appended
+        /// AFTER the briefing in the re-seeded prefix — callers use it to keep the last few verbatim
+        /// turns alongside the summary (NPCChatBase's ResumeFromCompact does). Virtual: models can
+        /// override with token-level history splicing (keep-last-K-turns) or a dedicated compaction
+        /// model. [Roadmap: finetune a small background compactor model — see InferenceEngine/CLAUDE.md.]
         /// </summary>
         public virtual IEnumerator Compact(string system_prompt = "", Action<string> onSummary = null,
-                                           int max_summary_tokens = 256)
+                                           int max_summary_tokens = 256, string post_summary_context = null)
         {
             CurrentPhase = "compact";
             var sb = new System.Text.StringBuilder();
@@ -328,12 +330,14 @@ namespace DeepUnity
                             max_new_tokens: max_summary_tokens, temperature: 0f);
             while (chat.MoveNext()) yield return chat.Current;
 
-            // 2. rebuild: fresh history/KV = system prompt + the briefing
+            // 2. rebuild: fresh history/KV = system prompt + the briefing (+ recent verbatim turns)
             string summary = sb.ToString().Trim();
             string seeded = string.IsNullOrEmpty(summary)
                 ? system_prompt
                 : (string.IsNullOrEmpty(system_prompt) ? "" : system_prompt + "\n\n")
                   + "[Summary of the conversation so far]\n" + summary;
+            if (!string.IsNullOrEmpty(post_summary_context))
+                seeded = (string.IsNullOrEmpty(seeded) ? "" : seeded + "\n\n") + post_summary_context;
             var init = InitializeChat(seeded);
             while (init.MoveNext()) yield return init.Current;
 
