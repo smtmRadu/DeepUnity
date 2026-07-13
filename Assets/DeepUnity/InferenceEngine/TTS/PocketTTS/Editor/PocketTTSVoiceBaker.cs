@@ -24,6 +24,25 @@ namespace DeepUnity
                 return key == null ? null : $"{ASSET_DIR}/{key}.bytes";
             }
 
+            /// <summary>Bake every AudioClip under Tutorials/*/Voices/ into the shared
+            /// Resources/Cache (one-click refresh after the cache key/location convention
+            /// changes, or after adding new reference clips).</summary>
+            [MenuItem("DeepUnity/PocketTTS/Bake Voice-Clone Cache (all Voices clips)")]
+            public static void BakeAllVoicesClips()
+            {
+                string[] guids = AssetDatabase.FindAssets("t:AudioClip", new[] { "Assets/DeepUnity/Tutorials" });
+                int baked = 0, seen = 0;
+                foreach (string g in guids)
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(g);
+                    if (!path.Replace('\\', '/').Contains("/Voices/")) continue;
+                    seen++;
+                    var clip = AssetDatabase.LoadAssetAtPath<AudioClip>(path);
+                    if (clip != null && Bake(clip) != null) baked++;
+                }
+                Debug.Log($"[PocketTTS] baked {baked}/{seen} voice-clone cache entries from Tutorials/*/Voices/ into {ASSET_DIR}.");
+            }
+
             /// <summary>Encode + write the Resources cache entry for a clip. int8 picks the int8
             /// weights dir (matches the NPC's ttsQuantization; the resulting prompts are ~equal —
             /// encoder int8 parity 0.99998). Returns the asset path or null on failure.</summary>

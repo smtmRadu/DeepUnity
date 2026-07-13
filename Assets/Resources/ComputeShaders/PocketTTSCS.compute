@@ -63,6 +63,9 @@ float scale;            // attention scale (1/sqrt(head_dim))
 float scale_val;        // ScaleBuf multiplier
 float leaky_slope;
 float rope_theta;       // 10000
+uint elem_offset;       // #29 sliced dispatch: element offset (LinearId kernels) / row offset
+                        // (LinearBias*) of this sub-dispatch. 0 for every whole-op dispatch —
+                        // C# range helpers set it and reset it to 0 before yielding.
 
 // -------------------------------------------------------------------- buffers
 StructuredBuffer<uint>    W;          // fp16 weight (2-per-uint) OR int8 weight (4-per-uint, q8 kernels)
@@ -92,7 +95,7 @@ RWStructuredBuffer<float>  inout_buf;
 // C# Dispatch1D issues (65535, ceil(g/65535), 1) and the kernel reconstructs the linear element
 // index. With y == 1 this reduces to the classic dtid.x, so legacy 1-D dispatches stay bit-identical.
 #define MAX_GX 65535u
-uint LinearId(uint3 gid, uint3 tid) { return (gid.y * MAX_GX + gid.x) * 256u + tid.x; }
+uint LinearId(uint3 gid, uint3 tid) { return elem_offset + (gid.y * MAX_GX + gid.x) * 256u + tid.x; }
 
 float readH(StructuredBuffer<uint> buf, uint index)
 {
@@ -168,7 +171,7 @@ void Activate(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
 [numthreads(1,8,32)]
 void LinearBias(uint3 id : SV_DispatchThreadID)
 {
-    uint t = id.y; uint p = id.z;
+    uint t = id.y + elem_offset; uint p = id.z;
     if (t >= seq_len || p >= out_dim) return;
     float sum = has_bias != 0 ? readH(W_bias, p) : 0.0;
     uint x_base = t * in_dim;
@@ -185,7 +188,7 @@ void LinearBias(uint3 id : SV_DispatchThreadID)
 [numthreads(1,8,32)]
 void LinearBiasQ8(uint3 id : SV_DispatchThreadID)
 {
-    uint t = id.y; uint p = id.z;
+    uint t = id.y + elem_offset; uint p = id.z;
     if (t >= seq_len || p >= out_dim) return;
     float sum = 0.0;
     uint x_base = t * in_dim;

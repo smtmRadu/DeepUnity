@@ -652,13 +652,18 @@ namespace DeepUnity
             }
 
             const int CHUNK = 8;
+            // pack several per-layer slices per frame (LLM.PrefillLayersPerFrame, per-NPC slider):
+            // fully spread, a ~30-token question cost ~100 mostly-idle frames before the first token
+            int pack = Math.Max(1, PrefillLayersPerFrame);
+            int step = 0;
             for (int start = 0; start < ids.Count; start += CHUNK)
             {
                 int len = Math.Min(CHUNK, ids.Count - start);
                 float[] part = new float[len];
                 for (int i = 0; i < len; i++) part[i] = ids[start + i];
                 var e = model.ForwardYielding(Tensor.Constant(part), useCache: true, lastPosOnly: true);
-                while (e.MoveNext()) yield return e.Current;
+                while (e.MoveNext())
+                    if (++step % pack == 0) yield return e.Current;
             }
         }
 

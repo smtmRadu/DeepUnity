@@ -63,7 +63,7 @@ namespace DeepUnity
         /// (GPU residency is NOT decided here — the prefetch zone / talk trigger owns that.)</summary>
         public enum HistoryMode
         {
-            [Tooltip("Every dialogue open starts a fresh conversation (fresh InitializeChat; the system-prompt KV disk cache still applies).")]
+            [Tooltip("The conversation ceases to exist the moment the chat CLOSES (same session): transcript wiped + live KV marked dead on close, fresh InitializeChat on the next open (the system-prompt KV disk cache still applies).")]
             ResetEveryTime,
             [Tooltip("Reopening resumes the SAME conversation. While the model is resident (player inside the prefetch zone / talk trigger) the live KV is reused as-is (instant); after a release the whole conversation is restored from disk (cacheKVCache) or the transcript is re-prefilled.")]
             ContinueWhereLeftOff,
@@ -84,7 +84,7 @@ namespace DeepUnity
         [Tooltip("LlmOnly = text-only replies (talk animation follows the writing; voice fields hidden below). LlmPlusTts = replies are spoken: the talk animation follows the AUDIO, and the next sentence synthesizes while the current one plays.")]
         [SerializeField] protected ConversationMode conversationMode = ConversationMode.LlmOnly;
         protected bool speakReplies => conversationMode == ConversationMode.LlmPlusTts;
-        [Tooltip("ResetEveryTime = fresh chat per opening. ContinueWhereLeftOff = the NPC remembers: live KV reused while resident, conversation KV restored from disk (or transcript re-prefilled) after a release. ResumeFromCompact = reserved (background compaction, not implemented yet) — falls back to ContinueWhereLeftOff.")]
+        [Tooltip("ResetEveryTime = the conversation is wiped the moment the chat closes (same session). ContinueWhereLeftOff = fully persistent, chat-to-chat AND session-to-session: live KV reused while resident, conversation KV restored from disk (or transcript re-prefilled) after a release. ResumeFromCompact = reserved (background compaction, not implemented yet) — falls back to ContinueWhereLeftOff.")]
         [SerializeField] protected HistoryMode historyMode = HistoryMode.ResetEveryTime;
         [Tooltip("Persist this NPC's KV cache to disk (persistentDataPath/DeepUnity): the system-prompt state in EVERY mode, plus — in the continue modes — the WHOLE conversation on a clean close (KV + sampler state + transcript), so reopening after the model was released (or the scene reloaded) restores the chat from disk instead of re-prefilling. Qwen3.5 only for now; Gemma3 NPCs fall back to the re-prefill path.")]
         [SerializeField] protected bool cacheKVCache = true;
@@ -94,11 +94,15 @@ namespace DeepUnity
         [SerializeField] protected string model = "Qwen3.5-0.8B";
         [Tooltip("Weight format. INT8 is ~lossless at half the VRAM — the recommended default. INT4 is lossy on models this small (Gemma int4 collapses outright).")]
         [SerializeField] protected LLMQuant quantization = LLMQuant.INT8;
+        [Tooltip("Let a thinking-capable model (Qwen3.5) reason in <think> before answering. The reasoning is NEVER voiced and never shown as reply text (the window's ShowThinkingTokens debug toggle can render it dimmed); while the model thinks, the dialog pulses an animated 'Thinking…' placeholder until the final answer starts. Non-thinking models ignore this.")]
+        [SerializeField] protected bool allowThinking = false;
+        [Tooltip("Prompt-prefill pacing — governs the pause before the FIRST token (your question and the system prompt are forwarded in per-layer slices). Slices issued per frame: higher = faster first token but more GPU per frame during prefill; 1 = fully spread (smoothest, slowest). 6 is invisible at 60 fps on the small NPC models.")]
+        [Range(1, 32)] [SerializeField] protected int prefillLayersPerFrame = 6;
 
         [Header("Sampling (-1 = model preset)")]
         [SerializeField] protected float temperature = 0.8f;
         [Tooltip("Reply length cap in tokens.")]
-        [SerializeField] protected int maxNewTokens = 128;
+        [SerializeField] protected int maxNewTokens = 1024;
         [Tooltip("-1 = model preset. 0 disables top-k filtering.")]
         [SerializeField] protected int topK = -1;
         [Tooltip("-1 = model preset. 1 disables nucleus filtering.")]
@@ -115,9 +119,9 @@ namespace DeepUnity
         [SerializeField] protected TtsModel ttsModel = TtsModel.PocketTTS;
         [Tooltip("Playback pitch for this NPC. 1 = natural (the voice's own timbre); <1 = deeper/slower.")]
         [SerializeField] protected float voicePitch = 1.0f;
-        [Tooltip("PocketTTS: voices/<name> (\"jean\"). Chatterbox: \"conds\"/\"conds_elder\". CosyVoice3: voices/<name> (\"velmire\"). Kokoro: voicepack (\"am_onyx\", \"af_heart\", \"granny\"...).")]
+        [Tooltip("BAKED voice shipped inside the selected TTS engine's weights export (voices/<name> dirs for PocketTTS/CosyVoice3, voices/<name>.bin voicepacks for Kokoro) — the inspector dropdown lists what's on disk. Pick 'Clone (reference clip)' on PocketTTS to clone from an AudioClip instead; a non-null clip always overrides this name.")]
         [SerializeField] protected string ttsVoice = "jean";
-        [Tooltip("PocketTTS only: reference clip to VOICE-CLONE for this NPC (overrides the baked ttsVoice). First runtime use encodes it once through the Mimi encoder and caches by content hash; press 'Precompute voice-clone cache' below to bake the embedding into Resources/PocketTTSVoices so runtime (editor AND builds) is a pure load — no recompute, ever.")]
+        [Tooltip("PocketTTS only: reference clip to VOICE-CLONE for this NPC (overrides the baked ttsVoice). First runtime use encodes it once through the Mimi encoder and caches by content hash; press 'Precompute voice-clone cache' below to bake the embedding into the shared Resources/Cache so runtime (editor AND builds) is a pure load — no recompute, ever.")]
         [SerializeField] protected AudioClip clonedVoiceClip;
         [Tooltip("Chatterbox weight format. INT8 = T3 matmuls int8 (~300 MB less, parity-validated); s3gen stays fp16 either way. Kokoro/CosyVoice ignore this.")]
         [SerializeField] protected LLMQuant ttsQuantization = LLMQuant.INT8;
@@ -375,6 +379,7 @@ namespace DeepUnity
             KVQuant kv = quantization == LLMQuant.FP16 ? KVQuant.FP16 : KVQuant.INT8;
             llm = LLMPool.Acquire(model, quantization, kv);
             llm.DiskKVCache = cacheKVCache;   // per-NPC toggle: system-prompt + conversation KV disk cache
+            llm.PrefillLayersPerFrame = prefillLayersPerFrame;   // per-NPC prefill pacing (shared instance)
             chatLive = false;   // we held no reference — whatever KV it carries isn't OUR conversation
         }
 
@@ -504,6 +509,7 @@ namespace DeepUnity
 
             EnsureLlm();
             llm.DiskKVCache = cacheKVCache;   // re-assert (a resume prefill below clears it temporarily)
+            llm.PrefillLayersPerFrame = prefillLayersPerFrame;   // re-assert per-NPC pacing on the shared instance
 
             // a background conversation-KV save still reading this model's GPU state must finish
             // before anything resets/forwards it again (the SSM snapshot would tear mid-read) —
@@ -621,6 +627,9 @@ namespace DeepUnity
         IEnumerator ThinkingDots(INPCChatWindow w)
         {
             string[] frames = { "..", "...", "." };
+            // with thinking enabled the model REALLY reasons behind these dots (until the final
+            // </think>), so say so; plain models just get the typing pulse
+            string label = allowThinking ? "Thinking" : "";
             int i = 0;
             // self-terminates when the reply ends or the dialogue closes
             while (state == NPCState.TalkingInInteraction)
@@ -628,7 +637,7 @@ namespace DeepUnity
                 yield return new WaitForSecondsRealtime(0.4f);
                 if (state != NPCState.TalkingInInteraction) break;
                 w.PopLastMessage();
-                w.AddMessage(npc_name, frames[i++ % 3]);
+                w.AddMessage(npc_name, label + frames[i++ % 3]);
             }
             dotsJob = null;
         }
@@ -775,6 +784,7 @@ namespace DeepUnity
                 min_p: minP >= 0f ? minP : llm.Config.DefaultMinP,
                 presence_penalty: presencePenalty >= 0f ? presencePenalty : llm.Config.DefaultPresencePenalty,
                 repetition_penalty: repetitionPenalty >= 0f ? repetitionPenalty : llm.Config.DefaultRepetitionPenalty,
+                enable_thinking: allowThinking,
                 onTokenGenerated: (token) =>
                 {
                     response.Append(token);
@@ -889,6 +899,16 @@ namespace DeepUnity
             activeTurn = null;
             activeResponse = null;
             // else: let the NPC finish the sentence while the player walks away
+
+            // ResetEveryTime: the conversation ceases to exist the moment the chat CLOSES (same
+            // session) — wipe it NOW instead of lazily at the next open, so nothing of it survives
+            // in any state the modes below might touch. The continue mode is the fully-persistent
+            // one (chat-to-chat and session-to-session).
+            if (historyMode == HistoryMode.ResetEveryTime)
+            {
+                transcript.Clear();
+                chatLive = false;
+            }
 
             // WS-G SnapshotConversation — implemented: on a clean close in the continue modes the
             // whole conversation state (KV/SSM prefix + token-seen penalty counts + open-turn flag

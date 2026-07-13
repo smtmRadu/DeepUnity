@@ -654,6 +654,7 @@ namespace DeepUnity
             // ===================== Per-layer wrapper =====================
             void DispatchLayer(int li, int seqLen, int totalKvLen, bool useCache)
             {
+                FramePacing.NoteLlmIssue();   // #29: mark this frame LLM-owned so TTS pumps can cede it
                 int cacheLen = useCache ? cache.CachedTokenCount : 0;
                 int hidTotal = seqLen * hiddenSize;
 

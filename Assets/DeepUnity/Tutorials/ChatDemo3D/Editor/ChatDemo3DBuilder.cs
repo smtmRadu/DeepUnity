@@ -353,6 +353,15 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        static void SetObject(Component c, string field, UnityEngine.Object value)
+        {
+            var so = new SerializedObject(c);
+            var prop = so.FindProperty(field);
+            if (prop == null) throw new Exception($"No serialized field '{field}' on {c.GetType().Name}");
+            prop.objectReferenceValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         static void SetString(Component c, string field, string value)
         {
             var so = new SerializedObject(c);
@@ -469,8 +478,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             RenderSettings.sun = sun;
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogColor = new Color(0.07f, 0.08f, 0.12f);
-            RenderSettings.fogDensity = 0.013f;
+            // readable night mist: slightly lifted color + denser falloff so the courtyard's far
+            // walls and the gate actually dissolve into it (0.013 was imperceptible in play)
+            RenderSettings.fogColor = new Color(0.10f, 0.11f, 0.16f);
+            RenderSettings.fogDensity = 0.024f;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = new Color(0.22f, 0.25f, 0.35f);
             RenderSettings.ambientEquatorColor = new Color(0.13f, 0.14f, 0.20f);
@@ -1690,10 +1701,14 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // and takes over once its A6 perf work lands RTF < 1.
             SetEnum(npc, "conversationMode", (int)NPCInteractor3D.ConversationMode.LlmPlusTts);
             // Velmire now speaks through pocket-tts (Kyutai 100M AR, RTF ~0.15 — the DEFAULT NPC
-            // TTS): real-time DURING generation, correct name pronunciation, voice cloning. Baked
-            // "jean" voice. Kokoro/CosyVoice3 stay selectable on the enum.
+            // TTS): real-time DURING generation, correct name pronunciation, voice cloning.
+            // His voice is CLONED from the Ansbach reference clip (precomputed into the shared
+            // Resources/Cache by the inspector button / bake-all menu — runtime is a pure load);
+            // "jean" stays as the baked fallback if the clip or its cache ever goes missing.
             SetEnum(npc, "ttsModel", (int)NPCInteractor3D.TtsModel.PocketTTS);
             SetString(npc, "ttsVoice", "jean");
+            SetObject(npc, "clonedVoiceClip", AssetDatabase.LoadAssetAtPath<AudioClip>(
+                "Assets/DeepUnity/Tutorials/ChatDemo3D/Voices/Ansbach_4-15s.mp3"));
             SetFloat(npc, "voicePitch", 1.0f);
             // residency A/B test: the big transparent-green sphere slow-prefetches Qwen+Kokoro
             // on entry, HOLDS both on the GPU while the player is inside, and unloads both on
@@ -1812,11 +1827,15 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // of the two loads first serves both). The small sphere trigger stays interaction-only.
             SetBool(npc, "usePrefetchZone", true);
             SetFloat(npc, "prefetchRadius", 10f);
-            // Keep the crone on Kokoro/af_heart so the scene has TWO distinct voices (a live A/B:
-            // Velmire = pocket-tts "jean" default vs the witch = Kokoro af_heart). Pinned
-            // explicitly so the pocket-tts field default doesn't collapse both to "jean".
-            SetEnum(npc, "ttsModel", (int)NPCInteractor3D.TtsModel.Kokoro);
-            SetString(npc, "ttsVoice", "af_heart");
+            // The crone speaks pocket-tts too (both NPCs on the default engine — ONE weight set
+            // on the GPU serves both). The two voices stay distinct through CLONING: her voice is
+            // cloned from the Finger Reader Enia reference clip (precomputed into Resources/Cache;
+            // runtime = pure load), vs Velmire's Ansbach clone. "jean" is the baked fallback.
+            SetEnum(npc, "conversationMode", (int)NPCInteractor3D.ConversationMode.LlmPlusTts);
+            SetEnum(npc, "ttsModel", (int)NPCInteractor3D.TtsModel.PocketTTS);
+            SetString(npc, "ttsVoice", "jean");
+            SetObject(npc, "clonedVoiceClip", AssetDatabase.LoadAssetAtPath<AudioClip>(
+                "Assets/DeepUnity/Tutorials/ChatDemo3D/Voices/FingerReaderEnia_0-15s.mp3"));
             return root;
         }
 

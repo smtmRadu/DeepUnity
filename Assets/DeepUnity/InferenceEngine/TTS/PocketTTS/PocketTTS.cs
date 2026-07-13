@@ -62,6 +62,35 @@ namespace DeepUnity
             /// editor-synchronous MoveNext loops. Data is identical either way (same dispatches).</summary>
             public bool AsyncReadback = true;
 
+            /// <summary>#29: yield sentinel meaning "END THE FRAME NOW". The voice pump's time
+            /// budget measures CPU ISSUE time (~1 ms buys ~15 ms of GPU), so plain-null yields get
+            /// re-entered until an entire prefill/flush lands in ONE frame anyway. GPU-heavy ticks
+            /// (a prefill layer, a Mimi-decode slice) yield THIS; PumpPipeline breaks its budget
+            /// loop on it — true one-heavy-tick-per-frame pacing. Cheap yields (AR bookkeeping,
+            /// readback spins) stay null and keep packing under the budget.</summary>
+            public static readonly object FrameBreak = new object();
+
+            /// <summary>#29: yield sentinel meaning "a GPU readback is in flight — no work can be
+            /// issued until it lands". The pump gives these a SHORT spin window (readbacks often
+            /// complete mid-frame when the queue is shallow) and then cedes the frame — spinning
+            /// them for the whole CPU budget was ~5 ms/frame of pure waste (the fat SPK+AUD band
+            /// in the talk-perf report).</summary>
+            public static readonly object GpuWait = new object();
+
+            /// <summary>#29: MAC budget of one GPU-heavy pipeline tick (a prefill chunk / Mimi-decode
+            /// slice). NOT hardware-tuned: this is only the starting guess — PocketTTSVoice
+            /// self-calibrates it at runtime from real frame feedback (a heavy tick should cost
+            /// ~3-7 ms over the scene's baseline frame, whatever the GPU). Slower cards converge
+            /// to finer slices, faster cards to coarser ones.</summary>
+            public static long GpuMacsPerTick = 900_000_000;
+
+            /// <summary>#29 spike attribution: the last pipeline stage a pump tick worked on
+            /// ("clause_start", "prefill", "ar_decode", "ar_flowhead", "mimi_decode", "flush_push",
+            /// "readback_hardwait"). Written by SynthesizeStreaming's yield sites; diagnostics
+            /// probes read-and-clear it per frame to attribute slow frames to a stage. Inert
+            /// otherwise (one static string assign per tick).</summary>
+            public static string LastHeavyTick;
+
             public bool IsReady => weights.IsReady;
             public long WeightBytes => weights.BytesTotal;   // resident weight footprint (fp16 vs int8 delta)
 
@@ -152,35 +181,33 @@ namespace DeepUnity
 
             string CacheDir => System.IO.Path.Combine(Application.persistentDataPath, "pockettts_voices");
 
-            /// <summary>Content hash of the reference samples (FNV-1a over the raw floats) — the cache key.</summary>
+            /// <summary>Content hash of the reference samples — SHA-256 hex (64 chars), matching the
+            /// Assets/Resources/Cache convention (the system-prompt KV folders use the same form).</summary>
             static string HashSamples(float[] s)
             {
-                ulong h = 1469598103934665603UL;
                 var buf = new byte[s.Length * 4];
                 Buffer.BlockCopy(s, 0, buf, 0, buf.Length);
-                foreach (byte bb in buf) { h ^= bb; h *= 1099511627789UL; }
-                return h.ToString("x16");
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                {
+                    byte[] h = sha.ComputeHash(buf);
+                    var sb = new System.Text.StringBuilder(64);
+                    for (int i = 0; i < h.Length; i++) sb.Append(h[i].ToString("x2"));
+                    return sb.ToString();
+                }
             }
 
-            /// <summary>Resources folder (under any Assets/Resources/) holding editor-baked voice-clone
-            /// prompts as .bytes TextAssets — the shipping tier of the clone cache.</summary>
-            public const string RES_VOICE_DIR = "PocketTTSVoices";
+            /// <summary>Resources folder holding editor-baked voice-clone prompts as .bytes TextAssets
+            /// — the SHARED content-addressed cache (same folder + SHA-256 naming as the system-prompt
+            /// KV caches), the shipping tier of the clone cache.</summary>
+            public const string RES_VOICE_DIR = "Cache";
 
             /// <summary>Where the last CloneVoice found its prompt: "persistent" (runtime disk cache) |
             /// "resources" (editor-baked, ships in builds) | "encoded" (computed now + cached).</summary>
             public string LastCloneSource { get; private set; }
 
-            static string KeyFor(float[] wav24k, string label)
-            {
-                string tag = string.IsNullOrEmpty(label) ? "" : Sanitize(label) + "_";
-                return tag + HashSamples(wav24k);
-            }
-            static string Sanitize(string s)
-            {
-                var sb = new System.Text.StringBuilder(s.Length);
-                foreach (char c in s) sb.Append(char.IsLetterOrDigit(c) || c == '-' || c == '_' ? c : '_');
-                return sb.ToString();
-            }
+            // Content-addressed: the key IS the SHA-256 of the capped 24 kHz wav — labels don't enter
+            // the key (identical audio = identical cache entry, regardless of clip name/renames).
+            static string KeyFor(float[] wav24k) => HashSamples(wav24k);
 
             /// <summary>The cache key CloneVoice(clip) will use — lets editor tooling check for a baked
             /// Resources entry without touching the model. Null if the clip isn't readable.</summary>
@@ -188,7 +215,7 @@ namespace DeepUnity
             {
                 float[] mono = ClipToMono(clip);
                 if (mono == null) return null;
-                return KeyFor(PrepRef(mono, clip.frequency), clip.name);
+                return KeyFor(PrepRef(mono, clip.frequency));
             }
 
             /// <summary>Editor precompute: encode a reference wav to the raw audio_prompt bytes the
@@ -199,7 +226,7 @@ namespace DeepUnity
                 key = null;
                 if (samples == null || samples.Length == 0) return null;
                 float[] wav = PrepRef(samples, sampleRate);   // resample to 24k + cap at MAX_REF_SECONDS
-                key = KeyFor(wav, label);
+                key = KeyFor(wav);   // content-addressed (label only names the voice, never the key)
                 float[] prompt = EncodeToPrompt(wav);
                 return prompt == null ? null : PromptToBytes(prompt);
             }
@@ -211,7 +238,8 @@ namespace DeepUnity
             }
 
             /// <summary>Clone a voice from an AudioClip (any sample rate; multi-channel down-mixed to
-            /// mono; only the first MAX_REF_SECONDS are used). Caches + binds as the current voice.</summary>
+            /// mono; a long clip is pause-aware-cropped near MAX_REF_SECONDS — see PrepRef). Caches +
+            /// binds as the current voice.</summary>
             public bool CloneVoice(AudioClip clip, string label = null)
             {
                 float[] mono = ClipToMono(clip);
@@ -227,23 +255,70 @@ namespace DeepUnity
             /// <summary>Max reference length for cloning — 10 s = 125 latent frames, the model's NATIVE
             /// audio_prompt length (every Kyutai baked voice is exactly this). Longer references only
             /// slow each reply's prefill and overflow the encoder's 1D dispatch limit (~10.9 s at the
-            /// 24 kHz stage), so the first 10 s are used and the rest ignored. The cache key hashes the
-            /// CAPPED wav, so bake and runtime always agree on the same key.</summary>
+            /// 24 kHz stage), so a longer clip is cropped at a natural pause near this cap (PrepRef;
+            /// hard 10 s cut only if the 7-10 s window has no pause). The cache key hashes the CROPPED
+            /// wav, so bake and runtime always agree on the same key.</summary>
             public const float MAX_REF_SECONDS = 10f;
+
+            // Pause-aware crop: a long reference is cut at a NATURAL PAUSE near the cap instead of
+            // mid-word at exactly 10.0 s — a chopped word in the prompt conditions the voice on a
+            // truncation artifact. Never cropped shorter than MIN_CROP_SECONDS; a "pause" is
+            // >= 3 consecutive 30 ms hops whose RMS sits under 15% of the clip's mean hop-RMS
+            // (stop-consonant closures are shorter, real pauses are longer).
+            const float MIN_CROP_SECONDS = 7f;
+            const float PAUSE_WIN_SECONDS = 0.03f;
 
             static float[] PrepRef(float[] samples, int sampleRate)
             {
                 float[] wav = sampleRate == Cfg.SAMPLE_RATE ? samples : Resample(samples, sampleRate, Cfg.SAMPLE_RATE);
                 int cap = (int)(MAX_REF_SECONDS * Cfg.SAMPLE_RATE);
-                if (wav.Length > cap)
+                if (wav.Length <= cap) return wav;
+
+                int cut = FindPauseCut(wav, cap);
+                float total = wav.Length / (float)Cfg.SAMPLE_RATE;
+                Debug.Log(cut < cap
+                    ? $"[PocketTTS] voice-clone reference is {total:F1}s — cropped at a natural pause, " +
+                      $"{cut / (float)Cfg.SAMPLE_RATE:F2}s (native prompt cap {MAX_REF_SECONDS:F0}s)."
+                    : $"[PocketTTS] voice-clone reference is {total:F1}s — no pause found near the cap, " +
+                      $"using the first {MAX_REF_SECONDS:F0}s (the model's native prompt length).");
+                var t = new float[cut];
+                Array.Copy(wav, t, cut);
+                return t;
+            }
+
+            // Latest (closest-to-cap) mid-pause sample index in [MIN_CROP_SECONDS, cap), or cap
+            // when the tail has no detectable pause. Deterministic — the cache key hashes the
+            // cropped wav, so bake and runtime always agree.
+            static int FindPauseCut(float[] wav, int cap)
+            {
+                int win = (int)(PAUSE_WIN_SECONDS * Cfg.SAMPLE_RATE);
+                int start = (int)(MIN_CROP_SECONDS * Cfg.SAMPLE_RATE);
+                int hops = (cap - start) / win;
+                if (win <= 0 || hops < 3) return cap;
+
+                double sum = 0; int n = 0;   // clip's own speech level (mean hop-RMS over the capped head)
+                for (int off = 0; off + win <= cap; off += win) { sum += HopRms(wav, off, win); n++; }
+                float thr = (float)(sum / Math.Max(n, 1)) * 0.15f;
+
+                int run = 0, cut = -1;
+                for (int h = 0; h < hops; h++)
                 {
-                    Debug.Log($"[PocketTTS] voice-clone reference is {wav.Length / (float)Cfg.SAMPLE_RATE:F1}s — " +
-                              $"using the first {MAX_REF_SECONDS:F0}s (the model's native prompt length).");
-                    var t = new float[cap];
-                    Array.Copy(wav, t, cap);
-                    wav = t;
+                    if (HopRms(wav, start + h * win, win) < thr)
+                    {
+                        // middle hop of the latest >=3-quiet run: inside the pause, clear of the
+                        // previous word's decay tail
+                        if (++run >= 3) cut = start + (h - 1) * win + win / 2;
+                    }
+                    else run = 0;
                 }
-                return wav;
+                return cut > 0 ? cut : cap;
+            }
+
+            static float HopRms(float[] wav, int off, int n)
+            {
+                double acc = 0;
+                for (int i = 0; i < n; i++) { float v = wav[off + i]; acc += v * v; }
+                return (float)Math.Sqrt(acc / n);
             }
 
             /// <summary>AudioClip -> mono float[] (average mixdown). Null if the clip is null or its
@@ -274,7 +349,7 @@ namespace DeepUnity
                 if (samples == null || samples.Length == 0) return false;
 
                 float[] wav = PrepRef(samples, sampleRate);   // resample to 24k + cap at MAX_REF_SECONDS
-                string key = KeyFor(wav, label);
+                string key = KeyFor(wav);   // content-addressed (label only names the voice, never the key)
                 string path = System.IO.Path.Combine(CacheDir, key + ".bin");
 
                 float[] prompt;
@@ -286,7 +361,7 @@ namespace DeepUnity
                 else
                 {
                     // Editor-precomputed cache (inspector "Precompute voice-clone cache" button /
-                    // PocketTTSVoiceBaker): a raw-float TextAsset at Resources/PocketTTSVoices/<key>
+                    // PocketTTSVoiceBaker): a raw-float TextAsset at Resources/Cache/<key> (shared content-addressed cache)
                     // — ships inside builds, so a baked voice NEVER re-encodes on any machine.
                     var baked = Resources.Load<TextAsset>(RES_VOICE_DIR + "/" + key);
                     if (baked != null)
@@ -304,7 +379,7 @@ namespace DeepUnity
                     }
                 }
                 voicePrompt = prompt;
-                CurrentVoice = key;
+                CurrentVoice = string.IsNullOrEmpty(label) ? key : label;   // readable name; key stays content-addressed
                 return true;
             }
 
@@ -548,6 +623,7 @@ namespace DeepUnity
                 bool deterministic = injectNoise != null;   // probe parity: inject reference noise
                 if (deterministic) maxFrames = injectNoise.Length;
 
+                LastHeavyTick = "clause_start";
                 int dim = Cfg.DIM;
                 float[] textEmb = flm.EmbedLookup(textIds);
                 int voiceFrames = voicePrompt.Length / dim;
@@ -559,9 +635,10 @@ namespace DeepUnity
 
                 var swAll = System.Diagnostics.Stopwatch.StartNew();
                 flm.ResetKV();
-                // bug C: prefill yields per layer (~15 ms/tick instead of one ~90 ms burst)
+                // bug C + #29: prefill yields per layer AND each tick ends the frame (FrameBreak) —
+                // the pump's CPU-time budget would otherwise re-enter all 6 ticks in one frame.
                 var pf = flm.PrefillKVYielding(prefix, Lp, Lp + maxFrames);
-                while (pf.MoveNext()) yield return null;
+                while (pf.MoveNext()) { LastHeavyTick = "prefill"; yield return FrameBreak; }
 
                 var latents = new List<float[]>(maxFrames);
                 var rawAll = new List<float>(maxFrames * Cfg.LDIM);   // raw flow latents, growing
@@ -577,7 +654,7 @@ namespace DeepUnity
                     float[] token = (n == 0) ? flm.BosLatentEmbedding() : flm.InputLinear(latents[n - 1]);
                     // bug C: async readbacks — yield while the GPU drains instead of a blocking GetData
                     var ds = flm.DecodeStepKVYielding(token, c, AsyncReadback);
-                    while (ds.MoveNext()) yield return null;
+                    while (ds.MoveNext()) { LastHeavyTick = "ar_decode"; yield return ds.Current; }
                     float eos = flm.OutEos(c);
                     if (eos > Cfg.EOS_THRESHOLD && eosStep < 0) eosStep = n;
                     bool stop = eosStep >= 0 && n >= eosStep + framesAfterEos;
@@ -585,7 +662,7 @@ namespace DeepUnity
                     {
                         float[] noise = deterministic ? injectNoise[n] : Gauss(Cfg.LDIM, Mathf.Sqrt(Cfg.TEMPERATURE));
                         var fh = flm.FlowHeadYielding(c, noise, 0f, 1f, vel, AsyncReadback);
-                        while (fh.MoveNext()) yield return null;
+                        while (fh.MoveNext()) { LastHeavyTick = "ar_flowhead"; yield return fh.Current; }
                         float[] lat = new float[Cfg.LDIM];
                         for (int i = 0; i < Cfg.LDIM; i++) lat[i] = noise[i] + vel[i];
                         latents.Add(lat);
@@ -598,20 +675,33 @@ namespace DeepUnity
                     {
                         // windowed decode: [ctx context ; new frames] — new samples are exact
                         // (receptive field < ctx) and per-chunk cost/dispatch stay O(window).
+                        // #29: the decode chain is SLICED (each slice = FrameBreak = one frame) and
+                        // the wav readback is ASYNC — the old single-tick sync flush was a 100-155 ms
+                        // main-thread stall every 0.64 s. The ring prebuffer absorbs the 1-3 frame
+                        // delivery latency.
                         int T = latents.Count;
                         int newFrames = T - emittedFrames;
                         int s = Math.Max(0, T - newFrames - Cfg.MIMI_DECODE_CTX);
                         int nWin = T - s;
                         var win = new float[nWin * Cfg.LDIM];
                         rawAll.CopyTo(s * Cfg.LDIM, win, 0, nWin * Cfg.LDIM);
-                        float[] wv = mimi.Decode(win, nWin, embMean, embStd);
+                        float[] wv = new float[nWin * Cfg.SAMPLES_PER_LATENT];
+                        var de = mimi.DecodeYielding(win, nWin, embMean, embStd, wv, AsyncReadback);
+                        // GPU-issue slices end the frame (FrameBreak); readback waits surface as
+                        // GpuWait so the pump can catch a mid-frame completion cheaply.
+                        while (de.MoveNext())
+                        {
+                            LastHeavyTick = "mimi_decode";
+                            yield return ReferenceEquals(de.Current, GpuWait) ? GpuWait : FrameBreak;
+                        }
                         int newN = newFrames * Cfg.SAMPLES_PER_LATENT;
                         float[] tail = new float[newN];
                         Array.Copy(wv, wv.Length - newN, tail, 0, newN);
                         emittedFrames = T;
                         if (TtfaMs == 0f) TtfaMs = (float)swAll.Elapsed.TotalMilliseconds;
+                        LastHeavyTick = "flush_push";
                         onSamples?.Invoke(tail);
-                        yield return null;   // spread decode + let the ring drain
+                        yield return null;   // let the ring drain
                     }
                     if (stop) break;
                     yield return null;       // one frame of AR per tick — never blocks the main thread

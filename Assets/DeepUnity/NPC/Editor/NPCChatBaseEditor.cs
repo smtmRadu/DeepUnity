@@ -29,17 +29,97 @@ namespace DeepUnity
                 }
                 if (llmOnly && System.Array.IndexOf(VOICE_FIELDS, it.name) >= 0) continue;
                 if (it.propertyPath == "model") { DrawModelPopup(it); continue; }
+                if (it.propertyPath == "ttsVoice") { DrawVoicePopup(it); continue; }
                 if (it.propertyPath == "clonedVoiceClip") { DrawCloneClip(it); continue; }
                 EditorGUILayout.PropertyField(it, true);
             }
             serializedObject.ApplyModifiedProperties();
         }
 
+        // ---- TTS voice dropdown -----------------------------------------------------------
+        // Voices are REAL assets on disk, shipped inside each engine's weights export:
+        //   <weights_dir>/voices/<name>/…    pocket-tts / CosyVoice3 — baked audio-prompt tensors
+        //   <weights_dir>/voices/<name>.bin  Kokoro — style-vector voicepacks
+        // ttsVoice is the string KEY into that folder (the name IS the asset id, no mapping).
+        // The dropdown lists what actually exists on disk; pocket-tts appends "Clone (reference
+        // clip)" — picking it reveals the clonedVoiceClip field (a non-null clip always means
+        // clone mode, and overrides the baked name at runtime). Engines with no on-disk catalog
+        // fall back to the plain string field.
+        static readonly System.Collections.Generic.Dictionary<int, string[]> _voiceCache =
+            new System.Collections.Generic.Dictionary<int, string[]>();
+        const string CLONE_OPTION = "Clone (reference clip)";
+        bool _clonePicked;   // transient: "Clone" chosen in the dropdown, clip not assigned yet
+
+        static string[] DiscoverVoices(int ttsModel)
+        {
+            if (_voiceCache.TryGetValue(ttsModel, out var cached)) return cached;
+            string prefix = ttsModel == (int)NPCChatBase.TtsModel.Chatterbox ? "weights_chatterbox"
+                          : ttsModel == (int)NPCChatBase.TtsModel.CosyVoice3 ? "weights_cosyvoice3"
+                          : ttsModel == (int)NPCChatBase.TtsModel.Kokoro ? "weights_kokoro"
+                          : "weights_pockettts";
+            var names = new System.Collections.Generic.SortedSet<string>();
+            const string ROOT = "Assets/Resources/Weights";
+            if (System.IO.Directory.Exists(ROOT))
+                foreach (string dir in System.IO.Directory.GetDirectories(ROOT))
+                {
+                    if (!System.IO.Path.GetFileName(dir).StartsWith(prefix)) continue;
+                    string vdir = System.IO.Path.Combine(dir, "voices");
+                    if (!System.IO.Directory.Exists(vdir)) continue;
+                    foreach (string d in System.IO.Directory.GetDirectories(vdir))
+                        names.Add(System.IO.Path.GetFileName(d));
+                    foreach (string f in System.IO.Directory.GetFiles(vdir, "*.bin"))
+                        names.Add(System.IO.Path.GetFileNameWithoutExtension(f));
+                }
+            var arr = new string[names.Count];
+            names.CopyTo(arr);
+            _voiceCache[ttsModel] = arr;
+            return arr;
+        }
+
+        void DrawVoicePopup(SerializedProperty prop)
+        {
+            var modelProp = serializedObject.FindProperty("ttsModel");
+            if (modelProp == null || serializedObject.isEditingMultipleObjects)
+            { EditorGUILayout.PropertyField(prop, true); return; }
+            int m = modelProp.enumValueIndex;
+            bool canClone = m == (int)NPCChatBase.TtsModel.PocketTTS;
+            var cloneProp = serializedObject.FindProperty("clonedVoiceClip");
+            bool cloneActive = canClone && (_clonePicked || (cloneProp != null && cloneProp.objectReferenceValue != null));
+
+            string[] voices = DiscoverVoices(m);
+            if (voices.Length == 0 && !canClone)   // no on-disk catalog for this engine — plain field
+            { EditorGUILayout.PropertyField(prop, true); return; }
+
+            int cloneIdx = canClone ? voices.Length : -1;
+            int missingIdx = -1;
+            int current;
+            if (cloneActive) current = cloneIdx;
+            else
+            {
+                current = System.Array.IndexOf(voices, prop.stringValue);
+                if (current < 0) { missingIdx = voices.Length + (canClone ? 1 : 0); current = missingIdx; }
+            }
+            var options = new string[voices.Length + (canClone ? 1 : 0) + (missingIdx >= 0 ? 1 : 0)];
+            voices.CopyTo(options, 0);
+            if (canClone) options[cloneIdx] = CLONE_OPTION;
+            if (missingIdx >= 0) options[missingIdx] = $"{prop.stringValue} <missing>";
+
+            int pick = EditorGUILayout.Popup(prop.displayName, current, options);
+            if (pick == current) return;
+            if (pick == cloneIdx) _clonePicked = true;   // clip field appears below (DrawCloneClip)
+            else if (pick < voices.Length)
+            {
+                prop.stringValue = voices[pick];
+                _clonePicked = false;
+                if (cloneProp != null) cloneProp.objectReferenceValue = null;   // clip would override the pick
+            }
+        }
+
         // ---- PocketTTS voice-clone precompute (clip field + bake status + button) --------------
-        // Shown only when ttsModel == PocketTTS. The key is content-hashed from the clip, so the
-        // status line always reflects THIS clip's bake state; the button runs the Mimi encoder in
-        // edit mode and writes Resources/PocketTTSVoices/<key>.bytes (ships in builds) so runtime
-        // never re-encodes.
+        // Shown only in clone mode (pocket-tts + "Clone" picked / a clip assigned). The key is
+        // content-hashed from the clip, so the status line always reflects THIS clip's bake state;
+        // the button runs the Mimi encoder in edit mode and writes Resources/Cache/<key>.bytes
+        // (ships in builds) so runtime never re-encodes.
         AudioClip _keyClip; string _cloneKey;
 
         void DrawCloneClip(SerializedProperty prop)
@@ -47,6 +127,8 @@ namespace DeepUnity
             var modelProp = serializedObject.FindProperty("ttsModel");
             if (modelProp == null || modelProp.enumValueIndex != (int)NPCChatBase.TtsModel.PocketTTS)
                 return;   // clone-from-clip is a pocket-tts feature — hidden for other engines
+            if (!_clonePicked && prop.objectReferenceValue == null)
+                return;   // a baked voice is selected in the dropdown — clone UI hidden
 
             EditorGUILayout.PropertyField(prop, true);
             var clip = prop.objectReferenceValue as AudioClip;
@@ -67,8 +149,8 @@ namespace DeepUnity
             bool baked = System.IO.File.Exists(assetPath);
             float cap = PocketTTSModeling.PocketTTS.MAX_REF_SECONDS;
             string capNote = clip.length > cap + 0.05f
-                ? $"\nClip is {clip.length:F1}s — auto-capped: only the first {cap:F0}s are used (the model's native reference length)."
-                : $"\nReference audio is auto-capped at {cap:F0}s (the model's native prompt length).";
+                ? $"\nClip is {clip.length:F1}s — cropped at the closest natural pause before {cap:F0}s, never mid-word (hard {cap:F0}s cut only if no pause exists in the tail). {cap:F0}s is the model's native reference length."
+                : $"\nClip is {clip.length:F1}s — fits the model's native {cap:F0}s reference window, used in full (no cropping).";
             EditorGUILayout.HelpBox((baked
                 ? $"Voice-clone cache baked ✓ — runtime is a pure load (editor + builds).\n{assetPath}"
                 : "Not precomputed — the first runtime use encodes this clip once (~1-2 s on approach). Bake it to make runtime loading instant.")

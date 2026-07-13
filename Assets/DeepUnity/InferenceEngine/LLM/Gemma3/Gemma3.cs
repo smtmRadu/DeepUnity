@@ -195,14 +195,19 @@ namespace DeepUnity
         IEnumerator ForwardPromptChunked(Tensor input_ids)
         {
             const int CHUNK = 8;
+            // pack several per-layer slices per frame (LLM.PrefillLayersPerFrame, per-NPC slider):
+            // fully spread, a ~30-token question cost ~100 mostly-idle frames before the first token
+            int pack = Math.Max(1, PrefillLayersPerFrame);
             int total = input_ids.Size(-1);
+            int step = 0;
             for (int start = 0; start < total; start += CHUNK)
             {
                 int len = Math.Min(CHUNK, total - start);
                 float[] part = new float[len];
                 for (int i = 0; i < len; i++) part[i] = input_ids[start + i];
                 var e = model.ForwardYielding(Tensor.Constant(part), useCache: true, lastPosOnly: true);
-                while (e.MoveNext()) yield return e.Current;
+                while (e.MoveNext())
+                    if (++step % pack == 0) yield return e.Current;
             }
         }
 

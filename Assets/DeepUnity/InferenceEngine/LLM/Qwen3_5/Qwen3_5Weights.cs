@@ -395,10 +395,10 @@ namespace DeepUnity
                     {
                         if (job.slot[job.slotIndex] == null)
                         {
-                            if (budget <= 0) { yield return null; frames++; budget = LLM.UploadBudgetBytes; }
+                            if (budget <= 0) { yield return null; frames++; if (_disposed) yield break; budget = LLM.UploadBudgetBytes; }
                             // big allocations right after a release stall the driver mid-cleanup
                             // (measured 250-550 ms single-frame spikes) — give it one present first
-                            if ((long)job.bufferHalfCount * 2 > 48_000_000) { yield return null; frames++; }
+                            if ((long)job.bufferHalfCount * 2 > 48_000_000) { yield return null; frames++; if (_disposed) yield break; }
                             slice.Restart();
                             job.slot[job.slotIndex] = HalfBuf(job.bufferHalfCount);
                             double cms = slice.Elapsed.TotalMilliseconds; // spikes here = driver allocation
@@ -415,6 +415,9 @@ namespace DeepUnity
                             {
                                 yield return null;               // hand the frame back to rendering
                                 frames++;
+                                // released while we slept on the budget — the buffer under
+                                // `target` is gone; touching it throws (zone-exit mid-stream)
+                                if (_disposed) yield break;
                                 budget = LLM.UploadBudgetBytes;
                             }
                             int count = (int)Math.Min(budget, len - src);

@@ -177,18 +177,26 @@ namespace DeepUnity
             id == MiniCPM5Modeling.MiniCPM5Config.IM_END_TOKEN_ID;
 
         // Forwards a prompt in small chunks so each yielded frame's GPU work stays bounded
-        // (same rationale as Gemma3ForCausalLM.ForwardPromptChunked).
+        // (same rationale as Gemma3ForCausalLM.ForwardPromptChunked). The inner ForwardYielding
+        // yields once PER LAYER — surfacing every one as a frame made a ~30-token question cost
+        // ~100 mostly-idle frames (the 1-2 s "thinking" pause before the first token, while the
+        // actual GPU work is a few ms on a 1B). Pack several layers per frame instead: 6 layers
+        // of an 8-token chunk ≈ a handful of decode bursts of GPU — invisible at 60 fps, and
+        // first-token latency drops ~6×. Applies to turn prefills AND the system-prompt init.
         IEnumerator ForwardPromptChunked(Tensor input_ids)
         {
             const int CHUNK = 8;
+            int pack = Math.Max(1, PrefillLayersPerFrame);   // per-NPC slider (LLM base)
             int total = input_ids.Size(-1);
+            int step = 0;
             for (int start = 0; start < total; start += CHUNK)
             {
                 int len = Math.Min(CHUNK, total - start);
                 float[] part = new float[len];
                 for (int i = 0; i < len; i++) part[i] = input_ids[start + i];
                 var e = model.ForwardYielding(Tensor.Constant(part), useCache: true, lastPosOnly: true);
-                while (e.MoveNext()) yield return e.Current;
+                while (e.MoveNext())
+                    if (++step % pack == 0) yield return e.Current;
             }
         }
 
@@ -220,7 +228,11 @@ namespace DeepUnity
             yield return true;
         }
 
-        // enable_thinking is accepted for API parity but ignored (we run the non-thinking preset).
+        // Hybrid reasoning per the checkpoint's chat_template.jinja: with enable_thinking the
+        // generation prompt OPENS a "<think>\n" block (the model reasons, closes it with
+        // </think>, then answers). The opening tag lives in the PROMPT, so it is mirrored into
+        // the token stream — downstream <think> filters (NPC window/TTS) need the full pair.
+        // enable_thinking=false keeps the validated non-thinking prompt exactly as benchmarked.
         public override IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
             int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
             float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false)
@@ -229,6 +241,11 @@ namespace DeepUnity
 
             // ChatML turn: user message, then open the assistant turn for generation.
             string turn = $"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n";
+            if (enable_thinking)
+            {
+                turn += "<think>\n";
+                onTokenGenerated?.Invoke("<think>\n");   // mirror the prompt-opened block into the stream
+            }
             (Tensor ids, Tensor _) = tokenizer.Encode(turn, add_special_tokens: false, truncation: true, max_length: 4096);
 
             CurrentPhase = "decode";

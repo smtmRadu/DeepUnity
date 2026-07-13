@@ -93,6 +93,49 @@ namespace DeepUnity
 
             readonly System.Diagnostics.Stopwatch pumpWatch = new System.Diagnostics.Stopwatch();
 
+            // #29 arbiter thresholds (seconds of audio buffered in the ring) — see PumpPipeline.
+            const float LLM_DEFER_HEADROOM = 1.0f;   // above: cede every LLM frame entirely
+            const float LLM_DEFER_FLOOR = 0.5f;      // above: cede alternate LLM frames; below: never defer
+            const double GPU_WAIT_SPIN_MS = 2.0;     // readback spin window while the ring is comfortable
+
+            // #29: hardware-neutral tick sizing. PocketTTS.GpuMacsPerTick (the slice budget of one
+            // heavy pipeline tick) self-calibrates so a heavy tick costs ~TICK_COST_MIN..MAX ms
+            // over the scene's own baseline frame — on ANY GPU. Slow cards converge to finer
+            // slices, fast cards to coarser ones; external GPU load shrinks it (and it grows back).
+            const float TICK_COST_MIN_MS = 3f, TICK_COST_MAX_MS = 7f;
+            const long MACS_TICK_FLOOR = 200_000_000, MACS_TICK_CAP = 4_000_000_000;
+            float emaBaseMs = -1f, emaHeavyMs = -1f;   // EMAs of frame cost without/with a heavy tick
+            bool heavyTickLastFrame;                    // set by PumpPipeline when it took a FrameBreak
+
+            void CalibrateTickBudget()
+            {
+                float ms = Time.unscaledDeltaTime * 1000f;
+                if (ms <= 0f || ms > 250f) { heavyTickLastFrame = false; return; }   // hitches/loads: ignore
+                if (heavyTickLastFrame)
+                {
+                    heavyTickLastFrame = false;
+                    emaHeavyMs = emaHeavyMs < 0f ? ms : Mathf.Lerp(emaHeavyMs, ms, 0.1f);
+                    // THROUGHPUT GUARD: while the ring is behind, bigger slices = more audio per
+                    // frame (the tick RATE is capped) — grow fast and NEVER shrink. Smoothness is
+                    // a luxury of surplus; shrinking here starved the ring during LLM generation
+                    // (concurrent Qwen bursts inflate the measured tick cost) and the resulting
+                    // mid-clause underruns were audible artifacts on long replies.
+                    if (IsSpeaking && RingCount() < (int)(LLM_DEFER_FLOOR * Cfg.SAMPLE_RATE))
+                    {
+                        PocketTTS.GpuMacsPerTick = Math.Min(MACS_TICK_CAP, (long)(PocketTTS.GpuMacsPerTick * 1.1f));
+                        return;
+                    }
+                    if (emaBaseMs < 0f) return;
+                    float cost = emaHeavyMs - emaBaseMs;
+                    if (cost > TICK_COST_MAX_MS)
+                        PocketTTS.GpuMacsPerTick = Math.Max(MACS_TICK_FLOOR, (long)(PocketTTS.GpuMacsPerTick * 0.9f));
+                    else if (cost < TICK_COST_MIN_MS)
+                        PocketTTS.GpuMacsPerTick = Math.Min(MACS_TICK_CAP, (long)(PocketTTS.GpuMacsPerTick * 1.02f));
+                }
+                else if (IsSpeaking)   // baseline sampled only near the action (same scene load)
+                    emaBaseMs = emaBaseMs < 0f ? ms : Mathf.Lerp(emaBaseMs, ms, 0.1f);
+            }
+
             // ring buffer (audio thread reads, main thread writes)
             float[] ring;
             int ringWrite, ringRead, ringCount;
@@ -113,26 +156,30 @@ namespace DeepUnity
             void Awake() => source = GetComponent<AudioSource>();
             void Start() { if (loadOnStart) EnsureTts(); }
 
-            AudioClip _boundClip;   // the clip currently cloned into the shared engine (avoid re-clone)
+            // The clip actually bound into the SHARED engine right now. STATIC on purpose: the
+            // engine holds ONE voice at a time for all NPCs, so the skip-rebind cache must track
+            // the engine, not the component — a per-component cache made NPC A keep "already
+            // bound" after NPC B rebound the engine, and A spoke with B's cloned voice.
+            static AudioClip s_engineBoundClip;
 
             /// <summary>Assign this NPC's voice from a reference clip at runtime — cloned + disk-cached
             /// on first use, then loaded from cache. Overrides voiceName. Pass null to revert to baked.</summary>
-            public void SetClonedVoice(AudioClip clip) { clonedVoiceClip = clip; _boundClip = null; }
+            public void SetClonedVoice(AudioClip clip) { clonedVoiceClip = clip; }
 
             // Bind the right voice into the shared engine before a clause. Clone-clip takes priority
-            // (cheap: cache hit is a file load, and the shared engine caches the bound clip so a
-            // re-bind of the same clip is a no-op). Falls back to the baked voiceName otherwise.
+            // (cheap: cache hit is a file load, and s_engineBoundClip makes a same-clip re-bind a
+            // no-op). Falls back to the baked voiceName otherwise.
             void BindVoice()
             {
                 if (clonedVoiceClip != null)
                 {
-                    if (_boundClip == clonedVoiceClip) return;   // already bound this clip
-                    if (tts.CloneVoice(clonedVoiceClip)) _boundClip = clonedVoiceClip;
-                    else tts.SetVoice(voiceName);                 // encoder missing -> baked fallback
+                    if (s_engineBoundClip == clonedVoiceClip) return;   // engine already carries this clip
+                    if (tts.CloneVoice(clonedVoiceClip)) s_engineBoundClip = clonedVoiceClip;
+                    else { s_engineBoundClip = null; tts.SetVoice(voiceName); }   // encoder missing -> baked fallback
                 }
                 else
                 {
-                    _boundClip = null;
+                    s_engineBoundClip = null;
                     tts.SetVoice(voiceName);                     // cheap rebind; unknown names warn + keep current
                 }
             }
@@ -145,15 +192,26 @@ namespace DeepUnity
             }
 
             // ---- residency wrappers (mirror Kokoro/CosyVoice; PocketTTSWeights owns the pump) ----
+            // The ENGINE is shared but residency requests are per-NPC, so mirror LLMPool and
+            // refcount the holders: with intercalated prefetch zones, walking out of NPC A's zone
+            // used to defetch the weights out from under NPC B (whose zone-enter had already
+            // fired) — B's pump then waited on !IsReady forever and B never spoke again.
+            static readonly HashSet<PocketTTSVoice> holders = new HashSet<PocketTTSVoice>();
 
             /// <summary>Build the engine and start streaming weights at full speed (load-on-approach trigger).</summary>
-            public void PrefetchNow() { EnsureTts(); tts.BeginLoad(); }
+            public void PrefetchNow() { EnsureTts(); holders.Add(this); tts.BeginLoad(); }
 
             /// <summary>Load-on-approach spread over ~targetSeconds (budgeted per frame).</summary>
-            public void SlowPrefetchNow(float targetSeconds) { EnsureTts(); tts.SlowPrefetch(targetSeconds); }
+            public void SlowPrefetchNow(float targetSeconds) { EnsureTts(); holders.Add(this); tts.SlowPrefetch(targetSeconds); }
 
-            /// <summary>Unload the weights (budgeted); a later prefetch re-streams.</summary>
-            public void DefetchNow() => tts?.Defetch(slow: true);
+            /// <summary>Drop THIS voice's residency claim; the weights actually unload (budgeted)
+            /// only when the LAST holder lets go. A later prefetch re-streams.</summary>
+            public void DefetchNow()
+            {
+                holders.Remove(this);
+                holders.RemoveWhere(h => h == null);   // destroyed components must not pin the weights
+                if (holders.Count == 0) tts?.Defetch(slow: true);
+            }
 
             /// <summary>One tiny discarded synthesis once resident — compiles every kernel path so the
             /// first real clause has no shader-compile hitch. Call where the player isn't looking.</summary>
@@ -288,7 +346,33 @@ namespace DeepUnity
                 IsSpeaking = true;
                 EnsureStream();
 
+                // #29 cross-engine arbiter: while the LLM is actively decoding, a TTS heavy tick
+                // lands in the same frame's GPU queue (the 22-27 ms GEN+SPK+AUD band). TTS has
+                // throughput margin, the LLM doesn't — so cede LLM frames whenever the ring can
+                // afford it: fully above LLM_DEFER_HEADROOM seconds buffered, alternate frames
+                // above the LLM_DEFER_FLOOR. Below the floor (clause start / near-starvation)
+                // pump every frame — an occasional shared frame beats an audible gap.
+                if (FramePacing.LlmBusy)
+                {
+                    int headroom = RingCount();
+                    if (headroom >= (int)(LLM_DEFER_HEADROOM * Cfg.SAMPLE_RATE))
+                    { FramePacing.TtsDeferrals++; return; }
+                    if (headroom >= (int)(LLM_DEFER_FLOOR * Cfg.SAMPLE_RATE) && (Time.frameCount & 1) == 1)
+                    { FramePacing.TtsDeferrals++; return; }
+                }
+
                 pumpWatch.Restart();
+                // #29 it.3: pipeline stages now yield FINE ticks (≲900 MMAC ≈ 4-6 ms GPU each).
+                // Steady state takes ONE per frame + a short readback-spin window (smoothness &
+                // CPU thrift); with the ring near-dry (clause start / behind playback) take two
+                // and spin readbacks for the whole budget — ~10 ms of GPU and a busy-waiting CPU
+                // beat an audible gap. (it.3 lesson: a fixed 2 ms spin everywhere starved the
+                // ring on long replies and the resulting always-low-ring emergency bursts were
+                // WORSE spikes than the waste it saved.)
+                bool lowRing = RingCount() < (int)(LLM_DEFER_FLOOR * Cfg.SAMPLE_RATE);
+                int heavyTicks = 0;
+                int maxHeavyTicks = lowRing ? 2 : 1;
+                double waitSpinMs = lowRing ? gpuBudgetMs : GPU_WAIT_SPIN_MS;
                 while (pumpWatch.Elapsed.TotalMilliseconds < gpuBudgetMs)
                 {
                     if (streamJob == null && clauseQueue.Count > 0)
@@ -311,7 +395,23 @@ namespace DeepUnity
                             lock (ringLock) inflightMark.end = totalWritten;
                             inflightMark = null;
                         }
+                        // #29: end the frame — the next clause's start (embed gather + prefix build
+                        // + first prefill tick) must not chain onto this clause's final flush frame.
+                        break;
                     }
+                    // #29: FrameBreak = that tick just ISSUED a GPU-heavy slice (prefill chunk /
+                    // Mimi-decode slice). The budget clock only measures CPU issue time (~1 ms buys
+                    // ~15 ms of GPU), so re-entering freely would stack the whole burst into this
+                    // frame — cap heavy ticks per frame instead. Plain nulls (cheap AR bookkeeping)
+                    // keep packing under budget.
+                    else if (ReferenceEquals(streamJob.Current, PocketTTS.FrameBreak))
+                    { heavyTickLastFrame = true; if (++heavyTicks >= maxHeavyTicks) break; }
+                    // #29: GpuWait = a readback is in flight and nothing can be issued. Give it a
+                    // spin window to complete mid-frame (shallow queues often do), then cede the
+                    // frame. The window is the full budget while the ring is low (throughput
+                    // first), 2 ms once it's comfortable (CPU thrift).
+                    else if (ReferenceEquals(streamJob.Current, PocketTTS.GpuWait) &&
+                             pumpWatch.Elapsed.TotalMilliseconds > waitSpinMs) break;
                 }
             }
 
@@ -358,6 +458,7 @@ namespace DeepUnity
             void Update()
             {
                 if (source != null && source.pitch != pitch) source.pitch = pitch;
+                CalibrateTickBudget();   // evaluates LAST frame's cost before this frame's pump
                 PumpPipeline();
                 if (streamClip == null) return;
 
@@ -434,6 +535,7 @@ namespace DeepUnity
 
             void OnDestroy()
             {
+                holders.Remove(this);   // a destroyed voice must not pin the shared weights
                 if (streamClip != null) Destroy(streamClip);
             }
         }

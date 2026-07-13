@@ -182,6 +182,15 @@ namespace DeepUnity
             yield break;
         }
 
+        /// <summary>Prompt-prefill pacing: how many per-layer prefill slices are issued per FRAME
+        /// while forwarding a prompt (the user question / the system-prompt init). 1 = fully
+        /// spread — minimum GPU per frame, slowest first token (a ~30-token question ≈ 100
+        /// mostly-idle frames on an 8-token-chunk model); higher packs slices (6 ≈ a few decode
+        /// bursts of GPU per frame — invisible at 60 fps on the small NPC models, first token
+        /// ~6× sooner). Per-NPC (inspector slider) — assigned onto the shared pooled instance
+        /// per dialogue, like DiskKVCache.</summary>
+        public int PrefillLayersPerFrame = 6;
+
         /// <summary>Rolling decode speed of the most recent generation step (0 while idle).</summary>
         public float TokensPerSecond { get; protected set; }
 

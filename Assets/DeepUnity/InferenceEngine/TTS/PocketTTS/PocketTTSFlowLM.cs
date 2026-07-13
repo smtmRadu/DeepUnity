@@ -74,6 +74,35 @@ namespace DeepUnity
                 cs.Dispatch(k, 1, (T + 7) / 8, (outDim + 31) / 32);
             }
 
+            // #29: row-sliced Linear — splits T rows into ~PocketTTS.GpuMacsPerTick sub-dispatches
+            // (via the shader's elem_offset row offset) with a yield between them, so one fat
+            // prefill matmul never owns a whole frame's GPU. The MAC budget is runtime
+            // self-calibrated (no GPU-specific tuning). Re-applies every uniform per sub-dispatch
+            // (the shader object is shared with Mimi, which may dispatch between our yields) and
+            // resets elem_offset synchronously — it must never stay non-zero across a yield.
+            System.Collections.IEnumerator LinearRows(string name, ComputeBuffer x, ComputeBuffer y,
+                int T, int inDim, int outDim, bool bias, int act = 0)
+            {
+                long macs = (long)T * inDim * outDim;
+                int slices = (int)Math.Min(T, (macs + PocketTTS.GpuMacsPerTick - 1) / PocketTTS.GpuMacsPerTick);
+                int rows = (T + slices - 1) / slices;
+                for (int r0 = 0; r0 < T; r0 += rows)
+                {
+                    ComputeBuffer scales = w.Has(name + ".weight.scales") ? w.Get(name + ".weight.scales") : null;
+                    int k = scales != null ? kLinearQ8 : kLinear;
+                    cs.SetInt("seq_len", T); cs.SetInt("in_dim", inDim); cs.SetInt("out_dim", outDim);
+                    cs.SetInt("activation_type", act); cs.SetInt("has_bias", bias ? 1 : 0);
+                    cs.SetBuffer(k, "X", x); cs.SetBuffer(k, "W", w.Get(name + ".weight"));
+                    cs.SetBuffer(k, "W_bias", bias ? w.Get(name + ".bias") : w.Get(name + ".weight"));
+                    if (scales != null) cs.SetBuffer(k, "W_scales", scales);
+                    cs.SetBuffer(k, "Y", y);
+                    cs.SetInt("elem_offset", r0);
+                    cs.Dispatch(k, 1, (Math.Min(rows, T - r0) + 7) / 8, (outDim + 31) / 32);
+                    cs.SetInt("elem_offset", 0);
+                    if (r0 + rows < T) yield return null;
+                }
+            }
+
             void LayerNorm(ComputeBuffer gamma, ComputeBuffer beta, ComputeBuffer x, ComputeBuffer y, int T, int dim, float eps)
             {
                 cs.SetInt("seq_len", T); cs.SetInt("norm_dim", dim); cs.SetFloat("norm_eps", eps);
@@ -87,12 +116,16 @@ namespace DeepUnity
             void Copy(ComputeBuffer a, ComputeBuffer b, int n) { cs.SetInt("buffer_size", n); cs.SetBuffer(kCopy, "buf_a", a); cs.SetBuffer(kCopy, "buf_b", b); cs.Dispatch(kCopy, Div256(n), 1, 1); }
 
             // ================= P2: text embed lookup (CPU gather) =================
+            // #29: the table MUST be cached — ReadFloats re-reads the 8 MB file and fp16-decodes
+            // 4.1M values (~90 ms), and EmbedLookup runs at EVERY clause start. Uncached, this was
+            // the once-per-clause GEN+SPK spike in the talk-perf report.
+            float[] _embTable;
             public float[] EmbedLookup(int[] ids)
             {
-                float[] emb = w.ReadFloats("flow_lm/conditioner/embed.weight");   // [4001,1024] widened
+                _embTable ??= w.ReadFloats("flow_lm/conditioner/embed.weight");   // [4001,1024] widened
                 float[] outv = new float[ids.Length * Cfg.DIM];
                 for (int i = 0; i < ids.Length; i++)
-                    Array.Copy(emb, ids[i] * Cfg.DIM, outv, i * Cfg.DIM, Cfg.DIM);
+                    Array.Copy(_embTable, ids[i] * Cfg.DIM, outv, i * Cfg.DIM, Cfg.DIM);
                 return outv;
             }
 
@@ -215,11 +248,16 @@ namespace DeepUnity
                 Grow(ref attn, Lp * dim); Grow(ref ff, Lp * Cfg.TF_FFN); Grow(ref tmp, Lp * dim);
                 tfIn.SetData(promptSeq, 0, 0, Lp * dim);
                 float attScale = 1f / Mathf.Sqrt(hd);
+                // #29 it.3: 4 ticks per layer (QKV | attention | linear1 | linear2), each ≲800 MMAC —
+                // the old half-layer ticks (in_proj+attn ~0.8 G, linear1+linear2 ~1.5 G at Lp≈180)
+                // were the 33-40 ms prefill spikes when a clause start collided with LLM decode.
+                // LinearRows additionally splits any single matmul that outgrows the cap (long text).
                 for (int li = 0; li < Cfg.TF_LAYERS; li++)
                 {
                     string lp = $"flow_lm/transformer/layers/{li}";
                     LayerNorm(w.Get(lp + "/norm1.weight"), w.Get(lp + "/norm1.bias"), tfIn, tfNorm, Lp, dim, 1e-5f);
-                    Linear(lp + "/self_attn/in_proj", tfNorm, qkv, Lp, dim, 3 * dim, bias: false);
+                    var lr = LinearRows(lp + "/self_attn/in_proj", tfNorm, qkv, Lp, dim, 3 * dim, bias: false);
+                    while (lr.MoveNext()) yield return null;
                     Slice(qkv, q, Lp, 3 * dim, dim, 0);
                     Slice(qkv, k, Lp, 3 * dim, dim, dim);
                     Slice(qkv, v, Lp, 3 * dim, dim, 2 * dim);
@@ -227,6 +265,7 @@ namespace DeepUnity
                     // store this layer's K/V rows [0..Lp-1] into the caches (CopyBuffer whole block)
                     Copy(kCache[li], k, Lp * dim);
                     Copy(vCache[li], v, Lp * dim);
+                    yield return null;   // QKV tick | attention tick
                     cs.SetInt("seq_len", Lp); cs.SetInt("num_heads", heads); cs.SetInt("head_dim", hd);
                     cs.SetInt("rope_on", 1); cs.SetFloat("scale", attScale); cs.SetInt("attn_context", 0);
                     cs.SetBuffer(kAttn, "Q", q); cs.SetBuffer(kAttn, "K", k); cs.SetBuffer(kAttn, "V", v);
@@ -234,11 +273,15 @@ namespace DeepUnity
                     cs.Dispatch(kAttn, Lp, heads, 1);
                     Linear(lp + "/self_attn/out_proj", attn, tmp, Lp, dim, dim, bias: false);
                     AddR(tfIn, tmp, Lp * dim);
+                    yield return null;   // attention tick | ffn ticks
                     LayerNorm(w.Get(lp + "/norm2.weight"), w.Get(lp + "/norm2.bias"), tfIn, tfNorm, Lp, dim, 1e-5f);
-                    Linear(lp + "/linear1", tfNorm, ff, Lp, dim, Cfg.TF_FFN, bias: false, act: 2);
-                    Linear(lp + "/linear2", ff, tmp, Lp, Cfg.TF_FFN, dim, bias: false);
+                    lr = LinearRows(lp + "/linear1", tfNorm, ff, Lp, dim, Cfg.TF_FFN, bias: false, act: 2);
+                    while (lr.MoveNext()) yield return null;
+                    yield return null;   // linear1 tick | linear2 tick
+                    lr = LinearRows(lp + "/linear2", ff, tmp, Lp, Cfg.TF_FFN, dim, bias: false);
+                    while (lr.MoveNext()) yield return null;
                     AddR(tfIn, tmp, Lp * dim);
-                    yield return null;   // ~1/6 of the prefill per pump tick (streaming path)
+                    yield return null;   // layer done
                 }
                 kvLen = Lp;
             }
@@ -294,22 +337,26 @@ namespace DeepUnity
             {
                 DecodeStepKVIssue(tokenEmb);
                 var rb = ReadbackYielding(d1Out, cOut, Cfg.DIM, async);
-                while (rb.MoveNext()) yield return null;
+                while (rb.MoveNext()) yield return rb.Current;   // forwards GpuWait to the pump
             }
 
-            // Async-with-fallback GPU readback of `count` floats into dst. Spin cap: the voice pump
-            // re-MoveNexts within a frame (readbacks only complete at frame boundaries), so the cap
-            // is a pathological-fallback hard-wait, not the normal path.
+            // Async-with-fallback GPU readback of `count` floats into dst. #29: the fallback cap
+            // counts FRAMES, not MoveNexts — the voice pump re-enters tens of thousands of times
+            // per frame inside its budget loop, so a MoveNext-counted cap tripped after ~2 frames
+            // of waiting and the WaitForCompletion stalled the main thread on the WHOLE GPU queue
+            // (the 85-116 ms outliers in the talk-perf report). Frame-counted, the hard-wait is
+            // truly pathological (~10 s of no readback), never a routine slow frame.
             System.Collections.IEnumerator ReadbackYielding(ComputeBuffer buf, float[] dst, int count, bool async)
             {
                 if (async && SystemInfo.supportsAsyncGPUReadback)
                 {
                     var req = UnityEngine.Rendering.AsyncGPUReadback.Request(buf, count * 4, 0);
-                    int spins = 0;
+                    int startFrame = UnityEngine.Time.frameCount;
                     while (!req.done)
                     {
-                        if (++spins > 100000) { req.WaitForCompletion(); break; }
-                        yield return null;
+                        if (UnityEngine.Time.frameCount - startFrame > 600)
+                        { PocketTTS.LastHeavyTick = "readback_hardwait"; req.WaitForCompletion(); break; }
+                        yield return PocketTTS.GpuWait;
                     }
                     if (!req.hasError)
                     {
@@ -339,6 +386,8 @@ namespace DeepUnity
             // Split into Issue (all dispatches -> persistent fOut) + sync/async readback wrappers
             // (bug C: the sync 128-byte GetData blocked the main thread on the whole GPU queue).
             ComputeBuffer fOut;   // velocity [32] (persistent; released in Dispose)
+            ComputeBuffer fNoiseIn, fCondIn;   // #29: persistent FlowHead input uploads (no per-frame alloc)
+            bool _fhConstInit;                 // ones/zeros fp16 constants uploaded once
 
             /// <summary>Synchronous form (probes/offline — P3/P4 parity + deterministic timing).</summary>
             public float[] FlowHead(float[] c, float[] noise, float s, float t)
@@ -356,7 +405,7 @@ namespace DeepUnity
             {
                 FlowHeadIssue(c, noise, s, t);
                 var rb = ReadbackYielding(fOut, velOut, Cfg.LDIM, async);
-                while (rb.MoveNext()) yield return null;
+                while (rb.MoveNext()) yield return rb.Current;   // forwards GpuWait to the pump
             }
 
             void FlowHeadIssue(float[] c, float[] noise, float s, float t)
@@ -366,15 +415,21 @@ namespace DeepUnity
                 Grow(ref ftmp, D); Grow(ref ftime0, D); Grow(ref ftime1, D);
                 // norm_final is no-affine: emulate via LayerNormT with gamma=1/beta=0. ln_gamma/ln_beta
                 // are read with readH (fp16, 2-per-uint), so these MUST be fp16-PACKED, not float32.
+                // #29: constants — uploaded ONCE (this ran per AR frame: 2 allocs + 2 SetDatas).
                 int packed = (D + 1) / 2;
-                Grow(ref onesB, packed); Grow(ref zerosB, packed);
-                uint[] onesPk = new uint[packed]; for (int i = 0; i < packed; i++) onesPk[i] = 0x3C003C00u; // two fp16 1.0
-                onesB.SetData(onesPk); zerosB.SetData(new uint[packed]);   // zeros = fp16 0.0 pairs
+                if (!_fhConstInit)
+                {
+                    Grow(ref onesB, packed); Grow(ref zerosB, packed);
+                    uint[] onesPk = new uint[packed]; for (int i = 0; i < packed; i++) onesPk[i] = 0x3C003C00u; // two fp16 1.0
+                    onesB.SetData(onesPk); zerosB.SetData(new uint[packed]);   // zeros = fp16 0.0 pairs
+                    _fhConstInit = true;
+                }
 
-                // x = input_proj(noise)  [32->512] (bias)
-                var nb = new ComputeBuffer(Cfg.LDIM, 4, ComputeBufferType.Structured); nb.SetData(noise);
-                Linear("flow_lm/flow_net/input_proj", nb, fx, 1, Cfg.LDIM, D, bias: true);
-                nb.Release();
+                // x = input_proj(noise)  [32->512] (bias). #29: persistent input buffers — the old
+                // per-call new ComputeBuffer + Release churned the D3D11 allocator every AR frame
+                // (the ar_flowhead 28-32 ms spikes in the talk-perf report).
+                Grow(ref fNoiseIn, Cfg.LDIM); fNoiseIn.SetData(noise);
+                Linear("flow_lm/flow_net/input_proj", fNoiseIn, fx, 1, Cfg.LDIM, D, bias: true);
                 Tap("flow_inproj", fx, D);
 
                 // t_combined = (TimeEmbed(s,0) + TimeEmbed(t,1)) / 2
@@ -386,9 +441,8 @@ namespace DeepUnity
                 // c_emb = cond_embed(c) [1024->512]; y = t_combined/2 + c_emb  -> fold /2: y = (t0+t1)*0.5 + c_emb
                 cs.SetInt("buffer_size", D); cs.SetFloat("scale_val", 0.5f);
                 cs.SetBuffer(cs.FindKernel("ScaleBuf"), "inout_buf", fy); cs.Dispatch(cs.FindKernel("ScaleBuf"), Div256(D), 1, 1);
-                var cb = new ComputeBuffer(Cfg.DIM, 4, ComputeBufferType.Structured); cb.SetData(c);
-                Linear("flow_lm/flow_net/cond_embed", cb, ftmp, 1, Cfg.DIM, D, bias: true);
-                cb.Release();
+                Grow(ref fCondIn, Cfg.DIM); fCondIn.SetData(c);
+                Linear("flow_lm/flow_net/cond_embed", fCondIn, ftmp, 1, Cfg.DIM, D, bias: true);
                 AddR(fy, ftmp, D);   // y = 0.5*(t0+t1) + c_emb
                 Tap("flow_cond_vec", fy, D);
 
@@ -470,8 +524,9 @@ namespace DeepUnity
                 }
                 return outv;
             }
-            // input_linear(bos_emb) — the decode BOS latent embedding
-            public float[] BosLatentEmbedding() => InputLinear(w.ReadFloats("flow_lm.bos_emb"));   // bos_emb [32] (dot leaf)
+            // input_linear(bos_emb) — the decode BOS latent embedding (cached: runs per clause; callers read-only)
+            float[] _bosTok;
+            public float[] BosLatentEmbedding() => _bosTok ??= InputLinear(w.ReadFloats("flow_lm.bos_emb"));   // bos_emb [32] (dot leaf)
 
             // out_eos: Linear(1024->1) + bias on the post-out_norm condition c. EOS when > threshold.
             float[] _eosW; float _eosB; bool _eosLoaded;
@@ -488,7 +543,7 @@ namespace DeepUnity
                 tfIn?.Release(); tfNorm?.Release(); qkv?.Release(); q?.Release(); k?.Release(); v?.Release();
                 attn?.Release(); ff?.Release(); tmp?.Release(); onesB?.Release(); zerosB?.Release();
                 fx?.Release(); fy?.Release(); fh?.Release(); fmod?.Release(); ftmp?.Release(); ftime0?.Release(); ftime1?.Release();
-                fOut?.Release();
+                fOut?.Release(); fNoiseIn?.Release(); fCondIn?.Release();
                 if (kCache != null) foreach (var b in kCache) b?.Release();
                 if (vCache != null) foreach (var b in vCache) b?.Release();
                 d1In?.Release(); d1Norm?.Release(); d1Qkv?.Release(); d1Q?.Release(); d1K?.Release(); d1V?.Release();

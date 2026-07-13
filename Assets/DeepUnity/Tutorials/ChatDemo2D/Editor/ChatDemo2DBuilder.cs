@@ -651,9 +651,9 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
                 // text-only 2D demo (user pick): no TTS on either villager — the talk bob
                 // follows the token stream; the Kokoro voice fields stay baked for easy re-enable
                 NPCInteractor2D.ConversationMode.LlmOnly, "am_onyx", 0.95f,
-                // history-mode A/B spread: Hobb forgets you between chats (fresh
-                // InitializeChat every opening — the pre-history-modes behavior)
-                NPCInteractor2D.HistoryMode.ResetEveryTime);
+                // history-mode A/B spread: Hobb forgets you the moment the chat closes
+                NPCInteractor2D.HistoryMode.ResetEveryTime,
+                "MiniCPM5-1B", think: false);
 
             var marla = BuildNpc(font, white, "GrannyMarla", "char_granny", T(30, 19), "Granny Marla",
                 "You are Granny Marla, the warm, talkative grandmother who runs the little red-roofed general store on " +
@@ -669,9 +669,10 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
                 "The shopkeeper looks up from her knitting with a smile...",
                 NPCInteractor2D.ConversationMode.LlmOnly, "granny", 0.92f,
                 // history-mode A/B spread: Granny REMEMBERS across dialogues (live KV while
-                // resident, disk-restore/re-prefill after release). Residency is the zone's job —
-                // the old KeepAliveInBackground mode was removed (ResumeFromCompact reserved).
-                NPCInteractor2D.HistoryMode.ContinueWhereLeftOff);
+                // resident, transcript re-prefill after release — MiniCPM has no disk-KV restore
+                // yet). Residency is the zone's job. She is also the THINKING arm of the A/B.
+                NPCInteractor2D.HistoryMode.ContinueWhereLeftOff,
+                "MiniCPM5-1B", think: true);
 
             return new[] { hobb, marla };
         }
@@ -680,7 +681,8 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
                                         Vector2 pos, string displayName, string systemPrompt,
                                         string approach, NPCInteractor2D.ConversationMode mode,
                                         string voice, float pitch,
-                                        NPCInteractor2D.HistoryMode history)
+                                        NPCInteractor2D.HistoryMode history,
+                                        string model, bool think)
         {
             var go = new GameObject(goName);
             go.transform.position = pos;
@@ -708,9 +710,11 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             SetString(npc, "npc_name", displayName);
             SetString(npc, "system_prompt", systemPrompt);
             SetString(npc, "approach_text", approach);
-            // Gemma3-270M is the snappy 2D default — set explicitly since the shared NPCChatBase
-            // field defaults to Qwen (the 3D pick). LLMRegistry id string.
-            SetString(npc, "model", "Gemma3-270M");
+            // Per-villager LLM (user pick): MiniCPM5-1B on both, thinking as a live A/B — Hobb
+            // answers directly, Marla REASONS in <think> first (never shown/voiced; the window
+            // pulses 'Thinking…' until her actual answer starts). LLMRegistry id string.
+            SetString(npc, "model", model);
+            SetBool(npc, "allowThinking", think);
             SetEnum(npc, "historyMode", (int)history);
             // modern voice wiring: Kokoro-only, mode as enum, voicepack by manifest name
             // (field unified with the 3D demo as "ttsVoice" when the NPCs moved onto NPCChatBase)
