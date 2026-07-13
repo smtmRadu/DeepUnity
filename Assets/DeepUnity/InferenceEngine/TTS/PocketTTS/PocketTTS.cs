@@ -357,6 +357,19 @@ namespace DeepUnity
             public static float[] ClipToMono(AudioClip clip)
             {
                 if (clip == null) return null;
+                // With 'Preload Audio Data' off (the importer default) a clip that hasn't played
+                // yet isn't loaded — clip.samples reads 0 and GetData returns nothing, which made
+                // the inspector report a "0.0s" reference (the Gowry regression). Force the load
+                // and wait briefly; clips are seconds long, and a failed load exits immediately.
+                if (clip.loadState != AudioDataLoadState.Loaded || clip.samples == 0)
+                {
+                    clip.LoadAudioData();
+                    int t0 = System.Environment.TickCount;
+                    while (clip.loadState == AudioDataLoadState.Loading &&
+                           System.Environment.TickCount - t0 < 3000)
+                        System.Threading.Thread.Sleep(5);
+                }
+                if (clip.loadState != AudioDataLoadState.Loaded || clip.samples == 0) return null;
                 var data = new float[clip.samples * clip.channels];
                 if (!clip.GetData(data, 0)) return null;
                 if (clip.channels == 1) return data;

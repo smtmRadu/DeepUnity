@@ -140,14 +140,17 @@ namespace DeepUnity
             var clip = prop.objectReferenceValue as AudioClip;
             if (clip == null || serializedObject.isEditingMultipleObjects) { _keyClip = null; _cloneKey = null; return; }
 
-            if (_keyClip != clip)   // content hash once per clip change, not per repaint
+            // content hash once per clip change, not per repaint — but NEVER cache a failure or a
+            // zero-length read (clip data still loading when first drawn): retry until it heals,
+            // otherwise a just-imported clip shows "0.0s" forever.
+            if (_keyClip != clip || _cloneKey == null || _crop.totalSeconds <= 0f)
             {
                 _keyClip = clip;
                 _cloneKey = PocketTTSModeling.PocketTTS.CloneKey(clip, out _crop);
             }
-            if (_cloneKey == null)
+            if (_cloneKey == null || _crop.totalSeconds <= 0f)
             {
-                EditorGUILayout.HelpBox("Clip sample data isn't readable — set its Load Type to 'Decompress On Load'.", MessageType.Warning);
+                EditorGUILayout.HelpBox("Clip sample data isn't readable (yet) — if this persists, set its Load Type to 'Decompress On Load'.", MessageType.Warning);
                 return;
             }
 
