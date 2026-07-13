@@ -1,6 +1,6 @@
 # ⚠ Copyrighted reference audio — personal / academic use only
 
-The voice clips in this folder (`Ansbach_4-15s.mp3`, `FingerReaderEnia_0-15s.mp3`) are short
+The voice clips in this folder (`Ansbach_4-15s.mp3`, `FingerReaderEnia_0-15s.mp3`, `Gowry_1-11s.wav`) are short
 excerpts of FromSoftware / Bandai Namco's **Elden Ring** voice performances, used strictly as
 voice-cloning REFERENCE material for a personal, non-commercial faculty demo of the DeepUnity
 InferenceEngine. The same applies to the gitignored music (`limgrave_theme.ogg`,

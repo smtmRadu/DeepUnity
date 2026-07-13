@@ -1702,13 +1702,13 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             SetEnum(npc, "conversationMode", (int)NPCInteractor3D.ConversationMode.LlmPlusTts);
             // Velmire now speaks through pocket-tts (Kyutai 100M AR, RTF ~0.15 — the DEFAULT NPC
             // TTS): real-time DURING generation, correct name pronunciation, voice cloning.
-            // His voice is CLONED from the Ansbach reference clip (precomputed into the shared
+            // His voice is CLONED from the Sage Gowry reference clip (precomputed into the shared
             // Resources/Cache by the inspector button / bake-all menu — runtime is a pure load);
             // "jean" stays as the baked fallback if the clip or its cache ever goes missing.
             SetEnum(npc, "ttsModel", (int)NPCInteractor3D.TtsModel.PocketTTS);
             SetString(npc, "ttsVoice", "jean");
             SetObject(npc, "clonedVoiceClip", AssetDatabase.LoadAssetAtPath<AudioClip>(
-                "Assets/DeepUnity/Tutorials/ChatDemo3D/Voices/Ansbach_4-15s.mp3"));
+                "Assets/DeepUnity/Tutorials/ChatDemo3D/Voices/Gowry_1-11s.wav"));
             SetFloat(npc, "voicePitch", 1.0f);
             // residency A/B test: the big transparent-green sphere slow-prefetches Qwen+Kokoro
             // on entry, HOLDS both on the GPU while the player is inside, and unloads both on

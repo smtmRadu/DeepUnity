@@ -49997,10 +49997,10 @@ MonoBehaviour:
   presencePenalty: -1
   repetitionPenalty: -1
   ttsModel: 3
+  ttsQuantization: 1
   voicePitch: 1
   ttsVoice: jean
   clonedVoiceClip: {fileID: 8300000, guid: 5a7c4216d5884c145920de07104012eb, type: 3}
-  ttsQuantization: 1
   usePrefetchZone: 1
   prefetchRadius: 10
   slowPrefetchSeconds: 3
@@ -77527,7 +77527,7 @@ MonoBehaviour:
     at all times. Keep your replies to one to three short sentences."
   approach_text: The pale figure regards you in silence...
   conversationMode: 1
-  historyMode: 1
+  historyMode: 0
   cacheKVCache: 1
   compactAfterTokens: 1536
   model: Qwen3.5-0.8B
@@ -77542,10 +77542,10 @@ MonoBehaviour:
   presencePenalty: -1
   repetitionPenalty: -1
   ttsModel: 3
+  ttsQuantization: 1
   voicePitch: 1
   ttsVoice: jean
-  clonedVoiceClip: {fileID: 8300000, guid: 313fbe1f327ba8c46949081253bc1175, type: 3}
-  ttsQuantization: 1
+  clonedVoiceClip: {fileID: 8300000, guid: ec5db90cdb52a0341aa1fb3f7a40e087, type: 3}
   usePrefetchZone: 1
   prefetchRadius: 10
   slowPrefetchSeconds: 3
