@@ -36,7 +36,7 @@ namespace DeepUnity
             if (_instance != null) return;
             var go = new GameObject("[DeepUnityDispatcher]");
             go.hideFlags = HideFlags.HideAndDontSave;
-            DontDestroyOnLoad(go);
+            if (Application.isPlaying) DontDestroyOnLoad(go);   // edit-mode probes: illegal outside play mode
             _instance = go.AddComponent<DeepUnityDispatcher>();
         }
 

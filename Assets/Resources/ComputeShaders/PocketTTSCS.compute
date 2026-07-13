@@ -20,11 +20,14 @@
 #pragma kernel LinearBias
 #pragma kernel LinearBiasQ8
 #pragma kernel Conv1D
+#pragma kernel Conv1DTiled
 #pragma kernel ConvTranspose1D
+#pragma kernel ConvTranspose1DTiled
 #pragma kernel ConvTranspose1DGrouped
 #pragma kernel LayerNormT
 #pragma kernel ApplyRoPE
 #pragma kernel CausalAttention
+#pragma kernel CausalAttentionLegacy
 #pragma kernel CausalAttentionKV
 #pragma kernel AppendKV
 #pragma kernel Modulate
@@ -232,6 +235,65 @@ void Conv1D(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
     Y[idx] = apply_act(sum);
 }
 
+// ================= Conv1DTiled (#30 decoder optimization) =================
+// One threadgroup = CT_TB consecutive output time-steps x ALL output channels. The input window
+// (rows x in_dim floats) is staged in groupshared ONCE and reused by every output channel — the
+// legacy Conv1D re-read it from global per output channel (512x redundant traffic at SEANet
+// conv0, which alone was 43% of Mimi decode on a GTX 1650). Each thread walks output channels in
+// steps of CT_THREADS and accumulates CT_TB outputs per channel, so every weight read is reused
+// CT_TB times. Accumulation order (bias first, then k-outer / ic-inner ascending) matches Conv1D
+// EXACTLY -> bit-identical output (out-of-range taps add +-0.0 instead of being skipped, which
+// cannot change any finite sum). C# routes here iff rows*in_dim <= CT_SHFLOATS; elem_offset is
+// the FIRST TILE index (#29 slicing operates on TILES for this kernel, not elements).
+#define CT_TB 8
+#define CT_THREADS 128
+#define CT_SHFLOATS 7168      // 28 KB: fits conv0's worst window (14 rows x 512 ch) exactly
+groupshared float ct_x[CT_SHFLOATS];
+
+[numthreads(CT_THREADS,1,1)]
+void Conv1DTiled(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint tile = elem_offset + gid.y * MAX_GX + gid.x;
+    uint t0 = tile * CT_TB;
+    if (t0 >= seq_len) return;                        // group-uniform: safe before the barrier
+    int inStart = (int)(t0 * conv_stride) - pad_left;
+    uint rows = (CT_TB - 1u) * conv_stride + (conv_kernel - 1u) * conv_dilation + 1u;
+    uint stageTotal = rows * in_dim;
+    for (uint li = tid.x; li < stageTotal; li += CT_THREADS)
+    {
+        int r = inStart + (int)(li / in_dim);
+        uint cc = li % in_dim;
+        float v = 0.0;
+        if (r >= 0 && r < (int)in_len) v = X[(uint)r * in_dim + cc];
+        else if (r < 0 && pad_replicate != 0) v = X[cc];   // replicate x[0] (Mimi downsample mode)
+        ct_x[li] = v;
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    for (uint oc = tid.x; oc < out_dim; oc += CT_THREADS)
+    {
+        float bv = has_bias != 0 ? readH(W_bias, oc) : 0.0;
+        float acc[CT_TB];
+        [unroll] for (uint q0 = 0; q0 < CT_TB; q0++) acc[q0] = bv;
+        uint w_base = oc * in_dim * conv_kernel;
+        for (uint k = 0; k < conv_kernel; k++)
+        {
+            uint row0 = k * conv_dilation;            // shared row of output q = q*stride + k*dil
+            for (uint ic = 0; ic < in_dim; ic++)
+            {
+                float wv = readH(W, w_base + ic * conv_kernel + k);
+                [unroll] for (uint q1 = 0; q1 < CT_TB; q1++)
+                    acc[q1] += ct_x[(row0 + q1 * conv_stride) * in_dim + ic] * wv;
+            }
+        }
+        [unroll] for (uint q2 = 0; q2 < CT_TB; q2++)
+        {
+            uint t = t0 + q2;
+            if (t < seq_len) Y[t * out_dim + oc] = apply_act(acc[q2]);
+        }
+    }
+}
+
 // ================= ConvTranspose1D (groups=1, [T,C]) =================
 // Weights flat (torch [in,out,k]): ic*(out_dim*K) + oc*K + k
 [numthreads(256,1,1)]
@@ -253,6 +315,64 @@ void ConvTranspose1D(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
             sum += X[x_base + ic] * readH(W, (ic * out_dim + oc) * conv_kernel + k);
     }
     Y[idx] = sum;
+}
+
+// ================= ConvTranspose1DTiled (#30, groups=1, [T,C]) =================
+// Same tiling scheme as Conv1DTiled for the SEANet upsample stages (k12s6 / k10s5 / k8s4). The
+// valid taps of a transposed conv are sparse in k (only k with (t+pad-k) % stride == 0), so each
+// k precomputes a per-output-row mask; skipped taps contribute NOTHING (mask, not +0) — matching
+// ConvTranspose1D's `continue` semantics bit-for-bit, same k-outer/ic-inner order. elem_offset =
+// first tile index. C# routes here iff groups==1 and the staged rows fit CTR_SHFLOATS.
+#define CTR_SHFLOATS 4096     // 16 KB: worst decode case k12 s6 stages ~5 rows x 512 ch
+groupshared float ctr_x[CTR_SHFLOATS];
+
+[numthreads(CT_THREADS,1,1)]
+void ConvTranspose1DTiled(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint tile = elem_offset + gid.y * MAX_GX + gid.x;
+    uint t0 = tile * CT_TB;
+    if (t0 >= seq_len) return;                        // group-uniform
+    uint tMax = min(t0 + CT_TB - 1u, seq_len - 1u);
+    int lo = (int)t0 + pad_left - (int)(conv_kernel - 1u);
+    int tiMin = lo > 0 ? (lo + (int)conv_stride - 1) / (int)conv_stride : 0;
+    int tiMax = min((int)in_len - 1, ((int)tMax + pad_left) / (int)conv_stride);
+    uint rows = (uint)max(0, tiMax - tiMin + 1);
+    uint stageTotal = rows * in_dim;
+    for (uint li = tid.x; li < stageTotal; li += CT_THREADS)
+        ctr_x[li] = X[(uint)(tiMin + (int)(li / in_dim)) * in_dim + (li % in_dim)];
+    GroupMemoryBarrierWithGroupSync();
+
+    for (uint oc = tid.x; oc < out_dim; oc += CT_THREADS)
+    {
+        float bv = has_bias != 0 ? readH(W_bias, oc) : 0.0;
+        float acc[CT_TB];
+        [unroll] for (uint q0 = 0; q0 < CT_TB; q0++) acc[q0] = bv;
+        for (uint k = 0; k < conv_kernel; k++)
+        {
+            int rowq[CT_TB];                          // shared row per output, -1 = no tap at this k
+            bool hasTap = false;
+            [unroll] for (uint q1 = 0; q1 < CT_TB; q1++)
+            {
+                int num = (int)(t0 + q1) + pad_left - (int)k;
+                int ti = num / (int)conv_stride;
+                bool ok = num >= 0 && ((uint)num % conv_stride) == 0u && ti <= tiMax && ti >= tiMin;
+                rowq[q1] = ok ? ti - tiMin : -1;
+                hasTap = hasTap || ok;
+            }
+            if (!hasTap) continue;
+            for (uint ic = 0; ic < in_dim; ic++)
+            {
+                float wv = readH(W, (ic * out_dim + oc) * conv_kernel + k);
+                [unroll] for (uint q2 = 0; q2 < CT_TB; q2++)
+                    if (rowq[q2] >= 0) acc[q2] += ctr_x[(uint)rowq[q2] * in_dim + ic] * wv;
+            }
+        }
+        [unroll] for (uint q3 = 0; q3 < CT_TB; q3++)
+        {
+            uint t = t0 + q3;
+            if (t < seq_len) Y[t * out_dim + oc] = acc[q3];
+        }
+    }
 }
 
 // ================= ConvTranspose1DGrouped (grouped/depthwise, [T,C]) =================
@@ -288,10 +408,11 @@ void ConvTranspose1DGrouped(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID
 }
 
 // ================= LayerNormT (per-row LayerNorm + affine) =================
+// elem_offset = first ROW (#30 tail-restricted decode); 0 on every legacy dispatch.
 [numthreads(256,1,1)]
 void LayerNormT(uint3 id : SV_DispatchThreadID)
 {
-    uint pos = id.x;
+    uint pos = id.x + elem_offset;
     if (pos >= seq_len) return;
     uint base_idx = pos * norm_dim;
     float mean = 0.0;
@@ -309,13 +430,15 @@ void LayerNormT(uint3 id : SV_DispatchThreadID)
 [numthreads(256,1,1)]
 void ApplyRoPE(uint3 id : SV_DispatchThreadID)
 {
-    // one thread per (t,h, pair) — total seq_len*num_heads*(head_dim/2)
+    // one thread per (t,h, pair) — total seq_len*num_heads*(head_dim/2).
+    // elem_offset = first ELEMENT (#30 tail-restricted decode); 0 on every legacy dispatch.
     uint hd2 = head_dim / 2u;
     uint total = seq_len * num_heads * hd2;
-    if (id.x >= total) return;
-    uint pair = id.x % hd2;
-    uint hh = (id.x / hd2) % num_heads;
-    uint t = id.x / (hd2 * num_heads);
+    uint gi = id.x + elem_offset;
+    if (gi >= total) return;
+    uint pair = gi % hd2;
+    uint hh = (gi / hd2) % num_heads;
+    uint t = gi / (hd2 * num_heads);
     float posf = (float)(pos_offset + t);
     float freq = pow(rope_theta, -2.0 * (float)pair / (float)head_dim);
     float ang = posf * freq;
@@ -334,7 +457,7 @@ groupshared float ca_red[CA_THREADS];
 [numthreads(CA_THREADS,1,1)]
 void CausalAttention(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
 {
-    uint qi = gid.x;                 // query position
+    uint qi = gid.x + elem_offset;   // query position (elem_offset = first QUERY ROW, #30; 0 legacy)
     uint h  = gid.y;                 // head
     uint lane = tid.x;
     if (qi >= seq_len) return;
@@ -372,7 +495,76 @@ void CausalAttention(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
     for (uint s2 = CA_THREADS / 2; s2 > 0; s2 >>= 1) { if (lane < s2) ca_red[lane] += ca_red[lane + s2]; GroupMemoryBarrierWithGroupSync(); }
     float denom = max(ca_red[0], 1e-20); GroupMemoryBarrierWithGroupSync();
 
-    // pass 3: weighted sum of V — each lane owns a slice of head_dim
+    // pass 3 (#30): keys in tiles of CA_THREADS — each lane computes ONE key's softmax weight
+    // into shared, then every lane accumulates its own output dim over the whole tile. The legacy
+    // pass recomputed every q.k dot in all 64 lanes (64x redundant — attention was 12% of Mimi
+    // decode on a GTX 1650). Same j-ascending summation order and identical exp/denom math ->
+    // bit-identical output. Requires head_dim <= CA_THREADS (both pocket transformers use 64).
+    float acc3 = 0.0;                                 // this lane's output dim d = lane
+    for (uint jt = jmin; jt <= qi; jt += CA_THREADS)
+    {
+        uint j3 = jt + lane;
+        float wgt = 0.0;
+        if (j3 <= qi)
+        {
+            uint kb3 = (j3 * num_heads + h) * head_dim;
+            float dot3 = 0.0;
+            for (uint dd = 0; dd < head_dim; dd++) dot3 += ca_q[dd] * K[kb3 + dd];
+            wgt = exp(dot3 * scale - mmax) / denom;
+        }
+        ca_red[lane] = wgt;
+        GroupMemoryBarrierWithGroupSync();
+        if (lane < head_dim)
+        {
+            uint cnt = min(qi - jt + 1u, (uint)CA_THREADS);
+            for (uint jj = 0; jj < cnt; jj++)
+                acc3 += ca_red[jj] * V[((jt + jj) * num_heads + h) * head_dim + lane];
+        }
+        GroupMemoryBarrierWithGroupSync();            // ca_red is rewritten next tile
+    }
+    if (lane < head_dim) AttendedValues[qbase + lane] = acc3;
+}
+
+// ================= CausalAttentionLegacy (pre-#30 pass 3; kept ONLY for the kernel parity
+// probe — PocketTTSMimi.ForceLegacyKernels routes here so tiled-vs-legacy can be compared
+// wav-to-wav on any machine, no reference dumps needed) =================
+[numthreads(CA_THREADS,1,1)]
+void CausalAttentionLegacy(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint qi = gid.x;
+    uint h  = gid.y;
+    uint lane = tid.x;
+    if (qi >= seq_len) return;
+    uint qbase = (qi * num_heads + h) * head_dim;
+    uint jmin = (attn_context > 0u && qi + 1u > attn_context) ? (qi + 1u - attn_context) : 0u;
+    for (uint d0 = lane; d0 < head_dim; d0 += CA_THREADS) ca_q[d0] = Q[qbase + d0];
+    GroupMemoryBarrierWithGroupSync();
+
+    float m = -1e30;
+    for (uint j = jmin + lane; j <= qi; j += CA_THREADS)
+    {
+        uint kbase = (j * num_heads + h) * head_dim;
+        float dot = 0.0;
+        for (uint d1 = 0; d1 < head_dim; d1++) dot += ca_q[d1] * K[kbase + d1];
+        dot *= scale;
+        m = max(m, dot);
+    }
+    ca_red[lane] = m; GroupMemoryBarrierWithGroupSync();
+    for (uint s = CA_THREADS / 2; s > 0; s >>= 1) { if (lane < s) ca_red[lane] = max(ca_red[lane], ca_red[lane + s]); GroupMemoryBarrierWithGroupSync(); }
+    float mmax = ca_red[0]; GroupMemoryBarrierWithGroupSync();
+
+    float sumexp = 0.0;
+    for (uint j2 = jmin + lane; j2 <= qi; j2 += CA_THREADS)
+    {
+        uint kbase = (j2 * num_heads + h) * head_dim;
+        float dot = 0.0;
+        for (uint d2 = 0; d2 < head_dim; d2++) dot += ca_q[d2] * K[kbase + d2];
+        sumexp += exp(dot * scale - mmax);
+    }
+    ca_red[lane] = sumexp; GroupMemoryBarrierWithGroupSync();
+    for (uint s2 = CA_THREADS / 2; s2 > 0; s2 >>= 1) { if (lane < s2) ca_red[lane] += ca_red[lane + s2]; GroupMemoryBarrierWithGroupSync(); }
+    float denom = max(ca_red[0], 1e-20); GroupMemoryBarrierWithGroupSync();
+
     for (uint d = lane; d < head_dim; d += CA_THREADS)
     {
         float acc = 0.0;

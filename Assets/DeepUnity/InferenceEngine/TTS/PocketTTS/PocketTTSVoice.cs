@@ -162,8 +162,11 @@ namespace DeepUnity
                 streamChunkFrames = Mathf.Max(streamChunkFrames, PlayerPrefs.GetInt(PREF_CHUNK, 0));
             }
 
-            const string PREF_PREBUFFER = "DeepUnity.PocketTTS.PrebufferSeconds";
-            const string PREF_CHUNK = "DeepUnity.PocketTTS.StreamChunkFrames";
+            // v2 (#30): key version bumped — values learned on the pre-#30 decoder (its streaming
+            // windows were ~8x slower) were overly conservative (3 s prebuffer / 12-frame chunks
+            // on the GTX 1650); drop them and relearn on the optimized kernels.
+            const string PREF_PREBUFFER = "DeepUnity.PocketTTS.PrebufferSeconds.v2";
+            const string PREF_CHUNK = "DeepUnity.PocketTTS.StreamChunkFrames.v2";
 
             static void SaveTunedDefaults(float prebuffer, int chunkFrames)
             {

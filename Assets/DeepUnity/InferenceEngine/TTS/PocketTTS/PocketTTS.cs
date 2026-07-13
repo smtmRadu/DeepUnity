@@ -627,7 +627,9 @@ namespace DeepUnity
                     int n = e - s;
                     var win = new float[n * Cfg.LDIM];
                     Array.Copy(rawLatents, s * Cfg.LDIM, win, 0, n * Cfg.LDIM);
-                    float[] wv = mimi.Decode(win, n, mean, std);
+                    // #30: only the kept tail is computed (context latents feed the transformer /
+                    // receptive-field margins only) — samples before the tail are garbage.
+                    float[] wv = mimi.Decode(win, n, mean, std, tailLatents: e - t0);
                     int newN = (e - t0) * Cfg.SAMPLES_PER_LATENT;
                     Array.Copy(wv, wv.Length - newN, wav, t0 * Cfg.SAMPLES_PER_LATENT, newN);
                 }
@@ -725,7 +727,9 @@ namespace DeepUnity
                         var win = new float[nWin * Cfg.LDIM];
                         rawAll.CopyTo(s * Cfg.LDIM, win, 0, nWin * Cfg.LDIM);
                         float[] wv = new float[nWin * Cfg.SAMPLES_PER_LATENT];
-                        var de = mimi.DecodeYielding(win, nWin, embMean, embStd, wv, AsyncReadback);
+                        // #30: tail-restricted — only the newFrames tail of the window is decoded
+                        // (bit-exact for the kept samples; the context region stays garbage).
+                        var de = mimi.DecodeYielding(win, nWin, embMean, embStd, wv, AsyncReadback, newFrames);
                         // GPU-issue slices end the frame (FrameBreak); readback waits surface as
                         // GpuWait so the pump can catch a mid-frame completion cheaply.
                         while (de.MoveNext())

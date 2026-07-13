@@ -106,7 +106,7 @@ DeepUnity runs TTS fully on the GPU as well, with real-time streaming synthesis 
 
 Speech-to-text runs fully on the GPU too: [Qwen3-ASR](https://huggingface.co/Qwen) 0.6B/1.7B (RTF 0.22-0.66) and [Parakeet-TDT](https://huggingface.co/nvidia) 0.6B v2/v3 (RTF ~0.08), both validated transcript-exact against their reference implementations.
 
-#### Speaking through a KokoroVoice component
+#### Speaking through a PocketTTSVoice component
 
 ```csharp
 using UnityEngine;
@@ -116,12 +116,16 @@ using DeepUnity;
 // scene; weights stream to the GPU budgeted, without frame drops.
 public class TalkingNpc : MonoBehaviour
 {
-    [SerializeField] private KokoroVoice voice; // voiceName, speed, pitch set in the inspector
+    [SerializeField] private PocketTTSVoice voice; // voiceName, pitch set in the inspector
+    [SerializeField] private AudioClip referenceClip; // ~10 s clip to clone a voice at runtime
 
     public void Start()
     {
         // one-shot utterance
         voice.Say("Welcome, traveler! What brings you to the village?");
+
+        // or clone a voice from a reference clip instead of a baked voiceName
+        // voice.SetClonedVoice(referenceClip);
     }
 
     // ...or stream an LLM reply as it generates: feed token deltas and flush at the end.
@@ -131,7 +135,7 @@ public class TalkingNpc : MonoBehaviour
 }
 ```
 
-###### _Voices can be auditioned in the **VoiceLab** scene (menu `DeepUnity/TTS/Build VoiceLab Scene`): pick an engine + voicepack, tune pitch/speed live and save presets. The `NPCChatBase` component wires LLM + TTS together for game NPCs — prefetch zones stream the models in as the player approaches and release them on exit._
+###### _Voices can be auditioned in the **VoiceLab** scene (menu `DeepUnity/TTS/Build VoiceLab Scene`): pick an engine + voicepack, tune pitch/speed live and save presets. The `NPCChatBase` component wires LLM + TTS together for game NPCs (pocket-tts by default, with Kokoro/CosyVoice3/Chatterbox selectable) — prefetch zones stream the models in as the player approaches and release them on exit._
 
 ## Reinforcement Learning
 

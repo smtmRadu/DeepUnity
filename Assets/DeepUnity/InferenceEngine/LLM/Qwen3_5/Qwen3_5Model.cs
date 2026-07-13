@@ -35,6 +35,16 @@ namespace DeepUnity
             int kRopePartial, kWriteCache, kMaskCausal, kSoftmax, kAttnScores, kAttend, kAttnGate, kFlashAttn;
             int kInProjQKV, kInProjZ, kInProjA, kInProjB;
             int kConvUpdate, kConvPrefill, kSplitConv;
+            int kGateUp1C, kDown1C, kLm1C, kInProjQKV1C, kInProjZ1C, kLinearOut1C;
+            int kGateUpG, kDownG, kInProjQKVG, kInProjZG, kLinearOutG;
+            const int GMM_TOK = 8;    // prefill token-tile — must match Qwen3_5CS GMM_TOK
+
+            // #31 parity switch: true routes the seqLen==1 GEMVs back through the legacy 1Vec
+            // kernels so QwenGemvParityProbe can compare logits coal-vs-legacy on any machine.
+            // Lane-parallel reduction reorders float sums, so the gate is logits-level tolerance
+            // (+ argmax agreement), not bit-exactness. Production always runs coalesced (false).
+            public static bool ForceLegacyGemv = false;
+            const int GVC_ROWS = 8;   // rows per group — must match Qwen3_5CS GVC_ROWS
             int kL2NormHead, kDeltaNet, kRMSGated, kLinearOut;
             int kGateUp, kDown, kGateUp1, kDown1;
             int kLm, kLm1, kArgMax, kSample;
@@ -188,6 +198,19 @@ namespace DeepUnity
                 kDown1       = cs.FindKernel("Down1Vec");
                 kLm          = cs.FindKernel("LmHeadPredict");
                 kLm1         = cs.FindKernel("LmHeadPredict1Vec");
+                // #31 coalesced decode GEMVs (seqLen==1 fast path; ForceLegacyGemv for parity)
+                kGateUp1C    = cs.FindKernel("GateUp1VecCoal");
+                kDown1C      = cs.FindKernel("Down1VecCoal");
+                kLm1C        = cs.FindKernel("LmHeadPredict1VecCoal");
+                kInProjQKV1C = cs.FindKernel("LinearInProjQKV1VecCoal");
+                kInProjZ1C   = cs.FindKernel("LinearInProjZ1VecCoal");
+                kLinearOut1C = cs.FindKernel("LinearOutProj1VecCoal");
+                // #31 coalesced prefill GEMMs (seqLen>1: weight reads amortized over 8-token tiles)
+                kGateUpG     = cs.FindKernel("GateUpGemmCoal");
+                kDownG       = cs.FindKernel("DownGemmCoal");
+                kInProjQKVG  = cs.FindKernel("LinearInProjQKVGemmCoal");
+                kInProjZG    = cs.FindKernel("LinearInProjZGemmCoal");
+                kLinearOutG  = cs.FindKernel("LinearOutProjGemmCoal");
                 kArgMax      = cs.FindKernel("ArgMax");
                 kSample      = cs.FindKernel("SampleToken");
                 kZero        = cs.FindKernel("ZeroBuffer");
@@ -426,6 +449,7 @@ namespace DeepUnity
                 cs.SetBuffer(kRopePartial, "rope_cos", ropeCos);
                 cs.SetBuffer(kRopePartial, "rope_sin", ropeSin);
                 cs.Dispatch(kRopePartial, (seqLen * headsKV * rd2 + 127) / 128, 1, 1);
+                Mark("fa:qkv+rope", kNormBuf);
 
                 ComputeBuffer kForAttn, vForAttn;
                 if (useCache)
@@ -516,6 +540,7 @@ namespace DeepUnity
                 cs.SetBuffer(kAttend, "AttendedValues", attendedBuf);
                 cs.Dispatch(kAttend, (headDim + 63) / 64, (seqLen + 3) / 4, (headsQ + 3) / 4);
                 }
+                Mark("fa:cache+attn", attendedBuf);
 
                 // Output gate (sigmoid(gate) * attended) — Qwen3.5 specific
                 cs.SetInt("batch_size", 1);
@@ -534,6 +559,7 @@ namespace DeepUnity
                 BindScales(kOProj, "W_O_scales", weights.W_OScales[li]);
                 cs.SetBuffer(kOProj, "O", attnOutBuf);
                 cs.Dispatch(kOProj, 1, (seqLen + 3) / 4, (hiddenSize + 31) / 32);
+                Mark("fa:gate+oproj", attnOutBuf);
             }
 
             // ===================== LINEAR-ATTENTION (DeltaNet) DISPATCH =====================
@@ -544,19 +570,28 @@ namespace DeepUnity
                 cs.SetInt("sequence_length_q", seqLen);
                 cs.SetInt("embedding_dim", hiddenSize);
                 cs.SetInt("linear_conv_dim", convDim);
-                cs.SetBuffer(kInProjQKV, "X", normOutBuf);
-                cs.SetBuffer(kInProjQKV, "W_inProjQKV", weights.W_inProjQKV[li]);
-                BindScales(kInProjQKV, "W_inProjQKV_scales", weights.W_inProjQKVScales[li]);
-                cs.SetBuffer(kInProjQKV, "linear_qkv", linearQkvBuf);
-                cs.Dispatch(kInProjQKV, 1, (seqLen + 7) / 8, (convDim + 31) / 32);
+                bool coal = seqLen == 1 && !ForceLegacyGemv;   // #31 coalesced decode GEMVs
+                bool gemm = seqLen > 1 && !ForceLegacyGemv;    // #31 coalesced prefill GEMMs
+                int tokTiles = (seqLen + GMM_TOK - 1) / GMM_TOK;
+                int kQKV = coal ? kInProjQKV1C : gemm ? kInProjQKVG : kInProjQKV;
+                cs.SetBuffer(kQKV, "X", normOutBuf);
+                cs.SetBuffer(kQKV, "W_inProjQKV", weights.W_inProjQKV[li]);
+                BindScales(kQKV, "W_inProjQKV_scales", weights.W_inProjQKVScales[li]);
+                cs.SetBuffer(kQKV, "linear_qkv", linearQkvBuf);
+                if (coal)      cs.Dispatch(kQKV, (convDim + GVC_ROWS - 1) / GVC_ROWS, 1, 1);
+                else if (gemm) cs.Dispatch(kQKV, (convDim + GVC_ROWS - 1) / GVC_ROWS, tokTiles, 1);
+                else           cs.Dispatch(kQKV, 1, (seqLen + 7) / 8, (convDim + 31) / 32);
 
                 // 2. in_proj_z -> linearZBuf
                 cs.SetInt("linear_value_dim", valueDim);
-                cs.SetBuffer(kInProjZ, "X", normOutBuf);
-                cs.SetBuffer(kInProjZ, "W_inProjZ", weights.W_inProjZ[li]);
-                BindScales(kInProjZ, "W_inProjZ_scales", weights.W_inProjZScales[li]);
-                cs.SetBuffer(kInProjZ, "linear_z_w", linearZBuf);
-                cs.Dispatch(kInProjZ, 1, (seqLen + 7) / 8, (valueDim + 31) / 32);
+                int kZ = coal ? kInProjZ1C : gemm ? kInProjZG : kInProjZ;
+                cs.SetBuffer(kZ, "X", normOutBuf);
+                cs.SetBuffer(kZ, "W_inProjZ", weights.W_inProjZ[li]);
+                BindScales(kZ, "W_inProjZ_scales", weights.W_inProjZScales[li]);
+                cs.SetBuffer(kZ, "linear_z_w", linearZBuf);
+                if (coal)      cs.Dispatch(kZ, (valueDim + GVC_ROWS - 1) / GVC_ROWS, 1, 1);
+                else if (gemm) cs.Dispatch(kZ, (valueDim + GVC_ROWS - 1) / GVC_ROWS, tokTiles, 1);
+                else           cs.Dispatch(kZ, 1, (seqLen + 7) / 8, (valueDim + 31) / 32);
 
                 // 3. in_proj_a -> linearABuf
                 cs.SetInt("linear_num_v_heads", numVHeads);
@@ -570,6 +605,7 @@ namespace DeepUnity
                 cs.SetBuffer(kInProjB, "W_inProjB", weights.W_inProjB[li]);
                 cs.SetBuffer(kInProjB, "linear_b_w", linearBBuf);
                 cs.Dispatch(kInProjB, Div256(seqLen * numVHeads), 1, 1);
+                Mark("lin:inproj", linearBBuf);
 
                 // 5. causal conv1d (in-place on linearQkvBuf) + state update
                 cs.SetInt("linear_conv_kernel", convKernel);
@@ -615,6 +651,7 @@ namespace DeepUnity
                 cs.SetBuffer(kL2NormHead, "norm_input", linearKBuf);
                 cs.SetBuffer(kL2NormHead, "norm_output", linearKNormBuf);
                 cs.Dispatch(kL2NormHead, Div256(seqLen * numVHeads), 1, 1);
+                Mark("lin:conv+norm", linearKNormBuf);
 
                 // 9. recurrent gated delta-rule scan
                 cs.SetInt("sequence_length_q", seqLen);
@@ -631,6 +668,7 @@ namespace DeepUnity
                 cs.SetBuffer(kDeltaNet, "dt_bias", weights.dtBias[li]);
                 cs.SetBuffer(kDeltaNet, "A_log", weights.ALog[li]);
                 cs.Dispatch(kDeltaNet, 1, numVHeads, 1);
+                Mark("lin:scan", linearYBuf);
 
                 // 10. RMSNormGated (with z gate)
                 cs.SetFloat("norm_eps", rmsEps);
@@ -644,11 +682,15 @@ namespace DeepUnity
                 // 11. out_proj -> attnOutBuf
                 cs.SetInt("batch_size", 1);
                 cs.SetInt("embedding_dim", hiddenSize);
-                cs.SetBuffer(kLinearOut, "linear_y_norm", linearYNormBuf);
-                cs.SetBuffer(kLinearOut, "W_outProj", weights.W_outProj[li]);
-                BindScales(kLinearOut, "W_outProj_scales", weights.W_outProjScales[li]);
-                cs.SetBuffer(kLinearOut, "O", attnOutBuf);
-                cs.Dispatch(kLinearOut, 1, (seqLen + 3) / 4, (hiddenSize + 31) / 32);
+                int kOut = coal ? kLinearOut1C : gemm ? kLinearOutG : kLinearOut;
+                cs.SetBuffer(kOut, "linear_y_norm", linearYNormBuf);
+                cs.SetBuffer(kOut, "W_outProj", weights.W_outProj[li]);
+                BindScales(kOut, "W_outProj_scales", weights.W_outProjScales[li]);
+                cs.SetBuffer(kOut, "O", attnOutBuf);
+                if (coal)      cs.Dispatch(kOut, (hiddenSize + GVC_ROWS - 1) / GVC_ROWS, 1, 1);
+                else if (gemm) cs.Dispatch(kOut, (hiddenSize + GVC_ROWS - 1) / GVC_ROWS, tokTiles, 1);
+                else           cs.Dispatch(kOut, 1, (seqLen + 3) / 4, (hiddenSize + 31) / 32);
+                Mark("lin:gnorm+out", attnOutBuf);
             }
 
             // ===================== Per-layer wrapper =====================
@@ -672,6 +714,7 @@ namespace DeepUnity
                 cs.SetBuffer(kRmsHidden, "norm_output", normOutBuf);
                 cs.SetBuffer(kRmsHidden, "norm_gamma", weights.inputLnGamma[li]);
                 cs.Dispatch(kRmsHidden, Div256(seqLen), 1, 1);
+                Mark("glue(copy/norm/res)", normOutBuf);
 
                 // attention block -> attnOutBuf
                 if (layerTypes[li] == Qwen3_5LayerType.FullAttention)
@@ -706,11 +749,15 @@ namespace DeepUnity
                 cs.SetBuffer(kCopy, "buf_a", hiddenBuf);
                 cs.SetBuffer(kCopy, "buf_b", normOutBuf);
                 cs.Dispatch(kCopy, Div256(hidTotal), 1, 1);
+                Mark("glue(copy/norm/res)", hiddenBuf);
 
                 // MLP (silu)
                 bool vec1 = seqLen == 1;
-                int kGU = vec1 ? kGateUp1 : kGateUp;
-                int kDN = vec1 ? kDown1 : kDown;
+                bool coalMlp = vec1 && !ForceLegacyGemv;       // #31 coalesced decode GEMVs
+                bool gemmMlp = !vec1 && !ForceLegacyGemv;      // #31 coalesced prefill GEMMs
+                int mlpTokTiles = (seqLen + GMM_TOK - 1) / GMM_TOK;
+                int kGU = coalMlp ? kGateUp1C : gemmMlp ? kGateUpG : vec1 ? kGateUp1 : kGateUp;
+                int kDN = coalMlp ? kDown1C : gemmMlp ? kDownG : vec1 ? kDown1 : kDown;
 
                 cs.SetInt("hidden_size", hiddenSize);
                 cs.SetInt("intermediate_size", intermediate);
@@ -723,20 +770,26 @@ namespace DeepUnity
                 BindScales(kGU, "mlp_gate_scales", weights.mlpGateScales[li]);
                 BindScales(kGU, "mlp_up_scales",   weights.mlpUpScales[li]);
                 cs.SetBuffer(kGU, "intermediate", mlpInterBuf);
-                if (vec1) cs.Dispatch(kGU, (intermediate + 255) / 256, 1, 1);
-                else      cs.Dispatch(kGU, (intermediate + 63) / 64, (seqLen + 7) / 8, 1);
+                if (coalMlp)      cs.Dispatch(kGU, (intermediate + GVC_ROWS - 1) / GVC_ROWS, 1, 1);
+                else if (gemmMlp) cs.Dispatch(kGU, (intermediate + GVC_ROWS - 1) / GVC_ROWS, mlpTokTiles, 1);
+                else if (vec1)    cs.Dispatch(kGU, (intermediate + 255) / 256, 1, 1);
+                else              cs.Dispatch(kGU, (intermediate + 63) / 64, (seqLen + 7) / 8, 1);
+                Mark("mlp:gate+up", mlpInterBuf);
 
                 cs.SetBuffer(kDN, "input", hiddenBuf);
                 cs.SetBuffer(kDN, "mlp_down_w", weights.mlpDown[li]);
                 BindScales(kDN, "mlp_down_scales", weights.mlpDownScales[li]);
                 cs.SetBuffer(kDN, "intermediate", mlpInterBuf);
-                if (vec1) cs.Dispatch(kDN, (hiddenSize + 255) / 256, 1, 1);
-                else      cs.Dispatch(kDN, (hiddenSize + 63) / 64, (seqLen + 7) / 8, 1);
+                if (coalMlp)      cs.Dispatch(kDN, (hiddenSize + GVC_ROWS - 1) / GVC_ROWS, 1, 1);
+                else if (gemmMlp) cs.Dispatch(kDN, (hiddenSize + GVC_ROWS - 1) / GVC_ROWS, mlpTokTiles, 1);
+                else if (vec1)    cs.Dispatch(kDN, (hiddenSize + 255) / 256, 1, 1);
+                else              cs.Dispatch(kDN, (hiddenSize + 63) / 64, (seqLen + 7) / 8, 1);
 
                 // hidden += skip
                 cs.SetBuffer(kAddRes, "buf_a", hiddenBuf);
                 cs.SetBuffer(kAddRes, "buf_b", skipBuf);
                 cs.Dispatch(kAddRes, Div256(hidTotal), 1, 1);
+                Mark("mlp:down", hiddenBuf);
             }
 
             public void Forward(Tensor input_ids, bool useCache, bool lastPosOnly)
@@ -755,6 +808,7 @@ namespace DeepUnity
                 BindScales(kEmbed, "embed_scales", weights.embedScales);
                 cs.SetBuffer(kEmbed, "embed_output", hiddenBuf);
                 cs.Dispatch(kEmbed, Div256(seqLen * hiddenSize), 1, 1);
+                Mark("embed", hiddenBuf);
 
                 for (int i = 0; i < numLayers; i++)
                     DispatchLayer(i, seqLen, totalKvLen, useCache);
@@ -763,12 +817,50 @@ namespace DeepUnity
 
                 if (lastPosOnly) DispatchFinalLast(seqLen);
                 else DispatchFinalAll(seqLen);
+                Mark("final+lmhead", logitsBuf);
             }
 
             // #20 A/B diagnostic: force the pre-fix yield-per-layer DECODE spreading so the
             // frame-pacing probe can measure the old spiky behavior against the shipped
             // one-burst path. Benchmarking only — never set in production code.
             public static bool DebugSpreadDecode = false;
+
+            // ===================== #31 decode stage profiler =====================
+            // Non-null => Mark() drains the GPU queue (1-float sync readback of the stage's output
+            // buffer) after each dispatch group and ACCUMULATES the split per category. Serializing
+            // inflates the total — read the splits as SHARES. Probe-only (QwenDecodeProfileProbe);
+            // always null in production.
+            public static System.Collections.Generic.Dictionary<string, float> StageProfile;
+            static readonly float[] profTmp = new float[1];
+            readonly System.Diagnostics.Stopwatch profSw = new System.Diagnostics.Stopwatch();
+            void Mark(string cat, ComputeBuffer written)
+            {
+                if (StageProfile == null) return;
+                written.GetData(profTmp, 0, 0, 1);
+                StageProfile.TryGetValue(cat, out float v);
+                StageProfile[cat] = v + (float)profSw.Elapsed.TotalMilliseconds;
+                profSw.Restart();
+            }
+            void ProfSync(ComputeBuffer written)   // drain + restart without recording (baseline)
+            {
+                if (StageProfile == null) return;
+                written.GetData(profTmp, 0, 0, 1);
+                profSw.Restart();
+            }
+
+#if UNITY_EDITOR
+            /// <summary>#31 probes: edit mode has no player loop, so the dispatcher-run upload/rope
+            /// coroutines never tick. Drive FRESH pump enumerators synchronously instead. Safe in a
+            /// tight loop: the load path is IO threads + SetData only — no GPU readbacks, so this
+            /// cannot deadlock the editor (unlike pumping the streaming-synthesis coroutines).</summary>
+            public void LoadBlockingForProbe()
+            {
+                var pump = weights.EditorUploadPump();
+                while (pump.MoveNext()) System.Threading.Thread.Sleep(0);   // yields = IO reads in flight
+                var rope = UploadRopeWhenReady(System.Diagnostics.Stopwatch.StartNew());
+                while (rope.MoveNext()) System.Threading.Thread.Sleep(1);   // waits the background rope compute
+            }
+#endif
 
             public IEnumerator ForwardYielding(Tensor input_ids, bool useCache, bool lastPosOnly)
             {
@@ -831,11 +923,13 @@ namespace DeepUnity
                 cs.SetInt("seq_len", 1);
                 cs.SetInt("hidden_size", hiddenSize);
                 cs.SetInt("vocab_size", vocab);
-                cs.SetBuffer(kLm1, "lm_weights", weights.embedLmHead);
-                BindScales(kLm1, "embed_scales", weights.embedScales);
-                cs.SetBuffer(kLm1, "lm_input", normSingleBuf);
-                cs.SetBuffer(kLm1, "lm_output", logitsBuf);
-                cs.Dispatch(kLm1, (vocab + 511) / 512, 1, 1);
+                int kHead = ForceLegacyGemv ? kLm1 : kLm1C;    // #31 coalesced decode GEMV
+                cs.SetBuffer(kHead, "lm_weights", weights.embedLmHead);
+                BindScales(kHead, "embed_scales", weights.embedScales);
+                cs.SetBuffer(kHead, "lm_input", normSingleBuf);
+                cs.SetBuffer(kHead, "lm_output", logitsBuf);
+                if (ForceLegacyGemv) cs.Dispatch(kHead, (vocab + 511) / 512, 1, 1);
+                else                 cs.Dispatch(kHead, (vocab + GVC_ROWS - 1) / GVC_ROWS, 1, 1);
             }
 
             void DispatchFinalAll(int seqLen)
@@ -909,6 +1003,7 @@ namespace DeepUnity
                     cs.Dispatch(kSample, 1, 1, 1);
                 }
                 MarkSampledSeen();
+                Mark("sample(penalty+argmax)", argmaxBuf);
             }
 
             public int SampleGreedy(float presencePenalty = 0f, float repetitionPenalty = 1f)

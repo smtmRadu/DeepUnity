@@ -380,6 +380,11 @@ namespace DeepUnity
             // Creates each target buffer lazily right before its first upload (charged at full size),
             // slices every SetData (byte[] overload — offsets/counts are in bytes), then recycles the
             // job's array and IO slot. Flips IsReady once everything is uploaded.
+            // #31 probes: lets Qwen3_5Model.LoadBlockingForProbe drive a fresh pump synchronously in
+            // edit mode (the ctor-started dispatcher coroutine never ticks without a player loop;
+            // both drain the same concurrent queue, so running a second pump is harmless).
+            internal IEnumerator EditorUploadPump() => UploadPump();
+
             IEnumerator UploadPump()
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
