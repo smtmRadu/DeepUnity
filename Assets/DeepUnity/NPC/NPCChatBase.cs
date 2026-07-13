@@ -119,23 +119,36 @@ namespace DeepUnity
         [Header("Voice (TTS)")]
         [Tooltip("PocketTTS = Kyutai 100M AR, RTF ~0.15 int8 (speaks in real time DURING generation, voice cloning — DEFAULT); Kokoro = 82M non-AR, RTF ~0.3; Chatterbox = clause-streamed (RTF~1.4); CosyVoice3 = streaming-native. 2D demo NPCs are Kokoro-only and ignore this.")]
         [SerializeField] protected TtsModel ttsModel = TtsModel.PocketTTS;
+        [Tooltip("TTS weight format. PocketTTS: int8 = 116 MB vs 209 MB fp16, same speed, mel-gated parity (also picks which voice-clone cache dir is used). Chatterbox: int8 = T3 matmuls int8 (~300 MB less, parity-validated); s3gen stays fp16 either way. Kokoro/CosyVoice ignore this (their voice component's weightsPath decides).")]
+        [SerializeField] protected LLMQuant ttsQuantization = LLMQuant.INT8;
         [Tooltip("Playback pitch for this NPC. 1 = natural (the voice's own timbre); <1 = deeper/slower.")]
         [SerializeField] protected float voicePitch = 1.0f;
         [Tooltip("BAKED voice shipped inside the selected TTS engine's weights export (voices/<name> dirs for PocketTTS/CosyVoice3, voices/<name>.bin voicepacks for Kokoro) — the inspector dropdown lists what's on disk. Pick 'Clone (reference clip)' on PocketTTS to clone from an AudioClip instead; a non-null clip always overrides this name.")]
         [SerializeField] protected string ttsVoice = "jean";
         [Tooltip("PocketTTS only: reference clip to VOICE-CLONE for this NPC (overrides the baked ttsVoice). First runtime use encodes it once through the Mimi encoder and caches by content hash; press 'Precompute voice-clone cache' below to bake the embedding into the shared Resources/Cache so runtime (editor AND builds) is a pure load — no recompute, ever.")]
         [SerializeField] protected AudioClip clonedVoiceClip;
-        [Tooltip("Chatterbox weight format. INT8 = T3 matmuls int8 (~300 MB less, parity-validated); s3gen stays fp16 either way. Kokoro/CosyVoice ignore this.")]
-        [SerializeField] protected LLMQuant ttsQuantization = LLMQuant.INT8;
 
         [Header("Prefetch Zone (A/B test)")]
         [Tooltip("ON: the big sphere (3D) / circle (2D — auto-detected) around the NPC is the model-RESIDENCY zone: entering slow-prefetches the LLM + TTS in the background, both stay on the GPU while the player is inside (closing the chat releases nothing), and leaving unloads both. OFF: the small talk trigger plays that role instead — load on contact, unload when the player walks off it.")]
         [SerializeField] protected bool usePrefetchZone = false;
         [Min(0f)]
-        [Tooltip("Radius of the prefetch/residency zone (drawn as a transparent green filled sphere/disc gizmo).")]
+        [Tooltip("Radius of the prefetch/residency zone (transparent green sphere/disc gizmo). " +
+                 "BIGGER = models start loading earlier and further away, so they're fully resident " +
+                 "(and instantly responsive) by the time the player reaches the NPC — at the cost of " +
+                 "holding GPU memory while the player merely passes nearby, and more wasted " +
+                 "load/unload churn if they wander in and out. SMALLER = VRAM is held only near the " +
+                 "NPC, but a running player can beat the load and hit a not-ready NPC (the stream " +
+                 "then boosts to full speed, which can cost a few heavy frames). Rule of thumb: " +
+                 "radius ≥ player speed × slowPrefetchSeconds, larger on slow GPUs/disks.")]
         [SerializeField] protected float prefetchRadius = 10f;
         [Min(1f)]
-        [Tooltip("BOTH weight streams (LLM + TTS) are spread over ~this many seconds of walking-up time.")]
+        [Tooltip("BOTH weight streams (LLM + TTS) are spread over ~this many seconds of walking-up " +
+                 "time. BIGGER = gentler per-frame upload budget (imperceptible, zero frame drops) " +
+                 "but the models need longer to become ready — pair with a larger prefetchRadius. " +
+                 "SMALLER = ready sooner after zone entry, but each frame uploads more bytes and " +
+                 "weak GPUs/disks may show hitches during the walk-up. Opening the dialogue BOOSTS " +
+                 "the stream to full speed regardless, so this only shapes the background portion. " +
+                 "3s suits walking approaches; raise toward 5-10s for large zones or low-end hardware.")]
         [SerializeField] protected float slowPrefetchSeconds = 3f;
 
         [Tooltip("Screen-space interaction prompt (\"[I] Speak\" / \"Talk — [ E ]\") shown while the player is in the talk trigger.")]
@@ -863,6 +876,8 @@ namespace DeepUnity
             }
 
             state = NPCState.Idle;
+            FadeOutVoices();   // Leave: speech fades to silence (~1 s) instead of cutting or
+                               // talking on; the NPC settles to idle as IsAudioPlaying drops.
             CloseConversation(interrupted);
 
             var w = Window;
@@ -1003,6 +1018,16 @@ namespace DeepUnity
             cvVoice?.StopSpeaking();
             kkVoice?.StopSpeaking();
             pkVoice?.StopSpeaking();
+        }
+
+        /// <summary>Dialogue-close speech stop: Kokoro/pocket-tts fade smoothly to silence over
+        /// ~<paramref name="seconds"/> (never a mid-word cut); the legacy engines hard-stop.</summary>
+        protected void FadeOutVoices(float seconds = 1f)
+        {
+            voice?.StopSpeaking();
+            cvVoice?.StopSpeaking();
+            kkVoice?.FadeOutAndStop(seconds);
+            pkVoice?.FadeOutAndStop(seconds);
         }
 
         /// <summary>Trigger-contact hook for subclasses (called from their OnTriggerEnter/2D).</summary>

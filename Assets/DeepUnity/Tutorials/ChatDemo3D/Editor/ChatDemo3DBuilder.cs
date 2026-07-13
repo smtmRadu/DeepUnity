@@ -2054,6 +2054,59 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             UnityEventTools.AddPersistentListener(leaveBtn.onClick, new UnityAction(win.PlayButtonClick));
 
             BuildHud(canvasGO.transform, gold, win, playerGO);
+            BuildFpsAndPauseMenu(canvasGO.transform, cinzel, gold, parchment, darkBG, win);
+        }
+
+        // ---------------------------------------------------------------- fps counter + esc menu
+
+        static void BuildFpsAndPauseMenu(Transform canvas, TMP_FontAsset cinzel, Color gold,
+                                         Color parchment, Color darkBG, SoulsChatWindow win)
+        {
+            // --- FPS counter, top-right (never blocks clicks; under the menu dim)
+            var fpsGO = MakeTMP("FpsCounter", canvas, "-- FPS", cinzel, 22,
+                                new Color(parchment.r, parchment.g, parchment.b, 0.75f),
+                                TextAlignmentOptions.TopRight, new Vector2(1, 1), new Vector2(1, 1),
+                                new Vector2(170, 32), new Vector2(-109, -30));
+            var fps = fpsGO.AddComponent<FpsCounter>();
+            SetRef(fps, "label", fpsGO.GetComponent<TMP_Text>());
+
+            // --- Esc menu: full-screen dim + centered Continue/Exit box. The world keeps
+            // running while it's up (soulslike) — PauseMenu only gates player/camera input.
+            var menuGO = MakeRect("PauseMenu", canvas, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            var menu = menuGO.AddComponent<PauseMenu>();
+
+            var panelGO = MakeRect("Panel", menuGO.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            var dim = panelGO.AddComponent<Image>();
+            dim.color = new Color(0f, 0f, 0f, 0.55f);   // raycast target ON: swallows clicks to the world UI
+
+            var boxGO = MakeRect("Box", panelGO.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                 new Vector2(400, 250), Vector2.zero);
+            boxGO.AddComponent<Image>().color = darkBG;
+            AddThinBorder(boxGO.transform, gold);
+            MakeTMP("Title", boxGO.transform, "MENU", cinzel, 32, parchment, TextAlignmentOptions.Center,
+                    new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, 56), new Vector2(0, -38));
+            var menuDivGO = MakeRect("Divider", boxGO.transform, new Vector2(0, 1), new Vector2(1, 1),
+                                     new Vector2(-70, 2), new Vector2(0, -74));
+            menuDivGO.AddComponent<Image>().color = gold;
+
+            var colGO = MakeRect("Buttons", boxGO.transform, Vector2.zero, Vector2.one,
+                                 new Vector2(-100, -100), new Vector2(0, -34));
+            var vlg = colGO.AddComponent<VerticalLayoutGroup>();
+            vlg.spacing = 14;
+            vlg.childControlWidth = true; vlg.childControlHeight = true;
+            vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
+
+            var contBtn = BuildSoulsButton(colGO.transform, "Continue", cinzel, gold, parchment, darkBG, 300);
+            var exitBtn = BuildSoulsButton(colGO.transform, "Exit", cinzel, gold, new Color(0.72f, 0.55f, 0.45f), darkBG, 300);
+            contBtn.GetComponent<LayoutElement>().preferredHeight = 54;
+            exitBtn.GetComponent<LayoutElement>().preferredHeight = 54;
+            UnityEventTools.AddPersistentListener(contBtn.onClick, new UnityAction(win.PlayButtonClick));
+
+            SetRef(menu, "panel", panelGO);
+            SetRef(menu, "chatWindow", win);
+            SetRef(menu, "continueButton", contBtn);
+            SetRef(menu, "exitButton", exitBtn);
+            panelGO.SetActive(false);
         }
 
         // ---------------------------------------------------------------- souls HUD

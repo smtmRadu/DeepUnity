@@ -168,11 +168,13 @@ namespace DeepUnity
 
         void DetectEngines()
         {
-            weightsDir[(int)Engine.Kokoro] = Directory.Exists(KOKORO_INT8) ? KOKORO_INT8 : KOKORO_FP16;
-            weightsDir[(int)Engine.CosyVoice3] = Directory.Exists(COSY_INT8) ? COSY_INT8 : COSY_FP16;
-            bool cbInt8 = Directory.Exists(CB_INT8);
+            string kkInt8 = DeepUnityMeta.ResolvePath(KOKORO_INT8), cvInt8 = DeepUnityMeta.ResolvePath(COSY_INT8);
+            weightsDir[(int)Engine.Kokoro] = Directory.Exists(kkInt8) ? kkInt8 : DeepUnityMeta.ResolvePath(KOKORO_FP16);
+            weightsDir[(int)Engine.CosyVoice3] = Directory.Exists(cvInt8) ? cvInt8 : DeepUnityMeta.ResolvePath(COSY_FP16);
+            string cbInt8Dir = DeepUnityMeta.ResolvePath(CB_INT8);
+            bool cbInt8 = Directory.Exists(cbInt8Dir);
             chatterboxQuant = cbInt8 ? LLMQuant.INT8 : LLMQuant.FP16;
-            weightsDir[(int)Engine.Chatterbox] = cbInt8 ? CB_INT8 : CB_FP16;
+            weightsDir[(int)Engine.Chatterbox] = cbInt8 ? cbInt8Dir : DeepUnityMeta.ResolvePath(CB_FP16);
 
             for (int i = 0; i < 3; i++)
             {
@@ -471,9 +473,10 @@ namespace DeepUnity
         {
             try
             {
-                if (File.Exists(PRESETS_PATH))
+                string p = DeepUnityMeta.ResolvePath(PRESETS_PATH);   // player builds: StreamingAssets
+                if (File.Exists(p))
                 {
-                    PresetFile f = JsonUtility.FromJson<PresetFile>(File.ReadAllText(PRESETS_PATH));
+                    PresetFile f = JsonUtility.FromJson<PresetFile>(File.ReadAllText(p));
                     if (f != null && f.presets != null) return f;
                 }
             }

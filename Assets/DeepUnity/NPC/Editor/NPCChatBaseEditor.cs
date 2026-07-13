@@ -126,7 +126,7 @@ namespace DeepUnity
         // content-hashed from the clip, so the status line always reflects THIS clip's bake state;
         // the button runs the Mimi encoder in edit mode and writes Resources/Cache/<key>.bytes
         // (ships in builds) so runtime never re-encodes.
-        AudioClip _keyClip; string _cloneKey;
+        AudioClip _keyClip; string _cloneKey; PocketTTSModeling.PocketTTS.CropInfo _crop;
 
         void DrawCloneClip(SerializedProperty prop)
         {
@@ -143,7 +143,7 @@ namespace DeepUnity
             if (_keyClip != clip)   // content hash once per clip change, not per repaint
             {
                 _keyClip = clip;
-                _cloneKey = PocketTTSModeling.PocketTTS.CloneKey(clip);
+                _cloneKey = PocketTTSModeling.PocketTTS.CloneKey(clip, out _crop);
             }
             if (_cloneKey == null)
             {
@@ -154,9 +154,12 @@ namespace DeepUnity
             string assetPath = $"{PocketTTSModeling.PocketTTSVoiceBaker.ASSET_DIR}/{_cloneKey}.bytes";
             bool baked = System.IO.File.Exists(assetPath);
             float cap = PocketTTSModeling.PocketTTS.MAX_REF_SECONDS;
-            string capNote = clip.length > cap + 0.05f
-                ? $"\nClip is {clip.length:F1}s — cropped at the closest natural pause before {cap:F0}s, never mid-word (hard {cap:F0}s cut only if no pause exists in the tail). {cap:F0}s is the model's native reference length."
-                : $"\nClip is {clip.length:F1}s — fits the model's native {cap:F0}s reference window, used in full (no cropping).";
+            float min = PocketTTSModeling.PocketTTS.MIN_CROP_SECONDS;
+            string capNote = _crop.cropped
+                ? (_crop.atPause
+                    ? $"\nClip is {_crop.totalSeconds:F1}s — cropped at a natural pause to {_crop.croppedSeconds:F2}s, never mid-word ({cap:F0}s is the model's native reference length). The cached latents cover exactly this cropped audio."
+                    : $"\nClip is {_crop.totalSeconds:F1}s — no natural pause detected in the {min:F0}-{cap:F0}s window, hard cut at {_crop.croppedSeconds:F2}s (the model's native reference length). The cached latents cover exactly this cropped audio.")
+                : $"\nClip is {_crop.totalSeconds:F1}s — fits the model's native {cap:F0}s reference window, used in full (no cropping).";
             EditorGUILayout.HelpBox((baked
                 ? $"Voice-clone cache baked ✓ — runtime is a pure load (editor + builds).\n{assetPath}"
                 : "Not precomputed — the first runtime use encodes this clip once (~1-2 s on approach). Bake it to make runtime loading instant.")

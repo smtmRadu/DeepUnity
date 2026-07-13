@@ -53,6 +53,7 @@ namespace DeepUnity
             // Main-thread ctor cost (RegexOptions.Compiled JITs here). The 13 MB JSON parse runs in the
             // background via LoadAsync, so it is NOT counted on this thread when load_async.
             var swCtor = System.Diagnostics.Stopwatch.StartNew();
+            path = DeepUnityMeta.ResolvePath(path);   // player builds: StreamingAssets
             BuildByteMaps();
             preTokRegex = new Regex(PRETOK_PATTERN, RegexOptions.Compiled);
 

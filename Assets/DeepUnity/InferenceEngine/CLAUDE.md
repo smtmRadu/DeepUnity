@@ -12,6 +12,9 @@ milestones land.
 Assets/DeepUnity/InferenceEngine/           ← F3 restructure landed 2026-07-12
   CLAUDE.md                ← this file
   import_params.py         ← THE unified exporter + model pool registry (`--list`); LLM+TTS+STT
+                             (pocket-tts exporter merged in 2026-07-13; standalone
+                             TTS/PocketTTS/validation/import_pocket_tts.py removed — kokoro/STT
+                             exporters still pending merge from their workstreams)
   LLM/
     Base/  (LLM.cs, LLMConfig.cs, BPETokenizer.cs)  Qwen3_5/  Gemma3/  MiniCPM5/
   TTS/
@@ -104,7 +107,25 @@ demos are live.
 | Parakeet-TDT 0.6B v2/v3 | STT | ✅ shipped — **GPU validated 6/6 EXACT** (RTF 0.08–0.09); ParakeetSTT:STT (v3 = Romanian) |
 
 Cross-cutting DONE: ModelBase/TTS/STT bases · residency lifecycle · **F2 tokenizer hierarchy
-(TokenizerBase)** · **F3 folder move under InferenceEngine/** · unified import_params pool ·
+(TokenizerBase)** · **F3 folder move under InferenceEngine/** · **player-build shipping (2026-07-13):
+weights/tokenizers are File-IO from `Assets/...` (editor-only paths) → `DeepUnityMeta.ResolvePath`
+redirects to `<Game>_Data/StreamingAssets/<same tail>` in players, `Main/Editor/DeepUnityBuildStep.cs`
+(IPostprocessBuildWithReport) copies Weights + tokenizer/G2P/preset files into the build output
+(NOT into Assets/StreamingAssets — keeps GBs out of the import pipeline); every *Weights/tokenizer
+ctor + res-vs-legacy picker wraps its path; Gemma3 system-prompt KV cache → persistentDataPath in
+players** · **GPU-teardown safety (2026-07-13): finalizers marshal ComputeBuffer.Release to the
+main thread via DeepUnityDispatcher.RunOnMainThread (finalizer-thread release = native crash in
+players); live-model sweeps release everything on Application.quitting, ExitingPlayMode AND
+beforeAssemblyReload (mid-play recompile orphaned buffers — the "Leak Detected: Persistent 336"
+report), hooks registered via InitializeOnLoadMethod so they survive domain reloads; PocketTTS is
+disposed by PocketTTSVoice's hook since it's not yet under ModelBase (WS-F)** ·
+**InferencePerf.cs (2026-07-13): ALL cross-engine GPU tuning knobs centralized as documented
+mutable statics (arbiter thresholds, silent-refill turbo, tick-calibration band, escalation caps)
+with low-end/high-end directions; PocketTTSVoice self-adapts on weak GPUs — underrun re-gate,
+prebuffer 0.5→3s, chunk 8→16 escalation, and the REVERSE #29 arbiter (Qwen holds token bursts
+while a voice is silent-but-pending, hard-capped for liveness) — validated interactively on a
+GTX 1650 (offline RTF int8 0.57 / fp16 0.64 via the new dump-free PocketTTSRtfProbe)** ·
+unified import_params pool ·
 LLMRegistry (auto-extending NPC picker) · NPCChatBase (2D+3D) + LLMPool + prefetch zones + KV disk
 persistence · demos ChatDemo3D / ChatDemo2D (farm) / ForestFork / VoiceLab (all E2E green).
 
@@ -124,9 +145,15 @@ Kokoro question-prosody probe.
 | ~~29~~ | ✅ **DONE 2026-07-13** Talk-time frame drops — FramePacing arbiter (Qwen `NoteLlmIssue` ↔ TTS pump deferral at ring ≥ headroom) + `elem_offset` row-sliced kernels + self-calibrating `PocketTTS.GpuMacsPerTick` (3-7 ms heavy-tick target, never-shrink-while-ring-low guard). Talk-time frames >22 ms 222→54, >33 ms 39→16, max 116→69 ms; parity P1/P4/P5/P8b re-PASS bit-exact; probe = `NpcTalkPerfProbe`. Shipped in `ed0c06fc`. Last un-pulled lever (fully GPU-resident AR loop) parked in session task #30 | ✅ done |
 | ~~24~~ | ❌ **DROPPED 2026-07-13** A6-MAX CosyVoice3 sub-1.0 RTF — user: pocket-tts is the permanent TTS standard, CosyVoice3 optimization abandoned (port stays in repo as-is, streaming RTF 1.71 final) | ❌ dropped |
 | ~~28~~ | ✅ **DONE 2026-07-13** Background KV compaction + `HistoryMode.ResumeFromCompact` ACTIVE (clamp removed). Close-time maintenance in NPCChatBase: past `compactAfterTokens` (est. chars/4, default 1536) a clean close runs `CompactConversationRoutine` on the resident idle model — full-state KV save first (crash-safe fallback) → `LLM.Compact` (greedy self-briefing, now takes `post_summary_context`) re-seeds `[system + summary + last 2 verbatim turns]` → transcript trims, briefing rides in the transcript JSON (`TranscriptState.summary`) → compacted KV saved (overwrites). `CancelCompaction` on any dialogue open on the same pooled instance (static `compactingNpc`, mirrors `kvSaveInFlight`) and on zone-exit release (unload NOW, no wait). Tier-c re-prefill rebuilds `[system + summary + recent turns]`. NOT YET play-tested | ✅ done (play QA pending) |
-| 25 | Paper benchmark matrix (RTF/TTFA/load/VRAM, all engines × quant) on 4060 | unblocked |
-| 15 | WS-F — LLM↔ModelBase unification (needs the 3 LLM loaders rewritten to the epoch/BeginLoad/Defetch contract — RISKY, touches the validated load path) | deferred |
+| 30 | **pocket-tts DECODER OPTIMIZATION campaign** — Mimi decode is 67% of synth cost (GTX 1650 measures: offline RTF int8 0.57, streaming ~1.0-1.2 → NO headroom for concurrent Qwen; the adaptive scheduling of 2026-07-13 only shapes the pauses, it can't remove them). Occupancy audit + dispatch fusion on the Mimi decode kernels first (Kokoro's vocoder pass got ~4×, same convnet family), then GPU-resident AR loop. **Target: streaming RTF ≤ 0.5 on the GTX 1650 → fluent LLM+TTS talk on 4 GB-class GPUs** | **TOP — next workstream** |
+| 25 | Paper benchmark matrix (RTF/TTFA/load/VRAM, all engines × quant) on 4060 (+1650 numbers now exist via PocketTTSRtfProbe) | unblocked |
+| 15 | WS-F — LLM↔ModelBase unification (needs the 3 LLM loaders rewritten to the epoch/BeginLoad/Defetch contract — RISKY, touches the validated load path; also lets PocketTTS join the ModelBase teardown sweeps instead of its own hook) | deferred |
 | 18 | WS-G rest — NPC-AI primitives (per-NPC memory, conversation snapshots, type-ahead prefill, mid-conversation AutoCompact) | backlog |
-| 30 | pocket-tts deep optimization (THE standard TTS) — GPU-resident AR loop, dispatch fusion, occupancy audit | low (works fine today) |
+
+Done 2026-07-13 (audio-on-weak-GPUs groundwork for #30): InferencePerf universal-standard constants
+(nobody hand-tweaks per GPU) · adaptive prebuffer/chunk escalation with per-device PlayerPrefs
+persistence (learns once, keeps forever; pure audio-side — prefetch zones/pool/KV untouched) ·
+#29 reverse arbiter (Qwen holds token bursts during audible silence, hard-capped) · silent-refill
+turbo · leave-fade (FadeOutAndStop).
 
 (Full per-task history + gotchas live in the session memory `project_deepunity_cosyvoice3_port.md`.)

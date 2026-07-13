@@ -40,6 +40,6 @@ encoder on a reference clip, Python-side), drop the tensor in. 20+ prebuilt voic
 - 100M params, 12.5 Hz (short AR loop), tiny flow head ⇒ RTF well under 1 on 4060, int8 → smaller. Clear Kokoro upgrade WITH voice cloning.
 
 ## Plan (mirror CosyVoice A0-A7 + Kokoro optims)
-- **P0**: freeze this SPEC ✅ · read modules/{transformer,rope,mlp,seanet,mimi_transformer}.py + default_parameters.py for exact attention type / Euler step count / noise clamp / act fns · `import_pocket_tts.py` exporter → Assets/Resources/Weights/weights_pockettts_english_{fp16,int8} · `dump_reference.py` per-stage .npy (fixed noise) · bake a voice.
+- **P0**: freeze this SPEC ✅ · read modules/{transformer,rope,mlp,seanet,mimi_transformer}.py + default_parameters.py for exact attention type / Euler step count / noise clamp / act fns · `import_params.py pocket-tts` exporter → Assets/Resources/Weights/weights_pockettts_english_{fp16,int8} · `dump_reference.py` per-stage .npy (fixed noise) · bake a voice.
 - **P1** Mimi decoder (conv + small transformer) parity · **P2** FlowLM transformer parity · **P3** SimpleMLPAdaLN flow head + Euler parity · **P4** offline e2e (text→audio) · **P5** streaming (frame-level ring buffer) + RTF/TTFA · **P6** int8 + Kokoro-style throughput autopsy · **P7** TtsModel enum entry + registry + NPC integration, make it DEFAULT.
 Module: Assets/DeepUnity/InferenceEngine/TTS/PocketTTS/ + Resources/ComputeShaders/PocketTTSCS.compute.

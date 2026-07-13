@@ -83,6 +83,7 @@ namespace DeepUnity
 
             public KokoroWeights(string paramsPath, bool beginLoad = true)
             {
+                paramsPath = DeepUnityMeta.ResolvePath(paramsPath);   // player builds: StreamingAssets
                 if (!Directory.Exists(paramsPath))
                     throw new DirectoryNotFoundException(
                         $"Kokoro weights folder not found: '{paramsPath}'. Generate it with " +

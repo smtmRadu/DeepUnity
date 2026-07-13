@@ -40,6 +40,7 @@ namespace DeepUnity
 
             public CosyVoiceTokenizer(string basePath = "Assets/DeepUnity/InferenceEngine/TTS/CosyVoice/CosyVoiceTokenizer")
             {
+                basePath = DeepUnityMeta.ResolvePath(basePath);   // player builds: StreamingAssets
                 BuildByteMap();
                 preTokRegex = new Regex(PRETOK_PATTERN, RegexOptions.Compiled);
                 var ordered = new List<string>(specials.Keys);

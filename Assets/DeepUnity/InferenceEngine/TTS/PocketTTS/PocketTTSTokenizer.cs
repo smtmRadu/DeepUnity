@@ -10,7 +10,7 @@ namespace DeepUnity
     {
         // C# port of the pocket-tts SentencePiece encoder (Unigram model, byte-fallback, NO Unicode
         // normalization). Loads tokenizer.vocab.json (pieces + scores + types, emitted by
-        // import_pocket_tts.py) and reproduces sp.encode(text, out_type=int) exactly:
+        // import_params.py pocket-tts) and reproduces sp.encode(text, out_type=int) exactly:
         //   1) prepare_text_prompt: strip, \n\r -> space, "  " -> " ", (optional ; -> ,), uppercase
         //      first letter, ensure trailing punctuation, (optional 8-space pad for short inputs).
         //   2) SentencePiece normalize (identity here — this model applies no NFKC; verified that
@@ -39,7 +39,7 @@ namespace DeepUnity
                 if (!File.Exists(vocabJsonPath))
                     throw new FileNotFoundException(
                         $"pocket-tts tokenizer.vocab.json not found at '{vocabJsonPath}'. Re-run " +
-                        "import_pocket_tts.py (it emits tokenizer.vocab.json next to tokenizer.model).");
+                        "import_params.py pocket-tts (it emits tokenizer.vocab.json next to tokenizer.model).");
                 Load(File.ReadAllText(vocabJsonPath, Encoding.UTF8));
             }
 

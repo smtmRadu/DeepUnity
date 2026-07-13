@@ -741,7 +741,9 @@ namespace DeepUnity
             ConsoleMessage.Info($"Gemma3ForEmbeddings created ({sw.Elapsed.TotalSeconds:0.00} s)");
         }
 
-        ~Gemma3ForEmbeddings() { model?.Dispose(); }
+        // GPU release marshalled to the main thread — finalizer-thread ComputeBuffer.Release
+        // crashes player builds (see DeepUnityDispatcher.RunOnMainThread).
+        ~Gemma3ForEmbeddings() { var m = model; if (m != null) DeepUnityDispatcher.RunOnMainThread(m.Dispose); }
 
 #if UNITY_EDITOR
         private void OnPlayModeChanged(UnityEditor.PlayModeStateChange state)

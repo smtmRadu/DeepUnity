@@ -12,7 +12,7 @@ namespace DeepUnity
     namespace PocketTTSModeling
     {
         // Manifest-driven weight store for the Kyutai pocket-tts export (fp16/int8 .bin files +
-        // manifest.tsv written by TTS/PocketTTS/validation/import_pocket_tts.py). Byte-for-byte the
+        // manifest.tsv written by InferenceEngine/import_params.py, `pocket-tts`). Byte-for-byte the
         // same generic loader as CosyVoiceWeights (the exporter is the schema — no hardcoded tensor
         // list): implements the ModelBase residency contract loader-side (BeginLoad budgeted upload
         // pump, Defetch safe at any point via load-epoch, LoadBlocking for editor parity probes).
@@ -61,11 +61,12 @@ namespace DeepUnity
 
             public PocketTTSWeights(string paramsPath, bool beginLoad = true)
             {
+                paramsPath = DeepUnityMeta.ResolvePath(paramsPath);   // player builds: StreamingAssets
                 if (!Directory.Exists(paramsPath))
                     throw new DirectoryNotFoundException(
                         $"pocket-tts weights folder not found: '{paramsPath}'. Generate it with " +
-                        "Assets/DeepUnity/InferenceEngine/TTS/PocketTTS/validation/import_pocket_tts.py " +
-                        "(`python import_pocket_tts.py --quant fp16`) → exports under Assets/Resources/Weights/.");
+                        "Assets/DeepUnity/InferenceEngine/import_params.py " +
+                        "(`python import_params.py pocket-tts --quant fp16`) → exports under Assets/Resources/Weights/.");
                 _root = paramsPath;
 
                 string manifest = Path.Combine(paramsPath, "manifest.tsv");

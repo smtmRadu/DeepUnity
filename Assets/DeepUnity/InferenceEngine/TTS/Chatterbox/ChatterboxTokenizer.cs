@@ -30,6 +30,7 @@ namespace DeepUnity
             public ChatterboxTokenizer(string basePath)
             {
                 // basePath e.g. "Assets/DeepUnity/InferenceEngine/TTS/Chatterbox/ChatterboxTokenizer" (no extension)
+                basePath = DeepUnityMeta.ResolvePath(basePath);   // player builds: StreamingAssets
                 string[] vlines = System.IO.File.ReadAllLines(basePath + ".vocab.txt", Encoding.UTF8);
                 for (int i = 0; i < vlines.Length; i++)
                 {

@@ -266,7 +266,12 @@ namespace DeepUnity
                 byte[] h = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(system_prompt ?? string.Empty));
                 var sb = new System.Text.StringBuilder(64);
                 for (int i = 0; i < h.Length; i++) sb.Append(h[i].ToString("x2"));
-                return System.IO.Path.Combine("Assets/Resources/Cache", sb.ToString());
+                // editor: the bake-able project cache; player: Assets/ is unwritable, so the KV
+                // lands in persistentDataPath (computed once per install, restored afterwards).
+                string root = Application.isEditor
+                    ? "Assets/Resources/Cache"
+                    : System.IO.Path.Combine(Application.persistentDataPath, "DeepUnity", "Cache");
+                return System.IO.Path.Combine(root, sb.ToString());
             }
         }
 

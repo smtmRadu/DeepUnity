@@ -13,7 +13,7 @@ namespace DeepUnity
         // through the C# Mimi encoder + speaker_proj (PocketTTS.EncodeToPrompt) and gates the result
         // against audio_prompt_ref (Python encode_to_latent -> speaker_proj) at corr>0.99. Also gates
         // the pre-speaker_proj latents (voice_ref_latents). Proves the encoder port + clone pipeline.
-        // Requires the encoder weights: export with `import_pocket_tts.py --include-encoder`.
+        // Requires the encoder weights: export with `import_params.py pocket-tts --include-encoder`.
         public static class PocketTTSCloneProbe
         {
             const string DUMP = "Assets/DeepUnity/InferenceEngine/TTS/PocketTTS/validation/dump";
@@ -53,7 +53,7 @@ namespace DeepUnity
                     {
                         failed = true;
                         Log("**FAIL**: encoder weights not in this dir. Re-export with " +
-                            "`import_pocket_tts.py --include-encoder` (and --quant int8 for the int8 dir).");
+                            "`import_params.py pocket-tts --include-encoder` (and --quant int8 for the int8 dir).");
                         return;
                     }
                     Log("weights resident (incl. encoder).");

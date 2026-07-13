@@ -58,12 +58,12 @@ namespace DeepUnity
                     tts.LoadBlocking();
                     EditorUtility.DisplayProgressBar("pocket-tts voice clone", $"Encoding '{clip.name}'…", 0.55f);
                     var sw = System.Diagnostics.Stopwatch.StartNew();
-                    byte[] bytes = tts.PrecomputePromptBytes(clip, out string key);
+                    byte[] bytes = tts.PrecomputePromptBytes(clip, out string key, out PocketTTS.CropInfo crop);
                     if (bytes == null)
                     {
                         EditorUtility.DisplayDialog("pocket-tts voice clone",
                             "Could not encode the clip. Either the Mimi encoder weights are missing from the " +
-                            "weights dir (re-export with import_pocket_tts.py --include-encoder) or the clip's " +
+                            "weights dir (re-export with import_params.py pocket-tts --include-encoder) or the clip's " +
                             "sample data isn't readable (set its Load Type to 'Decompress On Load').", "OK");
                         return null;
                     }
@@ -71,8 +71,13 @@ namespace DeepUnity
                     string assetPath = $"{ASSET_DIR}/{key}.bytes";
                     System.IO.File.WriteAllBytes(assetPath, bytes);
                     AssetDatabase.ImportAsset(assetPath);
+                    string cropNote = crop.cropped
+                        ? (crop.atPause
+                            ? $"reference {crop.totalSeconds:F1}s cropped at a natural pause to {crop.croppedSeconds:F2}s"
+                            : $"reference {crop.totalSeconds:F1}s hard-cut to {crop.croppedSeconds:F2}s (no pause found)")
+                        : $"reference {crop.totalSeconds:F1}s used in full";
                     Debug.Log($"[PocketTTS] voice-clone cache baked → {assetPath} ({bytes.Length / 1024} KB, " +
-                              $"{sw.ElapsedMilliseconds} ms). CloneVoice('{clip.name}') now loads instantly at runtime (editor + builds).");
+                              $"{sw.ElapsedMilliseconds} ms; {cropNote}). CloneVoice('{clip.name}') now loads instantly at runtime (editor + builds).");
                     return assetPath;
                 }
                 finally

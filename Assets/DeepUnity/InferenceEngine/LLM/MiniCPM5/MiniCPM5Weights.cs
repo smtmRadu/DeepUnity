@@ -80,6 +80,7 @@ namespace DeepUnity
 
             public MiniCPM5Weights(string paramsPath, LLMQuant quant = LLMQuant.FP16)
             {
+                paramsPath = DeepUnityMeta.ResolvePath(paramsPath);   // player builds: StreamingAssets
                 if (!Directory.Exists(paramsPath))
                     throw new DirectoryNotFoundException(
                         $"MiniCPM5 weights folder not found: '{paramsPath}'. Generate it with " +

@@ -64,6 +64,43 @@ namespace DeepUnity
             return field;
         }
 
+        /// <summary>
+        /// Runtime path resolution for the InferenceEngine's file-streamed data (weights folders,
+        /// tokenizer JSONs, G2P lexicons, presets). All of it is read with plain System.IO from
+        /// project-relative <c>Assets/...</c> paths — which only exist in the EDITOR (the working
+        /// directory is the project root). A built player has no Assets/ folder, and Resources only
+        /// ships assets loaded via Resources.Load, so raw .bin/.json files never reach the build that
+        /// way. Instead, DeepUnityBuildStep copies them VERBATIM into
+        /// <c>&lt;Game&gt;_Data/StreamingAssets/&lt;same tail&gt;</c> at build time, and this resolver
+        /// redirects any Assets/-relative path there when the original doesn't exist on disk:
+        /// returned unchanged when it exists relative to the working directory (editor), otherwise
+        /// mapped under <c>Application.streamingAssetsPath</c> with the same <c>Assets/</c>-tail
+        /// (player build). Unknown paths come back unchanged so the caller's error shows the original.
+        /// </summary>
+        public static string ResolvePath(string path)
+        {
+            if (string.IsNullOrEmpty(path) || File.Exists(path) || Directory.Exists(path))
+                return path;
+
+            string tail = null;
+            if (path.StartsWith("Assets/") || path.StartsWith("Assets\\"))
+                tail = path.Substring("Assets/".Length);
+            if (tail != null)
+            {
+                string mapped = Path.Combine(Application.streamingAssetsPath, tail);
+                if (File.Exists(mapped) || Directory.Exists(mapped))
+                    return mapped;
+                // tokenizer paths are often passed WITHOUT extension (e.g. ChatterboxTokenizer,
+                // KokoroG2P) and suffixed by the caller — accept the mapped base if any sibling
+                // starting with that base exists.
+                string dir = Path.GetDirectoryName(mapped);
+                string stem = Path.GetFileName(mapped);
+                if (Directory.Exists(dir) && Directory.GetFileSystemEntries(dir, stem + "*").Length > 0)
+                    return mapped;
+            }
+            return path;
+        }
+
         internal readonly static int THREADS_NUM = 256;
         internal readonly static Lazy<ParallelOptions> MULTITHREADS_8 = new Lazy<ParallelOptions>(() => new ParallelOptions { MaxDegreeOfParallelism = 8 });
         internal readonly static Lazy<ParallelOptions> MULTITHREADS_4 = new Lazy<ParallelOptions>(() => new ParallelOptions { MaxDegreeOfParallelism = 4 });

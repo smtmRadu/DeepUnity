@@ -11,12 +11,23 @@ USAGE
     python import_params.py D:/checkpoints/my-finetuned-qwen --quant int8
     python import_params.py ResembleAI/chatterbox-turbo          # TTS -> Resources/Weights/
                                                                  # (fp16 only; conds.pt export needs torch)
+    python import_params.py pocket-tts --quant int8              # TTS (DEFAULT NPC TTS) -> Resources/Weights/
 
 SUPPORTED MODELS                                                fp16   int8   int4
     gemma3    google/gemma-3-270m-it (and 270m mirrors)          OK     OK     OK    (*)
     qwen3_5   Qwen/Qwen3.5-0.8B, unsloth/Qwen3.5-0.8B            OK     OK     OK    (*)
     qwen3_5   Qwen/Qwen3.5-2B (size auto-detected by hidden dim) OK     OK     OK    (*)
     minicpm5  openbmb/MiniCPM5-1B (or -SFT; vanilla llama arch)  OK     OK     OK    (*)
+
+    TTS (dedicated export paths in THIS file — no standalone scripts)
+    chatterbox  ResembleAI/chatterbox-turbo                      OK     OK     -     (conds.pt needs torch)
+    cosyvoice3  FunAudioLLM/Fun-CosyVoice3-0.5B-2512             OK     OK     -     (needs torch; .pt pickles)
+    pockettts   kyutai/pocket-tts — the DEFAULT NPC TTS          OK     OK     -     (needs torch + sentencepiece;
+                -> weights_pockettts_english_<quant>; merged here from the former
+                TTS/PocketTTS/validation/import_pocket_tts.py; --voice/--include-encoder flags)
+
+    Kokoro + the STT models (qwen3asr, parakeet) still export via their workstream
+    validation/import_*.py scripts — registered in the pool below as pointers only.
 
     (*)  int4 (GGUF Q4_0, groups of 32) trades quality for ~quarter the VRAM/disk and was
          measured LOSSY on these small models (story quality visibly drops, and it decodes
@@ -821,6 +832,127 @@ def export_cosyvoice3(args):
     print("Use it in Unity:  var tts = new CosyVoiceTTS();")
 
 
+# ----------------------------------------------------------------------------- pocket-tts TTS
+# Merged from the former TTS/PocketTTS/validation/import_pocket_tts.py (2026-07-13) — byte-identical
+# output, now served by TTSExporter like the other TTS paths.
+POCKETTTS_REPO = "kyutai/pocket-tts"
+POCKETTTS_REPO_OPEN = "kyutai/pocket-tts-without-voice-cloning"  # tokenizer.model lives here (open)
+
+
+def _pockettts_is_matmul(name, shape):
+    """Only 2D '.weight' linears are int8-able; conditioner.embed.weight is an embedding table
+    [4001,1024] — kept fp16 (lookup, not matmul). Norms/biases/conv kernels are never 2D .weight."""
+    if len(shape) != 2 or not name.endswith(".weight"):
+        return False
+    return not name.endswith("conditioner.embed.weight")
+
+
+def _pockettts_export_tokenizer_vocab(model_path, out_json):
+    """Dump the SentencePiece Unigram vocab (piece, score, type per id) to JSON so the C# encoder
+    can run a Viterbi best-segmentation + byte-fallback WITHOUT parsing the protobuf at runtime.
+    type: 1=NORMAL 2=UNKNOWN 3=CONTROL 4=USER_DEFINED 6=BYTE (SentencePiece ModelProto.SentencePiece.Type).
+    Also records unk/bos/eos/pad ids and the byte-piece base so the C# maps a raw byte -> its <0xXX> id.
+    NO Unicode normalization is applied by this tokenizer (verified: ligatures/fullwidth survive as
+    bytes, double spaces preserved) — the C# only needs add_dummy_prefix + space->U+2581 + Viterbi."""
+    import sentencepiece as spm
+    sp = spm.SentencePieceProcessor(str(model_path))
+    n = sp.vocab_size()
+    pieces = []
+    byte_base = None
+    for i in range(n):
+        piece = sp.id_to_piece(i)
+        t = 1
+        if sp.is_unknown(i): t = 2
+        elif sp.is_control(i): t = 3
+        elif sp.is_byte(i): t = 6
+        elif sp.is_unused(i): t = 5
+        if t == 6 and byte_base is None:
+            byte_base = i          # first byte piece; SentencePiece lays <0x00>..<0xFF> contiguously
+        pieces.append({"piece": piece, "score": float(sp.get_score(i)), "type": t})
+    obj = {
+        "vocab_size": n,
+        "unk_id": sp.unk_id(), "bos_id": sp.bos_id(), "eos_id": sp.eos_id(), "pad_id": sp.pad_id(),
+        "byte_base_id": byte_base,           # id of <0x00>; byte b -> byte_base_id + b
+        "pieces": pieces,
+    }
+    with open(out_json, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False)
+    print(f"[tok]    tokenizer.vocab.json: {n} pieces, byte_base_id={byte_base}, "
+          f"unk={sp.unk_id()} bos={sp.bos_id()} eos={sp.eos_id()} pad={sp.pad_id()}")
+
+
+def export_pockettts(args):
+    """kyutai/pocket-tts -> Resources/Weights/weights_pockettts_english_<quant>/.
+    Arch (frozen in TTS/PocketTTS/SPEC.md): flow_lm (SentencePiece 4001->dim1024 conditioner;
+    6L/1024d/16h/FFN4096 RoPE-causal StreamingMHA transformer; SimpleMLPAdaLN flow head dim512/
+    6 res_blocks, 1 Euler step; latent ldim32) + mimi (SEANet decoder + 2L/512d/8h
+    decoder_transformer). Voice = audio_prompt [1,125,1024] prefix, baked per --voice.
+    Torch names kept verbatim (module path dots -> slashes, trailing param stays a dot-leaf:
+    `mimi.decoder.model.0.conv.weight` -> `mimi/decoder/model/0/conv.weight`) so the manifest is
+    self-documenting and the C# Conv/Linear helpers do Get(path+".weight").
+    The Mimi ENCODER + downsample are needed only for RUNTIME VOICE CLONING (P8: reference wav ->
+    audio_prompt): exported into the SAME dir under --include-encoder, skipped otherwise; the
+    runtime loader reads them lazily on CloneVoice() only.
+    Requires torch (safetensors 'pt' framework) + sentencepiece; HF access to kyutai/pocket-tts."""
+    from huggingface_hub import hf_hub_download
+    from safetensors import safe_open
+    if args.quant not in ("fp16", "int8"):
+        sys.exit("ERROR: pocket-tts export supports --quant fp16 or int8.")
+    out = args.out or os.path.normpath(os.path.join(
+        HERE, "..", "..", "Resources", "Weights", f"weights_pockettts_english_{args.quant}"))
+    os.makedirs(out, exist_ok=True)
+    ex = TTSExporter(out, args.quant)
+    model_path = hf_hub_download(POCKETTTS_REPO, "languages/english/model.safetensors")
+    print(f"[source] {model_path}")
+    print(f"[out]    {out}  (quant={args.quant}, include_encoder={args.include_encoder})")
+
+    n_mat = n_f16 = n_skip = n_enc = 0
+    with safe_open(model_path, "pt") as f:
+        for k in f.keys():
+            if k.startswith("mimi.encoder") or k.startswith("mimi.downsample"):
+                if not args.include_encoder:
+                    n_skip += 1
+                    continue
+                n_enc += 1
+            arr = f.get_tensor(k).float().cpu().numpy()
+            parts = k.split(".")
+            name = "/".join(parts[:-1]) + "." + parts[-1] if len(parts) > 1 else k
+            if _pockettts_is_matmul(k, arr.shape):
+                if not args.dry:
+                    ex.mat(name, arr)
+                n_mat += 1
+            else:
+                if not args.dry:
+                    ex.f16(name, arr)
+                n_f16 += 1
+
+    # voice embedding (audio_prompt [1,125,1024]) — bake the requested prebuilt voice into the dir
+    try:
+        vp = hf_hub_download(POCKETTTS_REPO, f"embeddings/{args.voice}.safetensors")
+        with safe_open(vp, "pt") as vf:
+            for vk in vf.keys():
+                varr = vf.get_tensor(vk).float().cpu().numpy()
+                if not args.dry:
+                    ex.f16(f"voices/{args.voice}/{vk}", varr)
+        print(f"[voice]  baked: {args.voice}  {list(varr.shape)}")
+    except Exception as e:
+        print(f"WARN voice {args.voice}: {str(e)[:120]}")
+
+    # tokenizer.model (SentencePiece, from the open repo) + a plain JSON dump of pieces/scores/types
+    # for the C# Unigram encoder (protobuf is painful to parse at runtime in C#).
+    if not args.dry:
+        tok = hf_hub_download(POCKETTTS_REPO_OPEN, "languages/english/tokenizer.model")
+        shutil.copy(tok, os.path.join(out, "tokenizer.model"))
+        _pockettts_export_tokenizer_vocab(tok, os.path.join(out, "tokenizer.vocab.json"))
+        ex.save_manifest()
+    print(f"exported: {n_mat} matmul + {n_f16} f16 (incl. {n_enc} encoder), skipped {n_skip} "
+          f"(encoder/downsample kept-out). tokenizer.model copied.")
+    if args.quant == "int8" and ex.worst[0] > 0:
+        print(f"[quant]  worst int8 |err| {ex.worst[0]:.4f} on {ex.worst[1]}")
+    print(f"\nDone - {ex.bytes_written / 1024 / 1024:.0f} MB written to:\n  {out}")
+    print("Use it in Unity:  var tts = new PocketTTS();")
+
+
 # ----------------------------------------------------------------------------- model pool
 # Downloadable pool: `python import_params.py <name> [--quant ...]` — no HF id needed.
 MODEL_POOL = {
@@ -832,6 +964,8 @@ MODEL_POOL = {
     # TTS
     "chatterbox-turbo":   ("tts", CHATTERBOX_REPO,                "chatterbox"),
     "cosyvoice3-0.5b":    ("tts", COSYVOICE3_REPO,                "cosyvoice3"),
+    "pocket-tts":         ("tts", POCKETTTS_REPO,                 "pockettts"),   # DEFAULT NPC TTS
+
     "kokoro-82m":         ("tts", "hexgrad/Kokoro-82M",           "kokoro"),      # exporter: TTS/Kokoro/validation/import_kokoro.py (merging)
     # STT (exporters land with the STT workstreams)
     "qwen3asr-0.6b":      ("stt", "Qwen/Qwen3-ASR-0.6B",          "qwen3asr"),
@@ -857,11 +991,15 @@ def main():
     ap.add_argument("model", nargs="?", default=None,
                     help="pool name (see --list), HF hub id, or local checkpoint folder")
     ap.add_argument("--quant", choices=["fp16", "int8", "int4"], default="fp16")
-    ap.add_argument("--arch", choices=["gemma3", "qwen3_5", "minicpm5", "chatterbox", "cosyvoice3"], default=None,
-                    help="override architecture auto-detection")
+    ap.add_argument("--arch", choices=["gemma3", "qwen3_5", "minicpm5", "chatterbox", "cosyvoice3", "pockettts"],
+                    default=None, help="override architecture auto-detection")
     ap.add_argument("--out", default=None, help="override the output folder")
     ap.add_argument("--llm-variant", choices=["rl", "base"], default="rl",
                     help="cosyvoice3 only: llm.rl.pt (RL-tuned, default) or llm.pt")
+    ap.add_argument("--voice", default="jean", help="pocket-tts only: prebuilt voice embedding to bake in")
+    ap.add_argument("--dry", action="store_true", help="pocket-tts only: walk + classify tensors, write nothing")
+    ap.add_argument("--include-encoder", action="store_true",
+                    help="pocket-tts only: also export mimi.encoder* + mimi.downsample (P8 runtime voice cloning)")
     ap.add_argument("--list", action="store_true", help="print the downloadable model pool and exit")
     args = ap.parse_args()
 
@@ -884,6 +1022,9 @@ def main():
         return
     if args.arch == "chatterbox" or "chatterbox" in args.model.lower():
         export_chatterbox(args)
+        return
+    if args.arch == "pockettts" or "pocket-tts" in args.model.lower():
+        export_pockettts(args)
         return
 
     cfg, reader = resolve_model(args.model)

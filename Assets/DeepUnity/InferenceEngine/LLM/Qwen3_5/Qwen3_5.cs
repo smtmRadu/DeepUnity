@@ -233,6 +233,12 @@ namespace DeepUnity
 
             for (int t = 0; t < max_new_tokens - 1; t++)
             {
+                // #29 reverse arbiter: audible SILENCE with synthesis pending outranks tok/s —
+                // hold this token's burst so the voice refills faster. Hard-capped (InferencePerf.LlmHoldMaxFrames frames)
+                // so decode always makes progress no matter what the voice reports.
+                for (int hold = 0; FramePacing.TtsStarving && hold < InferencePerf.LlmHoldMaxFrames; hold++)
+                { FramePacing.LlmDeferrals++; yield return null; }
+
                 Stopwatch sw = Stopwatch.StartNew();
                 Tensor nextInput = Tensor.Constant(tokenId);
                 e = model.ForwardYielding(nextInput, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
@@ -385,6 +391,11 @@ namespace DeepUnity
 
             for (int t = 0; t < max_new_tokens - 1; t++)
             {
+                // #29 reverse arbiter: audible SILENCE with synthesis pending outranks tok/s —
+                // hard-capped hold (see the Chat loop; liveness guaranteed).
+                for (int hold = 0; FramePacing.TtsStarving && hold < InferencePerf.LlmHoldMaxFrames; hold++)
+                { FramePacing.LlmDeferrals++; yield return null; }
+
                 Stopwatch sw = Stopwatch.StartNew();
                 Tensor nextInput = Tensor.Constant(tokenId);
                 e = model.ForwardYielding(nextInput, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);

@@ -71,6 +71,20 @@ namespace DeepUnity
             public bool loadOnStart = true;
 
             void Awake() => source = GetComponent<AudioSource>();
+
+#if UNITY_EDITOR
+            // engine buffers are released by the ModelBase teardown sweep — the static must not
+            // outlive them. InitializeOnLoadMethod so the hook survives every domain reload.
+            [UnityEditor.InitializeOnLoadMethod]
+            static void HookEditorTeardown()
+            {
+                UnityEditor.EditorApplication.playModeStateChanged += s =>
+                {
+                    if (s == UnityEditor.PlayModeStateChange.ExitingPlayMode) shared = null;
+                };
+                UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += () => shared = null;
+            }
+#endif
             void Start() { if (loadOnStart) EnsureTts(); }
 
             void EnsureTts(bool beginLoad = true)

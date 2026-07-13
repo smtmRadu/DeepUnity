@@ -102,6 +102,7 @@ namespace DeepUnity
 
             public Gemma3Weights(string paramsPath, LLMQuant quant = LLMQuant.FP16)
             {
+                paramsPath = DeepUnityMeta.ResolvePath(paramsPath);   // player builds: StreamingAssets
                 // The exported params are large and may not be checked into the repo — point the
                 // user at the exporter script instead of letting hundreds of file errors rain.
                 if (!System.IO.Directory.Exists(paramsPath))

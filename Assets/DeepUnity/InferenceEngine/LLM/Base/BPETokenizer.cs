@@ -37,6 +37,7 @@ namespace DeepUnity
         /// <exception cref="ArgumentException"></exception>
         public BPETokenizer(string path_to_vocab_json, bool load_async = true)
         {
+            path_to_vocab_json = DeepUnityMeta.ResolvePath(path_to_vocab_json);   // player builds: StreamingAssets
             if (!File.Exists(path_to_vocab_json))
                 throw new ArgumentException($"BPETokenizer vocab at {path_to_vocab_json} doesn't exist!");
 

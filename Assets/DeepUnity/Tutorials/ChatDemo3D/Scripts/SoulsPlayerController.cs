@@ -135,7 +135,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         {
             ApplyGravity();
 
-            if (mode != PlayerMode.Exploring || busy)
+            if (mode != PlayerMode.Exploring || busy || PauseMenu.IsOpen)
                 return;
 
             Vector3 wishDir = WishDirection();

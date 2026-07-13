@@ -58,9 +58,9 @@ namespace DeepUnity
         static string ResolveParamsDir(QwenASRSize size)
         {
             string dir = $"weights_qwen3asr_{QwenASRConfig.SizeLabel(size)}_fp16";
-            string res = $"Assets/Resources/Weights/{dir}";
+            string res = DeepUnityMeta.ResolvePath($"Assets/Resources/Weights/{dir}");   // player builds: StreamingAssets
             return System.IO.Directory.Exists(res) ? res
-                 : $"Assets/DeepUnity/InferenceEngine/STT/QwenASR/{dir}";   // legacy fallback, mirrors LLM.ResolveParamsDir
+                 : DeepUnityMeta.ResolvePath($"Assets/DeepUnity/InferenceEngine/STT/QwenASR/{dir}");   // legacy fallback, mirrors LLM.ResolveParamsDir
         }
 
         protected override void StartPrefetch(long bytesPerFrame)

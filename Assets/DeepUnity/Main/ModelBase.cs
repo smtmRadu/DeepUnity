@@ -55,6 +55,59 @@ namespace DeepUnity
     //     are published atomically per-tensor by the main-thread pump).
     public abstract class ModelBase : IDisposable
     {
+        protected ModelBase()
+        {
+            // App-quit sweep registration (main-thread ctor): every live model is Released on the
+            // MAIN thread before Unity tears the GfxDevice down — otherwise resident ComputeBuffers
+            // reach the GC finalizer during shutdown and closing the app errors/crashes.
+            // (Mirrors the same sweep on the LLM base — the hierarchies unify in WS-F.)
+            DeepUnityDispatcher.EnsureExists();
+            lock (_liveModels)
+            {
+                _liveModels.RemoveAll(wr => !wr.TryGetTarget(out _));
+                _liveModels.Add(new WeakReference<ModelBase>(this));
+            }
+            if (!_quitHooked)
+            {
+                _quitHooked = true;
+                UnityEngine.Application.quitting += ReleaseAllOnQuit;
+            }
+        }
+
+#if UNITY_EDITOR
+        // Editor-side sweep triggers, re-subscribed after EVERY domain reload (a ctor-time hook
+        // dies with the reload; a mid-play recompile resets the flag without re-running ctors):
+        //  - ExitingPlayMode: normal play stop.
+        //  - beforeAssemblyReload: a mid-play script recompile destroys the engines WITHOUT
+        //    ExitingPlayMode ever firing — dispose before the assemblies swap or every resident
+        //    ComputeBuffer orphans ("Leak Detected: Persistent allocates N", root-caused 2026-07-13).
+        [UnityEditor.InitializeOnLoadMethod]
+        static void HookEditorTeardown()
+        {
+            UnityEditor.EditorApplication.playModeStateChanged += s =>
+            {
+                if (s == UnityEditor.PlayModeStateChange.ExitingPlayMode) ReleaseAllOnQuit();
+            };
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += ReleaseAllOnQuit;
+        }
+#endif
+
+        static readonly System.Collections.Generic.List<WeakReference<ModelBase>> _liveModels
+            = new System.Collections.Generic.List<WeakReference<ModelBase>>();
+        static bool _quitHooked;
+
+        static void ReleaseAllOnQuit()
+        {
+            lock (_liveModels)
+            {
+                foreach (var wr in _liveModels)
+                    if (wr.TryGetTarget(out ModelBase m))
+                        try { m.Release(); }
+                        catch (Exception e) { UnityEngine.Debug.LogException(e); }
+                _liveModels.Clear();
+            }
+        }
+
         /// <summary>Weights + tokenizer streamed, model ready for inference.</summary>
         public abstract bool IsReady { get; }
 

@@ -73,6 +73,7 @@ namespace DeepUnity
 
             public QwenASRWeights(string paramsPath, bool beginLoad = true)
             {
+                paramsPath = DeepUnityMeta.ResolvePath(paramsPath);   // player builds: StreamingAssets
                 if (!Directory.Exists(paramsPath))
                     throw new DirectoryNotFoundException(
                         $"QwenASR weights folder not found: '{paramsPath}'. Generate it with " +

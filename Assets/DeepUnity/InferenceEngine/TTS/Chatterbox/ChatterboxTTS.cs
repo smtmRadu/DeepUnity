@@ -75,9 +75,9 @@ namespace DeepUnity
         static string ResolveParamsDir(LLMQuant quant)
         {
             string q = quant == LLMQuant.INT8 ? "int8" : quant == LLMQuant.INT4 ? "int4" : "fp16";
-            string res = $"Assets/Resources/Weights/weights_chatterbox_turbo_{q}";
+            string res = DeepUnityMeta.ResolvePath($"Assets/Resources/Weights/weights_chatterbox_turbo_{q}");   // player builds: StreamingAssets
             return System.IO.Directory.Exists(res) ? res
-                 : $"Assets/DeepUnity/InferenceEngine/TTS/Chatterbox/weights_chatterbox_turbo_{q}";
+                 : DeepUnityMeta.ResolvePath($"Assets/DeepUnity/InferenceEngine/TTS/Chatterbox/weights_chatterbox_turbo_{q}");
         }
 
         void LoadConds()

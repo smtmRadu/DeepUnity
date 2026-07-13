@@ -132,15 +132,62 @@ namespace DeepUnity
     {
         protected LLM()
         {
+            // ctor runs on the main thread: make sure the dispatcher pump exists (the finalizer
+            // below needs it) and register for the app-quit sweep.
+            DeepUnityDispatcher.EnsureExists();
+            lock (_liveModels)
+            {
+                _liveModels.RemoveAll(wr => !wr.TryGetTarget(out _));
+                _liveModels.Add(new WeakReference<LLM>(this));
+            }
+            if (!_quitHooked)
+            {
+                _quitHooked = true;
+                UnityEngine.Application.quitting += ReleaseAllOnQuit;
+            }
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeChanged;
 #endif
         }
 
+        // GPU buffers are MAIN-THREAD-only — the GC finalizer thread must never call
+        // ComputeBuffer.Release directly (editor: warning; player build: native crash in
+        // DestroyBuffer). Marshal the release; Release() is idempotent by contract.
         ~LLM()
         {
-            Release();
+            DeepUnityDispatcher.RunOnMainThread(Release);
         }
+
+        // App-quit sweep: release every live model on the MAIN thread BEFORE Unity tears the
+        // GfxDevice down. Without it, resident models reach the GC finalizer during shutdown and
+        // "suddenly stopping the app" errors/crashes on close. (Editor play-mode exit is handled
+        // separately by OnPlayModeChanged — Application.quitting doesn't fire there.)
+        static readonly System.Collections.Generic.List<WeakReference<LLM>> _liveModels
+            = new System.Collections.Generic.List<WeakReference<LLM>>();
+        static bool _quitHooked;
+
+        static void ReleaseAllOnQuit()
+        {
+            lock (_liveModels)
+            {
+                foreach (var wr in _liveModels)
+                    if (wr.TryGetTarget(out LLM m))
+                        try { m.Release(); }
+                        catch (Exception e) { UnityEngine.Debug.LogException(e); }
+                _liveModels.Clear();
+            }
+        }
+
+#if UNITY_EDITOR
+        // A MID-PLAY script recompile destroys live models WITHOUT ExitingPlayMode firing (the
+        // per-instance play-exit hooks die with the old assemblies) — release before the swap or
+        // every resident ComputeBuffer orphans. Re-subscribed after every reload.
+        [UnityEditor.InitializeOnLoadMethod]
+        static void HookAssemblyReloadTeardown()
+        {
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += ReleaseAllOnQuit;
+        }
+#endif
 
 #if UNITY_EDITOR
         private void OnPlayModeChanged(UnityEditor.PlayModeStateChange state)
@@ -257,8 +304,9 @@ namespace DeepUnity
         /// </summary>
         protected static T GetOrCreateTokenizer<T>(string path, Func<string, T> create) where T : class
         {
-            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
-                return null;
+            path = DeepUnityMeta.ResolvePath(path);   // player builds: StreamingAssets — resolve BEFORE
+            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))   // the optional-tokenizer guard,
+                return null;                                                  // or builds silently get null
             if (_tokenizerCache.TryGetValue(path, out object cached))
                 return (T)cached;
             T tok = create(path);
@@ -410,24 +458,26 @@ namespace DeepUnity
 
         /// <summary>
         /// Warns (once per unique path per session, from a model's constructor) when an asset path
-        /// (<paramref name="what"/> = "weights" / "tokenizer") doesn't live under a <c>Resources</c> folder.
-        /// Loose files under <c>Assets/…</c> are not packed into a player build and their path doesn't exist at
-        /// runtime, so they'd be missing on build. By default they are kept out of Resources to save build size —
-        /// move them there only when you actually want to ship the model inside the final build.
+        /// (<paramref name="what"/> = "weights" / "tokenizer") won't ship with a player build.
+        /// <c>Assets/…</c>-relative paths are fine: DeepUnityBuildStep copies them into the build's
+        /// StreamingAssets and DeepUnityMeta.ResolvePath redirects there at runtime. Anything
+        /// OUTSIDE Assets/ (absolute paths, ../ escapes) is invisible to that pipeline.
         /// </summary>
         protected static void WarnIfNotInResources(string what, string path)
         {
             if (string.IsNullOrEmpty(path))
                 return;
 
-            foreach (string seg in path.Replace('\\', '/').Split('/'))
-                if (string.Equals(seg, "Resources", StringComparison.OrdinalIgnoreCase))
-                    return; // already under a Resources folder — nothing to warn about
+            string p = path.Replace('\\', '/');
+            if (p.StartsWith("Assets/") || p.Contains("/StreamingAssets/"))
+                return; // shipped by DeepUnityBuildStep / already resolved — nothing to warn about
 
             if (!_resourcesWarned.Add($"{what}|{path}"))
                 return; // warn only once per unique path per session
 
-            ConsoleMessage.Warning($"On build, the {what} must be placed and referenced from resources folder (current: \"{path}\").");
+            ConsoleMessage.Warning($"The {what} path \"{path}\" is outside Assets/ — player builds won't " +
+                                   "include it (DeepUnityBuildStep only ships Assets/-relative data); it must " +
+                                   "exist on the target machine at this exact path.");
         }
 
         /// <summary>
@@ -440,8 +490,9 @@ namespace DeepUnity
         /// </summary>
         protected static string ResolveParamsDir(string archFolder, string dirName)
         {
-            string res = $"Assets/Resources/Weights/{dirName}";
-            return System.IO.Directory.Exists(res) ? res : $"Assets/DeepUnity/InferenceEngine/LLM/{archFolder}/{dirName}";
+            string res = DeepUnityMeta.ResolvePath($"Assets/Resources/Weights/{dirName}");   // player builds: StreamingAssets
+            return System.IO.Directory.Exists(res) ? res
+                 : DeepUnityMeta.ResolvePath($"Assets/DeepUnity/InferenceEngine/LLM/{archFolder}/{dirName}");
         }
     }
 }

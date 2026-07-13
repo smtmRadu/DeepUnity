@@ -130,6 +130,7 @@ namespace DeepUnity
 
             public Qwen3_5Weights(string paramsPath, LLMQuant quant = LLMQuant.FP16)
             {
+                paramsPath = DeepUnityMeta.ResolvePath(paramsPath);   // player builds: StreamingAssets
                 // The exported params are large and may not be checked into the repo — point the
                 // user at the exporter scripts instead of letting 270 file-not-found errors rain.
                 if (!Directory.Exists(paramsPath))

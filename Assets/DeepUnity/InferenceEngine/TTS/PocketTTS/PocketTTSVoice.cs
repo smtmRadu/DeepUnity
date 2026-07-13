@@ -22,8 +22,10 @@ namespace DeepUnity
         [RequireComponent(typeof(AudioSource))]
         public class PocketTTSVoice : MonoBehaviour
         {
-            [Tooltip("Streaming: seconds buffered before playback starts (time-to-first-audio vs underrun safety).")]
-            public float prebufferSeconds = 0.5f;
+            [Tooltip("Streaming: seconds buffered before playback starts (time-to-first-audio vs underrun " +
+                     "safety). 1.0 is the UNIVERSAL standard: safe on low-end GPUs, +0.5s TTFA on high-end. " +
+                     "The underrun tuner raises it as needed and PERSISTS the learned value per device.")]
+            public float prebufferSeconds = 1f;
 
             [Tooltip("Streaming: ring buffer capacity in seconds.")]
             public float ringSeconds = 60f;
@@ -41,7 +43,7 @@ namespace DeepUnity
             public string voiceName = "jean";
 
             [Tooltip("Optional reference clip to CLONE this NPC's voice from (P8). Cloned + disk-cached " +
-                     "on first use, then loaded from cache. Requires encoder weights (import_pocket_tts.py " +
+                     "on first use, then loaded from cache. Requires encoder weights (import_params.py pocket-tts " +
                      "--include-encoder). Leave null to use the baked voiceName.")]
             public AudioClip clonedVoiceClip;
 
@@ -93,17 +95,14 @@ namespace DeepUnity
 
             readonly System.Diagnostics.Stopwatch pumpWatch = new System.Diagnostics.Stopwatch();
 
-            // #29 arbiter thresholds (seconds of audio buffered in the ring) — see PumpPipeline.
-            const float LLM_DEFER_HEADROOM = 1.0f;   // above: cede every LLM frame entirely
-            const float LLM_DEFER_FLOOR = 0.5f;      // above: cede alternate LLM frames; below: never defer
-            const double GPU_WAIT_SPIN_MS = 2.0;     // readback spin window while the ring is comfortable
+            // #29 arbiter thresholds + pump budgets are CENTRALIZED in InferencePerf (one
+            // documented board of every GPU-tuning knob, with low-end/high-end directions).
 
             // #29: hardware-neutral tick sizing. PocketTTS.GpuMacsPerTick (the slice budget of one
             // heavy pipeline tick) self-calibrates so a heavy tick costs ~TICK_COST_MIN..MAX ms
             // over the scene's own baseline frame — on ANY GPU. Slow cards converge to finer
             // slices, fast cards to coarser ones; external GPU load shrinks it (and it grows back).
-            const float TICK_COST_MIN_MS = 3f, TICK_COST_MAX_MS = 7f;
-            const long MACS_TICK_FLOOR = 200_000_000, MACS_TICK_CAP = 4_000_000_000;
+            // calibration band + slice bounds live in InferencePerf (Tts TickCost / MacsTick).
             float emaBaseMs = -1f, emaHeavyMs = -1f;   // EMAs of frame cost without/with a heavy tick
             bool heavyTickLastFrame;                    // set by PumpPipeline when it took a FrameBreak
 
@@ -120,17 +119,17 @@ namespace DeepUnity
                     // a luxury of surplus; shrinking here starved the ring during LLM generation
                     // (concurrent Qwen bursts inflate the measured tick cost) and the resulting
                     // mid-clause underruns were audible artifacts on long replies.
-                    if (IsSpeaking && RingCount() < (int)(LLM_DEFER_FLOOR * Cfg.SAMPLE_RATE))
+                    if (IsSpeaking && RingCount() < (int)(InferencePerf.TtsRefillFloorSeconds * Cfg.SAMPLE_RATE))
                     {
-                        PocketTTS.GpuMacsPerTick = Math.Min(MACS_TICK_CAP, (long)(PocketTTS.GpuMacsPerTick * 1.1f));
+                        PocketTTS.GpuMacsPerTick = Math.Min(InferencePerf.TtsMacsTickCap, (long)(PocketTTS.GpuMacsPerTick * 1.1f));
                         return;
                     }
                     if (emaBaseMs < 0f) return;
                     float cost = emaHeavyMs - emaBaseMs;
-                    if (cost > TICK_COST_MAX_MS)
-                        PocketTTS.GpuMacsPerTick = Math.Max(MACS_TICK_FLOOR, (long)(PocketTTS.GpuMacsPerTick * 0.9f));
-                    else if (cost < TICK_COST_MIN_MS)
-                        PocketTTS.GpuMacsPerTick = Math.Min(MACS_TICK_CAP, (long)(PocketTTS.GpuMacsPerTick * 1.02f));
+                    if (cost > InferencePerf.TtsTickCostMaxMs)
+                        PocketTTS.GpuMacsPerTick = Math.Max(InferencePerf.TtsMacsTickFloor, (long)(PocketTTS.GpuMacsPerTick * 0.9f));
+                    else if (cost < InferencePerf.TtsTickCostMinMs)
+                        PocketTTS.GpuMacsPerTick = Math.Min(InferencePerf.TtsMacsTickCap, (long)(PocketTTS.GpuMacsPerTick * 1.02f));
                 }
                 else if (IsSpeaking)   // baseline sampled only near the action (same scene load)
                     emaBaseMs = emaBaseMs < 0f ? ms : Mathf.Lerp(emaBaseMs, ms, 0.1f);
@@ -153,7 +152,52 @@ namespace DeepUnity
             /// <summary>All PocketTTSVoice instances share one engine (one weight set on GPU).</summary>
             public static PocketTTS SetSharedTTS(PocketTTS instance) => shared = instance;
 
-            void Awake() => source = GetComponent<AudioSource>();
+            void Awake()
+            {
+                source = GetComponent<AudioSource>();
+                // per-device persistence: start from whatever the underrun tuner learned in past
+                // sessions (never below the inspector values). Pure audio-side state — zero
+                // interaction with prefetch zones / pooling / KV persistence.
+                prebufferSeconds = Mathf.Max(prebufferSeconds, PlayerPrefs.GetFloat(PREF_PREBUFFER, 0f));
+                streamChunkFrames = Mathf.Max(streamChunkFrames, PlayerPrefs.GetInt(PREF_CHUNK, 0));
+            }
+
+            const string PREF_PREBUFFER = "DeepUnity.PocketTTS.PrebufferSeconds";
+            const string PREF_CHUNK = "DeepUnity.PocketTTS.StreamChunkFrames";
+
+            static void SaveTunedDefaults(float prebuffer, int chunkFrames)
+            {
+                PlayerPrefs.SetFloat(PREF_PREBUFFER, prebuffer);
+                PlayerPrefs.SetInt(PREF_CHUNK, chunkFrames);
+                PlayerPrefs.Save();
+            }
+
+#if UNITY_EDITOR
+            // PocketTTS is NOT a ModelBase subclass (standalone IDisposable — WS-F unification
+            // pending), so the ModelBase sweep never sees it: the shared engine must be disposed
+            // HERE or its FlowLM/Mimi scratch+KV ComputeBuffers survive the play session ("Leak
+            // Detected: Persistent allocates 336", root-caused 2026-07-13). Subscribed via
+            // InitializeOnLoadMethod — an Awake-time hook dies with any domain reload, and a
+            // MID-PLAY recompile needs beforeAssemblyReload (ExitingPlayMode never fires there).
+            [UnityEditor.InitializeOnLoadMethod]
+            static void HookEditorTeardown()
+            {
+                UnityEditor.EditorApplication.playModeStateChanged += s =>
+                {
+                    if (s == UnityEditor.PlayModeStateChange.ExitingPlayMode) DisposeShared();
+                };
+                UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += DisposeShared;
+            }
+
+            static void DisposeShared()
+            {
+                shared?.Dispose();
+                shared = null;
+                s_engineBoundClip = null;
+                holders.Clear();
+                warmed = false;
+            }
+#endif
             void Start() { if (loadOnStart) EnsureTts(); }
 
             // The clip actually bound into the SHARED engine right now. STATIC on purpose: the
@@ -314,8 +358,43 @@ namespace DeepUnity
             /// <summary>Hard stop: drop in-flight synthesis, queued clauses, and buffered audio.
             /// Cuts IMMEDIATELY (interrupt semantics) — the end-of-utterance grace only applies to
             /// the natural ring-drain pause in Update.</summary>
+            // ---- leave-fade: voice doesn't cut on dialogue close — it fades to silence ---------
+            Coroutine fadeJob;
+            float fadePrevVolume = 1f;
+
+            /// <summary>Fade the voice smoothly to silence over <paramref name="seconds"/>, then
+            /// hard-stop (drops synthesis + queued clauses) and restore the volume for the next
+            /// utterance. Used on Leave/close so speech doesn't cut mid-word. A new Say/StopSpeaking
+            /// during the fade cancels it (volume restored immediately).</summary>
+            public void FadeOutAndStop(float seconds = 1f)
+            {
+                if (fadeJob != null) return;                      // fade already in progress
+                if (!IsSpeaking && !IsAudioPlaying) { StopSpeaking(); return; }   // nothing audible
+                fadePrevVolume = source != null ? source.volume : 1f;
+                fadeJob = StartCoroutine(FadeOutRoutine(seconds));
+            }
+
+            IEnumerator FadeOutRoutine(float seconds)
+            {
+                for (float t = 0f; t < seconds; t += Time.deltaTime)
+                {
+                    if (source != null) source.volume = Mathf.Lerp(fadePrevVolume, 0f, t / seconds);
+                    yield return null;
+                }
+                fadeJob = null;   // cleared BEFORE StopSpeaking so its fade-cancel is a no-op
+                StopSpeaking();
+                if (source != null) source.volume = fadePrevVolume;   // ready for the next reply
+            }
+
             public void StopSpeaking()
             {
+                // an interrupt (new Say) during a leave-fade cancels it and restores the volume
+                if (fadeJob != null)
+                {
+                    StopCoroutine(fadeJob);
+                    fadeJob = null;
+                    if (source != null) source.volume = fadePrevVolume;
+                }
                 streamJob = null;
                 inflightMark = null;
                 clauseQueue.Clear();
@@ -346,18 +425,25 @@ namespace DeepUnity
                 IsSpeaking = true;
                 EnsureStream();
 
+                // reverse arbiter (weak GPUs): mark starvation ONLY while the player hears
+                // SILENCE that synthesis should be filling (clause start prebuffer, or an
+                // underrun re-gate) — not merely a low ring during playback, which on weak GPUs
+                // is the normal state and would hold the LLM for the whole spoken reply.
+                if (!streamStarted && (streamJob != null || clauseQueue.Count > 0))
+                    FramePacing.NoteTtsStarving();
+
                 // #29 cross-engine arbiter: while the LLM is actively decoding, a TTS heavy tick
                 // lands in the same frame's GPU queue (the 22-27 ms GEN+SPK+AUD band). TTS has
                 // throughput margin, the LLM doesn't — so cede LLM frames whenever the ring can
-                // afford it: fully above LLM_DEFER_HEADROOM seconds buffered, alternate frames
-                // above the LLM_DEFER_FLOOR. Below the floor (clause start / near-starvation)
+                // afford it: fully above InferencePerf.TtsCedeHeadroomSeconds seconds buffered, alternate frames
+                // above the InferencePerf.TtsRefillFloorSeconds. Below the floor (clause start / near-starvation)
                 // pump every frame — an occasional shared frame beats an audible gap.
                 if (FramePacing.LlmBusy)
                 {
                     int headroom = RingCount();
-                    if (headroom >= (int)(LLM_DEFER_HEADROOM * Cfg.SAMPLE_RATE))
+                    if (headroom >= (int)(InferencePerf.TtsCedeHeadroomSeconds * Cfg.SAMPLE_RATE))
                     { FramePacing.TtsDeferrals++; return; }
-                    if (headroom >= (int)(LLM_DEFER_FLOOR * Cfg.SAMPLE_RATE) && (Time.frameCount & 1) == 1)
+                    if (headroom >= (int)(InferencePerf.TtsRefillFloorSeconds * Cfg.SAMPLE_RATE) && (Time.frameCount & 1) == 1)
                     { FramePacing.TtsDeferrals++; return; }
                 }
 
@@ -369,11 +455,15 @@ namespace DeepUnity
                 // beat an audible gap. (it.3 lesson: a fixed 2 ms spin everywhere starved the
                 // ring on long replies and the resulting always-low-ring emergency bursts were
                 // WORSE spikes than the waste it saved.)
-                bool lowRing = RingCount() < (int)(LLM_DEFER_FLOOR * Cfg.SAMPLE_RATE);
+                bool lowRing = RingCount() < (int)(InferencePerf.TtsRefillFloorSeconds * Cfg.SAMPLE_RATE);
+                // silent refill (prebuffer / underrun re-gate): nothing is audible, so frame
+                // smoothness buys nothing — push MUCH harder to end the gap sooner (weak GPUs).
+                bool silentRefill = !streamStarted;
                 int heavyTicks = 0;
-                int maxHeavyTicks = lowRing ? 2 : 1;
-                double waitSpinMs = lowRing ? gpuBudgetMs : GPU_WAIT_SPIN_MS;
-                while (pumpWatch.Elapsed.TotalMilliseconds < gpuBudgetMs)
+                int maxHeavyTicks = silentRefill ? InferencePerf.TtsSilentRefillHeavyTicks : lowRing ? 2 : 1;
+                double frameBudgetMs = silentRefill ? gpuBudgetMs * InferencePerf.TtsSilentRefillBudgetScale : gpuBudgetMs;
+                double waitSpinMs = (lowRing || silentRefill) ? frameBudgetMs : InferencePerf.TtsGpuWaitSpinMs;
+                while (pumpWatch.Elapsed.TotalMilliseconds < frameBudgetMs)
                 {
                     if (streamJob == null && clauseQueue.Count > 0)
                     {
@@ -455,6 +545,15 @@ namespace DeepUnity
                 }
             }
 
+            // ---- anti-stutter (weak GPUs): playback outrunning synthesis mid-reply drains the
+            // ring and dribbles word...pause...word (GTX 1650: streaming ~real-time, and the #29
+            // arbiter also cedes TTS frames to the decoding LLM). When it happens, re-gate
+            // playback on the prebuffer (one longer pause, then a full phrase — instead of
+            // word-by-word) and GROW the prebuffer so later clauses start with more runway.
+            int underruns;
+            bool wasStarved;
+            // escalation ceilings live in InferencePerf (TtsPrebufferCapSeconds / TtsMaxChunkFrames).
+
             void Update()
             {
                 if (source != null && source.pitch != pitch) source.pitch = pitch;
@@ -464,6 +563,40 @@ namespace DeepUnity
 
                 int buffered = RingCount();
                 if (buffered > 0) lastNonEmptyRealtime = Time.realtimeSinceStartup;
+
+                // mid-reply starvation: ring empty while MORE synthesis is coming (distinct from
+                // the natural end-of-reply drain, where nothing is in flight).
+                bool starving = streamStarted && buffered == 0 &&
+                                (streamJob != null || clauseQueue.Count > 0 || feedingText);
+                if (starving && !wasStarved)
+                {
+                    wasStarved = true;
+                    if (++underruns >= 2)
+                    {
+                        if (prebufferSeconds < InferencePerf.TtsPrebufferCapSeconds)
+                        {
+                            prebufferSeconds = Mathf.Min(InferencePerf.TtsPrebufferCapSeconds, prebufferSeconds * 2f);
+                            underruns = 0;
+                            SaveTunedDefaults(prebufferSeconds, streamChunkFrames);
+                            Debug.Log($"[PocketTTSVoice] ring underruns — prebuffer raised to " +
+                                      $"{prebufferSeconds:F1}s (synthesis can't outrun playback on this GPU; persisted).");
+                        }
+                        else if (streamChunkFrames < InferencePerf.TtsMaxChunkFrames)
+                        {
+                            // prebuffer maxed and still starving: the remaining tax is the
+                            // per-chunk windowed re-decode — bigger chunks amortize it
+                            // (takes effect from the next clause).
+                            streamChunkFrames = Mathf.Min(InferencePerf.TtsMaxChunkFrames, streamChunkFrames + 4);
+                            underruns = 0;
+                            SaveTunedDefaults(prebufferSeconds, streamChunkFrames);
+                            Debug.Log($"[PocketTTSVoice] still underrunning at max prebuffer — " +
+                                      $"streamChunkFrames raised to {streamChunkFrames} " +
+                                      $"({streamChunkFrames * 0.08f:F2}s per decode chunk; persisted).");
+                        }
+                    }
+                    streamStarted = false;   // silence; the start branch below re-arms at the prebuffer
+                }
+                else if (!starving) wasStarved = false;
                 // start at the prebuffer threshold — or as soon as the whole reply is synthesized
                 // (short replies never reach the threshold; without this they'd sit forever)
                 bool synthIdle = streamJob == null && clauseQueue.Count == 0 && !feedingText;

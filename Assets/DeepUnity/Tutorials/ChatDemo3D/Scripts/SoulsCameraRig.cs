@@ -49,7 +49,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 
         private void LateUpdate()
         {
-            if (mode != Mode.Orbit || target == null || moveCoroutine != null)
+            if (mode != Mode.Orbit || target == null || moveCoroutine != null || PauseMenu.IsOpen)
                 return;
 
             yaw += Input.GetAxis("Mouse X") * mouseSensitivity;

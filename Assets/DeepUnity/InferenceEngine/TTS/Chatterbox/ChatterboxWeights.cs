@@ -58,6 +58,7 @@ namespace DeepUnity
 
             public ChatterboxWeights(string paramsPath)
             {
+                paramsPath = DeepUnityMeta.ResolvePath(paramsPath);   // player builds: StreamingAssets
                 if (!Directory.Exists(paramsPath))
                     throw new DirectoryNotFoundException(
                         $"Chatterbox weights folder not found: '{paramsPath}'. Generate it with " +

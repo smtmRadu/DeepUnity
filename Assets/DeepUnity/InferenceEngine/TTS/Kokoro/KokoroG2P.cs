@@ -83,6 +83,7 @@ namespace DeepUnity
 
             public KokoroG2P(string dataPathBase = "Assets/DeepUnity/InferenceEngine/TTS/Kokoro/KokoroG2P")
             {
+                dataPathBase = DeepUnityMeta.ResolvePath(dataPathBase);   // player builds: StreamingAssets
                 // 4.6 MB of TSV (~200k lexicon entries): parsing is heavy string work — doing it
                 // here synchronously stalled the game for seconds the moment a prefetch zone
                 // built the TTS. Parse on the pool; every synthesis path gates on IsReady.

@@ -96,7 +96,9 @@ namespace DeepUnity
 
             public PocketTTS(string weightsDir = null)
             {
-                this.weightsDir = weightsDir ?? Cfg.WEIGHTS_DIR_FP16;
+                // resolved HERE (not just in PocketTTSWeights) — the tokenizer + encoder sibling
+                // files are read off this field too (player builds: StreamingAssets).
+                this.weightsDir = DeepUnityMeta.ResolvePath(weightsDir ?? Cfg.WEIGHTS_DIR_FP16);
                 weights = new PocketTTSWeights(this.weightsDir, beginLoad: false);
                 flm = new PocketTTSFlowLM(weights);
                 mimi = new PocketTTSMimi(weights);
@@ -156,7 +158,7 @@ namespace DeepUnity
 
             /// <summary>Rebind the baked voice (cheap CPU read of voices/&lt;name&gt;/audio_prompt — no
             /// GPU reload). Unknown names fall back to the currently-loaded voice with a warning
-            /// (only baked voices in the export are available; bake more with import_pocket_tts.py --voice).</summary>
+            /// (only baked voices in the export are available; bake more with import_params.py pocket-tts --voice).</summary>
             public void SetVoice(string name)
             {
                 if (string.IsNullOrEmpty(name) || name == CurrentVoice) return;
@@ -174,7 +176,7 @@ namespace DeepUnity
             // A reference clip -> audio_prompt [T,1024] via the Mimi encoder + speaker_proj. Cached
             // to disk by a content hash of the samples so re-cloning the same clip is a fast load
             // (~few hundred KB) instead of a full re-encode. Requires the encoder weights in the dir
-            // (import_pocket_tts.py --include-encoder); baked voices work without them.
+            // (import_params.py pocket-tts --include-encoder); baked voices work without them.
 
             public bool HasEncoder => weights.Has("mimi/encoder/model/0/conv.weight")
                                    && weights.Has("mimi/downsample/conv/conv.weight");
@@ -211,30 +213,42 @@ namespace DeepUnity
 
             /// <summary>The cache key CloneVoice(clip) will use — lets editor tooling check for a baked
             /// Resources entry without touching the model. Null if the clip isn't readable.</summary>
-            public static string CloneKey(AudioClip clip)
+            public static string CloneKey(AudioClip clip) => CloneKey(clip, out _);
+
+            /// <summary>Cache key + the exact crop CloneVoice(clip) will apply. The key hashes the
+            /// CROPPED wav, so the cached latents cover precisely crop.croppedSeconds of audio —
+            /// editor tooling shows the real cropped length from this, without touching the model.</summary>
+            public static string CloneKey(AudioClip clip, out CropInfo crop)
             {
+                crop = default;
                 float[] mono = ClipToMono(clip);
                 if (mono == null) return null;
-                return KeyFor(PrepRef(mono, clip.frequency));
+                return KeyFor(PrepRef(mono, clip.frequency, out crop));
             }
 
             /// <summary>Editor precompute: encode a reference wav to the raw audio_prompt bytes the
             /// cache stores (byte-identical to WritePromptBin's file / a Resources .bytes asset).
             /// Weights (incl. the Mimi encoder) must be resident. Null on failure.</summary>
             public byte[] PrecomputePromptBytes(float[] samples, int sampleRate, string label, out string key)
+                => PrecomputePromptBytes(samples, sampleRate, label, out key, out _);
+            public byte[] PrecomputePromptBytes(float[] samples, int sampleRate, string label, out string key, out CropInfo crop)
             {
                 key = null;
+                crop = default;
                 if (samples == null || samples.Length == 0) return null;
-                float[] wav = PrepRef(samples, sampleRate);   // resample to 24k + cap at MAX_REF_SECONDS
+                float[] wav = PrepRef(samples, sampleRate, out crop);   // resample to 24k + cap at MAX_REF_SECONDS
                 key = KeyFor(wav);   // content-addressed (label only names the voice, never the key)
                 float[] prompt = EncodeToPrompt(wav);
                 return prompt == null ? null : PromptToBytes(prompt);
             }
             public byte[] PrecomputePromptBytes(AudioClip clip, out string key)
+                => PrecomputePromptBytes(clip, out key, out _);
+            public byte[] PrecomputePromptBytes(AudioClip clip, out string key, out CropInfo crop)
             {
                 key = null;
+                crop = default;
                 float[] mono = ClipToMono(clip);
-                return mono == null ? null : PrecomputePromptBytes(mono, clip.frequency, clip.name, out key);
+                return mono == null ? null : PrecomputePromptBytes(mono, clip.frequency, clip.name, out key, out crop);
             }
 
             /// <summary>Clone a voice from an AudioClip (any sample rate; multi-channel down-mixed to
@@ -265,22 +279,38 @@ namespace DeepUnity
             // truncation artifact. Never cropped shorter than MIN_CROP_SECONDS; a "pause" is
             // >= 3 consecutive 30 ms hops whose RMS sits under 15% of the clip's mean hop-RMS
             // (stop-consonant closures are shorter, real pauses are longer).
-            const float MIN_CROP_SECONDS = 7f;
+            public const float MIN_CROP_SECONDS = 7f;
             const float PAUSE_WIN_SECONDS = 0.03f;
 
-            static float[] PrepRef(float[] samples, int sampleRate)
+            /// <summary>What PrepRef did to a reference clip — surfaced so the inspector (precompute
+            /// button) and the encode-time log can report the REAL cropped length. The cache key
+            /// hashes the cropped wav, so the cached latents cover exactly croppedSeconds of audio.</summary>
+            public struct CropInfo
+            {
+                public float totalSeconds;    // reference length (after resample to 24 kHz)
+                public float croppedSeconds;  // length actually used (== totalSeconds when uncropped)
+                public bool cropped;          // clip exceeded MAX_REF_SECONDS
+                public bool atPause;          // cut landed on a natural pause (else hard cap cut)
+            }
+
+            static float[] PrepRef(float[] samples, int sampleRate) => PrepRef(samples, sampleRate, out _);
+
+            static float[] PrepRef(float[] samples, int sampleRate, out CropInfo crop)
             {
                 float[] wav = sampleRate == Cfg.SAMPLE_RATE ? samples : Resample(samples, sampleRate, Cfg.SAMPLE_RATE);
                 int cap = (int)(MAX_REF_SECONDS * Cfg.SAMPLE_RATE);
-                if (wav.Length <= cap) return wav;
-
+                crop.totalSeconds = wav.Length / (float)Cfg.SAMPLE_RATE;
+                if (wav.Length <= cap)
+                {
+                    crop.croppedSeconds = crop.totalSeconds;
+                    crop.cropped = false;
+                    crop.atPause = false;
+                    return wav;
+                }
                 int cut = FindPauseCut(wav, cap);
-                float total = wav.Length / (float)Cfg.SAMPLE_RATE;
-                Debug.Log(cut < cap
-                    ? $"[PocketTTS] voice-clone reference is {total:F1}s — cropped at a natural pause, " +
-                      $"{cut / (float)Cfg.SAMPLE_RATE:F2}s (native prompt cap {MAX_REF_SECONDS:F0}s)."
-                    : $"[PocketTTS] voice-clone reference is {total:F1}s — no pause found near the cap, " +
-                      $"using the first {MAX_REF_SECONDS:F0}s (the model's native prompt length).");
+                crop.cropped = true;
+                crop.atPause = cut < cap;
+                crop.croppedSeconds = cut / (float)Cfg.SAMPLE_RATE;
                 var t = new float[cut];
                 Array.Copy(wav, t, cut);
                 return t;
@@ -348,7 +378,7 @@ namespace DeepUnity
                 if (!IsReady) { ConsoleMessage.Warning("pocket-tts CloneVoice: weights not resident yet."); return false; }
                 if (samples == null || samples.Length == 0) return false;
 
-                float[] wav = PrepRef(samples, sampleRate);   // resample to 24k + cap at MAX_REF_SECONDS
+                float[] wav = PrepRef(samples, sampleRate, out CropInfo crop);   // resample to 24k + cap at MAX_REF_SECONDS
                 string key = KeyFor(wav);   // content-addressed (label only names the voice, never the key)
                 string path = System.IO.Path.Combine(CacheDir, key + ".bin");
 
@@ -372,6 +402,15 @@ namespace DeepUnity
                     }
                     else
                     {
+                        // crop info logs ONLY here — an actual encode. Cache hits (persistent or
+                        // editor-baked Resources) stay silent: the crop already happened at bake
+                        // time and the inspector's precompute box reports the real cropped length.
+                        if (crop.cropped)
+                            Debug.Log(crop.atPause
+                                ? $"[PocketTTS] voice-clone reference '{label ?? key}' is {crop.totalSeconds:F1}s — cropped at a " +
+                                  $"natural pause to {crop.croppedSeconds:F2}s (native prompt cap {MAX_REF_SECONDS:F0}s)."
+                                : $"[PocketTTS] voice-clone reference '{label ?? key}' is {crop.totalSeconds:F1}s — no pause found " +
+                                  $"near the cap, using the first {MAX_REF_SECONDS:F0}s.");
                         prompt = EncodeToPrompt(wav);   // encode once
                         if (prompt == null) return false;
                         WritePromptBin(path, prompt);   // cache for the next runtime
@@ -403,7 +442,7 @@ namespace DeepUnity
                 if (!HasEncoder)
                 {
                     ConsoleMessage.Warning($"pocket-tts CloneVoice: encoder weights missing in {weightsDir}. " +
-                                           "Re-export with `import_pocket_tts.py --include-encoder`.");
+                                           "Re-export with `import_params.py pocket-tts --include-encoder`.");
                     return null;
                 }
                 _speakerProj ??= weights.ReadFloats("flow_lm.speaker_proj_weight");   // [1024,32]

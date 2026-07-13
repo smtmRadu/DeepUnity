@@ -78,6 +78,7 @@ namespace DeepUnity
 
             public ParakeetWeights(string paramsPath, bool beginLoad = true)
             {
+                paramsPath = DeepUnityMeta.ResolvePath(paramsPath);   // player builds: StreamingAssets
                 if (!Directory.Exists(paramsPath))
                     throw new DirectoryNotFoundException(
                         $"Parakeet weights folder not found: '{paramsPath}'. Generate it with " +

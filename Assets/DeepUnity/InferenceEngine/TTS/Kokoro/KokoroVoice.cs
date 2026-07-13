@@ -89,6 +89,26 @@ namespace DeepUnity
 
         void Awake() => source = GetComponent<AudioSource>();
 
+#if UNITY_EDITOR
+        // engine buffers are released by the ModelBase teardown sweep — the statics must not
+        // outlive them. InitializeOnLoadMethod so the hook survives every domain reload.
+        [UnityEditor.InitializeOnLoadMethod]
+        static void HookEditorTeardown()
+        {
+            UnityEditor.EditorApplication.playModeStateChanged += s =>
+            {
+                if (s == UnityEditor.PlayModeStateChange.ExitingPlayMode) ClearShared();
+            };
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += ClearShared;
+        }
+
+        static void ClearShared()
+        {
+            shared = null;
+            warmed = false;
+        }
+#endif
+
         void Start() { if (loadOnStart) EnsureTts(); }
 
         /// <summary>Build the shared TTS and start streaming its weights (budgeted, no frame
@@ -240,8 +260,40 @@ namespace DeepUnity
             sayJob = StartCoroutine(SayRoutine(text));
         }
 
+        // ---- leave-fade: voice doesn't cut on dialogue close — it fades to silence -------------
+        Coroutine fadeJob;
+        float fadePrevVolume = 1f;
+
+        /// <summary>Fade smoothly to silence over <paramref name="seconds"/>, then hard-stop and
+        /// restore the volume for the next utterance (mirrors PocketTTSVoice.FadeOutAndStop).</summary>
+        public void FadeOutAndStop(float seconds = 1f)
+        {
+            if (fadeJob != null) return;
+            if (!IsSpeaking && !IsAudioPlaying) { StopSpeaking(); return; }
+            fadePrevVolume = source != null ? source.volume : 1f;
+            fadeJob = StartCoroutine(FadeOutRoutine(seconds));
+        }
+
+        IEnumerator FadeOutRoutine(float seconds)
+        {
+            for (float t = 0f; t < seconds; t += Time.deltaTime)
+            {
+                if (source != null) source.volume = Mathf.Lerp(fadePrevVolume, 0f, t / seconds);
+                yield return null;
+            }
+            fadeJob = null;   // cleared BEFORE StopSpeaking so its fade-cancel is a no-op
+            StopSpeaking();
+            if (source != null) source.volume = fadePrevVolume;
+        }
+
         public void StopSpeaking()
         {
+            if (fadeJob != null)
+            {
+                StopCoroutine(fadeJob);
+                fadeJob = null;
+                if (source != null) source.volume = fadePrevVolume;
+            }
             if (sayJob != null) { StopCoroutine(sayJob); sayJob = null; }
             clauseQueue.Clear();
             pendingText.Clear();
