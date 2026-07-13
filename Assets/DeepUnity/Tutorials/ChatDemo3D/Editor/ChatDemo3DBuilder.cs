@@ -1689,10 +1689,11 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // CosyVoice "velmire" voice was baked from. CosyVoice3 stays selectable on the enum
             // and takes over once its A6 perf work lands RTF < 1.
             SetEnum(npc, "conversationMode", (int)NPCInteractor3D.ConversationMode.LlmPlusTts);
-            SetEnum(npc, "ttsModel", (int)NPCInteractor3D.TtsModel.Kokoro);
-            // velmire_elder = 0.5·am_onyx + 0.5·bm_george voicepack blend (deep + old); pure
-            // candidates baked too: bm_george, am_santa, am_onyx (ProbeLogs/voice_candidates)
-            SetString(npc, "ttsVoice", "velmire_elder");
+            // Velmire now speaks through pocket-tts (Kyutai 100M AR, RTF ~0.15 — the DEFAULT NPC
+            // TTS): real-time DURING generation, correct name pronunciation, voice cloning. Baked
+            // "jean" voice. Kokoro/CosyVoice3 stay selectable on the enum.
+            SetEnum(npc, "ttsModel", (int)NPCInteractor3D.TtsModel.PocketTTS);
+            SetString(npc, "ttsVoice", "jean");
             SetFloat(npc, "voicePitch", 1.0f);
             // residency A/B test: the big transparent-green sphere slow-prefetches Qwen+Kokoro
             // on entry, HOLDS both on the GPU while the player is inside, and unloads both on
@@ -1811,6 +1812,11 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // of the two loads first serves both). The small sphere trigger stays interaction-only.
             SetBool(npc, "usePrefetchZone", true);
             SetFloat(npc, "prefetchRadius", 10f);
+            // Keep the crone on Kokoro/af_heart so the scene has TWO distinct voices (a live A/B:
+            // Velmire = pocket-tts "jean" default vs the witch = Kokoro af_heart). Pinned
+            // explicitly so the pocket-tts field default doesn't collapse both to "jean".
+            SetEnum(npc, "ttsModel", (int)NPCInteractor3D.TtsModel.Kokoro);
+            SetString(npc, "ttsVoice", "af_heart");
             return root;
         }
 

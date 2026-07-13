@@ -1,0 +1,492 @@
+// Pocket-TTS (Kyutai) Mimi-decoder kernels for DeepUnity. Self-contained: the conv/norm/linear/
+// activation kernels are copied VERBATIM from CosyVoiceFlowCS (proven), plus the pocket-specific
+// additions: ConvTranspose1DGrouped (depthwise x16 upsample) and a causal RoPE attention path for
+// the 2-layer decoder_transformer (LayerNorm + layer_scale). [T,C] layout everywhere.
+//
+// UNCERTAIN (flagged for the compile+probe loop):
+//  - decoder_transformer uses RoPE (Moshi/Mimi convention). If parity fails on mimi_xf_out with
+//    RoPE, try no-RoPE (identity) — toggle by dispatching CausalAttention with rope_on=0.
+//  - self_attn.in_proj/out_proj have NO bias in the export (only .weight present) — has_bias=0.
+//  - layer_scale multiplies the sublayer output (attn / ffn) per-channel BEFORE the residual add.
+
+#pragma kernel CopyBuffer
+#pragma kernel CopySlice
+#pragma kernel SliceCols
+#pragma kernel ZeroBuffer
+#pragma kernel AddResidual
+#pragma kernel ScaleBuf
+#pragma kernel ChannelScaleAdd
+#pragma kernel Activate
+#pragma kernel LinearBias
+#pragma kernel LinearBiasQ8
+#pragma kernel Conv1D
+#pragma kernel ConvTranspose1D
+#pragma kernel ConvTranspose1DGrouped
+#pragma kernel LayerNormT
+#pragma kernel ApplyRoPE
+#pragma kernel CausalAttention
+#pragma kernel CausalAttentionKV
+#pragma kernel AppendKV
+#pragma kernel Modulate
+#pragma kernel GateAdd
+#pragma kernel RMSNormFlow
+
+// -------------------------------------------------------------------- uniforms
+uint seq_len;
+uint in_len;
+uint in_dim;
+uint out_dim;
+uint conv_kernel;
+uint conv_stride;
+uint conv_dilation;
+int  pad_left;
+uint norm_dim;
+uint num_heads;
+uint head_dim;
+uint buffer_size;
+uint copy_src_offset;
+uint copy_dst_offset;
+uint n_groups;
+uint pos_offset;        // absolute row index of local row 0 (RoPE / causal offset)
+int  activation_type;   // 0 none 1 silu 2 gelu_exact 4 leaky 7 elu 8 gelu_tanh
+int  has_bias;
+int  rope_on;           // 1 = apply RoPE in CausalAttention, 0 = skip (parity fallback)
+uint attn_context;      // sliding causal window: key j valid iff 0 <= (qi-j) < attn_context; 0 = unbounded
+uint kv_len;            // KV-cache decode: number of valid cache rows to attend over (query = row kv_len-1)
+int  pad_replicate;     // Conv1D left-pad mode: 0 = constant zero (skip ti<0), 1 = replicate x[0] (clamp ti)
+float norm_eps;
+float rms_eps;          // RMSNormFlow eps
+uint mod_shift_off;     // Modulate/GateAdd: offsets into mod_vec (adaLN output [shift|scale|gate])
+uint mod_scale_off;
+uint mod_gate_off;
+float scale;            // attention scale (1/sqrt(head_dim))
+float scale_val;        // ScaleBuf multiplier
+float leaky_slope;
+float rope_theta;       // 10000
+
+// -------------------------------------------------------------------- buffers
+StructuredBuffer<uint>    W;          // fp16 weight (2-per-uint) OR int8 weight (4-per-uint, q8 kernels)
+StructuredBuffer<uint>    W_bias;
+StructuredBuffer<uint>    W_scales;    // q8 per-output-row fp16 scales (LinearBiasQ8 only)
+StructuredBuffer<uint>    ln_gamma;
+StructuredBuffer<uint>    ln_beta;
+StructuredBuffer<uint>    ch_scale;   // layer_scale.scale [C] (fp16) for ChannelScaleAdd
+StructuredBuffer<float>   mod_vec;    // adaLN output (fp32), [shift|scale|gate] concatenated
+StructuredBuffer<uint>    rms_alpha;  // RMSNorm alpha [C] (fp16)
+StructuredBuffer<float>   X;
+RWStructuredBuffer<float>  Y;
+StructuredBuffer<float>   norm_input;
+RWStructuredBuffer<float>  norm_output;
+StructuredBuffer<float>   Q;
+StructuredBuffer<float>   K;
+StructuredBuffer<float>   V;
+RWStructuredBuffer<float>  AttendedValues;
+RWStructuredBuffer<float>  KCache;   // [maxLen, H*D] persistent K cache (KV decode)
+RWStructuredBuffer<float>  VCache;   // [maxLen, H*D] persistent V cache (KV decode)
+RWStructuredBuffer<float>  buf_a;
+StructuredBuffer<float>   buf_b;
+RWStructuredBuffer<float>  inout_buf;
+
+// D3D11 caps thread-group count at 65535 PER DIMENSION. Big elementwise/conv dispatches (SEANet
+// stages run 122880 elements PER LATENT -> >16.7M elements past ~136 latents) spill groups into Y:
+// C# Dispatch1D issues (65535, ceil(g/65535), 1) and the kernel reconstructs the linear element
+// index. With y == 1 this reduces to the classic dtid.x, so legacy 1-D dispatches stay bit-identical.
+#define MAX_GX 65535u
+uint LinearId(uint3 gid, uint3 tid) { return (gid.y * MAX_GX + gid.x) * 256u + tid.x; }
+
+float readH(StructuredBuffer<uint> buf, uint index)
+{
+    uint word = buf[index >> 1];
+    uint shift = (index & 1u) * 16u;
+    return f16tof32(word >> shift);
+}
+float safe_tanh(float x) { float a = abs(x); float e = exp(-2.0 * a); return sign(x) * ((1.0 - e) / (1.0 + e)); }
+float erf_approx(float x)
+{
+    float s = sign(x); float a = abs(x); float t = 1.0 / (1.0 + 0.3275911 * a);
+    float y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * exp(-a * a);
+    return s * y;
+}
+float gelu_exact(float x) { return 0.5 * x * (1.0 + erf_approx(x * 0.70710678)); }
+float silu(float x) { return x / (1.0 + exp(-x)); }
+float apply_act(float v)
+{
+    if (activation_type == 1) return silu(v);
+    if (activation_type == 2) return gelu_exact(v);
+    if (activation_type == 4) return v > 0.0 ? v : leaky_slope * v;
+    if (activation_type == 7) return v > 0.0 ? v : exp(v) - 1.0;   // ELU alpha=1
+    if (activation_type == 8) return 0.5 * v * (1.0 + safe_tanh(0.7978845608 * (v + 0.044715 * v * v * v)));
+    return v;
+}
+
+// ================= elementwise utilities (Y-spill aware: LinearId) =================
+[numthreads(256,1,1)]
+void CopyBuffer(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{ uint i = LinearId(gid, tid); if (i < buffer_size) buf_a[i] = buf_b[i]; }
+
+[numthreads(256,1,1)]
+void CopySlice(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{ uint i = LinearId(gid, tid); if (i < buffer_size) buf_a[copy_dst_offset + i] = buf_b[copy_src_offset + i]; }
+
+// Y[t, c] = X[t*in_dim + copy_src_offset + c]   (extract out_dim cols from an in_dim-wide row)
+[numthreads(256,1,1)]
+void SliceCols(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint i = LinearId(gid, tid);
+    if (i >= seq_len * out_dim) return;
+    uint t = i / out_dim; uint c = i % out_dim;
+    Y[i] = X[t * in_dim + copy_src_offset + c];
+}
+
+[numthreads(256,1,1)]
+void ZeroBuffer(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{ uint i = LinearId(gid, tid); if (i < buffer_size) buf_a[i] = 0.0; }
+
+[numthreads(256,1,1)]
+void AddResidual(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{ uint i = LinearId(gid, tid); if (i < buffer_size) buf_a[i] += buf_b[i]; }
+
+[numthreads(256,1,1)]
+void ScaleBuf(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{ uint i = LinearId(gid, tid); if (i < buffer_size) inout_buf[i] *= scale_val; }
+
+// buf_a[t,c] += buf_b[t,c] * ch_scale[c]   (per-channel layer_scale then residual add)
+[numthreads(256,1,1)]
+void ChannelScaleAdd(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint i = LinearId(gid, tid);
+    if (i >= buffer_size) return;
+    uint c = i % norm_dim;
+    buf_a[i] += buf_b[i] * readH(ch_scale, c);
+}
+
+[numthreads(256,1,1)]
+void Activate(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{ uint i = LinearId(gid, tid); if (i < buffer_size) inout_buf[i] = apply_act(inout_buf[i]); }
+
+// ================= LinearBias ([T,in]->[T,out]) =================
+[numthreads(1,8,32)]
+void LinearBias(uint3 id : SV_DispatchThreadID)
+{
+    uint t = id.y; uint p = id.z;
+    if (t >= seq_len || p >= out_dim) return;
+    float sum = has_bias != 0 ? readH(W_bias, p) : 0.0;
+    uint x_base = t * in_dim;
+    uint w_base = p * in_dim;
+    for (uint e = 0; e < in_dim; e++)
+        sum += X[x_base + e] * readH(W, w_base + e);
+    Y[t * out_dim + p] = apply_act(sum);
+}
+
+// ================= LinearBiasQ8 (int8 weight, per-output-row fp16 scale) =================
+// Y[t,p] = act( scale[p] * (X[t,:] · int8(W[p,:])) (+ bias[p]) ). Weight packed 4-per-uint.
+// Every pocket int8 weight has in_dim % 4 == 0 (32/256/512/1024/1536/2048/3072/4096) so we can
+// unpack whole uint words. Mirrors CosyVoiceFlowCS.LinearBiasQ8 (proven bit-≈-fp16 at corr>0.99).
+[numthreads(1,8,32)]
+void LinearBiasQ8(uint3 id : SV_DispatchThreadID)
+{
+    uint t = id.y; uint p = id.z;
+    if (t >= seq_len || p >= out_dim) return;
+    float sum = 0.0;
+    uint x_base = t * in_dim;
+    uint w_base = p * in_dim;
+    for (uint e = 0; e < in_dim; e += 4u)
+    {
+        int w4 = (int)W[(w_base + e) >> 2];
+        sum += X[x_base + e]      * (float)((w4 << 24) >> 24)
+             + X[x_base + e + 1u] * (float)((w4 << 16) >> 24)
+             + X[x_base + e + 2u] * (float)((w4 << 8)  >> 24)
+             + X[x_base + e + 3u] * (float)( w4        >> 24);
+    }
+    float bv = has_bias != 0 ? readH(W_bias, p) : 0.0;
+    Y[t * out_dim + p] = apply_act(sum * readH(W_scales, p) + bv);
+}
+
+// ================= Conv1D (causal, [T,C]) =================
+// Weights flat [oc,ic,k]: oc*(in_dim*K) + ic*K + k
+[numthreads(256,1,1)]
+void Conv1D(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint idx = LinearId(gid, tid);
+    if (idx >= seq_len * out_dim) return;
+    uint t = idx / out_dim; uint oc = idx % out_dim;
+    float sum = has_bias != 0 ? readH(W_bias, oc) : 0.0;
+    int base_t = (int)(t * conv_stride) - pad_left;
+    uint w_base = oc * in_dim * conv_kernel;
+    for (uint k = 0; k < conv_kernel; k++)
+    {
+        int ti = base_t + (int)(k * conv_dilation);
+        if (ti >= (int)in_len) continue;
+        if (ti < 0)
+        {
+            if (pad_replicate == 0) continue;   // constant zero left-pad
+            ti = 0;                             // replicate: clamp to first sample (Mimi downsample)
+        }
+        uint x_base = (uint)ti * in_dim;
+        for (uint ic = 0; ic < in_dim; ic++)
+            sum += X[x_base + ic] * readH(W, w_base + ic * conv_kernel + k);
+    }
+    Y[idx] = apply_act(sum);
+}
+
+// ================= ConvTranspose1D (groups=1, [T,C]) =================
+// Weights flat (torch [in,out,k]): ic*(out_dim*K) + oc*K + k
+[numthreads(256,1,1)]
+void ConvTranspose1D(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint idx = LinearId(gid, tid);
+    if (idx >= seq_len * out_dim) return;
+    uint t = idx / out_dim; uint oc = idx % out_dim;
+    float sum = has_bias != 0 ? readH(W_bias, oc) : 0.0;
+    for (uint k = 0; k < conv_kernel; k++)
+    {
+        int num = (int)t + pad_left - (int)k;
+        if (num < 0) continue;
+        if ((uint)num % conv_stride != 0u) continue;
+        uint ti = (uint)num / conv_stride;
+        if (ti >= in_len) continue;
+        uint x_base = ti * in_dim;
+        for (uint ic = 0; ic < in_dim; ic++)
+            sum += X[x_base + ic] * readH(W, (ic * out_dim + oc) * conv_kernel + k);
+    }
+    Y[idx] = sum;
+}
+
+// ================= ConvTranspose1DGrouped (grouped/depthwise, [T,C]) =================
+// n_groups groups; in_per_group = in_dim/n_groups, out_per_group = out_dim/n_groups.
+// torch grouped ConvT weight [in, out/groups, k]: ic_global*(out_per_group*K) + og*K + k.
+// For the x16 upsample this is pure depthwise (n_groups=out_dim=512, in_per=out_per=1).
+[numthreads(256,1,1)]
+void ConvTranspose1DGrouped(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint idx = LinearId(gid, tid);
+    if (idx >= seq_len * out_dim) return;
+    uint t = idx / out_dim; uint oc = idx % out_dim;
+    uint out_per = out_dim / n_groups;
+    uint in_per = in_dim / n_groups;
+    uint g = oc / out_per;
+    uint og = oc % out_per;
+    float sum = has_bias != 0 ? readH(W_bias, oc) : 0.0;
+    for (uint k = 0; k < conv_kernel; k++)
+    {
+        int num = (int)t + pad_left - (int)k;
+        if (num < 0) continue;
+        if ((uint)num % conv_stride != 0u) continue;
+        uint ti = (uint)num / conv_stride;
+        if (ti >= in_len) continue;
+        uint x_base = ti * in_dim;
+        for (uint icl = 0; icl < in_per; icl++)
+        {
+            uint ic_global = g * in_per + icl;
+            sum += X[x_base + ic_global] * readH(W, (ic_global * out_per + og) * conv_kernel + k);
+        }
+    }
+    Y[idx] = sum;
+}
+
+// ================= LayerNormT (per-row LayerNorm + affine) =================
+[numthreads(256,1,1)]
+void LayerNormT(uint3 id : SV_DispatchThreadID)
+{
+    uint pos = id.x;
+    if (pos >= seq_len) return;
+    uint base_idx = pos * norm_dim;
+    float mean = 0.0;
+    for (uint i = 0; i < norm_dim; i++) mean += norm_input[base_idx + i];
+    mean /= (float)norm_dim;
+    float var = 0.0;
+    for (uint j = 0; j < norm_dim; j++) { float d = norm_input[base_idx + j] - mean; var += d * d; }
+    float rstd = rsqrt(var / (float)norm_dim + norm_eps);
+    for (uint k = 0; k < norm_dim; k++)
+        norm_output[base_idx + k] = (norm_input[base_idx + k] - mean) * rstd * readH(ln_gamma, k) + readH(ln_beta, k);
+}
+
+// ================= ApplyRoPE (in place on a [T,H,D] q or k buffer) =================
+// Interleaved-pair rotation (Moshi/Kyutai rope.py: freqs = theta^(-2i/D)), position = pos_offset + t.
+[numthreads(256,1,1)]
+void ApplyRoPE(uint3 id : SV_DispatchThreadID)
+{
+    // one thread per (t,h, pair) — total seq_len*num_heads*(head_dim/2)
+    uint hd2 = head_dim / 2u;
+    uint total = seq_len * num_heads * hd2;
+    if (id.x >= total) return;
+    uint pair = id.x % hd2;
+    uint hh = (id.x / hd2) % num_heads;
+    uint t = id.x / (hd2 * num_heads);
+    float posf = (float)(pos_offset + t);
+    float freq = pow(rope_theta, -2.0 * (float)pair / (float)head_dim);
+    float ang = posf * freq;
+    float c = cos(ang), s = sin(ang);
+    uint base = (t * num_heads + hh) * head_dim + pair * 2u;
+    float a = inout_buf[base], b = inout_buf[base + 1u];
+    inout_buf[base]      = a * c - b * s;
+    inout_buf[base + 1u] = a * s + b * c;
+}
+
+// ================= CausalAttention (one threadgroup per (query, head)) =================
+// Q,K,V are [T, H*D] contiguous (H heads of D). Causal: key j <= query i. Online softmax.
+#define CA_THREADS 64
+groupshared float ca_q[64];
+groupshared float ca_red[CA_THREADS];
+[numthreads(CA_THREADS,1,1)]
+void CausalAttention(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint qi = gid.x;                 // query position
+    uint h  = gid.y;                 // head
+    uint lane = tid.x;
+    if (qi >= seq_len) return;
+    uint qbase = (qi * num_heads + h) * head_dim;
+    // sliding causal window [jmin, qi]: key j valid iff qi-j < attn_context (Mimi context=250)
+    uint jmin = (attn_context > 0u && qi + 1u > attn_context) ? (qi + 1u - attn_context) : 0u;
+    // load q into shared
+    for (uint d = lane; d < head_dim; d += CA_THREADS) ca_q[d] = Q[qbase + d];
+    GroupMemoryBarrierWithGroupSync();
+
+    // pass 1: max score
+    float m = -1e30;
+    for (uint j = jmin + lane; j <= qi; j += CA_THREADS)
+    {
+        uint kbase = (j * num_heads + h) * head_dim;
+        float dot = 0.0;
+        for (uint d = 0; d < head_dim; d++) dot += ca_q[d] * K[kbase + d];
+        dot *= scale;
+        m = max(m, dot);
+    }
+    ca_red[lane] = m; GroupMemoryBarrierWithGroupSync();
+    for (uint s = CA_THREADS / 2; s > 0; s >>= 1) { if (lane < s) ca_red[lane] = max(ca_red[lane], ca_red[lane + s]); GroupMemoryBarrierWithGroupSync(); }
+    float mmax = ca_red[0]; GroupMemoryBarrierWithGroupSync();
+
+    // pass 2: sum exp
+    float sumexp = 0.0;
+    for (uint j2 = jmin + lane; j2 <= qi; j2 += CA_THREADS)
+    {
+        uint kbase = (j2 * num_heads + h) * head_dim;
+        float dot = 0.0;
+        for (uint d = 0; d < head_dim; d++) dot += ca_q[d] * K[kbase + d];
+        sumexp += exp(dot * scale - mmax);
+    }
+    ca_red[lane] = sumexp; GroupMemoryBarrierWithGroupSync();
+    for (uint s2 = CA_THREADS / 2; s2 > 0; s2 >>= 1) { if (lane < s2) ca_red[lane] += ca_red[lane + s2]; GroupMemoryBarrierWithGroupSync(); }
+    float denom = max(ca_red[0], 1e-20); GroupMemoryBarrierWithGroupSync();
+
+    // pass 3: weighted sum of V — each lane owns a slice of head_dim
+    for (uint d = lane; d < head_dim; d += CA_THREADS)
+    {
+        float acc = 0.0;
+        for (uint j = jmin; j <= qi; j++)
+        {
+            uint kbase = (j * num_heads + h) * head_dim;
+            float dot = 0.0;
+            for (uint dd = 0; dd < head_dim; dd++) dot += ca_q[dd] * K[kbase + dd];
+            float w = exp(dot * scale - mmax) / denom;
+            acc += w * V[(j * num_heads + h) * head_dim + d];
+        }
+        AttendedValues[qbase + d] = acc;
+    }
+}
+
+// ================= AppendKV (KV-cache decode: write one row of K,V into the cache) =================
+// K,V are single-row [H*D] projections of the new token (already RoPE'd for K). Copy them into
+// KCache/VCache at absolute row `pos_offset` (= current cache length). One thread per channel.
+[numthreads(256,1,1)]
+void AppendKV(uint3 id : SV_DispatchThreadID)
+{
+    uint c = id.x;
+    if (c >= num_heads * head_dim) return;
+    uint dst = pos_offset * num_heads * head_dim + c;
+    KCache[dst] = K[c];
+    VCache[dst] = V[c];
+}
+
+// ================= CausalAttentionKV (incremental decode: 1 query over the whole cache) =================
+// Q is single-row [H*D] (the new token, RoPE'd). KCache/VCache hold kv_len rows [kv_len, H*D].
+// Unbounded causal: the query is the newest row, so it attends over ALL cache rows [0, kv_len-1].
+// One threadgroup per head. Bit-identical math to CausalAttention's last-row output (online softmax).
+[numthreads(CA_THREADS,1,1)]
+void CausalAttentionKV(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint h    = gid.x;               // head
+    uint lane = tid.x;
+    uint qbase = h * head_dim;
+    for (uint d = lane; d < head_dim; d += CA_THREADS) ca_q[d] = Q[qbase + d];
+    GroupMemoryBarrierWithGroupSync();
+
+    // pass 1: max score over all cache rows
+    float m = -1e30;
+    for (uint j = lane; j < kv_len; j += CA_THREADS)
+    {
+        uint kbase = (j * num_heads + h) * head_dim;
+        float dot = 0.0;
+        for (uint d = 0; d < head_dim; d++) dot += ca_q[d] * KCache[kbase + d];
+        m = max(m, dot * scale);
+    }
+    ca_red[lane] = m; GroupMemoryBarrierWithGroupSync();
+    for (uint s = CA_THREADS / 2; s > 0; s >>= 1) { if (lane < s) ca_red[lane] = max(ca_red[lane], ca_red[lane + s]); GroupMemoryBarrierWithGroupSync(); }
+    float mmax = ca_red[0]; GroupMemoryBarrierWithGroupSync();
+
+    // pass 2: sum exp
+    float sumexp = 0.0;
+    for (uint j2 = lane; j2 < kv_len; j2 += CA_THREADS)
+    {
+        uint kbase = (j2 * num_heads + h) * head_dim;
+        float dot = 0.0;
+        for (uint d = 0; d < head_dim; d++) dot += ca_q[d] * KCache[kbase + d];
+        sumexp += exp(dot * scale - mmax);
+    }
+    ca_red[lane] = sumexp; GroupMemoryBarrierWithGroupSync();
+    for (uint s2 = CA_THREADS / 2; s2 > 0; s2 >>= 1) { if (lane < s2) ca_red[lane] += ca_red[lane + s2]; GroupMemoryBarrierWithGroupSync(); }
+    float denom = max(ca_red[0], 1e-20); GroupMemoryBarrierWithGroupSync();
+
+    // pass 3: weighted sum of V — each lane owns a slice of head_dim
+    for (uint d = lane; d < head_dim; d += CA_THREADS)
+    {
+        float acc = 0.0;
+        for (uint j = 0; j < kv_len; j++)
+        {
+            uint kbase = (j * num_heads + h) * head_dim;
+            float dot = 0.0;
+            for (uint dd = 0; dd < head_dim; dd++) dot += ca_q[dd] * KCache[kbase + dd];
+            float wgt = exp(dot * scale - mmax) / denom;
+            acc += wgt * VCache[(j * num_heads + h) * head_dim + d];
+        }
+        AttendedValues[qbase + d] = acc;
+    }
+}
+
+// ================= flow-head (SimpleMLPAdaLN) ops =================
+// modulate: Y[t,c] = norm_input[t,c] * (1 + mod_vec[scaleOff+c]) + mod_vec[shiftOff+c]
+[numthreads(256,1,1)]
+void Modulate(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= seq_len * norm_dim) return;
+    uint c = id.x % norm_dim;
+    norm_output[id.x] = norm_input[id.x] * (1.0 + mod_vec[mod_scale_off + c]) + mod_vec[mod_shift_off + c];
+}
+
+// gate-add: buf_a[t,c] += mod_vec[gateOff+c] * buf_b[t,c]   (residual with per-channel gate)
+[numthreads(256,1,1)]
+void GateAdd(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= seq_len * norm_dim) return;
+    uint c = id.x % norm_dim;
+    buf_a[id.x] += mod_vec[mod_gate_off + c] * buf_b[id.x];
+}
+
+// RMSNorm (mlp.py _rms_norm): y = x * alpha * rsqrt(rms_eps + var(x)), var = UNBIASED (÷(N-1)),
+// NO mean subtraction in the scale application. One row per thread.
+[numthreads(256,1,1)]
+void RMSNormFlow(uint3 id : SV_DispatchThreadID)
+{
+    uint pos = id.x;
+    if (pos >= seq_len) return;
+    uint base_idx = pos * norm_dim;
+    float mean = 0.0;
+    for (uint i = 0; i < norm_dim; i++) mean += norm_input[base_idx + i];
+    mean /= (float)norm_dim;
+    float ss = 0.0;
+    for (uint j = 0; j < norm_dim; j++) { float dv = norm_input[base_idx + j] - mean; ss += dv * dv; }
+    float var = ss / (float)(norm_dim - 1u);              // unbiased (torch var default)
+    float inv = rsqrt(rms_eps + var);
+    for (uint k = 0; k < norm_dim; k++)
+        norm_output[base_idx + k] = norm_input[base_idx + k] * readH(rms_alpha, k) * inv;
+}

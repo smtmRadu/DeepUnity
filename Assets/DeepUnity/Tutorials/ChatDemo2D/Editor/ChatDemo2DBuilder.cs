@@ -668,9 +668,10 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
                 "Stay in character at all times. Keep your replies to one to three short sentences.",
                 "The shopkeeper looks up from her knitting with a smile...",
                 NPCInteractor2D.ConversationMode.LlmOnly, "granny", 0.92f,
-                // history-mode A/B spread: Granny's Gemma + KV stay RESIDENT between
-                // dialogues (close never releases; zone-exit only defetches her Kokoro)
-                NPCInteractor2D.HistoryMode.KeepAliveInBackground);
+                // history-mode A/B spread: Granny REMEMBERS across dialogues (live KV while
+                // resident, disk-restore/re-prefill after release). Residency is the zone's job —
+                // the old KeepAliveInBackground mode was removed (ResumeFromCompact reserved).
+                NPCInteractor2D.HistoryMode.ContinueWhereLeftOff);
 
             return new[] { hobb, marla };
         }

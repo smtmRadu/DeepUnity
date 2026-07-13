@@ -102,8 +102,9 @@ No `-quit` — `BuildBatch` exits itself (0 = OK; log tail `[ChatDemo2DBuilder] 
   when the CosyVoice port lands, swap the component construction in `Start()`; the
   FeedText/FlushText/StopSpeaking call sites are engine-agnostic.
 - Both NPCs default to Gemma3-270M and therefore SHARE one pooled instance (LLMPool refcounts
-  per model+quant — overlapping prefetch circles never double-load; Granny's
-  KeepAliveInBackground just keeps a reference alive). The TTS engine is shared statically too.
+  per model+quant — overlapping prefetch circles never double-load). Granny remembers her
+  conversation (ContinueWhereLeftOff; the old KeepAliveInBackground mode was removed — residency
+  belongs to the prefetch zone). The TTS engine is shared statically too.
 - No background music (nothing CC0 staged); UI clicks/type ticks + farm-action ticks are wired.
 - If the field/pen fence visuals ever need reshaping, edit the tile rects in
   `ChatDemo2DBuilder` (`DIRT_RECTS`, `FenceRect`, `TileSpan` calls) and re-run — colliders and

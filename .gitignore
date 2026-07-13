@@ -97,14 +97,14 @@ Assets/DeepUnity/ReinforcementLearning/Base/debug-*.log.meta
 # land flat under Assets/Resources/Weights/; intentionally NOT tracked (too large for git).
 Assets/Resources/Weights/
 Assets/Resources/Weights.meta
-Assets/DeepUnity/LLM/**/weights_*/
-Assets/DeepUnity/LLM/**/weights_*.meta
-Assets/DeepUnity/LLM/**/params_*/
-Assets/DeepUnity/LLM/**/params_*.meta
-Assets/DeepUnity/TTS/**/weights_*/
-Assets/DeepUnity/TTS/**/weights_*.meta
-Assets/DeepUnity/TTS/**/params_*/
-Assets/DeepUnity/TTS/**/params_*.meta
+Assets/DeepUnity/InferenceEngine/LLM/**/weights_*/
+Assets/DeepUnity/InferenceEngine/LLM/**/weights_*.meta
+Assets/DeepUnity/InferenceEngine/LLM/**/params_*/
+Assets/DeepUnity/InferenceEngine/LLM/**/params_*.meta
+Assets/DeepUnity/InferenceEngine/TTS/**/weights_*/
+Assets/DeepUnity/InferenceEngine/TTS/**/weights_*.meta
+Assets/DeepUnity/InferenceEngine/TTS/**/params_*/
+Assets/DeepUnity/InferenceEngine/TTS/**/params_*.meta
 
 # Python bytecode caches from the param-export scripts.
 **/__pycache__/
@@ -115,12 +115,12 @@ Assets/__*_tmp.unity
 Assets/__*_tmp.unity.meta
 
 # TTS/STT parity/reference tensor dumps — regenerated on-demand via dump_reference.py.
-Assets/DeepUnity/TTS/validation/dump/
-Assets/DeepUnity/TTS/validation/dump.meta
-Assets/DeepUnity/TTS/*/validation/dump/
-Assets/DeepUnity/TTS/*/validation/dump.meta
-Assets/DeepUnity/STT/*/validation/dump/
-Assets/DeepUnity/STT/*/validation/dump.meta
+Assets/DeepUnity/InferenceEngine/TTS/validation/dump/
+Assets/DeepUnity/InferenceEngine/TTS/validation/dump.meta
+Assets/DeepUnity/InferenceEngine/TTS/*/validation/dump/
+Assets/DeepUnity/InferenceEngine/TTS/*/validation/dump.meta
+Assets/DeepUnity/InferenceEngine/STT/*/validation/dump/
+Assets/DeepUnity/InferenceEngine/STT/*/validation/dump.meta
 
 # dotnet build artifacts of the Unity-ignored (~) validation harnesses
 Assets/DeepUnity/**/harness~/obj/

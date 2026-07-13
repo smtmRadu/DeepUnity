@@ -814,7 +814,7 @@ MonoBehaviour:
     to one to three short sentences."
   approach_text: The shopkeeper looks up from her knitting with a smile...
   conversationMode: 0
-  historyMode: 2
+  historyMode: 1
   cacheKVCache: 1
   model: Gemma3-270M
   quantization: 1

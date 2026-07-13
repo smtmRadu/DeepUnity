@@ -55,7 +55,7 @@ namespace DeepUnity
             TalkingInInteraction,
         }
 
-        public enum TtsModel { Chatterbox, CosyVoice3, Kokoro }
+        public enum TtsModel { Chatterbox, CosyVoice3, Kokoro, PocketTTS }
         /// <summary>How the NPC answers: text-only, or text + streaming speech.</summary>
         public enum ConversationMode { LlmOnly, LlmPlusTts }
 
@@ -67,8 +67,8 @@ namespace DeepUnity
             ResetEveryTime,
             [Tooltip("Reopening resumes the SAME conversation. While the model is resident (player inside the prefetch zone / talk trigger) the live KV is reused as-is (instant); after a release the whole conversation is restored from disk (cacheKVCache) or the transcript is re-prefilled.")]
             ContinueWhereLeftOff,
-            [Tooltip("Model + KV cache stay resident between dialogues AND after the player leaves the prefetch zone (only the TTS defetches) — this NPC's LLM never unloads.")]
-            KeepAliveInBackground,
+            [Tooltip("NOT IMPLEMENTED YET — will resume long conversations from a background-COMPACTED summary + recent turns instead of the full KV/transcript (lands with WS-G background compaction). Selecting it falls back to ContinueWhereLeftOff for now.")]
+            ResumeFromCompact,
         }
 
         [SerializeField, ViewOnly] protected NPCState state = NPCState.Idle;
@@ -84,7 +84,7 @@ namespace DeepUnity
         [Tooltip("LlmOnly = text-only replies (talk animation follows the writing; voice fields hidden below). LlmPlusTts = replies are spoken: the talk animation follows the AUDIO, and the next sentence synthesizes while the current one plays.")]
         [SerializeField] protected ConversationMode conversationMode = ConversationMode.LlmOnly;
         protected bool speakReplies => conversationMode == ConversationMode.LlmPlusTts;
-        [Tooltip("ResetEveryTime = fresh chat per opening. ContinueWhereLeftOff = the NPC remembers: live KV reused while resident, conversation KV restored from disk (or transcript re-prefilled) after a release. KeepAliveInBackground = model + KV never unload between dialogues.")]
+        [Tooltip("ResetEveryTime = fresh chat per opening. ContinueWhereLeftOff = the NPC remembers: live KV reused while resident, conversation KV restored from disk (or transcript re-prefilled) after a release. ResumeFromCompact = reserved (background compaction, not implemented yet) — falls back to ContinueWhereLeftOff.")]
         [SerializeField] protected HistoryMode historyMode = HistoryMode.ResetEveryTime;
         [Tooltip("Persist this NPC's KV cache to disk (persistentDataPath/DeepUnity): the system-prompt state in EVERY mode, plus — in the continue modes — the WHOLE conversation on a clean close (KV + sampler state + transcript), so reopening after the model was released (or the scene reloaded) restores the chat from disk instead of re-prefilling. Qwen3.5 only for now; Gemma3 NPCs fall back to the re-prefill path.")]
         [SerializeField] protected bool cacheKVCache = true;
@@ -111,12 +111,14 @@ namespace DeepUnity
         [SerializeField] protected float repetitionPenalty = -1f;
 
         [Header("Voice (TTS)")]
-        [Tooltip("Kokoro = 82M non-AR, RTF ~0.3 (speaks in real time DURING generation — recommended); Chatterbox = clause-streamed (RTF~1.4); CosyVoice3 = streaming-native but RTF ~2.9 until A6 lands. 2D demo NPCs are Kokoro-only and ignore this.")]
-        [SerializeField] protected TtsModel ttsModel = TtsModel.Kokoro;
+        [Tooltip("PocketTTS = Kyutai 100M AR, RTF ~0.15 int8 (speaks in real time DURING generation, voice cloning — DEFAULT); Kokoro = 82M non-AR, RTF ~0.3; Chatterbox = clause-streamed (RTF~1.4); CosyVoice3 = streaming-native. 2D demo NPCs are Kokoro-only and ignore this.")]
+        [SerializeField] protected TtsModel ttsModel = TtsModel.PocketTTS;
         [Tooltip("Playback pitch for this NPC. 1 = natural (the voice's own timbre); <1 = deeper/slower.")]
         [SerializeField] protected float voicePitch = 1.0f;
-        [Tooltip("Chatterbox: \"conds\"/\"conds_elder\". CosyVoice3: voices/<name> (\"velmire\"). Kokoro: voicepack (\"am_onyx\" deep male, \"af_heart\" warm female, \"granny\" elder-female blend...).")]
-        [SerializeField] protected string ttsVoice = "af_heart";
+        [Tooltip("PocketTTS: voices/<name> (\"jean\"). Chatterbox: \"conds\"/\"conds_elder\". CosyVoice3: voices/<name> (\"velmire\"). Kokoro: voicepack (\"am_onyx\", \"af_heart\", \"granny\"...).")]
+        [SerializeField] protected string ttsVoice = "jean";
+        [Tooltip("PocketTTS only: reference clip to VOICE-CLONE for this NPC (overrides the baked ttsVoice). First runtime use encodes it once through the Mimi encoder and caches by content hash; press 'Precompute voice-clone cache' below to bake the embedding into Resources/PocketTTSVoices so runtime (editor AND builds) is a pure load — no recompute, ever.")]
+        [SerializeField] protected AudioClip clonedVoiceClip;
         [Tooltip("Chatterbox weight format. INT8 = T3 matmuls int8 (~300 MB less, parity-validated); s3gen stays fp16 either way. Kokoro/CosyVoice ignore this.")]
         [SerializeField] protected LLMQuant ttsQuantization = LLMQuant.INT8;
 
@@ -138,14 +140,17 @@ namespace DeepUnity
         protected ChatterboxVoice voice;
         protected CosyVoiceModeling.CosyVoiceVoice cvVoice;
         protected KokoroVoice kkVoice;
+        protected PocketTTSModeling.PocketTTSVoice pkVoice;
         protected Coroutine dialogueCoroutine;
         protected Transform playerZoneT;      // player transform for the prefetch-zone distance check
         protected bool inPrefetchZone;
 
         // last value fed to OnTalkingChanged: audio-driven in Kokoro TTS mode, state-driven otherwise
         private bool talkAnimActive;
-        /// <summary>True while the NPC's Kokoro speech ring is actually audible (LLM+TTS mode).</summary>
-        protected bool IsVoiceAudible => kkVoice != null && kkVoice.IsAudioPlaying;
+        /// <summary>True while the NPC's streaming speech ring is actually audible (Kokoro/PocketTTS
+        /// LLM+TTS mode) — drives the talk animation from the AUDIO, not the token stream.</summary>
+        protected bool IsVoiceAudible => (kkVoice != null && kkVoice.IsAudioPlaying)
+                                      || (pkVoice != null && pkVoice.IsAudioPlaying);
         /// <summary>The last talk-animation value the watch fired (audio-driven with Kokoro, state-driven otherwise).</summary>
         protected bool TalkAnimActive => talkAnimActive;
 
@@ -260,7 +265,8 @@ namespace DeepUnity
             // model-RESIDENCY zone: slow-prefetch both models while the player walks up (both
             // weight streams spread over ~slowPrefetchSeconds), hold them on the GPU while the
             // player is inside (closing the chat releases nothing), unload on wander-off
-            // (never mid-dialogue; KeepAliveInBackground keeps its LLM).
+            // (never mid-dialogue). Residency is the zone's job alone — history modes only
+            // decide what happens to the CONVERSATION, never to the weights.
             // Gated on prewarmDone: entering the zone seconds after scene start must not pay the
             // COLD construction path (tokenizer file read + kernel lookups ≈ a 40 ms hitch) —
             // the zone simply arms a frame or two later, once the prewarm coroutine finished.
@@ -272,18 +278,19 @@ namespace DeepUnity
                     kkVoice?.SlowPrefetchNow(slowPrefetchSeconds);
                     kkVoice?.PrewarmKernels();   // shader compiles hide in the walk-up too
                     cvVoice?.SlowPrefetchNow(slowPrefetchSeconds);
+                    pkVoice?.SlowPrefetchNow(slowPrefetchSeconds);
+                    pkVoice?.PrewarmKernels();
                     BeginLlmSlowPrefetch();      // the LLM stream shares the walk-up window
                 }
                 else if (!inside && inPrefetchZone && state == NPCState.Idle)
                 {
                     kkVoice?.DefetchNow();
                     cvVoice?.DefetchNow();
-                    // KeepAliveInBackground: only the TTS may defetch — this NPC's LLM stays.
-                    // The release defers past any in-flight conversation-KV save (its GPU
+                    pkVoice?.DefetchNow();
+                    // The LLM release defers past any in-flight conversation-KV save (its GPU
                     // readbacks need the buffers alive); ContinueWhereLeftOff keeps the
                     // transcript either way — reopen restores from disk or re-prefills.
-                    if (historyMode != HistoryMode.KeepAliveInBackground)
-                        StartCoroutine(ReleaseLlmAfterKvSave());
+                    StartCoroutine(ReleaseLlmAfterKvSave());
                 }
                 inPrefetchZone = inside;
             }
@@ -311,6 +318,20 @@ namespace DeepUnity
         {
             switch (EffectiveTtsModel)
             {
+                case TtsModel.PocketTTS:
+                    pkVoice = GetComponent<PocketTTSModeling.PocketTTSVoice>();
+                    if (pkVoice == null) pkVoice = gameObject.AddComponent<PocketTTSModeling.PocketTTSVoice>();
+                    pkVoice.pitch = voicePitch;
+                    pkVoice.voiceName = ttsVoice;   // baked voices/<name> (default "jean")
+                    if (pkVoice.clonedVoiceClip != clonedVoiceClip)
+                        pkVoice.SetClonedVoice(clonedVoiceClip);   // clone-from-clip (cached) overrides baked
+                    pkVoice.weightsPath = ttsQuantization == LLMQuant.FP16
+                        ? PocketTTSModeling.PocketTTSConfig.WEIGHTS_DIR_FP16
+                        : PocketTTSModeling.PocketTTSConfig.WEIGHTS_DIR_INT8;
+                    pkVoice.loadOnStart = false;    // load-on-approach — the zone/trigger drives the stream
+                    pkVoice.OnClauseSpoken -= OnClauseSpokenHandler;   // audio-synced text reveal (as Kokoro)
+                    pkVoice.OnClauseSpoken += OnClauseSpokenHandler;
+                    break;
                 case TtsModel.Kokoro:
                     kkVoice = GetComponent<KokoroVoice>();
                     if (kkVoice == null) kkVoice = gameObject.AddComponent<KokoroVoice>();
@@ -447,13 +468,28 @@ namespace DeepUnity
         ///                             miss/mismatch it falls back to re-prefilling the recorded
         ///                             conversation (system prompt + all turns) through the
         ///                             normal chunked prefill. Correct, but pays the prefill.
-        ///   KeepAliveInBackground   — same tiers; tier (a) is the common case because close and
-        ///                             zone-exit never release this NPC's LLM. The disk restore
-        ///                             still helps after an interrupt (dead KV, live model) and
-        ///                             after scene reloads.
+        ///   ResumeFromCompact       — reserved (WS-G background compaction): will resume from a
+        ///                             compacted summary + recent turns instead of the full
+        ///                             KV/transcript. Falls back to ContinueWhereLeftOff until
+        ///                             then (see the clamp below).
         /// </summary>
+        // ResumeFromCompact is reserved until WS-G background compaction lands. Clamp it both in
+        // the inspector (warning) and at runtime (old scenes serialized with the removed
+        // KeepAliveInBackground share the same enum index and land here too).
+        protected virtual void OnValidate()
+        {
+            if (historyMode == HistoryMode.ResumeFromCompact)
+            {
+                Debug.LogWarning($"[{npc_name}] HistoryMode.ResumeFromCompact is not implemented yet " +
+                                 "(background compaction pending) — falling back to ContinueWhereLeftOff.");
+                historyMode = HistoryMode.ContinueWhereLeftOff;
+            }
+        }
+
         protected IEnumerator OpenConversation()
         {
+            if (historyMode == HistoryMode.ResumeFromCompact)   // runtime guard (old serialized scenes)
+                historyMode = HistoryMode.ContinueWhereLeftOff;
             yield return new WaitForSeconds(DialogueOpenDelay);
 
             var w = Window;
@@ -566,7 +602,7 @@ namespace DeepUnity
         string pendingFullReply;     // full generated text (set once generation completes)
         bool revealActive;
 
-        bool SyncedReveal => speakReplies && kkVoice != null;
+        bool SyncedReveal => speakReplies && (kkVoice != null || pkVoice != null);
 
         // ---- thinking-dots placeholder + <think> stream filtering --------------------------
         Coroutine dotsJob;
@@ -677,6 +713,7 @@ namespace DeepUnity
             if (!revealActive) return;
             StopRevealJob();
             if (kkVoice != null && kkVoice.IsSpeaking) kkVoice.StopSpeaking();
+            if (pkVoice != null && pkVoice.IsSpeaking) pkVoice.StopSpeaking();
             if (pendingFullReply != null && spokenShown != pendingFullReply)
             {
                 w.PopLastMessage();
@@ -689,6 +726,7 @@ namespace DeepUnity
         {
             // wait for the voice AND for the word-pacing to drain its queued clauses
             while (revealActive && ((kkVoice != null && kkVoice.IsSpeaking)
+                                    || (pkVoice != null && pkVoice.IsSpeaking)
                                     || revealJob != null || revealQueue.Count > 0))
                 yield return null;
             var w = Window;
@@ -905,6 +943,7 @@ namespace DeepUnity
             voice?.FeedText(token);
             cvVoice?.FeedText(token);
             kkVoice?.FeedText(token);
+            pkVoice?.FeedText(token);
         }
 
         /// <summary>Flushes the trailing (sentence-incomplete) text into speech.</summary>
@@ -913,6 +952,7 @@ namespace DeepUnity
             voice?.FlushText();
             cvVoice?.FlushText();
             kkVoice?.FlushText();
+            pkVoice?.FlushText();
         }
 
         /// <summary>Hard-stops all speech (used when a reply is interrupted mid-generation).</summary>
@@ -921,6 +961,7 @@ namespace DeepUnity
             voice?.StopSpeaking();
             cvVoice?.StopSpeaking();
             kkVoice?.StopSpeaking();
+            pkVoice?.StopSpeaking();
         }
 
         /// <summary>Trigger-contact hook for subclasses (called from their OnTriggerEnter/2D).</summary>
@@ -936,6 +977,8 @@ namespace DeepUnity
                 kkVoice?.PrefetchNow();
                 kkVoice?.PrewarmKernels();
                 cvVoice?.PrefetchNow();
+                pkVoice?.PrefetchNow();
+                pkVoice?.PrewarmKernels();
                 EnsureLlm();
             }
         }
@@ -949,13 +992,13 @@ namespace DeepUnity
             // contact-loading mode: the talk trigger IS the residency zone — walking off it
             // unloads what contact loaded (the prefetch zone owns residency otherwise, and its
             // exit is handled in Update). Same rules as the zone: never mid-dialogue, the LLM
-            // release defers past an in-flight conversation-KV save, KeepAlive keeps its LLM.
+            // release defers past an in-flight conversation-KV save.
             if (!usePrefetchZone && state == NPCState.Idle)
             {
                 kkVoice?.DefetchNow();
                 cvVoice?.DefetchNow();
-                if (historyMode != HistoryMode.KeepAliveInBackground)
-                    StartCoroutine(ReleaseLlmAfterKvSave());
+                pkVoice?.DefetchNow();
+                StartCoroutine(ReleaseLlmAfterKvSave());
             }
         }
 

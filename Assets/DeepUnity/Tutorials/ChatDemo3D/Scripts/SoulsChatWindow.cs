@@ -205,12 +205,42 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             onDone?.Invoke();
         }
 
+        // Streaming contract (same as ChatWindow2D): the base pops + re-adds the newest NPC
+        // line many times a second during the token stream / audio-synced word reveal.
+        // Destroy() is deferred to end of frame, so a naive pop+add briefly lays out BOTH the
+        // old and the new message — the visible one-frame text bob. PopLastMessage therefore
+        // PARKS the newest message and the AddMessage that follows in the same call stack
+        // reclaims it as a pure text mutation on the SAME GameObject. A parked message never
+        // reclaimed (a genuine pop) is destroyed in LateUpdate.
+        private GameObject recycledMsg;
+
+        private void LateUpdate()
+        {
+            if (recycledMsg != null)
+            {
+                Destroy(recycledMsg);
+                recycledMsg = null;
+                Canvas.ForceUpdateCanvases();
+                if (scrollRect != null)
+                    scrollRect.verticalNormalizedPosition = 0f;
+            }
+        }
+
         public void AddMessage(string username, string message)
         {
             if (messageTemplate == null || messageContainer == null) return;
 
-            GameObject newMsg = Instantiate(messageTemplate, messageContainer);
-            newMsg.SetActive(true);
+            GameObject newMsg;
+            if (recycledMsg != null)
+            {
+                newMsg = recycledMsg;          // streaming mutation: same object, longer text
+                recycledMsg = null;
+            }
+            else
+            {
+                newMsg = Instantiate(messageTemplate, messageContainer);
+                newMsg.SetActive(true);
+            }
 
             TMP_Text[] texts = newMsg.GetComponentsInChildren<TMP_Text>();
             if (texts.Length >= 2)
@@ -235,15 +265,17 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 
             GameObject lastMsg = messages[messages.Count - 1];
             messages.RemoveAt(messages.Count - 1);
-            if (lastMsg != null) Destroy(lastMsg);
+            if (lastMsg == null) return;
 
-            Canvas.ForceUpdateCanvases();
-            if (scrollRect != null)
-                scrollRect.verticalNormalizedPosition = 0f;
+            if (recycledMsg != null) Destroy(recycledMsg);   // two pops back-to-back
+            recycledMsg = lastMsg;
+            // no canvas update here — the object is still in place; the paired AddMessage
+            // (or LateUpdate for a genuine pop) settles the layout exactly once
         }
 
         public void Clear()
         {
+            recycledMsg = null;   // parked message is a container child — destroyed below
             if (messageContainer != null)
             {
                 for (int i = messageContainer.childCount - 1; i >= 0; i--)

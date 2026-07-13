@@ -13,8 +13,9 @@ namespace DeepUnity
     //   T3  GIVE-ITEMS flow               -> basket (injected) -> Give -> hidden prompt ->
     //                                        thank-you reply -> COINS land after it ends
     //   T4  leave the circle              -> Hobb's LLM unloads immediately (ResetEveryTime)
-    //   T5  Marla (KeepAliveInBackground) -> talk, leave her circle, LLM must STAY resident
-    //   T6  pooled share                  -> with Marla's Gemma alive, Hobb is ready instantly
+    //   T5  Marla (ContinueWhereLeftOff)  -> talk, leave her circle, LLM RELEASES (residency is
+    //                                        the zone's job; the old KeepAlive mode was removed)
+    //   T6  Hobb circle re-entry          -> LLM re-lands normally after both released
     // Report: ProbeLogs/npc_e2e_2d.md + .done marker (via NpcE2E2DRunner).
     public class NpcE2E2DProbe : MonoBehaviour
     {
@@ -116,7 +117,8 @@ namespace DeepUnity
             yield return PhaseR("T4 circle exit -> immediate unload", 12f, () => !hobb.LlmLoaded);
             Check(!hobb.LlmLoaded, "T4 Hobb LLM released after leaving the circle");
 
-            // T5 — Marla is KeepAliveInBackground: talk, leave, her LLM must STAY
+            // T5 — Marla is ContinueWhereLeftOff: talk, leave her circle — the LLM RELEASES like
+            // everyone else's (residency belongs to the zone; the conversation persists to disk)
             Teleport(ZonePoint(marla.transform, 5f));
             yield return PhaseR("T5a Marla circle entry -> Gemma lands", 30f, () => marla.LlmReady);
             Teleport(ZonePoint(marla.transform, 1.2f));
@@ -132,14 +134,14 @@ namespace DeepUnity
             marla.CloseInteraction();
             yield return new WaitForSecondsRealtime(0.5f);
             Teleport(marla.transform.position + (Vector3)(Vector2.down * 20f));
-            yield return new WaitForSecondsRealtime(3f);
-            Check(marla.LlmLoaded, "T5d KeepAliveInBackground: Marla's LLM STAYS resident outside her circle");
+            yield return PhaseR("T5d Marla circle exit -> release (KV save may defer it)", 20f, () => !marla.LlmLoaded);
+            Check(!marla.LlmLoaded, "T5d ContinueWhereLeftOff: Marla's LLM released after leaving her circle");
 
-            // T6 — pooled share: Marla's live Gemma serves Hobb instantly
+            // T6 — re-entry after both released: the LLM re-lands through the normal prefetch
             Teleport(ZonePoint(hobb.transform, 5f));
             float shareT = Time.unscaledTime;
-            yield return PhaseR("T6 Hobb re-entry (pool share off Marla's instance)", 10f, () => hobb.LlmReady);
-            Check(hobb.LlmReady, $"T6 Hobb ready in {Time.unscaledTime - shareT:0.00} s (pooled — ~instant)");
+            yield return PhaseR("T6 Hobb re-entry (fresh prefetch)", 40f, () => hobb.LlmReady);
+            Check(hobb.LlmReady, $"T6 Hobb ready in {Time.unscaledTime - shareT:0.00} s after re-entry");
 
             Finish();
         }

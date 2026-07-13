@@ -6,22 +6,28 @@ Python at runtime**. A shipped game contains only C# + .compute shaders + export
 This file is the source of truth for the architecture, conventions, and progress. Update it as
 milestones land.
 
-## Target structure (physical move happens at the WS-F merge point — see Progress)
+## Structure (F3 move landed 2026-07-12)
 
 ```
-InferenceEngine/
+Assets/DeepUnity/InferenceEngine/           ← F3 restructure landed 2026-07-12
   CLAUDE.md                ← this file
-  ModelBase.cs             (today at Main/ModelBase.cs; moves here)
-  LLM/                     (today at Assets/DeepUnity/LLM/)
+  import_params.py         ← THE unified exporter + model pool registry (`--list`); LLM+TTS+STT
+  LLM/
     Base/  (LLM.cs, LLMConfig.cs, BPETokenizer.cs)  Qwen3_5/  Gemma3/  MiniCPM5/
-    import_params.py       ← THE exporter + model pool registry (`--list`)
-  TTS/                     (today at Assets/DeepUnity/TTS/)
-    TTS.cs (family base)   Chatterbox/  CosyVoice/  Kokoro/  validation per module
-  STT/                     (today at Assets/DeepUnity/STT/)
+  TTS/
+    TTS.cs (family base)   Chatterbox/  CosyVoice/  Kokoro/  VoiceLab/  validation per module
+  STT/
     STT.cs (family base)   QwenASR/  Parakeet/
-Resources/ComputeShaders/  one .compute per model family, ALL registered in Main/DeepUnityMeta.cs
-Resources/DeepUnity/{LLM,TTS,STT}/<Family>/weights_<model>_<quant>/   exported manifests (gitignored)
+Assets/DeepUnity/Main/      ModelBase.cs, TokenizerBase.cs (family roots — shared beyond InferenceEngine)
+Assets/Resources/ComputeShaders/  one .compute per model family, ALL registered in Main/DeepUnityMeta.cs
+Assets/Resources/Weights/weights_<model>_<size>_<quant>/   exported manifests, FLAT (gitignored)
 ```
+
+Note (F3, 2026-07-12): the three families were moved from `Assets/DeepUnity/{LLM,TTS,STT}/`
+into `Assets/DeepUnity/InferenceEngine/`. Namespaces stayed `DeepUnity` (folder ≠ namespace in
+C#), so no code references changed — but ~77 hardcoded asset-path STRINGS (tokenizer JSONs,
+validation dump dirs, KokoroG2P lexicon dir, VoiceLab presets, legacy weight fallbacks) were
+rewritten to the new roots. `ModelBase` / `TokenizerBase` stay under `Main/` as engine-wide roots.
 
 ## Architecture (the rules every module follows)
 
@@ -33,7 +39,7 @@ Resources/DeepUnity/{LLM,TTS,STT}/<Family>/weights_<model>_<quant>/   exported m
    DefaultDefetchMode / LoadProgress / Residency`. Loader-side: live per-instance byte budget
    sampled every frame; epoch-invalidated IO so mid-load Defetch is race-free; prefetch during
    defetch is queued, never lost. Reference impl: `TTS/CosyVoice/CosyVoiceWeights.cs`.
-3. **Weights**: exported by `LLM/import_params.py` (pool registry: `python import_params.py
+3. **Weights**: exported by `import_params.py` (pool registry: `python import_params.py
    --list`) into per-tensor `.bin` + `manifest.tsv` (`name\tfile\tdtype\tnumel\tshape`).
    fp16 packed 2-per-uint (`readH`); int8 = per-row-scale q8 4-per-uint (`readQ8`) + `.scales`
    sibling — matmuls only; norms/embeddings/heads ALWAYS fp16. Embeddings sharded ×16.
@@ -83,25 +89,43 @@ demos are live.
   epoch pattern if the player engages, atomic history swap on completion; later upgraded by the
   finetuned compactor above.
 
-## Model pool & progress (2026-07-11)
+## Model pool (2026-07-12)
 
 | Model | Family | Status |
 |---|---|---|
-| Qwen3.5 0.8B/2B | LLM | ✅ shipped (fp16/int8/int4, KV fp16/int8, benchmarked 4060+1650) |
+| Qwen3.5 0.8B/2B | LLM | ✅ shipped — fp16/int8/int4, KV fp16/int8, benchmarked 4060+1650 |
 | Gemma3 270M | LLM | ✅ shipped |
 | MiniCPM5 1B | LLM | ✅ shipped |
-| Chatterbox-Turbo | TTS | ✅ shipped (parity PASS 0307; clause-streaming retrofit; RTF 1.42 → superseded by CosyVoice3 for real-time) |
-| **CosyVoice3-0.5B** | TTS | 🔄 **WS-A (main focus)**: A0 ✅ · **A1 ✅ PASS** (CausalHiFT: all stages corr 1.000000, wav 0.999989, RTF ~0.34@4060; gotcha: nearest-upsample scratch = outLen×IN-ch, 2× the ConvT donor max — OOB writes drop silently) · **A2 ✅ PASS 0711** (DiT flow: h_lookahead/dxdt-s0/mel ALL corr 1.000000, flow-mel→HiFT wav 0.99975; offline=ONE full-attention pass; kernels added: Conv1DGrouped/AdaLNModulate/GateAdd/RopeQK/EulerCfgStep/PackBroadcastCh + gelu-tanh act 8; **RoPE = x_transformers INTERLEAVED pairs (2j,2j+1), flat pre-head-split → only head 0 rotates**; naive-kernel flow = 18.7s @ T=576, perf work at A5/A6). **A3 ✅ PASS 0711** (LM: all 24 layers corr 1.000000, logp-s0 0.999998 argmax MATCH, decode 49.8 tok/s = 2.0× RT; CosyVoiceLMCS = Qwen3_5CS copy w/ plain-gamma RMSNorm + biased QKV; gotcha: buffer-name mismatch in SetBuffer = silent [Error] not exception). **A4 ✅** (tokenizer EXACT; e2e 10.9s audio; SineGen2 staircase source) · **A5 ✅ 0711** (ref-exact chunk schedule 25→50→100 + attn_chunk mask + finalize trims + CosyVoiceVoice ring buffer; perf: coalesced tiled GEMM + cooperative AdaLN + handle caching = flow 23s→7.0s @T=576; streaming TTFA 4.65s RTF 2.86 — int8+batch-CFG close the RT gap at A6) · **A7 ✅ 0711** (voices/velmire baked via make_voice.py from a Kokoro-am_onyx EN prompt; NPCInteractor3D TtsEngine enum; ChatDemo3D scene rebuilt: Velmire speaks CosyVoice3/velmire, play-QA pending). **A6 int8 ✅ 0711** (996MB vs 1.9GB; LM logp 0.999867 / flow mel 0.9996 vs fp32 — int8 wav-corr vs ref is phase-drift-decorrelated, MEL is the int8 gate; demo CosyVoiceVoice defaults to int8; gotcha: append `^voices/` manifest lines when cloning a weights dir). **PERF FINDING**: int8 = NO speed win on 4060 (LM decode is dispatch-overhead-bound ~240/token → 51.6 tok/s; tiled-GEMM flow is compute-bound → 6.9s @T=576 both quants; streaming RTF 2.90≈2.86). Remaining A6 = structural: batch-2 CFG single pass · AdaLN mods are t-only → precompute 22×10 once/synthesis · incremental chunk re-solve (freeze old DiT K/V, HiFT left-context re-vocode) · LM dispatch fusion. Probes: `CosyVoice{Hift,Flow,Lm,E2e,Stream}Probe.Run`, `CosyVoiceE2eProbe.RunVelmire`, `{Lm,Flow,Stream}Probe.RunInt8` |
-| Kokoro-82M v1.0 | TTS | ✅ **GPU port VALIDATED 0711** (26/26 kernels PASS, stages corr 1.000000, RTF 0.24-0.43 @4060, CPU-LSTM hybrid per rule 5b) · **production polish 0711**: int8 (78 q8 matmuls via per-tensor LinearBiasQ8/.w.scales, 143MB, err≤0.011) · frame-spread decode (KokoroModel.SliceMacs Tick budget + AdainBlockY/SnakeResBlockY; KokoroCPU ParOpts=cores/2) · KokoroVoice FeedText/FlushText + PrewarmKernels + SlowPrefetchNow/DefetchNow · **ChatDemo3D Velmire = velmire_elder blend** (12 packs baked; blends = staging .pt avg + reimport) · NPCInteractor3D prefetch ZONE (10m gizmo sphere, enter=slow-prefetch qwen+kokoro, exit=deload, toggleable) · perf harness QwenKokoroPerfProbe (bridge Run/Finish/Restore): speak-alone 2/5544 frames >33ms; remaining spikes = QWEN decode (38/1267 >33ms → async token readback, task #20) |
-| Qwen3-ASR 0.6B/1.7B | STT | ✅ WS-D D1 code-complete (0711): CPU twin corr 1.000000 all gates both sizes, transcripts EXACT; QwenASRSTT:STT + 26-kernel shader (fxc-checked, int8-ready); Unity compile clean; PENDING: in-Unity GPU probe + latency + int8 |
-| Parakeet-TDT 0.6B v2/v3 | STT | ✅ WS-E E1 code-complete (0711): corr 1.000000 every stage, tokens/transcripts EXACT both variants (v3 incl. Romanian = default); ParakeetSTT:STT + 9-kernel shader; CPU TDT decode loop; Unity compile clean; PENDING: in-Unity GPU probe + latency |
+| Chatterbox-Turbo 0.5B | TTS | ✅ shipped — parity PASS; clause-streaming; superseded by CosyVoice3/Kokoro for RT |
+| Kokoro-82M v1.0 | TTS | ✅ shipped — (superseded as default by pocket-tts); 29/29 kernels corr 1.000000; int8; GPU kernel speedup (vocoder ~4×, **RTF 0.15–0.30**); 0 frame drops speaking; CPU-LSTM predictor is the only non-GPU stage (~30ms in IL2CPP) |
+| CosyVoice3-0.5B | TTS | ✅ shipped — full A0→A7 + A6-MAX campaign: **streaming RTF 2.90→1.15** (int8), LM 151 tok/s, TTFA 2.49s, offline RTF 1.03, parity corr 0.9999 argmax MATCH, seams 4/4 ≤ nat. Voice cloning offline (make_voice.py). Phase 7 (batch readback → RTF<1) optional |
+| **pocket-tts (Kyutai) ~100M** | TTS | ✅ **DEFAULT NPC TTS (#27)**. FlowLM (SentencePiece cond → 6L RoPE causal transformer → SimpleMLPAdaLN 1-Euler flow head, ldim32) + Mimi codec (SEANet + 2L decoder-transformer, 250-key window) → 24kHz; **voice cloning** (audio_prompt prefix). **P1–P5 bit-exact vs PyTorch (fp16 corr 1.0 / wav 0.999999)**; KV-cache decode **10× speedup**, **RTF 0.15–0.18 offline / 0.31 streaming fp16 · 0.15/0.34 int8**, TTFA ~100–335ms, streamed==offline bit-identical (0 clicks/underflows). **int8 shipped** (103 MB, −46%; per-stage ≥0.998, mel-corr 0.925 vs fp16 — user-accepted 2026-07-13). **C# SentencePiece encoder** (P7, ids exact-match) → Say(string) Python-free; TtsModel registry + default switched. Names pronounced correctly (user QA). P8 IN PROGRESS: runtime voice-clone cache (Mimi encoder → CloneVoice(AudioClip) → speaker_proj → audio_prompt, disk-cached by audio hash) |
+| Qwen3-ASR 0.6B/1.7B | STT | ✅ shipped — **GPU validated 6/6 EXACT** (RTF 0.22–0.66); QwenASRSTT:STT |
+| Parakeet-TDT 0.6B v2/v3 | STT | ✅ shipped — **GPU validated 6/6 EXACT** (RTF 0.08–0.09); ParakeetSTT:STT (v3 = Romanian) |
 
-Cross-cutting: ModelBase+TTS+STT bases ✅ (0711) · residency lifecycle in CosyVoiceWeights ✅ ·
-legacy rebase (LLMs, Chatterbox → ModelBase; per-instance budgets; BeginLoad/Defetch on the 3 LLM
-loaders) = **WS-F, right after CosyVoice3** · tokenizer hierarchy = WS-F2 · physical folder move
-under InferenceEngine/ = WS-F3 (agents are writing to the old absolute paths mid-flight; move
-only at the merge point, Unity closed, .meta pairs together) · unified import_params pool ✅
-(kokoro/STT exporters fold in at their merges).
+Cross-cutting DONE: ModelBase/TTS/STT bases · residency lifecycle · **F2 tokenizer hierarchy
+(TokenizerBase)** · **F3 folder move under InferenceEngine/** · unified import_params pool ·
+LLMRegistry (auto-extending NPC picker) · NPCChatBase (2D+3D) + LLMPool + prefetch zones + KV disk
+persistence · demos ChatDemo3D / ChatDemo2D (farm) / ForestFork / VoiceLab (all E2E green).
 
-Related demos: ChatDemo3D (witch NPC = Chatterbox → CosyVoice at A7) · ChatDemo2D being rebuilt
-as a Stardew-like farm demo (WS-C agent; old demo archived as ChatDemo2D_OLD).
+## Task board (2026-07-12) — source of truth, update as tasks land
+
+**Done:** A0–A7 CosyVoice3 · Kokoro port + speedup · STT Qwen-ASR + Parakeet (GPU-validated) ·
+import_params registry · THIRD_PARTY_NOTICES · NPCChatBase · dissertation TeX · chat thinking-dots +
+think-filter · **F2 tokenizer hierarchy** · **F3 InferenceEngine restructure** · chat text-jitter fix ·
+Kokoro question-prosody probe.
+
+**Remaining (priority order):**
+
+| # | Task | Priority |
+|---|---|---|
+| ~~20~~ | ✅ **DONE** Qwen3.5 decode frame-pacing — VALIDATED headless 2026-07-13 (`LMFramePacingProbe`, 3-arm A/B, 4060 int8): pre-#20 spread+sync = a 20-30 ms hitch EVERY token; shipped burst+`SampleYielding` = **0 frames >20 ms in 9608, p95 1.65 ms, max 15.9 ms, tok/s unchanged (30.8)**. Results in BENCHMARK.md; `DebugSpreadDecode` = A/B toggle | ✅ done |
+| ~~27~~ | ✅ **DONE** pocket-tts GPU port → DEFAULT NPC TTS. P1–P8 all validated: fp16 bit-exact, int8 shipped (mel-gate, user-accepted), C# SentencePiece exact, registry + default set, names QA'd, voice-clone cache (Mimi encoder → CloneVoice(AudioClip) corr 1.0; 3 tiers: Resources bake / persistent / encode; **inspector precompute button** on NPCChatBase; ref auto-capped 10 s = native prompt len). **Long-reply safe**: 2D dispatch guard (>65535 groups) + windowed streaming decode (CTX 40, O(1)/chunk, corr 1.0 vs direct). **Integration polish live-QA'd**: drain-grace pause (last words audible), OnClauseSpoken audio-synced text reveal, spread prefill + async readbacks (no Interact hitch). ChatDemo3D: Velmire → PocketTTS/jean + user-cloned voices tested | ✅ done |
+| 29 | **Talk-time frame drops** — dips to ~45 FPS while an NPC speaks (pocket-tts streaming + Qwen decode concurrently). Monitored multi-turn play-mode session (walk up → several turns → watch per-frame ms + which pump/stage correlates with the dips), then optimize the culprit (suspects: chunked Mimi re-decode burst at flush, clone-prefix prefill ticks, LLM+TTS pump contention in the same frame budget) | 🔥 **NOW** |
+| 24 | A6-MAX Phase 7 — CosyVoice3 sub-1.0 RTF (batch token readback) | optional |
+| 25 | Paper benchmark matrix (RTF/TTFA/load/VRAM, all engines × quant) on 4060 | unblocked |
+| 15 | WS-F — LLM↔ModelBase unification (needs the 3 LLM loaders rewritten to the epoch/BeginLoad/Defetch contract — RISKY, touches the validated load path) | deferred |
+| 28 | **Background KV compaction + HistoryMode.ResumeFromCompact** — run compaction in the background (idle/zone-exit), store the compacted summary+recent-turns state, resume from it on reopen. Activates the reserved `ResumeFromCompact` enum (replaced the removed `KeepAliveInBackground` — residency is the prefetch zone's job alone; LLM.Compact's summary-briefing seed is the starting point) | 🔥 **next after demo-polish commit** |
+| 18 | WS-G rest — NPC-AI primitives (per-NPC memory, conversation snapshots, type-ahead prefill) | backlog |
+
+(Full per-task history + gotchas live in the session memory `project_deepunity_cosyvoice3_port.md`.)

@@ -1,5 +1,5 @@
 # DeepUnity (2022.3.43f1 lts)
-![version](https://img.shields.io/badge/version-v0.13.0-yellow)
+![version](https://img.shields.io/badge/version-v0.14.0-yellow)
 [Reference Papers](https://github.com/smtmRadu/Policy-Gradient-Methods-Insights-and-Optimization-Strategies)
 
 DeepUnity is an add-on framework that provides tensor computation [with GPU acceleration support] and deep neural networks, along with reinforcement learning tools that enable training for intelligent agents within Unity environments using state-of-the-art algorithms.
@@ -99,11 +99,12 @@ DeepUnity runs TTS fully on the GPU as well, with real-time streaming synthesis 
 
 | Model | Size | Quantization | Notes |
 |---|---|---|---|
+| [pocket-tts](https://github.com/kyutai-labs/pocket-tts) **(default)** | 100M | FP16, INT8 | autoregressive flow-matching + Mimi codec, RTF ~0.15 on an RTX 4060, ~100 ms to first audio; **runtime voice cloning from a 10 s reference clip** (one-click precompute + disk cache — cloned voices load instantly, in builds too) |
 | [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) | 82M | FP16, INT8 | non-autoregressive, RTF ~0.3 on an RTX 4060 — real-time with headroom; 15 voicepacks + blends |
 | [Fun-CosyVoice3](https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512) | 0.5B | FP16, INT8 | autoregressive LM + causal DiT flow, token-level streaming, voices baked offline from any reference clip |
 | [Chatterbox-Turbo](https://github.com/resemble-ai/chatterbox) | 0.5B | FP16, INT8 | offline-style synthesis with clause-level streaming |
 
-Speech-to-text ports ([Qwen3-ASR](https://huggingface.co/Qwen) 0.6B/1.7B and [Parakeet-TDT](https://huggingface.co/nvidia) 0.6B) are in progress.
+Speech-to-text runs fully on the GPU too: [Qwen3-ASR](https://huggingface.co/Qwen) 0.6B/1.7B (RTF 0.22-0.66) and [Parakeet-TDT](https://huggingface.co/nvidia) 0.6B v2/v3 (RTF ~0.08), both validated transcript-exact against their reference implementations.
 
 #### Speaking through a KokoroVoice component
 
