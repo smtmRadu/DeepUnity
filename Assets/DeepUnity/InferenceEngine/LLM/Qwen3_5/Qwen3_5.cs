@@ -231,6 +231,7 @@ namespace DeepUnity
                 onTokenGenerated?.Invoke(tokenId.ToString() + " ");
             yield return null;
 
+            int tokensPerFrame = System.Math.Max(1, InferencePerf.LlmDecodeTokensPerFrame);
             for (int t = 0; t < max_new_tokens - 1; t++)
             {
                 // #29 reverse arbiter: audible SILENCE with synthesis pending outranks tok/s —
@@ -238,14 +239,11 @@ namespace DeepUnity
                 // so decode always makes progress no matter what the voice reports.
                 for (int hold = 0; FramePacing.TtsStarving && hold < InferencePerf.LlmHoldMaxFrames; hold++)
                 { FramePacing.LlmDeferrals++; yield return null; }
+                bool cede = FramePacing.TtsStarving;
 
                 Stopwatch sw = Stopwatch.StartNew();
-                Tensor nextInput = Tensor.Constant(tokenId);
-                e = model.ForwardYielding(nextInput, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
-                while (e.MoveNext()) yield return e.Current;
-
-                s = model.SampleYielding(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty, sampled);
-                while (s.MoveNext()) yield return s.Current;
+                var d = DecodeStep(Tensor.Constant(tokenId), sampled, temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
+                while (d.MoveNext()) yield return d.Current;
                 tokenId = sampled[0];
                 if (tokenId == Qwen3_5Modeling.Qwen3_5Config.EOS_TOKEN_ID) break;
 
@@ -254,11 +252,42 @@ namespace DeepUnity
                 else
                     onTokenGenerated?.Invoke(tokenId.ToString() + " ");
                 TokensPerSecond = sw.ElapsedMilliseconds > 0 ? 1000f / sw.ElapsedMilliseconds : 0f;
-                yield return null;
+                // hand a frame back to rendering every LlmDecodeTokensPerFrame tokens (forced every
+                // token while a voice is starving, so the TTS pump keeps its frames)
+                if (cede || t % tokensPerFrame == tokensPerFrame - 1) yield return null;
             }
 
             TokensPerSecond = 0f;
             yield return true;
+        }
+
+        // One autoregressive decode step (single token). Two modes:
+        //  - FAST (default): issue the forward + sampler SYNCHRONOUSLY and block once on the token
+        //    readback. Now that a token is only ~a few ms of GPU work (the #31 coalesced kernels),
+        //    this runs decode at COMPUTE speed. The old async-readback path spread every token over
+        //    ~3-4 frames (ForwardYielding's frame + AsyncGPUReadback's ~2 + the loop's trailing
+        //    yield), which capped play-mode decode at ~framerate/4 tok/s no matter how fast the GPU
+        //    was — the "high FPS but slow text" symptom. The caller still yields once per token, so
+        //    the app stays responsive (renders ~1 frame per token during a reply).
+        //  - CEDING: while a speaking TTS voice is starving (3D concurrent talk), fall back to the
+        //    async yielding path so the voice keeps its frames — audio continuity outranks tok/s
+        //    there, and the #29 reverse arbiter already holds the burst anyway.
+        IEnumerator DecodeStep(Tensor input, int[] result, float temperature, int top_k, float top_p,
+                               float min_p, float presence_penalty, float repetition_penalty)
+        {
+            bool cede = FramePacing.TtsStarving;
+            if (cede)
+            {
+                var e = model.ForwardYielding(input, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
+                while (e.MoveNext()) yield return e.Current;
+                var s = model.SampleYielding(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty, result);
+                while (s.MoveNext()) yield return s.Current;
+            }
+            else
+            {
+                model.Forward(input, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
+                result[0] = model.Sample(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
+            }
         }
 
         public override IEnumerator InitializeChat(string system_prompt = "")
@@ -389,20 +418,20 @@ namespace DeepUnity
             onTokenGenerated?.Invoke(tokenStr);
             yield return null;
 
+            var genSw = Stopwatch.StartNew();   // wall-clock over the decode loop, for the tok/s report
+            int genTokens = 1;
+            int tokensPerFrame = System.Math.Max(1, InferencePerf.LlmDecodeTokensPerFrame);
             for (int t = 0; t < max_new_tokens - 1; t++)
             {
                 // #29 reverse arbiter: audible SILENCE with synthesis pending outranks tok/s —
                 // hard-capped hold (see the Chat loop; liveness guaranteed).
                 for (int hold = 0; FramePacing.TtsStarving && hold < InferencePerf.LlmHoldMaxFrames; hold++)
                 { FramePacing.LlmDeferrals++; yield return null; }
+                bool cede = FramePacing.TtsStarving;
 
                 Stopwatch sw = Stopwatch.StartNew();
-                Tensor nextInput = Tensor.Constant(tokenId);
-                e = model.ForwardYielding(nextInput, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
-                while (e.MoveNext()) yield return e.Current;
-
-                s = model.SampleYielding(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty, sampled);
-                while (s.MoveNext()) yield return s.Current;
+                var d = DecodeStep(Tensor.Constant(tokenId), sampled, temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
+                while (d.MoveNext()) yield return d.Current;
                 tokenId = sampled[0];
                 if (tokenId == Qwen3_5Modeling.Qwen3_5Config.EOS_TOKEN_ID)
                 {
@@ -412,9 +441,19 @@ namespace DeepUnity
 
                 tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
                 onTokenGenerated?.Invoke(tokenStr);
+                genTokens++;
                 TokensPerSecond = sw.ElapsedMilliseconds > 0 ? 1000f / sw.ElapsedMilliseconds : 0f;
-                yield return null;
+                // hand a frame back to rendering every LlmDecodeTokensPerFrame tokens (forced every
+                // token while a voice is starving, so the TTS pump keeps its frames)
+                if (cede || t % tokensPerFrame == tokensPerFrame - 1) yield return null;
             }
+
+            // in-game decode speed (the honest play-mode number — includes per-token frame yields,
+            // unlike the tight-loop RTF probe). Lets us confirm the coalesced kernels + sync decode
+            // are actually reaching the player.
+            double genSec = genSw.Elapsed.TotalSeconds;
+            if (genSec > 0)
+                ConsoleMessage.Info($"Qwen3.5 decode: {genTokens} tokens in {genSec:F2}s = {genTokens / genSec:F1} tok/s (in-game).");
 
             TokensPerSecond = 0f;
             CurrentPhase = "idle";

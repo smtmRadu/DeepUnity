@@ -48,6 +48,32 @@ namespace DeepUnity
         /// everything else maxed. Never remove: an unbounded hold serialized whole replies.</summary>
         public static int LlmHoldMaxFrames = 180;
 
+        // ============ LLM play-mode pacing — the decode-SPEED ⇄ FRAMERATE tradeoff dial ============
+        // The LLM decode is autoregressive: each token must finish (and read back) before the next
+        // starts, so it can't be parallelized — the only lever in-game is HOW MANY frames you spend
+        // per unit of LLM work. Spend fewer frames → faster text, lower FPS during the reply. Spend
+        // more → smoother FPS, slower text. These two dials expose that tradeoff so it's tuned once
+        // per GPU instead of hard-coded. Both are OVERRIDDEN to the smooth end automatically while a
+        // TTS voice is starving (audio continuity wins there — see FramePacing / the #29 arbiter).
+
+        /// <summary>Transformer layers issued per frame while PREFILLING the prompt (the one-time
+        /// cost before the first token). Prefill is heavy, so it's spread over frames to avoid a
+        /// single giant hitch. RAISE for faster prompt processing at the cost of chunkier frames
+        /// as the reply spins up (fine on a strong GPU, or when a brief hitch is acceptable); LOWER
+        /// to 1 for the smoothest frames on a weak GPU. ≤ 0 issues the whole prefill in ONE frame
+        /// (fastest possible, biggest hitch). 24-layer model, so 24+ = single-frame prefill.</summary>
+        public static int LlmPrefillLayersPerFrame = 1;
+
+        /// <summary>Tokens decoded per frame during a reply. Each token is issued + sampled
+        /// SYNCHRONOUSLY (only a few ms of GPU on the coalesced kernels), then the frame is handed
+        /// back to rendering every this-many tokens. RAISE for faster text at a lower framerate
+        /// while the NPC talks — the "spend frames on decode instead of idle FPS" trade, ideal on a
+        /// weak GPU that's otherwise coasting mid-reply; LOWER to 1 for the smoothest framerate
+        /// during generation. Higher values reveal text in bursts of N and hitch ~N×(token cost)
+        /// per frame, so don't set it so high the app feels frozen. Forced to 1 while a TTS voice
+        /// is starving.</summary>
+        public static int LlmDecodeTokensPerFrame = 1;
+
         // ================= pocket-tts streaming voice ==========================================
 
         /// <summary>Ceiling for the ADAPTIVE prebuffer (PocketTTSVoice doubles its inspector

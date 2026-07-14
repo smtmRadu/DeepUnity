@@ -887,12 +887,13 @@ namespace DeepUnity
                 // caller's async SampleYielding readback then paces the CPU to the GPU (the game
                 // renders smoothly across the readback wait). Same kernels/order → bit-identical.
                 bool spread = seqLen > 1 || DebugSpreadDecode;
-                if (spread) yield return null;
-
+                // prefill spreads LlmPrefillLayersPerFrame layers per frame (decode-speed⇄FPS dial);
+                // decode (seqLen==1) issues in one shot and is paced by the caller's per-token loop.
+                int perFrame = Math.Max(1, InferencePerf.LlmPrefillLayersPerFrame);
                 for (int i = 0; i < numLayers; i++)
                 {
                     DispatchLayer(i, seqLen, totalKvLen, useCache);
-                    if (spread) yield return null;
+                    if (spread && (i % perFrame == perFrame - 1)) yield return null;
                 }
 
                 if (useCache) cache.CachedTokenCount += seqLen;

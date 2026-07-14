@@ -653,7 +653,9 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
                 NPCInteractor2D.ConversationMode.LlmOnly, "am_onyx", 0.95f,
                 // history-mode A/B spread: Hobb forgets you the moment the chat closes
                 NPCInteractor2D.HistoryMode.ResetEveryTime,
-                "MiniCPM5-1B", think: false);
+                // Qwen3.5-0.8B: the coalesced-kernel model (fast decode + disk-KV restore); Hobb
+                // is the perf arm of the 2D A/B (Marla stays on MiniCPM5-1B)
+                "Qwen3.5-0.8B", think: false);
 
             var marla = BuildNpc(font, white, "GrannyMarla", "char_granny", T(30, 19), "Granny Marla",
                 "You are Granny Marla, the warm, talkative grandmother who runs the little red-roofed general store on " +
