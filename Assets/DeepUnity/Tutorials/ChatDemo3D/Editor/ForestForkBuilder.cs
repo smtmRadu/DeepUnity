@@ -342,7 +342,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // LLM frame-pacing helpers: compile the compute kernels at scene start (one visible
             // hitch here instead of mid-game on first chat open) + a dormant frame-spike probe
             var llmHelper = new GameObject("LLMBootHelper");
-            llmHelper.AddComponent<LLMPrewarm>();
+            // kernel prewarm is automatic in NPCChatBase.Awake now — only the dormant spike probe
             llmHelper.AddComponent<FrameSpikeProbe>();
 
             // final cross-wiring

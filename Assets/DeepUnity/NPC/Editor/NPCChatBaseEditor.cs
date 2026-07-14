@@ -28,13 +28,14 @@ namespace DeepUnity
                     continue;
                 }
                 if (llmOnly && System.Array.IndexOf(VOICE_FIELDS, it.name) >= 0) continue;
-                if (it.propertyPath == "compactAfterTokens")   // only meaningful in ResumeFromCompact
+                if (it.propertyPath == "compactionTriggerTokens")   // only meaningful in ResumeFromCompact
                 {
                     var hm = serializedObject.FindProperty("historyMode");
                     if (hm == null || hm.enumValueIndex != (int)NPCChatBase.HistoryMode.ResumeFromCompact)
                         continue;
                 }
                 if (it.propertyPath == "model") { DrawModelPopup(it); continue; }
+                if (it.propertyPath == "smoothVsSpeed") { DrawSmoothSpeed(it); continue; }
                 if (it.propertyPath == "ttsVoice") { DrawVoicePopup(it); continue; }
                 if (it.propertyPath == "clonedVoiceClip") { DrawCloneClip(it); continue; }
                 EditorGUILayout.PropertyField(it, true);
@@ -177,6 +178,30 @@ namespace DeepUnity
                     PocketTTSModeling.PocketTTSVoiceBaker.Bake(clip, int8);
                 }
             }
+        }
+
+        // ---- Smooth ⇄ Speed (reply pacing preference) ---------------------------------------
+        // The auto-detection always computes for a stable 60+ fps; this dial only biases around
+        // that result while the player talks to THIS NPC. Drawn with named ends + the current
+        // mode (and the live AutoTune decision in play mode).
+        static void DrawSmoothSpeed(SerializedProperty prop)
+        {
+            EditorGUILayout.LabelField(new GUIContent("Reply Pacing",
+                "Hardware adaptation is fully automatic (AutoTune measures the GPU each session, 60 fps anchor). This slider is pure preference for this NPC's dialogues."), EditorStyles.boldLabel);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Label("Smooth", GUILayout.Width(50));
+                prop.floatValue = GUILayout.HorizontalSlider(prop.floatValue, 0f, 1f);
+                GUILayout.Label("Speed", GUILayout.Width(42));
+            }
+            float v = prop.floatValue;
+            string mode = v <= 0.02f ? "forced gentlest: async decode, 1 layer/frame prefill"
+                        : v >= 0.98f ? "forced fastest: sync decode, bulk prefill"
+                        : Mathf.Approximately(v, 0.5f) ? "pure auto — computed for a stable 60+ fps"
+                        : $"auto (60 fps anchor) with bias ×{Mathf.Pow(4f, (v - 0.5f) * 2f):F2} on the measured budgets";
+            EditorGUILayout.LabelField(Application.isPlaying
+                ? $"{mode}   |   AutoTune: {InferencePerf.AutoTuneStatus}"
+                : mode, EditorStyles.miniLabel);
         }
 
         // The LLM is a string id backed by LLMRegistry (auto-discovered [LLMEntry] methods) —

@@ -158,20 +158,55 @@ namespace DeepUnity
                 // per-device persistence: start from whatever the underrun tuner learned in past
                 // sessions (never below the inspector values). Pure audio-side state — zero
                 // interaction with prefetch zones / pooling / KV persistence.
-                prebufferSeconds = Mathf.Max(prebufferSeconds, PlayerPrefs.GetFloat(PREF_PREBUFFER, 0f));
-                streamChunkFrames = Mathf.Max(streamChunkFrames, PlayerPrefs.GetInt(PREF_CHUNK, 0));
+                // #32 self-healing: if the LAST session finished CLEAN (no escalation fired at the
+                // learned level), walk the learned values back ONE rung before adopting them — a
+                // single contended/JIT-heavy session can no longer degrade this device forever,
+                // while a truly weak GPU just re-earns its rung with one audible gap. Once per
+                // session (several voices Awake in a scene).
+                float learnedPre = PlayerPrefs.GetFloat(PREF_PREBUFFER, 0f);
+                int learnedChunk = PlayerPrefs.GetInt(PREF_CHUNK, 0);
+                if (!prefsWalkedBack)
+                {
+                    prefsWalkedBack = true;
+                    if (PlayerPrefs.GetInt(PREF_CLEAN, 1) == 1 && (learnedPre > 0f || learnedChunk > 0))
+                    {
+                        if (learnedChunk > streamChunkFrames) learnedChunk -= 4;      // reverse of the +4 escalation
+                        else if (learnedPre > prebufferSeconds) learnedPre *= 0.5f;   // reverse of the ×2 escalation
+                        PlayerPrefs.SetFloat(PREF_PREBUFFER, learnedPre);
+                        PlayerPrefs.SetInt(PREF_CHUNK, learnedChunk);
+                    }
+                    PlayerPrefs.SetInt(PREF_CLEAN, 1);   // re-armed; any escalation this session clears it
+                    PlayerPrefs.Save();
+                }
+                prebufferSeconds = Mathf.Max(prebufferSeconds, learnedPre);
+                streamChunkFrames = Mathf.Max(streamChunkFrames, learnedChunk);
             }
 
-            // v2 (#30): key version bumped — values learned on the pre-#30 decoder (its streaming
-            // windows were ~8x slower) were overly conservative (3 s prebuffer / 12-frame chunks
-            // on the GTX 1650); drop them and relearn on the optimized kernels.
-            const string PREF_PREBUFFER = "DeepUnity.PocketTTS.PrebufferSeconds.v2";
-            const string PREF_CHUNK = "DeepUnity.PocketTTS.StreamChunkFrames.v2";
+            // v3 (#32): keys are GPU-KEYED — prefs that travel with the user profile (or a GPU
+            // swap in the same machine) can no longer leak one device's learned escalation onto
+            // another. v2 bump history: values learned on the pre-#30 decoder were overly
+            // conservative; dropped and relearned on the optimized kernels.
+            static string DeviceKey(string k)
+            {
+                var g = SystemInfo.graphicsDeviceName;
+                var sb = new System.Text.StringBuilder(k.Length + 1 + g.Length);
+                sb.Append(k).Append('.');
+                foreach (char c in g) sb.Append(char.IsLetterOrDigit(c) ? c : '_');
+                return sb.ToString();
+            }
+            static string PREF_PREBUFFER => DeviceKey("DeepUnity.PocketTTS.PrebufferSeconds.v3");
+            static string PREF_CHUNK => DeviceKey("DeepUnity.PocketTTS.StreamChunkFrames.v3");
+            static string PREF_CLEAN => DeviceKey("DeepUnity.PocketTTS.CleanSession.v3");
+            static bool prefsWalkedBack;   // once per play session
+
+            [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+            static void ResetSessionStatics() => prefsWalkedBack = false;   // editor domain-reload-off replays
 
             static void SaveTunedDefaults(float prebuffer, int chunkFrames)
             {
                 PlayerPrefs.SetFloat(PREF_PREBUFFER, prebuffer);
                 PlayerPrefs.SetInt(PREF_CHUNK, chunkFrames);
+                PlayerPrefs.SetInt(PREF_CLEAN, 0);   // this session escalated — not clean, no walk-back next boot
                 PlayerPrefs.Save();
             }
 
@@ -276,10 +311,27 @@ namespace DeepUnity
                 if (!warmed)
                 {
                     warmed = true;
+                    var wallSw = System.Diagnostics.Stopwatch.StartNew();
                     // a tiny real utterance: exercises tokenizer + prefill + KV decode + flow + Mimi
                     // decode + chunk stream, so the first real clause has no shader-compile hitch.
                     var e = tts.SynthesizeStreaming(tts.Tokenize("Hi."), _ => { }, maxFrames: 8);
-                    while (e.MoveNext()) yield return null;
+                    // BUDGETED pump. The synth yields THOUSANDS of fine ticks (MAC-sliced prefill,
+                    // AR bookkeeping, readback waits) — one MoveNext per frame crawled for ~15 s,
+                    // dropping a ~5 ms dispatch into EVERY frame's GPU queue: it saturated the GPU
+                    // for the whole first reply of the session (decode 13 → 0.8-2 tok/s, the
+                    // "first message takes 5 s to speak" report). Pump a few ms + 2 heavy ticks
+                    // per frame instead — done in well under a second, still off the hot path.
+                    var frameSw = System.Diagnostics.Stopwatch.StartNew();
+                    int heavy = 0;
+                    while (e.MoveNext())
+                        if ((ReferenceEquals(e.Current, PocketTTS.FrameBreak) && ++heavy >= 2)
+                            || frameSw.Elapsed.TotalMilliseconds > 3.0)
+                        {
+                            heavy = 0;
+                            yield return null;
+                            frameSw.Restart();
+                        }
+                    Debug.Log($"[PocketTTSVoice] kernel prewarm done in {wallSw.ElapsedMilliseconds} ms.");
                 }
                 prewarmJob = null;
             }
@@ -292,6 +344,12 @@ namespace DeepUnity
             {
                 if (string.IsNullOrEmpty(delta)) return;
                 EnsureTts();
+                if (!ttfaArmed && !streamStarted && streamJob == null)
+                {
+                    ttfaArmed = true;
+                    ttfaFeed = Time.realtimeSinceStartup;
+                    ttfaQueue = ttfaSynth = ttfaRing = -1f;
+                }
                 feedingText = true;
                 pendingText.Append(delta);
                 CutCompleteChunks();
@@ -327,7 +385,11 @@ namespace DeepUnity
             void EnqueueClause(string text)
             {
                 int[] ids = tts.Tokenize(text);
-                if (ids != null && ids.Length > 0) clauseQueue.Enqueue((ids, text));
+                if (ids != null && ids.Length > 0)
+                {
+                    clauseQueue.Enqueue((ids, text));
+                    if (ttfaArmed && ttfaQueue < 0f) ttfaQueue = Time.realtimeSinceStartup;
+                }
             }
 
             /// <summary>Queue an utterance from pre-tokenized SentencePiece ids (one clause).
@@ -411,6 +473,7 @@ namespace DeepUnity
                     spokenQueue.Clear();
                 }
                 streamStarted = false;
+                ttfaArmed = false;
                 lastNonEmptyRealtime = float.NegativeInfinity;   // no phantom tail after a hard cut
                 if (source != null && source.isPlaying) source.Pause();
             }
@@ -460,12 +523,35 @@ namespace DeepUnity
                 // WORSE spikes than the waste it saved.)
                 bool lowRing = RingCount() < (int)(InferencePerf.TtsRefillFloorSeconds * Cfg.SAMPLE_RATE);
                 // silent refill (prebuffer / underrun re-gate): nothing is audible, so frame
-                // smoothness buys nothing — push MUCH harder to end the gap sooner (weak GPUs).
+                // smoothness buys nothing — push harder to end the gap sooner. #32: HOW MUCH
+                // harder is MEASURED, not a constant — a strong GPU refills multiples of
+                // real-time on one gentle tick (the fixed 4-tick turbo was the 17-21 ms GEN+SPK
+                // band on the 4060), a weak one climbs to the InferencePerf cap.
                 bool silentRefill = !streamStarted;
+                if (silentRefill)
+                {
+                    float now = Time.realtimeSinceStartup;
+                    int rc = RingCount();
+                    if (lastSilentRingCount >= 0 && now > lastSilentTime + 1e-4f)
+                    {
+                        float rate = (rc - lastSilentRingCount) / (float)Cfg.SAMPLE_RATE / (now - lastSilentTime);
+                        if (rate > 0f)
+                            refillRateEma = refillRateEma <= 0f ? rate : Mathf.Lerp(refillRateEma, rate, 0.2f);
+                        if (refillRateEma > 3f && silentTicksAdaptive > 1)
+                            silentTicksAdaptive--;                       // filling ≥3× real-time: be gentle
+                        else if (refillRateEma > 0f && refillRateEma < 1.5f
+                                 && silentTicksAdaptive < InferencePerf.TtsSilentRefillHeavyTicks)
+                            silentTicksAdaptive++;                       // barely real-time: push harder
+                    }
+                    lastSilentRingCount = rc; lastSilentTime = now;
+                }
+                else lastSilentRingCount = -1;
                 int heavyTicks = 0;
-                int maxHeavyTicks = silentRefill ? InferencePerf.TtsSilentRefillHeavyTicks : lowRing ? 2 : 1;
-                double frameBudgetMs = silentRefill ? gpuBudgetMs * InferencePerf.TtsSilentRefillBudgetScale : gpuBudgetMs;
-                double waitSpinMs = (lowRing || silentRefill) ? frameBudgetMs : InferencePerf.TtsGpuWaitSpinMs;
+                int maxHeavyTicks = silentRefill ? silentTicksAdaptive : lowRing ? 2 : 1;
+                bool pushHard = (lowRing && streamStarted) || (silentRefill && silentTicksAdaptive > 1);
+                double frameBudgetMs = (silentRefill && silentTicksAdaptive > 1)
+                    ? gpuBudgetMs * InferencePerf.TtsSilentRefillBudgetScale : gpuBudgetMs;
+                double waitSpinMs = pushHard ? frameBudgetMs : InferencePerf.TtsGpuWaitSpinMs;
                 while (pumpWatch.Elapsed.TotalMilliseconds < frameBudgetMs)
                 {
                     if (streamJob == null && clauseQueue.Count > 0)
@@ -478,6 +564,7 @@ namespace DeepUnity
                         inflightMark = new ClauseMark { text = text };
                         lock (ringLock) { inflightMark.start = totalWritten; spokenQueue.Enqueue(inflightMark); }
                         streamJob = tts.SynthesizeStreaming(ids, PushSamples);
+                        if (ttfaArmed && ttfaSynth < 0f) ttfaSynth = Time.realtimeSinceStartup;
                     }
                     if (streamJob == null) break;
                     if (!streamJob.MoveNext())
@@ -534,6 +621,7 @@ namespace DeepUnity
             public void PushSamples(float[] samples)
             {
                 if (samples == null) return;   // stream-complete sentinel
+                if (ttfaArmed && ttfaRing < 0f && samples.Length > 0) ttfaRing = Time.realtimeSinceStartup;
                 EnsureStream();
                 lock (ringLock)
                 {
@@ -556,6 +644,17 @@ namespace DeepUnity
             int underruns;
             bool wasStarved;
             // escalation ceilings live in InferencePerf (TtsPrebufferCapSeconds / TtsMaxChunkFrames).
+            // #32 measured silent-refill pacing: adaptive tick count (1 = strong GPU, up to the
+            // InferencePerf cap on weak ones), driven by the EMA of ring-fill rate in audio
+            // seconds per wall second while silent. Any real underrun snaps it back up.
+            int silentTicksAdaptive = 2;
+            float refillRateEma;
+            int lastSilentRingCount = -1;
+            float lastSilentTime;
+            // [TTFA] first-speech latency breakdown per reply (log-only diagnostics): armed at
+            // the reply's first text delta, one console line when playback actually starts.
+            bool ttfaArmed;
+            float ttfaFeed, ttfaQueue, ttfaSynth, ttfaRing;
 
             void Update()
             {
@@ -574,6 +673,9 @@ namespace DeepUnity
                 if (starving && !wasStarved)
                 {
                     wasStarved = true;
+                    // a real audible gap: the gentle measured refill was too optimistic here —
+                    // snap the silent-refill turbo back up before touching the sticky knobs
+                    silentTicksAdaptive = Mathf.Max(silentTicksAdaptive, InferencePerf.TtsSilentRefillHeavyTicks);
                     if (++underruns >= 2)
                     {
                         if (prebufferSeconds < InferencePerf.TtsPrebufferCapSeconds)
@@ -608,6 +710,18 @@ namespace DeepUnity
                 {
                     streamStarted = true;
                     if (!source.isPlaying) source.Play();
+                    if (ttfaArmed)
+                    {
+                        float now = Time.realtimeSinceStartup;
+                        Debug.Log($"[PocketTTSVoice] TTFA {(now - ttfaFeed) * 1000f:F0} ms — " +
+                                  $"first-token→clause {(ttfaQueue - ttfaFeed) * 1000f:F0} | " +
+                                  $"clause→synth-start {(ttfaSynth - ttfaQueue) * 1000f:F0} | " +
+                                  $"synth→first-audio {(ttfaRing - ttfaSynth) * 1000f:F0} | " +
+                                  $"buffer-gate {(now - ttfaRing) * 1000f:F0} ms " +
+                                  $"(ring {buffered / (float)Cfg.SAMPLE_RATE:F2}s, prebuffer {prebufferSeconds:F2}s, " +
+                                  $"chunk {streamChunkFrames}f, silentTicks {silentTicksAdaptive})");
+                        ttfaArmed = false;
+                    }
                 }
                 else if (streamStarted && buffered == 0 && !IsSpeaking)
                 {

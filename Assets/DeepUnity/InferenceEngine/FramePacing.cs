@@ -19,8 +19,12 @@ namespace DeepUnity
         /// <summary>True if the LLM issued GPU work this frame or the previous one. The 1-frame
         /// grace covers Update-vs-coroutine ordering: a voice's Update may run before the LLM
         /// coroutine resumes within the same frame, and while decoding the LLM issues (nearly)
-        /// every frame — last frame's mark predicts this frame's burst.</summary>
-        public static bool LlmBusy => Time.frameCount - llmIssueFrame <= 1;
+        /// every frame — last frame's mark predicts this frame's burst.
+        /// The sentinel guard matters: frameCount − int.MinValue OVERFLOWS negative, which read
+        /// as "busy/starving since forever" at every session start — the un-guarded TtsStarving
+        /// version held the LLM for the WHOLE first reply of each session (the "first message
+        /// takes 5 s to speak" bug, 3166 held frames measured).</summary>
+        public static bool LlmBusy => llmIssueFrame != int.MinValue && Time.frameCount - llmIssueFrame <= 1;
 
         /// <summary>Diagnostic: frames a TTS pump ceded to the LLM (#29 probe logs the per-turn delta).</summary>
         public static long TtsDeferrals;
@@ -37,10 +41,22 @@ namespace DeepUnity
         /// with more synthesis pending.</summary>
         public static void NoteTtsStarving() => ttsStarveFrame = Time.frameCount;
 
-        /// <summary>True if a TTS voice reported starvation this frame or the previous one.</summary>
-        public static bool TtsStarving => Time.frameCount - ttsStarveFrame <= 1;
+        /// <summary>True if a TTS voice reported starvation this frame or the previous one
+        /// (sentinel-guarded — see LlmBusy for the overflow bug this prevents).</summary>
+        public static bool TtsStarving => ttsStarveFrame != int.MinValue && Time.frameCount - ttsStarveFrame <= 1;
 
         /// <summary>Diagnostic: frames an LLM decode ceded to a starving TTS.</summary>
         public static long LlmDeferrals;
+
+        // Statics survive domain-reload-off replays; Time.frameCount resets to 0 each session,
+        // so LAST session's frame marks would read as "this frame" (or overflow) — clear them.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetOnBoot()
+        {
+            llmIssueFrame = int.MinValue;
+            ttsStarveFrame = int.MinValue;
+            TtsDeferrals = 0;
+            LlmDeferrals = 0;
+        }
     }
 }

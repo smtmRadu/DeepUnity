@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace DeepUnity
 {
     /// <summary>
@@ -126,5 +128,168 @@ namespace DeepUnity
         /// <summary>Hard cap of the self-calibrated tick slice (MACs). RAISE on very strong GPUs
         /// if profiling shows the calibrator pinned here while frames stay cheap.</summary>
         public static long TtsMacsTickCap = 4_000_000_000;
+
+        // ================= measured AutoTune (#32) =============================================
+        // Sync-vs-async decode is a DEVICE property (token cost vs frame budget), not a universal
+        // constant: always-sync (v0.14.7) made text 2× faster on a 4060 but put its ~14 ms token
+        // stall into every reply frame — undoing #20's smoothness on exactly the GPUs that didn't
+        // need the throughput. So the runtime MEASURES and decides per session: the first
+        // AutoTuneMeasureTokens sync tokens of a session are the probe (timed inside
+        // Qwen3_5.DecodeStep), then:
+        //   tokenMs <= SyncStallBudgetMs            -> SYNC (the stall hides inside the frame
+        //                                              budget) and pack floor(budget/tokenMs)
+        //                                              tokens per frame;
+        //   else if est. async tok/s >= MinUsable   -> ASYNC (#20 path: smooth frames, text at
+        //                                              ~fps/AsyncFramesPerToken — reading speed);
+        //   else                                    -> SYNC anyway (a weak GPU at low fps would
+        //                                              dribble unusable text on the async path).
+        // SESSION-LOCAL by design — re-measured at every boot, so nothing decided on one GPU (or
+        // during one contended session) can ever degrade a run on another device.
+        // SmoothVsSpeed is the ONE user-facing dial (see InferencePerfTuner for the scene slider).
+
+        /// <summary>The Smooth ⇄ Speed preference. The AUTO-DETECTION always computes for a
+        /// stable 60+ fps (AutoTargetFps — the anchor never moves); this value only biases the
+        /// internal tradeoff around that result. 0.5 = pure auto (no bias). Offsets multiply the
+        /// measured budgets (BiasMultiplier); the EXTREMES force the implementation limits:
+        /// ≤0.02 = gentlest possible (async decode, 1 layer/frame prefill), ≥0.98 = fastest
+        /// possible (sync decode, bulk prefill). Changing it mid-session should go through
+        /// ResetAutoTune() (InferencePerfTuner does) so the next reply re-decides.</summary>
+        public static float SmoothVsSpeed = 0.5f;
+
+        /// <summary>The FIXED frame-rate anchor every auto computation targets: hold a stable
+        /// 60 fps while the NPC replies, on any GPU. The slider does not move this — it biases
+        /// around it.</summary>
+        public const float AutoTargetFps = 60f;
+
+        /// <summary>Bias the slider applies to the measured budgets: ×1 at center (pure auto),
+        /// ×0.25 near Smooth (accept only a quarter of the 60 fps budget → lighter frames),
+        /// ×4 near Speed (accept 4× the budget → faster text at lower fps, e.g. ~30 fps
+        /// territory). Exact extremes bypass the math entirely (implementation limits).</summary>
+        public static float BiasMultiplier => Mathf.Pow(4f, (Mathf.Clamp01(SmoothVsSpeed) - 0.5f) * 2f);
+
+        /// <summary>Async-path floor: below this estimated tok/s a reply reads as a dribble, so a
+        /// weak GPU stays sync even though its token stall breaks the frame budget.</summary>
+        public static float MinUsableTokS = 12f;
+
+        /// <summary>Empirical frames one token spans on the async path (ForwardYielding's frame +
+        /// AsyncGPUReadback ~2 + the loop's trailing yield — v0.14.7's "framerate/4" symptom).</summary>
+        public static float AsyncFramesPerToken = 3.5f;
+
+        /// <summary>Sync probe tokens measured at each session start before the decision locks.</summary>
+        public static int AutoTuneMeasureTokens = 6;
+
+        static readonly System.Collections.Generic.List<float> tokenMsSamples =
+            new System.Collections.Generic.List<float>();
+        static float measureStartTime;
+        static int measureStartFrame;
+        static float minFrameDtMs;      // cheapest frame seen in the probe window ≈ scene baseline
+        static bool decided;
+        static bool syncDecode = true;
+
+        /// <summary>True while decode should take the FAST synchronous path: the slider's hard
+        /// extremes force the implementation limit (Speed end = always sync, Smooth end = always
+        /// async); otherwise true during the probe window (the measurement needs sync tokens),
+        /// then the measured policy. TTS starvation still overrides to async at the call site.</summary>
+        public static bool UseSyncDecode => SmoothVsSpeed >= 0.98f ? true
+                                          : SmoothVsSpeed <= 0.02f ? false
+                                          : (!decided || syncDecode);
+
+        /// <summary>Qwen3_5.DecodeStep reports each SYNC token's wall cost here; the
+        /// AutoTuneMeasureTokens-th sample locks the session's decision (and the
+        /// LlmDecodeTokensPerFrame packing) with one log line.</summary>
+        public static void NoteSyncTokenMs(float ms)
+        {
+            if (decided) return;
+            if (tokenMsSamples.Count == 0)
+            {
+                measureStartTime = Time.realtimeSinceStartup;
+                measureStartFrame = Time.frameCount;
+                minFrameDtMs = float.MaxValue;
+            }
+            minFrameDtMs = Mathf.Min(minFrameDtMs, Time.unscaledDeltaTime * 1000f);
+            tokenMsSamples.Add(ms);
+            if (tokenMsSamples.Count < AutoTuneMeasureTokens) return;
+
+            tokenMsSamples.Sort();
+            float tokenMs = tokenMsSamples[tokenMsSamples.Count / 2];   // median: JIT/contention robust
+            float elapsed = Mathf.Max(1e-3f, Time.realtimeSinceStartup - measureStartTime);
+            float fps = Mathf.Max(1f, (Time.frameCount - measureStartFrame) / elapsed);
+            float asyncTokS = fps / Mathf.Max(1f, AsyncFramesPerToken);
+
+            // The tradeoff always anchors on the FIXED 60 fps target: how much decode stall
+            // fits in a 60 fps frame after the scene's own baseline cost? The slider only
+            // multiplies that measured budget (×1 at center = pure auto).
+            float targetFrameMs = 1000f / AutoTargetFps;
+            float baselineMs = Mathf.Min(minFrameDtMs, targetFrameMs);   // vsync-quantized floors cap out
+            float stallBudgetMs = Mathf.Max(0f, targetFrameMs - baselineMs) * BiasMultiplier;
+
+            if (tokenMs <= stallBudgetMs)
+            {
+                syncDecode = true;   // full-speed text still holds the target frame rate
+                LlmDecodeTokensPerFrame = Mathf.Max(1, (int)(stallBudgetMs / Mathf.Max(0.1f, tokenMs)));
+            }
+            else if (asyncTokS >= MinUsableTokS) { syncDecode = false; LlmDecodeTokensPerFrame = 1; }
+            else { syncDecode = true; LlmDecodeTokensPerFrame = 1; }   // weak GPU: readable text wins
+            decided = true;
+            AutoTuneStatus = (syncDecode ? $"SYNC decode, {LlmDecodeTokensPerFrame} tok/frame"
+                                         : $"ASYNC decode (~{asyncTokS:F0} tok/s est.)") +
+                             $" — token {tokenMs:F1} ms, 60 fps anchor, bias ×{BiasMultiplier:F2}";
+            Debug.Log($"[InferencePerf] AutoTune: token {tokenMs:F1} ms (median/{tokenMsSamples.Count}), baseline {baselineMs:F1} ms, {fps:F0} fps → " +
+                      (syncDecode ? $"SYNC decode, {LlmDecodeTokensPerFrame} tok/frame"
+                                  : $"ASYNC decode (~{asyncTokS:F0} tok/s est.)") +
+                      $" | 60 fps anchor, stall budget {stallBudgetMs:F1} ms (Smooth⇄Speed {SmoothVsSpeed:F2}, bias ×{BiasMultiplier:F2}) | {SystemInfo.graphicsDeviceName}");
+        }
+
+        /// <summary>One-line description of the session's AutoTune decision (the tuner's
+        /// inspector shows it live); "measuring…" until the probe tokens lock it.</summary>
+        public static string AutoTuneStatus { get; private set; } = "measuring…";
+
+        // ---- adaptive prefill packing (#32) ---------------------------------------------------
+        // The dialogue-open latency IS the system-prompt prefill (plus the question prefill at
+        // each reply) — pacing it with a fixed layers-per-frame constant wastes exactly the GPUs
+        // that could swallow it whole. The pack self-tunes off MEASURED prefill frame times
+        // against the same bias-scaled budget: fast GPUs converge to fat packs (dialogs open in a
+        // fraction of the time), weak ones sink to the per-NPC slider floor.
+
+        /// <summary>Layers-per-frame pack the chunked prefill runs at (adaptive). Converges
+        /// within one system-prompt prefill and persists for the session.</summary>
+        public static int PrefillPack = 6;
+
+        /// <summary>ForwardPromptChunked reports each prefill frame's wall time here; the pack
+        /// grows while whole frames sit comfortably under the 60 fps frame budget (× the slider
+        /// bias) and shrinks fast when they overshoot it. Prefill is a loading moment, so it may
+        /// FILL the frame (unlike decode, which must leave room for the scene).</summary>
+        public static void NotePrefillFrameMs(float ms)
+        {
+            float targetFrameMs = 1000f / AutoTargetFps * BiasMultiplier;
+            if (ms < targetFrameMs * 0.75f) PrefillPack = Mathf.Min(64, PrefillPack + 2);
+            else if (ms > targetFrameMs * 1.1f) PrefillPack = Mathf.Max(1, PrefillPack - 4);
+        }
+
+        /// <summary>The layers-per-frame pack a prefill should actually run at: the slider's
+        /// hard extremes force the implementation limits (Smooth end = 1 layer/frame, the
+        /// gentlest possible; Speed end = 64 ≈ whole chunks in one frame), otherwise the
+        /// measured adaptive pack. Models call this per yield.</summary>
+        public static int EffectivePrefillPack()
+        {
+            if (SmoothVsSpeed <= 0.02f) return 1;
+            if (SmoothVsSpeed >= 0.98f) return 64;
+            return Mathf.Max(1, PrefillPack);
+        }
+
+        /// <summary>Drops the session decision — the next reply's first tokens re-probe. Called at
+        /// boot and whenever ReplySpeedBias changes.</summary>
+        public static void ResetAutoTune()
+        {
+            decided = false;
+            syncDecode = true;
+            tokenMsSamples.Clear();
+            LlmDecodeTokensPerFrame = 1;
+            PrefillPack = 6;
+            AutoTuneStatus = "measuring…";
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetOnBoot() => ResetAutoTune();   // also covers editor domain-reload-off replays
     }
 }

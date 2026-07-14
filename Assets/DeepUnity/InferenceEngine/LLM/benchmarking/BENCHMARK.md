@@ -330,3 +330,49 @@ same as NPCChatBase Talk). Three arms, identical greedy chain (prefill 192 → 1
   16.7 ms budget) — at **unchanged tok/s** (GPU-bound; the async wait is free).
 - Report: `ProbeLogs/framepacing_qwen3.5-0.8B_INT8_20260713_052843/` (per-frame CSVs per arm).
 - `Qwen3_5Model.DebugSpreadDecode` is the A/B toggle (benchmarking only, never production).
+
+## Coalesced GEMV/GEMM (#31) + tiled Mimi kernels (#30) — 4060 A/B — 2026-07-14
+
+The v0.14.2 kernel rewrites were built and validated on the GTX 1650 (bandwidth-starved). This
+section answers "is the win real on a faster GPU, or 1650-specific tuning?" — same build, same
+machine, back-to-back legacy-vs-new via the `ForceLegacyGemv` / `ForceLegacyKernels` switches
+(`LegacyKernelABRunner.cs` menus: "Decode Profile (int8, LEGACY GEMV)" / "RTF Benchmark (int8,
+LEGACY kernels)"). Edit mode, editor open on ChatDemo3D (~30% baseline GPU util), warm shaders
+(first coalesced run pays ~2 s of kernel JIT — discard it).
+
+### Qwen3.5-0.8B int8 / kvFP16 — `QwenDecodeProfileProbe` (prefill 64 ids, 32 timed tokens, greedy)
+
+| kernels | decode tok/s | ms/tok | prefill 64 ids (warm) |
+|---|---:|---:|---:|
+| legacy (1 thread/row GEMV) | 29.6 | 33.8 | 548 ms |
+| **coalesced (warp-per-row + tree-reduce)** | **70.0** | **14.3** | **334 ms** |
+
+- **Decode 2.37× on the 4060** (the old Table-2 baseline of 31.3 tok/s ≈ the legacy arm — sanity
+  holds). The 4060 was never purely dispatch-bound after all: the fp16 LM head + MLP GEMVs were
+  bandwidth-wasteful here too, just less catastrophically than on the 1650 (which got 5×).
+- Prefill 64-id probe: 1.64× (the standardized 2048-token prefill matrix row is a different
+  methodology — re-run the batch matrix when the paper numbers are collected, task #25).
+- Serialized stage shares (coalesced): glue/copy/norm 22.9% is now the top cost — the GEMVs no
+  longer dominate (mlp:down fell 21.5%→10.3% of a 32% smaller token).
+- Parity ON THIS GPU: `GEMV Parity (coal vs legacy)` **PASS** — corr 1.000000000, argmax match,
+  maxAbs 3.6e-4 over the full 248320 vocab.
+
+### pocket-tts int8 — `PocketTTSRtfProbe` offline-KV (66 ids → 10.4 s audio)
+
+| kernels | mimi decode | AR loop | total | RTF |
+|---|---:|---:|---:|---:|
+| legacy Conv1D/attention | 452 ms | 950 ms | 1491 ms | 0.143 |
+| **tiled (#30)** | **256 ms** | 932 ms | **1276 ms** | **0.123** |
+
+- **Mimi decode 1.77× on the 4060** (vs 4.6× on the 1650) — real but smaller: here the decoder
+  was already fast enough that dispatch overhead, not weight re-reads, sets the floor.
+- Total RTF only 0.143→0.123 because on this GPU the FlowLM AR loop is ~73% of the offline cost
+  (untouched by #30); on the 1650 the decoder was 67% of cost, hence its 2× RTF headline.
+- fp16 same run: RTF 0.138 (int8 ≈ fp16, as always — the win is VRAM/load).
+- Best-ever 4060 offline number: pre-#29 P5 baseline was RTF 0.15; the #29 slicing overhead that
+  raised sync-drain to 0.27 does not apply to this offline-KV path.
+
+**Verdict: the optimizations are real cross-GPU, not 1650-specific.** Qwen decode 2.37× / Mimi
+1.77× on the 4060, bit-parity confirmed locally. If the DEMO still doesn't feel faster on the
+4060, the gap is in play-mode pacing (InferencePerf dials / TTS-starving fallback / prefill of
+long system prompts), not in the kernels.

@@ -413,15 +413,13 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             ambience.clip = AssetDatabase.LoadAssetAtPath<AudioClip>(ART + "/Audio/limgrave_theme.ogg");
             ambience.loop = true;
             ambience.playOnAwake = true;
-            ambience.volume = 0.3f;
+            ambience.volume = 0.18f;   // user 2026-07-14: was 0.3, too loud over the NPC voices
             ambience.spatialBlend = 0f;
 
-            // LLM frame-pacing helpers: compile the compute kernels at scene start (one visible
-            // hitch here instead of mid-game on first chat open) + a dormant frame-spike probe
-            // (tick its `record` in the inspector when hunting fps dips).
-            var llmHelper = new GameObject("LLMBootHelper");
-            llmHelper.AddComponent<LLMPrewarm>();
-            llmHelper.AddComponent<FrameSpikeProbe>();
+            // Kernel prewarm now lives INSIDE NPCChatBase.Awake (frame-0, per model, automatic) —
+            // no helper object needed. Only the dormant frame-spike probe remains (tick its
+            // `record` in the inspector when hunting fps dips).
+            new GameObject("FrameSpikeProbe").AddComponent<FrameSpikeProbe>();
 
             // final cross-wiring
             SetRef(player.GetComponent<SoulsPlayerController>(), "cam", cameraRig.GetComponent<SoulsCameraRig>());
@@ -1692,9 +1690,9 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 "the boss, you foreshadow it with morbid delight — urging the lambkin onward while clearly expecting them to die. " +
                 "Stay in character at all times. Keep your replies to one to three short sentences.");
             SetString(npc, "approach_text", "The pale figure regards you in silence...");
-            // history-mode A/B spread: Velmire REMEMBERS between dialogues (live KV reused
-            // while his Qwen is resident, transcript re-prefilled after a zone-exit unload)
-            SetEnum(npc, "historyMode", (int)NPCInteractor3D.HistoryMode.ContinueWhereLeftOff);
+            // Velmire resets per dialogue (user pick 2026-07-14; was the ContinueWhereLeftOff
+            // arm of the history-mode A/B — both castle NPCs now wipe at chat close)
+            SetEnum(npc, "historyMode", (int)NPCInteractor3D.HistoryMode.ResetEveryTime);
             // Velmire speaks through Kokoro (82M non-AR, RTF ~0.3 — speaks DURING generation)
             // with the am_onyx voicepack: the same deep Freeman-esque narrator timbre the
             // CosyVoice "velmire" voice was baked from. CosyVoice3 stays selectable on the enum

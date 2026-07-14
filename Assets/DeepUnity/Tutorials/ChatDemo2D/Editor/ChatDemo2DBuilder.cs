@@ -653,8 +653,8 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
                 NPCInteractor2D.ConversationMode.LlmOnly, "am_onyx", 0.95f,
                 // history-mode A/B spread: Hobb forgets you the moment the chat closes
                 NPCInteractor2D.HistoryMode.ResetEveryTime,
-                // Qwen3.5-0.8B: the coalesced-kernel model (fast decode + disk-KV restore); Hobb
-                // is the perf arm of the 2D A/B (Marla stays on MiniCPM5-1B)
+                // Qwen3.5-0.8B int8: the force-optimized default on EVERY demo NPC (coalesced
+                // kernels + disk-KV restore + InferencePerf pacing dials all target it)
                 "Qwen3.5-0.8B", think: false);
 
             var marla = BuildNpc(font, white, "GrannyMarla", "char_granny", T(30, 19), "Granny Marla",
@@ -671,10 +671,10 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
                 "The shopkeeper looks up from her knitting with a smile...",
                 NPCInteractor2D.ConversationMode.LlmOnly, "granny", 0.92f,
                 // history-mode A/B spread: Granny REMEMBERS across dialogues (live KV while
-                // resident, transcript re-prefill after release — MiniCPM has no disk-KV restore
-                // yet). Residency is the zone's job. She is also the THINKING arm of the A/B.
+                // resident, full disk-KV restore after release now that she runs Qwen).
+                // Residency is the zone's job. She is also the THINKING arm of the A/B.
                 NPCInteractor2D.HistoryMode.ContinueWhereLeftOff,
-                "MiniCPM5-1B", think: true);
+                "Qwen3.5-0.8B", think: true);
 
             return new[] { hobb, marla };
         }
@@ -712,9 +712,10 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             SetString(npc, "npc_name", displayName);
             SetString(npc, "system_prompt", systemPrompt);
             SetString(npc, "approach_text", approach);
-            // Per-villager LLM (user pick): MiniCPM5-1B on both, thinking as a live A/B — Hobb
-            // answers directly, Marla REASONS in <think> first (never shown/voiced; the window
-            // pulses 'Thinking…' until her actual answer starts). LLMRegistry id string.
+            // Per-villager LLM (user pick 2026-07-14): Qwen3.5-0.8B int8 on BOTH — the
+            // force-optimized default. Thinking stays the live A/B: Hobb answers directly,
+            // Marla REASONS in <think> first (never shown/voiced; the window pulses
+            // 'Thinking…' until her actual answer starts). LLMRegistry id string.
             SetString(npc, "model", model);
             SetBool(npc, "allowThinking", think);
             SetEnum(npc, "historyMode", (int)history);

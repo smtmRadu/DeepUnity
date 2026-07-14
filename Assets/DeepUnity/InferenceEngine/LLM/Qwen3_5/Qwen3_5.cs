@@ -275,7 +275,10 @@ namespace DeepUnity
         IEnumerator DecodeStep(Tensor input, int[] result, float temperature, int top_k, float top_p,
                                float min_p, float presence_penalty, float repetition_penalty)
         {
-            bool cede = FramePacing.TtsStarving;
+            // #32 AutoTune: the async path also serves when the MEASURED per-token stall doesn't
+            // fit this device's frame budget (InferencePerf decides once per session from the
+            // first sync tokens' cost) — sync-at-any-price undid #20's smoothness on strong GPUs.
+            bool cede = FramePacing.TtsStarving || !InferencePerf.UseSyncDecode;
             if (cede)
             {
                 var e = model.ForwardYielding(input, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
@@ -285,8 +288,10 @@ namespace DeepUnity
             }
             else
             {
+                var sw = Stopwatch.StartNew();
                 model.Forward(input, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
                 result[0] = model.Sample(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
+                InferencePerf.NoteSyncTokenMs((float)sw.Elapsed.TotalMilliseconds);   // probe feed (no-op once decided)
             }
         }
 
@@ -420,14 +425,16 @@ namespace DeepUnity
 
             var genSw = Stopwatch.StartNew();   // wall-clock over the decode loop, for the tok/s report
             int genTokens = 1;
+            int holdFrames = 0, cededToks = 0;  // diagnostic split for the tok/s report
             int tokensPerFrame = System.Math.Max(1, InferencePerf.LlmDecodeTokensPerFrame);
             for (int t = 0; t < max_new_tokens - 1; t++)
             {
                 // #29 reverse arbiter: audible SILENCE with synthesis pending outranks tok/s —
                 // hard-capped hold (see the Chat loop; liveness guaranteed).
                 for (int hold = 0; FramePacing.TtsStarving && hold < InferencePerf.LlmHoldMaxFrames; hold++)
-                { FramePacing.LlmDeferrals++; yield return null; }
+                { FramePacing.LlmDeferrals++; holdFrames++; yield return null; }
                 bool cede = FramePacing.TtsStarving;
+                if (cede) cededToks++;
 
                 Stopwatch sw = Stopwatch.StartNew();
                 var d = DecodeStep(Tensor.Constant(tokenId), sampled, temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
@@ -453,7 +460,9 @@ namespace DeepUnity
             // are actually reaching the player.
             double genSec = genSw.Elapsed.TotalSeconds;
             if (genSec > 0)
-                ConsoleMessage.Info($"Qwen3.5 decode: {genTokens} tokens in {genSec:F2}s = {genTokens / genSec:F1} tok/s (in-game).");
+                ConsoleMessage.Info($"Qwen3.5 decode: {genTokens} tokens in {genSec:F2}s = {genTokens / genSec:F1} tok/s (in-game; " +
+                                    $"held {holdFrames} frames for starving TTS, {cededToks} ceded tokens, " +
+                                    $"sync={InferencePerf.UseSyncDecode}).");
 
             TokensPerSecond = 0f;
             CurrentPhase = "idle";
@@ -702,9 +711,9 @@ namespace DeepUnity
             }
 
             const int CHUNK = 8;
-            // pack several per-layer slices per frame (LLM.PrefillLayersPerFrame, per-NPC slider):
-            // fully spread, a ~30-token question cost ~100 mostly-idle frames before the first token
-            int pack = Math.Max(1, PrefillLayersPerFrame);
+            // #32 adaptive prefill packing: InferencePerf grows/shrinks the per-frame slice pack
+            // off measured prefill frame times (60 fps anchor, Smooth⇄Speed-biased) — fast GPUs
+            // open dialogues in a fraction of the old fixed-pack time.
             int step = 0;
             for (int start = 0; start < ids.Count; start += CHUNK)
             {
@@ -713,7 +722,12 @@ namespace DeepUnity
                 for (int i = 0; i < len; i++) part[i] = ids[start + i];
                 var e = model.ForwardYielding(Tensor.Constant(part), useCache: true, lastPosOnly: true);
                 while (e.MoveNext())
-                    if (++step % pack == 0) yield return e.Current;
+                    if (++step % InferencePerf.EffectivePrefillPack() == 0)
+                    {
+                        float tYield = Time.realtimeSinceStartup;
+                        yield return e.Current;
+                        InferencePerf.NotePrefillFrameMs((Time.realtimeSinceStartup - tYield) * 1000f);
+                    }
             }
         }
 

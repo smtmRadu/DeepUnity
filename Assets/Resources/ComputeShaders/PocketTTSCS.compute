@@ -334,8 +334,10 @@ void ConvTranspose1DTiled(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
     if (t0 >= seq_len) return;                        // group-uniform
     uint tMax = min(t0 + CT_TB - 1u, seq_len - 1u);
     int lo = (int)t0 + pad_left - (int)(conv_kernel - 1u);
-    int tiMin = lo > 0 ? (lo + (int)conv_stride - 1) / (int)conv_stride : 0;
-    int tiMax = min((int)in_len - 1, ((int)tMax + pad_left) / (int)conv_stride);
+    // divides run on uints (int div is slower on d3d11); both numerators are proven >= 0 on
+    // their branch (lo > 0 checked; tMax + pad_left >= 0 always), so results are identical
+    int tiMin = lo > 0 ? (int)(((uint)lo + conv_stride - 1u) / conv_stride) : 0;
+    int tiMax = min((int)in_len - 1, (int)((uint)((int)tMax + pad_left) / conv_stride));
     uint rows = (uint)max(0, tiMax - tiMin + 1);
     uint stageTotal = rows * in_dim;
     for (uint li = tid.x; li < stageTotal; li += CT_THREADS)
@@ -354,8 +356,9 @@ void ConvTranspose1DTiled(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
             [unroll] for (uint q1 = 0; q1 < CT_TB; q1++)
             {
                 int num = (int)(t0 + q1) + pad_left - (int)k;
-                int ti = num / (int)conv_stride;
-                bool ok = num >= 0 && ((uint)num % conv_stride) == 0u && ti <= tiMax && ti >= tiMin;
+                bool nn = num >= 0;
+                int ti = nn ? (int)((uint)num / conv_stride) : 0;   // uint div; unused when nn=false
+                bool ok = nn && ((uint)num % conv_stride) == 0u && ti <= tiMax && ti >= tiMin;
                 rowq[q1] = ok ? ti - tiMin : -1;
                 hasTap = hasTap || ok;
             }
@@ -440,7 +443,9 @@ void ApplyRoPE(uint3 id : SV_DispatchThreadID)
     uint hh = (gi / hd2) % num_heads;
     uint t = gi / (hd2 * num_heads);
     float posf = (float)(pos_offset + t);
-    float freq = pow(rope_theta, -2.0 * (float)pair / (float)head_dim);
+    // abs() is identity here (rope_theta = 10000 > 0) — it only silences the negative-base
+    // pow warning; same exp2(y*log2(x)) lowering, bit-identical for positive theta
+    float freq = pow(abs(rope_theta), -2.0 * (float)pair / (float)head_dim);
     float ang = posf * freq;
     float c = cos(ang), s = sin(ang);
     uint base = (t * num_heads + hh) * head_dim + pair * 2u;
@@ -607,12 +612,14 @@ void CausalAttentionKV(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
     GroupMemoryBarrierWithGroupSync();
 
     // pass 1: max score over all cache rows
+    // (loop vars named uniquely throughout — legacy HLSL scoping hoists them to function
+    // scope, so re-declaring `d`/`j` per pass raises conflict warnings)
     float m = -1e30;
     for (uint j = lane; j < kv_len; j += CA_THREADS)
     {
         uint kbase = (j * num_heads + h) * head_dim;
         float dot = 0.0;
-        for (uint d = 0; d < head_dim; d++) dot += ca_q[d] * KCache[kbase + d];
+        for (uint dk1 = 0; dk1 < head_dim; dk1++) dot += ca_q[dk1] * KCache[kbase + dk1];
         m = max(m, dot * scale);
     }
     ca_red[lane] = m; GroupMemoryBarrierWithGroupSync();
@@ -625,7 +632,7 @@ void CausalAttentionKV(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
     {
         uint kbase = (j2 * num_heads + h) * head_dim;
         float dot = 0.0;
-        for (uint d = 0; d < head_dim; d++) dot += ca_q[d] * KCache[kbase + d];
+        for (uint dk2 = 0; dk2 < head_dim; dk2++) dot += ca_q[dk2] * KCache[kbase + dk2];
         sumexp += exp(dot * scale - mmax);
     }
     ca_red[lane] = sumexp; GroupMemoryBarrierWithGroupSync();
@@ -633,18 +640,18 @@ void CausalAttentionKV(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
     float denom = max(ca_red[0], 1e-20); GroupMemoryBarrierWithGroupSync();
 
     // pass 3: weighted sum of V — each lane owns a slice of head_dim
-    for (uint d = lane; d < head_dim; d += CA_THREADS)
+    for (uint dv = lane; dv < head_dim; dv += CA_THREADS)
     {
         float acc = 0.0;
-        for (uint j = 0; j < kv_len; j++)
+        for (uint jv = 0; jv < kv_len; jv++)
         {
-            uint kbase = (j * num_heads + h) * head_dim;
+            uint kbase = (jv * num_heads + h) * head_dim;
             float dot = 0.0;
             for (uint dd = 0; dd < head_dim; dd++) dot += ca_q[dd] * KCache[kbase + dd];
             float wgt = exp(dot * scale - mmax) / denom;
-            acc += wgt * VCache[(j * num_heads + h) * head_dim + d];
+            acc += wgt * VCache[(jv * num_heads + h) * head_dim + dv];
         }
-        AttendedValues[qbase + d] = acc;
+        AttendedValues[qbase + dv] = acc;
     }
 }
 

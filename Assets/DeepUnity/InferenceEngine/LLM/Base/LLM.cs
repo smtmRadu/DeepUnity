@@ -229,14 +229,9 @@ namespace DeepUnity
             yield break;
         }
 
-        /// <summary>Prompt-prefill pacing: how many per-layer prefill slices are issued per FRAME
-        /// while forwarding a prompt (the user question / the system-prompt init). 1 = fully
-        /// spread — minimum GPU per frame, slowest first token (a ~30-token question ≈ 100
-        /// mostly-idle frames on an 8-token-chunk model); higher packs slices (6 ≈ a few decode
-        /// bursts of GPU per frame — invisible at 60 fps on the small NPC models, first token
-        /// ~6× sooner). Per-NPC (inspector slider) — assigned onto the shared pooled instance
-        /// per dialogue, like DiskKVCache.</summary>
-        public int PrefillLayersPerFrame = 6;
+        // Prompt-prefill pacing is fully automatic: InferencePerf.EffectivePrefillPack() adapts
+        // the per-frame slice pack off measured prefill frame times (60 fps anchor, biased by
+        // the scene's Smooth⇄Speed dial). The old per-NPC PrefillLayersPerFrame knob is gone.
 
         /// <summary>Rolling decode speed of the most recent generation step (0 while idle).</summary>
         public float TokensPerSecond { get; protected set; }
@@ -349,43 +344,42 @@ namespace DeepUnity
             int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
             float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false);
 
-        const string COMPACT_PROMPT =
-            "Summarize our ENTIRE conversation so far as a compact briefing for yourself: the key facts, " +
-            "decisions, names, numbers and the user's goals/preferences. No preamble, no commentary — " +
-            "just the briefing, dense and factual.";
+        // Deliberately BARE (user spec): the model is expected to answer this with the complete
+        // conversation compact in ONE message, as a natural continuation of the chat — no
+        // elaborate instructions. Stock instruct models handle it acceptably today; the roadmap
+        // item is a model FINETUNED to emit its compact instantly on this trigger (see CLAUDE.md).
+        const string COMPACT_PROMPT = "Compact the conversation.";
 
         /// <summary>
-        /// Compacts the running conversation to reclaim context: the model SUMMARIZES its own chat
-        /// history in-context (greedy, capped at <paramref name="max_summary_tokens"/>), then the chat
-        /// is re-initialized as [<paramref name="system_prompt"/> + summary briefing] — the KV cache
-        /// shrinks back to a short prefix while the NPC "remembers" what mattered.
+        /// Compacts the running conversation to reclaim context: the model answers a bare
+        /// "Compact the conversation." user prompt with a single-shot compact of the ENTIRE
+        /// history (greedy, capped at <paramref name="max_summary_tokens"/>), then the chat is
+        /// re-initialized as [<paramref name="system_prompt"/> + "HISTORY:" + compact] — the
+        /// recompute leaves the KV cache a short prefix while the NPC "remembers" everything
+        /// through the HISTORY block.
         /// Call it between turns (e.g. when the history nears the context limit); it is a coroutine and
         /// yields per frame like everything else, so it can run behind gameplay.
         /// Pass the SAME system_prompt used in <see cref="InitializeChat"/> (the base class cannot see
-        /// the concrete model's template state). <paramref name="post_summary_context"/> is appended
-        /// AFTER the briefing in the re-seeded prefix — callers use it to keep the last few verbatim
-        /// turns alongside the summary (NPCChatBase's ResumeFromCompact does). Virtual: models can
-        /// override with token-level history splicing (keep-last-K-turns) or a dedicated compaction
-        /// model. [Roadmap: finetune a small background compactor model — see InferenceEngine/CLAUDE.md.]
+        /// the concrete model's template state). Virtual: models can override with token-level
+        /// history splicing (keep-last-K-turns) or a dedicated compaction model. [Roadmap: finetune
+        /// a small background compactor model — see InferenceEngine/CLAUDE.md.]
         /// </summary>
         public virtual IEnumerator Compact(string system_prompt = "", Action<string> onSummary = null,
-                                           int max_summary_tokens = 256, string post_summary_context = null)
+                                           int max_summary_tokens = 256)
         {
             CurrentPhase = "compact";
             var sb = new System.Text.StringBuilder();
-            // 1. in-context summary request — continues the model's tracked conversation (greedy)
+            // 1. compact request — continues the model's tracked conversation (greedy, one shot)
             var chat = Chat(COMPACT_PROMPT, t => sb.Append(t),
                             max_new_tokens: max_summary_tokens, temperature: 0f);
             while (chat.MoveNext()) yield return chat.Current;
 
-            // 2. rebuild: fresh history/KV = system prompt + the briefing (+ recent verbatim turns)
+            // 2. recompute: fresh history/KV = system prompt + the compact as a HISTORY block
             string summary = sb.ToString().Trim();
             string seeded = string.IsNullOrEmpty(summary)
                 ? system_prompt
                 : (string.IsNullOrEmpty(system_prompt) ? "" : system_prompt + "\n\n")
-                  + "[Summary of the conversation so far]\n" + summary;
-            if (!string.IsNullOrEmpty(post_summary_context))
-                seeded = (string.IsNullOrEmpty(seeded) ? "" : seeded + "\n\n") + post_summary_context;
+                  + "HISTORY:\n" + summary;
             var init = InitializeChat(seeded);
             while (init.MoveNext()) yield return init.Current;
 
