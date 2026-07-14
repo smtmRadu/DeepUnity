@@ -219,6 +219,15 @@ namespace DeepUnity
         /// weights folder return its stem (same label their loaders log with).</summary>
         public virtual string WeightsLabel => GetType().Name;
 
+        /// <summary>Live KV-cache occupancy in tokens (system prompt + history so far), or -1 when
+        /// the model doesn't expose it. Game code uses it to detect when a conversation has filled
+        /// the context window (see NPCChatBase history modes: halt-and-warn, or compact-at-full).</summary>
+        public virtual int CurrentContextTokens => -1;
+        /// <summary>Allocated KV-cache capacity in tokens (the ctor's maxModelLength), or -1 when
+        /// not exposed. For compact-at-full this is deliberately larger than the trigger threshold
+        /// so the compaction pass itself has headroom to run.</summary>
+        public virtual int MaxContextTokens => -1;
+
         /// <summary>Budgeted GPU teardown: frees ~bytesPerFrame of buffers per frame so the
         /// driver digests the teardown incrementally — a monolithic free right before the next
         /// model's big allocations measures as a 250-550 ms single-frame stall. Unloading still
@@ -413,6 +422,12 @@ namespace DeepUnity
         public virtual IEnumerator SaveConversationKV(string key, string userState = null,
                                                       string system_prompt = null)
         { yield break; }
+
+        /// <summary>Delete every on-disk conversation snapshot for <paramref name="key"/> (all
+        /// system-prompt variants), so the next open starts a fresh <see cref="InitializeChat"/>
+        /// instead of restoring the old state — the manual-reset counterpart to
+        /// <see cref="SaveConversationKV"/>. No-op on models without conversation persistence.</summary>
+        public virtual void DeleteConversationKV(string key) { }
 
         /// <summary>
         /// Restores a conversation saved by <see cref="SaveConversationKV"/> with the same key /

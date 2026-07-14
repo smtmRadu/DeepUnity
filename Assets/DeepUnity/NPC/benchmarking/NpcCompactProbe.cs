@@ -49,7 +49,7 @@ namespace DeepUnity
         {
             var t = typeof(NPCChatBase);
             fHistoryMode    = t.GetField("historyMode", BF);
-            fMaxTokens      = t.GetField("compactionTriggerTokens", BF);
+            fMaxTokens      = t.GetField("maxContextLength", BF);   // compaction now fires at the context limit
             fCacheKV        = t.GetField("cacheKVCache", BF);
             fUseZone        = t.GetField("usePrefetchZone", BF);
             fCompactRoutine = t.GetField("compactRoutine", BF);
@@ -121,10 +121,10 @@ namespace DeepUnity
 
             // force the mode under test on the play-mode instance (not persisted)
             fHistoryMode.SetValue(npc, NPCChatBase.HistoryMode.ResumeFromCompact);
-            fMaxTokens.SetValue(npc, 1);   // any close with any content compacts — [Min(1)] use case
+            fMaxTokens.SetValue(npc, 1);   // context limit = 1 token → the first reply compacts immediately
             bool cacheKV = (bool)fCacheKV.GetValue(npc);
             bool useZone = (bool)fUseZone.GetValue(npc);
-            sb.AppendLine($"- npc=Velmire historyMode→ResumeFromCompact compactionTriggerTokens→1 cacheKVCache={cacheKV} usePrefetchZone={useZone}");
+            sb.AppendLine($"- npc=Velmire historyMode→ResumeFromCompact maxContextLength→1 cacheKVCache={cacheKV} usePrefetchZone={useZone}");
 
             // ---------- open + one turn ----------
             phase = "load";

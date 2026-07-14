@@ -31,8 +31,8 @@ namespace DeepUnity
         {
             /// <summary>Stable identifier — doubles as the inspector label ("Qwen3.5-0.8B").</summary>
             public string id;
-            /// <summary>Builds the model: (weight quant, KV-cache quant) → instance.</summary>
-            public Func<LLMQuant, KVQuant, LLM> create;
+            /// <summary>Builds the model: (weight quant, KV-cache quant, max context length) → instance.</summary>
+            public Func<LLMQuant, KVQuant, int, LLM> create;
             /// <summary>Optional scene-start prewarm (kernel compiles + tokenizer parse).</summary>
             public Func<IEnumerator> prewarm;
             /// <summary>Dropdown ordering (from the attribute).</summary>
@@ -56,7 +56,7 @@ namespace DeepUnity
         /// <summary>Builds the model registered under <paramref name="id"/>. An unknown id
         /// (typo, model removed) falls back to the first entry with a console warning instead
         /// of crashing the NPC.</summary>
-        public static LLM Create(string id, LLMQuant quant, KVQuant kvQuant)
+        public static LLM Create(string id, LLMQuant quant, KVQuant kvQuant, int maxContextLength = 8192)
         {
             Scan();
             var e = Find(id);
@@ -67,7 +67,7 @@ namespace DeepUnity
                 ConsoleMessage.Warning($"LLMRegistry: unknown model id '{id}' — falling back to '{entries[0].id}'.");
                 e = entries[0];
             }
-            return e.create(quant, kvQuant);
+            return e.create(quant, kvQuant, maxContextLength);
         }
 
         // One reflection pass over the engine assembly (everything lives in Assembly-CSharp

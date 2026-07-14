@@ -28,10 +28,10 @@ namespace DeepUnity
                     continue;
                 }
                 if (llmOnly && System.Array.IndexOf(VOICE_FIELDS, it.name) >= 0) continue;
-                if (it.propertyPath == "compactionTriggerTokens")   // only meaningful in ResumeFromCompact
+                if (it.propertyPath == "maxContextLength")   // only used by the continue modes
                 {
                     var hm = serializedObject.FindProperty("historyMode");
-                    if (hm == null || hm.enumValueIndex != (int)NPCChatBase.HistoryMode.ResumeFromCompact)
+                    if (hm == null || hm.enumValueIndex == (int)NPCChatBase.HistoryMode.ResetEveryTime)
                         continue;
                 }
                 if (it.propertyPath == "model") { DrawModelPopup(it); continue; }
@@ -41,6 +41,17 @@ namespace DeepUnity
                 EditorGUILayout.PropertyField(it, true);
             }
             serializedObject.ApplyModifiedProperties();
+
+            // Manual conversation reset (also on the component's right-click context menu). Useful
+            // for ContinueWhereLeftOff once it halts at the context limit, and for wiping a
+            // ResumeFromCompact/continue history during testing. Works in play mode.
+            var hmProp = serializedObject.FindProperty("historyMode");
+            if (target is NPCChatBase npc && hmProp != null
+                && hmProp.enumValueIndex != (int)NPCChatBase.HistoryMode.ResetEveryTime)
+            {
+                EditorGUILayout.Space();
+                if (GUILayout.Button("Reset Conversation")) npc.ResetConversation();
+            }
         }
 
         // ---- TTS voice dropdown -----------------------------------------------------------

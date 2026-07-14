@@ -37,17 +37,19 @@ namespace DeepUnity
         }
 #endif
 
-        /// <summary>One shared instance per (id, quant, kvQuant); construction goes through
-        /// <see cref="LLMRegistry.Create"/> on first acquire. Main-thread only.</summary>
-        public static LLM Acquire(string id, LLMQuant quant, KVQuant kvQuant)
+        /// <summary>One shared instance per (id, quant, kvQuant, maxContextLength); construction
+        /// goes through <see cref="LLMRegistry.Create"/> on first acquire. The context length is in
+        /// the key because it sizes the KV cache — two NPCs asking for different lengths get
+        /// different instances. Main-thread only.</summary>
+        public static LLM Acquire(string id, LLMQuant quant, KVQuant kvQuant, int maxContextLength = 8192)
         {
-            string key = $"{id}|{quant}|{kvQuant}";
+            string key = $"{id}|{quant}|{kvQuant}|{maxContextLength}";
             if (slots.TryGetValue(key, out var s) && s.llm != null)
             {
                 s.refs++;
                 return s.llm;
             }
-            var llm = LLMRegistry.Create(id, quant, kvQuant);
+            var llm = LLMRegistry.Create(id, quant, kvQuant, maxContextLength);
             slots[key] = new Slot { llm = llm, refs = 1 };
             keys[llm] = key;
             return llm;

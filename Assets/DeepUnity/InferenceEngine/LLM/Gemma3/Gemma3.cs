@@ -85,7 +85,7 @@ namespace DeepUnity
         static LLMRegistry.Entry RegistryEntry() => new LLMRegistry.Entry
         {
             id = "Gemma3-270M",
-            create = (q, kv) => new Gemma3ForCausalLM(quantization: q, kv_quant: kv),
+            create = (q, kv, maxLen) => new Gemma3ForCausalLM(quantization: q, kv_quant: kv, maxModelLength: maxLen),
             prewarm = () => Prewarm(),
         };
 

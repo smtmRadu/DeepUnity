@@ -81,7 +81,7 @@ namespace DeepUnity
         static LLMRegistry.Entry RegistryEntry() => new LLMRegistry.Entry
         {
             id = "MiniCPM5-1B",
-            create = (q, kv) => new MiniCPM5ForCausalLM(quantization: q, kv_quant: kv),
+            create = (q, kv, maxLen) => new MiniCPM5ForCausalLM(quantization: q, kv_quant: kv, maxModelLength: maxLen),
             prewarm = () => Prewarm(),
         };
 

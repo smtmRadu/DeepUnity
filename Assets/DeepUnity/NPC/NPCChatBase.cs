@@ -67,7 +67,7 @@ namespace DeepUnity
             ResetEveryTime,
             [Tooltip("Reopening resumes the SAME conversation. While the model is resident (player inside the prefetch zone / talk trigger) the live KV is reused as-is (instant); after a release the whole conversation is restored from disk (cacheKVCache) or the transcript is re-prefilled.")]
             ContinueWhereLeftOff,
-            [Tooltip("Like ContinueWhereLeftOff, but a LONG conversation is compacted in the background after the chat closes: the model compacts the whole chat in one shot and the result rides in the system prompt as a HISTORY block, so reopening stays a short prefix no matter how long you've talked. Triggers past Compaction Trigger Tokens, on the resident model, behind gameplay; the model stays on GPU until the compact lands (zone exit waits), and reopening mid-compaction blocks input behind a 'Compacting…' pulse.")]
+            [Tooltip("Like ContinueWhereLeftOff, but instead of halting at the limit the model COMPACTS itself the moment the conversation reaches Max Context Length: it summarizes the whole chat in one shot and the result rides in the system prompt as a HISTORY block, so talking continues on a short prefix forever. The KV is allocated larger than the limit so the compact pass has room. Compaction fires right after the reply that hit the limit (behind a 'Compacting…' pulse, input blocked) and, as crash-recovery, on the next open if a compact never landed. Never canceled once started.")]
             ResumeFromCompact,
         }
 
@@ -84,18 +84,18 @@ namespace DeepUnity
         [Tooltip("LlmOnly = text-only replies (talk animation follows the writing; voice fields hidden below). LlmPlusTts = replies are spoken: the talk animation follows the AUDIO, and the next sentence synthesizes while the current one plays.")]
         [SerializeField] protected ConversationMode conversationMode = ConversationMode.LlmOnly;
         protected bool speakReplies => conversationMode == ConversationMode.LlmPlusTts;
-        [Tooltip("ResetEveryTime = the conversation is wiped the moment the chat closes (same session). ContinueWhereLeftOff = fully persistent, chat-to-chat AND session-to-session: live KV reused while resident, conversation KV restored from disk (or transcript re-prefilled) after a release. ResumeFromCompact = ContinueWhereLeftOff + background compaction: long histories collapse to [system prompt + HISTORY block] after the chat closes (see Compaction Trigger Tokens).")]
+        [Tooltip("ResetEveryTime = wiped when the chat closes (same session). ContinueWhereLeftOff = fully persistent (live KV while resident, restored from disk / re-prefilled after a release), but once the conversation fills Max Context Length it STOPS and requires a manual reset (right-click the component → Reset Conversation). ResumeFromCompact = same persistence, but at the limit the model auto-compacts the history into a HISTORY block and keeps going (see the mode tooltip). Both limits are driven by Max Context Length below.")]
         [SerializeField] protected HistoryMode historyMode = HistoryMode.ResetEveryTime;
         [Tooltip("Persist this NPC's KV cache to disk (persistentDataPath/DeepUnity): the system-prompt state in EVERY mode, plus — in the continue modes — the WHOLE conversation on a clean close (KV + sampler state + transcript), so reopening after the model was released (or the scene reloaded) restores the chat from disk instead of re-prefilling. Qwen3.5 only for now; Gemma3 NPCs fall back to the re-prefill path.")]
         [SerializeField] protected bool cacheKVCache = true;
-        [Tooltip("ResumeFromCompact only: the conversation size (estimated tokens, ~4 chars each) that TRIGGERS the background compaction. Every clean chat close compares the history against this: below it nothing happens (behaves like ContinueWhereLeftOff), above it the model compacts the whole chat in one shot and the conversation recomputes as [system prompt + HISTORY block] on the resident model, behind gameplay — watch the [Compact] console lines. Set to 1 to compact after EVERY clean close (testing). Interrupted closes (Escape mid-reply) never compact.")]
-        [Min(1)] [SerializeField] protected int compactionTriggerTokens = 512;
 
         [Header("Text (LLM)")]
         [Tooltip("Which local LLM voices this NPC — the dropdown lists every model registered in LLMRegistry, so a freshly ported LLM appears here automatically. Sampling fields at -1 fall back to this model's Config presets.")]
         [SerializeField] protected string model = "Qwen3.5-0.8B";
         [Tooltip("Weight format. INT8 is ~lossless at half the VRAM — the recommended default. INT4 is lossy on models this small (Gemma int4 collapses outright).")]
         [SerializeField] protected LLMQuant quantization = LLMQuant.INT8;
+        [Tooltip("Context window (tokens) — the conversation size the history modes act on. ContinueWhereLeftOff halts and asks for a reset when the live KV reaches this; ResumeFromCompact auto-compacts here (and allocates the KV +8192 above it for the compact pass). Sizes the KV cache (pre-allocated → more = more VRAM). 8192 default. Instances are pooled per (model, quant, KV, this length + headroom), so NPCs sharing a model should share this value.")]
+        [SerializeField] protected int maxContextLength = 8192;
         [Tooltip("Let a thinking-capable model (Qwen3.5) reason in <think> before answering. The reasoning is NEVER voiced and never shown as reply text (the window's ShowThinkingTokens debug toggle can render it dimmed); while the model thinks, the dialog pulses an animated 'Thinking…' placeholder until the final answer starts. Non-thinking models ignore this.")]
         [SerializeField] protected bool allowThinking = false;
         [Tooltip("The auto-detection ALWAYS computes reply pacing for a stable 60+ fps; this only biases around its result while you talk to THIS NPC. 0.5 = pure auto. Offsets multiply the measured budgets (toward Speed the frames may carry more decode → faster text; toward Smooth they carry less). The hard ends force the implementation limits: full Smooth = async decode + 1 layer/frame prefill, full Speed = sync decode + bulk prefill. Live: moving it mid-dialogue re-probes on the next reply.")]
@@ -204,6 +204,9 @@ namespace DeepUnity
         private string compactSummary;
         private Coroutine compactRoutine;
         private static NPCChatBase compactingNpc;
+        // ContinueWhereLeftOff: the conversation reached maxContextLength and further turns are
+        // refused until a manual reset (ResetConversation / the [Reset Conversation] context menu).
+        private bool conversationFull;
 
         // ---------------------------------------------------------------- subclass surface
 
@@ -470,11 +473,16 @@ namespace DeepUnity
         // from LLMPool, so NPCs sharing a model (same id/quant/kv) share ONE stream + ONE VRAM
         // copy — walking between two such NPCs never double-loads.
         // Standard KV pairing from the benchmark matrix: fp16 weights → fp16 KV, int8/int4 → int8 KV.
+        // ResumeFromCompact allocates the KV LARGER than the trigger threshold so LLM.Compact's
+        // own forward pass has room to run once the conversation reaches maxContextLength.
+        const int COMPACT_HEADROOM = 8192;
+
         protected void EnsureLlm()
         {
             if (llm != null) return;
             KVQuant kv = quantization == LLMQuant.FP16 ? KVQuant.FP16 : KVQuant.INT8;
-            llm = LLMPool.Acquire(model, quantization, kv);
+            int cap = historyMode == HistoryMode.ResumeFromCompact ? maxContextLength + COMPACT_HEADROOM : maxContextLength;
+            llm = LLMPool.Acquire(model, quantization, kv, cap);
             llm.DiskKVCache = cacheKVCache;   // per-NPC toggle: system-prompt + conversation KV disk cache
             chatLive = false;   // we held no reference — whatever KV it carries isn't OUR conversation
         }
@@ -598,23 +606,7 @@ namespace DeepUnity
             // PreparingForInteraction so AskNPC rejects sends, and the bubble that normally pulses
             // "Thinking…" pulses "Compacting…" instead until the routine finishes.
             if (compactingNpc != null && compactingNpc.llm == llm)
-            {
-                w.AddMessage(npc_name, "Compacting..");
-                string[] frames = { "..", "...", "." };
-                int fi = 0;
-                float next = Time.unscaledTime + 0.4f;
-                while (compactingNpc != null && compactingNpc.llm == llm)
-                {
-                    if (Time.unscaledTime >= next)
-                    {
-                        w.PopLastMessage();
-                        w.AddMessage(npc_name, "Compacting" + frames[fi++ % 3]);
-                        next = Time.unscaledTime + 0.4f;
-                    }
-                    yield return null;
-                }
-                w.PopLastMessage();
-            }
+                yield return ShowCompactingUntilDone(w);
             llm.DiskKVCache = cacheKVCache;   // re-assert (a compaction/resume prefill clears it temporarily)
 
             // a background conversation-KV save still reading this model's GPU state must finish
@@ -674,8 +666,25 @@ namespace DeepUnity
             if (historyMode != HistoryMode.ResetEveryTime && transcript.Count > 0)
                 RepopulateWindow();   // the window was cleared on close — restore the visible history
 
-            w.SetInfoText("");
+            // Context-window state now that the conversation KV is live:
+            //  - ResumeFromCompact: a state restored ABOVE the trigger means a previous compaction
+            //    never landed (game stopped mid-compact) — compact it now, before the player talks,
+            //    behind the "Compacting…" pulse. Normal live triggering happens after each reply.
+            //  - ContinueWhereLeftOff: if it's full, refuse further turns until a manual reset.
+            conversationFull = false;
+            if (historyMode == HistoryMode.ResumeFromCompact && compactRoutine == null && ContextFull())
+            {
+                compactRoutine = StartCoroutine(CompactConversationRoutine());
+                yield return ShowCompactingUntilDone(w);
+            }
+            else if (historyMode == HistoryMode.ContinueWhereLeftOff && ContextFull())
+            {
+                conversationFull = true;
+            }
+
+            w.SetInfoText(conversationFull ? "— memory full — reset this conversation to continue —" : "");
             w.SetSendLoading(false);
+            if (w.SendButton != null) w.SendButton.interactable = !conversationFull;
             state = NPCState.WaitingInInteraction;
             if (!w.InputField.isFocused)
                 w.InputField.ActivateInputField();
@@ -689,6 +698,11 @@ namespace DeepUnity
             if (w == null || w.InputField == null || string.IsNullOrWhiteSpace(w.InputField.text)
                 || state != NPCState.WaitingInInteraction)
                 return;
+            if (conversationFull)   // ContinueWhereLeftOff at the context limit — no more turns until reset
+            {
+                w.SetInfoText("— memory full — reset this conversation to continue —");
+                return;
+            }
 
             string question = w.InputField.text;
             PrepareForNextReply(w);   // settle a still-speaking previous reply BEFORE the user line lands
@@ -951,11 +965,31 @@ namespace DeepUnity
             if (turn != null) turn.npc = finalVisible;
             activeTurn = null;
             activeResponse = null;
-
-            w.SendButton.interactable = true;
-            w.InputField.ActivateInputField();
             state = NPCState.WaitingInInteraction;
             dialogueCoroutine = null;
+
+            // Context-window handling now that this reply is on the KV (the continue modes only):
+            //  - ResumeFromCompact: at the limit, compact NOW (auto) behind the "Compacting…" pulse,
+            //    then talking resumes on the short compacted prefix. The KV headroom above the
+            //    threshold gives the compact pass room to run.
+            //  - ContinueWhereLeftOff: at the limit, refuse further turns until a manual reset.
+            if (historyMode != HistoryMode.ResetEveryTime && ContextFull())
+            {
+                if (historyMode == HistoryMode.ResumeFromCompact && compactRoutine == null)
+                {
+                    w.SendButton.interactable = false;
+                    compactRoutine = StartCoroutine(CompactConversationRoutine());
+                    yield return ShowCompactingUntilDone(w);
+                }
+                else if (historyMode == HistoryMode.ContinueWhereLeftOff)
+                {
+                    conversationFull = true;
+                    w.SetInfoText("— memory full — reset this conversation to continue —");
+                }
+            }
+
+            w.SendButton.interactable = !conversationFull;
+            w.InputField.ActivateInputField();
             OnReplyFinished();
         }
 
@@ -1040,15 +1074,10 @@ namespace DeepUnity
             if (saveConversation)
                 StartCoroutine(SaveConversationKvRoutine());
 
-            // ResumeFromCompact maintenance (task #28): once the conversation outgrows the
-            // threshold, compact it now — while the model idles resident — so every future reopen
-            // is a short prefix instead of an ever-growing KV/transcript. Runs AFTER the
-            // full-state save above, which stays on disk as the fallback if this is canceled.
-            if (historyMode == HistoryMode.ResumeFromCompact && !interrupted && chatLive
-                && llm != null && compactRoutine == null
-                && transcript.Count > 0
-                && EstimatedTranscriptTokens() > compactionTriggerTokens)
-                compactRoutine = StartCoroutine(CompactConversationRoutine());
+            // ResumeFromCompact compaction is NOT triggered on close anymore — it fires the moment
+            // the conversation reaches maxContextLength (after the offending reply, or on the next
+            // open as crash-recovery). The full-state save above is the pre-compact fallback that
+            // on-open recovery re-detects and compacts if a mid-session compact never landed.
         }
 
         // Background conversation-KV snapshot. Any residency release that becomes due while it
@@ -1197,6 +1226,56 @@ namespace DeepUnity
 
         // ---------------------------------------------------------------- background compaction
 
+        // The "Compacting…" pulse: shown while a background compaction owns THIS NPC's model,
+        // blocking input until it lands. Used both when REOPENING onto an in-flight compact and
+        // when compaction is triggered LIVE at the context limit (mid-session or on open).
+        private IEnumerator ShowCompactingUntilDone(INPCChatWindow w)
+        {
+            w.AddMessage(npc_name, "Compacting..");
+            string[] frames = { "..", "...", "." };
+            int fi = 0;
+            float next = Time.unscaledTime + 0.4f;
+            while (compactingNpc != null && compactingNpc.llm == llm)
+            {
+                if (Time.unscaledTime >= next)
+                {
+                    w.PopLastMessage();
+                    w.AddMessage(npc_name, "Compacting" + frames[fi++ % 3]);
+                    next = Time.unscaledTime + 0.4f;
+                }
+                yield return null;
+            }
+            w.PopLastMessage();
+        }
+
+        /// <summary>Wipe this NPC's conversation back to a blank slate — the manual reset for
+        /// ContinueWhereLeftOff once it hits the context limit (right-click the component →
+        /// "Reset Conversation"). Public so an in-window button can call it too. Clears the
+        /// transcript, the compact summary, the live/disk conversation KV and the full flag, so the
+        /// next open starts a fresh InitializeChat(system_prompt).</summary>
+        [ContextMenu("Reset Conversation")]
+        public void ResetConversation()
+        {
+            transcript.Clear();
+            compactSummary = null;
+            conversationFull = false;
+            chatLive = false;                       // forces a fresh InitializeChat on next open
+            if (llm != null)
+            {
+                if (LLMPool.OwnsConversation(llm, this))
+                    LLMPool.ClaimConversation(llm, null);   // drop our claim on the shared KV
+                if (cacheKVCache) llm.DeleteConversationKV(ConversationKvKey());   // remove the disk snapshot
+            }
+            var w = Window;
+            if (w != null && state != NPCState.Idle)
+            {
+                w.Clear();
+                w.SetInfoText("— conversation reset —");
+                if (w.SendButton != null) w.SendButton.interactable = true;
+            }
+            ConsoleMessage.Info($"[Reset] {npc_name}: conversation wiped (manual reset).");
+        }
+
         // ~4 chars/token: a model-agnostic estimate of what the conversation costs in context
         // (the HISTORY compact counts too once one exists — compaction re-triggers when the
         // compacted state has grown long again).
@@ -1207,6 +1286,15 @@ namespace DeepUnity
                 chars += (t.user?.Length ?? 0) + (t.npc?.Length ?? 0);
             return chars / 4;
         }
+
+        // Live KV occupancy when the model reports it (accurate), else the chars/4 transcript
+        // estimate — the single measure both ContinueWhereLeftOff (halt) and ResumeFromCompact
+        // (compact) test against maxContextLength.
+        private int ContextTokensNow()
+            => llm != null && llm.CurrentContextTokens >= 0 ? llm.CurrentContextTokens : EstimatedTranscriptTokens();
+
+        // The conversation has reached the context window and this mode must act on it.
+        private bool ContextFull() => ContextTokensNow() >= maxContextLength;
 
         // ResumeFromCompact close-time maintenance, on the resident idle model:
         //   1. wait out the full-state snapshot CloseConversation kicked (it reads the same GPU
@@ -1224,15 +1312,18 @@ namespace DeepUnity
         {
             compactingNpc = this;
             while (kvSaveInFlight) yield return null;
-            if (!chatLive || state != NPCState.Idle || llm == null
+            // Fired at the context limit: on open (PreparingForInteraction, crash recovery), right
+            // after a reply (WaitingInInteraction), or on a resident close (Idle). Bail only if the
+            // conversation is gone, a reply is actively generating, or another NPC owns the model.
+            if (!chatLive || state == NPCState.TalkingInInteraction || llm == null
                 || !LLMPool.OwnsConversation(llm, this))
             {
                 compactRoutine = null;
                 compactingNpc = null;
                 yield break;
             }
-            ConsoleMessage.Info($"[Compact] {npc_name}: background compaction started " +
-                                $"(~{EstimatedTranscriptTokens()} est. tokens > {compactionTriggerTokens})");
+            ConsoleMessage.Info($"[Compact] {npc_name}: compaction started at the context limit " +
+                                $"(~{ContextTokensNow()} tokens ≥ {maxContextLength})");
 
             // the re-seeded prefix is one-shot (same rule as the resume prefill) — don't let
             // InitializeChat's system-prompt cache write an orphan file for it

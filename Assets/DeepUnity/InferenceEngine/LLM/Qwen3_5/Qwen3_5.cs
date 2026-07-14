@@ -26,6 +26,7 @@ namespace DeepUnity
         private static readonly Qwen3_5ConfigDescriptor _config = new();
         private string path;
         private readonly Qwen3_5Size size;
+        private readonly int maxModelLength;
         public Qwen3_5Modeling.Qwen3_5Model model;
         public Qwen3_5TokenizerFast tokenizer;
         private bool isFreshlyInitialized;
@@ -40,6 +41,8 @@ namespace DeepUnity
         public override long TotalWeightBytes => model?.weights?.BytesTotal ?? 0;
         public override long UploadedWeightBytes => model?.weights?.BytesUploaded ?? 0;
         public override string WeightsLabel => ResidencyLog.Label(path);
+        public override int CurrentContextTokens => model?.cache?.CachedTokenCount ?? 0;
+        public override int MaxContextTokens => maxModelLength;
 
         /// <summary>
         /// Qwen3.5-0.8B (text-only), full-GPU FP16 inference.
@@ -94,6 +97,7 @@ namespace DeepUnity
             Qwen3_5Modeling.Qwen3_5Config.ApplySize(size);
             params_path ??= ResolveParamsPath(size, quantization);
             this.size = size;
+            this.maxModelLength = maxModelLength;
             this.path = params_path;
             WarnIfNotInResources("weights", params_path);
             WarnIfNotInResources("tokenizer", tokenizer_path);
@@ -148,14 +152,14 @@ namespace DeepUnity
         static LLMRegistry.Entry RegistryEntry0_8B() => new LLMRegistry.Entry
         {
             id = "Qwen3.5-0.8B",
-            create = (q, kv) => new Qwen3_5ForCausalLM(Qwen3_5Size.B0_8, quantization: q, kv_quant: kv),
+            create = (q, kv, maxLen) => new Qwen3_5ForCausalLM(Qwen3_5Size.B0_8, quantization: q, kv_quant: kv, maxModelLength: maxLen),
             prewarm = () => Prewarm(),
         };
         [LLMEntry(1)]
         static LLMRegistry.Entry RegistryEntry2B() => new LLMRegistry.Entry
         {
             id = "Qwen3.5-2B",
-            create = (q, kv) => new Qwen3_5ForCausalLM(Qwen3_5Size.B2, quantization: q, kv_quant: kv),
+            create = (q, kv, maxLen) => new Qwen3_5ForCausalLM(Qwen3_5Size.B2, quantization: q, kv_quant: kv, maxModelLength: maxLen),
             prewarm = () => Prewarm(),
         };
 
@@ -584,6 +588,18 @@ namespace DeepUnity
         /// transcript). Budgeted readbacks + worker-thread IO — runs behind gameplay. No-op when
         /// <see cref="LLM.DiskKVCache"/> is off, the model isn't ready or nothing is cached.
         /// </summary>
+        public override void DeleteConversationKV(string key)
+        {
+            try
+            {
+                string dir = CacheDir();
+                if (!System.IO.Directory.Exists(dir)) return;
+                foreach (var f in System.IO.Directory.GetFiles(dir, $"qwen35_conv_{SanitizeKey(key)}_*.kv"))
+                    System.IO.File.Delete(f);
+            }
+            catch (System.Exception e) { ConsoleMessage.Warning($"Qwen3.5 DeleteConversationKV: {e.Message}"); }
+        }
+
         public override IEnumerator SaveConversationKV(string key, string userState = null,
                                                        string system_prompt = null)
         {
