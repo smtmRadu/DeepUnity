@@ -400,8 +400,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
 
             BuildUI(cinzel, vignette, npc, witch, player);
 
-            // ambient exploration music, quiet and looping; streamed — it's a 6-minute track
-            var audioImp = AssetImporter.GetAtPath(ART + "/Audio/limgrave_theme.ogg") as AudioImporter;
+            // ambient exploration music, quiet and looping; streamed. ambient_theme.mp3 is a
+            // royalty-free souls-like track shipped IN the repo (unlike the gitignored, copyrighted
+            // limgrave_theme.ogg — drop that back in as ambient_theme if you have the rights).
+            var audioImp = AssetImporter.GetAtPath(ART + "/Audio/ambient_theme.mp3") as AudioImporter;
             if (audioImp != null)
             {
                 var sampleSettings = audioImp.defaultSampleSettings;
@@ -410,7 +412,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 audioImp.SaveAndReimport();
             }
             var ambience = new GameObject("Ambience").AddComponent<AudioSource>();
-            ambience.clip = AssetDatabase.LoadAssetAtPath<AudioClip>(ART + "/Audio/limgrave_theme.ogg");
+            ambience.clip = AssetDatabase.LoadAssetAtPath<AudioClip>(ART + "/Audio/ambient_theme.mp3");
             ambience.loop = true;
             ambience.playOnAwake = true;
             ambience.volume = 0.18f;   // user 2026-07-14: was 0.3, too loud over the NPC voices
