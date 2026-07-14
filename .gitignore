@@ -97,6 +97,8 @@ Assets/DeepUnity/ReinforcementLearning/Base/debug-*.log.meta
 # land flat under Assets/Resources/Weights/; intentionally NOT tracked (too large for git).
 Assets/Resources/Weights/
 Assets/Resources/Weights.meta
+Assets/Resources/DeepUnity/
+Assets/Resources/DeepUnity.meta
 Assets/DeepUnity/InferenceEngine/LLM/**/weights_*/
 Assets/DeepUnity/InferenceEngine/LLM/**/weights_*.meta
 Assets/DeepUnity/InferenceEngine/LLM/**/params_*/
