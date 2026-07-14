@@ -399,6 +399,54 @@ namespace DeepUnity
             if (idToToken.TryGetValue(id, out string s)) sb.Append(s);
         }
 
+        // ---- streaming detokenizer -----------------------------------------------------------
+        // Byte-level BPE can place the bytes of ONE UTF-8 char (em-dash —, curly quotes, …, emoji)
+        // in SEPARATE tokens; decoding each token alone (as the per-token streaming display path
+        // did) turns the incomplete byte run into U+FFFD □ boxes that stick in the reply. This
+        // stateful variant buffers a trailing INCOMPLETE UTF-8 sequence until a later token
+        // completes it, emitting only whole characters. Call ResetStreamDecode() at reply start;
+        // DecodeStreamStep(id) per generated token. The concatenation is byte-identical to a full
+        // Decode of the sequence — same text, delivered incrementally.
+        readonly List<byte> _streamBytes = new();
+        public void ResetStreamDecode() => _streamBytes.Clear();
+
+        public string DecodeStreamStep(int id)
+        {
+            if (!idToToken.TryGetValue(id, out string s)) return "";
+            // a special-token string (e.g. "<|im_end|>") isn't byte-map chars — flush + pass through
+            bool allBytes = true;
+            foreach (char c in s) if (!byteDecoder.ContainsKey(c)) { allBytes = false; break; }
+            if (!allBytes)
+            {
+                string flushed = _streamBytes.Count > 0 ? Encoding.UTF8.GetString(_streamBytes.ToArray()) : "";
+                _streamBytes.Clear();
+                return flushed + s;
+            }
+            foreach (char c in s) _streamBytes.Add(byteDecoder[c]);
+            int hold = IncompleteTrailingUtf8(_streamBytes);
+            int emit = _streamBytes.Count - hold;
+            if (emit <= 0) return "";
+            string outp = Encoding.UTF8.GetString(_streamBytes.ToArray(), 0, emit);
+            _streamBytes.RemoveRange(0, emit);
+            return outp;
+        }
+
+        // number of bytes forming a trailing INCOMPLETE UTF-8 sequence (0 if the buffer ends on a
+        // character boundary). UTF-8: lead 0xxxxxxx=1B, 110xxxxx=2B, 1110xxxx=3B, 11110xxx=4B;
+        // continuation = 10xxxxxx.
+        static int IncompleteTrailingUtf8(List<byte> b)
+        {
+            int n = b.Count, cont = 0;
+            for (int i = n - 1; i >= 0 && cont < 3 && (b[i] & 0xC0) == 0x80; i--) cont++;
+            int leadIdx = n - 1 - cont;
+            if (leadIdx < 0) return Math.Min(cont, n);   // only continuation bytes so far
+            byte lead = b[leadIdx];
+            if (lead < 0x80) return 0;                    // ASCII last byte = complete boundary
+            int need = lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4;
+            int have = cont + 1;
+            return have < need ? have : 0;                // short of a full char → hold the partial run
+        }
+
         string MappedToUtf8(string mapped)
         {
             // Special-token strings (e.g. "<|im_end|>") aren't in the byte map; pass through.

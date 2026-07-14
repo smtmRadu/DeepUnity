@@ -225,8 +225,9 @@ namespace DeepUnity
             var s = model.SampleYielding(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty, sampled);
             while (s.MoveNext()) yield return s.Current;
             int tokenId = sampled[0];
+            tokenizer?.ResetStreamDecode();   // buffer split multibyte chars so they don't render as □ boxes
             if (tokenizer != null)
-                onTokenGenerated?.Invoke(tokenizer.Decode(Tensor.Constant(tokenId))[0]);
+                onTokenGenerated?.Invoke(tokenizer.DecodeStreamStep(tokenId));
             else
                 onTokenGenerated?.Invoke(tokenId.ToString() + " ");
             yield return null;
@@ -248,7 +249,7 @@ namespace DeepUnity
                 if (tokenId == Qwen3_5Modeling.Qwen3_5Config.EOS_TOKEN_ID) break;
 
                 if (tokenizer != null)
-                    onTokenGenerated?.Invoke(tokenizer.Decode(Tensor.Constant(tokenId))[0]);
+                    onTokenGenerated?.Invoke(tokenizer.DecodeStreamStep(tokenId));
                 else
                     onTokenGenerated?.Invoke(tokenId.ToString() + " ");
                 TokensPerSecond = sw.ElapsedMilliseconds > 0 ? 1000f / sw.ElapsedMilliseconds : 0f;
@@ -419,7 +420,8 @@ namespace DeepUnity
             var s = model.SampleYielding(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty, sampled);
             while (s.MoveNext()) yield return s.Current;
             int tokenId = sampled[0];
-            string tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
+            tokenizer.ResetStreamDecode();   // buffer split multibyte chars so they don't render as □ boxes
+            string tokenStr = tokenizer.DecodeStreamStep(tokenId);
             onTokenGenerated?.Invoke(tokenStr);
             yield return null;
 
@@ -446,7 +448,7 @@ namespace DeepUnity
                     break;
                 }
 
-                tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
+                tokenStr = tokenizer.DecodeStreamStep(tokenId);
                 onTokenGenerated?.Invoke(tokenStr);
                 genTokens++;
                 TokensPerSecond = sw.ElapsedMilliseconds > 0 ? 1000f / sw.ElapsedMilliseconds : 0f;
