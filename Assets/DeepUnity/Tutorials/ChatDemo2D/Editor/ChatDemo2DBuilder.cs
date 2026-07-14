@@ -224,6 +224,23 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             // day cycle drives the tint overlay + the HUD clock
             SetRef(dayGO.GetComponent<DayCycle2D>(), "hud", ui.hud);
 
+            // looping background music (royalty-free pixel-farm ambient, shipped in the repo);
+            // streamed + quiet, matching the 3D demo's Ambience
+            var ambImp = AssetImporter.GetAtPath(ART + "/Audio/ambient_theme.mp3") as AudioImporter;
+            if (ambImp != null)
+            {
+                var ss = ambImp.defaultSampleSettings;
+                ss.loadType = AudioClipLoadType.Streaming;
+                ambImp.defaultSampleSettings = ss;
+                ambImp.SaveAndReimport();
+            }
+            var ambience = new GameObject("Ambience").AddComponent<AudioSource>();
+            ambience.clip = AssetDatabase.LoadAssetAtPath<AudioClip>(ART + "/Audio/ambient_theme.mp3");
+            ambience.loop = true;
+            ambience.playOnAwake = true;
+            ambience.volume = 0.18f;
+            ambience.spatialBlend = 0f;
+
             // final cross-wiring
             SetRef(player.GetComponent<PlayerController2D>(), "cam", cameraGO.GetComponent<CameraFollow2D>());
             SetRef(cameraGO.GetComponent<CameraFollow2D>(), "target", player.transform);
