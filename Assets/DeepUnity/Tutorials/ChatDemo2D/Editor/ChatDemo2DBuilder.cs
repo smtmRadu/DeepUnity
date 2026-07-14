@@ -888,7 +888,10 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             // and text-only Say/Leave buttons
             var rowGO = MakeRect("InputRow", panelGO.transform, new Vector2(0, 0), new Vector2(1, 0), new Vector2(-140, 46), new Vector2(0, 34));
             var stripImg = rowGO.AddComponent<Image>();
-            stripImg.color = new Color(0f, 0f, 0f, 0.20f);
+            // solid dark-wood input bar (was 20%-alpha black — invisible over the bright farm);
+            // gives the cream input text + Say/Leave labels a consistent dark backing to read against
+            stripImg.color = new Color(0.11f, 0.08f, 0.05f, 0.80f);
+            AddThinBorder(rowGO.transform, trim);   // wooden trim so the bar has a defined edge
             var rowHlg = rowGO.AddComponent<HorizontalLayoutGroup>();
             rowHlg.padding = new RectOffset(14, 10, 6, 6);
             rowHlg.spacing = 8;
@@ -1061,16 +1064,18 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             var areaGO = MakeRect("Text Area", go.transform, Vector2.zero, Vector2.one, new Vector2(-12, -8), Vector2.zero);
             areaGO.AddComponent<RectMask2D>();
 
+            // placeholder + typed text bumped to a legible weight over the dark input bar
+            // (placeholder was 55%-alpha and hard to read); typed text is full-opacity cream
             var phGO = MakeTMP("Placeholder", areaGO.transform, "Say something...", null, 20,
-                               new Color(0.80f, 0.74f, 0.60f, 0.55f), TextAlignmentOptions.Left, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+                               new Color(0.86f, 0.81f, 0.66f, 0.85f), TextAlignmentOptions.Left, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             phGO.GetComponent<TMP_Text>().fontStyle = FontStyles.Italic;
             var txtGO = MakeTMP("Text", areaGO.transform, "", null, 20, cream,
                                 TextAlignmentOptions.Left, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
 
-            // thin underline instead of a box
+            // thin underline instead of a box — gold, near-opaque so the field edge is clearly visible
             var underGO = MakeRect("Underline", go.transform, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 2), new Vector2(0, 2));
             var underImg = underGO.AddComponent<Image>();
-            underImg.color = new Color(cream.r, cream.g, cream.b, 0.35f);
+            underImg.color = new Color(gold.r, gold.g, gold.b, 0.85f);
             underImg.raycastTarget = false;
 
             field.textViewport = (RectTransform)areaGO.transform;
