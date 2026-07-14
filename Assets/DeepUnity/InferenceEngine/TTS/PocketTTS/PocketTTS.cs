@@ -383,6 +383,65 @@ namespace DeepUnity
                 return mono;
             }
 
+            static bool _kernelsPrewarmed;
+
+            /// <summary>Weights-FREE kernel precompile — the frame-0 counterpart to the LLMs'
+            /// Qwen3_5Model.PrewarmKernels (drained in NPCChatBase.Awake, hidden in the scene-load
+            /// blackout). The driver compiles each compute kernel's ISA on its FIRST dispatch; this
+            /// dispatches every PocketTTSCS kernel once with ZEROED size uniforms (so every thread
+            /// early-outs on its `idx >= size` guard — safe with dummy buffers, no OOB) and a
+            /// distinct dummy bound to every buffer property (D3D11 forbids one UAV in two slots).
+            /// Needs NO weights and NO PocketTTS instance, so it runs at scene start, long before
+            /// any voice streams in — unlike PocketTTSVoice.PrewarmKernels, which does a REAL "Hi."
+            /// synthesis and must wait for IsReady (that pass now only warms real buffer/KV paths;
+            /// the shader-compile cost it used to carry is paid here at frame 0). Static-guarded:
+            /// compiles once per session.</summary>
+            public static IEnumerator PrewarmKernels()
+            {
+                if (_kernelsPrewarmed) yield break;
+                _kernelsPrewarmed = true;
+
+                ComputeShader shader = DeepUnityMeta.PocketTTSCS;
+                string[] kernels =
+                {
+                    "CopyBuffer", "CopySlice", "SliceCols", "ZeroBuffer", "AddResidual", "ScaleBuf",
+                    "ChannelScaleAdd", "Activate", "LinearBias", "LinearBiasQ8", "Conv1D", "Conv1DTiled",
+                    "ConvTranspose1D", "ConvTranspose1DTiled", "ConvTranspose1DGrouped", "LayerNormT",
+                    "ApplyRoPE", "CausalAttention", "CausalAttentionLegacy", "CausalAttentionKV",
+                    "AppendKV", "Modulate", "GateAdd", "RMSNormFlow",
+                };
+                // every buffer property in PocketTTSCS.compute — distinct dummy each (one UAV per slot)
+                string[] bufs =
+                {
+                    "AttendedValues", "K", "KCache", "Q", "V", "VCache", "W", "W_bias", "W_scales",
+                    "X", "Y", "buf", "buf_a", "buf_b", "ch_scale", "inout_buf", "ln_beta", "ln_gamma",
+                    "mod_vec", "norm_input", "norm_output", "rms_alpha",
+                };
+                // every integer uniform that gates a thread guard — zero them so all dispatches degenerate
+                string[] zeroUniforms =
+                {
+                    "seq_len", "in_len", "in_dim", "out_dim", "conv_kernel", "conv_stride",
+                    "conv_dilation", "pad_left", "norm_dim", "num_heads", "head_dim", "buffer_size",
+                    "copy_src_offset", "copy_dst_offset", "n_groups", "pos_offset", "kv_len",
+                    "elem_offset", "attn_context", "mod_shift_off", "mod_scale_off", "mod_gate_off",
+                };
+
+                var dummies = new ComputeBuffer[bufs.Length];
+                for (int i = 0; i < dummies.Length; i++)
+                    dummies[i] = new ComputeBuffer(256, 4, ComputeBufferType.Structured);
+                foreach (string u in zeroUniforms) shader.SetInt(u, 0);
+
+                foreach (string name in kernels)
+                {
+                    int k = shader.FindKernel(name);
+                    for (int i = 0; i < bufs.Length; i++) shader.SetBuffer(k, bufs[i], dummies[i]);
+                    shader.Dispatch(k, 1, 1, 1);   // one compile per frame when pumped as a coroutine
+                    yield return null;
+                }
+
+                foreach (var d in dummies) d.Release();
+            }
+
             /// <summary>Clone a voice from a reference clip -> audio_prompt [frames*1024], cache it by
             /// content hash, and bind it as the current voice. Cache hit = instant load; miss =
             /// encode once + save. Returns false if the encoder weights aren't in this dir.</summary>

@@ -331,7 +331,8 @@ namespace DeepUnity
                             yield return null;
                             frameSw.Restart();
                         }
-                    Debug.Log($"[PocketTTSVoice] kernel prewarm done in {wallSw.ElapsedMilliseconds} ms.");
+                    Debug.Log($"[PocketTTSVoice] voice warmup done in {wallSw.ElapsedMilliseconds} ms " +
+                              "(real-path warm; kernels already compiled at frame 0 — see PocketTTS.PrewarmKernels).");
                 }
                 prewarmJob = null;
             }

@@ -292,8 +292,24 @@ namespace DeepUnity
             // session (prewarmedModels), so after the first NPC of the scene this whole block is
             // a no-op; NPCs spawned/loaded later still cover themselves via their own Awake.
             PrewarmModel(model);
+            bool anyPocket = ttsModel == TtsModel.PocketTTS;
             foreach (var npc in FindObjectsOfType<NPCChatBase>(true))
+            {
                 PrewarmModel(npc.model);
+                if (npc.ttsModel == TtsModel.PocketTTS) anyPocket = true;
+            }
+            // TTS kernels compile at frame 0 too (weights-free, same scene-load blackout as the LLM
+            // prewarm above) — pocket-tts is the DEFAULT voice, so its shaders precompile here
+            // instead of on the first zone entry / first clause. Its per-voice PrewarmKernels then
+            // only warms real buffer/KV paths once weights are resident. Other TTS engines
+            // (Kokoro/CosyVoice/Chatterbox) still prewarm on zone entry — a weights-free frame-0
+            // pass for them is a follow-up (needs their own per-shader degenerate-dispatch list).
+            if (anyPocket)
+            {
+                LLM.CurrentPhase = "kernel-prewarm";
+                DrainNow(PocketTTSModeling.PocketTTS.PrewarmKernels());
+                LLM.CurrentPhase = "idle";
+            }
         }
 
         static void PrewarmModel(string id)
