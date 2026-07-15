@@ -15,7 +15,7 @@ stable how-it-works + how-to-change-it reference.
    serialized per NPC:   npc_name · system_prompt · approach_text
                          conversationMode {LlmOnly, LlmPlusTts}
                          historyMode {ResetEveryTime, ContinueWhereLeftOff, ResumeFromCompact}
-                         cacheKVCache · compactionTriggerTokens (ResumeFromCompact only)
+                         cacheKVCache · maxContextLength (sizes the KV; halt/compact threshold)
                          model (string id → LLMRegistry dropdown) · quantization · allowThinking
                          smoothVsSpeed ("Reply Pacing" Smooth⇄Speed dial, per NPC)
                          sampling fields (-1 = model Config preset)
@@ -55,11 +55,21 @@ one window; only the NPC in interaction reacts.
    tokens stream to the window (think-tokens filtered by `SplitThink`, never voiced) and to
    the voice via `FeedVoiceText`. Decode pacing: `InferencePerf` AutoTune decides sync/async
    per session; `FramePacing` arbitrates frames against the speaking voice.
-4. **Close** — `CloseConversation(interrupted)`: ResetEveryTime wipes now; continue modes save
+4. **Context limit (ResumeFromCompact)** — THE COMPACTION STANDARD: when a reply pushes the
+   conversation past `maxContextLength`, that reply is still delivered IN FULL — decoded,
+   typed and SPOKEN to the end (+8192 KV headroom absorbs the overshoot). Only after the
+   voice goes quiet does `CompactConversationRoutine` run behind the "Compacting…" pulse
+   (input blocked; single-shot compact → `[system + HISTORY:]` re-seed). The window KEEPS the
+   whole visible conversation; the NEXT open collapses it to one dimmed compact block.
+   Sending or leaving during the pre-compact speech wait stands the pass down (a new ask
+   re-triggers after ITS reply; a close leaves it to the next open's crash-recovery).
+   Interrupts (send/leave mid-reply) cancel generation cooperatively at a token boundary
+   (`LLM.CancelChat`) — the KV keeps the truncated turn as if the model had stopped there.
+5. **Close** — `CloseConversation(interrupted)`: ResetEveryTime wipes now; continue modes save
    the whole conversation KV to disk in the background (`SaveConversationKvRoutine`,
-   `kvSaveInFlight` gate); ResumeFromCompact additionally runs `CompactConversationRoutine`
-   past `compactionTriggerTokens` (single-shot compact → `[system + HISTORY:]` re-seed, #28/#31).
-5. **Zone exit (Idle only)** — `ReleaseLlmAfterKvSave()`: waits for any in-flight compaction
+   `kvSavesInFlight` per-LLM gate; skipped while a compaction is forwarding the model — it re-saves
+   itself when it lands).
+6. **Zone exit (Idle only)** — `ReleaseLlmAfterKvSave()`: waits for any in-flight compaction
    AND the KV save (the model never leaves the GPU until the compact lands), then
    `LLMPool.Release` (frees only at refcount 0) + TTS `DefetchNow`.
 
@@ -129,13 +139,22 @@ radius. Rebuild via the `DeepUnity/...Build...` menu.
 - `ContinueWhereLeftOff` — fully persistent: live KV while resident → disk KV
   (`persistentDataPath/DeepUnity/qwen35_conv_<npc>_<hash>.kv`, Qwen only) → transcript
   re-prefill fallback.
-- `ResumeFromCompact` — Continue + background compaction after close once the estimated
-  history exceeds `compactionTriggerTokens` (~4 chars/token): the model answers a bare
-  "Compact the conversation." with a one-shot compact, the chat recomputes as
-  `[system + HISTORY: compact]` and the compacted KV is saved. NEVER cancelled once started:
-  reopening waits behind a "Compacting…" pulse (input blocked) and zone exit defers the GPU
-  release until the compact + its KV snapshot land. Tune `compactionTriggerTokens` to the model's
-  KV budget (default 512; Qwen capacity 8192).
+- `ResumeFromCompact` — Continue + self-compaction at the context limit. THE STANDARD
+  (user spec 2026-07-15):
+  1. The reply that hits `maxContextLength` is delivered IN FULL — decoded, typed and spoken
+     to the end (the KV is allocated `maxContextLength + 8192`, so the overshoot fits).
+  2. "Compacting…" appears ONLY once the NPC finished talking; input stays blocked until the
+     compact lands. The model answers a bare "Compact the conversation." with a one-shot
+     compact, the chat recomputes as `[system + HISTORY: compact]` and the compacted KV is
+     saved (overwrites the pre-compact snapshot).
+  3. The window keeps the ENTIRE visible conversation through the compaction; the next open
+     starts visually EMPTY (+ any turns since the compact) — the compact itself is never
+     rendered, it lives only in the system prompt's HISTORY block.
+  4. NEVER cancelled once started: reopening waits behind the pulse and zone exit defers the
+     GPU release until the compact + its KV snapshot land. If it never got to run (player
+     left during the speech wait / game closed), the next open compacts behind the same pulse.
+  Verified end-to-end by `NpcCompactProbe` (menu `DeepUnity/NPC/Run Compact Probe`); the
+  interrupt/cancel machinery by `NpcInterruptProbe` (`Run Interrupt Probe`).
 
 ### R5 — Performance: which knob for which symptom
 

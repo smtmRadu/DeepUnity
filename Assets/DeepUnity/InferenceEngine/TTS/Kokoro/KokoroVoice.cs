@@ -108,26 +108,40 @@ namespace DeepUnity
         static void ClearShared()
         {
             shared = null;
+            holders.Clear();
             warmed = false;
         }
 #endif
 
         void Start() { if (loadOnStart) EnsureTts(); }
 
+        // The ENGINE is shared but residency requests are per-NPC, so mirror PocketTTSVoice and
+        // refcount the holders: with intercalated prefetch zones, walking out of NPC A's zone
+        // used to defetch the weights out from under NPC B (whose zone-enter had already fired) —
+        // B then waited on !IsReady forever and never spoke again. (audit #11)
+        static readonly HashSet<KokoroVoice> holders = new HashSet<KokoroVoice>();
+
         /// <summary>Build the shared TTS and start streaming its weights (budgeted, no frame
         /// drops). Call from a proximity trigger for load-on-approach.</summary>
-        public void PrefetchNow() => EnsureTts();
+        public void PrefetchNow() { EnsureTts(); holders.Add(this); }
 
         /// <summary>Load-on-approach, spread over ~targetSeconds (SlowPrefetch): tiny per-frame
         /// upload slices while the player walks up.</summary>
         public void SlowPrefetchNow(float targetSeconds)
         {
             EnsureTts();
+            holders.Add(this);
             tts.SlowPrefetch(targetSeconds);
         }
 
-        /// <summary>Release the GPU weights (budgeted, frame-friendly). Prefetch again re-streams.</summary>
-        public void DefetchNow() => tts?.Defetch(DefetchMode.Slow);
+        /// <summary>Drop THIS voice's residency claim; the weights actually unload (budgeted,
+        /// frame-friendly) only when the LAST holder lets go. Prefetch again re-streams.</summary>
+        public void DefetchNow()
+        {
+            holders.Remove(this);
+            holders.RemoveWhere(h => h == null);   // destroyed components must not pin the weights
+            if (holders.Count == 0) tts?.Defetch(DefetchMode.Slow);
+        }
 
         /// <summary>One tiny discarded synthesis once the weights are resident — compiles every
         /// kernel path so the first REAL clause has no shader-compile hitches. Call it where the
@@ -269,23 +283,37 @@ namespace DeepUnity
 
         /// <summary>Fade smoothly to silence over <paramref name="seconds"/>, then hard-stop and
         /// restore the volume for the next utterance (mirrors PocketTTSVoice.FadeOutAndStop).</summary>
+        // While a fade runs, chunk callbacks may still deliver the dying reply's tail — those
+        // writes must be dropped, or the fade's new-reply detector (totalWritten delta) trips on
+        // the OLD reply and the fade aborts (mirrors PocketTTSVoice.fadingOut).
+        bool fadingOut;
+
         public void FadeOutAndStop(float seconds = 1f)
         {
             if (fadeJob != null) return;
             if (!IsSpeaking && !IsAudioPlaying) { StopSpeaking(); return; }
+            fadingOut = true;
             fadePrevVolume = source != null ? source.volume : 1f;
             fadeJob = StartCoroutine(FadeOutRoutine(seconds));
         }
 
         IEnumerator FadeOutRoutine(float seconds)
         {
-            for (float t = 0f; t < seconds; t += Time.deltaTime)
+            long written0; lock (ringLock) written0 = totalWritten;
+            // unscaled: fades must finish under pause menus (timeScale 0)
+            for (float t = 0f; t < seconds; t += Time.unscaledDeltaTime)
             {
-                if (source != null) source.volume = Mathf.Lerp(fadePrevVolume, 0f, t / seconds);
+                long w; lock (ringLock) w = totalWritten;
+                if (w != written0) break;   // a NEW reply started writing — abort, never touch it
+                // exponential (constant-dB, ~-60 dB over the fade) — perceptually even trail-off;
+                // a linear amplitude ramp reads as loud-then-sudden-cut (see PocketTTSVoice)
+                if (source != null) source.volume = fadePrevVolume * Mathf.Pow(0.001f, t / seconds);
                 yield return null;
             }
             fadeJob = null;   // cleared BEFORE StopSpeaking so its fade-cancel is a no-op
-            StopSpeaking();
+            long w1; lock (ringLock) w1 = totalWritten;
+            if (w1 == written0) StopSpeaking();   // complete the stop only while it is still OUR audio
+            fadingOut = false;
             if (source != null) source.volume = fadePrevVolume;
         }
 
@@ -297,12 +325,25 @@ namespace DeepUnity
                 fadeJob = null;
                 if (source != null) source.volume = fadePrevVolume;
             }
+            fadingOut = false;
             if (sayJob != null) { StopCoroutine(sayJob); sayJob = null; }
             clauseQueue.Clear();
             pendingText.Clear();
             feedingText = false;
             lock (ringLock) spokenQueue.Clear();
-            if (streaming) ClearRing();
+            if (streaming)
+            {
+                ClearRing();
+                // flush Unity's internal stream buffer too — it holds ~0.2-0.8 s of already-read
+                // OLD speech that would play before any new samples (same hard-cut taint as
+                // PocketTTSVoice.StopSpeaking)
+                if (source != null)
+                {
+                    source.Stop();
+                    source.clip = null;
+                }
+                if (streamClip != null) { Destroy(streamClip); streamClip = null; }
+            }
             else source.Stop();
             IsSpeaking = false;
         }
@@ -350,7 +391,10 @@ namespace DeepUnity
 
         void ClearRing()
         {
-            lock (ringLock) { ringRead = ringWrite = ringCount = 0; }
+            // dropped samples count as consumed (totalRead catches up to totalWritten), or every
+            // later clause-reveal mark lags the audio by the cumulative dropped duration —
+            // PocketTTSVoice.StopSpeaking does the same reconciliation
+            lock (ringLock) { ringRead = ringWrite = ringCount = 0; totalRead = totalWritten; }
             streamStarted = false;
         }
 
@@ -358,6 +402,7 @@ namespace DeepUnity
         public void PushSamples(float[] samples)
         {
             if (ring == null) return;
+            if (fadingOut) return;   // dying reply's tail — dropped, see fadingOut
             lock (ringLock)
             {
                 foreach (float s in samples)
@@ -393,6 +438,7 @@ namespace DeepUnity
 
         void OnDestroy()
         {
+            holders.Remove(this);   // a destroyed voice must not pin the shared weights
             if (streamClip != null) Destroy(streamClip);
         }
     }

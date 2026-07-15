@@ -206,7 +206,7 @@ namespace DeepUnity
             }
         }
 
-        public override IEnumerator InitializeChat(string system_prompt = "")
+        protected override IEnumerator InitializeChatCore(string system_prompt = "")
         {
             CurrentPhase = "boot (weights+warmup)";
             yield return Warmup();
@@ -239,11 +239,12 @@ namespace DeepUnity
         // </think>, then answers). The opening tag lives in the PROMPT, so it is mirrored into
         // the token stream — downstream <think> filters (NPC window/TTS) need the full pair.
         // enable_thinking=false keeps the validated non-thinking prompt exactly as benchmarked.
-        public override IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
+        protected override IEnumerator ChatCore(string prompt, Action<string> onTokenGenerated,
             int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
             float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false)
         {
             if (!IsReady) throw new Exception("Call InitializeChat before Chat.");
+            chatCancelRequested = false;
 
             // ChatML turn: user message, then open the assistant turn for generation.
             string turn = $"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n";
@@ -258,37 +259,50 @@ namespace DeepUnity
             var e = ForwardPromptChunked(ids);
             while (e.MoveNext()) yield return e.Current;
 
+            // A cancel that landed during the PREFILL exits here: the chunked prefill always runs
+            // to completion (breaking mid-chunk would tear the turn template off the KV), then the
+            // first sample/emit is skipped — the turn ends EMPTY and the close-turn forward below
+            // still runs, exactly like any truncated turn.
             int[] sampled = new int[1];
-            var s = model.SampleYielding(temperature, top_k, top_p, min_p, sampled);
-            while (s.MoveNext()) yield return s.Current;
-            int tokenId = sampled[0];
-            string tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
-            onTokenGenerated?.Invoke(tokenStr);
-            yield return null;
+            int tokenId = -1;
+            bool canceledInPrefill = chatCancelRequested;
+            if (canceledInPrefill)
+                ConsoleMessage.Info("MiniCPM5 reply canceled during prefill (KV consistent, empty turn closes as usual).");
+            else
+            {
+                var s0 = model.SampleYielding(temperature, top_k, top_p, min_p, sampled);
+                while (s0.MoveNext()) yield return s0.Current;
+                tokenId = sampled[0];
+                onTokenGenerated?.Invoke(tokenizer.Decode(Tensor.Constant(tokenId))[0]);
+                yield return null;
+            }
 
-            for (int t = 0; t < max_new_tokens - 1; t++)
+            for (int t = 0; !canceledInPrefill && t < max_new_tokens - 1; t++)
             {
                 Stopwatch sw = Stopwatch.StartNew();
                 Tensor nextInput = Tensor.Constant(tokenId);
                 e = model.ForwardYielding(nextInput, useCache: true, lastPosOnly: true);
                 while (e.MoveNext()) yield return e.Current;
 
-                s = model.SampleYielding(temperature, top_k, top_p, min_p, sampled);
+                var s = model.SampleYielding(temperature, top_k, top_p, min_p, sampled);
                 while (s.MoveNext()) yield return s.Current;
                 tokenId = sampled[0];
-                if (IsStopToken(tokenId))
+                if (IsStopToken(tokenId) || chatCancelRequested)
                 {
-                    ConsoleMessage.Info("MiniCPM5 ended the response.");
+                    ConsoleMessage.Info(chatCancelRequested
+                        ? "MiniCPM5 reply canceled at a token boundary (KV consistent)."
+                        : "MiniCPM5 ended the response.");
                     break;
                 }
 
-                tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
+                string tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
                 onTokenGenerated?.Invoke(tokenStr);
                 TokensPerSecond = sw.ElapsedMilliseconds > 0 ? 1000f / sw.ElapsedMilliseconds : 0f;
                 yield return null;
             }
 
-            // Close the assistant turn in the KV cache so the next Chat() turn is well-formed.
+            // Close the assistant turn in the KV cache so the next Chat() turn is well-formed
+            // (runs on cancel too — empty/truncated turns close the same way).
             var closeTurn = Tensor.Constant((float)MiniCPM5Modeling.MiniCPM5Config.IM_END_TOKEN_ID);
             e = model.ForwardYielding(closeTurn, useCache: true, lastPosOnly: true);
             while (e.MoveNext()) yield return e.Current;

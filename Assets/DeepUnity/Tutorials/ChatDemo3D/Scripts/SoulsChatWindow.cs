@@ -167,6 +167,20 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             if (titleText != null) titleText.text = title;
         }
 
+        // ---- context-fill bar: golden fill inside a silver track, above the input row --------
+        [SerializeField] private RectTransform contextFill;
+        private float ctxTarget, ctxShown;
+
+        public void SetContextFill(float fill01) => ctxTarget = Mathf.Clamp01(fill01);
+
+        private void Update()
+        {
+            if (contextFill == null) return;
+            // exponential smoothing — the bar glides toward the live token count
+            ctxShown = Mathf.Lerp(ctxShown, ctxTarget, 1f - Mathf.Exp(-6f * Time.unscaledDeltaTime));
+            contextFill.anchorMax = new Vector2(ctxShown, 1f);
+        }
+
         public void Open()
         {
             gameObject.SetActive(true);

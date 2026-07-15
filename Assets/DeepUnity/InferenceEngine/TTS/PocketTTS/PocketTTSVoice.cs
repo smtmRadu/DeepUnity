@@ -464,23 +464,39 @@ namespace DeepUnity
             /// hard-stop (drops synthesis + queued clauses) and restore the volume for the next
             /// utterance. Used on Leave/close so speech doesn't cut mid-word. A new Say/StopSpeaking
             /// during the fade cancels it (volume restored immediately).</summary>
+            // While a fade runs, the synth pipeline may STILL be writing the dying reply's tail
+            // (pocket synthesizes ahead of playback) — those writes must be dropped, or the
+            // fade's new-reply detector (totalWritten delta) trips on the OLD reply and the fade
+            // aborts, leaving the voice talking until the caller's hard-stop deadline.
+            bool fadingOut;
+
             public void FadeOutAndStop(float seconds = 1f)
             {
                 if (fadeJob != null) return;                      // fade already in progress
                 if (!IsSpeaking && !IsAudioPlaying) { StopSpeaking(); return; }   // nothing audible
+                fadingOut = true;
                 fadePrevVolume = source != null ? source.volume : 1f;
                 fadeJob = StartCoroutine(FadeOutRoutine(seconds));
             }
 
             IEnumerator FadeOutRoutine(float seconds)
             {
-                for (float t = 0f; t < seconds; t += Time.deltaTime)
+                long written0; lock (ringLock) written0 = totalWritten;
+                // unscaled: fades must finish under pause menus (timeScale 0)
+                for (float t = 0f; t < seconds; t += Time.unscaledDeltaTime)
                 {
-                    if (source != null) source.volume = Mathf.Lerp(fadePrevVolume, 0f, t / seconds);
+                    long w; lock (ringLock) w = totalWritten;
+                    if (w != written0) break;   // a NEW reply started writing — abort, never touch it
+                    // exponential (constant-dB, ~-60 dB over the fade): hearing is logarithmic, so
+                    // a LINEAR amplitude ramp reads as loud-loud-then-sudden-cut — this one reads
+                    // as a perfectly even trail-off
+                    if (source != null) source.volume = fadePrevVolume * Mathf.Pow(0.001f, t / seconds);
                     yield return null;
                 }
                 fadeJob = null;   // cleared BEFORE StopSpeaking so its fade-cancel is a no-op
-                StopSpeaking();
+                long w1; lock (ringLock) w1 = totalWritten;
+                if (w1 == written0) StopSpeaking();   // complete the stop only while it is still OUR audio
+                fadingOut = false;
                 if (source != null) source.volume = fadePrevVolume;   // ready for the next reply
             }
 
@@ -493,6 +509,7 @@ namespace DeepUnity
                     fadeJob = null;
                     if (source != null) source.volume = fadePrevVolume;
                 }
+                fadingOut = false;
                 streamJob = null;
                 inflightMark = null;
                 clauseQueue.Clear();
@@ -509,7 +526,18 @@ namespace DeepUnity
                 streamStarted = false;
                 ttfaArmed = false;
                 lastNonEmptyRealtime = float.NegativeInfinity;   // no phantom tail after a hard cut
-                if (source != null && source.isPlaying) source.Pause();
+                // A hard cut leaves the stream clip TAINTED: Unity's PCM reader already pulled
+                // ~0.2-0.8 s of the OLD speech into its internal streaming buffer, and a later
+                // Play would render THAT before asking for new samples ("one second of the
+                // previous reply before the new one"). Destroy the clip — the next reply's
+                // EnsureStream builds a fresh, silent one. (The natural end-of-reply pause keeps
+                // its clip: the reader buffered only the zero-fill there.)
+                if (source != null)
+                {
+                    source.Stop();
+                    source.clip = null;
+                }
+                if (streamClip != null) { Destroy(streamClip); streamClip = null; }
             }
 
             // ---- budget pump: advance the in-flight clause every frame within gpuBudgetMs -------
@@ -668,6 +696,7 @@ namespace DeepUnity
             public void PushSamples(float[] samples)
             {
                 if (samples == null) return;   // stream-complete sentinel
+                if (fadingOut) return;         // dying reply's tail — dropped, see fadingOut
                 if (ttfaArmed && ttfaRing < 0f && samples.Length > 0) ttfaRing = Time.realtimeSinceStartup;
                 EnsureStream();
                 lock (ringLock)

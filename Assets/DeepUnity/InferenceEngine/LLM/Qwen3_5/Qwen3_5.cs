@@ -300,7 +300,7 @@ namespace DeepUnity
             }
         }
 
-        public override IEnumerator InitializeChat(string system_prompt = "")
+        protected override IEnumerator InitializeChatCore(string system_prompt = "")
         {
             // Warmup is part of initialization: kernel compiles + throwaway forwards happen here,
             // behind the caller's loading screen, never on the first reply. Idempotent.
@@ -377,11 +377,12 @@ namespace DeepUnity
             yield return true;
         }
 
-        public override IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
+        protected override IEnumerator ChatCore(string prompt, Action<string> onTokenGenerated,
             int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
             float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false)
         {
             if (!IsReady) throw new Exception("Call InitializeChat before Chat.");
+            chatCancelRequested = false;
 
             var ids = new System.Collections.Generic.List<float>();
 
@@ -420,20 +421,31 @@ namespace DeepUnity
             var e = ForwardPromptChunked(ids);
             while (e.MoveNext()) yield return e.Current;
 
+            // A cancel that landed during the PREFILL exits here: the chunked prefill always runs
+            // to completion (breaking mid-chunk would tear the turn template off the KV), then the
+            // first sample/emit is skipped — the turn ends EMPTY, and the next Chat closes it
+            // exactly like any truncated turn.
             int[] sampled = new int[1];
-            var s = model.SampleYielding(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty, sampled);
-            while (s.MoveNext()) yield return s.Current;
-            int tokenId = sampled[0];
-            tokenizer.ResetStreamDecode();   // buffer split multibyte chars so they don't render as □ boxes
-            string tokenStr = tokenizer.DecodeStreamStep(tokenId);
-            onTokenGenerated?.Invoke(tokenStr);
-            yield return null;
+            int tokenId = -1;
+            int genTokens = 0;
+            bool canceledInPrefill = chatCancelRequested;
+            if (canceledInPrefill)
+                ConsoleMessage.Info("Qwen3.5 reply canceled during prefill (KV consistent, empty turn closes as usual).");
+            else
+            {
+                var s = model.SampleYielding(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty, sampled);
+                while (s.MoveNext()) yield return s.Current;
+                tokenId = sampled[0];
+                tokenizer.ResetStreamDecode();   // buffer split multibyte chars so they don't render as □ boxes
+                onTokenGenerated?.Invoke(tokenizer.DecodeStreamStep(tokenId));
+                genTokens = 1;
+                yield return null;
+            }
 
             var genSw = Stopwatch.StartNew();   // wall-clock over the decode loop, for the tok/s report
-            int genTokens = 1;
             int holdFrames = 0, cededToks = 0;  // diagnostic split for the tok/s report
             int tokensPerFrame = System.Math.Max(1, InferencePerf.LlmDecodeTokensPerFrame);
-            for (int t = 0; t < max_new_tokens - 1; t++)
+            for (int t = 0; !canceledInPrefill && t < max_new_tokens - 1; t++)
             {
                 // #29 reverse arbiter: audible SILENCE with synthesis pending outranks tok/s —
                 // hard-capped hold (see the Chat loop; liveness guaranteed).
@@ -446,13 +458,15 @@ namespace DeepUnity
                 var d = DecodeStep(Tensor.Constant(tokenId), sampled, temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
                 while (d.MoveNext()) yield return d.Current;
                 tokenId = sampled[0];
-                if (tokenId == Qwen3_5Modeling.Qwen3_5Config.EOS_TOKEN_ID)
+                if (tokenId == Qwen3_5Modeling.Qwen3_5Config.EOS_TOKEN_ID || chatCancelRequested)
                 {
-                    ConsoleMessage.Info("Qwen3.5 ended the response.");
+                    ConsoleMessage.Info(chatCancelRequested
+                        ? "Qwen3.5 reply canceled at a token boundary (KV consistent, turn closes as usual)."
+                        : "Qwen3.5 ended the response.");
                     break;
                 }
 
-                tokenStr = tokenizer.DecodeStreamStep(tokenId);
+                string tokenStr = tokenizer.DecodeStreamStep(tokenId);
                 onTokenGenerated?.Invoke(tokenStr);
                 genTokens++;
                 TokensPerSecond = sw.ElapsedMilliseconds > 0 ? 1000f / sw.ElapsedMilliseconds : 0f;
@@ -465,7 +479,7 @@ namespace DeepUnity
             // unlike the tight-loop RTF probe). Lets us confirm the coalesced kernels + sync decode
             // are actually reaching the player.
             double genSec = genSw.Elapsed.TotalSeconds;
-            if (genSec > 0)
+            if (genSec > 0 && genTokens > 0)
                 ConsoleMessage.Info($"Qwen3.5 decode: {genTokens} tokens in {genSec:F2}s = {genTokens / genSec:F1} tok/s (in-game; " +
                                     $"held {holdFrames} frames for starving TTS, {cededToks} ceded tokens, " +
                                     $"sync={InferencePerf.UseSyncDecode}).");
@@ -600,8 +614,8 @@ namespace DeepUnity
             catch (System.Exception e) { ConsoleMessage.Warning($"Qwen3.5 DeleteConversationKV: {e.Message}"); }
         }
 
-        public override IEnumerator SaveConversationKV(string key, string userState = null,
-                                                       string system_prompt = null)
+        protected override IEnumerator SaveConversationKVCore(string key, string userState = null,
+                                                              string system_prompt = null)
         {
             if (!DiskKVCache || !Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE) yield break;
             if (!IsReady || model.cache.CachedTokenCount <= 0) yield break;
@@ -628,7 +642,7 @@ namespace DeepUnity
         /// the KV/SSM prefix, token-seen counts and the open-turn flag are live again and the
         /// chat continues exactly where it left off (no InitializeChat needed).
         /// </summary>
-        public override IEnumerator TryRestoreConversationKV(string key, Action<bool> onResult,
+        protected override IEnumerator TryRestoreConversationKVCore(string key, Action<bool> onResult,
             string system_prompt = null, Func<string, bool> acceptUserState = null)
         {
             if (!DiskKVCache || !Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE)

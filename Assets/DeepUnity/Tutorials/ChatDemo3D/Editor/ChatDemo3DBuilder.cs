@@ -353,6 +353,13 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        static void SetInt(Component c, string field, int value)
+        {
+            var so = new SerializedObject(c);
+            so.FindProperty(field).intValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         static void SetObject(Component c, string field, UnityEngine.Object value)
         {
             var so = new SerializedObject(c);
@@ -1037,6 +1044,8 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             glow.range = 5.5f;
             glow.shadows = LightShadows.None;
 
+            // user 2026-07-15: hand-tuned in the editor (local values, under the 1.66-tall root)
+            Vector3[] layerPos = { new Vector3(0f, 0.688f, -0.08f), new Vector3(0f, 0.5698f, 0.08f) };
             var layers = new List<Renderer>();
             for (int i = 0; i < 2; i++)
             {
@@ -1044,8 +1053,8 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 UnityEngine.Object.DestroyImmediate(quad.GetComponent<Collider>());
                 quad.name = "MistLayer" + i;
                 quad.transform.SetParent(root.transform, false);
-                quad.transform.localPosition = new Vector3(0f, 1.55f, (i - 0.5f) * 0.16f);
-                quad.transform.localScale = new Vector3(2.7f, 3.1f, 1f);
+                quad.transform.localPosition = layerPos[i];
+                quad.transform.localScale = new Vector3(2.55f, 2.58f, 1f);
                 var r = quad.GetComponent<MeshRenderer>();
                 r.sharedMaterial = mat;
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -1696,6 +1705,9 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // Velmire resets per dialogue (user pick 2026-07-14; was the ContinueWhereLeftOff
             // arm of the history-mode A/B — both castle NPCs now wipe at chat close)
             SetEnum(npc, "historyMode", (int)NPCInteractor3D.HistoryMode.ResetEveryTime);
+            // small context on purpose (user default 2026-07-15): compaction demos trigger after
+            // a few replies; the context bar above the input row makes the fill visible
+            SetInt(npc, "maxContextLength", 400);
             // Velmire speaks through Kokoro (82M non-AR, RTF ~0.3 — speaks DURING generation)
             // with the am_onyx voicepack: the same deep Freeman-esque narrator timbre the
             // CosyVoice "velmire" voice was baked from. CosyVoice3 stays selectable on the enum
@@ -1997,6 +2009,14 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             var bodyGO = MakeTMP("Message", msgGO.transform, "Body", null, 21, new Color(0.87f, 0.84f, 0.76f),
                                  TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
 
+            // context-fill bar: silver track + golden fill, right above the input row — live
+            // view of the conversation vs Max Context Length (the NPC compacts when it fills)
+            var ctxBarGO = MakeRect("ContextBar", panelGO.transform, new Vector2(0, 0), new Vector2(1, 0), new Vector2(-36, 5), new Vector2(0, 82));
+            var ctxTrackImg = ctxBarGO.AddComponent<Image>(); ctxTrackImg.color = new Color(0.62f, 0.62f, 0.66f, 0.45f); ctxTrackImg.raycastTarget = false;   // silver = empty
+            var ctxFillGO = MakeRect("Fill", ctxBarGO.transform, new Vector2(0, 0), new Vector2(0, 1), Vector2.zero, Vector2.zero);
+            ((RectTransform)ctxFillGO.transform).pivot = new Vector2(0f, 0.5f);
+            var ctxFillImg = ctxFillGO.AddComponent<Image>(); ctxFillImg.color = gold; ctxFillImg.raycastTarget = false;   // golden = filled
+
             // input row
             var rowGO = MakeRect("InputRow", panelGO.transform, new Vector2(0, 0), new Vector2(1, 0), new Vector2(-36, 54), new Vector2(0, 48));
             var rowHlg = rowGO.AddComponent<HorizontalLayoutGroup>();
@@ -2021,6 +2041,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             SetRef(win, "scrollRect", scroll);
             SetRef(win, "infoText", infoGO.GetComponent<TMP_Text>());
             SetRef(win, "titleText", titleGO.GetComponent<TMP_Text>());
+            SetRef(win, "contextFill", (RectTransform)ctxFillGO.transform);
 
             // UI sounds: source on the canvas so the Leave click isn't cut off by the panel deactivating
             var uiAudio = canvasGO.AddComponent<AudioSource>();

@@ -62,6 +62,13 @@ namespace DeepUnity.Tutorials.ChatDemo2D
         public TMP_InputField InputField => inputField;
         public bool IsOpen { get; private set; }
 
+        [Tooltip("Optional golden context-fill rect inside a silver track; null = no bar in this window.")]
+        [SerializeField] private RectTransform contextFill;
+        public void SetContextFill(float fill01)
+        {
+            if (contextFill != null) contextFill.anchorMax = new Vector2(Mathf.Clamp01(fill01), 1f);
+        }
+
         // farm-gold accent shared with the builder — the caret must be unmissable
         private static readonly Color CaretGold = new Color(0.90f, 0.72f, 0.35f);
 

@@ -215,7 +215,7 @@ namespace DeepUnity
             }
         }
 
-        public override IEnumerator InitializeChat(string system_prompt = "")
+        protected override IEnumerator InitializeChatCore(string system_prompt = "")
         {
             // Warmup is part of initialization: kernel compiles + throwaway forwards happen here,
             // behind the caller's loading screen, never on the first reply. Idempotent.
@@ -282,11 +282,12 @@ namespace DeepUnity
         // presence_penalty / repetition_penalty / enable_thinking are accepted for API parity with other LLMs
         // but ignored — Gemma3-270m has no penalty or thinking support. Gemma's recommended top_k (64, from
         // its generation_config) lives in Config.DefaultTopK; the shared signature defaults stay neutral.
-        public override IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
+        protected override IEnumerator ChatCore(string prompt, Action<string> onTokenGenerated,
             int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
             float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false)
         {
             if (!IsReady) throw new Exception("Call InitializeChat before Chat.");
+            chatCancelRequested = false;
 
             Tensor prefixT, postfixT;
             if (isFreshlyInitialized)
@@ -320,31 +321,43 @@ namespace DeepUnity
             var e = ForwardPromptChunked(input_ids);
             while (e.MoveNext()) yield return e.Current;
 
+            // A cancel that landed during the PREFILL exits here: the chunked prefill always runs
+            // to completion (breaking mid-chunk would tear the turn template off the KV), then the
+            // first sample/emit is skipped — the turn ends EMPTY, and the next Chat closes it
+            // exactly like any truncated turn.
             int[] sampled = new int[1];
-            var s = model.SampleYielding(temperature, top_k, top_p, min_p, sampled);
-            while (s.MoveNext()) yield return s.Current;
-            int tokenId = sampled[0];
-            string tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
-            onTokenGenerated?.Invoke(tokenStr);
-            yield return null;
+            int tokenId = -1;
+            bool canceledInPrefill = chatCancelRequested;
+            if (canceledInPrefill)
+                ConsoleMessage.Info("Gemma3 reply canceled during prefill (KV consistent, empty turn closes as usual).");
+            else
+            {
+                var s0 = model.SampleYielding(temperature, top_k, top_p, min_p, sampled);
+                while (s0.MoveNext()) yield return s0.Current;
+                tokenId = sampled[0];
+                onTokenGenerated?.Invoke(tokenizer.Decode(Tensor.Constant(tokenId))[0]);
+                yield return null;
+            }
 
-            for (int t = 0; t < max_new_tokens - 1; t++)
+            for (int t = 0; !canceledInPrefill && t < max_new_tokens - 1; t++)
             {
                 Stopwatch sw = Stopwatch.StartNew();
                 Tensor nextInput = Tensor.Constant(tokenId);
                 e = model.ForwardYielding(nextInput, useCache: true, lastPosOnly: true);
                 while (e.MoveNext()) yield return e.Current;
 
-                s = model.SampleYielding(temperature, top_k, top_p, min_p, sampled);
+                var s = model.SampleYielding(temperature, top_k, top_p, min_p, sampled);
                 while (s.MoveNext()) yield return s.Current;
                 tokenId = sampled[0];
-                if (tokenId == Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID)
+                if (tokenId == Gemma3TokenizerFast.END_OF_TURN_TOKEN_ID || chatCancelRequested)
                 {
-                    ConsoleMessage.Info("Gemma3 ended the response.");
+                    ConsoleMessage.Info(chatCancelRequested
+                        ? "Gemma3 reply canceled at a token boundary (KV consistent)."
+                        : "Gemma3 ended the response.");
                     break;
                 }
 
-                tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
+                string tokenStr = tokenizer.Decode(Tensor.Constant(tokenId))[0];
                 onTokenGenerated?.Invoke(tokenStr);
                 TokensPerSecond = sw.ElapsedMilliseconds > 0 ? 1000f / sw.ElapsedMilliseconds : 0f;
                 yield return null;

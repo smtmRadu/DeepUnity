@@ -42,7 +42,7 @@ namespace DeepUnity
         // ---- reflection surface (probe-only; the runtime API stays minimal) ----
         static readonly BindingFlags BF = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
         static FieldInfo fHistoryMode, fMaxTokens, fCacheKV, fUseZone, fCompactRoutine, fSummary,
-                         fTranscript, fChatLive, fLlm, fCompactingNpc, fKvSaveInFlight;
+                         fTranscript, fChatLive, fLlm, fCompactingNpc, fKvSaveInFlight, fPkVoice;
         static MethodInfo mReleaseAfterSave;
 
         static void Bind()
@@ -58,12 +58,18 @@ namespace DeepUnity
             fChatLive       = t.GetField("chatLive", BF);
             fLlm            = t.GetField("llm", BF);
             fCompactingNpc  = t.GetField("compactingNpc", BindingFlags.Static | BindingFlags.NonPublic);
-            fKvSaveInFlight = t.GetField("kvSaveInFlight", BindingFlags.Static | BindingFlags.NonPublic);
+            fKvSaveInFlight = t.GetField("kvSavesInFlight", BindingFlags.Static | BindingFlags.NonPublic);
             mReleaseAfterSave = t.GetMethod("ReleaseLlmAfterKvSave", BF);
+            fPkVoice        = t.GetField("pkVoice", BF);
         }
 
+        PocketTTSModeling.PocketTTSVoice Pk => fPkVoice.GetValue(npc) as PocketTTSModeling.PocketTTSVoice;
+        bool VoiceAudible => Pk != null && (Pk.IsSpeaking || Pk.IsAudioPlaying);
+
         bool Compacting => fCompactRoutine.GetValue(npc) != null;
-        bool KvSaving => (bool)fKvSaveInFlight.GetValue(null);
+        // gate is a per-instance Dictionary<LLM, NPCChatBase> now — "any save in flight"
+        // matches the old global-bool read (single-NPC probe)
+        bool KvSaving => ((System.Collections.IDictionary)fKvSaveInFlight.GetValue(null)).Count > 0;
         object Llm => fLlm.GetValue(npc);
         string Summary => (string)fSummary.GetValue(npc);
         int TranscriptCount => ((System.Collections.ICollection)fTranscript.GetValue(npc)).Count;
@@ -147,11 +153,21 @@ namespace DeepUnity
             int transcriptBefore = TranscriptCount;
             sb.AppendLine($"- transcript before compaction: {transcriptBefore} turn(s)");
 
-            // ---------- A1: close starts compaction ----------
+            // ---------- A0/A1: the limit-hitting reply is SPOKEN IN FULL, then compaction fires
+            // in-dialogue (THE STANDARD: "Compacting…" only after the voice finishes) ----------
             phase = "compact1";
-            npc.CloseInteraction();
-            yield return WaitFor(5f, () => Compacting);
-            Check(Compacting, "A1 compaction started after close");
+            bool compactedWhileAudible = false;
+            float tq = Time.unscaledTime;
+            while (Time.unscaledTime - tq < 90f)
+            {
+                if (VoiceAudible && Compacting) compactedWhileAudible = true;
+                if (!VoiceAudible) break;
+                yield return null;
+            }
+            Check(!compactedWhileAudible, "A0 no compaction while the reply was still being spoken");
+            yield return WaitFor(15f, () => Compacting);
+            Check(Compacting, "A1 compaction started once the reply was fully spoken (in-dialogue)");
+            npc.CloseInteraction();   // leave mid-compact — compaction is never canceled
 
             // wait until CompactConversationRoutine is PAST its pre-touch guard (actively driving
             // the model) — reopening earlier legitimately aborts the not-yet-started routine
@@ -210,9 +226,10 @@ namespace DeepUnity
 
             // ---------- A5: zone-exit during compaction #2 — model stays until the compact lands ----------
             phase = "compact2-zone-exit";
+            yield return WaitFor(90f, () => !VoiceAudible);              // turn 2 spoken in full first
+            yield return WaitFor(15f, () => Compacting);
+            Check(Compacting, "compaction #2 started after turn 2 was fully spoken");
             npc.CloseInteraction();
-            yield return WaitFor(5f, () => Compacting);
-            Check(Compacting, "compaction #2 started");
             Teleport(ZonePoint(60f));                                    // real Update zone-exit branch
             if (!useZone) StartCoroutine((IEnumerator)mReleaseAfterSave.Invoke(npc, null));
             bool heldThroughout = true;

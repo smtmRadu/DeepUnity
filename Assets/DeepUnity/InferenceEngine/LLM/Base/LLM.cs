@@ -338,10 +338,38 @@ namespace DeepUnity
             int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
             float presence_penalty = 0f, float repetition_penalty = 1f);
 
+        // ---- double-forward backstop (F1) ------------------------------------------------------
+        // Two coroutines pumping one instance interleave their forward passes and corrupt the
+        // KV/SSM state. The game-side choreography (NPCChatBase epochs/gates) should make that
+        // impossible; the guard below is the LAST line of defense — a second model-driving
+        // operation REFUSES on entry (warning + immediate end; never a throw, never a queue).
+
+        /// <summary>True while a model-driving operation (Chat / InitializeChat / Compact /
+        /// conversation-KV save/restore) is pumping this instance. A second operation started
+        /// while Busy refuses immediately with a console warning instead of corrupting the KV.</summary>
+        public bool Busy { get; private set; }
+
+        IEnumerator Guarded(string op, IEnumerator inner)
+        {
+            if (Busy)
+            {
+                ConsoleMessage.Warning($"{GetType().Name}.{op} refused — another operation is still " +
+                                       "driving this instance (a concurrent forward would corrupt the KV).");
+                yield break;
+            }
+            Busy = true;
+            try { while (inner.MoveNext()) yield return inner.Current; }
+            finally { Busy = false; }
+        }
+
         /// <summary>
         /// Primes the chat with an (optionally cached) system prompt. Call once before <see cref="Chat"/>.
         /// </summary>
-        public abstract IEnumerator InitializeChat(string system_prompt = "");
+        public IEnumerator InitializeChat(string system_prompt = "")
+            => Guarded("InitializeChat", InitializeChatCore(system_prompt));
+
+        /// <summary>Model-side implementation of <see cref="InitializeChat"/> (runs inside the Busy guard).</summary>
+        protected abstract IEnumerator InitializeChatCore(string system_prompt = "");
 
         /// <summary>
         /// One chat turn: encodes <paramref name="prompt"/> with the model's chat template and streams the reply.
@@ -349,9 +377,31 @@ namespace DeepUnity
         /// <see cref="Config"/>.Default* when you want it. <paramref name="enable_thinking"/> and the penalty
         /// knobs are honored only by models that support them.
         /// </summary>
-        public abstract IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
+        public IEnumerator Chat(string prompt, Action<string> onTokenGenerated,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
+            float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false)
+            => Guarded("Chat", ChatCore(prompt, onTokenGenerated, max_new_tokens, temperature, top_k, top_p,
+                                        min_p, presence_penalty, repetition_penalty, enable_thinking));
+
+        /// <summary>Model-side implementation of <see cref="Chat"/> (runs inside the Busy guard).</summary>
+        protected abstract IEnumerator ChatCore(string prompt, Action<string> onTokenGenerated,
             int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
             float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false);
+
+        /// <summary>
+        /// Cooperatively stops the in-flight <see cref="Chat"/> at the NEXT TOKEN BOUNDARY. The
+        /// decode loop exits exactly like a natural stop-token end: every already-generated token
+        /// stays on the KV and the assistant turn is left open the same way, so the next Chat
+        /// closes it with the template's end-of-turn tokens — the truncated reply behaves as if
+        /// the model had stopped there by itself. A cancel that lands during the PROMPT PREFILL
+        /// lets the chunked prefill run to completion (breaking mid-chunk would tear the turn
+        /// template off the KV), then skips generation entirely — the turn ends EMPTY, under the
+        /// same contract. This is the ONLY safe way to interrupt a reply: stopping the coroutine
+        /// externally can land mid-forward and half-write the KV.
+        /// Cleared automatically when the next Chat starts; a no-op if nothing is decoding.
+        /// </summary>
+        public void CancelChat() => chatCancelRequested = true;
+        protected bool chatCancelRequested;
 
         // Deliberately BARE (user spec): the model is expected to answer this with the complete
         // conversation compact in ONE message, as a natural continuation of the chat — no
@@ -369,18 +419,24 @@ namespace DeepUnity
         /// Call it between turns (e.g. when the history nears the context limit); it is a coroutine and
         /// yields per frame like everything else, so it can run behind gameplay.
         /// Pass the SAME system_prompt used in <see cref="InitializeChat"/> (the base class cannot see
-        /// the concrete model's template state). Virtual: models can override with token-level
-        /// history splicing (keep-last-K-turns) or a dedicated compaction model. [Roadmap: finetune
-        /// a small background compactor model — see InferenceEngine/CLAUDE.md.]
+        /// the concrete model's template state). Models can override <see cref="CompactCore"/> with
+        /// token-level history splicing (keep-last-K-turns) or a dedicated compaction model.
+        /// [Roadmap: finetune a small background compactor model — see InferenceEngine/CLAUDE.md.]
         /// </summary>
-        public virtual IEnumerator Compact(string system_prompt = "", Action<string> onSummary = null,
-                                           int max_summary_tokens = 256)
+        public IEnumerator Compact(string system_prompt = "", Action<string> onSummary = null,
+                                   int max_summary_tokens = 256)
+            => Guarded("Compact", CompactCore(system_prompt, onSummary, max_summary_tokens));
+
+        /// <summary>Model-side implementation of <see cref="Compact"/>. Runs inside the Busy
+        /// guard, so it drives the model through the Core entries, never the public wrappers.</summary>
+        protected virtual IEnumerator CompactCore(string system_prompt = "", Action<string> onSummary = null,
+                                                  int max_summary_tokens = 256)
         {
             CurrentPhase = "compact";
             var sb = new System.Text.StringBuilder();
             // 1. compact request — continues the model's tracked conversation (greedy, one shot)
-            var chat = Chat(COMPACT_PROMPT, t => sb.Append(t),
-                            max_new_tokens: max_summary_tokens, temperature: 0f);
+            var chat = ChatCore(COMPACT_PROMPT, t => sb.Append(t),
+                                max_new_tokens: max_summary_tokens, temperature: 0f);
             while (chat.MoveNext()) yield return chat.Current;
 
             // 2. recompute: fresh history/KV = system prompt + the compact as a HISTORY block
@@ -389,7 +445,7 @@ namespace DeepUnity
                 ? system_prompt
                 : (string.IsNullOrEmpty(system_prompt) ? "" : system_prompt + "\n\n")
                   + "HISTORY:\n" + summary;
-            var init = InitializeChat(seeded);
+            var init = InitializeChatCore(seeded);
             while (init.MoveNext()) yield return init.Current;
 
             CurrentPhase = "idle";
@@ -419,8 +475,14 @@ namespace DeepUnity
         /// can run behind gameplay. Base implementation: graceful no-op for models without
         /// conversation persistence (Gemma3 — TODO: mirror the Qwen3.5 v2 format in Gemma3Cache).
         /// </summary>
-        public virtual IEnumerator SaveConversationKV(string key, string userState = null,
-                                                      string system_prompt = null)
+        public IEnumerator SaveConversationKV(string key, string userState = null,
+                                              string system_prompt = null)
+            => Guarded("SaveConversationKV", SaveConversationKVCore(key, userState, system_prompt));
+
+        /// <summary>Model-side implementation of <see cref="SaveConversationKV"/> (runs inside
+        /// the Busy guard). Base: graceful no-op for models without conversation persistence.</summary>
+        protected virtual IEnumerator SaveConversationKVCore(string key, string userState = null,
+                                                             string system_prompt = null)
         { yield break; }
 
         /// <summary>Delete every on-disk conversation snapshot for <paramref name="key"/> (all
@@ -438,7 +500,30 @@ namespace DeepUnity
         /// live transcript is fuller than the saved one). Waits for weights + warmup internally,
         /// like InitializeChat. Base implementation always misses (Gemma3 — see above).
         /// </summary>
-        public virtual IEnumerator TryRestoreConversationKV(string key, Action<bool> onResult,
+        public IEnumerator TryRestoreConversationKV(string key, Action<bool> onResult,
+            string system_prompt = null, Func<string, bool> acceptUserState = null)
+        {
+            // hand-rolled guard (not Guarded): a refusal must still report a MISS through
+            // onResult so the caller takes its re-prefill fallback instead of hanging on it
+            if (Busy)
+            {
+                ConsoleMessage.Warning($"{GetType().Name}.TryRestoreConversationKV refused — another operation " +
+                                       "is still driving this instance (a concurrent forward would corrupt the KV).");
+                onResult?.Invoke(false);
+                yield break;
+            }
+            Busy = true;
+            try
+            {
+                var e = TryRestoreConversationKVCore(key, onResult, system_prompt, acceptUserState);
+                while (e.MoveNext()) yield return e.Current;
+            }
+            finally { Busy = false; }
+        }
+
+        /// <summary>Model-side implementation of <see cref="TryRestoreConversationKV"/> (runs
+        /// inside the Busy guard). Base implementation always misses.</summary>
+        protected virtual IEnumerator TryRestoreConversationKVCore(string key, Action<bool> onResult,
             string system_prompt = null, Func<string, bool> acceptUserState = null)
         {
             onResult?.Invoke(false);
