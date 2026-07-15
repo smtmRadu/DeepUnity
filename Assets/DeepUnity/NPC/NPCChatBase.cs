@@ -846,7 +846,7 @@ namespace DeepUnity
                     w.PopLastMessage();
                     w.AddMessage(npc_name, spokenShown);
                     float share = chars > 0 ? (words[i].Length + 1f) / chars : 0f;
-                    yield return new WaitForSecondsRealtime(Mathf.Max(0.02f, dur * 0.92f * share));
+                    yield return new WaitForSecondsRealtime(Mathf.Max(0.02f, dur * 0.98f * share));
                 }
             }
             revealJob = null;

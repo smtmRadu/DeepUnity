@@ -855,7 +855,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
 
             (string, Vector3, float)[] clutter =
             {
-                ("Cart",            new Vector3(hx - L * 1.3f, 0, -hz + L * 1.2f), 250f),
+                ("Cart",            new Vector3(hx - L * 1.3f, -0.17f, -hz + L * 1.2f), 250f),   // user 2026-07-15: sunk into the ground
                 ("Barrel",          new Vector3(hx - L * 1.05f, 0, -hz + L * 0.8f), 10f),
                 ("Crate",           new Vector3(hx - L * 1.5f, 0, -hz + L * 0.75f), 35f),
                 ("Chest",           new Vector3(-hx + L * 0.6f, 0, hz - L * 0.6f), 140f),
@@ -1025,6 +1025,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
 
             var root = new GameObject("MistDoor");
             root.transform.position = pos;
+            root.transform.localScale = new Vector3(1f, 1.66f, 1f);   // user 2026-07-15: taller mist window
 
             // the fog gate glows golden onto the surrounding stone
             var glow = new GameObject("MistGlow").AddComponent<Light>();

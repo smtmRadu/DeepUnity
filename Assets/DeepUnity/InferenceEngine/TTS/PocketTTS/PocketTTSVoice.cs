@@ -87,8 +87,8 @@ namespace DeepUnity
             // moment a fed clause's audio actually STARTS playing, ~clauseRevealLead early, with the
             // clause's spoken DURATION so the UI can pace a word-by-word reveal across it.
             public event Action<string, float> OnClauseSpoken;
-            [Tooltip("OnClauseSpoken fires this many seconds BEFORE the clause is audible (text may lead the voice slightly).")]
-            public float clauseRevealLead = 0.35f;
+            [Tooltip("Seconds to shift the clause text reveal relative to ring playback. Unity's stream reader runs ~0.2-0.8 s AHEAD of what you actually hear, so a slightly NEGATIVE value lines the text up with the audible voice; positive fires earlier (text leads more).")]
+            public float clauseRevealLead = -0.25f;
             sealed class ClauseMark { public string text; public long start; public long end = -1; }
             readonly Queue<ClauseMark> spokenQueue = new Queue<ClauseMark>();
             ClauseMark inflightMark;              // the clause the current streamJob is synthesizing
@@ -806,7 +806,7 @@ namespace DeepUnity
                                 fire = mk.text;
                                 dur = mk.end > mk.start
                                     ? (mk.end - mk.start) / (float)Cfg.SAMPLE_RATE
-                                    : mk.text.Length * 0.055f;   // still synthesizing — chars estimate
+                                    : mk.text.Length * 0.065f;   // still synthesizing — chars estimate (~15 chars/s speech)
                             }
                         }
                     }

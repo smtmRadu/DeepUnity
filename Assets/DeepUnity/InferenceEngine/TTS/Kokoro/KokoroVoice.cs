@@ -75,7 +75,7 @@ namespace DeepUnity
         // for a clause still synthesizing it falls back to a chars-based estimate.
         public event Action<string, float> OnClauseSpoken;
         [Tooltip("OnClauseSpoken fires this many seconds BEFORE the clause is audible (text may lead the voice slightly).")]
-        public float clauseRevealLead = 0.35f;
+        public float clauseRevealLead = -0.25f;
         sealed class ClauseMark { public string text; public long start; public long end = -1; }
         readonly Queue<ClauseMark> spokenQueue = new Queue<ClauseMark>();
         long totalWritten, totalRead;   // monotonic sample counters (ringLock-guarded)
