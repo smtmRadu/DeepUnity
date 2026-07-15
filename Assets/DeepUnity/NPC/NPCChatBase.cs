@@ -124,6 +124,16 @@ namespace DeepUnity
         [SerializeField] protected LLMQuant ttsQuantization = LLMQuant.INT8;
         [Tooltip("Playback pitch for this NPC. 1 = natural (the voice's own timbre); <1 = deeper/slower.")]
         [SerializeField] protected float voicePitch = 1.0f;
+        [Tooltip("Loudness of this NPC's voice. AudioSource.volume tops out at 1, so this multiplies the samples themselves — >1 = louder (peaks clamp at full scale).")]
+        [Min(0f)] [SerializeField] protected float voiceVolume = 1.4f;
+        [Tooltip("PocketTTS pacing: pause between spoken sentences (after . ! ?), in seconds. Each sentence is synthesized separately, so this silence is what separates them.")]
+        [Min(0f)] [SerializeField] protected float sentencePauseSeconds = 0.36f;
+        [Tooltip("PocketTTS pacing: pause after a clause cut at a semicolon, in seconds.")]
+        [Min(0f)] [SerializeField] protected float semicolonPauseSeconds = 0.2f;
+        [Tooltip("PocketTTS pacing: pause after an emergency comma cut (very long run-on sentences), in seconds.")]
+        [Min(0f)] [SerializeField] protected float commaPauseSeconds = 0.15f;
+        [Tooltip("PocketTTS pacing: extra model-generated tail on the reply's last sentence, in seconds — lets the final word decay naturally instead of cutting ~0.16 s after it.")]
+        [Min(0f)] [SerializeField] protected float replyTailSeconds = 0.32f;
         [Tooltip("BAKED voice shipped inside the selected TTS engine's weights export (voices/<name> dirs for PocketTTS/CosyVoice3, voices/<name>.bin voicepacks for Kokoro) — the inspector dropdown lists what's on disk. Pick 'Clone (reference clip)' on PocketTTS to clone from an AudioClip instead; a non-null clip always overrides this name.")]
         [SerializeField] protected string ttsVoice = "jean";
         [Tooltip("PocketTTS only: reference clip to VOICE-CLONE for this NPC (overrides the baked ttsVoice). First runtime use encodes it once through the Mimi encoder and caches by content hash; press 'Precompute voice-clone cache' below to bake the embedding into the shared Resources/Cache so runtime (editor AND builds) is a pure load — no recompute, ever.")]
@@ -426,6 +436,11 @@ namespace DeepUnity
                     pkVoice = GetComponent<PocketTTSModeling.PocketTTSVoice>();
                     if (pkVoice == null) pkVoice = gameObject.AddComponent<PocketTTSModeling.PocketTTSVoice>();
                     pkVoice.pitch = voicePitch;
+                    pkVoice.volume = voiceVolume;
+                    pkVoice.sentencePauseSeconds = sentencePauseSeconds;
+                    pkVoice.semicolonPauseSeconds = semicolonPauseSeconds;
+                    pkVoice.commaPauseSeconds = commaPauseSeconds;
+                    pkVoice.replyTailSeconds = replyTailSeconds;
                     pkVoice.voiceName = ttsVoice;   // baked voices/<name> (default "jean")
                     if (pkVoice.clonedVoiceClip != clonedVoiceClip)
                         pkVoice.SetClonedVoice(clonedVoiceClip);   // clone-from-clip (cached) overrides baked
@@ -441,6 +456,7 @@ namespace DeepUnity
                     if (kkVoice == null) kkVoice = gameObject.AddComponent<KokoroVoice>();
                     kkVoice.streaming = true;
                     kkVoice.pitch = voicePitch;
+                    kkVoice.volume = voiceVolume;
                     kkVoice.voiceName = ttsVoice;
                     kkVoice.loadOnStart = false;   // load-on-approach, see Update / OnPlayerContact
                     kkVoice.OnClauseSpoken -= OnClauseSpokenHandler;   // audio-synced text reveal
@@ -450,6 +466,7 @@ namespace DeepUnity
                     cvVoice = GetComponent<CosyVoiceModeling.CosyVoiceVoice>();
                     if (cvVoice == null) cvVoice = gameObject.AddComponent<CosyVoiceModeling.CosyVoiceVoice>();
                     cvVoice.pitch = voicePitch;
+                    cvVoice.volume = voiceVolume;
                     cvVoice.voiceName = ttsVoice;   // unknown names fall back inside CosyVoiceTTS (warned)
                     cvVoice.loadOnStart = false;    // load-on-approach — the zone/trigger drives the stream
                     // streaming synth currently runs ~2.9x real-time on a 4060 (pre-int8) — a
@@ -461,6 +478,7 @@ namespace DeepUnity
                     if (voice == null) voice = gameObject.AddComponent<ChatterboxVoice>();
                     voice.streaming = true;
                     voice.pitch = voicePitch;
+                    voice.volume = voiceVolume;
                     voice.voiceName = ttsVoice;   // applied in ChatterboxVoice.Start (TTS is lazy-built)
                     voice.quantization = ttsQuantization;
                     break;

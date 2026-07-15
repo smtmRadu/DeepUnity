@@ -41,6 +41,9 @@ namespace DeepUnity
         [Tooltip("Playback pitch. <1 = deeper & slower.")]
         public float pitch = 1f;
 
+        [Tooltip("Loudness gain multiplied into the synthesized samples (AudioSource.volume tops out at 1 — this can go above it; peaks clamp at full scale).")]
+        [Min(0f)] public float volume = 1f;
+
         [Tooltip("Build + start loading the shared TTS in Start(). Off = call PrefetchNow() when " +
                  "the player gets close, so the weights stream on approach instead of scene load.")]
         public bool loadOnStart = true;
@@ -360,7 +363,7 @@ namespace DeepUnity
                 foreach (float s in samples)
                 {
                     if (ringCount == ring.Length) break;   // full: drop tail (ringSeconds exceeded)
-                    ring[ringWrite] = s;
+                    ring[ringWrite] = volume == 1f ? s : Mathf.Clamp(s * volume, -1f, 1f);
                     ringWrite = (ringWrite + 1) % ring.Length;
                     ringCount++;
                     totalWritten++;

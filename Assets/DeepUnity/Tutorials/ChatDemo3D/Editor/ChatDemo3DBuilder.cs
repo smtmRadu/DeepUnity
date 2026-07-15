@@ -415,7 +415,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             ambience.clip = AssetDatabase.LoadAssetAtPath<AudioClip>(ART + "/Audio/ambient_theme.mp3");
             ambience.loop = true;
             ambience.playOnAwake = true;
-            ambience.volume = 0.18f;   // user 2026-07-14: was 0.3, too loud over the NPC voices
+            ambience.volume = 0.144f;  // user 2026-07-15: 80% of 0.18 — still competed with the NPC voices
             ambience.spatialBlend = 0f;
 
             // Kernel prewarm now lives INSIDE NPCChatBase.Awake (frame-0, per model, automatic) —

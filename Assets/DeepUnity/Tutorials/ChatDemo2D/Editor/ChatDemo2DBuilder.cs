@@ -238,7 +238,7 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             ambience.clip = AssetDatabase.LoadAssetAtPath<AudioClip>(ART + "/Audio/ambient_theme.mp3");
             ambience.loop = true;
             ambience.playOnAwake = true;
-            ambience.volume = 0.18f;
+            ambience.volume = 0.144f;  // user 2026-07-15: 80% of 0.18, matching the 3D demo
             ambience.spatialBlend = 0f;
 
             // final cross-wiring

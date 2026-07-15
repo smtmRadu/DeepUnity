@@ -5601,7 +5601,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4288923606
   m_fontColor: {r: 0.84, g: 0.78, b: 0.64, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -5614,7 +5614,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -12560,7 +12560,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0.99921227, y: 0, z: 11.990547}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 1, y: 1.66, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 644278467}
@@ -14263,8 +14263,8 @@ Transform:
   m_GameObject: {fileID: 327034608}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.55, z: -0.08}
-  m_LocalScale: {x: 2.7, y: 3.1, z: 1}
+  m_LocalPosition: {x: 0, y: 1.6682, z: -0.08}
+  m_LocalScale: {x: 2.7, y: 3.33622, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 276000709}
@@ -19866,7 +19866,7 @@ Canvas:
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
   m_VertexColorAlwaysGammaSpace: 0
-  m_AdditionalShaderChannelsFlag: 0
+  m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
   m_SortingOrder: 0
@@ -21129,8 +21129,7 @@ Material:
   m_Shader: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _EMISSION
+  m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -21319,8 +21318,7 @@ Material:
   m_Shader: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _EMISSION
+  m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -21522,7 +21520,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4285762744
   m_fontColor: {r: 0.72, g: 0.55, b: 0.45, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -21535,7 +21533,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -25787,7 +25785,7 @@ AudioSource:
   OutputAudioMixerGroup: {fileID: 0}
   m_audioClip: {fileID: 8300000, guid: cc769161f79b9324faba9d8b8121009c, type: 3}
   m_PlayOnAwake: 1
-  m_Volume: 0.18
+  m_Volume: 0.144
   m_Pitch: 1
   Loop: 1
   Mute: 0
@@ -28178,7 +28176,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -37352,10 +37350,10 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 1040583846}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 312, y: -37.085}
+  m_SizeDelta: {x: 624, y: 23.47}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &813956558
 MonoBehaviour:
@@ -37386,7 +37384,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4290959070
   m_fontColor: {r: 0.87, g: 0.84, b: 0.76, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -37399,7 +37397,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -41909,7 +41907,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4288923606
   m_fontColor: {r: 0.84, g: 0.78, b: 0.64, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -41922,7 +41920,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -45054,7 +45052,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 0c309ef7a01cb2a40a84aa4e4935f467, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.4043072
+      value: -0.17
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 0c309ef7a01cb2a40a84aa4e4935f467, type: 3}
       propertyPath: m_LocalPosition.z
@@ -48279,10 +48277,10 @@ RectTransform:
   - {fileID: 813956557}
   m_Father: {fileID: 1417215414}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 322, y: -32.41}
+  m_SizeDelta: {x: 624, y: 48.82}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1042543059
 GameObject:
@@ -49050,10 +49048,10 @@ RectTransform:
   - {fileID: 902602323}
   m_Father: {fileID: 986336726}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 478, y: -27}
+  m_SizeDelta: {x: 104, y: 54}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1065588906
 MonoBehaviour:
@@ -54097,10 +54095,10 @@ RectTransform:
   - {fileID: 1742313040}
   m_Father: {fileID: 986336726}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 208, y: -27}
+  m_SizeDelta: {x: 416, y: 54}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1153176774
 MonoBehaviour:
@@ -57055,8 +57053,7 @@ Material:
   m_Shader: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _EMISSION
+  m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -63134,7 +63131,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 3215181782
   m_fontColor: {r: 0.84, g: 0.78, b: 0.64, a: 0.75}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -63147,7 +63144,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -63559,7 +63556,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4292142056
   m_fontColor: {r: 0.91, g: 0.89, b: 0.83, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -63572,7 +63569,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -64466,9 +64463,9 @@ MonoBehaviour:
   conversationMode: 1
   historyMode: 0
   cacheKVCache: 1
-  compactionTriggerTokens: 512
   model: Qwen3.5-0.8B
   quantization: 1
+  maxContextLength: 8192
   allowThinking: 0
   smoothVsSpeed: 0.5
   temperature: 0.8
@@ -64481,6 +64478,11 @@ MonoBehaviour:
   ttsModel: 3
   ttsQuantization: 1
   voicePitch: 1
+  voiceVolume: 1.4
+  sentencePauseSeconds: 0.36
+  semicolonPauseSeconds: 0.2
+  commaPauseSeconds: 0.15
+  replyTailSeconds: 0.32
   ttsVoice: jean
   clonedVoiceClip: {fileID: 8300000, guid: 5a7c4216d5884c145920de07104012eb, type: 3}
   usePrefetchZone: 1
@@ -65541,7 +65543,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4284575347
   m_fontColor: {r: 0.45, g: 0.43, b: 0.38, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -65554,7 +65556,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -67511,7 +67513,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 64.82}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!114 &1417215415
 MonoBehaviour:
@@ -76729,10 +76731,10 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 1040583846}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 312, y: -11.175}
+  m_SizeDelta: {x: 624, y: 22.35}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1640319221
 MonoBehaviour:
@@ -76763,7 +76765,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4285245636
   m_fontColor: {r: 0.77, g: 0.66, b: 0.42, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -76776,7 +76778,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -77013,8 +77015,7 @@ Material:
   m_Shader: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _EMISSION
+  m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -78177,9 +78178,9 @@ MonoBehaviour:
   conversationMode: 1
   historyMode: 0
   cacheKVCache: 1
-  compactionTriggerTokens: 512
   model: Qwen3.5-0.8B
   quantization: 1
+  maxContextLength: 8192
   allowThinking: 0
   smoothVsSpeed: 0.5
   temperature: 0.8
@@ -78192,8 +78193,13 @@ MonoBehaviour:
   ttsModel: 3
   ttsQuantization: 1
   voicePitch: 1
+  voiceVolume: 1.4
+  sentencePauseSeconds: 0.36
+  semicolonPauseSeconds: 0.2
+  commaPauseSeconds: 0.15
+  replyTailSeconds: 0.32
   ttsVoice: jean
-  clonedVoiceClip: {fileID: 8300000, guid: ec5db90cdb52a0341aa1fb3f7a40e087, type: 3}
+  clonedVoiceClip: {fileID: 8300000, guid: 313fbe1f327ba8c46949081253bc1175, type: 3}
   usePrefetchZone: 1
   prefetchRadius: 10
   slowPrefetchSeconds: 3
@@ -78839,8 +78845,7 @@ Material:
   m_Shader: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _EMISSION
+  m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -91510,7 +91515,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4288923606
   m_fontColor: {r: 0.84, g: 0.78, b: 0.64, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -91523,7 +91528,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -93616,8 +93621,7 @@ Material:
   m_Shader: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _EMISSION
+  m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -99778,10 +99782,10 @@ RectTransform:
   - {fileID: 479525010}
   m_Father: {fileID: 986336726}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 592, y: -27}
+  m_SizeDelta: {x: 104, y: 54}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1001 &2141533701
 PrefabInstance:
@@ -100273,7 +100277,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4291289323
   m_fontColor: {r: 0.92, g: 0.88, b: 0.78, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -100286,7 +100290,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2

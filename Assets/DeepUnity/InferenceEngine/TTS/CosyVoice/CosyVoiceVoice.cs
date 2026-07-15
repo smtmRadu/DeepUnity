@@ -25,6 +25,9 @@ namespace DeepUnity
             [Tooltip("Playback pitch. <1 = deeper & slower.")]
             public float pitch = 1f;
 
+            [Tooltip("Loudness gain multiplied into the synthesized samples (AudioSource.volume tops out at 1 — this can go above it; peaks clamp at full scale).")]
+            [Min(0f)] public float volume = 1f;
+
             [Tooltip("Fed text cuts ONLY at sentence enders (. ! ? ;). A comma may cut too, but only past this many pending characters — an escape hatch for run-on sentences.")]
             public int emergencyChunkChars = 220;
 
@@ -235,7 +238,7 @@ namespace DeepUnity
                     for (int i = 0; i < samples.Length; i++)
                     {
                         if (ringCount >= ring.Length) break;
-                        ring[ringWrite] = samples[i];
+                        ring[ringWrite] = volume == 1f ? samples[i] : Mathf.Clamp(samples[i] * volume, -1f, 1f);
                         ringWrite = (ringWrite + 1) % ring.Length;
                         ringCount++;
                     }

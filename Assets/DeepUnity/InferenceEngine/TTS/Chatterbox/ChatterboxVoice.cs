@@ -36,6 +36,9 @@ namespace DeepUnity
         [Tooltip("Playback pitch. <1 = deeper & slower (0.88-0.92 reads as an elder voice).")]
         public float pitch = 1f;
 
+        [Tooltip("Loudness gain multiplied into the synthesized samples (AudioSource.volume tops out at 1 — this can go above it; peaks clamp at full scale).")]
+        [Min(0f)] public float volume = 1f;
+
         [Tooltip("Min characters before a comma/semicolon may cut a speech chunk (sentence enders always cut).")]
         public int minChunkChars = 40;
 
@@ -272,7 +275,7 @@ namespace DeepUnity
                 for (int i = 0; i < samples.Length; i++)
                 {
                     if (ringCount >= ring.Length) break;   // full: drop (better than blocking main thread)
-                    ring[ringWrite] = samples[i];
+                    ring[ringWrite] = volume == 1f ? samples[i] : Mathf.Clamp(samples[i] * volume, -1f, 1f);
                     ringWrite = (ringWrite + 1) % ring.Length;
                     ringCount++;
                 }

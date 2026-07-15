@@ -135,7 +135,21 @@ public class TalkingNpc : MonoBehaviour
 }
 ```
 
-###### _Voices can be auditioned in the **VoiceLab** scene (menu `DeepUnity/TTS/Build VoiceLab Scene`): pick an engine + voicepack, tune pitch/speed live and save presets. The `NPCChatBase` component wires LLM + TTS together for game NPCs (pocket-tts by default, with Kokoro/CosyVoice3/Chatterbox selectable) — prefetch zones stream the models in as the player approaches and release them on exit._
+###### _Voices can be auditioned in the **VoiceLab** scene (menu `DeepUnity/TTS/Build VoiceLab Scene`): pick an engine + voicepack, tune pitch/speed live and save presets._
+
+## Game NPCs
+
+`NPCChatBase` is a drop-in MonoBehaviour that turns the LLM + TTS stack into a talking game character — everything is set up in the inspector (persona, model, voice), the demo subclasses (`NPCInteractor3D`/`NPCInteractor2D`) only add presentation.
+
+<!-- NPC demo gif goes here -->
+
+Features:
+- Per-NPC persona (system prompt), any registered LLM + quantization, sampling overrides, optional `<think>` reasoning with an animated *Thinking…* indicator.
+- Spoken replies through any TTS engine, per-NPC voice or cloned from an `AudioClip`, audio-synced talk animation (or text-only mode).
+- Prefetch zones: model weights stream to the GPU as the player approaches, released on exit; NPCs sharing a model share one GPU instance.
+- Auto frame pacing (60+ fps while the model works) with a per-NPC *Smooth ⇄ Speed* dial.
+- Conversation memory driven by *Max Context Length*: reset-on-close, persistent with disk KV snapshots, or self-compacting history (`HISTORY:` block in the system prompt) that lets a chat continue indefinitely.
+- Escape-interrupt, chat window sharing across NPCs, `StartInteraction()`/`AskNPC()`/`CloseInteraction()` API.
 
 ## Reinforcement Learning
 

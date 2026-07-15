@@ -33,6 +33,21 @@ namespace DeepUnity
             [Tooltip("Playback pitch. <1 = deeper & slower.")]
             public float pitch = 1f;
 
+            [Tooltip("Loudness gain multiplied into the synthesized samples (AudioSource.volume tops out at 1 — this can go above it; peaks clamp at full scale).")]
+            [Min(0f)] public float volume = 1f;
+
+            [Tooltip("Pause inserted between streamed clauses after a sentence ender . ! ? (seconds). Each clause is synthesized as its own utterance and EOS keeps only ~0.16 s of the model's trailing silence, so without this consecutive sentences butt together.")]
+            [Min(0f)] public float sentencePauseSeconds = 0.36f;
+
+            [Tooltip("Pause inserted after a clause cut at a semicolon (seconds).")]
+            [Min(0f)] public float semicolonPauseSeconds = 0.2f;
+
+            [Tooltip("Pause inserted after an emergency comma cut — run-on sentences past Emergency Chunk Chars (seconds).")]
+            [Min(0f)] public float commaPauseSeconds = 0.15f;
+
+            [Tooltip("Extra model-generated tail on the reply's LAST clause (seconds, in post-EOS frames of ~0.08 s). The default EOS stop keeps only ~0.16 s after the final word — an audible hard cut; this lets the model render the word's natural decay and release.")]
+            [Min(0f)] public float replyTailSeconds = 0.32f;
+
             [Tooltip("Frames of audio produced between streaming decodes (chunk cadence). 8 = 0.64s @ 12.5Hz.")]
             public int streamChunkFrames = 8;
 
@@ -393,6 +408,23 @@ namespace DeepUnity
                 }
             }
 
+            // inter-clause pause: armed when a clause finishes while more speech is coming,
+            // written into the ring right before the NEXT clause's first sample (so a reply's
+            // last clause never gets a silent tail and the clause mark starts at real speech).
+            int pendingGapSamples;
+
+            int GapSamplesAfter(string clauseText)
+            {
+                float t = sentencePauseSeconds;
+                if (!string.IsNullOrEmpty(clauseText))
+                {
+                    char c = clauseText[clauseText.Length - 1];
+                    if (c == ',') t = commaPauseSeconds;          // emergency comma cut
+                    else if (c == ';') t = semicolonPauseSeconds;
+                }
+                return t <= 0f ? 0 : Mathf.RoundToInt(t * Cfg.SAMPLE_RATE);
+            }
+
             /// <summary>Queue an utterance from pre-tokenized SentencePiece ids (one clause).
             /// No text is known here, so no OnClauseSpoken fires for it (use FeedText for reveal).</summary>
             public void FeedTokens(int[] textIds)
@@ -464,6 +496,7 @@ namespace DeepUnity
                 streamJob = null;
                 inflightMark = null;
                 clauseQueue.Clear();
+                pendingGapSamples = 0;
                 pendingText.Clear();
                 feedingText = false;
                 IsSpeaking = false;
@@ -560,22 +593,35 @@ namespace DeepUnity
                         BindVoice();               // clone-clip (cached) or baked voiceName — cheap rebind
                         tts.StreamChunkFrames = Mathf.Max(1, streamChunkFrames);
                         var (ids, text) = clauseQueue.Dequeue();
+                        if (pendingGapSamples > 0)   // pause between clauses, before this clause's mark
+                        {
+                            PushSamples(new float[pendingGapSamples]);
+                            pendingGapSamples = 0;
+                        }
                         // clause mark: first sample of this clause lands at totalWritten (single
                         // synthesis in flight) -> OnClauseSpoken fires when playback reaches it
                         inflightMark = new ClauseMark { text = text };
                         lock (ringLock) { inflightMark.start = totalWritten; spokenQueue.Enqueue(inflightMark); }
-                        streamJob = tts.SynthesizeStreaming(ids, PushSamples);
+                        // reply's LAST clause: extra post-EOS frames so the final word decays
+                        // naturally (model-rendered) instead of cutting ~0.16 s after it.
+                        bool lastClause = !feedingText && clauseQueue.Count == 0;
+                        int tailFrames = 2 + (lastClause ? Mathf.Max(0, Mathf.RoundToInt(replyTailSeconds * Cfg.FRAME_RATE)) : 0);
+                        streamJob = tts.SynthesizeStreaming(ids, PushSamples, framesAfterEos: tailFrames);
                         if (ttfaArmed && ttfaSynth < 0f) ttfaSynth = Time.realtimeSinceStartup;
                     }
                     if (streamJob == null) break;
                     if (!streamJob.MoveNext())
                     {
                         streamJob = null;
+                        string doneClause = null;
                         if (inflightMark != null)   // exact spoken duration now known
                         {
                             lock (ringLock) inflightMark.end = totalWritten;
+                            doneClause = inflightMark.text;
                             inflightMark = null;
                         }
+                        if (feedingText || clauseQueue.Count > 0)   // more speech follows this clause
+                            pendingGapSamples = GapSamplesAfter(doneClause);
                         // #29: end the frame — the next clause's start (embed gather + prefix build
                         // + first prefill tick) must not chain onto this clause's final flush frame.
                         break;
@@ -629,7 +675,7 @@ namespace DeepUnity
                     for (int i = 0; i < samples.Length; i++)
                     {
                         if (ringCount >= ring.Length) break;   // full: drop tail (ringSeconds exceeded)
-                        ring[ringWrite] = samples[i];
+                        ring[ringWrite] = volume == 1f ? samples[i] : Mathf.Clamp(samples[i] * volume, -1f, 1f);
                         ringWrite = (ringWrite + 1) % ring.Length;
                         ringCount++;
                         totalWritten++;                        // only STORED samples count (drops excluded)
