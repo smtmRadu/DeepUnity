@@ -19,6 +19,46 @@ namespace DeepUnity
     {
         const string TempScenePath = "Assets/__lm_benchmark_probe_tmp.unity";
 
+        // ---- ClaudeBridge entry point: parameterless static (the bridge invoke can't pass
+        // args), params read from ClaudeBridge/bench_next.json written just before the invoke:
+        //   {"probe":"prefill|decodedecay|bootload|bootknob|reopen","model":"qwen|qwen2b|gemma|minicpm","quant":"fp16|int8|int4"}
+        // "reopen" restores ChatDemo3D after a campaign (the launchers switch to the temp scene).
+        // Added 2026-07-15: -batchmode play mode hangs on this box (boot freezes pre-play), so
+        // benchmark campaigns run through the OPEN editor instead — same probes, same reports.
+        public static void RunFromFile()
+        {
+            string json = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "ClaudeBridge", "bench_next.json"));
+            string Get(string key)
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(json, $"\"{key}\"\\s*:\\s*\"([^\"]+)\"");
+                return m.Success ? m.Groups[1].Value.ToLowerInvariant() : "";
+            }
+            string probe = Get("probe");
+            if (probe == "reopen")
+            {
+                EditorSceneManager.OpenScene("Assets/DeepUnity/Tutorials/ChatDemo3D/ChatDemo3D.unity");
+                return;
+            }
+            var kind = Get("model") == "qwen2b" ? ProbeModelKind.Qwen3_5_2B
+                     : Get("model") == "gemma" ? ProbeModelKind.Gemma3_270M
+                     : Get("model") == "minicpm" ? ProbeModelKind.MiniCPM5_1B
+                     : ProbeModelKind.Qwen3_5_0_8B;
+            var quant = Get("quant") == "int8" ? LLMQuant.INT8
+                      : Get("quant") == "int4" ? LLMQuant.INT4 : LLMQuant.FP16;
+            var kv = StandardKV(quant);
+            // interactive (non-batch) runs: uncap the editor or vsync quantizes every frame-time
+            // metric and caps prefill/decode wall-clock — batch had no vsync, keep parity
+            QualitySettings.vSyncCount = 0;
+            Application.targetFrameRate = -1;
+            switch (probe)
+            {
+                case "decodedecay": LaunchDecodeDecay(kind, quant, kv); break;
+                case "bootload":    LaunchBootLoad(kind, quant, kv); break;
+                case "bootknob":    LaunchBoot(kind, quant); break;
+                default:            LaunchPrefill(kind, quant, kv); break;
+            }
+        }
+
         // ---- batch entry points (read -model/-quant from the command line) --------------------
         public static void RunBootKnobProbe()    => LaunchBoot(ParseModel(), ParseQuant());
         public static void RunPrefillProbe()     => LaunchPrefill(ParseModel(), ParseQuant(), ParseKV(ParseQuant()));

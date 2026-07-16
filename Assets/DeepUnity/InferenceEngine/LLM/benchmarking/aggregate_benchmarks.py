@@ -61,8 +61,8 @@ def g(rec, *keys, default="—"):
 
 
 def speed_table(recs, gpu):
-    rows = ["| model | weight | kv | prefill tok/s (2048) | decode tok/s (ctx≈0) | decode tok/s (max ctx) | decay % |",
-            "|---|---|---|---:|---:|---:|---:|"]
+    rows = ["| model | weight | kv | prefill tok/s (2048) | TTFT ms (2048-tok prompt) | decode tok/s (ctx≈0) | decode tok/s (max ctx) | decay % |",
+            "|---|---|---|---:|---:|---:|---:|---:|"]
     for model in MODEL_ORDER:
         for quant in QUANT_ORDER:
             for kv in KV_ORDER:
@@ -70,9 +70,9 @@ def speed_table(recs, gpu):
                 dd = recs.get((gpu, model, quant, kv, "decode_decay"))
                 if pf is None and dd is None:
                     continue
-                rows.append("| {} | {} | {} | {} | {} | {} | {} |".format(
+                rows.append("| {} | {} | {} | {} | {} | {} | {} | {} |".format(
                     model, quant.lower(), kv.lower(),
-                    g(pf, "median_tok_s"), g(dd, "start_tok_s"), g(dd, "end_tok_s"), g(dd, "decay_pct")))
+                    g(pf, "median_tok_s"), g(pf, "median_ms"), g(dd, "start_tok_s"), g(dd, "end_tok_s"), g(dd, "decay_pct")))
     return "\n".join(rows) if len(rows) > 2 else "_(no speed runs for this GPU yet)_"
 
 
