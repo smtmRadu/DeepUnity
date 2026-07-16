@@ -1,0 +1,16 @@
+{
+ "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+ "torch": "2.10.0+cu128",
+ "cpu": "x86_64",
+ "note": "WSL2 CUDA; D3D11 in-engine numbers differ slightly",
+ "h2d_pageable_GBps": 11.3,
+ "h2d_pinned_GBps": 11.6,
+ "d2h_pinned_GBps": 12.2,
+ "d2d_GBps": 217.3,
+ "fp16_tflops": 29.1,
+ "fp32_tflops": 7.6,
+ "gpu_membw_GBps": 236.0,
+ "disk_read_GBps_warm": 0.0,
+ "disk_file_GB": 0.0,
+ "cpu_membw_GBps_1t": 19.3
+}

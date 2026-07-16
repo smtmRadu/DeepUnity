@@ -31,6 +31,19 @@ one-off KV-precision experiments. Fill order: fp16 config first (all models, bot
 Each probe stamps the exact GPU/CPU/driver into its `summary.json` `machine` block — the aggregator
 keys rows off `machine.gpu`, so a row can always be traced to the box it ran on.
 
+**4060 (Victus) hardware baseline** — measured 2026-07-16 (torch/CUDA on WSL2; `hw_baseline_4060.json`),
+for extrapolating results to other machines now that the box is retired from benchmarking:
+
+| metric | value | notes |
+|---|---:|---|
+| PCIe H2D (pinned) | 11.6 GB/s | host→GPU upload — bounds weight-streaming |
+| PCIe D2H (pinned) | 12.2 GB/s | readbacks |
+| GPU mem bandwidth | ~236 GB/s | fp16 elementwise r+w (spec 256) |
+| GPU D2D copy | 217 GB/s | |
+| fp16 matmul | 29.1 TFLOPS | tensor cores, 8192³ |
+| fp32 matmul | 7.6 TFLOPS | 4096³ |
+| CPU RAM copy (1T) | 19.3 GB/s | single-thread torch copy |
+
 ## How to produce the numbers (headless)
 
 ONE model+quant per editor run, `-batchmode` **without** `-nographics` (compute shaders need a graphics

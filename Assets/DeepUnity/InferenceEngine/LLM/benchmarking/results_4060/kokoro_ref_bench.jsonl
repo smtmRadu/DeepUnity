@@ -1,0 +1,2 @@
+{"framework": "kokoro-ref", "torch": "2.11.0+cu128", "device": "cpu", "threads": 8, "load_s": 22.44, "audio_sec": 13.35, "gen_wall_s": 3.081, "rtf": 0.231, "ttfa_ms": 3136.1, "gpu": null}
+{"framework": "kokoro-ref", "torch": "2.11.0+cu128", "device": "cuda", "threads": null, "load_s": 2.5, "audio_sec": 13.35, "gen_wall_s": 0.247, "rtf": 0.019, "ttfa_ms": 248.2, "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU"}

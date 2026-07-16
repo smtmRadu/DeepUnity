@@ -1,0 +1,3 @@
+{"framework": "pocket-tts-ref", "torch": "2.13.0+cu130", "device": "cpu", "threads": 1, "load_s": 0.9, "audio_sec": 10.16, "gen_wall_s": 4.153, "rtf": 0.409, "ttfa_ms": 144.1, "gpu": null}
+{"framework": "pocket-tts-ref", "torch": "2.13.0+cu130", "device": "cpu-quantized", "threads": 1, "load_s": 3.24, "audio_sec": 10.32, "gen_wall_s": 4.075, "rtf": 0.395, "ttfa_ms": 99.4, "gpu": null}
+{"framework": "pocket-tts-ref", "torch": "2.13.0+cu130", "device": "cuda", "threads": null, "load_s": 1.06, "audio_sec": 10.72, "gen_wall_s": 2.096, "rtf": 0.196, "ttfa_ms": 52.8, "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU"}
