@@ -362,6 +362,19 @@ namespace DeepUnity
             finally { Busy = false; }
         }
 
+        /// <summary>Force-clears the <see cref="Busy"/> guard after a model-driving coroutine was
+        /// abandoned by <c>StopCoroutine</c> — which, unlike running to completion, does NOT execute
+        /// the <see cref="Guarded"/> <c>finally</c>, so the guard would otherwise stay latched and
+        /// every later Chat/InitializeChat on this (pooled) instance would refuse forever. ONLY the
+        /// game-side dead-model fallback calls this, and only together with marking the conversation
+        /// KV dead: the next open fully re-initializes the instance, so the possibly half-written
+        /// state is discarded. NEVER call this while a coroutine is legitimately driving the model.</summary>
+        public void AbandonGuardedOperation()
+        {
+            Busy = false;
+            chatCancelRequested = false;   // a stale cancel must not kill the next reply's first token
+        }
+
         /// <summary>
         /// Primes the chat with an (optionally cached) system prompt. Call once before <see cref="Chat"/>.
         /// </summary>
@@ -403,11 +416,14 @@ namespace DeepUnity
         public void CancelChat() => chatCancelRequested = true;
         protected bool chatCancelRequested;
 
-        // Deliberately BARE (user spec): the model is expected to answer this with the complete
-        // conversation compact in ONE message, as a natural continuation of the chat — no
-        // elaborate instructions. Stock instruct models handle it acceptably today; the roadmap
-        // item is a model FINETUNED to emit its compact instantly on this trigger (see CLAUDE.md).
-        const string COMPACT_PROMPT = "Compact the conversation.";
+        /// <summary>The EXACT user turn the model is asked on compaction. Deliberately BARE (user
+        /// spec): the model answers it with the complete conversation compact in ONE message, as a
+        /// natural continuation of the chat — no elaborate instructions. Its reply is then re-seeded
+        /// as [system_prompt]\n\nHISTORY:\n[reply] (see <see cref="CompactCore"/>). Stock instruct
+        /// models handle it acceptably today; the roadmap item is a model FINETUNED to emit its
+        /// compact instantly on this trigger (see InferenceEngine/CLAUDE.md). Public so game code
+        /// (e.g. NPCChatBase) can surface/inspect it.</summary>
+        public const string COMPACT_PROMPT = "Compact the conversation.";
 
         /// <summary>
         /// Compacts the running conversation to reclaim context: the model answers a bare
@@ -575,18 +591,24 @@ namespace DeepUnity
         }
 
         /// <summary>
-        /// Resolves a model's params folder under the unified convention written by
-        /// Assets/DeepUnity/InferenceEngine/import_params.py: everything lands FLAT under
-        /// <c>Assets/Resources/Weights/&lt;dir&gt;</c> (folder names are self-describing:
-        /// weights_&lt;model&gt;_&lt;size&gt;_&lt;quant&gt;), falling back to the legacy in-repo
-        /// location <c>Assets/DeepUnity/InferenceEngine/LLM/&lt;arch&gt;/&lt;dir&gt;</c> so checkouts that still
-        /// carry the old folders keep working without re-exporting.
+        /// Resolves a model's params folder. Checks, in order:
+        ///   1. <c>Assets/Resources/Weights/&lt;dir&gt;</c> — the FLAT convention written by
+        ///      import_params.py (the demo's live models live here);
+        ///   2. <c>Assets/Resources/DeepUnity/LLM/&lt;arch&gt;/&lt;dir&gt;</c> — the arch-ORGANIZED layout that
+        ///      carries the full benchmark weight set (all models × quants) and that BENCHMARK.md
+        ///      documents; needed so the headless probes find gemma/qwen2b/minicpm/etc. that aren't
+        ///      duplicated into the flat folder;
+        ///   3. <c>Assets/DeepUnity/InferenceEngine/LLM/&lt;arch&gt;/&lt;dir&gt;</c> — the legacy in-repo
+        ///      location, so old checkouts that still carry the folders keep working.
+        /// Folder names are self-describing (weights_&lt;model&gt;_&lt;size&gt;_&lt;quant&gt;).
         /// </summary>
         protected static string ResolveParamsDir(string archFolder, string dirName)
         {
-            string res = DeepUnityMeta.ResolvePath($"Assets/Resources/Weights/{dirName}");   // player builds: StreamingAssets
-            return System.IO.Directory.Exists(res) ? res
-                 : DeepUnityMeta.ResolvePath($"Assets/DeepUnity/InferenceEngine/LLM/{archFolder}/{dirName}");
+            string flat = DeepUnityMeta.ResolvePath($"Assets/Resources/Weights/{dirName}");   // player builds: StreamingAssets
+            if (System.IO.Directory.Exists(flat)) return flat;
+            string organized = DeepUnityMeta.ResolvePath($"Assets/Resources/DeepUnity/LLM/{archFolder}/{dirName}");
+            if (System.IO.Directory.Exists(organized)) return organized;
+            return DeepUnityMeta.ResolvePath($"Assets/DeepUnity/InferenceEngine/LLM/{archFolder}/{dirName}");
         }
     }
 }

@@ -149,14 +149,14 @@ namespace DeepUnity
             fMaxTokens.SetValue(velmire, 1000000);
             // Morwenna is staged like an NPC with a PAST conversation (chatLive + one turn):
             // exactly the state in which the pre-fix idle-sibling close corrupted things
-            fHistoryMode.SetValue(morwenna, NPCChatBase.HistoryMode.ContinueWhereLeftOff);
+            fHistoryMode.SetValue(morwenna, NPCChatBase.HistoryMode.ResumeFromCompact);
             fChatLive.SetValue(morwenna, true);
             object fakeTurn = System.Activator.CreateInstance(turnType);
             turnType.GetField("user", BF).SetValue(fakeTurn, "old question");
             turnType.GetField("npc", BF).SetValue(fakeTurn, "old answer");
             ((System.Collections.IList)fTranscript.GetValue(morwenna)).Add(fakeTurn);
             sb.AppendLine("- velmire→ResumeFromCompact maxContextLength→1000000; morwenna staged " +
-                          "ContinueWhereLeftOff + chatLive + 1 fake turn (idle-sibling bait)");
+                          "ResumeFromCompact + chatLive + 1 fake turn (idle-sibling bait)");
 
             // ---------- load + open Velmire's dialogue ----------
             Teleport(ZonePoint(7.5f));

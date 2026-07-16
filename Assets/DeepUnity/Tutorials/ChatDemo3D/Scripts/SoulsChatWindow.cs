@@ -191,8 +191,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 
         public void Close()
         {
-            if (!gameObject.activeSelf) return;
+            // clear IsOpen FIRST — must never stay stuck true (PauseMenu keys its Esc-swallow off it;
+            // a stale value soft-locks the pause menu). Safe even when already inactive.
             IsOpen = false;
+            if (!gameObject.activeSelf) return;
             SlideTo(hiddenX, () => gameObject.SetActive(false));
         }
 

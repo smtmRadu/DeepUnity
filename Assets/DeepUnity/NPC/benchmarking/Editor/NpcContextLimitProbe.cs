@@ -7,7 +7,7 @@ namespace DeepUnity
     // Edit-mode probe for the context-limit primitives the NPC history modes are built on:
     //   - LLM.MaxContextTokens  — the per-NPC maxContextLength reaching the KV capacity
     //   - LLM.CurrentContextTokens — live KV occupancy (system prompt + every turn so far)
-    //   - crossing maxContextLength is detected (ContinueWhereLeftOff halts / ResumeFromCompact fires)
+    //   - crossing maxContextLength is detected (ResumeFromCompact fires the compaction)
     //   - re-seeding a SHORT prefix (exactly what CompactConversationRoutine does after summarizing)
     //     drops the occupancy back under the limit → the conversation keeps going
     // Deliberately SYNCHRONOUS (model.Forward + SampleGreedy, like QwenDecodeProfileProbe) — it never

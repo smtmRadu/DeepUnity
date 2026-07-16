@@ -148,28 +148,28 @@ markers** — re-run the aggregator to refresh. One block per distinct GPU (`mac
 | model | weight | kv | prefill tok/s (2048) | decode tok/s (ctx≈0) | decode tok/s (max ctx) | decay % |
 |---|---|---|---:|---:|---:|---:|
 | qwen3.5-2B | fp16 | fp16 | — | 0.0 | 0.0 | 0.0 |
-| qwen3.5-2B | int8 | int8 | 12.3 | 4.1 | 3.9 | 3.1 |
-| qwen3.5-2B | int4 | int8 | — | 1.5 | 1.5 | 0.9 |
-| minicpm5-1B | fp16 | fp16 | 21.9 | 7.0 | 6.0 | 13.3 |
-| minicpm5-1B | int8 | int8 | 21.6 | 7.4 | 6.2 | 15.8 |
-| minicpm5-1B | int4 | int8 | 17.2 | 2.2 | 2.1 | 5.3 |
-| qwen3.5-0.8B | fp16 | fp16 | 34.1 | 8.2 | 7.9 | 4.1 |
-| qwen3.5-0.8B | int8 | int8 | 34.0 | 8.3 | 7.9 | 5.1 |
-| qwen3.5-0.8B | int4 | int8 | 25.9 | 0.0 | 0.0 | 0.0 |
-| gemma3-270M | fp16 | fp16 | 124.5 | 22.3 | 20.9 | 6.5 |
-| gemma3-270M | int8 | int8 | 122.8 | 22.8 | 20.8 | 8.5 |
-| gemma3-270M | int4 | int8 | 110.7 | 19.5 | 18.1 | 7.1 |
+| qwen3.5-2B | int8 | int8 | 64.8 | 20.3 | 17.5 | 13.8 |
+| qwen3.5-2B | int4 | int8 | 57.5 | 17.3 | 15.3 | 11.8 |
+| minicpm5-1B | fp16 | fp16 | 21.7 | 6.9 | 6.0 | 13.2 |
+| minicpm5-1B | int8 | int8 | 21.4 | 7.4 | 6.2 | 15.7 |
+| minicpm5-1B | int4 | int8 | 17.2 | 2.2 | 2.1 | 5.2 |
+| qwen3.5-0.8B | fp16 | fp16 | 127.4 | 37.8 | 30.8 | 18.5 |
+| qwen3.5-0.8B | int8 | int8 | 125.0 | 40.7 | 31.2 | 23.3 |
+| qwen3.5-0.8B | int4 | int8 | 116.4 | 37.2 | 29.0 | 21.9 |
+| gemma3-270M | fp16 | fp16 | 127.9 | 22.5 | 21.0 | 6.5 |
+| gemma3-270M | int8 | int8 | 125.4 | 22.9 | 21.0 | 8.1 |
+| gemma3-270M | int4 | int8 | 112.1 | 19.6 | 18.2 | 7.1 |
 
 #### Table 3 — Quality vs fp16 (fp16 = 0 reference)
 
 | model | weight | kv | max logit Δ | mean logit Δ | argmax match | greedy div (char) | decode speedup |
 |---|---|---|---:|---:|---:|---:|---:|
-| qwen3.5-2B | int8 | int8 | 0.5007 | 0.063713 | 8/8 | -1 | 1.08x |
-| qwen3.5-2B | int4 | int8 | 3.0684 | 0.477537 | 4/8 | 1 | 0.39x |
+| qwen3.5-2B | int8 | int8 | 0.5002 | 0.063885 | 8/8 | -1 | 1.2x |
+| qwen3.5-2B | int4 | int8 | 3.069 | 0.477405 | 4/8 | 1 | 0.97x |
 | minicpm5-1B | int8 | int8 | 0.9556 | 0.103492 | 8/8 | 101 | 1.06x |
 | minicpm5-1B | int4 | int8 | 6.2644 | 1.007999 | 7/8 | 97 | 0.31x |
-| qwen3.5-0.8B | int8 | int8 | 0.4596 | 0.075648 | 7/8 | -1 | 1.01x |
-| qwen3.5-0.8B | int4 | int8 | 3.3893 | 0.503522 | 7/8 | 1 | 0.56x |
+| qwen3.5-0.8B | int8 | int8 | 0.4579 | 0.075324 | 7/8 | -1 | 1.08x |
+| qwen3.5-0.8B | int4 | int8 | 3.3898 | 0.503406 | 7/8 | 1 | 0.99x |
 | gemma3-270M | int8 | int8 | 3.8474 | 0.757592 | 8/8 | 7 | 1.02x |
 | gemma3-270M | int4 | int8 | 24.9383 | 3.775131 | 1/8 | 1 | 0.87x |
 
@@ -178,18 +178,17 @@ markers** — re-run the aggregator to refresh. One block per distinct GPU (`mac
 | model | weight | kv | total boot s | prewarm ms | tokenizer ready ms | ctor ms | stream s | stream worst ms | stream >33ms | GC |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | qwen3.5-2B | fp16 | fp16 | 9.83 | 772.7 | 1600.7 | 827.9 | 7.38 | 829.94 | 2 | 5 |
-| qwen3.5-2B | int8 | int8 | 7.07 | 727.0 | 1510.1 | 783.1 | 4.61 | 785.23 | 2 | 4 |
-| qwen3.5-2B | int4 | int8 | 4.31 | 736.4 | 1120.5 | 384.0 | 0.98 | 386.18 | 1 | 3 |
-| minicpm5-1B | fp16 | fp16 | 1.71 | 341.9 | 416.8 | 74.8 | 0.83 | 87.7 | 1 | 2 |
-| minicpm5-1B | int8 | int8 | 2.02 | 344.3 | 603.9 | 259.5 | 1.13 | 280.17 | 1 | 2 |
-| minicpm5-1B | int4 | int8 | 1.74 | 329.8 | 397.4 | 67.5 | 0.49 | 78.03 | 1 | 2 |
-| qwen3.5-0.8B | fp16 | fp16 | 3.02 | 852.5 | 941.6 | 89.0 | 0.78 | 94.27 | 2 | 3 |
-| qwen3.5-0.8B | int8 | int8 | 2.83 | 850.6 | 946.6 | 95.9 | 0.66 | 101.2 | 2 | 3 |
-| qwen3.5-0.8B | int4 | int8 | 2.99 | 905.3 | 1003.1 | 97.6 | 0.64 | 102.85 | 2 | 3 |
-| gemma3-270M | fp16 | fp16 | 1.89 | 1025.3 | 1188.7 | 163.3 | 0.53 | 165.75 | 2 | 2 |
-| gemma3-270M | int8 | int8 | 1.83 | 316.1 | 1508.3 | 89.6 | 1.19 | 91.75 | 2 | 3 |
-| gemma3-270M | int4 | int8 | 1.88 | 340.0 | 1544.9 | 104.8 | 1.21 | 110.08 | 2 | 3 |
-
+| qwen3.5-2B | int8 | int8 | 2.12 | 387.9 | 1018.8 | 31.1 | 1.1 | 46.96 | 1 | 10 |
+| qwen3.5-2B | int4 | int8 | 1.96 | 308.4 | 909.1 | 33.9 | 0.96 | 193.83 | 2 | 5 |
+| minicpm5-1B | fp16 | fp16 | 1.5 | 311.6 | 435.4 | 21.7 | 0.78 | 36.78 | 1 | 7 |
+| minicpm5-1B | int8 | int8 | 1.74 | 758.9 | 888.8 | 23.6 | 0.59 | 39.04 | 1 | 22 |
+| minicpm5-1B | int4 | int8 | 1.59 | 301.2 | 439.4 | 23.4 | 0.5 | 39.13 | 1 | 4 |
+| qwen3.5-0.8B | fp16 | fp16 | 1.54 | 345.0 | 966.3 | 31.7 | 0.86 | 62.23 | 2 | 6 |
+| qwen3.5-0.8B | int8 | int8 | 1.41 | 327.2 | 933.0 | 29.2 | 0.71 | 46.34 | 1 | 5 |
+| qwen3.5-0.8B | int4 | int8 | 1.61 | 812.7 | 1096.3 | 24.7 | 0.43 | 37.98 | 1 | 22 |
+| gemma3-270M | fp16 | fp16 | 1.55 | 312.2 | 1395.0 | 20.7 | 1.09 | 98.12 | 2 | 10 |
+| gemma3-270M | int8 | int8 | 1.58 | 221.5 | 1419.9 | 22.9 | 1.2 | 88.21 | 2 | 5 |
+| gemma3-270M | int4 | int8 | 1.49 | 226.2 | 1309.1 | 21.7 | 1.09 | 146.09 | 3 | 4 |
 ### GPU: `NVIDIA GeForce RTX 4060 Laptop GPU`
 
 #### Table 2 — Speed
@@ -376,3 +375,33 @@ LEGACY kernels)"). Edit mode, editor open on ChatDemo3D (~30% baseline GPU util)
 1.77× on the 4060, bit-parity confirmed locally. If the DEMO still doesn't feel faster on the
 4060, the gap is in play-mode pacing (InferencePerf dials / TTS-starving fallback / prefill of
 long system prompts), not in the kernels.
+
+## Coalesced GEMV/GEMM (#31) + tiled Mimi kernels (#30) — GTX 1650 A/B — 2026-07-16
+
+Same probes on the bandwidth-starved 1650 (Pavilion), same build. Legacy vs new via the
+`LegacyKernelABRunner` menus, run headless (`-batchmode -quit -executeMethod …`). This is the box
+the kernels were tuned on, so it shows the largest win.
+
+### Qwen3.5-0.8B int8 / kvFP16 — `QwenDecodeProfileProbe` (prefill 64 ids, 32 timed tokens, greedy)
+
+| kernels | decode tok/s | ms/tok | prefill 64 ids (warm) |
+|---|---:|---:|---:|
+| legacy (1 thread/row GEMV) | 8.2 | 121.3 | 1862 ms |
+| **coalesced (warp-per-row + tree-reduce)** | **41.0** | **24.4** | **496 ms** |
+
+- **Decode 5.0× on the 1650** (vs 2.37× on the 4060) — the bandwidth-starved card gains most: the
+  fp16 LM-head + MLP GEMVs were re-reading weights it can least afford. Prefill 3.75×.
+- Consistent with the standardized 2048-token matrix above (Table 2: qwen0.8B int8 decode 8.3 →
+  40.7 tok/s), which was re-run on this same build 2026-07-16.
+
+### pocket-tts int8 — `PocketTTSRtfProbe` offline-KV (66 ids → 10.4 s audio)
+
+| kernels | mimi decode | AR loop | total | RTF |
+|---|---:|---:|---:|---:|
+| legacy Conv1D/attention | 2581 ms | 1552 ms | 4434 ms | 0.426 |
+| **tiled (#30)** | **827 ms** | 1519 ms | **2647 ms** | **0.255** |
+
+- **Mimi decode 3.12× on the 1650** (vs 1.77× on the 4060) — same bandwidth story: the tiling
+  stages the input window once per 8-row tile instead of re-reading it per output row.
+- The FlowLM AR loop (~1520 ms, untouched by #30) is now the floor, capping the total at 1.68× and
+  offline **RTF 0.426 → 0.255**. Bit-exact (accumulation order preserved).

@@ -692,9 +692,10 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
                 "The shopkeeper looks up from her knitting with a smile...",
                 NPCInteractor2D.ConversationMode.LlmOnly, "granny", 0.92f,
                 // history-mode A/B spread: Granny REMEMBERS across dialogues (live KV while
-                // resident, full disk-KV restore after release now that she runs Qwen).
-                // Residency is the zone's job. She is also the THINKING arm of the A/B.
-                NPCInteractor2D.HistoryMode.ContinueWhereLeftOff,
+                // resident, full disk-KV restore after release now that she runs Qwen); at the
+                // context limit she auto-compacts and keeps going. Residency is the zone's job.
+                // She is also the THINKING arm of the A/B.
+                NPCInteractor2D.HistoryMode.ResumeFromCompact,
                 "Qwen3.5-0.8B", think: true);
 
             return new[] { hobb, marla };

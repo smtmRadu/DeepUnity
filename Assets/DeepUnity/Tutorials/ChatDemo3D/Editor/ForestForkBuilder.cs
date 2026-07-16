@@ -963,8 +963,9 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 "Stay in character at all times. Keep your replies to one to three short sentences.");
             SetString(npc, "approach_text", "The beggar stirs against his crate and rattles a battered bowl at you...");
             // Cobb REMEMBERS between dialogues (his whole shtick is warming up to kindness across
-            // visits): live KV reused while resident, transcript re-prefilled after an unload
-            SetEnum(npc, "historyMode", (int)NPCInteractor3D.HistoryMode.ContinueWhereLeftOff);
+            // visits): live KV reused while resident, transcript re-prefilled after an unload; at
+            // the context limit he auto-compacts and keeps going
+            SetEnum(npc, "historyMode", (int)NPCInteractor3D.HistoryMode.ResumeFromCompact);
             // same LLM+TTS stack as Velmire, with a rougher low male Kokoro voice for the beggar
             SetEnum(npc, "conversationMode", (int)NPCInteractor3D.ConversationMode.LlmPlusTts);
             SetEnum(npc, "ttsModel", (int)NPCInteractor3D.TtsModel.Kokoro);

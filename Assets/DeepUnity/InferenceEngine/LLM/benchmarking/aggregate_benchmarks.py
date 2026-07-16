@@ -19,7 +19,7 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.normpath(os.path.join(HERE, "..", "..", "..", ".."))  # Assets/DeepUnity/InferenceEngine/LLM/benchmarking -> root
+PROJECT_ROOT = os.path.normpath(os.path.join(HERE, "..", "..", "..", "..", ".."))  # Assets/DeepUnity/InferenceEngine/LLM/benchmarking -> repo root (5 up)
 
 MODEL_ORDER = ["qwen3.5-2B", "minicpm5-1B", "qwen3.5-0.8B", "gemma3-270M"]  # largest first
 QUANT_ORDER = ["FP16", "INT8", "INT4"]
@@ -126,6 +126,36 @@ def build_auto(recs):
     return "\n".join(out)
 
 
+import re
+
+
+def split_gpu_blocks(auto_body):
+    """{gpu_name: body} from an AUTO-section body, split on '### GPU: `name`' headers.
+    Ordered (dict preserves insertion order). body is everything after the header line up to
+    the next header (or end)."""
+    blocks = {}
+    matches = list(re.finditer(r"(?m)^### GPU: `(.+?)`[ \t]*$", auto_body))
+    for i, m in enumerate(matches):
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(auto_body)
+        blocks[m.group(1).strip()] = auto_body[start:end]
+    return blocks
+
+
+def merge_auto(existing_body, fresh_block):
+    """Refresh the GPU blocks we have fresh data for; PRESERVE blocks for GPUs we don't.
+    Each machine only carries its own GPU's ProbeLogs, so a wholesale replace would erase the
+    other machines' committed blocks. Existing order is kept; new GPUs are appended."""
+    existing = split_gpu_blocks(existing_body)
+    fresh = split_gpu_blocks(fresh_block)
+    if not fresh:
+        return existing_body   # nothing local — never blank out the doc
+    merged = dict(existing)
+    for gpu, body in fresh.items():
+        merged[gpu] = body
+    return "\n" + "".join(f"### GPU: `{gpu}`{body}" for gpu, body in merged.items())
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--probelogs", default=os.path.join(PROJECT_ROOT, "ProbeLogs"))
@@ -147,12 +177,15 @@ def main():
         doc = f.read()
     if BEGIN not in doc or END not in doc:
         sys.exit(f"ERROR: markers {BEGIN}/{END} not found in {args.benchmark}")
+    existing_body = doc[doc.index(BEGIN) + len(BEGIN):doc.index(END)]
+    merged = merge_auto(existing_body, block)
     pre = doc[:doc.index(BEGIN) + len(BEGIN)]
     post = doc[doc.index(END):]
-    doc2 = pre + "\n" + block + "\n" + post
+    doc2 = pre + merged + post
     with open(args.benchmark, "w", encoding="utf-8") as f:
         f.write(doc2)
-    print(f"[aggregate] wrote {args.benchmark} ({len(recs)} records, {len({k[0] for k in recs})} GPU(s))")
+    local_gpus = sorted({k[0] for k in recs})
+    print(f"[aggregate] wrote {args.benchmark} ({len(recs)} records; refreshed {local_gpus}; other GPU blocks preserved)")
 
 
 if __name__ == "__main__":

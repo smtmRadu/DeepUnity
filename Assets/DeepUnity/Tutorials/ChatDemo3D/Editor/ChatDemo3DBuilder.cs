@@ -1702,9 +1702,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 "the boss, you foreshadow it with morbid delight — urging the lambkin onward while clearly expecting them to die. " +
                 "Stay in character at all times. Keep your replies to one to three short sentences.");
             SetString(npc, "approach_text", "The pale figure regards you in silence...");
-            // Velmire resets per dialogue (user pick 2026-07-14; was the ContinueWhereLeftOff
-            // arm of the history-mode A/B — both castle NPCs now wipe at chat close)
-            SetEnum(npc, "historyMode", (int)NPCInteractor3D.HistoryMode.ResetEveryTime);
+            // Velmire is the ResumeFromCompact demo (user 2026-07-15): paired with the small
+            // context below, the model auto-compacts its history after a few replies and keeps
+            // talking on the short compacted prefix.
+            SetEnum(npc, "historyMode", (int)NPCInteractor3D.HistoryMode.ResumeFromCompact);
             // small context on purpose (user default 2026-07-15): compaction demos trigger after
             // a few replies; the context bar above the input row makes the fill visible
             SetInt(npc, "maxContextLength", 400);
@@ -1715,14 +1716,15 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             SetEnum(npc, "conversationMode", (int)NPCInteractor3D.ConversationMode.LlmPlusTts);
             // Velmire now speaks through pocket-tts (Kyutai 100M AR, RTF ~0.15 — the DEFAULT NPC
             // TTS): real-time DURING generation, correct name pronunciation, voice cloning.
-            // His voice is CLONED from the Sage Gowry reference clip (precomputed into the shared
+            // His voice is CLONED from the Ansbach reference clip (precomputed into the shared
             // Resources/Cache by the inspector button / bake-all menu — runtime is a pure load);
             // "jean" stays as the baked fallback if the clip or its cache ever goes missing.
             SetEnum(npc, "ttsModel", (int)NPCInteractor3D.TtsModel.PocketTTS);
             SetString(npc, "ttsVoice", "jean");
             SetObject(npc, "clonedVoiceClip", AssetDatabase.LoadAssetAtPath<AudioClip>(
-                "Assets/DeepUnity/Tutorials/ChatDemo3D/Voices/Gowry_1-11s.wav"));
+                "Assets/DeepUnity/Tutorials/ChatDemo3D/Voices/Ansbach_4-15s.mp3"));
             SetFloat(npc, "voicePitch", 1.0f);
+            SetFloat(npc, "voiceVolume", 5f);   // user 2026-07-15
             // residency A/B test: the big transparent-green sphere slow-prefetches Qwen+Kokoro
             // on entry, HOLDS both on the GPU while the player is inside, and unloads both on
             // exit; toggle off in the inspector for contact loading (talk trigger = mini zone)
@@ -1849,6 +1851,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             SetString(npc, "ttsVoice", "jean");
             SetObject(npc, "clonedVoiceClip", AssetDatabase.LoadAssetAtPath<AudioClip>(
                 "Assets/DeepUnity/Tutorials/ChatDemo3D/Voices/FingerReaderEnia_0-15s.mp3"));
+            SetFloat(npc, "voiceVolume", 5f);   // user 2026-07-15 (both castle NPCs at 5)
             return root;
         }
 
