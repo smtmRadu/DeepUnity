@@ -309,6 +309,9 @@ namespace DeepUnity
 
             // Single main-thread consumer: drains the upload queue under the per-frame byte budget.
             // See Gemma3Weights.UploadPump for the design notes.
+            // #31 probes: see Gemma3Weights.EditorUploadPump.
+            internal IEnumerator EditorUploadPump() => UploadPump();
+
             IEnumerator UploadPump()
             {
                 long budget = LLM.UploadBudgetBytes;

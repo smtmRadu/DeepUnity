@@ -233,3 +233,41 @@ keyword: one threadgroup per (token, kv-head) reduces head_dim min/max, packs ui
 dequantize via `kv_unpack8`. Pending: human in-editor validation of decode vs FP32. The Qwen3.5 KV
 disk cache (v2) persists INT8 KV including kScaleZp/vScaleZp, so INT8-cache prompts/conversations
 restore from disk; Gemma's FP32-only cache still recomputes.)
+
+## #31 Coalesced GEMV/GEMM matmul kernels (Qwen 2026-07-14 → Gemma3 + MiniCPM5 2026-07-16)
+
+The original matmul kernels give each OUTPUT ROW one thread that walks the whole K dim serially —
+adjacent threads read weight rows K elements apart, so almost every warp memory transaction is
+wasted (bandwidth-bound GEMVs at ~1/32 efficiency). The coalesced replacements:
+
+- **Decode GEMVs (`*1VecCoal`)** — a 256-thread group owns 8 output rows × 32 lanes. The input
+  vector is staged ONCE in groupshared; each lane reads 4 CONSECUTIVE weights per step (one packed
+  int8 uint / two fp16 uints — coalesced across the warp in every quant), then a 32-lane tree
+  reduction folds each row's partial sums.
+- **Prefill GEMMs (`*GemmCoal`)** — same layout plus 8 tokens per group: the input tile is staged
+  in 128-column chunks and every (coalesced) weight read is reused by all 8 tokens, cutting the
+  "prefill of N ids costs N× a decode token" weight re-read. Requires K % 128 == 0 (all model Ks).
+- Covered ops: Qwen3.5 = DeltaNet in/out projections + MLP + lm_head (Qwen3_5CS); Gemma3-270M +
+  MiniCPM5-1B = QKVProj + OProj + GateUp/Down + lm_head (shared Gemma3CS, dim-agnostic —
+  `GVC_XMAX 4608` = minicpm's mlp intermediate, the largest staged K).
+- `ForceLegacyGemv` (static, per model class) switches back to the legacy kernels for A/B probes.
+
+**Parity** (`GEMV Parity + A-B` menus / `GemmaCpmGemvParityProbe`, logits-level, all 3 quants ×
+both models): decode-only (identical KV state) maxAbs ≤ 4.2e-3, corr ≥ 0.999999994, argmax match;
+full-path (prefill GEMMs too) relative maxAbs ≤ 7.7e-4. Gemma's ABSOLUTE full-path diff (~1.9e-2)
+looks big but is propagation, not error: its √hidden embed scale amplifies tiny KV diffs across
+18 layers while logit magnitude grows the same way — the RELATIVE gate is the meaningful one.
+
+**Measured decode speedups (RTX 4060 Laptop, legacy → coal ms/tok, same run):**
+
+| model | fp16 | int8 | int4 |
+|---|---:|---:|---:|
+| Qwen3.5-0.8B (2026-07-14 A/B) | — | **2.37×** | — |
+| Gemma3-270M | 2.63× | 2.79× | **3.59×** |
+| MiniCPM5-1B | 3.14× | 3.82× | **4.95×** |
+
+int4 gains the most: the legacy int4 tier was ~0.8× SLOWER than fp16 (Q4_0 dequant made the
+wasteful reads even more expensive) — coalesced turns int4 into the FASTEST tier (minicpm 9.9
+ms/tok int4 vs 12.6 fp16), so int4 is no longer "footprint-only". Prefill: gemma fp16 2048-token
+prefill went 417 → 1258 tok/s (3.0×) with the GEMM tiles. Full standard-matrix numbers live in
+BENCHMARK.md Tables 2–4 (refreshed 2026-07-16).

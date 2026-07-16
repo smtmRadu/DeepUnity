@@ -1167,3 +1167,273 @@ void AddResidual(uint3 id : SV_DispatchThreadID)
     if (id.x >= buffer_size) return;
     buf_a[id.x] += buf_b[id.x];
 }
+
+
+// ================================ #31 coalesced decode GEMVs ==================================
+// Ported from Qwen3_5CS (2026-07-16). The legacy 1Vec/thread-per-row kernels give each output row
+// ONE thread that walks the whole K dim serially — adjacent threads read weight rows K apart, so
+// every warp transaction is wasted (the 4060 A/B on qwen: decode 2.37x, the 1650: 5x). Here a
+// 256-thread group owns GVC_ROWS=8 output rows, 32 lanes each: the input vector is staged once in
+// groupshared and each lane reads 4 CONSECUTIVE weights per step (1 packed int8 uint / 2 fp16
+// uints — coalesced across the warp either way), then a 32-lane tree reduction folds the row.
+// Gemma/MiniCPM share this file (dim-agnostic): gemma K max = 2048, minicpm K max = 4608
+// (mlp intermediate) -> GVC_XMAX 4608 (18 KB groupshared). All Ks are %4 == 0.
+// Weight layout note: W_QKV / mlp_weights are CONCATENATED (q|k|v, gate|up|down), so the dot
+// macro takes the row's flat BASE offset and wScale takes the row's position in the concat.
+#pragma kernel QKVProj1VecCoal
+#pragma kernel OProj1VecCoal
+#pragma kernel GateUp1VecCoal
+#pragma kernel Down1VecCoal
+#pragma kernel LmHeadPredict1VecCoal
+
+#define GVC_LANES 32
+#define GVC_ROWS 8
+#define GVC_THREADS 256
+#define GVC_XMAX 4608            // largest decode K (minicpm mlp intermediate); 18 KB groupshared
+groupshared float gvc_x[GVC_XMAX];
+groupshared float gvc_red[GVC_THREADS];
+
+// dot of gvc_x[0..K) with the weight row whose flat element offset is `base`: lane-strided,
+// 4 consecutive elements per step (1 packed uint in int8, 2 in fp16 — consecutive words across
+// lanes either way).
+#define GVC_DOT(accum, W, WS, base, K) { \
+    for (uint hh = lane * 4u; hh < (K); hh += GVC_LANES * 4u) \
+        accum += gvc_x[hh]      * readW(W, WS, (base) + hh) \
+               + gvc_x[hh + 1u] * readW(W, WS, (base) + hh + 1u) \
+               + gvc_x[hh + 2u] * readW(W, WS, (base) + hh + 2u) \
+               + gvc_x[hh + 3u] * readW(W, WS, (base) + hh + 3u); }
+
+// 32-lane tree reduction of gvc_red within this row's lane block; result in gvc_red[rowBase]
+#define GVC_REDUCE(acc) { \
+    gvc_red[tid.x] = acc; GroupMemoryBarrierWithGroupSync(); \
+    [unroll] for (uint ss = 16u; ss > 0u; ss >>= 1u) { \
+        if (lane < ss) gvc_red[tid.x] += gvc_red[tid.x + ss]; \
+        GroupMemoryBarrierWithGroupSync(); } }
+
+#define GVC_STAGE(SRC, K) { \
+    for (uint xx = tid.x; xx < (K); xx += GVC_THREADS) gvc_x[xx] = SRC[xx]; \
+    GroupMemoryBarrierWithGroupSync(); }
+
+[numthreads(GVC_THREADS,1,1)]
+void QKVProj1VecCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (GVC_LANES - 1u);
+    uint row = gid.x * GVC_ROWS + (tid.x >> 5);      // output row = q|k|v concat index
+    GVC_STAGE(X, embedding_dim);
+    float acc = 0.0;
+    if (row < qkv_proj_dim) GVC_DOT(acc, W_QKV, W_QKV_scales, row * embedding_dim, embedding_dim);
+    GVC_REDUCE(acc);
+    if (lane == 0u && row < qkv_proj_dim)
+        QKV[row] = gvc_red[tid.x] * wScale(W_QKV_scales, row);
+}
+
+[numthreads(GVC_THREADS,1,1)]
+void OProj1VecCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (GVC_LANES - 1u);
+    uint row = gid.x * GVC_ROWS + (tid.x >> 5);      // output row = hidden index
+    // decode: AttendedValues is [1, heads*head_dim] = inner_embedding_dim contiguous floats
+    GVC_STAGE(AttendedValues, inner_embedding_dim);
+    float acc = 0.0;
+    if (row < embedding_dim) GVC_DOT(acc, W_O, W_O_scales, row * inner_embedding_dim, inner_embedding_dim);
+    GVC_REDUCE(acc);
+    if (lane == 0u && row < embedding_dim)
+        O[row] = gvc_red[tid.x] * wScale(W_O_scales, row);
+}
+
+[numthreads(GVC_THREADS,1,1)]
+void GateUp1VecCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (GVC_LANES - 1u);
+    uint row = gid.x * GVC_ROWS + (tid.x >> 5);      // output row = intermediate index
+    GVC_STAGE(input, hidden_size);
+    float ag = 0.0, au = 0.0;
+    if (row < intermediate_size)
+    {
+        GVC_DOT(ag, mlp_weights, mlp_scales, row * hidden_size, hidden_size);
+        GVC_DOT(au, mlp_weights, mlp_scales, hidden_size * intermediate_size + row * hidden_size, hidden_size);
+    }
+    GVC_REDUCE(ag);
+    float g = gvc_red[tid.x & ~(GVC_LANES - 1u)];
+    GroupMemoryBarrierWithGroupSync();
+    GVC_REDUCE(au);
+    if (lane == 0u && row < intermediate_size)
+    {
+        float u = gvc_red[tid.x];
+        g *= wScale(mlp_scales, row);                       // gate rows [0, I)
+        u *= wScale(mlp_scales, intermediate_size + row);   // up rows   [I, 2I)
+        intermediate[row] = (activation_type == 0) ? silu(g) * u : gelu(g) * u;
+    }
+}
+
+[numthreads(GVC_THREADS,1,1)]
+void Down1VecCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (GVC_LANES - 1u);
+    uint row = gid.x * GVC_ROWS + (tid.x >> 5);      // output row = hidden index
+    GVC_STAGE(intermediate, intermediate_size);
+    float acc = 0.0;
+    if (row < hidden_size)
+        GVC_DOT(acc, mlp_weights, mlp_scales,
+                2u * hidden_size * intermediate_size + row * intermediate_size, intermediate_size);
+    GVC_REDUCE(acc);
+    if (lane == 0u && row < hidden_size)
+        input[row] = gvc_red[tid.x] * wScale(mlp_scales, 2u * intermediate_size + row);   // down rows [2I, 2I+H)
+}
+
+[numthreads(GVC_THREADS,1,1)]
+void LmHeadPredict1VecCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (GVC_LANES - 1u);
+    uint row = gid.x * GVC_ROWS + (tid.x >> 5);      // output row = vocab index
+    GVC_STAGE(lm_input, hidden_size);
+    float acc = 0.0;
+    if (row < vocab_size)                             // lm_head always fp16 (readH, no scales)
+    {
+        uint bse = row * hidden_size;
+        for (uint hh = lane * 4u; hh < hidden_size; hh += GVC_LANES * 4u)
+            acc += gvc_x[hh]      * readH(lm_weights, bse + hh)
+                 + gvc_x[hh + 1u] * readH(lm_weights, bse + hh + 1u)
+                 + gvc_x[hh + 2u] * readH(lm_weights, bse + hh + 2u)
+                 + gvc_x[hh + 3u] * readH(lm_weights, bse + hh + 3u);
+    }
+    GVC_REDUCE(acc);
+    if (lane == 0u && row < vocab_size) lm_output[row] = gvc_red[tid.x];
+}
+
+// ================================ #31 coalesced prefill GEMMs ==================================
+// The legacy batch kernels give each (token, output-row) pair its own thread — every token re-reads
+// the full weight matrix. Here a group owns 8 output rows x 8 tokens: the input tile is staged in
+// groupshared in 128-column chunks and every (coalesced) weight read is reused by all 8 tokens.
+// Same logits-level parity gate as the decode GEMVs. Requires K % 128 == 0 (all gemma/minicpm Ks:
+// 640/1024/1536/2048/4608).
+#pragma kernel QKVProjGemmCoal
+#pragma kernel OProjGemmCoal
+#pragma kernel GateUpGemmCoal
+#pragma kernel DownGemmCoal
+
+#define GMM_TOK 8
+#define GMM_CHUNK 128
+groupshared float gmm_x[GMM_TOK * GMM_CHUNK];
+
+// acc[GMM_TOK] += (4 consecutive weights of the row at flat base `base`, chunk offset h0) x
+// (staged tokens). Each lane owns 4 consecutive columns of the 128-column chunk (32x4 = 128).
+#define GMM_STEP(acc, W, WS, base, h0) { \
+    uint bse = (base) + (h0) + lane * 4u; \
+    float w0 = readW(W, WS, bse), w1 = readW(W, WS, bse + 1u), \
+          w2 = readW(W, WS, bse + 2u), w3 = readW(W, WS, bse + 3u); \
+    [unroll] for (uint t = 0; t < GMM_TOK; t++) { \
+        uint xb = t * GMM_CHUNK + lane * 4u; \
+        acc[t] += gmm_x[xb] * w0 + gmm_x[xb + 1u] * w1 + gmm_x[xb + 2u] * w2 + gmm_x[xb + 3u] * w3; } }
+
+#define GMM_STAGE(SRC, K, seqN, h0) { \
+    for (uint i = tid.x; i < GMM_TOK * GMM_CHUNK; i += GVC_THREADS) { \
+        uint tt = i >> 7; uint hh = i & (GMM_CHUNK - 1u); uint tok = t0 + tt; \
+        gmm_x[i] = tok < (seqN) ? SRC[tok * (K) + (h0) + hh] : 0.0; } \
+    GroupMemoryBarrierWithGroupSync(); }
+
+[numthreads(GVC_THREADS,1,1)]
+void QKVProjGemmCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (GVC_LANES - 1u);
+    uint row = gid.x * GVC_ROWS + (tid.x >> 5);
+    uint t0 = gid.y * GMM_TOK;
+    float acc[GMM_TOK];
+    [unroll] for (uint z = 0; z < GMM_TOK; z++) acc[z] = 0.0;
+    for (uint h0 = 0; h0 < embedding_dim; h0 += GMM_CHUNK)
+    {
+        GMM_STAGE(X, embedding_dim, sequence_length_q, h0);
+        if (row < qkv_proj_dim) GMM_STEP(acc, W_QKV, W_QKV_scales, row * embedding_dim, h0);
+        GroupMemoryBarrierWithGroupSync();
+    }
+    for (uint t = 0; t < GMM_TOK; t++)   // NOT [unroll]: fxc mis-schedules barriers in unrolled loops
+    {
+        GVC_REDUCE(acc[t]);
+        if (lane == 0u && row < qkv_proj_dim && t0 + t < sequence_length_q)
+            QKV[(t0 + t) * qkv_proj_dim + row] = gvc_red[tid.x] * wScale(W_QKV_scales, row);
+        GroupMemoryBarrierWithGroupSync();
+    }
+}
+
+[numthreads(GVC_THREADS,1,1)]
+void OProjGemmCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (GVC_LANES - 1u);
+    uint row = gid.x * GVC_ROWS + (tid.x >> 5);
+    uint t0 = gid.y * GMM_TOK;
+    float acc[GMM_TOK];
+    [unroll] for (uint z = 0; z < GMM_TOK; z++) acc[z] = 0.0;
+    // AttendedValues is [t, heads*head_dim] = [t, inner_embedding_dim] flat — GMM_STAGE-compatible
+    for (uint h0 = 0; h0 < inner_embedding_dim; h0 += GMM_CHUNK)
+    {
+        GMM_STAGE(AttendedValues, inner_embedding_dim, sequence_length_q, h0);
+        if (row < embedding_dim) GMM_STEP(acc, W_O, W_O_scales, row * inner_embedding_dim, h0);
+        GroupMemoryBarrierWithGroupSync();
+    }
+    for (uint t = 0; t < GMM_TOK; t++)   // NOT [unroll]: fxc mis-schedules barriers in unrolled loops
+    {
+        GVC_REDUCE(acc[t]);
+        if (lane == 0u && row < embedding_dim && t0 + t < sequence_length_q)
+            O[(t0 + t) * embedding_dim + row] = gvc_red[tid.x] * wScale(W_O_scales, row);
+        GroupMemoryBarrierWithGroupSync();
+    }
+}
+
+[numthreads(GVC_THREADS,1,1)]
+void GateUpGemmCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (GVC_LANES - 1u);
+    uint row = gid.x * GVC_ROWS + (tid.x >> 5);
+    uint t0 = gid.y * GMM_TOK;
+    float ag[GMM_TOK], au[GMM_TOK];
+    [unroll] for (uint z = 0; z < GMM_TOK; z++) { ag[z] = 0.0; au[z] = 0.0; }
+    for (uint h0 = 0; h0 < hidden_size; h0 += GMM_CHUNK)
+    {
+        GMM_STAGE(input, hidden_size, seq_len, h0);
+        if (row < intermediate_size)
+        {
+            GMM_STEP(ag, mlp_weights, mlp_scales, row * hidden_size, h0);
+            GMM_STEP(au, mlp_weights, mlp_scales, hidden_size * intermediate_size + row * hidden_size, h0);
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    for (uint t = 0; t < GMM_TOK; t++)   // NOT [unroll]: fxc mis-schedules barriers in unrolled loops
+    {
+        GVC_REDUCE(ag[t]);
+        float g = gvc_red[tid.x & ~(GVC_LANES - 1u)];
+        GroupMemoryBarrierWithGroupSync();
+        GVC_REDUCE(au[t]);
+        if (lane == 0u && row < intermediate_size && t0 + t < seq_len)
+        {
+            float gg = g * wScale(mlp_scales, row);
+            float uu = gvc_red[tid.x] * wScale(mlp_scales, intermediate_size + row);
+            intermediate[(t0 + t) * intermediate_size + row] = (activation_type == 0) ? silu(gg) * uu : gelu(gg) * uu;
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+}
+
+[numthreads(GVC_THREADS,1,1)]
+void DownGemmCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (GVC_LANES - 1u);
+    uint row = gid.x * GVC_ROWS + (tid.x >> 5);
+    uint t0 = gid.y * GMM_TOK;
+    float acc[GMM_TOK];
+    [unroll] for (uint z = 0; z < GMM_TOK; z++) acc[z] = 0.0;
+    for (uint h0 = 0; h0 < intermediate_size; h0 += GMM_CHUNK)
+    {
+        GMM_STAGE(intermediate, intermediate_size, seq_len, h0);
+        if (row < hidden_size)
+            GMM_STEP(acc, mlp_weights, mlp_scales,
+                     2u * hidden_size * intermediate_size + row * intermediate_size, h0);
+        GroupMemoryBarrierWithGroupSync();
+    }
+    for (uint t = 0; t < GMM_TOK; t++)   // NOT [unroll]: fxc mis-schedules barriers in unrolled loops
+    {
+        GVC_REDUCE(acc[t]);
+        if (lane == 0u && row < hidden_size && t0 + t < seq_len)
+            input[(t0 + t) * hidden_size + row] = gvc_red[tid.x] * wScale(mlp_scales, 2u * intermediate_size + row);
+        GroupMemoryBarrierWithGroupSync();
+    }
+}

@@ -130,3 +130,4 @@ Assets/DeepUnity/**/harness~/bin/
 
 # local editor batch-build logs
 /chatdemo2d_*.log
+unsloth_compiled_cache/
