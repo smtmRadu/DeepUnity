@@ -133,3 +133,125 @@ ALL PASS, 0 errors, voice audible during Qwen generation.
 
 Rollback story: any failure → flip `KokoroModel.FastKernels2 = false` (one static; v1
 behavior is byte-for-byte the #26 dispatch list) and report which gate + which kernel row.
+
+---
+
+# Round 2 (#33-R2) — predictor biLSTM stack ON GPU (`FastKernels3`)
+
+Round-1 landed (v0.15.7, 31/31 PASS, generator 199→95 ms, bert 44→18, tenc hidden) and
+left the CPU predictor LSTM chain as the editor wall: **pred 844–894 ms/chunk on Mono**
+(10–15 ms IL2CPP). Round 2 moves the whole `pred` stage — DurationEncoder (3× biLSTM +
+AdaLayerNorm), the duration-head biLSTM + `dur_proj`, and the shared biLSTM — onto the
+GPU behind `KokoroModel.FastKernels3` (default ON, layered on FastKernels2; the KokoroCPU
+path stays intact as the A/B fallback and the parity oracle).
+
+## R2.1 Design
+
+**Two-kernel LSTM, mirroring the oracle's own two-phase split** (KokoroCPU.BiLstm =
+parallel input projection + sequential recurrence):
+
+- **`LstmInProjTile`** — `pre[t,r] = (bih[r]+bhh[r]) + wih[r,:]·x'(t,:)`, r in [0,1024).
+  A LinearTileBias2 clone (32 tokens × 64 rows, both operands staged, each weight read
+  reused 32× — naive per-(t,r) threading would have re-streamed the 1.25 MB wih T times)
+  with the LSTM input rule fused into the X staging: `lstm_cat_dim` appends the 128-d
+  style vector from `buf_b` (CatStyle never materialized), `lstm_gather` indexes rows
+  through `gather_idx` (the `en = d@aln` alignment expansion fused into the shared-LSTM
+  read — no [F,640] en buffer exists at all). Dual bias via new `W_bias2` (bhh); bias-sum
+  first then k-ascending, the oracle's order.
+- **`LstmBiRecur`** — the persistent recurrent half: ONE dispatch, **2 groups** (gid.x =
+  fwd/bwd — bwd walks t = T-1..0), timesteps looped in-kernel. 256 threads/group; thread
+  i owns hidden unit i = gate rows {i, 256+i, 512+i, 768+i} (torch i,f,g,o), so all four
+  gates accumulate in registers and the cell state c never leaves a register; only
+  h[256] is groupshared, swapped with 2 barriers/step. Per step each thread streams its
+  4 whh rows (j-ascending, packed-word-unrolled; the 512 KB whh stays L2-resident across
+  steps on both the 4060 and the 1650) against broadcast h[j] reads. Gate math =
+  `c = σ(f)·c + σ(i)·tanh(g); h = σ(o)·tanh(c)` — RunLstmDir verbatim (HLSL exp/tanh vs
+  the oracle's double Math.Exp/Tanh; recurrence is contractive, gated at 1e-3).
+- **AdaLayerNorm** = `LayerNormCoop` with new `ln_style=1`: affine from the style fc's
+  fp32 [2C] ((1+γ)·LN_noaffine + β, eps 1e-5) instead of fp16 ln_gamma/ln_beta.
+- **`TransposeRC`** — shared-LSTM rows [F,512] → channel-major xf [512,F] (replaces the
+  CPU transpose + upload).
+
+**What stays CPU (deliberately):** the duration head's sigmoid-sum — the GPU computes
+`dur_proj` logits and reads back only [T,50]; the **double-precision** sigmoid-sum,
+`/speed`, round-half-even and clamp run as verbatim oracle code (rounding feeds the
+alignment; keeping it bit-identical to KokoroCPU.DurationHead means pred_dur can only
+differ through ~1e-6 logit noise at exact .5 boundaries — covered by the existing D
+gate's exact-or-±1≤2 provision). Plus the integer frame2tok build (µs). The **tenc
+biLSTM** and **NSF source** stay on worker Tasks (see R2.4).
+
+**Pipeline shape under v3:** the d_en readback disappears (the durenc chain reads dEnBuf
+directly); the bert scratch (qB/kB/atB, free after benc) hosts the [T,512] chain; new
+grow-only `lstmPreF/lstmPreR` [max(T,F)×1024] hold the input projections. `BertMs` is
+now dispatch-issue wall only (no sync point) — `PredictorMs` still covers everything up
+to asr; `PredCpuMs` = GPU durenc/head wall + [T,50] readback + CPU head.
+
+**Weights:** zero loader changes — KokoroWeights already uploads every manifest tensor,
+including all LSTM sets (fp16 packed, torch layouts); its header comment was the only
+edit. int8 export unaffected (LSTM tensors are f16 in both exports per INT8_NOTES).
+
+## R2.2 Expected impact (both targets, honestly)
+
+- **Editor (Mono):** the ~850 ms CPU-LSTM wall per chunk is replaced by GPU work
+  estimated at **~5–20 ms** (in-proj ≈ 1.3 GMAC/chunk tiled + 10 persistent recur
+  dispatches whose wall is T × per-step latency, ~0.2–0.5 ms per LSTM at T≈200) →
+  editor chunk time should drop from ~1.0–1.2 s to **GPU-bound ~150–250 ms**
+  (t2-shaped: bert 18 + pred GPU + decoder ~15 + generator ~95 + readbacks).
+- **IL2CPP builds:** roughly **unchanged wall** (the SIMD CPU LSTM was already
+  10–15 ms) but the predictor becomes CPU-free — those cores go back to the game (and
+  to the tenc/NSF tasks), and the pipeline loses a readback→CPU→upload sync pair.
+- Recur occupancy is 2 threadgroups by design (serial dependency) — latency we pay, not
+  throughput; the 1650 pays ~the same microseconds per step as the 4060 (L2-resident
+  whh, latency-bound loop), so the ABSOLUTE pred cost stays small on the low-end tier.
+
+## R2.3 What changed on disk (round 2)
+
+- `KokoroCS.compute` — uniforms `ln_style`, `lstm_cat_dim`, `lstm_gather`; buffers `W2`,
+  `W_bias2`; kernels `LstmInProjTile`, `LstmBiRecur`, `TransposeRC`; `LayerNormCoop`
+  styled-affine branch. All 28 kernels dxc-verified (`cs_6_0`).
+- `KokoroModel.cs` — `FastKernels3`; `LstmBiY` / `AdaLayerNormOp` / `TransposeOp`
+  helpers (public, probe-graded); v3 predictor block in ForwardYielding (CPU Task path
+  intact under the else); `lstmPreF/R` scratch; `ln_style` stale-uniform guards on the
+  LN helpers; timing-field doc updates.
+- `KokoroWeights.cs` — comment only (LSTM GPU copies now consumed).
+- `KokoroKernelProbe.cs` — `fastKernels3` flag, routing line, part-A tests
+  **14a LstmBiY durenc0 (cat)**, **14b LstmBiY shared (gather+cat)**,
+  **14c AdaLayerNorm**, **14d TransposeRC** — all vs the KokoroCPU oracle on real fp16
+  weights, maxabs < 1e-3.
+- `KokoroKernelBatchRunner.cs` — menu `Run Kokoro Kernel Probe V2 (FastKernels3 off)`;
+  V1/LEGACY menus force the lower tiers off too.
+
+## R2.4 Next targets (diagnosed, NOT done)
+
+- **NSF source (CPU, nsf-wait 66–86 ms in round 1):** with pred on GPU it starts earlier
+  (F0 readback lands sooner) and must hide behind decoder + generator (~110 ms GPU); if
+  `NsfWaitMs` stays > ~10 ms in the round-2 numbers, the sine-gen phase pipeline is the
+  next persistent-kernel candidate — but it is also the RNG parity-injection home, so it
+  moves only with a dump-injected GPU-RNG plan.
+- **tenc biLSTM (CPU, overlapped):** trivially routable through the same kernels
+  (in_dim = cat_dim = 512, no gather, + two TransposeRC) if `TencCpuMs` ever surfaces;
+  left CPU to keep round 2's blast radius on the measured bottleneck.
+
+## R2.5 Validation checklist (round 2 — replaces gate 1 above)
+
+1. **Compile** — files in R2.3 only.
+2. **Kernel + stage probe, four-way bisect** (report header prints
+   `kernel routing: v3 (#33 GPU-LSTM) / v2 / v1 / LEGACY`):
+   - `DeepUnity/TTS/Run Kokoro Kernel Probe` (v3, default) — expect **35/35 PASS**
+     (round-1 rows + 14a–d) at maxabs < 1e-3; stage gates unchanged incl.
+     **pred_dur exact (or ±1 on ≤2 tokens)** on t0/t1/t2 and **t0 wav ≥ 0.99**;
+   - `... V2 (FastKernels3 off)` — round-1 behavior untouched (31/31);
+   - `... V1 (FastKernels2 off)` and `... LEGACY` — still PASS;
+   - batch: `KokoroKernelBatchRunner.Run` (v3 defaults, exit 0/1/2).
+3. **The number that matters** — `[perf]` per text, v3 vs v2: pred CPU wall 844–894 ms →
+   expect **PredCpuMs ≲ 20 ms** and the predictor stage GPU-bound; **end-to-end editor
+   ~1.0–1.2 s → ~150–250 ms**. Record `nsf-wait` — if > ~10 ms, R2.4 is next.
+4. **Duration integrity** (the user-facing risk): the probe already gates pred_dur vs
+   the dumps; ALSO diff v3-vs-v2 pred_dur on the same texts (run both modes, compare the
+   reports' pred_dur lines — must match exactly, else flag the boundary token count).
+5. **Audio + pacing**: listen `ProbeLogs/kokoro_gpu_t0.wav` (v3 run); QwenKokoroPerfProbe
+   int8 — D2 speak-alone ≤ round-1 frame stats (the predictor no longer competes with
+   Unity's main/worker threads at all), B/C2 unchanged.
+6. **1650**: same v3/v2 probe pair — record per-stage + RTF; expect the pred stage to be
+   nearly as cheap in absolute ms as on the 4060 (latency-bound persistent loop).
+7. Rollback: `KokoroModel.FastKernels3 = false` restores round-1 v2 byte-for-byte.

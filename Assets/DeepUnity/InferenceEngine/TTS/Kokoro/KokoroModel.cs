@@ -22,6 +22,12 @@ namespace DeepUnity
         // concurrently with the predictor's CPU stage instead of serially after the F0/N
         // stacks; the F0 readback is requested before the N stack is issued (earlier NSF
         // start). BertMs therefore includes the (cheap) tenc dispatches under v2.
+        // FastKernels3 (#33 round 2) moves the PREDICTOR biLSTM stack onto the GPU
+        // (LstmInProjTile + persistent LstmBiRecur; AdaLayerNorm via LayerNormCoop ln_style):
+        // the d_en readback and the CPU predictor Task disappear — the only CPU left in the
+        // predictor is the exact duration head (double sigmoid-sum + round, [T,50] logits
+        // readback) and the integer alignment build. The tenc biLSTM and the NSF source stay
+        // on KokoroCPU worker Tasks (hybrid boundary; both overlap GPU stages).
         //
         // Layouts match KokoroCPU exactly: PLBERT buffers are [T,C] row-major, everything
         // conv-side is [C,T] channel-major (channel concat = contiguous CopySlice).
@@ -44,6 +50,7 @@ namespace DeepUnity
                 kGather, kSnake, kStft, kIstft, kCopySlice, kAdd, kAddScale, kScale;
             int kLinearT2, kLinearT2Q8, kConvTile, kConvTFast, kINStats;
             int kConvTile2, kLNCoop;
+            int kLstmInProj, kLstmRecur, kTranspose;
 
             /// <summary>Routes the optimized kernels (LinearTileBias2[Q8], Conv1DTile with the
             /// fused AdaIN+Snake/LeakyReLU X-prologue, InstanceNormStats, ConvTranspose1DFast).
@@ -64,6 +71,19 @@ namespace DeepUnity
             /// #31 GEMVs). Probes bisect three ways: v2 / v1 (this off) / legacy (both off).</summary>
             public static bool FastKernels2 = true;
 
+            /// <summary>#33 round 2 (only active on top of FastKernels+FastKernels2): the
+            /// predictor biLSTM stack runs ON GPU — DurationEncoder (3x biLSTM+AdaLayerNorm),
+            /// duration-head biLSTM + dur_proj, and the shared biLSTM (alignment gather + style
+            /// cat fused into its input read) via LstmInProjTile (tiled input-projection GEMM)
+            /// + LstmBiRecur (persistent 2-group step loop, h in groupshared, c in registers).
+            /// The d_en readback and the CPU predictor Task disappear; only the exact oracle
+            /// duration head (double-precision sigmoid-sum + round-half-even, KokoroCPU
+            /// .DurationHead) and the integer alignment build stay CPU (reads back [T,50]
+            /// logits). false = the v2 CPU predictor path (KokoroCPU worker Task) — the
+            /// A/B fallback and the parity oracle. NOTE: under v3 BertMs is dispatch-issue
+            /// wall only (no d_en sync point); PredictorMs still covers bert-GPU + predictor.</summary>
+            public static bool FastKernels3 = true;
+
             // persistent small buffers
             ComputeBuffer idsBuf, styleSdBuf, styleSpBuf, styleG1Buf, styleG2Buf;
             ComputeBuffer statsBuf;      // InstanceNormStats out [2C], C <= 1090 (fused AdaIN)
@@ -75,6 +95,8 @@ namespace DeepUnity
             ComputeBuffer gatherBuf;     // uint time indices (frame2tok / reflection pad)
             // generator scratch (sized by F, the big ones)
             ComputeBuffer gX, gSrc, gT1, gT2, gAcc, gTmp, harBuf, harCatBuf, wavBuf;
+            // v3 GPU-LSTM input projections [max(T,F), 1024] per direction (grow-only)
+            ComputeBuffer lstmPreF, lstmPreR;
 
             int curF;
             const float RSQRT2 = 0.70710678f;
@@ -93,7 +115,10 @@ namespace DeepUnity
             /// <summary>Wall-clock stage timings of the last forward (ms). EndToEnd includes the
             /// final wav readback = true ids-in -> samples-out latency. PredCpuMs/TencCpuMs are
             /// the CPU biLSTM worker-task waits inside PredictorMs; NsfWaitMs is how long the
-            /// generator stalled on the CPU NSF source (0 when it fully overlapped the decoder).</summary>
+            /// generator stalled on the CPU NSF source (0 when it fully overlapped the decoder).
+            /// Under FastKernels3: BertMs is dispatch-issue wall only (the d_en sync point is
+            /// gone) and PredCpuMs = GPU durenc/head wall + the [T,50] logits readback + the
+            /// CPU duration head (the biLSTMs themselves are GPU).</summary>
             public float BertMs, PredictorMs, DecoderMs, GeneratorMs, EndToEndMs;
             public float PredCpuMs, TencCpuMs, NsfWaitMs;
 
@@ -133,9 +158,13 @@ namespace DeepUnity
                 kINStats = cs.FindKernel("InstanceNormStats");
                 kConvTile2 = cs.FindKernel("Conv1DTile2");
                 kLNCoop = cs.FindKernel("LayerNormCoop");
+                kLstmInProj = cs.FindKernel("LstmInProjTile");
+                kLstmRecur = cs.FindKernel("LstmBiRecur");
+                kTranspose = cs.FindKernel("TransposeRC");
 
                 const int T = 512;                        // ALBERT max_position_embeddings
                 idsBuf = New(T);
+                lstmPreF = New(T * 1024); lstmPreR = New(T * 1024);   // grown to F by scratch
                 gatherBuf = New(1);                       // grown by EnsureFrameScratch
                 styleSdBuf = New(128); styleSpBuf = New(128);
                 styleG1Buf = New(2 * 1090); styleG2Buf = New(2 * 1090);
@@ -176,6 +205,7 @@ namespace DeepUnity
                 Grow(ref gX, gen); Grow(ref gSrc, gen); Grow(ref gT1, gen); Grow(ref gT2, gen);
                 Grow(ref gAcc, gen); Grow(ref gTmp, gen);
                 Grow(ref harBuf, 600 * F); Grow(ref harCatBuf, 22 * frames); Grow(ref wavBuf, 600 * F);
+                Grow(ref lstmPreF, 1024 * F); Grow(ref lstmPreR, 1024 * F);   // v3 shared biLSTM
             }
 
             // ================= generic op helpers (public: graded by KokoroKernelProbe) =========
@@ -234,8 +264,9 @@ namespace DeepUnity
                 cs.SetBuffer(k, "ln_beta", weights.Get(name + ".b"));
                 if (k == kLNCoop)
                 {
-                    cs.SetInt("ln_add", 0);
+                    cs.SetInt("ln_add", 0); cs.SetInt("ln_style", 0);
                     cs.SetBuffer(k, "buf_b", x);              // never read at ln_add 0
+                    cs.SetBuffer(k, "style_gb", statsBuf);    // never read at ln_style 0
                     cs.Dispatch(k, positions, 1, 1);
                 }
                 else
@@ -252,13 +283,80 @@ namespace DeepUnity
                 cs.SetInt("seq_len", positions); cs.SetInt("norm_dim", C);
                 cs.SetFloat("norm_eps", eps);
                 cs.SetInt("ln_pos_stride", posStride); cs.SetInt("ln_ch_stride", chStride);
-                cs.SetInt("ln_add", 1);
+                cs.SetInt("ln_add", 1); cs.SetInt("ln_style", 0);
                 cs.SetBuffer(kLNCoop, "norm_input", x);
                 cs.SetBuffer(kLNCoop, "buf_b", res);
                 cs.SetBuffer(kLNCoop, "norm_output", y);
                 cs.SetBuffer(kLNCoop, "ln_gamma", weights.Get(name + ".w"));
                 cs.SetBuffer(kLNCoop, "ln_beta", weights.Get(name + ".b"));
+                cs.SetBuffer(kLNCoop, "style_gb", statsBuf);  // never read at ln_style 0
                 cs.Dispatch(kLNCoop, positions, 1, 1);
+            }
+
+            /// <summary>FastKernels3-only: AdaLayerNorm (SPEC §4.1) — [gamma|beta] = fc(s_p),
+            /// out rows = (1+gamma)·LN_noaffine(x, eps 1e-5) + beta. LayerNormCoop with
+            /// ln_style = 1; x/y are [T,512] row-major (KokoroCPU.AdaLayerNorm oracle).</summary>
+            public void AdaLayerNormOp(string fcName, ComputeBuffer styleVec, ComputeBuffer x,
+                                       ComputeBuffer y, int T, int C)
+            {
+                StyleFc(fcName, styleVec, styleG1Buf);
+                cs.SetInt("seq_len", T); cs.SetInt("norm_dim", C); cs.SetFloat("norm_eps", 1e-5f);
+                cs.SetInt("ln_pos_stride", C); cs.SetInt("ln_ch_stride", 1);
+                cs.SetInt("ln_add", 0); cs.SetInt("ln_style", 1);
+                cs.SetBuffer(kLNCoop, "norm_input", x);
+                cs.SetBuffer(kLNCoop, "buf_b", x);                        // never read (ln_add 0)
+                cs.SetBuffer(kLNCoop, "norm_output", y);
+                cs.SetBuffer(kLNCoop, "style_gb", styleG1Buf);
+                cs.SetBuffer(kLNCoop, "ln_gamma", weights.Get(fcName + ".w"));   // never read
+                cs.SetBuffer(kLNCoop, "ln_beta", weights.Get(fcName + ".w"));    // (ln_style 1)
+                cs.Dispatch(kLNCoop, T, 1, 1);
+            }
+
+            /// <summary>FastKernels3-only: torch bidirectional 1-layer LSTM (H=256/dir, gates
+            /// i,f,g,o — the KokoroCPU.BiLstm oracle) fully on GPU. Phase 1: LstmInProjTile
+            /// GEMM per direction -> pre[t,r] = bih+bhh + wih·x' (the CatStyle 128-d style
+            /// tail and the optional en-alignment gather are fused into the input read — x is
+            /// always a [rows, catDim] row-major buffer, style from styleVec, row indices from
+            /// gatherIdx when gather). Phase 2: LstmBiRecur — ONE dispatch, 2 persistent groups
+            /// (fwd/bwd), T steps looped in-kernel. y = [T,512] rows (fwd 0-255 | bwd 256-511).
+            /// gatherIdx null -> the internal frame2tok buffer (runtime path).</summary>
+            public IEnumerator LstmBiY(string prefix, ComputeBuffer x, int catDim, int inDim,
+                                       ComputeBuffer styleVec, bool gather, int T, ComputeBuffer y,
+                                       ComputeBuffer gatherIdx = null)
+            {
+                cs.SetInt("seq_len", T); cs.SetInt("in_dim", inDim); cs.SetInt("out_dim", 1024);
+                cs.SetInt("lstm_cat_dim", catDim); cs.SetInt("lstm_gather", gather ? 1 : 0);
+                foreach (bool rev in new[] { false, true })
+                {
+                    string sfx = rev ? "_r" : "";
+                    ComputeBuffer pre = rev ? lstmPreR : lstmPreF;
+                    cs.SetBuffer(kLstmInProj, "X", x);
+                    cs.SetBuffer(kLstmInProj, "buf_b", styleVec ?? statsBuf);
+                    cs.SetBuffer(kLstmInProj, "gather_idx", gatherIdx ?? gatherBuf);
+                    cs.SetBuffer(kLstmInProj, "W", weights.Get($"{prefix}/wih{sfx}"));
+                    cs.SetBuffer(kLstmInProj, "W_bias", weights.Get($"{prefix}/bih{sfx}"));
+                    cs.SetBuffer(kLstmInProj, "W_bias2", weights.Get($"{prefix}/bhh{sfx}"));
+                    cs.SetBuffer(kLstmInProj, "Y", pre);
+                    cs.Dispatch(kLstmInProj, 1024 / 64, (T + 31) / 32, 1);
+                }
+                if (Tick(2L * T * 1024 * inDim)) yield return null;
+                cs.SetInt("seq_len", T);           // re-set after the yield (shared cs instance)
+                cs.SetBuffer(kLstmRecur, "X", lstmPreF);
+                cs.SetBuffer(kLstmRecur, "buf_b", lstmPreR);
+                cs.SetBuffer(kLstmRecur, "W", weights.Get($"{prefix}/whh"));
+                cs.SetBuffer(kLstmRecur, "W2", weights.Get($"{prefix}/whh_r"));
+                cs.SetBuffer(kLstmRecur, "Y", y);
+                cs.Dispatch(kLstmRecur, 2, 1, 1);
+                if (Tick(2L * T * 1024 * 256)) yield return null;
+            }
+
+            /// <summary>Y [C,T] = transpose of X [T,C] (shared-LSTM rows -> channel-major xf).</summary>
+            public void TransposeOp(ComputeBuffer x, ComputeBuffer y, int T, int C)
+            {
+                cs.SetInt("seq_len", T); cs.SetInt("in_dim", C);
+                cs.SetBuffer(kTranspose, "X", x);
+                cs.SetBuffer(kTranspose, "Y", y);
+                cs.Dispatch(kTranspose, Div256(T * C), 1, 1);
             }
 
             public void EmbedAlbert(ComputeBuffer y, int T)
@@ -816,6 +914,7 @@ namespace DeepUnity
                 styleSdBuf.SetData(sd);
                 styleSpBuf.SetData(sp);
                 bool v2 = FastKernels && FastKernels2;
+                bool v3 = v2 && FastKernels3;      // predictor biLSTMs on GPU
 
                 // ---------------- TextEncoder convs FIRST (v2) ----------------------------------
                 // The tenc branch depends only on ids: issuing its convs + readback BEFORE
@@ -874,17 +973,23 @@ namespace DeepUnity
                 if (stages != null) stages.bertDur = ReadNow(bA, T * 768);
                 Linear("benc", bA, dEnBuf, T, 768, 512);                          // d_en rows [T,512]
 
-                // ---------------- CPU: DurationEncoder + head + alignment + shared biLSTM -------
+                // ---------------- predictor: DurationEncoder + head + alignment + shared biLSTM -
+                // v3 (FastKernels3): the biLSTMs run ON GPU (LstmBiY) straight off dEnBuf — no
+                // d_en readback, no CPU predictor Task. Otherwise: readback -> KokoroCPU Task.
                 float[] dEnRows = null;
-                var rb1 = ReadbackYielding(dEnBuf, T * 512, a => dEnRows = a);
-                while (rb1.MoveNext()) yield return rb1.Current;
-                BertMs = (float)swAll.Elapsed.TotalMilliseconds;
+                if (!v3)
+                {
+                    var rb1 = ReadbackYielding(dEnBuf, T * 512, a => dEnRows = a);
+                    while (rb1.MoveNext()) yield return rb1.Current;
+                }
+                BertMs = (float)swAll.Elapsed.TotalMilliseconds;   // v3: issue-wall only (no sync)
 
                 float[] d = null, duration = null, sh = null;
                 int[] predDur = null, frame2tok = null;
                 int F = 0;
                 Exception cpuErr = null;
-                var predTask = Task.Run(() =>
+                Task predTask = null;
+                if (!v3) predTask = Task.Run(() =>
                 {
                     try
                     {
@@ -924,8 +1029,63 @@ namespace DeepUnity
                     tencTask = Task.Run(tencWork);
                 }
                 var swCpu = System.Diagnostics.Stopwatch.StartNew();
-                while (!predTask.IsCompleted) yield return null;
-                PredCpuMs = (float)swCpu.Elapsed.TotalMilliseconds;
+                if (v3)
+                {
+                    // ---- GPU DurationEncoder chain (SPEC §4.1) off dEnBuf; bert scratch
+                    //      qB/kB/atB is free after benc and hosts the [T,512] chain ----------
+                    ComputeBuffer z = dEnBuf;
+                    for (int i = 0; i < 3; i++)
+                    {
+                        var lb = LstmBiY($"pred/durenc/lstm{i}", z, 512, 640, styleSpBuf,
+                                         false, T, atB);
+                        while (lb.MoveNext()) yield return lb.Current;
+                        ComputeBuffer nz = (i & 1) == 0 ? qB : kB;
+                        AdaLayerNormOp($"pred/durenc/adaln{i}_fc", styleSpBuf, atB, nz, T, 512);
+                        z = nz;
+                    }
+                    // ---- duration head (SPEC §4.2): GPU biLSTM + dur_proj logits; the EXACT
+                    //      oracle head (double sigmoid-sum, round-half-even, clamp) stays CPU —
+                    //      rounding feeds the alignment, KokoroCPU.DurationHead verbatim ------
+                    var lb2 = LstmBiY("pred/lstm", z, 512, 640, styleSpBuf, false, T, atB);
+                    while (lb2.MoveNext()) yield return lb2.Current;
+                    Linear("pred/dur_proj", atB, embA, T, 512, 50);
+                    float[] durLogits = null;
+                    var rbDur = ReadbackYielding(embA, T * 50, a => durLogits = a);
+                    while (rbDur.MoveNext()) yield return rbDur.Current;
+                    duration = new float[T]; predDur = new int[T];
+                    for (int t = 0; t < T; t++)
+                    {
+                        double sum = 0;
+                        for (int k = 0; k < 50; k++)
+                            sum += 1.0 / (1.0 + Math.Exp(-durLogits[t * 50 + k]));
+                        duration[t] = (float)(sum / speed);
+                        predDur[t] = Math.Max(1, (int)Math.Round(duration[t], MidpointRounding.ToEven));
+                    }
+                    if (InjectPredDur != null) predDur = InjectPredDur;
+                    foreach (int pd in predDur) F += pd;
+                    frame2tok = new int[F];
+                    for (int t = 0, f = 0; t < T; t++)
+                        for (int k = 0; k < predDur[t]; k++) frame2tok[f++] = t;
+                    PredCpuMs = (float)swCpu.Elapsed.TotalMilliseconds;   // logits readback + head
+
+                    EnsureFrameScratch(F);
+                    uint[] f2tUp = new uint[F];
+                    for (int f = 0; f < F; f++) f2tUp[f] = (uint)frame2tok[f];
+                    gatherBuf.SetData(f2tUp, 0, 0, F);
+                    // ---- shared biLSTM over en (SPEC §4.3): the alignment expansion + style
+                    //      cat are fused into its input read — en is never materialized;
+                    //      y rows [F,512] (fT1, free until the F0/N stacks) -> xf [512,F] ----
+                    var lb3 = LstmBiY("pred/shared", z, 512, 640, styleSpBuf, true, F, fT1);
+                    while (lb3.MoveNext()) yield return lb3.Current;
+                    TransposeOp(fT1, xfBuf, F, 512);
+                    if (stages != null)   // stages.d = cat[durenc out, s_p] (probe only)
+                        d = KokoroCPU.CatStyle(ReadNow(z, T * 512), T, 512, sp);
+                }
+                else
+                {
+                    while (!predTask.IsCompleted) yield return null;
+                    PredCpuMs = (float)swCpu.Elapsed.TotalMilliseconds;
+                }
                 if (cpuErr != null)
                 {
                     ConsoleMessage.Warning($"Kokoro CPU predictor stage failed: {cpuErr.Message}");
@@ -934,6 +1094,7 @@ namespace DeepUnity
                 }
                 if (stages != null)
                 {
+                    if (dEnRows == null) dEnRows = ReadNow(dEnBuf, T * 512);   // v3: no readback
                     stages.dEn = KokoroCPU.Transpose(dEnRows, T, 512);
                     stages.d = d; stages.duration = duration; stages.predDur = predDur; stages.F = F;
                     stages.en = new float[640 * F];
@@ -943,7 +1104,8 @@ namespace DeepUnity
 
                 EnsureFrameScratch(F);
                 int F2 = 2 * F;
-                xfBuf.SetData(KokoroCPU.Transpose(sh, F, 512), 0, 0, 512 * F);    // [512,F]
+                if (!v3)
+                    xfBuf.SetData(KokoroCPU.Transpose(sh, F, 512), 0, 0, 512 * F);    // [512,F]
 
                 // ---------------- F0/N predictors (GPU AdainResBlk stacks) ----------------------
                 Pending f0Rb = default;
@@ -1150,6 +1312,7 @@ namespace DeepUnity
                 gX?.Release(); gSrc?.Release(); gT1?.Release(); gT2?.Release();
                 gAcc?.Release(); gTmp?.Release();
                 harBuf?.Release(); harCatBuf?.Release(); wavBuf?.Release();
+                lstmPreF?.Release(); lstmPreR?.Release();
             }
         }
     }

@@ -43,6 +43,12 @@ uint conv_in_mode;    // Conv1DTile[2]/ConvTFast X prologue: 0 raw, 1 AdaIN+Snak
 uint conv_out_mode;   // Conv1DTile2 writeback: 0 Y=acc, 1 Y+=acc (fused AddBuf),
                       //   2 Y=(acc+buf_b)*scale_val (fused AdainBlock AddScale)
 uint ln_add;          // LayerNormCoop: 1 = fuse the preceding residual (v = in + buf_b)
+uint ln_style;        // LayerNormCoop: 1 = AdaLayerNorm — affine from style_gb fp32 [2C]
+                      //   ((1+gamma)·norm + beta, SPEC §4.1) instead of fp16 ln_gamma/ln_beta
+uint lstm_cat_dim;    // LstmInProjTile: X row width; input elems >= this read buf_b[e-cat_dim]
+                      //   (the CatStyle fusion — SPEC §4.1). cat_dim == in_dim -> no concat.
+uint lstm_gather;     // LstmInProjTile: 1 = X row index = gather_idx[t] (en = d@aln alignment
+                      //   expansion fused into the shared-LSTM input read — SPEC §4.3)
 uint n_frames;        // STFT/iSTFT frame count
 uint sample_len;      // waveform sample count
 int  activation_type; // 0 none 1 gelu_new 2 leaky 3 tanh
@@ -56,6 +62,8 @@ float leaky_slope;    // 0.2 / 0.1 / 0.01 (!) — SPEC §12.5
 StructuredBuffer<uint>      W;              // linear/conv weight (fp16 packed; q8 for LinearBiasQ8)
 StructuredBuffer<uint>      W_bias;
 StructuredBuffer<uint>      W_scales;       // q8 per-output-row fp16 scales (LinearBiasQ8 only)
+StructuredBuffer<uint>      W2;             // LstmBiRecur: reverse-direction whh_r (fp16)
+StructuredBuffer<uint>      W_bias2;        // LstmInProjTile: bhh (second bias, fp16)
 StructuredBuffer<uint>      ln_gamma;
 StructuredBuffer<uint>      ln_beta;
 StructuredBuffer<uint>      emb_word;       // bert word emb [178,128] / tenc emb [178,512]
@@ -1111,6 +1119,9 @@ void Conv1DTile2(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
 // (v = norm_input + buf_b — the bert attn/ffn residual sites; same float add).
 // Tree reduction REORDERS the float sums vs the serial loop (like the #31 GEMVs):
 // graded at maxabs < 1e-3 / stage corr by the probe, not bit-exact.
+// ln_style = 1 (#33 round 2): AdaLayerNorm — the DurationEncoder's style-conditioned
+// LN (SPEC §4.1): out = (1+style_gb[c])·norm + style_gb[C+c], eps 1e-5, fp16
+// ln_gamma/ln_beta never read (KokoroCPU.AdaLayerNorm oracle, same (1+γ) trap §12.1).
 // Dispatch (positions, 1, 1); norm_dim <= LN_XMAX (bert 768 / tenc 512 / emb 128);
 // generic strides as LayerNormAffine.
 #define LN_XMAX 768
@@ -1163,6 +1174,173 @@ void LayerNormCoop(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
     float rstd = rsqrt(lnc_red[0] / (float)norm_dim + norm_eps);
 
     for (uint c3 = tid; c3 < norm_dim; c3 += 256u)
-        norm_output[base_idx + c3 * ln_ch_stride] =
-            (lnc_x[c3] - mean) * rstd * readH(ln_gamma, c3) + readH(ln_beta, c3);
+        norm_output[base_idx + c3 * ln_ch_stride] = ln_style != 0u
+            ? (1.0 + style_gb[c3]) * ((lnc_x[c3] - mean) * rstd) + style_gb[norm_dim + c3]
+            : (lnc_x[c3] - mean) * rstd * readH(ln_gamma, c3) + readH(ln_beta, c3);
+}
+
+// ======================================================================================
+// V3 KERNELS (#33 round 2) — the predictor biLSTM stack on GPU, routed by
+// KokoroModel.FastKernels3 (on top of FastKernels2; KokoroCPU stays the fallback +
+// oracle). Mirrors KokoroCPU.BiLstm's two-phase structure exactly: a massively
+// parallel input-projection GEMM (no recurrence, ~70% of the FLOPs) + a PERSISTENT
+// per-direction step loop for the recurrent half (torch 1-layer biLSTM, H=256/dir,
+// gates i,f,g,o — SPEC §4).
+// ======================================================================================
+
+// ========================= LstmInProjTile =====================================
+// pre[t, r] = (bih[r] + bhh[r]) + Σ_i wih[r, :]·x'(t, :)  for r in [0, 1024) — the
+// LstmInputProj oracle. Register-blocked GEMM cloned from LinearTileBias2 (32 tokens
+// x 64 rows per group, both operands staged, weights reused 32x across tokens) with
+// the LSTM-specific X rule fused into the staging load:
+//   src row  = lstm_gather ? gather_idx[t] : t          (en = d@aln expansion, §4.3)
+//   x'(t, i) = i < lstm_cat_dim ? X[src*lstm_cat_dim+i] : buf_b[i-lstm_cat_dim]
+//              (CatStyle: the 128-d style tail is never materialized, §4.1)
+// Bias init = bih + bhh FIRST (the oracle's precomputed bsum), then k ascending in
+// 32-chunks — per-output float op order identical to LstmInputProj (lane layout is
+// LinearTileBias2's, so within-chunk order matches the GEMM convention already
+// gated at 1e-3). in_dim % 32 == 0 (640/512); out_dim = 1024. W = wih [1024, in_dim]
+// fp16 row-major, W_bias = bih, W_bias2 = bhh, Y = pre [T, 1024] row-major.
+#pragma kernel LstmInProjTile
+[numthreads(32, 8, 1)]
+void LstmInProjTile(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint t0 = gid.y * B2_T;
+    uint p0 = gid.x * B2_P;
+    uint tx = gtid.x, ty = gtid.y;
+    uint ltid = ty * 32u + tx;
+    uint pA = p0 + tx, pB = p0 + tx + 32u;
+    float bA = (pA < out_dim) ? readH(W_bias, pA) + readH(W_bias2, pA) : 0.0;
+    float bB = (pB < out_dim) ? readH(W_bias, pB) + readH(W_bias2, pB) : 0.0;
+    float a00 = bA, a10 = bA, a20 = bA, a30 = bA;   // bias-sum first, like the oracle
+    float a01 = bB, a11 = bB, a21 = bB, a31 = bB;
+
+    for (uint k0 = 0; k0 < in_dim; k0 += B2_K)
+    {
+        for (uint l = ltid; l < B2_T * B2_K; l += 256u)
+        {
+            uint tt = l / B2_K, kk = l % B2_K;
+            uint gt = t0 + tt;
+            uint i = k0 + kk;
+            float v = 0.0;
+            if (gt < seq_len)
+            {
+                uint src = lstm_gather != 0u ? gather_idx[gt] : gt;
+                v = i < lstm_cat_dim ? X[src * lstm_cat_dim + i] : buf_b[i - lstm_cat_dim];
+            }
+            b2_x[tt][kk] = v;
+        }
+        for (uint l2 = ltid; l2 < B2_P * (B2_K / 2u); l2 += 256u)
+        {
+            uint pp = l2 / (B2_K / 2u), uu = l2 % (B2_K / 2u);
+            uint word = (p0 + pp < out_dim) ? W[(((p0 + pp) * in_dim + k0) >> 1) + uu] : 0u;
+            b2_w[pp][2u * uu]      = f16tof32(word & 0xFFFFu);
+            b2_w[pp][2u * uu + 1u] = f16tof32(word >> 16);
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        [unroll]
+        for (uint kk = 0; kk < B2_K; kk++)
+        {
+            float w0 = b2_w[tx][kk];
+            float w1 = b2_w[tx + 32u][kk];
+            float x0 = b2_x[ty][kk];
+            float x1 = b2_x[ty + 8u][kk];
+            float x2 = b2_x[ty + 16u][kk];
+            float x3 = b2_x[ty + 24u][kk];
+            a00 += x0 * w0; a01 += x0 * w1;
+            a10 += x1 * w0; a11 += x1 * w1;
+            a20 += x2 * w0; a21 += x2 * w1;
+            a30 += x3 * w0; a31 += x3 * w1;
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    for (uint r = 0; r < 4u; r++)
+    {
+        uint t = t0 + ty + r * 8u;
+        if (t >= seq_len) continue;
+        float aA = r == 0u ? a00 : r == 1u ? a10 : r == 2u ? a20 : a30;
+        float aB = r == 0u ? a01 : r == 1u ? a11 : r == 2u ? a21 : a31;
+        if (pA < out_dim) Y[t * out_dim + pA] = aA;
+        if (pB < out_dim) Y[t * out_dim + pB] = aB;
+    }
+}
+
+// ========================= LstmBiRecur ========================================
+// PERSISTENT recurrent half: ONE dispatch of TWO groups (gid.x = 0 fwd / 1 bwd,
+// independent — bwd walks t = T-1..0 like the oracle's RunLstmDir(reverse)), the
+// timestep loop INSIDE the kernel. 256 threads/group; thread i owns hidden unit i:
+// gate rows {i, 256+i, 512+i, 768+i} (torch order i,f,g,o) so all four gates land
+// in registers — no gate exchange, cell state c stays in a REGISTER, only h[256]
+// lives in groupshared (barrier-swapped per step). Per step, per thread:
+//   g_r = pre[t,r] + Σ_j whh[r, :]·h[j]   (j ascending; h[j] is a groupshared
+//   broadcast shared by the 4 rows; each thread streams its own 4 whh rows
+//   sequentially — L1-friendly, and the 512 KB whh stays L2-resident across steps)
+//   c = σ(g_f)·c + σ(g_i)·tanh(g_g);  h = σ(g_o)·tanh(c);  Y[t*512 + dir*256 + i] = h
+// — the exact KokoroCPU.RunLstmDir update. whh word-unrolled (j, j+1 share a packed
+// uint; two separate += keep j-ascending order). exp/tanh are HLSL fp32 vs the
+// oracle's double Math.Exp/Tanh — recurrence is contractive (gates < 1), graded at
+// maxabs < 1e-3 like the rest.  X = pre_fwd [T,1024], buf_b = pre_bwd [T,1024],
+// W = whh, W2 = whh_r (both [1024,256] fp16), Y = y [T,512] (fwd cols 0-255, bwd
+// 256-511). Dispatch (2, 1, 1).
+#define LSTM_H 256
+groupshared float lstm_h[LSTM_H];
+
+#define LSTM_STEP_GEMV(PRE, WHH) { \
+    a0 = PRE[t * 1024u + i]; \
+    a1 = PRE[t * 1024u + 256u + i]; \
+    a2 = PRE[t * 1024u + 512u + i]; \
+    a3 = PRE[t * 1024u + 768u + i]; \
+    for (uint j = 0; j < 256u; j += 2u) { \
+        float h0 = lstm_h[j], h1 = lstm_h[j + 1u]; \
+        uint w; \
+        w = WHH[(i * 256u + j) >> 1];            a0 += f16tof32(w & 0xFFFFu) * h0; a0 += f16tof32(w >> 16) * h1; \
+        w = WHH[((256u + i) * 256u + j) >> 1];   a1 += f16tof32(w & 0xFFFFu) * h0; a1 += f16tof32(w >> 16) * h1; \
+        w = WHH[((512u + i) * 256u + j) >> 1];   a2 += f16tof32(w & 0xFFFFu) * h0; a2 += f16tof32(w >> 16) * h1; \
+        w = WHH[((768u + i) * 256u + j) >> 1];   a3 += f16tof32(w & 0xFFFFu) * h0; a3 += f16tof32(w >> 16) * h1; } }
+
+#pragma kernel LstmBiRecur
+[numthreads(LSTM_H, 1, 1)]
+void LstmBiRecur(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint dir = gid.x;                 // 0 = forward, 1 = backward (group-uniform)
+    uint i = gtid.x;                  // hidden unit
+    float c = 0.0;                    // cell state — register-resident
+    lstm_h[i] = 0.0;
+    GroupMemoryBarrierWithGroupSync();
+
+    for (uint step = 0; step < seq_len; step++)
+    {
+        uint t = dir == 0u ? step : seq_len - 1u - step;
+        float a0, a1, a2, a3;
+        if (dir == 0u) { LSTM_STEP_GEMV(X, W) }
+        else           { LSTM_STEP_GEMV(buf_b, W2) }
+
+        float ig = 1.0 / (1.0 + exp(-a0));
+        float fg = 1.0 / (1.0 + exp(-a1));
+        float gg = safe_tanh(a2);
+        float og = 1.0 / (1.0 + exp(-a3));
+        c = fg * c + ig * gg;
+        float hn = og * safe_tanh(c);
+
+        GroupMemoryBarrierWithGroupSync();     // everyone done reading old h
+        lstm_h[i] = hn;
+        GroupMemoryBarrierWithGroupSync();     // new h visible before next step
+        Y[t * 512u + dir * 256u + i] = hn;
+    }
+}
+
+// ========================= TransposeRC ========================================
+// Y [C, T] = X [T, C] transposed (shared-LSTM rows [F,512] -> xf [512,F] for the
+// channel-major F0/N conv stacks). seq_len = T (rows), in_dim = C (cols).
+#pragma kernel TransposeRC
+[numthreads(256, 1, 1)]
+void TransposeRC(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * in_dim) return;
+    uint c = idx / seq_len;
+    uint t = idx - c * seq_len;
+    Y[idx] = X[t * in_dim + c];
 }

@@ -321,15 +321,26 @@ lighthouse passage (**13.35 s of 24 kHz audio**), warm shaders, median of 3.
 |---|---|---:|---:|---:|
 | fp16 | #26 (FastKernels) | 0.146 | 1944 | 1204 |
 | int8 | #26 | 0.139 | 1863 | 870 |
-| fp16 | **deep-opt (FastKernels2)** | **0.133** | 1787 | **402** |
-| int8 | deep-opt | 0.143 | 1906 | 420 |
+| fp16 | deep-opt R1 (FastKernels2) | 0.133 | 1787 | 402 |
+| int8 | deep-opt R1 | 0.143 | 1906 | 420 |
+| fp16 | **deep-opt R2 (FastKernels3, GPU LSTM)** | **0.043** | **550** | 367 |
+| int8 | **deep-opt R2** | **0.041** | **556** | 348 |
 
-**Deep-opt read (2026-07-16, parity 31/31 PASS, wav corr 0.997):** the GPU stages got the promised
-win — generator 199→**95 ms** (t2; and 66–86 ms of that is now WAITING on the CPU NSF), bert
-44→**18 ms**, decoder 21→13 ms, tenc biLSTM fully hidden (0 ms) — but END-TO-END editor RTF barely
-moves because the **CPU LSTM predictor (~850 ms under Mono) now dominates the chain**. In IL2CPP
-player builds that stage is ~10–15 ms, so builds get the full GPU win; the editor numbers above
-under-sell it. int8's flat RTF is the same masking. Details: `TTS/Kokoro/KOKORO_DEEPOPT.md`.
+**Deep-opt story (2026-07-16, two rounds, both parity-gated):**
+- **R1 (FastKernels2)**: Conv1DTile2 register blocking + fused writebacks + LayerNormCoop +
+  pipeline reorder — generator 199→95 ms, bert 44→18, decoder 21→13, tenc biLSTM hidden. But
+  editor RTF barely moved: the **CPU LSTM predictor (~850 ms under Mono)** dominated the chain
+  (IL2CPP builds run it at ~10–15 ms, so R1 was already a real win in players).
+- **R2 (FastKernels3)**: the predictor LSTM stack moved to the GPU as a **persistent-kernel
+  biLSTM** — `LstmInProjTile` (all 1024 gate rows as a register-blocked GEMM, style-concat and
+  gather fused into the staging) + `LstmBiRecur` (ONE dispatch, fwd/bwd groups, T steps looped
+  in-kernel, cell state in registers, h in groupshared). Duration math stays verbatim-CPU on a
+  tiny [T,50] readback, so pred_dur is exact. Parity 35/35 PASS, wav corr ≥0.99. Editor pred
+  844→**~28 ms**; end-to-end chunk ~1.1 s → **~300 ms**; **editor RTF 0.041 — 3.3× faster than
+  R1 and now the fastest TTS tier in the engine** (pocket-tts 0.108), 2.2× from the PyTorch CUDA
+  reference (0.019, was a 7× gap). Rollback knobs: `FastKernels3=false` → R1, `FastKernels2=false`
+  → #26. Next targets (noted, not done): tenc biLSTM (~55 ms, routable through the same kernels)
+  and the CPU NSF source. Details: `TTS/Kokoro/KOKORO_DEEPOPT.md`.
 
 \* TTFA caveat: `KokoroTTS.Chunk` keeps this whole passage in ONE chunk (≤510 phonemes), so the
 first `onChunk` ≈ the full generation — the number is a chunking-granularity artifact, not model
@@ -387,8 +398,8 @@ its gemma numbers are not an fp16 comparison. ‡ unsloth's loader crashes on Mi
 |  | ref PyTorch CPU (1 thread) | 0.409 | 144 | 0.9 |
 |  | ref PyTorch CPU quantized | 0.395 | 99 | 3.2 |
 |  | ref PyTorch CUDA | 0.196 | 53 | 1.1 |
-| kokoro-82M | **DeepUnity fp16** | 0.146 | 1944* | 1.2 |
-|  | **DeepUnity int8** | 0.139 | 1863* | 0.9 |
+| kokoro-82M | **DeepUnity fp16 (FastKernels3)** | **0.043** | 550* | 0.4 |
+|  | **DeepUnity int8 (FastKernels3)** | **0.041** | 556* | 0.3 |
 |  | ref PyTorch CPU (8 threads) | 0.231 | 3136 | 22.4 |
 |  | ref PyTorch CUDA | **0.019** | 248 | 2.5 |
 

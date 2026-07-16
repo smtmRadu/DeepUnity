@@ -34,8 +34,10 @@ namespace DeepUnity
         // LinearBiasQ8/readQ8) each with a f16 "<name>.scales" sibling — both already covered by
         // BytesPerElem/MakeBuffer below. Voicepacks (`voices/<name>` [510,256]) and the 6 biLSTM
         // weight sets are ALSO read CPU-side via ReadFloats (KokoroCPU/KokoroTensors, f16 in both
-        // exports) — the GPU copies of the LSTM tensors are unused until/unless an LSTM kernel
-        // lands.
+        // exports). Since #33 round 2 (FastKernels3) the GPU copies of the 5 PREDICTOR LSTM
+        // weight sets (pred/durenc/lstm{0-2}, pred/lstm, pred/shared: wih/whh/bih/bhh + _r) are
+        // consumed by KokoroCS LstmInProjTile/LstmBiRecur; the CPU copies remain the fallback
+        // path + parity oracle (tenc/lstm stays CPU-only).
         public class KokoroWeights : IDisposable
         {
             public bool IsReady { get; private set; }

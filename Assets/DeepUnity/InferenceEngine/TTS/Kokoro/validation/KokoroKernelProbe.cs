@@ -37,6 +37,8 @@ namespace DeepUnity
             public bool fastKernels = true;
             [Tooltip("Bisect the #33 deep-opt layer (Conv1DTile2 / LayerNormCoop / fused epilogues / reordered pipeline): false = the #26 v1 kernels. Only meaningful while fastKernels is on.")]
             public bool fastKernels2 = true;
+            [Tooltip("Bisect the #33 round-2 GPU predictor LSTMs (LstmInProjTile + LstmBiRecur persistent kernel + AdaLayerNorm): false = the KokoroCPU predictor Task. Only meaningful while fastKernels + fastKernels2 are on.")]
+            public bool fastKernels3 = true;
 
             readonly StringBuilder report = new StringBuilder();
             bool failed;
@@ -52,6 +54,7 @@ namespace DeepUnity
             {
                 KokoroModel.FastKernels = fastKernels;
                 KokoroModel.FastKernels2 = fastKernels2;
+                KokoroModel.FastKernels3 = fastKernels3;
                 StartCoroutine(Run());
             }
 
@@ -222,7 +225,7 @@ namespace DeepUnity
                 Log($"# Kokoro kernel + stage report — {DateTime.Now:yyyy-MM-dd HH:mm}");
                 Log("");
                 Log($"weights: {weightsDir}");
-                Log($"kernel routing: {(fastKernels ? fastKernels2 ? "v2 (#33 deep-opt)" : "v1 (#26 FastKernels)" : "LEGACY")}");
+                Log($"kernel routing: {(fastKernels ? fastKernels2 ? fastKernels3 ? "v3 (#33 GPU-LSTM)" : "v2 (#33 deep-opt)" : "v1 (#26 FastKernels)" : "LEGACY")}");
 
                 weights = new KokoroWeights(weightsDir);
                 weights.BudgetBytesPerFrame = 512L * 1024 * 1024;   // probe: no hitch concerns
@@ -565,6 +568,54 @@ namespace DeepUnity
                     GradeKernel("13c AdainBlockY up (pool+fused)", Down(ob, 256 * 2 * T), r, 2e-3f);
                 }
                 ReleaseScoped();
+
+                // ---- 14. GPU predictor LSTMs (FastKernels3) vs the KokoroCPU.BiLstm oracle,
+                //          real fp16 weights: plain cat-style (durenc/head shape), the
+                //          gather+cat shared-LSTM shape, and the AdaLayerNorm style LN ----
+                if (KokoroModel.FastKernels && KokoroModel.FastKernels2 && KokoroModel.FastKernels3)
+                {
+                    int T = 37;
+                    float[] xr = Rand(T * 512);
+                    float[] s = Rand(128);
+                    float[] xcat = KokoroCPU.CatStyle(xr, T, 512, s);        // oracle input [T,640]
+                    var xb = Up(xr); var sb = Up(s);
+                    {   // 14a: durenc/head shape — x' = cat[x rows, style]
+                        var yb = Alloc(T * 512);
+                        var it = model.LstmBiY("pred/durenc/lstm0", xb, 512, 640, sb, false, T, yb);
+                        while (it.MoveNext()) { }
+                        GradeKernel("14a LstmBiY durenc0 (cat)", Down(yb, T * 512),
+                                    cpu.BiLstm(xcat, T, 640, "pred/durenc/lstm0"));
+                    }
+                    {   // 14b: shared shape — x' = cat[x[gather_idx[t]] rows, style]
+                        int F = 61;
+                        int[] idx = RandIds(F, T);
+                        uint[] idxU = new uint[F];
+                        for (int f = 0; f < F; f++) idxU[f] = (uint)idx[f];
+                        var ib = Alloc(F); ib.SetData(idxU);
+                        var yb = Alloc(F * 512);
+                        var it = model.LstmBiY("pred/shared", xb, 512, 640, sb, true, F, yb, ib);
+                        while (it.MoveNext()) { }
+                        float[] enRows = new float[F * 640];
+                        for (int f = 0; f < F; f++)
+                            Array.Copy(xcat, idx[f] * 640, enRows, f * 640, 640);
+                        GradeKernel("14b LstmBiY shared (gather+cat)", Down(yb, F * 512),
+                                    cpu.BiLstm(enRows, F, 640, "pred/shared"));
+                    }
+                    {   // 14c: AdaLayerNorm (LayerNormCoop ln_style) vs cpu.AdaLayerNorm
+                        var yb = Alloc(T * 512);
+                        model.AdaLayerNormOp("pred/durenc/adaln0_fc", sb, xb, yb, T, 512);
+                        float[] r = (float[])xr.Clone();
+                        cpu.AdaLayerNorm(r, T, 512, s, "pred/durenc/adaln0_fc");
+                        GradeKernel("14c AdaLayerNorm (coop, styled)", Down(yb, T * 512), r);
+                    }
+                    {   // 14d: TransposeRC (shared-LSTM rows -> xf)
+                        var yb = Alloc(T * 512);
+                        model.TransposeOp(xb, yb, T, 512);
+                        GradeKernel("14d TransposeRC", Down(yb, T * 512),
+                                    KokoroCPU.Transpose(xr, T, 512));
+                    }
+                    ReleaseScoped();
+                }
 
                 // ---- extras: EmbedText + util kernels ----
                 {
