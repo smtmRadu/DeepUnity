@@ -38,7 +38,11 @@ uint copy_dst_offset;
 uint ln_pos_stride;   // LayerNormAffine: index(p,c) = p*ln_pos_stride + c*ln_ch_stride
 uint ln_ch_stride;    //   bert rows [T,C]: (C,1); tenc channels of [C,T]: (1,T)
 uint gather_mode;     // GatherTime: 0 = gather_idx buffer, 1 = nearest x2 (t/2)
-uint conv_in_mode;    // Conv1DTile X prologue: 0 raw, 1 AdaIN+Snake, 2 AdaIN+LeakyReLU
+uint conv_in_mode;    // Conv1DTile[2]/ConvTFast X prologue: 0 raw, 1 AdaIN+Snake,
+                      //   2 AdaIN+LeakyReLU(0.2), 3 plain LeakyReLU(leaky_slope) — v2 only
+uint conv_out_mode;   // Conv1DTile2 writeback: 0 Y=acc, 1 Y+=acc (fused AddBuf),
+                      //   2 Y=(acc+buf_b)*scale_val (fused AdainBlock AddScale)
+uint ln_add;          // LayerNormCoop: 1 = fuse the preceding residual (v = in + buf_b)
 uint n_frames;        // STFT/iSTFT frame count
 uint sample_len;      // waveform sample count
 int  activation_type; // 0 none 1 gelu_new 2 leaky 3 tanh
@@ -902,6 +906,14 @@ void InstanceNormStats(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
 // q at FIXED r: identical k set across the warp (no divergence) and X reads
 // coalesced along q. The per-output accumulation code and order are byte-identical
 // to ConvTranspose1D -> bit-exact. Dispatch: out_dim * ceil(Tout/s) * s threads.
+//
+// conv_in_mode (#33 deep-opt, FastKernels2 routing only — v1 callers pass 0):
+//   2: AdaIN + LeakyReLU(leaky_slope) on each X read (in_stats/style_gb, the exact
+//      InstanceNormStyle+Activate expression) — the AdainBlock up-path pool consumes
+//      the normalized activation without the CopySlice/IN/Activate round-trip.
+//   3: plain LeakyReLU(leaky_slope) — the Generator trunk's pre-ups activation.
+// Each X element is re-activated per tap (<= k reads) instead of one full pass:
+// same fp32 expression on the same input value -> identical sums.
 #pragma kernel ConvTranspose1DFast
 [numthreads(256, 1, 1)]
 void ConvTranspose1DFast(uint3 id : SV_DispatchThreadID)
@@ -933,8 +945,224 @@ void ConvTranspose1DFast(uint3 id : SV_DispatchThreadID)
         for (uint icg = 0; icg < cinPerG; icg++)
         {
             uint ci = g * cinPerG + icg;
-            sum += X[ci * in_len + ti] * readH(W, (ci * coutPerG + cog) * conv_kernel + k);
+            float xv = X[ci * in_len + ti];
+            if (conv_in_mode == 2u)
+            {
+                float mu = in_stats[ci], rstd = in_stats[in_dim + ci];
+                xv = (1.0 + style_gb[ci]) * ((xv - mu) * rstd) + style_gb[in_dim + ci];
+                xv = xv > 0.0 ? xv : leaky_slope * xv;
+            }
+            else if (conv_in_mode == 3u)
+                xv = xv > 0.0 ? xv : leaky_slope * xv;
+            sum += xv * readH(W, (ci * coutPerG + cog) * conv_kernel + k);
         }
     }
     Y[oc * seq_len + to] = sum;
+}
+
+// ======================================================================================
+// V2 FAST-PATH KERNELS (#33 deep-opt) — routed by KokoroModel.FastKernels2 (default ON,
+// only active on top of FastKernels; Conv1DTile/LayerNormAffine above stay as the v1
+// bisect fallback). Focus: the Snake-resblock convs are ~90% of remaining GPU MACs and
+// Conv1DTile measured only ~19% of fp32 peak on the 4060 — the limiter is the LDS port
+// (6 groupshared reads per 8 FMAs) plus 8x-redundant X staging across oc-tile rows.
+// ======================================================================================
+
+// ========================= Conv1DTile2 ========================================
+// Conv1DTile with DOUBLED register blocking: tile = 128 timesteps x 32 output
+// channels per 256-thread group; each thread owns 4 t x 4 oc = 16 accumulators
+// (four float4 rows). Per (ci,k) inner step: 4 broadcast W reads + 4 conflict-free
+// X reads feed 16 FMAs — half the groupshared traffic per FMA of the v1 tile — and
+// halving the oc-row count halves the redundant X staging + fused-prologue
+// recompute (a 128-ch conv staged every X slice 8x in v1, 4x here).
+//
+// Same contracts as Conv1DTile: stride 1, K <= 11, (K-1)*dil <= 50 (C#-routed);
+// per-output accumulation order = bias FIRST, then ci ascending inside CV_CI
+// slices, k ascending — the exact Conv1D / KokoroCPU.Conv1d order (ragged tile
+// slots contribute an exact +0.0). conv_in_mode adds 3 = plain
+// LeakyReLU(leaky_slope) (fuses a producer Activate, no AdaIN). conv_out_mode
+// fuses the CONSUMER's elementwise op into the writeback (each Y element is
+// touched by exactly one thread — same float ops, same order as the standalone
+// AddBuf/AddScale dispatches they replace):
+//   0: Y = acc
+//   1: Y += acc                          (SnakeResBlock x += conv2)
+//   2: Y = (acc + buf_b[i]) * scale_val  (AdainBlock (res+short)*rsqrt2)
+#define CV2_O 32
+groupshared float cv2_w[CV2_O * CV_CI * 11];  // 32 x 88 floats; + cv_x = ~16.6 KB
+
+#pragma kernel Conv1DTile2
+[numthreads(32, 8, 1)]
+void Conv1DTile2(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint tx = gtid.x, ty = gtid.y;
+    uint ltid = ty * 32u + tx;
+    uint t0 = gid.x * CV_T;
+    uint o0 = gid.y * CV2_O;
+    uint K = conv_kernel;
+    uint XT = CV_T + (K - 1u) * conv_dilation;    // <= CV_XT_MAX (C#-routed)
+    int  xbase = (int)t0 - pad_left;
+
+    uint ocA = o0 + ty, ocB = o0 + ty + 8u, ocC = o0 + ty + 16u, ocD = o0 + ty + 24u;
+    float4 bv;
+    bv.x = (has_bias != 0 && ocA < out_dim) ? readH(W_bias, ocA) : 0.0;
+    bv.y = (has_bias != 0 && ocB < out_dim) ? readH(W_bias, ocB) : 0.0;
+    bv.z = (has_bias != 0 && ocC < out_dim) ? readH(W_bias, ocC) : 0.0;
+    bv.w = (has_bias != 0 && ocD < out_dim) ? readH(W_bias, ocD) : 0.0;
+    float4 a0 = bv, a1 = bv, a2 = bv, a3 = bv;    // bias-first, like the oracle
+
+    uint wPer = CV_CI * K;                        // W elements per oc row per slice
+    for (uint ci0 = 0; ci0 < in_dim; ci0 += CV_CI)
+    {
+        // X slice [CV_CI, XT] — coalesced along time, zero outside, fused prologue
+        // (UNIFORM trip counts: barrier sits in uniform flow, X3663 — as Conv1DTile).
+        uint xCount = CV_CI * XT;
+        for (uint l = 0; l < xCount; l += 256u)
+        {
+            uint i = l + ltid;
+            if (i < xCount)
+            {
+                uint row = i / XT, col = i - row * XT;
+                uint ci = ci0 + row;
+                int  t  = xbase + (int)col;
+                float v = 0.0;
+                if (ci < in_dim && t >= 0 && t < (int)in_len)
+                {
+                    v = X[ci * in_len + (uint)t];
+                    if (conv_in_mode == 1u || conv_in_mode == 2u)
+                    {
+                        float mu = in_stats[ci], rstd = in_stats[in_dim + ci];
+                        v = (1.0 + style_gb[ci]) * ((v - mu) * rstd) + style_gb[in_dim + ci];
+                        if (conv_in_mode == 1u)
+                        {
+                            float al = readH(snake_alpha, ci);
+                            float sn = sin(al * v);
+                            v = v + (1.0 / al) * sn * sn;     // exact 1/alpha — SPEC §7.3
+                        }
+                        else
+                            v = v > 0.0 ? v : leaky_slope * v;
+                    }
+                    else if (conv_in_mode == 3u)
+                        v = v > 0.0 ? v : leaky_slope * v;
+                }
+                cv_x[row * XT + col] = v;
+            }
+        }
+        // W slice [CV2_O, CV_CI*K] — torch [out,in,k] rows are contiguous chunks
+        uint wCount = CV2_O * wPer;
+        for (uint l2 = 0; l2 < wCount; l2 += 256u)
+        {
+            uint i2 = l2 + ltid;
+            if (i2 < wCount)
+            {
+                uint orow = i2 / wPer, rem = i2 - orow * wPer;
+                uint oc = o0 + orow, ci = ci0 + rem / K;
+                cv2_w[orow * wPer + rem] = (oc < out_dim && ci < in_dim)
+                    ? readH(W, (oc * in_dim + ci0) * K + rem) : 0.0;
+            }
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        for (uint ci = 0; ci < CV_CI; ci++)
+        {
+            uint wb = ty * wPer + ci * K;
+            uint xb = ci * XT + tx;
+            for (uint k = 0; k < K; k++)
+            {
+                float4 wv = float4(cv2_w[wb + k],
+                                   cv2_w[wb + 8u * wPer + k],
+                                   cv2_w[wb + 16u * wPer + k],
+                                   cv2_w[wb + 24u * wPer + k]);   // 4 broadcast reads
+                uint  xo = xb + k * conv_dilation;
+                a0 += cv_x[xo]        * wv;
+                a1 += cv_x[xo + 32u]  * wv;
+                a2 += cv_x[xo + 64u]  * wv;
+                a3 += cv_x[xo + 96u]  * wv;
+            }
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    for (uint r = 0; r < 4u; r++)
+    {
+        uint t = t0 + tx + r * 32u;
+        if (t >= seq_len) continue;
+        float4 v = r == 0u ? a0 : r == 1u ? a1 : r == 2u ? a2 : a3;
+        [unroll]
+        for (uint c = 0; c < 4u; c++)
+        {
+            uint oc = o0 + ty + c * 8u;
+            if (oc >= out_dim) continue;
+            uint yi = oc * seq_len + t;
+            float vc = c == 0u ? v.x : c == 1u ? v.y : c == 2u ? v.z : v.w;
+            if (conv_out_mode == 0u)      Y[yi] = vc;
+            else if (conv_out_mode == 1u) Y[yi] += vc;
+            else                          Y[yi] = (vc + buf_b[yi]) * scale_val;
+        }
+    }
+}
+
+// ========================= LayerNormCoop ======================================
+// Cooperative LayerNormAffine: ONE 256-thread group per position. The v1 kernel
+// gave each position a single THREAD — a T=50 bert chunk lit up 50 threads total
+// and every LN was a serial 3-pass walk over 768 channels (PLBERT is
+// dispatch/latency-bound, not MAC-bound). The row is staged in groupshared once
+// (1 global read per element instead of 3), then mean/var tree-reduce à la
+// InstanceNormStyle. ln_add = 1 additionally fuses the preceding residual AddBuf
+// (v = norm_input + buf_b — the bert attn/ffn residual sites; same float add).
+// Tree reduction REORDERS the float sums vs the serial loop (like the #31 GEMVs):
+// graded at maxabs < 1e-3 / stage corr by the probe, not bit-exact.
+// Dispatch (positions, 1, 1); norm_dim <= LN_XMAX (bert 768 / tenc 512 / emb 128);
+// generic strides as LayerNormAffine.
+#define LN_XMAX 768
+groupshared float lnc_x[LN_XMAX];
+groupshared float lnc_red[256];
+
+#pragma kernel LayerNormCoop
+[numthreads(256, 1, 1)]
+void LayerNormCoop(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint p = gid.x;               // position (dispatch groups = seq_len exactly)
+    uint tid = gtid.x;
+    uint base_idx = p * ln_pos_stride;
+
+    for (uint c0 = tid; c0 < norm_dim; c0 += 256u)
+    {
+        float v = norm_input[base_idx + c0 * ln_ch_stride];
+        if (ln_add != 0u) v += buf_b[base_idx + c0 * ln_ch_stride];
+        lnc_x[c0] = v;
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    // pass 1: mean
+    float s = 0.0;
+    for (uint c1 = tid; c1 < norm_dim; c1 += 256u) s += lnc_x[c1];
+    lnc_red[tid] = s;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint r = 128u; r > 0u; r >>= 1)
+    {
+        if (tid < r) lnc_red[tid] += lnc_red[tid + r];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    float mean = lnc_red[0] / (float)norm_dim;
+    GroupMemoryBarrierWithGroupSync();
+
+    // pass 2: variance
+    float vv = 0.0;
+    for (uint c2 = tid; c2 < norm_dim; c2 += 256u)
+    {
+        float d = lnc_x[c2] - mean;
+        vv += d * d;
+    }
+    lnc_red[tid] = vv;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint r2 = 128u; r2 > 0u; r2 >>= 1)
+    {
+        if (tid < r2) lnc_red[tid] += lnc_red[tid + r2];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    float rstd = rsqrt(lnc_red[0] / (float)norm_dim + norm_eps);
+
+    for (uint c3 = tid; c3 < norm_dim; c3 += 256u)
+        norm_output[base_idx + c3 * ln_ch_stride] =
+            (lnc_x[c3] - mean) * rstd * readH(ln_gamma, c3) + readH(ln_beta, c3);
 }

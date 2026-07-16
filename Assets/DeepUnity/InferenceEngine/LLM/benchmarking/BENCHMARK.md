@@ -317,10 +317,19 @@ faster than real-time (0.11–0.13 ≈ **8–9× real-time**); TTFA(proxy) is th
 `KokoroRtfProbe` (play mode, headless batch via `KokoroRtfBatchRunner.RunFp16/RunInt8`), same
 lighthouse passage (**13.35 s of 24 kHz audio**), warm shaders, median of 3.
 
-| weight | RTF | TTFA ms* | load ms |
-|---|---:|---:|---:|
-| fp16 | 0.146 | 1944 | 1204 |
-| int8 | 0.139 | 1863 | 870 |
+| weight | kernels | RTF | TTFA ms* | load ms |
+|---|---|---:|---:|---:|
+| fp16 | #26 (FastKernels) | 0.146 | 1944 | 1204 |
+| int8 | #26 | 0.139 | 1863 | 870 |
+| fp16 | **deep-opt (FastKernels2)** | **0.133** | 1787 | **402** |
+| int8 | deep-opt | 0.143 | 1906 | 420 |
+
+**Deep-opt read (2026-07-16, parity 31/31 PASS, wav corr 0.997):** the GPU stages got the promised
+win — generator 199→**95 ms** (t2; and 66–86 ms of that is now WAITING on the CPU NSF), bert
+44→**18 ms**, decoder 21→13 ms, tenc biLSTM fully hidden (0 ms) — but END-TO-END editor RTF barely
+moves because the **CPU LSTM predictor (~850 ms under Mono) now dominates the chain**. In IL2CPP
+player builds that stage is ~10–15 ms, so builds get the full GPU win; the editor numbers above
+under-sell it. int8's flat RTF is the same masking. Details: `TTS/Kokoro/KOKORO_DEEPOPT.md`.
 
 \* TTFA caveat: `KokoroTTS.Chunk` keeps this whole passage in ONE chunk (≤510 phonemes), so the
 first `onChunk` ≈ the full generation — the number is a chunking-granularity artifact, not model

@@ -24,20 +24,26 @@ namespace DeepUnity
             [MenuItem("DeepUnity/TTS/Run Kokoro Kernel Probe")]
             public static void RunInteractive() => Setup(exitWhenDone: false);
 
-            // A/B bisect: legacy (pre-optimization) kernel routing via the probe's serialized flag.
+            // A/B/C bisect via the probe's serialized flags (statics don't survive the
+            // play-mode domain reload): v2 (#33 deep-opt, default) / v1 (#26) / legacy.
+            [MenuItem("DeepUnity/TTS/Run Kokoro Kernel Probe V1 (FastKernels2 off)")]
+            public static void RunInteractiveV1() => Setup(exitWhenDone: false, fastKernels2: false);
+
             [MenuItem("DeepUnity/TTS/Run Kokoro Kernel Probe LEGACY (FastKernels off)")]
             public static void RunInteractiveLegacy() => Setup(exitWhenDone: false, fastKernels: false);
 
             public static void Run() => Setup(exitWhenDone: true);
 
-            static void Setup(bool exitWhenDone, bool fastKernels = true)
+            static void Setup(bool exitWhenDone, bool fastKernels = true, bool fastKernels2 = true)
             {
                 Directory.CreateDirectory("ProbeLogs");
                 if (File.Exists(Marker)) File.Delete(Marker);
 
                 var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
                 var go = new GameObject(nameof(KokoroKernelProbe));
-                go.AddComponent<KokoroKernelProbe>().fastKernels = fastKernels;
+                var probe = go.AddComponent<KokoroKernelProbe>();
+                probe.fastKernels = fastKernels;
+                probe.fastKernels2 = fastKernels2;
                 EditorSceneManager.SaveScene(scene, TmpScene);
 
                 if (exitWhenDone)

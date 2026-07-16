@@ -35,6 +35,8 @@ namespace DeepUnity
             public string doneMarker = "ProbeLogs/kokoro_kernel.done";
             [Tooltip("Bisect: false = legacy (pre-optimization) kernel routing. Serialized so it survives the play-mode domain reload.")]
             public bool fastKernels = true;
+            [Tooltip("Bisect the #33 deep-opt layer (Conv1DTile2 / LayerNormCoop / fused epilogues / reordered pipeline): false = the #26 v1 kernels. Only meaningful while fastKernels is on.")]
+            public bool fastKernels2 = true;
 
             readonly StringBuilder report = new StringBuilder();
             bool failed;
@@ -49,6 +51,7 @@ namespace DeepUnity
             void Start()
             {
                 KokoroModel.FastKernels = fastKernels;
+                KokoroModel.FastKernels2 = fastKernels2;
                 StartCoroutine(Run());
             }
 
@@ -219,6 +222,7 @@ namespace DeepUnity
                 Log($"# Kokoro kernel + stage report — {DateTime.Now:yyyy-MM-dd HH:mm}");
                 Log("");
                 Log($"weights: {weightsDir}");
+                Log($"kernel routing: {(fastKernels ? fastKernels2 ? "v2 (#33 deep-opt)" : "v1 (#26 FastKernels)" : "LEGACY")}");
 
                 weights = new KokoroWeights(weightsDir);
                 weights.BudgetBytesPerFrame = 512L * 1024 * 1024;   // probe: no hitch concerns
@@ -293,6 +297,18 @@ namespace DeepUnity
                                 KokoroCPU.Transpose(rows, T2, 512));
                 }
                 ReleaseScoped();
+                if (KokoroModel.FastKernels && KokoroModel.FastKernels2)
+                {   // ---- 2c. LayerNormCoop residual fusion (bert attn/ffn sites) ----
+                    int T = 29;
+                    float[] x = Rand(T * 768), res = Rand(T * 768);
+                    var xb = Up(x); var rb = Up(res); var yb = Alloc(T * 768);
+                    model.LayerNormAdd("bert/layer/ln", xb, rb, yb, T, 768, 1e-12f, 768, 1);
+                    float[] r = new float[T * 768];
+                    for (int i = 0; i < r.Length; i++) r[i] = x[i] + res[i];
+                    KokoroCPU.LayerNorm(r, T, 768, tensors.D("bert/layer/ln.w"), tensors.D("bert/layer/ln.b"), 1e-12f);
+                    GradeKernel("2c LayerNormCoop +residual", Down(yb, T * 768), r);
+                    ReleaseScoped();
+                }
 
                 // ---- 3. EmbedAlbert (word+pos+tok lookup) ----
                 {
@@ -418,6 +434,19 @@ namespace DeepUnity
                                 cpu.ConvTranspose1d(x, 256, T, "dec/gen/ups1", 6, 3, 0, 1));
                 }
                 ReleaseScoped();
+                if (KokoroModel.FastKernels && KokoroModel.FastKernels2)
+                {   // ---- 9c. ConvT lrelu X-prologue (Generator trunk pre-ups activation) ----
+                    int T = 20, To = (T - 1) * 6 - 6 + 12;             // 120
+                    float[] x = Rand(256 * T);
+                    var xb = Up(x); var yb = Alloc(128 * To);
+                    model.ConvT("dec/gen/ups1", xb, yb, 256, T, 128, To, 12, 6, 3, 1,
+                                inMode: 3, inSlope: 0.1f);
+                    float[] xa = (float[])x.Clone();
+                    KokoroCPU.LRelu(xa, 0.1f);
+                    GradeKernel("9c ConvT +lrelu prologue", Down(yb, 128 * To),
+                                cpu.ConvTranspose1d(xa, 256, T, "dec/gen/ups1", 6, 3, 0, 1));
+                    ReleaseScoped();
+                }
 
                 // ---- 10. GatherTime (nearest x2 + index gather) ----
                 {
@@ -493,9 +522,10 @@ namespace DeepUnity
                 }
                 ReleaseScoped();
 
-                // ---- 13. composite blocks (grades whichever path KokoroModel.FastKernels
-                //          selects: fused InstanceNormStats + Conv1DTile prologue when ON, the
-                //          legacy unfused dispatch list when OFF — both must pass) ----
+                // ---- 13. composite blocks (grades whichever routing the FastKernels/
+                //          FastKernels2 statics select: v2 fused prologues + fused writebacks,
+                //          v1 fused prologues + standalone Add/AddScale, or the legacy unfused
+                //          dispatch list — all three must pass) ----
                 {
                     int C = 256, T = 60;
                     float[] x = Rand(C * T);
