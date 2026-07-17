@@ -131,3 +131,9 @@ Assets/DeepUnity/**/harness~/bin/
 # local editor batch-build logs
 /chatdemo2d_*.log
 unsloth_compiled_cache/
+
+# AnyaChatDemo (archived): Rocketbox source art (~100 MB, MIT) — intentionally NOT tracked.
+# Re-download instructions: Assets/DeepUnity/Tutorials/AnyaChatDemo/ARCHIVED.md
+Assets/DeepUnity/Tutorials/AnyaChatDemo/Art/Female_Adult_01/Export/
+Assets/DeepUnity/Tutorials/AnyaChatDemo/Art/Female_Adult_01/Export.meta
+Assets/DeepUnity/Tutorials/AnyaChatDemo/Art/Female_Adult_01/Textures/f001_*

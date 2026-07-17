@@ -1316,8 +1316,15 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             NormalizeWorldSize(shield, 0.80f);   // heater shield ~0.8 m tall
             if (shield != null)                  // along the forearm, face out (tuned via ShieldTuneBatch lineup)
                 shield.transform.localRotation = Quaternion.Euler(270f, 0f, 0f) * shield.transform.localRotation;
+            if (sword != null)                   // idle stance aims the blade forward-down, not out to the right
+                sword.transform.localRotation = Quaternion.Euler(0f, -45f, 0f) * sword.transform.localRotation;
 
             root.AddComponent<BreathingIdle>();
+
+            // conversation sheathing: sword tweens to the right hip, shield to the back while chatting
+            var stower = root.AddComponent<WeaponStower>();
+            if (sword != null) SetRef(stower, "sword", sword.transform);
+            if (shield != null) SetRef(stower, "shield", shield.transform);
 
             // footsteps
             var stepSource = root.AddComponent<AudioSource>();

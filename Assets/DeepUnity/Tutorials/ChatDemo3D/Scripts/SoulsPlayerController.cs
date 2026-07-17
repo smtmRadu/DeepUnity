@@ -90,11 +90,14 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         public float Health01 => health / maxHealth;
         public int FlaskCharges => flaskCharges;
 
+        private WeaponStower stower;   // sheathes sword/shield during conversations (optional)
+
         private void Start()
         {
             controller = GetComponent<CharacterController>();
             animator = GetComponentInChildren<Animator>();
             audioSource = GetComponent<AudioSource>();
+            stower = GetComponent<WeaponStower>();
             stamina = maxStamina;
             health = maxHealth;
             flaskCharges = maxFlaskCharges;
@@ -111,6 +114,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             mode = PlayerMode.Interaction;
             blocking = false;
             PlayLocomotion("Idle");
+            stower?.Stow();   // sword to the hip, shield to the back — talking, not fighting
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
@@ -119,6 +123,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         {
             mode = PlayerMode.Exploring;
             locomotionState = "";   // force a locomotion refresh in case a dialogue pose is playing
+            stower?.Draw();   // weapons back to the hands
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }

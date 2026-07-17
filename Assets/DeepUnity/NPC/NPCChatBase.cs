@@ -870,13 +870,18 @@ namespace DeepUnity
                 yield return new WaitForSecondsRealtime(0.4f);
                 if (state != NPCState.TalkingInInteraction) break;
                 w.PopLastMessage();
-                w.AddMessage(npc_name, label + frames[i++ % 3]);
+                w.AddMessage(npc_name, StatusStyled(label + frames[i++ % 3]));
             }
             dotsJob = null;
         }
 
         static string ThinkStyled(string think)
             => $"<i><color=#9A9A9AB0>{think.Trim()}</color></i>\n";
+
+        // status pulses (Thinking… / Compacting… / typing dots) are meta-text, not dialogue —
+        // render them italic + slightly dimmed so they read as a different breed of text
+        static string StatusStyled(string status)
+            => $"<i><color=#CFCFCFC8>{status}</color></i>";
 
         /// <summary>Split the accumulated reply into visible/think channels. Re-parses the FULL
         /// string every token (replies are short) so tags split across tokens just work; a
@@ -1037,7 +1042,7 @@ namespace DeepUnity
             bool contentShown = false;  // the animated dots own the bubble until real content
 
             // thinking placeholder: ". / .. / ..." pulses until the first real content lands
-            w.AddMessage(npc_name, ".");
+            w.AddMessage(npc_name, StatusStyled("."));
             StartThinkingDots(w);
 
             // A background conversation-KV save still reading this model's GPU state holds the Busy
@@ -1094,6 +1099,10 @@ namespace DeepUnity
                 FlushVoiceText();   // speak the trailing clause
             }
             StopThinkingDots();
+            // surface the model's hidden reasoning in the console so its behavior can be verified
+            // (it is never voiced and only rendered in-window behind the ShowThinkingTokens toggle)
+            if (thinkFull.Length > 0)
+                ConsoleMessage.Info($"[Think] {npc_name}: <i>{thinkFull.Trim()}</i>");
             bool stillOpen = state == NPCState.TalkingInInteraction && epoch == dialogueEpoch;   // close mid-reply drops state/epoch
             // transcripts/window always carry the VISIBLE text (raw kept only if nothing parsed)
             string finalVisible = visibleFull.Length > 0 ? visibleFull
@@ -1467,7 +1476,7 @@ namespace DeepUnity
         // when compaction is triggered LIVE at the context limit (mid-session or on open).
         private IEnumerator ShowCompactingUntilDone(INPCChatWindow w)
         {
-            w.AddMessage(npc_name, "Compacting..");
+            w.AddMessage(npc_name, StatusStyled("Compacting.."));
             string[] frames = { "..", "...", "." };
             int fi = 0;
             float next = Time.unscaledTime + 0.4f;
@@ -1478,7 +1487,7 @@ namespace DeepUnity
                 if (Time.unscaledTime >= next)
                 {
                     w.PopLastMessage();
-                    w.AddMessage(npc_name, "Compacting" + frames[fi++ % 3]);
+                    w.AddMessage(npc_name, StatusStyled("Compacting" + frames[fi++ % 3]));
                     next = Time.unscaledTime + 0.4f;
                 }
                 yield return null;
@@ -1607,6 +1616,8 @@ namespace DeepUnity
             LLMPool.ClaimConversation(llm, this);   // the compacted prefix carries OUR conversation
             ConsoleMessage.Info($"[Compact] {npc_name}: compaction done — history → " +
                                 $"{summary.Length}-char HISTORY block, KV recomputed");
+            // the compact text itself, so its quality can be inspected in the console
+            ConsoleMessage.Info($"[Compact] {npc_name}: <i>{summary.Trim()}</i>");
             if (cacheKVCache && chatLive && !KvSaveInFlightFor(llm))
                 StartCoroutine(SaveConversationKvRoutine());
         }
