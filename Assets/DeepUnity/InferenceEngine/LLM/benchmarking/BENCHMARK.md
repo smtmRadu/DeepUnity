@@ -306,23 +306,43 @@ the load takes (`ready ms`, `load frames`) versus how badly it hitches the rende
 - The `>33 ms` worst-frame **outliers at budget = 2** (int4-2B 1176 ms, int4-0.8B 4199 ms ready) are one-time
   shader-compile / buffer-allocation spikes on the very first load frame — not steady-state hitches.
 
-## TTS — pocket-tts real-time benchmark (RTX 4060, 2026-07-16)
+## TTS — pocket-tts real-time benchmark (RTX 4060, 2026-07-16 · deep-opt #31-P 2026-07-17)
 
-`PocketTTSRtfProbe` offline-KV path, 3-sentence lighthouse passage (**66 speech ids → 10.40 s of 24 kHz
-audio**), warm shaders. Both fp16 and int8 — the two **super-optimized** standard-TTS tiers. RTF < 1 means
-faster than real-time (0.11–0.13 ≈ **8–9× real-time**); TTFA(proxy) is the modeled time-to-first-audio.
+`PocketTTSRtfProbe` offline-KV path, 3-sentence lighthouse passage (66 speech ids → ~10.1–11.3 s of
+24 kHz audio, run-dependent sampled EOS), warm shaders. 2026-07-17 added three parity-gated deep-opt
+rounds (`FastKernels2`/`FastKernels3` + `OverlapMimi`/`ArBatchRamp`) — campaign narrative in
+`InferenceEngine/DEEPOPT_LOG.md`, kernel detail in `TTS/PocketTTS/DEEPOPT.md`.
 
-| weight | RTF | TTFA proxy ms | load ms | prefill ms | AR loop ms | mimi decode ms | total gen ms |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| fp16 | 0.132 | 156 | 2001 | 148 | 963 | 260 | 1372 |
-| int8 | 0.108 |  88 | 1613 |  82 | 801 | 236 | 1118 |
+| weight | kernels | RTF | TTFA proxy ms | prefill ms | AR loop ms | mimi ms | load ms |
+|---|---|---:|---:|---:|---:|---:|---:|
+| fp16 | baseline (#30) | 0.132 | 156 | 148 | 963 | 260 | 2001 |
+| int8 | baseline (#30) | 0.108 | 88 | 82 | 801 | 236 | 1613 |
+| fp16 | R1 FastKernels2 | 0.114 | 62 | 54 | 920 | 213 | 469 |
+| int8 | R1 FastKernels2 | 0.103 | 57 | 52 | 783 | 230 | 363 |
+| fp16 | R2 FastKernels3 | 0.099 | 94* | 54 | 756 | 199 | 319 |
+| int8 | R2 FastKernels3 | **0.073** | 79* | 52 | 495 | 189 | 265 |
+| fp16 | **R3 overlap+ramp (defaults)** | 0.095 | **65** | 54 | 992† | 31† | 454 |
+| int8 | **R3 overlap+ramp (defaults)** | 0.076–0.078 | **60** | 52 | ~640† | ~125† | ~260 |
 
-- **int8 wins on every axis** here — RTF 0.108 vs 0.132 (~18% faster), TTFA 88 vs 156 ms, load 1613 vs 2001 ms —
-  on top of the usual VRAM saving; quality is bit-comparable (int8 ≈ fp16 for this model, as always).
-- The **autoregressive FlowLM loop dominates** offline cost (~70%); mimi decode is ~19%, prefill the rest —
-  consistent with the #30 tiling analysis (that pass sped up mimi decode, not the AR loop).
-- Numbers are the **offline-KV** path (one shot, no player-loop). The live streaming RTF (per-frame pumped in
-  play mode) carries the #29 slicing overhead and runs ~0.29 — measured separately by the demos / NpcTalkPerfProbe.
+\* R2's offline TTFA proxy is block-granular (K=8) — fixed by the R3 first-block ramp {2,4}.
+† under `OverlapMimi` the loop/mimi split shifts (mimi windows issue inside the AR loop) — only
+total/RTF is comparable across rounds.
+
+- **Deep-opt story (3 rounds, every gate PASS, incl. three bit-exact R3 overlap gates):**
+  **R1** = #31 coalesced GEMV/GEMM + fused flow head — prefill ~2×, TTFA halved, AR flat (proved the
+  loop was NOT bandwidth-bound: ~12–15 GB/s effective vs the 236 GB/s roofline). **R2** = GPU-resident
+  AR frame — the 2 blocking readbacks + 3 uploads per frame (≈88% of the loop was pipeline-drain wait)
+  removed via K=8 frame blocks with per-frame GPU slots; dispatches 151→51/frame; AR 1.45× int8, RTF
+  0.108→0.073. **R3** = mimi windows overlapped into the AR blocks + TTFA ramp — **chat-clause-length
+  synth (≈3.7 s) 2.05× int8 / 1.75× fp16 total; TTFA proxy 47–60 ms**; long clips neutral (0.99×, GPU
+  already saturated). Whole-layer fusion was assessed and skipped with proof (no device-scope barrier
+  on D3D11 → provably slower).
+- Quality: E2E same EOS step, latents corr ≥0.9999998, mel-corr ≥0.999985 across all rounds; R3 wav
+  bit-identical to the sequential decode. Rollback ladder: `OverlapMimi=false`→R2,
+  `FastKernels3=false`→R1, `FastKernels2=false`→baseline.
+- Streaming path shares the wins (1 async read/frame instead of 2 blocking; first flush at 2 frames →
+  first audio ~0.5 s earlier). The old live-streaming RTF ~0.29 predates the campaign — re-measure via
+  NpcTalkPerfProbe / demos in the next play-mode session.
 - `load ms` is first-load-in-session and OS-cache-sensitive (varies run to run); RTF/TTFA are the stable metrics.
 
 ## TTS — Kokoro-82M benchmark (RTX 4060, 2026-07-16)

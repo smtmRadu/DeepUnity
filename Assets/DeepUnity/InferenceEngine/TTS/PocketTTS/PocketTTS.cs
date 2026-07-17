@@ -32,6 +32,27 @@ namespace DeepUnity
             System.Random rng = new System.Random(1234);
             ComputeBuffer syncBuf;   // 1-elem buffer; a blocking GetData flushes the GPU queue for timing
             readonly float[] syncTmp = new float[1];
+            ComputeBuffer wavAccum;  // #31-R3: overlapped-mimi wav assembly [maxFrames*1920] (one readback)
+
+            void GrowWav(int n)
+            {
+                if (wavAccum != null && wavAccum.count >= n) return;
+                wavAccum?.Release();
+                wavAccum = new ComputeBuffer(Math.Max(n, 1), 4, ComputeBufferType.Structured);
+            }
+
+            // #31-R3: issue ONE mimi window of the DecodeWindowed schedule — window [s, e) with
+            // ctx latents of left context, tail-restricted to the e-t0 kept frames, harvested
+            // GPU-side into wavAccum at t0*1920. No readback (the caller owns the final one).
+            void IssueMimiWindow(List<float[]> latents, int t0, int e)
+            {
+                int s = Math.Max(0, t0 - Cfg.MIMI_DECODE_CTX);
+                int nWin = e - s;
+                var win = new float[nWin * Cfg.LDIM];
+                for (int t = s; t < e; t++)
+                    Array.Copy(latents[t], 0, win, (t - s) * Cfg.LDIM, Cfg.LDIM);
+                mimi.DecodeIssueTo(wavAccum, t0 * Cfg.SAMPLES_PER_LATENT, win, nWin, embMean, embStd, e - t0);
+            }
 
             // Force the GPU to finish queued dispatches so CPU stopwatch reads reflect real GPU time
             // (FlowHead/DecodeStepKV already GetData, but PrefillKV has no readback of its own).
@@ -53,6 +74,13 @@ namespace DeepUnity
             /// fine for typical NPC lines (<=~5 s). For long (10 s / 125-frame) clips prefer a
             /// larger chunk, or a true incremental Mimi-state decode (follow-up optimization).</summary>
             public int StreamChunkFrames = 8;
+
+            /// <summary>#31-R3 lever 2 (streaming twin of ArBatchRamp): the FIRST flush fires after
+            /// this many frames (then every StreamChunkFrames) — first audio reaches the ring
+            /// ~0.5 s earlier at 12.5 Hz. Only the flush BOUNDARY moves: the windowed decode's
+            /// kept-tail samples are position-exact, so emitted audio is unchanged. Applied on the
+            /// GPU-frame path (FastKernels3) only, keeping the legacy path A/B-identical.</summary>
+            public int StreamFirstChunkFrames = 2;
             public int StreamLastTokenCount { get; private set; }   // frames actually emitted (streaming)
 
             /// <summary>Streaming path only (bug C): per-frame GPU readbacks via AsyncGPUReadback —
@@ -83,6 +111,68 @@ namespace DeepUnity
             /// ~3-7 ms over the scene's baseline frame, whatever the GPU). Slower cards converge
             /// to finer slices, faster cards to coarser ones.</summary>
             public static long GpuMacsPerTick = 900_000_000;
+
+            /// <summary>#31-P: routes every eligible matmul (FlowLM backbone GEMVs + prefill GEMMs,
+            /// flow head, mimi decoder_transformer) through the coalesced/fused kernel generation
+            /// (see PocketTTSCS.compute "#31-P" section + DEEPOPT.md). Default ON. false = the
+            /// pre-#31 LinearBias/LinearBiasQ8 + per-op flow head, kept for A/B probes and as the
+            /// rollback (PocketTTSMimi.ForceLegacyKernels additionally forces the pre-#30 convs —
+            /// the two switches bisect the #30 and #31 axes independently). Tick pacing is
+            /// unaffected: slicing stays MAC-budgeted and InferencePerf AutoTune re-measures
+            /// real per-tick cost, so faster kernels just converge to coarser slices.</summary>
+            public static bool FastKernels2 = true;
+
+            /// <summary>#31-R2 (layered on FastKernels2): GPU-resident AR frames — the whole
+            /// token->transformer->eos->flow-head->latent chain stays on the GPU (feedback via a
+            /// GPU latent buffer, eos+latent written to per-frame slots), the offline loop reads
+            /// results back ONCE per ArBatchFrames block instead of TWICE PER FRAME, streaming
+            /// makes one combined async readback per frame instead of two. Plus the fused
+            /// transformer step (LN folded into the GEMV staging, residual adds folded into GEMV
+            /// epilogues, slice+RoPE+KV-append as one kernel): ~49 dispatches/frame vs R1's ~96.
+            /// Default ON; false restores the exact R1 dispatch list (three-tier bisect:
+            /// legacy / FastKernels2 / FastKernels2+3).</summary>
+            public static bool FastKernels3 = true;
+
+            /// <summary>#31-R2: frames per GPU-resident offline batch (1..16). Larger = fewer
+            /// pipeline drains but more post-EOS overshoot compute (up to K-1 discarded frames,
+            /// ~2% of a 130-frame clip at 8). Streaming always runs per-frame (latency).</summary>
+            public static int ArBatchFrames = 8;
+
+            /// <summary>#31-R3 lever 2 (TTFA ramp): frame counts for the FIRST offline blocks (each
+            /// clamped to ArBatchFrames; later blocks use ArBatchFrames). Flat K=8 regressed the
+            /// TTFA proxy 57→79 ms (first readback waits for 8 frames); {2,4} lands the first
+            /// eos/latent readback after ~2 frames of GPU. null = flat K (the exact R2 behavior,
+            /// kept for A/B).</summary>
+            public static int[] ArBatchRamp = { 2, 4 };
+
+            /// <summary>#31-R3 lever 1: interleave mimi with the AR loop instead of running it
+            /// strictly after. The offline GPU-resident path issues DecodeWindowed's EXACT window
+            /// schedule (chunk 64, ctx MIMI_DECODE_CTX) as soon as each window's latents are
+            /// scanned, harvests every window's kept tail GPU-side into a persistent buffer
+            /// (CopySlice — pure copy), and does ONE readback at the very end: same dispatches as
+            /// the sequential windowed path, only interleaved, so given the same latents the wav
+            /// is BIT-IDENTICAL to DecodeWindowed(chunk 64) — probe-gated at maxAbs == 0. Mimi's
+            /// fat conv kernels fill the AR chain's inter-dispatch dependency bubbles and largely
+            /// leave the critical path. false = the R2 sequential tail (A/B). Offline only —
+            /// streaming already interleaves decode via its flush windows.</summary>
+            public static bool OverlapMimi = true;
+            const int MIMI_OVERLAP_CHUNK = 64;   // = DecodeWindowed's default chunk (schedule parity)
+
+            // ---- #31-R2 instrumentation (probe-owned; zero overhead when PerfCounting == false).
+            // FlowLM funnels EVERY dispatch through its Disp() wrapper and counts blocking/async
+            // readbacks + uploads at their exact sites, so the parity probe can print per-frame
+            // dispatch counts and sync attribution BEFORE/AFTER the R2 path (item 1 of the brief).
+            public static bool PerfCounting = false;
+            public static long StatDispatches, StatBlockingReads, StatAsyncReads, StatUploads;
+            public static double StatReadWaitMs;                       // ms spent inside blocking GetData
+            public static double StatTokenCpuMs, StatDecodeCallMs, StatFlowCallMs;   // legacy-loop split
+            public static long StatLoopStartDisp, StatLoopStartReads, StatLoopStartUps;  // post-prefill marks
+            public static void StatReset()
+            {
+                StatDispatches = StatBlockingReads = StatAsyncReads = StatUploads = 0;
+                StatReadWaitMs = StatTokenCpuMs = StatDecodeCallMs = StatFlowCallMs = 0;
+                StatLoopStartDisp = StatLoopStartReads = StatLoopStartUps = 0;
+            }
 
             /// <summary>#29 spike attribution: the last pipeline stage a pump tick worked on
             /// ("clause_start", "prefill", "ar_decode", "ar_flowhead", "mimi_decode", "flush_push",
@@ -409,6 +499,12 @@ namespace DeepUnity
                     "ConvTranspose1D", "ConvTranspose1DTiled", "ConvTranspose1DGrouped", "LayerNormT",
                     "ApplyRoPE", "CausalAttention", "CausalAttentionLegacy", "CausalAttentionKV",
                     "AppendKV", "Modulate", "GateAdd", "RMSNormFlow",
+                    // #31-P (all degenerate at zeroed uniforms: in_dim/out_dim/seq_len/norm_dim = 0)
+                    "LinearBiasCoal", "LinearBiasQ8Coal", "LinearBiasGemm", "LinearBiasQ8Gemm",
+                    "FlowResBlockFused", "FlowResBlockFusedQ8", "FlowFinalFused", "FlowFinalFusedQ8",
+                    // #31-R2 (degenerate at in_dim/out_dim/num_heads = 0)
+                    "Gemv16", "GemvQ8", "GemvLN16", "GemvLNQ8",
+                    "ARQkvPrep", "AREosNorm", "AREosNormQ8", "ARCommit",
                 };
                 // every buffer property in PocketTTSCS.compute — distinct dummy each (one UAV per slot)
                 string[] bufs =
@@ -416,6 +512,7 @@ namespace DeepUnity
                     "AttendedValues", "K", "KCache", "Q", "V", "VCache", "W", "W_bias", "W_scales",
                     "X", "Y", "buf", "buf_a", "buf_b", "ch_scale", "inout_buf", "ln_beta", "ln_gamma",
                     "mod_vec", "norm_input", "norm_output", "rms_alpha",
+                    "W2", "W_bias2", "W_scales2", "W3", "W_bias3", "W_scales3",   // #31-P fused slots
                 };
                 // every integer uniform that gates a thread guard — zero them so all dispatches degenerate
                 string[] zeroUniforms =
@@ -424,6 +521,7 @@ namespace DeepUnity
                     "conv_dilation", "pad_left", "norm_dim", "num_heads", "head_dim", "buffer_size",
                     "copy_src_offset", "copy_dst_offset", "n_groups", "pos_offset", "kv_len",
                     "elem_offset", "attn_context", "mod_shift_off", "mod_scale_off", "mod_gate_off",
+                    "gemv_mode",   // #31-R2
                 };
 
                 var dummies = new ComputeBuffer[bufs.Length];
@@ -626,41 +724,125 @@ namespace DeepUnity
                     seq.AddRange(prefix);
                 }
 
-                var swLoop = System.Diagnostics.Stopwatch.StartNew();
-                for (int n = 0; n < frames; n++)
+                if (PerfCounting)   // #31-R2 item 1: attribute the AR loop separately from prefill
                 {
-                    float[] token = (n == 0) ? flm.BosLatentEmbedding() : flm.InputLinear(latents[n - 1]);
-                    float[] c;
-                    if (useKvCache)
-                    {
-                        c = flm.DecodeStepKV(token);          // append token, attend over cache -> out_norm(c)
-                    }
-                    else
-                    {
-                        seq.AddRange(token);
-                        int L = seq.Count / dim;
-                        var tfOut = flm.RunTransformer(seq.ToArray(), L);
-                        c = flm.OutNormLastRow(tfOut, L);
-                    }
-
-                    // EOS applies in ALL modes (bit-exact c -> same eos step as the reference). The
-                    // reference calls flow at the loop top then breaks BEFORE queue.put, so the
-                    // post-EOS frames' noise exists in flow_noise_all but their latents are never
-                    // emitted — breaking here (before FlowHead/collect) matches its put-count exactly.
-                    float eos = flm.OutEos(c);
-                    if (eos > Cfg.EOS_THRESHOLD && eosStep < 0) eosStep = n;
-                    if (eosStep >= 0 && n >= eosStep + framesAfterEos) break;
-
-                    float[] noise = deterministic ? injectNoise[n] : Gauss(Cfg.LDIM, Mathf.Sqrt(Cfg.TEMPERATURE));
-                    float[] vel = flm.FlowHead(c, noise, 0f, 1f);
-                    float[] lat = new float[Cfg.LDIM];
-                    for (int i = 0; i < Cfg.LDIM; i++) lat[i] = noise[i] + vel[i];   // 1 Euler step
-                    latents.Add(lat);
-                    // TTFA (offline proxy): prefill + first latent ready. True end-to-end TTFA (incl.
-                    // the first Mimi frame + audio buffer fill) is measured by the streaming path (next step).
-                    if (n == 0) { GpuSync(); TtfaMs = PrefillMs + (float)swLoop.Elapsed.TotalMilliseconds; }
+                    StatLoopStartDisp = StatDispatches;
+                    StatLoopStartReads = StatBlockingReads;
+                    StatLoopStartUps = StatUploads;
                 }
-                GpuSync();
+                var swLoop = System.Diagnostics.Stopwatch.StartNew();
+                bool overlapActive = false;   // #31-R3: mimi windows interleaved with the AR blocks
+                int mimiIssued = 0;           // latents already routed into an issued mimi window
+                if (useKvCache && flm.CanRunGpuFrames())
+                {
+                    // ===== #31-R2: GPU-resident K-frame batches — ZERO per-frame syncs =====
+                    // K frames issue back-to-back (feedback stays on-GPU), then ONE blocking
+                    // readback of the K [eos|latent] slots. The CPU EOS scan reproduces the legacy
+                    // semantics exactly: eos checked BEFORE a frame's latent is emitted, stop at
+                    // eosStep+framesAfterEos, overshoot latents (computed but past the stop) are
+                    // DISCARDED here, before mimi — emitted audio is identical by construction
+                    // (frame f's latent never depends on later frames; extra KV rows are never
+                    // attended by emitted frames). Non-deterministic runs consume RNG for the whole
+                    // issued block (overshoot noise) — inconsequential (sampling), and injectNoise
+                    // parity runs are indexed per absolute frame, unaffected.
+                    // #31-R3 lever 2: the FIRST blocks follow ArBatchRamp (e.g. 2, 4) so the first
+                    // eos/latent readback lands after ~2 frames of GPU, not K.
+                    // #31-R3 lever 1: every completed MIMI_OVERLAP_CHUNK of scanned latents issues
+                    // its mimi window immediately (no readback) — the window executes on the GPU
+                    // interleaved with the NEXT AR blocks and is drained by their eos readbacks.
+                    int K = Math.Max(1, Math.Min(ArBatchFrames, 16));
+                    int stride = Cfg.LDIM + 1;
+                    var noiseRows = new float[K][];
+                    var slotCpu = new float[K * stride];
+                    bool done = false;
+                    overlapActive = OverlapMimi;
+                    if (overlapActive) GrowWav(frames * Cfg.SAMPLES_PER_LATENT);
+                    int blockIdx = 0;
+                    for (int n0 = 0; n0 < frames && !done; blockIdx++)
+                    {
+                        int kThis = (ArBatchRamp != null && blockIdx < ArBatchRamp.Length)
+                                    ? Math.Max(1, Math.Min(ArBatchRamp[blockIdx], K)) : K;
+                        int blk = Math.Min(kThis, frames - n0);
+                        for (int f = 0; f < blk; f++)
+                            noiseRows[f] = deterministic ? injectNoise[n0 + f]
+                                                         : Gauss(Cfg.LDIM, Mathf.Sqrt(Cfg.TEMPERATURE));
+                        flm.UploadNoiseBlock(noiseRows, blk);              // one upload per block
+                        for (int f = 0; f < blk; f++)
+                            flm.DecodeFrameGpuIssue(f, n0 + f);            // no readbacks inside
+                        flm.ReadEosLatBlock(blk, slotCpu);                 // the block's ONE sync point
+                        for (int f = 0; f < blk; f++)
+                        {
+                            int n = n0 + f;
+                            float eos = slotCpu[f * stride];
+                            if (eos > Cfg.EOS_THRESHOLD && eosStep < 0) eosStep = n;
+                            if (eosStep >= 0 && n >= eosStep + framesAfterEos) { done = true; break; }
+                            var lat = new float[Cfg.LDIM];
+                            Array.Copy(slotCpu, f * stride + 1, lat, 0, Cfg.LDIM);
+                            latents.Add(lat);
+                        }
+                        // TTFA proxy is BLOCK-granular here (ArBatchRamp keeps block 0 tiny); the
+                        // per-frame streaming path owns the real user-facing TTFA.
+                        if (TtfaMs == 0f && latents.Count > 0)
+                            TtfaMs = PrefillMs + (float)swLoop.Elapsed.TotalMilliseconds;
+                        n0 += blk;
+                        // R3 lever 1: issue every COMPLETE window over the scanned latents now —
+                        // its GPU work hides behind the next blocks' eos-readback waits.
+                        while (overlapActive && latents.Count - mimiIssued >= MIMI_OVERLAP_CHUNK)
+                        {
+                            IssueMimiWindow(latents, mimiIssued, mimiIssued + MIMI_OVERLAP_CHUNK);
+                            mimiIssued += MIMI_OVERLAP_CHUNK;
+                        }
+                    }
+                }
+                else
+                {
+                    var swSec = PerfCounting ? new System.Diagnostics.Stopwatch() : null;
+                    for (int n = 0; n < frames; n++)
+                    {
+                        swSec?.Restart();
+                        float[] token = (n == 0) ? flm.BosLatentEmbedding() : flm.InputLinear(latents[n - 1]);
+                        if (swSec != null) StatTokenCpuMs += swSec.Elapsed.TotalMilliseconds;
+                        float[] c;
+                        swSec?.Restart();
+                        if (useKvCache)
+                        {
+                            c = flm.DecodeStepKV(token);          // append token, attend over cache -> out_norm(c)
+                        }
+                        else
+                        {
+                            seq.AddRange(token);
+                            int L = seq.Count / dim;
+                            var tfOut = flm.RunTransformer(seq.ToArray(), L);
+                            c = flm.OutNormLastRow(tfOut, L);
+                        }
+                        if (swSec != null) StatDecodeCallMs += swSec.Elapsed.TotalMilliseconds;
+
+                        // EOS applies in ALL modes (bit-exact c -> same eos step as the reference). The
+                        // reference calls flow at the loop top then breaks BEFORE queue.put, so the
+                        // post-EOS frames' noise exists in flow_noise_all but their latents are never
+                        // emitted — breaking here (before FlowHead/collect) matches its put-count exactly.
+                        float eos = flm.OutEos(c);
+                        if (eos > Cfg.EOS_THRESHOLD && eosStep < 0) eosStep = n;
+                        if (eosStep >= 0 && n >= eosStep + framesAfterEos) break;
+
+                        float[] noise = deterministic ? injectNoise[n] : Gauss(Cfg.LDIM, Mathf.Sqrt(Cfg.TEMPERATURE));
+                        swSec?.Restart();
+                        float[] vel = flm.FlowHead(c, noise, 0f, 1f);
+                        if (swSec != null) StatFlowCallMs += swSec.Elapsed.TotalMilliseconds;
+                        float[] lat = new float[Cfg.LDIM];
+                        for (int i = 0; i < Cfg.LDIM; i++) lat[i] = noise[i] + vel[i];   // 1 Euler step
+                        latents.Add(lat);
+                        // TTFA (offline proxy): prefill + first latent ready. True end-to-end TTFA (incl.
+                        // the first Mimi frame + audio buffer fill) is measured by the streaming path (next step).
+                        if (n == 0) { GpuSync(); TtfaMs = PrefillMs + (float)swLoop.Elapsed.TotalMilliseconds; }
+                    }
+                }
+                // #31-R3: with overlap, the last eos readback already fenced the AR chain; only
+                // freshly-issued mimi windows are still queued and belong to DecodeMs (the single
+                // final readback drains them). NOTE the split's meaning under overlap: earlier
+                // windows execute during the loop's readback waits, so LoopMs absorbs hidden mimi
+                // work and DecodeMs shrinks — TOTAL is the comparable number in [perf] A/Bs.
+                if (!overlapActive) GpuSync();
                 LoopMs = (float)swLoop.Elapsed.TotalMilliseconds;
 
                 int T = latents.Count;
@@ -675,8 +857,27 @@ namespace DeepUnity
                 // is exact past the receptive field, see MIMI_DECODE_CTX) with BOUNDED dispatch
                 // sizes and scratch memory (a single 512-frame block decode would want ~1 GB scratch).
                 var swDec = System.Diagnostics.Stopwatch.StartNew();
-                float[] wav = T <= 128 ? mimi.Decode(raw, T, embMean, embStd)
-                                       : DecodeWindowed(raw, T);
+                float[] wav;
+                if (overlapActive)
+                {
+                    // finish the schedule (final ragged window) + ONE readback of the assembly.
+                    // Windows and their dispatch parameters are IDENTICAL to DecodeWindowed(chunk
+                    // 64) on the same latents -> bit-identical wav (probe R3 gate); for T <= 64
+                    // that single window IS the plain full decode (bit-identical to the old path).
+                    while (mimiIssued < T)
+                    {
+                        int e = Math.Min(mimiIssued + MIMI_OVERLAP_CHUNK, T);
+                        IssueMimiWindow(latents, mimiIssued, e);
+                        mimiIssued = e;
+                    }
+                    wav = new float[T * Cfg.SAMPLES_PER_LATENT];
+                    if (wav.Length > 0) wavAccum.GetData(wav, 0, 0, wav.Length);
+                }
+                else
+                {
+                    wav = T <= 128 ? mimi.Decode(raw, T, embMean, embStd)
+                                   : DecodeWindowed(raw, T);
+                }
                 DecodeMs = (float)swDec.Elapsed.TotalMilliseconds;
                 return wav;
             }
@@ -762,15 +963,47 @@ namespace DeepUnity
                 float[] c = new float[Cfg.DIM];                       // per-frame readback targets (reused)
                 float[] vel = new float[Cfg.LDIM];
 
+                // #31-R2: GPU-resident frame — one combined [eos|latent] readback replaces the
+                // legacy pair (c then velocity) and kills the token/cond uploads + CPU input_linear.
+                // Per-frame pacing and the flush block are UNCHANGED (pump semantics intact); the
+                // only extra work is one discarded flow-head pass on the final stop frame.
+                bool gpuAr = flm.CanRunGpuFrames();
+                float[] slot1 = gpuAr ? new float[Cfg.LDIM + 1] : null;
+                float[][] noiseRow1 = gpuAr ? new float[1][] : null;
+                // #31-R3: first flush after StreamFirstChunkFrames (GPU-frame path), then the
+                // normal cadence — earlier first audio, identical samples (windowed tail-exact).
+                int firstChunk = gpuAr ? Mathf.Clamp(StreamFirstChunkFrames, 1, chunk) : chunk;
+
                 for (int n = 0; n < maxFrames; n++)
                 {
+                    bool stop;
+                    if (gpuAr)
+                    {
+                        noiseRow1[0] = deterministic ? injectNoise[n] : Gauss(Cfg.LDIM, Mathf.Sqrt(Cfg.TEMPERATURE));
+                        flm.UploadNoiseBlock(noiseRow1, 1);
+                        flm.DecodeFrameGpuIssue(0, n);
+                        var rb = flm.ReadEosLatYielding(1, slot1, AsyncReadback);
+                        while (rb.MoveNext()) { LastHeavyTick = "ar_frame"; yield return rb.Current; }
+                        float eosG = slot1[0];
+                        if (eosG > Cfg.EOS_THRESHOLD && eosStep < 0) eosStep = n;
+                        stop = eosStep >= 0 && n >= eosStep + framesAfterEos;
+                        if (!stop)
+                        {
+                            float[] lat = new float[Cfg.LDIM];
+                            Array.Copy(slot1, 1, lat, 0, Cfg.LDIM);
+                            latents.Add(lat);
+                            rawAll.AddRange(lat);
+                        }
+                    }
+                    else
+                    {
                     float[] token = (n == 0) ? flm.BosLatentEmbedding() : flm.InputLinear(latents[n - 1]);
                     // bug C: async readbacks — yield while the GPU drains instead of a blocking GetData
                     var ds = flm.DecodeStepKVYielding(token, c, AsyncReadback);
                     while (ds.MoveNext()) { LastHeavyTick = "ar_decode"; yield return ds.Current; }
                     float eos = flm.OutEos(c);
                     if (eos > Cfg.EOS_THRESHOLD && eosStep < 0) eosStep = n;
-                    bool stop = eosStep >= 0 && n >= eosStep + framesAfterEos;
+                    stop = eosStep >= 0 && n >= eosStep + framesAfterEos;
                     if (!stop)
                     {
                         float[] noise = deterministic ? injectNoise[n] : Gauss(Cfg.LDIM, Mathf.Sqrt(Cfg.TEMPERATURE));
@@ -781,9 +1014,13 @@ namespace DeepUnity
                         latents.Add(lat);
                         rawAll.AddRange(lat);
                     }
+                    }
 
-                    // emit a chunk when enough new frames accumulated, or at end-of-stream
-                    bool flush = stop || (latents.Count > 0 && latents.Count % chunk == 0);
+                    // emit a chunk when enough new frames accumulated, or at end-of-stream.
+                    // Schedule form (== the old `% chunk` cadence when firstChunk == chunk): next
+                    // flush at emitted + (first ? firstChunk : chunk) scanned frames.
+                    bool flush = stop || (latents.Count > 0 &&
+                        latents.Count >= emittedFrames + (emittedFrames == 0 ? firstChunk : chunk));
                     if (flush && latents.Count > emittedFrames)
                     {
                         // windowed decode: [ctx context ; new frames] — new samples are exact
@@ -839,7 +1076,7 @@ namespace DeepUnity
                 return clip;
             }
 
-            public void Dispose() { syncBuf?.Release(); encoder?.Dispose(); flm?.Dispose(); mimi?.Dispose(); weights?.Dispose(); }
+            public void Dispose() { syncBuf?.Release(); wavAccum?.Release(); encoder?.Dispose(); flm?.Dispose(); mimi?.Dispose(); weights?.Dispose(); }
         }
     }
 }

@@ -16,9 +16,47 @@ namespace DeepUnity
             readonly ComputeShader cs;
             readonly PocketTTSWeights w;
             int kCopy, kSliceCols, kAdd, kAct, kLinear, kLinearQ8, kLN, kRope, kAttn, kAttnKV, kAppendKV, kMod, kGate, kRms;
+            int kLinearCoal, kLinearQ8Coal, kLinearGemm, kLinearQ8Gemm;          // #31-P coalesced
+            int kFlowRB, kFlowRBQ8, kFlowFinal, kFlowFinalQ8;                    // #31-P fused flow head
+            int kGemv16, kGemvQ8, kGemvLN16, kGemvLNQ8;                          // #31-R2 mode/LN GEMVs
+            int kQkvPrep, kEosNorm, kEosNormQ8, kCommit, kSlice;                 // #31-R2 AR-frame kernels
             ComputeBuffer tfIn, tfNorm, qkv, q, k, v, attn, ff, tmp, onesB, zerosB;
             ComputeBuffer fx, fy, fh, fmod, ftmp, ftime0, ftime1;
             int cap;
+
+            // ---- #31-R2 GPU-resident AR frame state ----
+            // Zero per-frame CPU<->GPU crossings: the previous latent lives in d1Lat (feedback for
+            // the on-GPU input_linear), noise for a K-frame block is uploaded ONCE into noiseK, and
+            // each frame's [eos | latent[32]] lands in its eosLat slot (stride 33) — read back once
+            // per block (offline) / once per frame async (streaming).
+            public const int EOSLAT_STRIDE = PocketTTSConfig.LDIM + 1;           // [eos | latent]
+            ComputeBuffer bosLat, d1Noise, d1Lat, noiseK, eosLat;
+            float[] _noiseFlat;                                                  // upload scratch
+            int _arCap;                                                          // allocated K slots
+
+            // instrumentation funnel (#31-R2 item 1): every FlowLM dispatch goes through Disp so
+            // PocketTTS.PerfCounting can report EXACT per-frame dispatch counts. Zero cost when off.
+            void Disp(int kernel, int gx, int gy, int gz)
+            {
+                cs.Dispatch(kernel, gx, gy, gz);
+                if (PocketTTS.PerfCounting) PocketTTS.StatDispatches++;
+            }
+            static void CountUpload() { if (PocketTTS.PerfCounting) PocketTTS.StatUploads++; }
+            void BlockingRead(ComputeBuffer b, float[] dst, int n)
+            {
+                if (!PocketTTS.PerfCounting) { b.GetData(dst, 0, 0, n); return; }
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                b.GetData(dst, 0, 0, n);
+                PocketTTS.StatBlockingReads++;
+                PocketTTS.StatReadWaitMs += sw.Elapsed.TotalMilliseconds;
+            }
+
+            // #31-P routing gate: coalesced GEMV/GEMM for every K that is a multiple of 128 (the
+            // GEMM stages 128-column chunks; the GEMV requires K <= COAL_KMAX groupshared floats).
+            // Pocket Ks: 32 (input_proj — stays legacy), 256, 512, 1024, 4096 — all %128==0 above 32.
+            const int COAL_KMAX = 4096;                                          // = PVC_XMAX in the shader
+            static bool CoalEligible(int inDim)
+                => PocketTTS.FastKernels2 && inDim % 128 == 0 && inDim <= COAL_KMAX;
 
             // ---- KV-cache incremental decode (P5) ----
             ComputeBuffer[] kCache, vCache;   // per-layer [maxLen, DIM]
@@ -52,6 +90,23 @@ namespace DeepUnity
                 kMod = cs.FindKernel("Modulate");
                 kGate = cs.FindKernel("GateAdd");
                 kRms = cs.FindKernel("RMSNormFlow");
+                kLinearCoal = cs.FindKernel("LinearBiasCoal");
+                kLinearQ8Coal = cs.FindKernel("LinearBiasQ8Coal");
+                kLinearGemm = cs.FindKernel("LinearBiasGemm");
+                kLinearQ8Gemm = cs.FindKernel("LinearBiasQ8Gemm");
+                kFlowRB = cs.FindKernel("FlowResBlockFused");
+                kFlowRBQ8 = cs.FindKernel("FlowResBlockFusedQ8");
+                kFlowFinal = cs.FindKernel("FlowFinalFused");
+                kFlowFinalQ8 = cs.FindKernel("FlowFinalFusedQ8");
+                kGemv16 = cs.FindKernel("Gemv16");
+                kGemvQ8 = cs.FindKernel("GemvQ8");
+                kGemvLN16 = cs.FindKernel("GemvLN16");
+                kGemvLNQ8 = cs.FindKernel("GemvLNQ8");
+                kQkvPrep = cs.FindKernel("ARQkvPrep");
+                kEosNorm = cs.FindKernel("AREosNorm");
+                kEosNormQ8 = cs.FindKernel("AREosNormQ8");
+                kCommit = cs.FindKernel("ARCommit");
+                kSlice = cs.FindKernel("CopySlice");
             }
 
             static int Div256(int n) => (n + 255) / 256;
@@ -61,9 +116,31 @@ namespace DeepUnity
             // A '<name>.weight.scales' sibling in the manifest => the weight is q8 (int8 4-per-uint
             // + per-row fp16 scale): route to LinearBiasQ8. Chosen PER TENSOR (fp16 dirs have no
             // .scales, so this is a no-op there). All pocket q8 in_dims are % 4 == 0.
+            // #31-P: eligible shapes (K % 128 == 0) route to the coalesced GEMV (T==1, the AR-loop
+            // shape) / GEMM (T>1, RunTransformer) kernels behind PocketTTS.FastKernels2. Same
+            // uniforms/buffers, different thread layout — reductions reorder float sums, so the new
+            // path is parity-gated (maxAbs/corr), NOT bit-exact (see DEEPOPT.md).
             void Linear(string name, ComputeBuffer x, ComputeBuffer y, int T, int inDim, int outDim, bool bias, int act = 0)
             {
                 ComputeBuffer scales = w.Has(name + ".weight.scales") ? w.Get(name + ".weight.scales") : null;
+                if (CoalEligible(inDim))
+                {
+                    int kc = T == 1 ? (scales != null ? kLinearQ8Coal : kLinearCoal)
+                                    : (scales != null ? kLinearQ8Gemm : kLinearGemm);
+                    cs.SetInt("seq_len", T); cs.SetInt("in_dim", inDim); cs.SetInt("out_dim", outDim);
+                    cs.SetInt("activation_type", act); cs.SetInt("has_bias", bias ? 1 : 0);
+                    cs.SetBuffer(kc, "X", x); cs.SetBuffer(kc, "W", w.Get(name + ".weight"));
+                    cs.SetBuffer(kc, "W_bias", bias ? w.Get(name + ".bias") : w.Get(name + ".weight"));
+                    if (scales != null) cs.SetBuffer(kc, "W_scales", scales);
+                    cs.SetBuffer(kc, "Y", y);
+                    if (T == 1) Disp(kc, (outDim + 7) / 8, 1, 1);
+                    else
+                    {
+                        cs.SetInt("elem_offset", 0);   // GEMM token offset — whole-op dispatch
+                        Disp(kc, (outDim + 7) / 8, (T + 7) / 8, 1);
+                    }
+                    return;
+                }
                 int k = scales != null ? kLinearQ8 : kLinear;
                 cs.SetInt("seq_len", T); cs.SetInt("in_dim", inDim); cs.SetInt("out_dim", outDim);
                 cs.SetInt("activation_type", act); cs.SetInt("has_bias", bias ? 1 : 0);
@@ -71,7 +148,7 @@ namespace DeepUnity
                 cs.SetBuffer(k, "W_bias", bias ? w.Get(name + ".bias") : w.Get(name + ".weight"));
                 if (scales != null) cs.SetBuffer(k, "W_scales", scales);
                 cs.SetBuffer(k, "Y", y);
-                cs.Dispatch(k, 1, (T + 7) / 8, (outDim + 31) / 32);
+                Disp(k, 1, (T + 7) / 8, (outDim + 31) / 32);
             }
 
             // #29: row-sliced Linear — splits T rows into ~PocketTTS.GpuMacsPerTick sub-dispatches
@@ -89,6 +166,25 @@ namespace DeepUnity
                 for (int r0 = 0; r0 < T; r0 += rows)
                 {
                     ComputeBuffer scales = w.Has(name + ".weight.scales") ? w.Get(name + ".weight.scales") : null;
+                    int span = Math.Min(rows, T - r0);
+                    // #31-P: eligible slices go through the coalesced GEMM — elem_offset is the
+                    // FIRST TOKEN ROW; a ragged tail tile recomputes <=7 rows also covered by the
+                    // next slice with the SAME kernel -> identical values, parity-neutral (#29 rule).
+                    if (CoalEligible(inDim))
+                    {
+                        int kc = scales != null ? kLinearQ8Gemm : kLinearGemm;
+                        cs.SetInt("seq_len", T); cs.SetInt("in_dim", inDim); cs.SetInt("out_dim", outDim);
+                        cs.SetInt("activation_type", act); cs.SetInt("has_bias", bias ? 1 : 0);
+                        cs.SetBuffer(kc, "X", x); cs.SetBuffer(kc, "W", w.Get(name + ".weight"));
+                        cs.SetBuffer(kc, "W_bias", bias ? w.Get(name + ".bias") : w.Get(name + ".weight"));
+                        if (scales != null) cs.SetBuffer(kc, "W_scales", scales);
+                        cs.SetBuffer(kc, "Y", y);
+                        cs.SetInt("elem_offset", r0);
+                        Disp(kc, (outDim + 7) / 8, (span + 7) / 8, 1);
+                        cs.SetInt("elem_offset", 0);
+                        if (r0 + rows < T) yield return null;
+                        continue;
+                    }
                     int k = scales != null ? kLinearQ8 : kLinear;
                     cs.SetInt("seq_len", T); cs.SetInt("in_dim", inDim); cs.SetInt("out_dim", outDim);
                     cs.SetInt("activation_type", act); cs.SetInt("has_bias", bias ? 1 : 0);
@@ -97,7 +193,7 @@ namespace DeepUnity
                     if (scales != null) cs.SetBuffer(k, "W_scales", scales);
                     cs.SetBuffer(k, "Y", y);
                     cs.SetInt("elem_offset", r0);
-                    cs.Dispatch(k, 1, (Math.Min(rows, T - r0) + 7) / 8, (outDim + 31) / 32);
+                    Disp(k, 1, (span + 7) / 8, (outDim + 31) / 32);
                     cs.SetInt("elem_offset", 0);
                     if (r0 + rows < T) yield return null;
                 }
@@ -108,12 +204,12 @@ namespace DeepUnity
                 cs.SetInt("seq_len", T); cs.SetInt("norm_dim", dim); cs.SetFloat("norm_eps", eps);
                 cs.SetBuffer(kLN, "norm_input", x); cs.SetBuffer(kLN, "norm_output", y);
                 cs.SetBuffer(kLN, "ln_gamma", gamma); cs.SetBuffer(kLN, "ln_beta", beta);
-                cs.Dispatch(kLN, Div256(T), 1, 1);
+                Disp(kLN, Div256(T), 1, 1);
             }
 
-            void Act(ComputeBuffer b, int n, int act) { cs.SetInt("buffer_size", n); cs.SetInt("activation_type", act); cs.SetFloat("leaky_slope", 0.01f); cs.SetBuffer(kAct, "inout_buf", b); cs.Dispatch(kAct, Div256(n), 1, 1); }
-            void AddR(ComputeBuffer a, ComputeBuffer b, int n) { cs.SetInt("buffer_size", n); cs.SetBuffer(kAdd, "buf_a", a); cs.SetBuffer(kAdd, "buf_b", b); cs.Dispatch(kAdd, Div256(n), 1, 1); }
-            void Copy(ComputeBuffer a, ComputeBuffer b, int n) { cs.SetInt("buffer_size", n); cs.SetBuffer(kCopy, "buf_a", a); cs.SetBuffer(kCopy, "buf_b", b); cs.Dispatch(kCopy, Div256(n), 1, 1); }
+            void Act(ComputeBuffer b, int n, int act) { cs.SetInt("buffer_size", n); cs.SetInt("activation_type", act); cs.SetFloat("leaky_slope", 0.01f); cs.SetBuffer(kAct, "inout_buf", b); Disp(kAct, Div256(n), 1, 1); }
+            void AddR(ComputeBuffer a, ComputeBuffer b, int n) { cs.SetInt("buffer_size", n); cs.SetBuffer(kAdd, "buf_a", a); cs.SetBuffer(kAdd, "buf_b", b); Disp(kAdd, Div256(n), 1, 1); }
+            void Copy(ComputeBuffer a, ComputeBuffer b, int n) { cs.SetInt("buffer_size", n); cs.SetBuffer(kCopy, "buf_a", a); cs.SetBuffer(kCopy, "buf_b", b); Disp(kCopy, Div256(n), 1, 1); }
 
             // ================= P2: text embed lookup (CPU gather) =================
             // #29: the table MUST be cached — ReadFloats re-reads the 8 MB file and fp16-decodes
@@ -154,7 +250,7 @@ namespace DeepUnity
                     cs.SetInt("rope_on", 1); cs.SetFloat("scale", attScale); cs.SetInt("attn_context", 0); // 0 = unbounded
                     cs.SetBuffer(kAttn, "Q", q); cs.SetBuffer(kAttn, "K", k); cs.SetBuffer(kAttn, "V", v);
                     cs.SetBuffer(kAttn, "AttendedValues", attn);
-                    cs.Dispatch(kAttn, L, heads, 1);
+                    Disp(kAttn, L, heads, 1);
                     Linear(lp + "/self_attn/out_proj", attn, tmp, L, dim, dim, bias: false);
                     AddR(tfIn, tmp, L * dim);
                     // ffn: x + linear2(gelu(linear1(norm2(x))))
@@ -170,13 +266,13 @@ namespace DeepUnity
             {
                 cs.SetInt("seq_len", T); cs.SetInt("in_dim", inDim); cs.SetInt("out_dim", outDim); cs.SetInt("copy_src_offset", colOff);
                 cs.SetBuffer(kSliceCols, "X", src); cs.SetBuffer(kSliceCols, "Y", dst);
-                cs.Dispatch(kSliceCols, Div256(T * outDim), 1, 1);
+                Disp(kSliceCols, Div256(T * outDim), 1, 1);
             }
             void RoPE(ComputeBuffer b, int T, int heads, int hd, int posOffset = 0)
             {
                 cs.SetInt("seq_len", T); cs.SetInt("num_heads", heads); cs.SetInt("head_dim", hd);
                 cs.SetInt("pos_offset", posOffset); cs.SetFloat("rope_theta", Cfg.ROPE_THETA);
-                cs.SetBuffer(kRope, "inout_buf", b); cs.Dispatch(kRope, Div256(T * heads * (hd / 2)), 1, 1);
+                cs.SetBuffer(kRope, "inout_buf", b); Disp(kRope, Div256(T * heads * (hd / 2)), 1, 1);
             }
 
             // ================= P5: KV-cache incremental decode =================
@@ -220,7 +316,7 @@ namespace DeepUnity
                 cs.SetInt("num_heads", heads); cs.SetInt("head_dim", hd); cs.SetInt("pos_offset", pos);
                 cs.SetBuffer(kAppendKV, "K", d1K); cs.SetBuffer(kAppendKV, "V", d1V);
                 cs.SetBuffer(kAppendKV, "KCache", kCache[layer]); cs.SetBuffer(kAppendKV, "VCache", vCache[layer]);
-                cs.Dispatch(kAppendKV, Div256(dim), 1, 1);
+                Disp(kAppendKV, Div256(dim), 1, 1);
             }
 
             /// <summary>Prefill the KV caches over the prompt rows [bos_before_voice ; voice ; text]
@@ -270,7 +366,7 @@ namespace DeepUnity
                     cs.SetInt("rope_on", 1); cs.SetFloat("scale", attScale); cs.SetInt("attn_context", 0);
                     cs.SetBuffer(kAttn, "Q", q); cs.SetBuffer(kAttn, "K", k); cs.SetBuffer(kAttn, "V", v);
                     cs.SetBuffer(kAttn, "AttendedValues", attn);
-                    cs.Dispatch(kAttn, Lp, heads, 1);
+                    Disp(kAttn, Lp, heads, 1);
                     Linear(lp + "/self_attn/out_proj", attn, tmp, Lp, dim, dim, bias: false);
                     AddR(tfIn, tmp, Lp * dim);
                     yield return null;   // attention tick | ffn ticks
@@ -293,7 +389,7 @@ namespace DeepUnity
                 int dim = Cfg.DIM, heads = Cfg.TF_HEADS, hd = Cfg.HEAD_DIM;
                 int pos = kvLen;                 // absolute position of this new token
                 float attScale = 1f / Mathf.Sqrt(hd);
-                d1In.SetData(tokenEmb, 0, 0, dim);
+                d1In.SetData(tokenEmb, 0, 0, dim); CountUpload();
                 for (int li = 0; li < Cfg.TF_LAYERS; li++)
                 {
                     string lp = $"flow_lm/transformer/layers/{li}";
@@ -305,7 +401,7 @@ namespace DeepUnity
                     cs.SetBuffer(kAttnKV, "Q", d1Q);
                     cs.SetBuffer(kAttnKV, "KCache", kCache[li]); cs.SetBuffer(kAttnKV, "VCache", vCache[li]);
                     cs.SetBuffer(kAttnKV, "AttendedValues", d1Attn);
-                    cs.Dispatch(kAttnKV, heads, 1, 1);
+                    Disp(kAttnKV, heads, 1, 1);
                     Linear(lp + "/self_attn/out_proj", d1Attn, d1Tmp, 1, dim, dim, bias: false);
                     AddR(d1In, d1Tmp, dim);
                     // ffn
@@ -326,7 +422,7 @@ namespace DeepUnity
             {
                 DecodeStepKVIssue(tokenEmb);
                 float[] c = new float[Cfg.DIM];
-                d1Out.GetData(c, 0, 0, Cfg.DIM);
+                BlockingRead(d1Out, c, Cfg.DIM);   // per-frame pipeline drain #1 (legacy loop)
                 return c;
             }
 
@@ -389,12 +485,40 @@ namespace DeepUnity
             ComputeBuffer fNoiseIn, fCondIn;   // #29: persistent FlowHead input uploads (no per-frame alloc)
             bool _fhConstInit;                 // ones/zeros fp16 constants uploaded once
 
+            // ---- #31-P fused flow head state ----
+            // fTimeComb caches 0.5*(TimeEmbed(s,0)+TimeEmbed(t,1)) — (s,t) are CONSTANT (0,1) for
+            // every AR frame, yet the legacy path recomputed both embeds (6 dispatches + a CPU
+            // cos/sin table + a transient ComputeBuffer) per frame. Same kernels compute it ONCE;
+            // bit-identical values thereafter. Invalidated if (s,t) ever change.
+            ComputeBuffer fTimeComb;
+            float _tcS, _tcT; bool _tcValid;
+            // tri-state fusion capability: 0 unknown, 1 fusable, -1 mixed-quant fallback (never
+            // happens with the real exporter — every flow_net 2D .weight is uniformly fp16 or q8).
+            int _fuseState;
+            bool CanFuseFlowHead()
+            {
+                if (_fuseState != 0) return _fuseState > 0;
+                bool ok = true;
+                bool q0 = w.Has("flow_lm/flow_net/res_blocks/0/adaLN_modulation/1.weight.scales");
+                for (int i = 0; i < Cfg.FLOW_DEPTH && ok; i++)
+                {
+                    string p = $"flow_lm/flow_net/res_blocks/{i}";
+                    ok = w.Has(p + "/adaLN_modulation/1.weight.scales") == q0
+                      && w.Has(p + "/mlp/0.weight.scales") == q0
+                      && w.Has(p + "/mlp/2.weight.scales") == q0;
+                }
+                ok = ok && w.Has("flow_lm/flow_net/final_layer/adaLN_modulation/1.weight.scales") ==
+                           w.Has("flow_lm/flow_net/final_layer/linear.weight.scales");
+                _fuseState = ok ? 1 : -1;
+                return ok;
+            }
+
             /// <summary>Synchronous form (probes/offline — P3/P4 parity + deterministic timing).</summary>
             public float[] FlowHead(float[] c, float[] noise, float s, float t)
             {
                 FlowHeadIssue(c, noise, s, t);
                 float[] vel = new float[Cfg.LDIM];
-                fOut.GetData(vel, 0, 0, Cfg.LDIM);
+                BlockingRead(fOut, vel, Cfg.LDIM);   // per-frame pipeline drain #2 (legacy loop)
                 if (FlowTap != null) FlowTap("flow_final", vel);
                 return vel;   // velocity; latent = noise + vel
             }
@@ -410,6 +534,15 @@ namespace DeepUnity
 
             void FlowHeadIssue(float[] c, float[] noise, float s, float t)
             {
+                // #31-P: the fused path collapses the ~50-dispatch SimpleMLPAdaLN storm into ~10
+                // dispatches (input_proj + cond_embed + 2 assembles + 6 res_block kernels + 1 final
+                // kernel). The legacy body below is untouched and remains the A/B + FlowTap path
+                // (the persistent kernels cannot surface per-stage taps).
+                if (PocketTTS.FastKernels2 && FlowTap == null && CanFuseFlowHead())
+                {
+                    FlowHeadIssueFused(c, noise, s, t);
+                    return;
+                }
                 int D = Cfg.FLOW_DIM;   // 512
                 Grow(ref fx, D); Grow(ref fy, D); Grow(ref fh, D); Grow(ref fmod, 3 * D);
                 Grow(ref ftmp, D); Grow(ref ftime0, D); Grow(ref ftime1, D);
@@ -428,7 +561,7 @@ namespace DeepUnity
                 // x = input_proj(noise)  [32->512] (bias). #29: persistent input buffers — the old
                 // per-call new ComputeBuffer + Release churned the D3D11 allocator every AR frame
                 // (the ar_flowhead 28-32 ms spikes in the talk-perf report).
-                Grow(ref fNoiseIn, Cfg.LDIM); fNoiseIn.SetData(noise);
+                Grow(ref fNoiseIn, Cfg.LDIM); fNoiseIn.SetData(noise); CountUpload();
                 Linear("flow_lm/flow_net/input_proj", fNoiseIn, fx, 1, Cfg.LDIM, D, bias: true);
                 Tap("flow_inproj", fx, D);
 
@@ -440,8 +573,8 @@ namespace DeepUnity
                 Copy(fy, ftime0, D); AddR(fy, ftime1, D);   // fy = t0 + t1
                 // c_emb = cond_embed(c) [1024->512]; y = t_combined/2 + c_emb  -> fold /2: y = (t0+t1)*0.5 + c_emb
                 cs.SetInt("buffer_size", D); cs.SetFloat("scale_val", 0.5f);
-                cs.SetBuffer(cs.FindKernel("ScaleBuf"), "inout_buf", fy); cs.Dispatch(cs.FindKernel("ScaleBuf"), Div256(D), 1, 1);
-                Grow(ref fCondIn, Cfg.DIM); fCondIn.SetData(c);
+                cs.SetBuffer(cs.FindKernel("ScaleBuf"), "inout_buf", fy); Disp(cs.FindKernel("ScaleBuf"), Div256(D), 1, 1);
+                Grow(ref fCondIn, Cfg.DIM); fCondIn.SetData(c); CountUpload();
                 Linear("flow_lm/flow_net/cond_embed", fCondIn, ftmp, 1, Cfg.DIM, D, bias: true);
                 AddR(fy, ftmp, D);   // y = 0.5*(t0+t1) + c_emb
                 Tap("flow_cond_vec", fy, D);
@@ -476,6 +609,323 @@ namespace DeepUnity
                 Linear("flow_lm/flow_net/final_layer/linear", ftime1, fOut, 1, D, Cfg.LDIM, bias: true);
             }
 
+            // #31-P fused flow head: identical math, restructured dispatches.
+            //   x = input_proj(noise)                       (legacy GEMV — K=32 not coal-eligible)
+            //   y = [cached 0.5*(temb_s+temb_t)] + cond_embed(c)
+            //   6x FlowResBlockFused(y, x)                  (adaLN+LN+modulate+mlp+gate, 1 dispatch each)
+            //   vel = FlowFinalFused(y, x)                  (adaLN+noaffine-LN+modulate+linear, 1 dispatch)
+            // SiLU(y) is computed inside the fused kernels (the legacy Copy+Activate per block dies).
+            void FlowHeadIssueFused(float[] c, float[] noise, float s, float t)
+            {
+                int D = Cfg.FLOW_DIM;   // 512
+                Grow(ref fx, D); Grow(ref fy, D); Grow(ref ftmp, D);
+
+                // x = input_proj(noise)  [32->512] (bias)
+                Grow(ref fNoiseIn, Cfg.LDIM); fNoiseIn.SetData(noise); CountUpload();
+                Linear("flow_lm/flow_net/input_proj", fNoiseIn, fx, 1, Cfg.LDIM, D, bias: true);
+
+                EnsureTimeComb(s, t);
+
+                // y = tcomb + cond_embed(c)  [1024->512] (bias; coal GEMV when eligible)
+                Grow(ref fCondIn, Cfg.DIM); fCondIn.SetData(c); CountUpload();
+                Linear("flow_lm/flow_net/cond_embed", fCondIn, ftmp, 1, Cfg.DIM, D, bias: true);
+                Copy(fy, fTimeComb, D); AddR(fy, ftmp, D);
+
+                FlowBlocksIssue();
+            }
+
+            // cached time embedding: 0.5*(TimeEmbed(s,0) + TimeEmbed(t,1)) — constant across
+            // AR frames ((s,t) is always (0,1)); computed once with the SAME legacy dispatches.
+            void EnsureTimeComb(float s, float t)
+            {
+                if (_tcValid && s == _tcS && t == _tcT) return;
+                int D = Cfg.FLOW_DIM;
+                Grow(ref ftmp, D); Grow(ref ftime0, D); Grow(ref ftime1, D); Grow(ref fTimeComb, D);
+                TimeEmbed(s, 0, ftime0);
+                TimeEmbed(t, 1, ftime1);
+                Copy(fTimeComb, ftime0, D); AddR(fTimeComb, ftime1, D);
+                int kScale = cs.FindKernel("ScaleBuf");
+                cs.SetInt("buffer_size", D); cs.SetFloat("scale_val", 0.5f);
+                cs.SetBuffer(kScale, "inout_buf", fTimeComb); Disp(kScale, Div256(D), 1, 1);
+                _tcS = s; _tcT = t; _tcValid = true;
+            }
+
+            // Shared tail of the fused flow head (R1 fused path AND the R2 GPU-resident frame):
+            // 6x FlowResBlockFused (x in fx updated in place, cond vector in fy) + FlowFinalFused
+            // -> velocity in fOut. Identical dispatches from both callers (R1 parity intact).
+            void FlowBlocksIssue()
+            {
+                int D = Cfg.FLOW_DIM;
+                cs.SetInt("norm_dim", D); cs.SetFloat("norm_eps", 1e-6f);
+                for (int i = 0; i < Cfg.FLOW_DEPTH; i++)
+                {
+                    string p = $"flow_lm/flow_net/res_blocks/{i}";
+                    bool q8 = w.Has(p + "/adaLN_modulation/1.weight.scales");
+                    int kk = q8 ? kFlowRBQ8 : kFlowRB;
+                    cs.SetBuffer(kk, "X", fy);
+                    cs.SetBuffer(kk, "inout_buf", fx);
+                    cs.SetBuffer(kk, "W", w.Get(p + "/adaLN_modulation/1.weight"));
+                    cs.SetBuffer(kk, "W_bias", w.Get(p + "/adaLN_modulation/1.bias"));
+                    cs.SetBuffer(kk, "W2", w.Get(p + "/mlp/0.weight"));
+                    cs.SetBuffer(kk, "W_bias2", w.Get(p + "/mlp/0.bias"));
+                    cs.SetBuffer(kk, "W3", w.Get(p + "/mlp/2.weight"));
+                    cs.SetBuffer(kk, "W_bias3", w.Get(p + "/mlp/2.bias"));
+                    cs.SetBuffer(kk, "ln_gamma", w.Get(p + "/in_ln.weight"));
+                    cs.SetBuffer(kk, "ln_beta", w.Get(p + "/in_ln.bias"));
+                    if (q8)
+                    {
+                        cs.SetBuffer(kk, "W_scales", w.Get(p + "/adaLN_modulation/1.weight.scales"));
+                        cs.SetBuffer(kk, "W_scales2", w.Get(p + "/mlp/0.weight.scales"));
+                        cs.SetBuffer(kk, "W_scales3", w.Get(p + "/mlp/2.weight.scales"));
+                    }
+                    Disp(kk, 1, 1, 1);
+                }
+
+                // fused final layer -> velocity [32]
+                Grow(ref fOut, Cfg.LDIM);
+                bool q8f = w.Has("flow_lm/flow_net/final_layer/adaLN_modulation/1.weight.scales");
+                int kf = q8f ? kFlowFinalQ8 : kFlowFinal;
+                cs.SetInt("out_dim", Cfg.LDIM);
+                cs.SetBuffer(kf, "X", fy);
+                cs.SetBuffer(kf, "buf_b", fx);
+                cs.SetBuffer(kf, "W", w.Get("flow_lm/flow_net/final_layer/adaLN_modulation/1.weight"));
+                cs.SetBuffer(kf, "W_bias", w.Get("flow_lm/flow_net/final_layer/adaLN_modulation/1.bias"));
+                cs.SetBuffer(kf, "W2", w.Get("flow_lm/flow_net/final_layer/linear.weight"));
+                cs.SetBuffer(kf, "W_bias2", w.Get("flow_lm/flow_net/final_layer/linear.bias"));
+                if (q8f)
+                {
+                    cs.SetBuffer(kf, "W_scales", w.Get("flow_lm/flow_net/final_layer/adaLN_modulation/1.weight.scales"));
+                    cs.SetBuffer(kf, "W_scales2", w.Get("flow_lm/flow_net/final_layer/linear.weight.scales"));
+                }
+                cs.SetBuffer(kf, "Y", fOut);
+                Disp(kf, 1, 1, 1);
+            }
+
+            /// <summary>Probe-only (#31-P parity): run one manifest Linear on x [T*inDim] and read
+            /// back y [T*outDim]. Routing (legacy vs coalesced) follows PocketTTS.FastKernels2 —
+            /// the parity probe toggles it around two calls and diffs.</summary>
+            public float[] RunLinearForProbe(string name, float[] x, int T, int inDim, int outDim, bool bias, int act = 0)
+            {
+                var xb = new ComputeBuffer(T * inDim, 4, ComputeBufferType.Structured);
+                var yb = new ComputeBuffer(T * outDim, 4, ComputeBufferType.Structured);
+                xb.SetData(x);
+                Linear(name, xb, yb, T, inDim, outDim, bias, act);
+                var y = new float[T * outDim];
+                yb.GetData(y);
+                xb.Release(); yb.Release();
+                return y;
+            }
+
+            // ======================= #31-R2 (FastKernels3): GPU-resident AR frame =======================
+            // One frame = ~49 dispatches, ZERO CPU<->GPU crossings. The legacy loop paid 2 blocking
+            // readbacks (c for the CPU EOS check, velocity for the CPU latent add) + 3 uploads (token
+            // embedding, noise, c re-uploaded for cond_embed) EVERY frame — each readback drains the
+            // whole GPU pipe (the measured ~50 us/dispatch was mostly this serialization, see DEEPOPT
+            // §R2). Here the AR feedback (latent -> input_linear -> next token) stays on the GPU
+            // (d1Lat), noise for a K-frame block is uploaded once (noiseK), and each frame writes
+            // [eos | latent[32]] into its eosLat slot — read back ONCE per block (offline, blocking)
+            // or once per frame (streaming, async, replacing TWO async waits).
+
+            /// <summary>True when the GPU-resident frame path is usable: both kernel tiers on, no
+            /// FlowTap (needs legacy per-op taps), flow head fusable (uniform quant, always true
+            /// with the real exporter).</summary>
+            public bool CanRunGpuFrames()
+                => PocketTTS.FastKernels2 && PocketTTS.FastKernels3 && FlowTap == null && CanFuseFlowHead();
+
+            void EnsureAr(int kFrames)
+            {
+                GrowKV(ref d1Noise, Cfg.LDIM);
+                GrowKV(ref d1Lat, Cfg.LDIM);
+                if (_arCap < kFrames)
+                {
+                    _arCap = kFrames;
+                    GrowKV(ref noiseK, kFrames * Cfg.LDIM);
+                    GrowKV(ref eosLat, kFrames * EOSLAT_STRIDE);
+                }
+                if (bosLat == null)
+                {
+                    bosLat = new ComputeBuffer(Cfg.LDIM, 4, ComputeBufferType.Structured);
+                    bosLat.SetData(w.ReadFloats("flow_lm.bos_emb"));   // [32] — one-time upload
+                }
+                Grow(ref fx, Cfg.FLOW_DIM); Grow(ref fy, Cfg.FLOW_DIM); Grow(ref ftmp, Cfg.FLOW_DIM);
+                Grow(ref fOut, Cfg.LDIM);
+            }
+
+            /// <summary>Upload `count` frames of noise ([32] each) into the block buffer in ONE
+            /// SetData (the legacy path uploaded per frame). Rows are consumed by slot index.</summary>
+            public void UploadNoiseBlock(float[][] rows, int count)
+            {
+                EnsureAr(Math.Max(count, 1));
+                if (_noiseFlat == null || _noiseFlat.Length < count * Cfg.LDIM)
+                    _noiseFlat = new float[Math.Max(count, 1) * Cfg.LDIM];
+                for (int f = 0; f < count; f++)
+                    Array.Copy(rows[f], 0, _noiseFlat, f * Cfg.LDIM, Cfg.LDIM);
+                noiseK.SetData(_noiseFlat, 0, 0, count * Cfg.LDIM); CountUpload();
+            }
+
+            // R2 GEMV with epilogue mode (0 write / 1 Y += r / 2 Y = r + addSrc[row]). addSrc == null
+            // binds X to the unread buf_b slot (same-buffer double-SRV is legal; never leave it unbound).
+            void Gemv(string name, ComputeBuffer x, ComputeBuffer y, int inDim, int outDim,
+                      bool bias, int act, int mode, ComputeBuffer addSrc)
+            {
+                ComputeBuffer scales = w.Has(name + ".weight.scales") ? w.Get(name + ".weight.scales") : null;
+                int kg = scales != null ? kGemvQ8 : kGemv16;
+                cs.SetInt("in_dim", inDim); cs.SetInt("out_dim", outDim);
+                cs.SetInt("activation_type", act); cs.SetInt("has_bias", bias ? 1 : 0);
+                cs.SetInt("gemv_mode", mode);
+                cs.SetBuffer(kg, "X", x); cs.SetBuffer(kg, "W", w.Get(name + ".weight"));
+                cs.SetBuffer(kg, "W_bias", bias ? w.Get(name + ".bias") : w.Get(name + ".weight"));
+                if (scales != null) cs.SetBuffer(kg, "W_scales", scales);
+                cs.SetBuffer(kg, "buf_b", addSrc ?? x);
+                cs.SetBuffer(kg, "Y", y);
+                Disp(kg, (outDim + 7) / 8, 1, 1);
+            }
+
+            // R2 GEMV with the preceding LayerNorm folded into the staging pass (norm1/norm2 fold).
+            void GemvLN(string lnName, string wName, ComputeBuffer x, ComputeBuffer y,
+                        int inDim, int outDim, bool bias, int act, float eps, int mode)
+            {
+                ComputeBuffer scales = w.Has(wName + ".weight.scales") ? w.Get(wName + ".weight.scales") : null;
+                int kg = scales != null ? kGemvLNQ8 : kGemvLN16;
+                cs.SetInt("in_dim", inDim); cs.SetInt("out_dim", outDim);
+                cs.SetInt("activation_type", act); cs.SetInt("has_bias", bias ? 1 : 0);
+                cs.SetInt("gemv_mode", mode); cs.SetFloat("norm_eps", eps);
+                cs.SetBuffer(kg, "X", x); cs.SetBuffer(kg, "W", w.Get(wName + ".weight"));
+                cs.SetBuffer(kg, "W_bias", bias ? w.Get(wName + ".bias") : w.Get(wName + ".weight"));
+                if (scales != null) cs.SetBuffer(kg, "W_scales", scales);
+                cs.SetBuffer(kg, "ln_gamma", w.Get(lnName + ".weight"));
+                cs.SetBuffer(kg, "ln_beta", w.Get(lnName + ".bias"));
+                cs.SetBuffer(kg, "buf_b", x);   // unread in mode 0; keep the slot bound
+                cs.SetBuffer(kg, "Y", y);
+                Disp(kg, (outDim + 7) / 8, 1, 1);
+            }
+
+            /// <summary>Issue ONE fully GPU-resident AR frame into slot `slot` of eosLat/noiseK.
+            /// absFrame 0 sources the token from bos_emb, else from d1Lat (the previous frame's
+            /// committed latent — GPU feedback, no readback). Advances kvLen. NO readback here —
+            /// callers batch K frames then read eosLat once. UploadNoiseBlock must have filled the
+            /// slot's noise row first. Dispatches: 1 token GEMV + 6x(GemvLN, ARQkvPrep, AttnKV,
+            /// Gemv+add, GemvLN, Gemv+add) + AREosNorm + noise CopySlice + input_proj + cond_embed
+            /// + 6 res_blocks + final + ARCommit = 49.</summary>
+            public void DecodeFrameGpuIssue(int slot, int absFrame)
+            {
+                int dim = Cfg.DIM, heads = Cfg.TF_HEADS, hd = Cfg.HEAD_DIM;
+                int pos = kvLen;
+                float attScale = 1f / Mathf.Sqrt(hd);
+                EnsureTimeComb(0f, 1f);
+
+                // token = input_linear(prev latent | bos)  [32 -> 1024], no bias (K=32 -> legacy kernel)
+                Linear("flow_lm/input_linear", absFrame == 0 ? bosLat : d1Lat, d1In, 1, Cfg.LDIM, dim, bias: false);
+
+                for (int li = 0; li < Cfg.TF_LAYERS; li++)
+                {
+                    string lp = $"flow_lm/transformer/layers/{li}";
+                    // norm1 folded into the qkv GEMV
+                    GemvLN(lp + "/norm1", lp + "/self_attn/in_proj", d1In, d1Qkv, dim, 3 * dim,
+                           bias: false, act: 0, eps: 1e-5f, mode: 0);
+                    // slice q|k|v + RoPE q,k @pos + append k,v to the caches — one dispatch
+                    cs.SetInt("num_heads", heads); cs.SetInt("head_dim", hd); cs.SetInt("pos_offset", pos);
+                    cs.SetFloat("rope_theta", Cfg.ROPE_THETA);
+                    cs.SetBuffer(kQkvPrep, "X", d1Qkv); cs.SetBuffer(kQkvPrep, "Y", d1Q);
+                    cs.SetBuffer(kQkvPrep, "KCache", kCache[li]); cs.SetBuffer(kQkvPrep, "VCache", vCache[li]);
+                    Disp(kQkvPrep, 1, 1, 1);
+                    // attention over the cache (unchanged kernel)
+                    cs.SetInt("num_heads", heads); cs.SetInt("head_dim", hd);
+                    cs.SetFloat("scale", attScale); cs.SetInt("kv_len", pos + 1);
+                    cs.SetBuffer(kAttnKV, "Q", d1Q);
+                    cs.SetBuffer(kAttnKV, "KCache", kCache[li]); cs.SetBuffer(kAttnKV, "VCache", vCache[li]);
+                    cs.SetBuffer(kAttnKV, "AttendedValues", d1Attn);
+                    Disp(kAttnKV, heads, 1, 1);
+                    // out_proj with the residual add folded into the epilogue (d1In += r)
+                    Gemv(lp + "/self_attn/out_proj", d1Attn, d1In, dim, dim, bias: false, act: 0, mode: 1, addSrc: null);
+                    // ffn: norm2 folded into linear1 (GELU), residual add folded into linear2
+                    GemvLN(lp + "/norm2", lp + "/linear1", d1In, d1Ff, dim, Cfg.TF_FFN,
+                           bias: false, act: 2, eps: 1e-5f, mode: 0);
+                    Gemv(lp + "/linear2", d1Ff, d1In, Cfg.TF_FFN, dim, bias: false, act: 0, mode: 1, addSrc: null);
+                }
+                kvLen = pos + 1;
+
+                // out_norm + eos logit in one dispatch: d1Out = out_norm(d1In); eosLat[slot*33] = eos
+                bool q8e = w.Has("flow_lm/out_eos.weight.scales");
+                int ke = q8e ? kEosNormQ8 : kEosNorm;
+                cs.SetInt("in_dim", dim); cs.SetFloat("norm_eps", 1e-5f);
+                cs.SetInt("elem_offset", slot * EOSLAT_STRIDE);
+                cs.SetBuffer(ke, "X", d1In); cs.SetBuffer(ke, "Y", d1Out);
+                cs.SetBuffer(ke, "ln_gamma", w.Get("flow_lm/out_norm.weight"));
+                cs.SetBuffer(ke, "ln_beta", w.Get("flow_lm/out_norm.bias"));
+                cs.SetBuffer(ke, "W", w.Get("flow_lm/out_eos.weight"));
+                cs.SetBuffer(ke, "W_bias", w.Get("flow_lm/out_eos.bias"));
+                if (q8e) cs.SetBuffer(ke, "W_scales", w.Get("flow_lm/out_eos.weight.scales"));
+                cs.SetBuffer(ke, "buf_a", eosLat);
+                Disp(ke, 1, 1, 1);
+                cs.SetInt("elem_offset", 0);
+
+                // this slot's noise row -> d1Noise (input_proj/commit source)
+                cs.SetInt("buffer_size", Cfg.LDIM);
+                cs.SetInt("copy_src_offset", slot * Cfg.LDIM); cs.SetInt("copy_dst_offset", 0);
+                cs.SetBuffer(kSlice, "buf_a", d1Noise); cs.SetBuffer(kSlice, "buf_b", noiseK);
+                Disp(kSlice, 1, 1, 1);
+
+                // flow head, cond read DIRECTLY from d1Out (the legacy path read c back and
+                // re-uploaded it): x = input_proj(noise); y = cond_embed(c) + tcomb (mode-2 epilogue
+                // replaces the legacy Copy+AddR assemble); then the shared R1 fused blocks.
+                Linear("flow_lm/flow_net/input_proj", d1Noise, fx, 1, Cfg.LDIM, Cfg.FLOW_DIM, bias: true);
+                Gemv("flow_lm/flow_net/cond_embed", d1Out, fy, Cfg.DIM, Cfg.FLOW_DIM,
+                     bias: true, act: 0, mode: 2, addSrc: fTimeComb);
+                FlowBlocksIssue();
+
+                // commit: d1Lat = velocity + noise (AR feedback) + the slot's latent part
+                cs.SetInt("out_dim", Cfg.LDIM);
+                cs.SetInt("elem_offset", slot * EOSLAT_STRIDE + 1);
+                cs.SetBuffer(kCommit, "X", fOut); cs.SetBuffer(kCommit, "buf_b", d1Noise);
+                cs.SetBuffer(kCommit, "Y", d1Lat); cs.SetBuffer(kCommit, "buf_a", eosLat);
+                Disp(kCommit, 1, 1, 1);
+                cs.SetInt("elem_offset", 0);
+            }
+
+            /// <summary>Blocking readback of `count` frame slots ([eos | latent[32]] each) into dst
+            /// [count * 33]. The offline loop's ONE sync point per K-frame block.</summary>
+            public void ReadEosLatBlock(int count, float[] dst) => BlockingRead(eosLat, dst, count * EOSLAT_STRIDE);
+
+            /// <summary>Async form (streaming): one combined [eos | latent] readback per frame —
+            /// replaces the legacy pair of waits (c then velocity). Yields GpuWait to the pump.</summary>
+            public System.Collections.IEnumerator ReadEosLatYielding(int count, float[] dst, bool async)
+            {
+                if (PocketTTS.PerfCounting) PocketTTS.StatAsyncReads++;
+                var rb = ReadbackYielding(eosLat, dst, count * EOSLAT_STRIDE, async);
+                while (rb.MoveNext()) yield return rb.Current;
+            }
+
+            /// <summary>Probe-only: read back the current c (= d1Out, post out_norm) [1024].</summary>
+            public float[] ReadCondForProbe()
+            {
+                var c = new float[Cfg.DIM];
+                d1Out.GetData(c, 0, 0, Cfg.DIM);
+                return c;
+            }
+
+            /// <summary>Probe-only (#31-R2): LN-folded GEMV vs the legacy LayerNormT + routed Linear
+            /// composite on real weights. Returns y [outDim].</summary>
+            public float[] RunLNLinearForProbe(string lnName, string wName, float[] x, int inDim, int outDim,
+                                               int act, float eps, bool fused)
+            {
+                var xb = new ComputeBuffer(inDim, 4, ComputeBufferType.Structured);
+                var nb = new ComputeBuffer(inDim, 4, ComputeBufferType.Structured);
+                var yb = new ComputeBuffer(outDim, 4, ComputeBufferType.Structured);
+                xb.SetData(x);
+                if (fused)
+                    GemvLN(lnName, wName, xb, yb, inDim, outDim, bias: false, act: act, eps: eps, mode: 0);
+                else
+                {
+                    LayerNorm(w.Get(lnName + ".weight"), w.Get(lnName + ".bias"), xb, nb, 1, inDim, eps);
+                    Linear(wName, nb, yb, 1, inDim, outDim, bias: false, act: act);
+                }
+                var y = new float[outDim];
+                yb.GetData(y);
+                xb.Release(); nb.Release(); yb.Release();
+                return y;
+            }
+
             // TimestepEmbedder(scalar tau): emb=cat(cos(tau*freqs),sin(tau*freqs)) [256];
             // mlp: Linear(256->512)+SiLU -> Linear(512->512) -> RMSNorm(alpha). Output in `dst` [512].
             void TimeEmbed(float tau, int idx, ComputeBuffer dst)
@@ -493,7 +943,7 @@ namespace DeepUnity
                 cs.SetInt("seq_len", 1); cs.SetInt("norm_dim", Cfg.FLOW_DIM); cs.SetFloat("rms_eps", 1e-5f);
                 cs.SetBuffer(kRms, "norm_input", ftmp); cs.SetBuffer(kRms, "norm_output", dst);
                 cs.SetBuffer(kRms, "rms_alpha", w.Get(p + "/mlp/3.alpha"));
-                cs.Dispatch(kRms, 1, 1, 1);
+                Disp(kRms, 1, 1, 1);
             }
 
             void Modulate(ComputeBuffer x, ComputeBuffer y, ComputeBuffer mod, int dim, int shiftOff, int scaleOff)
@@ -501,13 +951,13 @@ namespace DeepUnity
                 cs.SetInt("seq_len", 1); cs.SetInt("norm_dim", dim);
                 cs.SetInt("mod_shift_off", shiftOff); cs.SetInt("mod_scale_off", scaleOff);
                 cs.SetBuffer(kMod, "norm_input", x); cs.SetBuffer(kMod, "norm_output", y); cs.SetBuffer(kMod, "mod_vec", mod);
-                cs.Dispatch(kMod, Div256(dim), 1, 1);
+                Disp(kMod, Div256(dim), 1, 1);
             }
             void GateAdd(ComputeBuffer a, ComputeBuffer h, ComputeBuffer mod, int dim, int gateOff)
             {
                 cs.SetInt("seq_len", 1); cs.SetInt("norm_dim", dim); cs.SetInt("mod_gate_off", gateOff);
                 cs.SetBuffer(kGate, "buf_a", a); cs.SetBuffer(kGate, "buf_b", h); cs.SetBuffer(kGate, "mod_vec", mod);
-                cs.Dispatch(kGate, Div256(dim), 1, 1);
+                Disp(kGate, Div256(dim), 1, 1);
             }
 
             // input_linear [32->1024] CPU (no bias). Cached weight for the AR loop.
@@ -543,7 +993,8 @@ namespace DeepUnity
                 tfIn?.Release(); tfNorm?.Release(); qkv?.Release(); q?.Release(); k?.Release(); v?.Release();
                 attn?.Release(); ff?.Release(); tmp?.Release(); onesB?.Release(); zerosB?.Release();
                 fx?.Release(); fy?.Release(); fh?.Release(); fmod?.Release(); ftmp?.Release(); ftime0?.Release(); ftime1?.Release();
-                fOut?.Release(); fNoiseIn?.Release(); fCondIn?.Release();
+                fOut?.Release(); fNoiseIn?.Release(); fCondIn?.Release(); fTimeComb?.Release();
+                bosLat?.Release(); d1Noise?.Release(); d1Lat?.Release(); noiseK?.Release(); eosLat?.Release();
                 if (kCache != null) foreach (var b in kCache) b?.Release();
                 if (vCache != null) foreach (var b in vCache) b?.Release();
                 d1In?.Release(); d1Norm?.Release(); d1Qkv?.Release(); d1Q?.Release(); d1K?.Release(); d1V?.Release();

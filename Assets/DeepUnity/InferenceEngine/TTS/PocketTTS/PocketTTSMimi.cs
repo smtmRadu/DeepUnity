@@ -20,12 +20,19 @@ namespace DeepUnity
             readonly PocketTTSWeights w;
             int kCopy, kSlice, kSliceCols, kZero, kAdd, kScale, kChanAdd, kAct, kLinear, kLinearQ8,
                 kConv, kConvT, kConvTr, kConvTrT, kConvTrG, kLN, kRope, kAttn, kAttnLegacy;
+            int kLinearGemm, kLinearQ8Gemm;   // #31-P coalesced GEMM (decoder_transformer linears)
 
             // #30: kernel-parity switch — true routes every conv through the pre-#30 kernels and
             // attention through CausalAttentionLegacy, so the parity probe can compare tiled vs
             // legacy wav-to-wav on any machine (the .npy reference dumps live on the main dev box
-            // only). Production always runs tiled (false).
+            // only). Production always runs tiled (false). #31-P: also forces the LEGACY LinearBias
+            // path (full-legacy baseline); the #31 axis alone is bisected via PocketTTS.FastKernels2.
             public static bool ForceLegacyKernels = false;
+
+            // #31-P: decoder_transformer linears (K = 512 / 2048, both % 128 == 0) route to the
+            // coalesced GEMM behind PocketTTS.FastKernels2. Convs are untouched (#30 owns them).
+            static bool CoalEligible(int inDim)
+                => PocketTTS.FastKernels2 && !ForceLegacyKernels && inDim % 128 == 0 && inDim <= 4096;
 
             const int CONV_TB = 8;              // output time-steps per tile — must match CT_TB
             const int CONV_TILE_SH = 7168;      // Conv1DTiled groupshared floats (CT_SHFLOATS)
@@ -83,6 +90,8 @@ namespace DeepUnity
                 kRope = cs.FindKernel("ApplyRoPE");
                 kAttn = cs.FindKernel("CausalAttention");
                 kAttnLegacy = cs.FindKernel("CausalAttentionLegacy");
+                kLinearGemm = cs.FindKernel("LinearBiasGemm");
+                kLinearQ8Gemm = cs.FindKernel("LinearBiasQ8Gemm");
             }
 
             static int Div256(int n) => (n + 255) / 256;
@@ -160,9 +169,26 @@ namespace DeepUnity
 
             // fp16 OR int8: a '<name>.weight.scales' sibling => q8 (LinearBiasQ8). Mimi's
             // decoder_transformer linears are int8-able; conv/convtr kernels stay fp16 (3D).
+            // #31-P: eligible whole/tail ops route to the coalesced GEMM (elem_offset = first token
+            // row = rowStart) behind PocketTTS.FastKernels2 — same tail-restriction semantics
+            // (rows below rowStart are never touched), parity-gated not bit-exact.
             void Linear(string name, ComputeBuffer x, ComputeBuffer y, int T, int inDim, int outDim, bool bias, int act = 0, int rowStart = 0)
             {
                 ComputeBuffer scales = w.Has(name + ".weight.scales") ? w.Get(name + ".weight.scales") : null;
+                if (CoalEligible(inDim))
+                {
+                    int kc = scales != null ? kLinearQ8Gemm : kLinearGemm;
+                    cs.SetInt("seq_len", T); cs.SetInt("in_dim", inDim); cs.SetInt("out_dim", outDim);
+                    cs.SetInt("activation_type", act); cs.SetInt("has_bias", bias ? 1 : 0);
+                    cs.SetBuffer(kc, "X", x); cs.SetBuffer(kc, "W", w.Get(name + ".weight"));
+                    cs.SetBuffer(kc, "W_bias", bias ? w.Get(name + ".bias") : w.Get(name + ".weight"));
+                    if (scales != null) cs.SetBuffer(kc, "W_scales", scales);
+                    cs.SetBuffer(kc, "Y", y);
+                    cs.SetInt("elem_offset", rowStart);
+                    cs.Dispatch(kc, (outDim + 7) / 8, (T - rowStart + 7) / 8, 1);
+                    if (rowStart != 0) cs.SetInt("elem_offset", 0);
+                    return;
+                }
                 int k = scales != null ? kLinearQ8 : kLinear;
                 cs.SetInt("seq_len", T); cs.SetInt("in_dim", inDim); cs.SetInt("out_dim", outDim);
                 cs.SetInt("activation_type", act); cs.SetInt("has_bias", bias ? 1 : 0);
@@ -351,6 +377,24 @@ namespace DeepUnity
                 for (int r0 = rowStart; r0 < T; r0 += rows)
                 {
                     ComputeBuffer scales = w.Has(name + ".weight.scales") ? w.Get(name + ".weight.scales") : null;
+                    int sub = Math.Min(rows, T - r0);
+                    // #31-P: coalesced GEMM slice — a ragged tail tile recomputes <=7 rows also
+                    // covered by the next slice with the SAME kernel -> identical values (#29 rule).
+                    if (CoalEligible(inDim))
+                    {
+                        int kc = scales != null ? kLinearQ8Gemm : kLinearGemm;
+                        cs.SetInt("seq_len", T); cs.SetInt("in_dim", inDim); cs.SetInt("out_dim", outDim);
+                        cs.SetInt("activation_type", act); cs.SetInt("has_bias", bias ? 1 : 0);
+                        cs.SetBuffer(kc, "X", x); cs.SetBuffer(kc, "W", w.Get(name + ".weight"));
+                        cs.SetBuffer(kc, "W_bias", bias ? w.Get(name + ".bias") : w.Get(name + ".weight"));
+                        if (scales != null) cs.SetBuffer(kc, "W_scales", scales);
+                        cs.SetBuffer(kc, "Y", y);
+                        cs.SetInt("elem_offset", r0);
+                        cs.Dispatch(kc, (outDim + 7) / 8, (sub + 7) / 8, 1);
+                        cs.SetInt("elem_offset", 0);
+                        if (r0 + rows < T) yield return null;
+                        continue;
+                    }
                     int k = scales != null ? kLinearQ8 : kLinear;
                     cs.SetInt("seq_len", T); cs.SetInt("in_dim", inDim); cs.SetInt("out_dim", outDim);
                     cs.SetInt("activation_type", act); cs.SetInt("has_bias", bias ? 1 : 0);
@@ -359,7 +403,7 @@ namespace DeepUnity
                     if (scales != null) cs.SetBuffer(k, "W_scales", scales);
                     cs.SetBuffer(k, "Y", y);
                     cs.SetInt("elem_offset", r0);
-                    cs.Dispatch(k, 1, (Math.Min(rows, T - r0) + 7) / 8, (outDim + 31) / 32);
+                    cs.Dispatch(k, 1, (sub + 7) / 8, (outDim + 31) / 32);
                     cs.SetInt("elem_offset", 0);
                     if (r0 + rows < T) yield return null;
                 }
@@ -454,6 +498,29 @@ namespace DeepUnity
                 sw.Stop();
                 DecodeMs = (float)sw.Elapsed.TotalMilliseconds;
                 return wav;
+            }
+
+            /// <summary>#31-R3 (mimi/AR overlap): issue a (windowed, tail-restricted) decode with NO
+            /// readback and GPU-copy the kept tail samples into `dst` at `dstSampleOffset`
+            /// (CopySlice — a pure copy, so the harvested values are bit-identical to what Decode()
+            /// would have read back). The caller interleaves these windows between AR blocks (the
+            /// window's fat conv kernels fill the AR chain's inter-dispatch dependency bubbles) and
+            /// owns the single deferred readback of the assembled buffer. Scratch reuse across
+            /// windows is safe: the tail-restriction bookkeeping never reads garbage-permitted
+            /// regions (probe gates 2/B4b), so a window's output is independent of buffer state.</summary>
+            public void DecodeIssueTo(ComputeBuffer dst, int dstSampleOffset, float[] latents, int T,
+                                      float[] embMean, float[] embStd, int tailLatents)
+            {
+                var e = DecodeIssueYielding(Denorm(latents, T, embMean, embStd), T, tailLatents);
+                while (e.MoveNext()) { }
+                int tailN = lastWavLen - lastWavStart;
+                cs.SetInt("buffer_size", tailN);
+                cs.SetInt("copy_src_offset", lastWavStart);
+                cs.SetInt("copy_dst_offset", dstSampleOffset);
+                cs.SetBuffer(kSlice, "buf_a", dst);
+                cs.SetBuffer(kSlice, "buf_b", lastWavBuf);
+                cs.SetInt("elem_offset", 0);
+                Dispatch1D(kSlice, tailN);
             }
 
             /// <summary>STREAMING form (#29): the decode chain is SLICED — one GPU-heavy group per

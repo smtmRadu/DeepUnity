@@ -692,3 +692,819 @@ void RMSNormFlow(uint3 id : SV_DispatchThreadID)
     for (uint k = 0; k < norm_dim; k++)
         norm_output[base_idx + k] = norm_input[base_idx + k] * readH(rms_alpha, k) * inv;
 }
+
+// ###############################################################################################
+// ================= #31-P (FastKernels2) — coalesced GEMV/GEMM + fused flow head =================
+// ###############################################################################################
+//
+// The legacy LinearBias/LinearBiasQ8 above give each OUTPUT ROW one thread ([numthreads(1,8,32)])
+// that walks the whole in_dim serially — adjacent lanes read weight rows in_dim elements apart,
+// so nearly every warp memory transaction is wasted (the same pathology #31 fixed on Qwen/Gemma/
+// MiniCPM at 2.4-5x decode). EVERY matmul of the FlowLM backbone, flow head and mimi
+// decoder_transformer lands there, and the FlowLM AR loop is ~72% of pocket generation time.
+//
+// This section is a straight port of the proven Gemma3CS/Qwen3_5CS #31 GVC/GMM patterns, adapted
+// to pocket's manifest-driven per-TENSOR quant (fp16 dirs have no .scales sibling; int8 dirs are
+// q8 for every 2D .weight) — so instead of multi_compile variants there are explicit fp16/Q8
+// kernel twins, chosen by the C# Linear() router exactly like LinearBias vs LinearBiasQ8.
+//
+// Layout math (identical to the legacy kernels — weight buffers consumed AS-IS, no export change):
+//   fp16: element i lives in uint word i>>1, half (i&1)*16 (readH).
+//   q8:   element i lives in uint word i>>2, byte  (i&3)*8, raw signed (sign-extend);
+//         value = int8 * fp16 scale[row] applied ONCE per dot product (factored out).
+//   Row r of a [R,K] weight starts at flat element r*K. All routed Ks are % 128 == 0
+//   (256/512/1024/1536/2048/4096), so lane*4 element reads are always word-aligned in both
+//   packings and the GEMM 128-column staging never needs a tail.
+//
+// Decode GEMVs (T=1): a 256-thread group owns PVC_ROWS=8 output rows x PVC_LANES=32 lanes.
+// The input vector is staged ONCE in groupshared (in_dim <= PVC_XMAX 4096 = pocket's largest K,
+// the FFN linear2); each lane reads 4 CONSECUTIVE weight elements per step (2 fp16 uints / 1 q8
+// uint — coalesced across the warp either way), then a 32-lane tree reduction folds each row.
+//
+// Prefill GEMMs: same row layout + 8 tokens per group (gid.y tiles); the input tile is staged in
+// 128-column chunks and every coalesced weight read is reused by all 8 tokens. elem_offset =
+// FIRST TOKEN ROW of this dispatch (the #29 MAC-budget slicer and the #30 mimi tail-restriction
+// both slice tokens through it; 0 for whole-op dispatches).
+//
+// Fused flow head: SimpleMLPAdaLN runs 1 Euler step per AR frame as ~50 dispatches of 512-wide
+// ops — pure dispatch/latency overhead (each op is < 1 MMAC). FlowResBlockFused runs an ENTIRE
+// res_block (adaLN GEMV 512->1536 + in_ln + modulate + mlp0 SiLU + mlp2 + gate-residual) in ONE
+// persistent 256-thread group with all activations in groupshared (~15 KB); FlowFinalFused does
+// the final layer (adaLN 512->1024 + no-affine LN + modulate + 512->32 linear). SiLU(y) is
+// recomputed in-kernel from the raw cond vector y (the legacy path materialized it per block via
+// Copy+Activate). Work split inside the persistent kernels: 64 rows x FRB_LANES=4 lanes per tile
+// (a warp covers 8 consecutive rows; each row's 4 lanes read 4 (fp16) / 8 (q8) consecutive
+// elements = one full 32-byte sector per row per step), partials folded by a 64-thread writer —
+// 2 barriers per 64-row tile instead of 6 per 8-row tile (the flow GEMVs are tiny; barrier count,
+// not bandwidth, is the limiter at D=512).
+//
+// PARITY: tree/lane reductions REORDER float sums, so unlike the #30 conv tiles these kernels are
+// NOT bit-exact vs legacy — same acceptance as LLM #31: per-kernel maxAbs/corr gates + e2e
+// latent/wav/EOS-step agreement (PocketTTSKernelParityProbe, gates listed in ../DEEPOPT.md).
+//
+// fxc gotchas honored (hard-won, from Gemma3CS/KokoroCS):
+//  - the GEMM per-token reduce loop is NOT [unroll]: fxc mis-schedules barriers in unrolled loops
+//    over arrays; the constant 5-step PVC_REDUCE [unroll] is fine (proven in GVC_REDUCE).
+//  - barriers only in group-uniform control flow: tile loop bounds come from uniforms, the
+//    degenerate prewarm guard (norm_dim == 0 / in_dim == 0) exits before the first barrier.
+//  - loop vars named uniquely per pass (legacy HLSL scoping hoists them to function scope).
+
+#pragma kernel LinearBiasCoal
+#pragma kernel LinearBiasQ8Coal
+#pragma kernel LinearBiasGemm
+#pragma kernel LinearBiasQ8Gemm
+#pragma kernel FlowResBlockFused
+#pragma kernel FlowResBlockFusedQ8
+#pragma kernel FlowFinalFused
+#pragma kernel FlowFinalFusedQ8
+
+// -------- extra weight slots for the fused flow kernels (adaLN / mlp0 / mlp2 in one dispatch) --
+StructuredBuffer<uint> W2;          // fused: second weight (mlp.0 / final linear)
+StructuredBuffer<uint> W_bias2;
+StructuredBuffer<uint> W_scales2;   // q8 per-row scales of W2
+StructuredBuffer<uint> W3;          // fused: third weight (mlp.2)
+StructuredBuffer<uint> W_bias3;
+StructuredBuffer<uint> W_scales3;   // q8 per-row scales of W3
+
+// ================================ decode GEMVs (T = 1) ================================
+#define PVC_LANES 32
+#define PVC_ROWS 8
+#define PVC_THREADS 256
+#define PVC_XMAX 4096            // largest routed K (FlowLM FFN linear2); 16 KB groupshared
+groupshared float pvc_x[PVC_XMAX];
+groupshared float pvc_red[PVC_THREADS];
+
+// 32-lane tree reduction within this row's lane block; result lands in pvc_red[row's lane 0].
+// [unroll] with barriers is fine on this constant 5-step form (GVC_REDUCE precedent).
+#define PVC_REDUCE(acc) { \
+    pvc_red[tid.x] = acc; GroupMemoryBarrierWithGroupSync(); \
+    [unroll] for (uint ss = 16u; ss > 0u; ss >>= 1u) { \
+        if (lane < ss) pvc_red[tid.x] += pvc_red[tid.x + ss]; \
+        GroupMemoryBarrierWithGroupSync(); } }
+
+#define PVC_STAGE_X { \
+    for (uint xx = tid.x; xx < in_dim; xx += PVC_THREADS) pvc_x[xx] = X[xx]; \
+    GroupMemoryBarrierWithGroupSync(); }
+
+// Y[p] = act( X[0,:] · W[p,:] (+ bias[p]) ) — fp16 weights. Dispatch(ceil(out_dim/8), 1, 1).
+[numthreads(PVC_THREADS,1,1)]
+void LinearBiasCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (PVC_LANES - 1u);
+    uint row = gid.x * PVC_ROWS + (tid.x >> 5);
+    PVC_STAGE_X;
+    float acc = 0.0;
+    if (row < out_dim)
+    {
+        uint wb = row * in_dim;
+        for (uint hh = lane * 4u; hh < in_dim; hh += PVC_LANES * 4u)
+            acc += pvc_x[hh]      * readH(W, wb + hh)
+                 + pvc_x[hh + 1u] * readH(W, wb + hh + 1u)
+                 + pvc_x[hh + 2u] * readH(W, wb + hh + 2u)
+                 + pvc_x[hh + 3u] * readH(W, wb + hh + 3u);
+    }
+    PVC_REDUCE(acc);
+    if (lane == 0u && row < out_dim)
+    {
+        float sum = pvc_red[tid.x] + (has_bias != 0 ? readH(W_bias, row) : 0.0);
+        Y[row] = apply_act(sum);
+    }
+}
+
+// Y[p] = act( scale[p] * (X[0,:] · int8 W[p,:]) (+ bias[p]) ) — q8 weights, 4-per-uint.
+[numthreads(PVC_THREADS,1,1)]
+void LinearBiasQ8Coal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (PVC_LANES - 1u);
+    uint row = gid.x * PVC_ROWS + (tid.x >> 5);
+    PVC_STAGE_X;
+    float acc = 0.0;
+    if (row < out_dim)
+    {
+        uint wb = row * in_dim;
+        for (uint hh = lane * 4u; hh < in_dim; hh += PVC_LANES * 4u)
+        {
+            int w4 = (int)W[(wb + hh) >> 2];        // wb, hh both % 4 == 0 -> word-aligned
+            acc += pvc_x[hh]      * (float)((w4 << 24) >> 24)
+                 + pvc_x[hh + 1u] * (float)((w4 << 16) >> 24)
+                 + pvc_x[hh + 2u] * (float)((w4 << 8)  >> 24)
+                 + pvc_x[hh + 3u] * (float)( w4        >> 24);
+        }
+    }
+    PVC_REDUCE(acc);
+    if (lane == 0u && row < out_dim)
+    {
+        float bv = has_bias != 0 ? readH(W_bias, row) : 0.0;
+        Y[row] = apply_act(pvc_red[tid.x] * readH(W_scales, row) + bv);
+    }
+}
+
+// ================================ prefill GEMMs (8 tokens x 8 rows) ================================
+#define PMM_TOK 8
+#define PMM_CHUNK 128
+groupshared float pmm_x[PMM_TOK * PMM_CHUNK];
+
+#define PMM_STAGE(h0) { \
+    for (uint ii = tid.x; ii < PMM_TOK * PMM_CHUNK; ii += PVC_THREADS) { \
+        uint tt = ii >> 7; uint hh = ii & (PMM_CHUNK - 1u); uint tok = t0 + tt; \
+        pmm_x[ii] = tok < seq_len ? X[tok * in_dim + (h0) + hh] : 0.0; } \
+    GroupMemoryBarrierWithGroupSync(); }
+
+// Y[t,p] = act( X[t,:] · W[p,:] (+ bias[p]) ), t in [elem_offset + gid.y*8, +8). fp16 weights.
+// Requires in_dim % 128 == 0. Dispatch(ceil(out_dim/8), ceil(tokens/8), 1).
+[numthreads(PVC_THREADS,1,1)]
+void LinearBiasGemm(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (PVC_LANES - 1u);
+    uint row = gid.x * PVC_ROWS + (tid.x >> 5);
+    uint t0 = elem_offset + gid.y * PMM_TOK;
+    float acc[PMM_TOK];
+    [unroll] for (uint z = 0; z < PMM_TOK; z++) acc[z] = 0.0;
+    for (uint h0 = 0; h0 < in_dim; h0 += PMM_CHUNK)
+    {
+        PMM_STAGE(h0);
+        if (row < out_dim)
+        {
+            uint bse = row * in_dim + h0 + lane * 4u;
+            float w0 = readH(W, bse),      w1 = readH(W, bse + 1u),
+                  w2 = readH(W, bse + 2u), w3 = readH(W, bse + 3u);
+            [unroll] for (uint tw = 0; tw < PMM_TOK; tw++)
+            {
+                uint xb = tw * PMM_CHUNK + lane * 4u;
+                acc[tw] += pmm_x[xb] * w0 + pmm_x[xb + 1u] * w1 + pmm_x[xb + 2u] * w2 + pmm_x[xb + 3u] * w3;
+            }
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    for (uint tr = 0; tr < PMM_TOK; tr++)   // NOT [unroll]: fxc mis-schedules barriers in unrolled loops
+    {
+        PVC_REDUCE(acc[tr]);
+        uint trow = t0 + tr;                // NOT `tok` — PMM_STAGE declares one (scope hoisting)
+        if (lane == 0u && row < out_dim && trow < seq_len)
+        {
+            float sum = pvc_red[tid.x] + (has_bias != 0 ? readH(W_bias, row) : 0.0);
+            Y[trow * out_dim + row] = apply_act(sum);
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+}
+
+// q8 twin of LinearBiasGemm (per-row scale applied after the reduce, like LinearBiasQ8).
+[numthreads(PVC_THREADS,1,1)]
+void LinearBiasQ8Gemm(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (PVC_LANES - 1u);
+    uint row = gid.x * PVC_ROWS + (tid.x >> 5);
+    uint t0 = elem_offset + gid.y * PMM_TOK;
+    float acc[PMM_TOK];
+    [unroll] for (uint z = 0; z < PMM_TOK; z++) acc[z] = 0.0;
+    for (uint h0 = 0; h0 < in_dim; h0 += PMM_CHUNK)
+    {
+        PMM_STAGE(h0);
+        if (row < out_dim)
+        {
+            int w4 = (int)W[(row * in_dim + h0 + lane * 4u) >> 2];
+            float w0 = (float)((w4 << 24) >> 24), w1 = (float)((w4 << 16) >> 24),
+                  w2 = (float)((w4 << 8)  >> 24), w3 = (float)( w4        >> 24);
+            [unroll] for (uint tw = 0; tw < PMM_TOK; tw++)
+            {
+                uint xb = tw * PMM_CHUNK + lane * 4u;
+                acc[tw] += pmm_x[xb] * w0 + pmm_x[xb + 1u] * w1 + pmm_x[xb + 2u] * w2 + pmm_x[xb + 3u] * w3;
+            }
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    for (uint tr = 0; tr < PMM_TOK; tr++)   // NOT [unroll]: fxc mis-schedules barriers in unrolled loops
+    {
+        PVC_REDUCE(acc[tr]);
+        uint trow = t0 + tr;                // NOT `tok` — PMM_STAGE declares one (scope hoisting)
+        if (lane == 0u && row < out_dim && trow < seq_len)
+        {
+            float bv = has_bias != 0 ? readH(W_bias, row) : 0.0;
+            Y[trow * out_dim + row] = apply_act(pvc_red[tid.x] * readH(W_scales, row) + bv);
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+}
+
+// ================================ fused SimpleMLPAdaLN flow head ================================
+// FlowResBlockFused: ONE dispatch (1 group, 256 threads) = ONE res_block:
+//   mod[1536] = adaLN_W · silu(y) + adaLN_b                    (W / W_bias / W_scales)
+//   v         = modulate(in_ln(x), mod[0:512], mod[512:1024])  (ln_gamma / ln_beta, eps norm_eps)
+//   h         = silu(mlp0_W · v + mlp0_b)                      (W2 / W_bias2 / W_scales2)
+//   x        += mod[1024:1536] * (mlp2_W · h + mlp2_b)         (W3 / W_bias3 / W_scales3)
+// X = y (raw cond vector [D]; silu applied in-kernel), inout_buf = x (updated in place).
+// norm_dim = D (512; 0 = prewarm no-op). Requires norm_dim % 256 == 0 and biases present.
+// Row tiles: 64 rows x 4 lanes; per-thread partials folded by a 64-thread writer (2 barriers/tile).
+#define FRB_D 512
+#define FRB_THREADS 256
+#define FRB_LANES 4
+groupshared float frb_x[FRB_D];           // x (residual stream)
+groupshared float frb_sy[FRB_D];          // silu(y)
+groupshared float frb_v[FRB_D];           // modulated / mlp2 output
+groupshared float frb_h[FRB_D];           // mlp0 output
+groupshared float frb_mod[3 * FRB_D];     // adaLN output [shift|scale|gate]
+groupshared float frb_red[FRB_THREADS];
+groupshared float frb_stat[2];            // LN mean, rstd
+
+// fp16 row-dot partial: row r of [R, D] weight WB, input from groupshared IN, this thread's lane.
+// Lane reads 4 consecutive elements (= 2 packed uints; a row's 4 lanes cover one 32 B sector).
+// Outer braces: the macro expands several times per kernel — its locals must own their scope
+// (legacy HLSL hoists un-braced declarations to function scope -> redeclaration conflicts).
+#define FRB_DOT16(p, WB, r, IN) { \
+    uint wb_ = (r) * norm_dim; \
+    for (uint e_ = lane * 4u; e_ < norm_dim; e_ += FRB_LANES * 4u) \
+        p += IN[e_]      * readH(WB, wb_ + e_) \
+           + IN[e_ + 1u] * readH(WB, wb_ + e_ + 1u) \
+           + IN[e_ + 2u] * readH(WB, wb_ + e_ + 2u) \
+           + IN[e_ + 3u] * readH(WB, wb_ + e_ + 3u); }
+
+// q8 row-dot partial: lane reads 8 consecutive elements (= 2 packed uints = one 32 B sector per
+// row per step across the 4 lanes). wb_ and e_ are % 8 == 0 -> both words aligned.
+#define FRB_DOTQ8(p, WB, r, IN) { \
+    uint wb_ = (r) * norm_dim; \
+    for (uint e_ = lane * 8u; e_ < norm_dim; e_ += FRB_LANES * 8u) { \
+        uint wi_ = (wb_ + e_) >> 2; \
+        int wa_ = (int)WB[wi_]; \
+        int wc_ = (int)WB[wi_ + 1u]; \
+        p += IN[e_]      * (float)((wa_ << 24) >> 24) \
+           + IN[e_ + 1u] * (float)((wa_ << 16) >> 24) \
+           + IN[e_ + 2u] * (float)((wa_ << 8)  >> 24) \
+           + IN[e_ + 3u] * (float)( wa_        >> 24) \
+           + IN[e_ + 4u] * (float)((wc_ << 24) >> 24) \
+           + IN[e_ + 5u] * (float)((wc_ << 16) >> 24) \
+           + IN[e_ + 6u] * (float)((wc_ << 8)  >> 24) \
+           + IN[e_ + 7u] * (float)( wc_        >> 24); } }
+
+// fold the 4 lane-partials of the 64 tile rows (writer thread t < 64 owns row rb + t whose
+// partials live at frb_red[4t .. 4t+3]) — caller supplies the per-row epilogue.
+#define FRB_FOLD4(t) (frb_red[(t) * 4u] + frb_red[(t) * 4u + 1u] + frb_red[(t) * 4u + 2u] + frb_red[(t) * 4u + 3u])
+
+// group mean/rstd of frb_x[0..norm_dim) -> frb_stat (plain tree reduce, NOT unrolled).
+#define FRB_LNSTATS { \
+    float part_ = 0.0; \
+    for (uint i_ = t; i_ < norm_dim; i_ += FRB_THREADS) part_ += frb_x[i_]; \
+    frb_red[t] = part_; GroupMemoryBarrierWithGroupSync(); \
+    for (uint s_ = FRB_THREADS / 2u; s_ > 0u; s_ >>= 1u) \
+    { if (t < s_) frb_red[t] += frb_red[t + s_]; GroupMemoryBarrierWithGroupSync(); } \
+    if (t == 0u) frb_stat[0] = frb_red[0] / (float)norm_dim; \
+    GroupMemoryBarrierWithGroupSync(); \
+    float mean_ = frb_stat[0]; \
+    float vpart_ = 0.0; \
+    for (uint j_ = t; j_ < norm_dim; j_ += FRB_THREADS) { float d_ = frb_x[j_] - mean_; vpart_ += d_ * d_; } \
+    frb_red[t] = vpart_; GroupMemoryBarrierWithGroupSync(); \
+    for (uint z_ = FRB_THREADS / 2u; z_ > 0u; z_ >>= 1u) \
+    { if (t < z_) frb_red[t] += frb_red[t + z_]; GroupMemoryBarrierWithGroupSync(); } \
+    if (t == 0u) frb_stat[1] = rsqrt(frb_red[0] / (float)norm_dim + norm_eps); \
+    GroupMemoryBarrierWithGroupSync(); }
+
+[numthreads(FRB_THREADS,1,1)]
+void FlowResBlockFused(uint3 tid : SV_GroupThreadID)
+{
+    uint t = tid.x;
+    if (norm_dim == 0u) return;                        // prewarm no-op (group-uniform)
+    uint lane = t & (FRB_LANES - 1u);
+    uint rown = t >> 2;                                // row within the 64-row tile
+
+    for (uint i0 = t; i0 < norm_dim; i0 += FRB_THREADS)
+    {
+        frb_x[i0] = inout_buf[i0];
+        frb_sy[i0] = silu(X[i0]);
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    // adaLN_modulation: mod[3D] = W · silu(y) + b
+    for (uint rb0 = 0; rb0 < 3u * norm_dim; rb0 += 64u)
+    {
+        float p0 = 0.0;
+        FRB_DOT16(p0, W, rb0 + rown, frb_sy);
+        frb_red[t] = p0;
+        GroupMemoryBarrierWithGroupSync();
+        if (t < 64u && rb0 + t < 3u * norm_dim)
+            frb_mod[rb0 + t] = FRB_FOLD4(t) + readH(W_bias, rb0 + t);
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    FRB_LNSTATS;
+    float mean = frb_stat[0], rstd = frb_stat[1];
+
+    // v = in_ln(x) * (1 + mod[D+i]) + mod[i]
+    for (uint i1 = t; i1 < norm_dim; i1 += FRB_THREADS)
+    {
+        float ln = (frb_x[i1] - mean) * rstd * readH(ln_gamma, i1) + readH(ln_beta, i1);
+        frb_v[i1] = ln * (1.0 + frb_mod[norm_dim + i1]) + frb_mod[i1];
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    // h = silu(mlp0 · v + b)
+    for (uint rb1 = 0; rb1 < norm_dim; rb1 += 64u)
+    {
+        float p1 = 0.0;
+        FRB_DOT16(p1, W2, rb1 + rown, frb_v);
+        frb_red[t] = p1;
+        GroupMemoryBarrierWithGroupSync();
+        if (t < 64u && rb1 + t < norm_dim)
+            frb_h[rb1 + t] = silu(FRB_FOLD4(t) + readH(W_bias2, rb1 + t));
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    // v = mlp2 · h + b
+    for (uint rb2 = 0; rb2 < norm_dim; rb2 += 64u)
+    {
+        float p2 = 0.0;
+        FRB_DOT16(p2, W3, rb2 + rown, frb_h);
+        frb_red[t] = p2;
+        GroupMemoryBarrierWithGroupSync();
+        if (t < 64u && rb2 + t < norm_dim)
+            frb_v[rb2 + t] = FRB_FOLD4(t) + readH(W_bias3, rb2 + t);
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    // x += gate * v  (write back)
+    for (uint i2 = t; i2 < norm_dim; i2 += FRB_THREADS)
+        inout_buf[i2] = frb_x[i2] + frb_mod[2u * norm_dim + i2] * frb_v[i2];
+}
+
+// q8 twin (int8 export: adaLN / mlp0 / mlp2 all q8 + per-row scales; biases stay fp16).
+[numthreads(FRB_THREADS,1,1)]
+void FlowResBlockFusedQ8(uint3 tid : SV_GroupThreadID)
+{
+    uint t = tid.x;
+    if (norm_dim == 0u) return;
+    uint lane = t & (FRB_LANES - 1u);
+    uint rown = t >> 2;
+
+    for (uint i0 = t; i0 < norm_dim; i0 += FRB_THREADS)
+    {
+        frb_x[i0] = inout_buf[i0];
+        frb_sy[i0] = silu(X[i0]);
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    for (uint rb0 = 0; rb0 < 3u * norm_dim; rb0 += 64u)
+    {
+        float p0 = 0.0;
+        FRB_DOTQ8(p0, W, rb0 + rown, frb_sy);
+        frb_red[t] = p0;
+        GroupMemoryBarrierWithGroupSync();
+        if (t < 64u && rb0 + t < 3u * norm_dim)
+            frb_mod[rb0 + t] = FRB_FOLD4(t) * readH(W_scales, rb0 + t) + readH(W_bias, rb0 + t);
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    FRB_LNSTATS;
+    float mean = frb_stat[0], rstd = frb_stat[1];
+
+    for (uint i1 = t; i1 < norm_dim; i1 += FRB_THREADS)
+    {
+        float ln = (frb_x[i1] - mean) * rstd * readH(ln_gamma, i1) + readH(ln_beta, i1);
+        frb_v[i1] = ln * (1.0 + frb_mod[norm_dim + i1]) + frb_mod[i1];
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    for (uint rb1 = 0; rb1 < norm_dim; rb1 += 64u)
+    {
+        float p1 = 0.0;
+        FRB_DOTQ8(p1, W2, rb1 + rown, frb_v);
+        frb_red[t] = p1;
+        GroupMemoryBarrierWithGroupSync();
+        if (t < 64u && rb1 + t < norm_dim)
+            frb_h[rb1 + t] = silu(FRB_FOLD4(t) * readH(W_scales2, rb1 + t) + readH(W_bias2, rb1 + t));
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    for (uint rb2 = 0; rb2 < norm_dim; rb2 += 64u)
+    {
+        float p2 = 0.0;
+        FRB_DOTQ8(p2, W3, rb2 + rown, frb_h);
+        frb_red[t] = p2;
+        GroupMemoryBarrierWithGroupSync();
+        if (t < 64u && rb2 + t < norm_dim)
+            frb_v[rb2 + t] = FRB_FOLD4(t) * readH(W_scales3, rb2 + t) + readH(W_bias3, rb2 + t);
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    for (uint i2 = t; i2 < norm_dim; i2 += FRB_THREADS)
+        inout_buf[i2] = frb_x[i2] + frb_mod[2u * norm_dim + i2] * frb_v[i2];
+}
+
+// FlowFinalFused: final_layer in ONE dispatch:
+//   mod[2D] = adaLN_final · silu(y) + b     (W / W_bias / W_scales; [2D, D] — shift|scale, NO gate)
+//   v       = modulate(LN_noaffine(x), mod[0:D], mod[D:2D])
+//   Y[out_dim] = linear · v + b             (W2 / W_bias2 / W_scales2; [out_dim, D], out_dim = 32)
+// X = y, buf_b = x (read-only), Y = velocity. norm_dim = D, out_dim = LDIM.
+[numthreads(FRB_THREADS,1,1)]
+void FlowFinalFused(uint3 tid : SV_GroupThreadID)
+{
+    uint t = tid.x;
+    if (norm_dim == 0u) return;
+    uint lane = t & (FRB_LANES - 1u);
+    uint rown = t >> 2;
+
+    for (uint i0 = t; i0 < norm_dim; i0 += FRB_THREADS)
+    {
+        frb_x[i0] = buf_b[i0];
+        frb_sy[i0] = silu(X[i0]);
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    for (uint rb0 = 0; rb0 < 2u * norm_dim; rb0 += 64u)
+    {
+        float p0 = 0.0;
+        FRB_DOT16(p0, W, rb0 + rown, frb_sy);
+        frb_red[t] = p0;
+        GroupMemoryBarrierWithGroupSync();
+        if (t < 64u && rb0 + t < 2u * norm_dim)
+            frb_mod[rb0 + t] = FRB_FOLD4(t) + readH(W_bias, rb0 + t);
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    FRB_LNSTATS;
+    float mean = frb_stat[0], rstd = frb_stat[1];
+
+    for (uint i1 = t; i1 < norm_dim; i1 += FRB_THREADS)
+    {
+        float ln = (frb_x[i1] - mean) * rstd;          // norm_final has NO affine
+        frb_v[i1] = ln * (1.0 + frb_mod[norm_dim + i1]) + frb_mod[i1];
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    for (uint rb1 = 0; rb1 < out_dim; rb1 += 64u)      // out_dim = 32 -> single tile
+    {
+        float p1 = 0.0;
+        FRB_DOT16(p1, W2, rb1 + rown, frb_v);
+        frb_red[t] = p1;
+        GroupMemoryBarrierWithGroupSync();
+        if (t < 64u && rb1 + t < out_dim)
+            Y[rb1 + t] = FRB_FOLD4(t) + readH(W_bias2, rb1 + t);
+        GroupMemoryBarrierWithGroupSync();
+    }
+}
+
+// q8 twin of FlowFinalFused.
+[numthreads(FRB_THREADS,1,1)]
+void FlowFinalFusedQ8(uint3 tid : SV_GroupThreadID)
+{
+    uint t = tid.x;
+    if (norm_dim == 0u) return;
+    uint lane = t & (FRB_LANES - 1u);
+    uint rown = t >> 2;
+
+    for (uint i0 = t; i0 < norm_dim; i0 += FRB_THREADS)
+    {
+        frb_x[i0] = buf_b[i0];
+        frb_sy[i0] = silu(X[i0]);
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    for (uint rb0 = 0; rb0 < 2u * norm_dim; rb0 += 64u)
+    {
+        float p0 = 0.0;
+        FRB_DOTQ8(p0, W, rb0 + rown, frb_sy);
+        frb_red[t] = p0;
+        GroupMemoryBarrierWithGroupSync();
+        if (t < 64u && rb0 + t < 2u * norm_dim)
+            frb_mod[rb0 + t] = FRB_FOLD4(t) * readH(W_scales, rb0 + t) + readH(W_bias, rb0 + t);
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    FRB_LNSTATS;
+    float mean = frb_stat[0], rstd = frb_stat[1];
+
+    for (uint i1 = t; i1 < norm_dim; i1 += FRB_THREADS)
+    {
+        float ln = (frb_x[i1] - mean) * rstd;
+        frb_v[i1] = ln * (1.0 + frb_mod[norm_dim + i1]) + frb_mod[i1];
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    for (uint rb1 = 0; rb1 < out_dim; rb1 += 64u)
+    {
+        float p1 = 0.0;
+        FRB_DOTQ8(p1, W2, rb1 + rown, frb_v);
+        frb_red[t] = p1;
+        GroupMemoryBarrierWithGroupSync();
+        if (t < 64u && rb1 + t < out_dim)
+            Y[rb1 + t] = FRB_FOLD4(t) * readH(W_scales2, rb1 + t) + readH(W_bias2, rb1 + t);
+        GroupMemoryBarrierWithGroupSync();
+    }
+}
+
+// ###############################################################################################
+// ============ #31-P ROUND 2 (FastKernels3) — GPU-resident AR frame, zero per-frame syncs ========
+// ###############################################################################################
+//
+// R1 measured flat on the AR loop (int8 283->225 ms, fp16 334->328): the loop is NOT bandwidth-
+// bound — legacy ran the weight stream at ~12 GB/s effective, 20-50x under roofline. The real
+// cost is FIXED PER-FRAME OVERHEAD: ~96 dispatches x ~50 us apparent cost each, dominated by TWO
+// BLOCKING READBACKS per frame (c[1024] for the CPU EOS check + velocity[32] for the CPU latent
+// add — each drains the whole GPU pipe) plus three per-frame uploads (token embedding, noise,
+// and c re-uploaded for cond_embed after its OWN readback). R2 removes every per-frame CPU<->GPU
+// crossing and fuses the transformer step's dispatch chain:
+//
+//   frame (all-GPU): token = input_linear(prev latent | bos)          (was CPU matmul + upload)
+//     6x layer:  GemvLN(norm1+in_proj)                                (was LN + GEMV)
+//                ARQkvPrep (slice q|k|v + RoPE q,k + KV append)       (was 3xSlice + 2xRoPE + Append)
+//                CausalAttentionKV                                    (unchanged)
+//                Gemv(out_proj, mode 1: Y += r)                       (was GEMV + AddResidual)
+//                GemvLN(norm2+linear1, GELU) ; Gemv(linear2, mode 1)  (was LN + GEMV + GEMV + Add)
+//     AREosNorm  (out_norm LN -> c buffer + eos logit -> slot)        (was LN + CPU dot after readback)
+//     flow head  (R1 fused kernels; cond read DIRECTLY from the c buffer, noise from a slot)
+//     ARCommit   (latent = noise + velocity -> feedback buffer + slot)(was CPU add after readback)
+//
+// eos + latent land in ONE per-frame-slotted buffer (stride 33 = [eos | latent[32]]): the offline
+// loop runs K frames back-to-back with ZERO readbacks, then does ONE readback of K slots and
+// trims post-EOS overshoot frames CPU-side (overshoot latents are discarded BEFORE mimi — the
+// emitted audio is decided exactly like the legacy loop; frame f's latent never depends on later
+// frames). Streaming keeps its per-frame pacing but drops from two async waits to ONE combined
+// 33-float readback and loses the token/cond uploads (only the 128 B noise upload remains).
+//
+// gemv_mode epilogue (R2 kernels ONLY — the proven R1 kernels are untouched and never read it):
+//   0 = Y[row] = act(r)   1 = Y[row] += act(r)   2 = Y[row] = act(r) + buf_b[row]
+// GemvLN* additionally LayerNorms X while staging (every group redundantly computes the row's
+// mean/var — ~1024 extra reads + ~18 barriers per group, trivial vs killing a whole dispatch;
+// all groups reduce in the same order -> identical stats in every group).
+// PARITY: LN tree-reduce reorders sums vs LayerNormT's serial mean/var -> tolerance-gated like
+// every #31 kernel (composite single-frame gate + e2e in the parity probe). ARQkvPrep's RoPE
+// math is copied VERBATIM from ApplyRoPE (same pow/cos/sin expressions -> identical values);
+// ARCommit's noise+velocity add is commutative (bitwise-equal to the CPU add).
+
+#pragma kernel Gemv16
+#pragma kernel GemvQ8
+#pragma kernel GemvLN16
+#pragma kernel GemvLNQ8
+#pragma kernel ARQkvPrep
+#pragma kernel AREosNorm
+#pragma kernel AREosNormQ8
+#pragma kernel ARCommit
+
+uint gemv_mode;                 // R2 GEMV epilogue: 0 write, 1 add-into-Y, 2 write r + buf_b[row]
+groupshared float pvc_stat[2];  // GemvLN/AREosNorm LayerNorm mean, rstd
+
+// fp16 / q8 row-dot partials against staged pvc_x (identical inner loops to LinearBiasCoal/Q8Coal)
+#define PVC_DOT16(accum, rowv) { \
+    uint wb_ = (rowv) * in_dim; \
+    for (uint hh_ = lane * 4u; hh_ < in_dim; hh_ += PVC_LANES * 4u) \
+        accum += pvc_x[hh_]      * readH(W, wb_ + hh_) \
+               + pvc_x[hh_ + 1u] * readH(W, wb_ + hh_ + 1u) \
+               + pvc_x[hh_ + 2u] * readH(W, wb_ + hh_ + 2u) \
+               + pvc_x[hh_ + 3u] * readH(W, wb_ + hh_ + 3u); }
+
+#define PVC_DOTQ8(accum, rowv) { \
+    uint wb_ = (rowv) * in_dim; \
+    for (uint hh_ = lane * 4u; hh_ < in_dim; hh_ += PVC_LANES * 4u) { \
+        int w4_ = (int)W[(wb_ + hh_) >> 2]; \
+        accum += pvc_x[hh_]      * (float)((w4_ << 24) >> 24) \
+               + pvc_x[hh_ + 1u] * (float)((w4_ << 16) >> 24) \
+               + pvc_x[hh_ + 2u] * (float)((w4_ << 8)  >> 24) \
+               + pvc_x[hh_ + 3u] * (float)( w4_        >> 24); } }
+
+// epilogue: apply act then route by gemv_mode (r already includes scale/bias)
+#define GEMV_WRITE(r, rowv) { \
+    float rw_ = apply_act(r); \
+    if (gemv_mode == 1u) Y[rowv] += rw_; \
+    else if (gemv_mode == 2u) Y[rowv] = rw_ + buf_b[rowv]; \
+    else Y[rowv] = rw_; }
+
+// LayerNorm stats of the RAW staged pvc_x[0..in_dim) -> pvc_stat[0]=mean, [1]=rstd.
+// Plain (NOT unrolled) tree reduce; every barrier group-uniform.
+#define PVC_LNSTATS { \
+    float pm_ = 0.0; \
+    for (uint li_ = tid.x; li_ < in_dim; li_ += PVC_THREADS) pm_ += pvc_x[li_]; \
+    pvc_red[tid.x] = pm_; GroupMemoryBarrierWithGroupSync(); \
+    for (uint ls_ = PVC_THREADS / 2u; ls_ > 0u; ls_ >>= 1u) \
+    { if (tid.x < ls_) pvc_red[tid.x] += pvc_red[tid.x + ls_]; GroupMemoryBarrierWithGroupSync(); } \
+    if (tid.x == 0u) pvc_stat[0] = pvc_red[0] / (float)in_dim; \
+    GroupMemoryBarrierWithGroupSync(); \
+    float lmn_ = pvc_stat[0]; \
+    float pv_ = 0.0; \
+    for (uint lj_ = tid.x; lj_ < in_dim; lj_ += PVC_THREADS) { float ld_ = pvc_x[lj_] - lmn_; pv_ += ld_ * ld_; } \
+    pvc_red[tid.x] = pv_; GroupMemoryBarrierWithGroupSync(); \
+    for (uint lz_ = PVC_THREADS / 2u; lz_ > 0u; lz_ >>= 1u) \
+    { if (tid.x < lz_) pvc_red[tid.x] += pvc_red[tid.x + lz_]; GroupMemoryBarrierWithGroupSync(); } \
+    if (tid.x == 0u) pvc_stat[1] = rsqrt(pvc_red[0] / (float)in_dim + norm_eps); \
+    GroupMemoryBarrierWithGroupSync(); }
+
+// -------- Gemv16 / GemvQ8: LinearBiasCoal/Q8Coal + gemv_mode epilogue --------
+[numthreads(PVC_THREADS,1,1)]
+void Gemv16(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (PVC_LANES - 1u);
+    uint row = gid.x * PVC_ROWS + (tid.x >> 5);
+    PVC_STAGE_X;
+    float acc = 0.0;
+    if (row < out_dim) PVC_DOT16(acc, row);
+    PVC_REDUCE(acc);
+    if (lane == 0u && row < out_dim)
+    {
+        float r = pvc_red[tid.x] + (has_bias != 0 ? readH(W_bias, row) : 0.0);
+        GEMV_WRITE(r, row);
+    }
+}
+
+[numthreads(PVC_THREADS,1,1)]
+void GemvQ8(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (PVC_LANES - 1u);
+    uint row = gid.x * PVC_ROWS + (tid.x >> 5);
+    PVC_STAGE_X;
+    float acc = 0.0;
+    if (row < out_dim) PVC_DOTQ8(acc, row);
+    PVC_REDUCE(acc);
+    if (lane == 0u && row < out_dim)
+    {
+        float bv = has_bias != 0 ? readH(W_bias, row) : 0.0;
+        float r = pvc_red[tid.x] * readH(W_scales, row) + bv;
+        GEMV_WRITE(r, row);
+    }
+}
+
+// -------- GemvLN16 / GemvLNQ8: LayerNorm folded into the staging pass --------
+// Stages X raw, computes mean/rstd (group reduce), rewrites the staged copy as
+// (x-mean)*rstd*gamma+beta, then runs the same coalesced dot. norm_eps = the LN eps.
+[numthreads(PVC_THREADS,1,1)]
+void GemvLN16(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    if (in_dim == 0u) return;                          // prewarm no-op (group-uniform)
+    uint lane = tid.x & (PVC_LANES - 1u);
+    uint row = gid.x * PVC_ROWS + (tid.x >> 5);
+    PVC_STAGE_X;
+    PVC_LNSTATS;
+    float mean = pvc_stat[0], rstd = pvc_stat[1];
+    for (uint nn = tid.x; nn < in_dim; nn += PVC_THREADS)
+        pvc_x[nn] = (pvc_x[nn] - mean) * rstd * readH(ln_gamma, nn) + readH(ln_beta, nn);
+    GroupMemoryBarrierWithGroupSync();
+    float acc = 0.0;
+    if (row < out_dim) PVC_DOT16(acc, row);
+    PVC_REDUCE(acc);
+    if (lane == 0u && row < out_dim)
+    {
+        float r = pvc_red[tid.x] + (has_bias != 0 ? readH(W_bias, row) : 0.0);
+        GEMV_WRITE(r, row);
+    }
+}
+
+[numthreads(PVC_THREADS,1,1)]
+void GemvLNQ8(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    if (in_dim == 0u) return;
+    uint lane = tid.x & (PVC_LANES - 1u);
+    uint row = gid.x * PVC_ROWS + (tid.x >> 5);
+    PVC_STAGE_X;
+    PVC_LNSTATS;
+    float mean = pvc_stat[0], rstd = pvc_stat[1];
+    for (uint nn = tid.x; nn < in_dim; nn += PVC_THREADS)
+        pvc_x[nn] = (pvc_x[nn] - mean) * rstd * readH(ln_gamma, nn) + readH(ln_beta, nn);
+    GroupMemoryBarrierWithGroupSync();
+    float acc = 0.0;
+    if (row < out_dim) PVC_DOTQ8(acc, row);
+    PVC_REDUCE(acc);
+    if (lane == 0u && row < out_dim)
+    {
+        float bv = has_bias != 0 ? readH(W_bias, row) : 0.0;
+        float r = pvc_red[tid.x] * readH(W_scales, row) + bv;
+        GEMV_WRITE(r, row);
+    }
+}
+
+// -------- ARQkvPrep: qkv[3*H*D] -> RoPE'd q (Y) + RoPE'd k / raw v appended to the caches ------
+// Replaces 3x SliceCols + 2x ApplyRoPE + AppendKV (6 dispatches -> 1). RoPE math copied VERBATIM
+// from ApplyRoPE (interleaved pairs, freq = theta^(-2*pair/D), position = pos_offset) so the
+// rotated values are bit-identical. X = d1Qkv [q|k|v], Y = d1Q; KCache/VCache row pos_offset.
+[numthreads(256,1,1)]
+void ARQkvPrep(uint3 tid : SV_GroupThreadID)
+{
+    uint HD = num_heads * head_dim;
+    uint hd2 = head_dim / 2u;
+    uint cacheBase = pos_offset * HD;
+    for (uint pr = tid.x; pr < num_heads * hd2; pr += 256u)
+    {
+        uint hh = pr / hd2;
+        uint pair = pr % hd2;
+        // abs() is identity (theta > 0) — silences the negative-base pow warning, same lowering
+        float freq = pow(abs(rope_theta), -2.0 * (float)pair / (float)head_dim);
+        float ang = (float)pos_offset * freq;
+        float cc = cos(ang), sn = sin(ang);
+        uint b = hh * head_dim + pair * 2u;
+        float qa = X[b], qb = X[b + 1u];
+        Y[b]      = qa * cc - qb * sn;
+        Y[b + 1u] = qa * sn + qb * cc;
+        float ka = X[HD + b], kb = X[HD + b + 1u];
+        KCache[cacheBase + b]      = ka * cc - kb * sn;
+        KCache[cacheBase + b + 1u] = ka * sn + kb * cc;
+    }
+    for (uint cv = tid.x; cv < HD; cv += 256u)
+        VCache[cacheBase + cv] = X[2u * HD + cv];
+}
+
+// -------- AREosNorm / AREosNormQ8: out_norm LayerNorm + eos logit in one dispatch --------------
+// X = transformer residual [in_dim=1024]; Y = c = out_norm(X) (consumed by cond_embed on-GPU);
+// eos = dot(out_eos.weight, c) + bias -> buf_a[elem_offset] (the frame's [eos|latent] slot).
+// ln_gamma/ln_beta = out_norm affine (norm_eps 1e-5); W/W_bias(/W_scales) = out_eos.
+[numthreads(PVC_THREADS,1,1)]
+void AREosNorm(uint3 tid : SV_GroupThreadID)
+{
+    if (in_dim == 0u) return;                          // prewarm no-op (group-uniform)
+    for (uint st = tid.x; st < in_dim; st += PVC_THREADS) pvc_x[st] = X[st];
+    GroupMemoryBarrierWithGroupSync();
+    PVC_LNSTATS;
+    float mean = pvc_stat[0], rstd = pvc_stat[1];
+    for (uint nn = tid.x; nn < in_dim; nn += PVC_THREADS)
+    {
+        float nv = (pvc_x[nn] - mean) * rstd * readH(ln_gamma, nn) + readH(ln_beta, nn);
+        pvc_x[nn] = nv;
+        Y[nn] = nv;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    float ep = 0.0;
+    for (uint ei = tid.x; ei < in_dim; ei += PVC_THREADS) ep += pvc_x[ei] * readH(W, ei);
+    pvc_red[tid.x] = ep;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint es = PVC_THREADS / 2u; es > 0u; es >>= 1u)
+    { if (tid.x < es) pvc_red[tid.x] += pvc_red[tid.x + es]; GroupMemoryBarrierWithGroupSync(); }
+    if (tid.x == 0u) buf_a[elem_offset] = pvc_red[0] + readH(W_bias, 0);
+}
+
+[numthreads(PVC_THREADS,1,1)]
+void AREosNormQ8(uint3 tid : SV_GroupThreadID)
+{
+    if (in_dim == 0u) return;
+    for (uint st = tid.x; st < in_dim; st += PVC_THREADS) pvc_x[st] = X[st];
+    GroupMemoryBarrierWithGroupSync();
+    PVC_LNSTATS;
+    float mean = pvc_stat[0], rstd = pvc_stat[1];
+    for (uint nn = tid.x; nn < in_dim; nn += PVC_THREADS)
+    {
+        float nv = (pvc_x[nn] - mean) * rstd * readH(ln_gamma, nn) + readH(ln_beta, nn);
+        pvc_x[nn] = nv;
+        Y[nn] = nv;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    float ep = 0.0;
+    for (uint ei = tid.x; ei < in_dim; ei += PVC_THREADS)
+    {
+        // q8 element ei of row 0: word ei>>2, byte ei&3, sign-extended (readQ8 layout)
+        float wv = (float)((int)(W[ei >> 2] << ((3u - (ei & 3u)) * 8u)) >> 24);
+        ep += pvc_x[ei] * wv;
+    }
+    pvc_red[tid.x] = ep;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint es = PVC_THREADS / 2u; es > 0u; es >>= 1u)
+    { if (tid.x < es) pvc_red[tid.x] += pvc_red[tid.x + es]; GroupMemoryBarrierWithGroupSync(); }
+    if (tid.x == 0u)
+        buf_a[elem_offset] = pvc_red[0] * readH(W_scales, 0) + readH(W_bias, 0);
+}
+
+// -------- ARCommit: latent = velocity + noise -> AR feedback buffer + the frame's slot ---------
+// X = fOut (velocity [32]), buf_b = d1Noise (noise row [32]); Y = d1Lat (next frame's token
+// source); buf_a[elem_offset + i] = the [eos|latent] slot's latent part. Float add is
+// commutative -> bitwise-equal to the legacy CPU `noise[i] + vel[i]`.
+[numthreads(32,1,1)]
+void ARCommit(uint3 tid : SV_GroupThreadID)
+{
+    uint i = tid.x;
+    if (i >= out_dim) return;
+    float lat = X[i] + buf_b[i];
+    Y[i] = lat;
+    buf_a[elem_offset + i] = lat;
+}

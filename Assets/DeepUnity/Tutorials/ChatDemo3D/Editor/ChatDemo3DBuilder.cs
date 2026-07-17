@@ -1316,8 +1316,9 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             NormalizeWorldSize(shield, 0.80f);   // heater shield ~0.8 m tall
             if (shield != null)                  // along the forearm, face out (tuned via ShieldTuneBatch lineup)
                 shield.transform.localRotation = Quaternion.Euler(270f, 0f, 0f) * shield.transform.localRotation;
-            if (sword != null)                   // idle stance aims the blade forward-down, not out to the right
-                sword.transform.localRotation = Quaternion.Euler(0f, -45f, 0f) * sword.transform.localRotation;
+            if (sword != null)                   // held pose hand-tuned in-editor 2026-07-17 (blade forward);
+                                                 // exact serialized quat — euler round-trips drift, keep as-is
+                sword.transform.localRotation = new Quaternion(-0.52869385f, 0.52449185f, -0.47811946f, 0.46561024f);
 
             root.AddComponent<BreathingIdle>();
 
