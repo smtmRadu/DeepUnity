@@ -60,6 +60,18 @@ uint pack_dst_row;    // PackChannels: dest row offset
 uint kv_row_off;      // WriteFlowKV: dest row within each half's plane
 uint kv_cap;          // flow K/V cache: rows per plane (per half, per K/V)
 uint kv_len;          // BidirAttentionKV: valid cache rows (attention key count)
+// ---- cosyvoice-deepopt #31 kernels (DEEPOPT.md §4) ----
+uint conv_in_mode;    // Conv1DTileTC X prologue: 0 raw, 1 snake (alpha per in-ch, SnakeAct-exact),
+                      // 2 leaky(leaky_slope), 3 leaky + nearest-repeat(conv_repeat)
+uint conv_out_mode;   // Conv1DTileTC writeback: 0 Y = apply_act(acc), 1 Y += apply_act(acc)
+uint conv_repeat;     // in_mode 3: nearest-repeat factor (staging reads X[(gt/conv_repeat)*in_dim + ci])
+uint dit_in_mode;     // Dit*Coal X staging: 0 raw, 1 AdaLN-modulate (est_stats + mod_vec offsets)
+uint dit_out_mode;    // DitLinearCoal writeback: 0 Y = apply_act(v), 1 Y += mod_vec[mod_gate_off+row]*apply_act(v)
+uint est_rows;        // PackEstIn: rows per CFG half (Le)
+uint est_apron;       // PackEstIn: x-tail apron rows at the top of each half
+uint est_xrow;        // PackEstIn: first xBuf row (F)
+uint est_cond_row;    // PackEstIn: first cond/mu row (F - apron)
+uint est_tail_row;    // PackEstIn: first x-tail row in est_tail
 
 // ================================ WEIGHT / IO BUFFERS ================================
 StructuredBuffer<uint>      emb_weights;    // token embedding [6561, 512]
@@ -99,6 +111,24 @@ StructuredBuffer<uint>      rope_freqs;     // DiT rotary inv_freq [32] (fp16)
 // row-planes of kv_cap rows each: plane (half*2 + {0=K,1=V}). Row stride = 1024 elems.
 StructuredBuffer<uint>      flow_kv;        // read view (BidirAttentionKV)
 RWStructuredBuffer<uint>    flow_kv_w;      // write view (WriteFlowKV)
+// ---- cosyvoice-deepopt #31 kernels (DEEPOPT.md §4.2) ----
+StructuredBuffer<uint>      W_k;            // DitQKVCoal: to_k / to_v weights (W keeps the Q role)
+StructuredBuffer<uint>      W_v;
+StructuredBuffer<uint>      W_k_bias;
+StructuredBuffer<uint>      W_v_bias;
+StructuredBuffer<uint>      W_k_scales;     // q8 per-row scales (Q8 twin only)
+StructuredBuffer<uint>      W_v_scales;
+RWStructuredBuffer<float>   Y2;             // DitQKVCoal K / V outputs
+RWStructuredBuffer<float>   Y3;
+RWStructuredBuffer<float>   est_stats_w;    // AdaLNStats write view: [row*2] = mean, [row*2+1] = rstd
+StructuredBuffer<float>     est_stats;      // read view (Dit*Coal modulate staging)
+StructuredBuffer<float>     est_x;          // PackEstIn inputs
+StructuredBuffer<float>     est_tail;
+StructuredBuffer<float>     est_cond;
+StructuredBuffer<float>     est_mu;
+StructuredBuffer<float>     est_spk;
+RWStructuredBuffer<float>   est_out;        // PackEstIn output [2*Le, 320]
+RWStructuredBuffer<float>   inout_buf2;     // RopeQKPair second rotate target (kBuf)
 
 // ================================ HELPERS ================================
 float readH(StructuredBuffer<uint> buf, uint index)
@@ -513,6 +543,150 @@ void Conv1D(uint3 id : SV_DispatchThreadID)
             sum += X[x_base + ic] * readH(W, w_base + ic * conv_kernel + k);
     }
     Y[idx] = apply_act(sum);
+}
+
+// ========================= Conv1DTileTC =======================================
+// #31-class register-blocked stride-1 conv for THIS file's [T,C] row-major layout
+// (cosyvoice-deepopt lever 1, DEEPOPT.md §4.1) — KokoroCS Conv1DTile2 adapted with
+// the geometry TRANSPOSED (Kokoro is channel-major [C,T]; here writes coalesce
+// along the channel dim of a row, so oc rides the 32 tx lanes).
+// Tile = 64 timesteps x 64 output channels per (32,8) group; thread (tx,ty) owns
+// oc {o0+tx, o0+tx+32} x t {t0+ty+8r, r<8} = 16 accumulators as 8 named float2s
+// (NO dynamically-indexed accumulator arrays — they spill to memory).
+// Staging per CI_CHUNK=4 input-channel slice:
+//   X  [XT<=114][4]  col-major (4 contiguous floats per timestep = the [T,C]
+//                    layout's coalescing unit; inner-loop reads broadcast per warp)
+//   W  [64 oc][4*K]  torch [out,in,k] rows contiguous per slice; row stride padded
+//                    to 65 so the 32 tx lanes hit distinct banks
+// Inner (ci,k) step: 2 padded W reads + 8 broadcast X reads feed 16 FMAs.
+// Contracts (C#-routed, HiFTVocoder.FastConv): stride 1, K <= 16, (K-1)*dil <= 50.
+// Accumulation per output: bias FIRST, then ci ascending (4-slices), k ascending
+// inside each ci — Conv1D is k-outer/ic-inner, so sums are NOT bit-exact vs the
+// legacy kernel (tolerance-gated, DEEPOPT §6). Ragged tile slots add exact +0.0.
+// conv_in_mode fuses the PRODUCER op into the X staging (same fp32 expression on
+// the same value, re-applied per tap; conv zero-padding stays a TRUE zero):
+//   1 snake:  x + sin^2(a*x)/(a+1e-9), a = snake_alpha[ci]  (SnakeAct-exact —
+//             NOT Kokoro's exact-1/alpha variant)
+//   2 leaky(leaky_slope)
+//   3 leaky + nearest-repeat: staging reads X[(gt/conv_repeat)*in_dim + ci], gt
+//     bounded by in_len = the REPEATED length — replaces Activate + RepeatTime
+//     and skips the 15360*Tg-float intermediate
+// conv_out_mode: 0 Y = apply_act(acc), 1 Y += apply_act(acc)  (ResBlock x += conv2;
+// each Y element is touched by exactly one thread).
+#define TC_T 64
+#define TC_O 64
+#define TC_CI 4
+#define TC_HALO 50
+#define TC_XT_MAX (TC_T + TC_HALO)            // 114
+#define TC_WSTRIDE (TC_CI * 16 + 1)           // 65 floats: K <= 16, +1 pad -> conflict-free tx reads
+groupshared float ctc_x[TC_XT_MAX * TC_CI];   // 456 floats
+groupshared float ctc_w[TC_O * TC_WSTRIDE];   // 4160 floats (~18 KB total groupshared)
+
+#pragma kernel Conv1DTileTC
+[numthreads(32, 8, 1)]
+void Conv1DTileTC(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint tx = gtid.x, ty = gtid.y;
+    uint ltid = ty * 32u + tx;
+    uint t0 = gid.x * TC_T;
+    uint o0 = gid.y * TC_O;
+    uint K = conv_kernel;
+    uint XT = TC_T + (K - 1u) * conv_dilation;   // <= TC_XT_MAX (C#-routed)
+    int  xbase = (int)t0 - pad_left;
+
+    uint ocA = o0 + tx, ocB = o0 + tx + 32u;
+    float2 bv;
+    bv.x = (has_bias != 0 && ocA < out_dim) ? readH(W_bias, ocA) : 0.0;
+    bv.y = (has_bias != 0 && ocB < out_dim) ? readH(W_bias, ocB) : 0.0;
+    float2 c0 = bv, c1 = bv, c2 = bv, c3 = bv;   // bias-first, like Conv1D
+    float2 c4 = bv, c5 = bv, c6 = bv, c7 = bv;
+
+    uint wPer = TC_CI * K;                       // W elements per oc row per slice
+    for (uint ci0 = 0; ci0 < in_dim; ci0 += TC_CI)
+    {
+        // X slice [XT, 4] — fused prologue on in-range samples only.
+        // (UNIFORM trip counts: loop bounds are cbuffer values, the thread id only
+        // gates the guarded body, so the barrier below sits in uniform flow — the
+        // Conv1DTile2/X3663 precedent.)
+        uint xCount = XT * TC_CI;
+        for (uint l = 0; l < xCount; l += 256u)
+        {
+            uint i = l + ltid;
+            if (i < xCount)
+            {
+                uint col = i >> 2, cl = i & 3u;
+                uint ci = ci0 + cl;
+                int  t  = xbase + (int)col;
+                float v = 0.0;
+                if (ci < in_dim && t >= 0 && t < (int)in_len)
+                {
+                    v = (conv_in_mode == 3u) ? X[((uint)t / conv_repeat) * in_dim + ci]
+                                             : X[(uint)t * in_dim + ci];
+                    if (conv_in_mode == 1u)
+                    {
+                        float a = readH(snake_alpha, ci);
+                        float sn = sin(v * a);
+                        v = v + sn * sn / (a + 1e-9);        // SnakeAct-exact expression
+                    }
+                    else if (conv_in_mode >= 2u)
+                        v = v > 0.0 ? v : leaky_slope * v;
+                }
+                ctc_x[col * TC_CI + cl] = v;
+            }
+        }
+        // W slice [TC_O, 4*K] — torch [out,in,k] rows are contiguous chunks
+        uint wCount = TC_O * wPer;
+        for (uint l2 = 0; l2 < wCount; l2 += 256u)
+        {
+            uint i2 = l2 + ltid;
+            if (i2 < wCount)
+            {
+                uint orow = i2 / wPer, rem = i2 - orow * wPer;
+                uint oc = o0 + orow, ci = ci0 + rem / K;
+                ctc_w[orow * TC_WSTRIDE + rem] = (oc < out_dim && ci < in_dim)
+                    ? readH(W, (oc * in_dim + ci0) * K + rem) : 0.0;
+            }
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        for (uint cl = 0; cl < TC_CI; cl++)
+        {
+            uint wbA = tx * TC_WSTRIDE + cl * K;
+            uint wbB = (tx + 32u) * TC_WSTRIDE + cl * K;
+            for (uint k = 0; k < K; k++)
+            {
+                float2 wv = float2(ctc_w[wbA + k], ctc_w[wbB + k]);
+                uint xb = (ty + k * conv_dilation) * TC_CI + cl;
+                c0 += ctc_x[xb]               * wv;   // t = t0 + ty
+                c1 += ctc_x[xb + 8u * TC_CI]  * wv;   // t0 + ty + 8
+                c2 += ctc_x[xb + 16u * TC_CI] * wv;
+                c3 += ctc_x[xb + 24u * TC_CI] * wv;
+                c4 += ctc_x[xb + 32u * TC_CI] * wv;
+                c5 += ctc_x[xb + 40u * TC_CI] * wv;
+                c6 += ctc_x[xb + 48u * TC_CI] * wv;
+                c7 += ctc_x[xb + 56u * TC_CI] * wv;
+            }
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    for (uint r = 0; r < 8u; r++)
+    {
+        uint t = t0 + ty + r * 8u;
+        if (t >= seq_len) continue;
+        float2 v = r == 0u ? c0 : r == 1u ? c1 : r == 2u ? c2 : r == 3u ? c3
+                 : r == 4u ? c4 : r == 5u ? c5 : r == 6u ? c6 : c7;
+        if (ocA < out_dim)
+        {
+            uint yi = t * out_dim + ocA;
+            if (conv_out_mode == 0u) Y[yi] = apply_act(v.x); else Y[yi] += apply_act(v.x);
+        }
+        if (ocB < out_dim)
+        {
+            uint yi2 = t * out_dim + ocB;
+            if (conv_out_mode == 0u) Y[yi2] = apply_act(v.y); else Y[yi2] += apply_act(v.y);
+        }
+    }
 }
 
 // ========================= ConvTranspose1D ====================================

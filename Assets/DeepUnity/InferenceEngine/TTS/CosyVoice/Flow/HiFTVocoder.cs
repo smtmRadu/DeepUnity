@@ -29,8 +29,20 @@ namespace DeepUnity
             readonly ComputeShader cs;
             readonly CosyVoiceWeights weights;
 
-            int kLinear, kConv, kSnake, kActivate, kRepeat, kGauss, kCumsum, kSineMerge,
+            int kLinear, kConv, kConvTile, kSnake, kActivate, kRepeat, kGauss, kCumsum, kSineMerge,
                 kSTFT, kMagPhase, kISTFT, kZero, kCopy, kCopySlice, kAdd, kScale;
+
+            /// <summary>cosyvoice-deepopt lever 1 (DEEPOPT.md §4.1, default ON): every eligible
+            /// conv (stride 1, K &lt;= 16, (K-1)*dil &lt;= 50 — i.e. everything except the strided
+            /// source_downs.0/.1) runs the Conv1DTileTC register-blocked tile kernel instead of
+            /// the naive thread-per-(t,oc) Conv1D, with the producer Snake / LeakyReLU /
+            /// nearest-repeat fused into the tile's X staging (ResBlock 20 -> 8 dispatches;
+            /// Activate+RepeatTime+Conv -> one dispatch per up stage). Accumulation order is
+            /// ci-slice-outer/k-inner vs Conv1D's k-outer/ic-inner, so outputs are
+            /// TOLERANCE-equal, not bit-equal (gates: per-stage corr >= 0.99999, wav corr >=
+            /// 0.999 — CosyVoiceFastKernelsProbe). false = the legacy per-op kernels,
+            /// bit-identical to the A1-validated path.</summary>
+            public static bool FastConv = true;
 
             ComputeBuffer f0A, f0B, f0Buf, f0UpBuf, thetaBuf, noiseBuf, phaseVecBuf, srcBuf, sstftBuf;
             ComputeBuffer vA, vB, vC, vD, rbT1, rbT2, rbAcc, wavBuf;
@@ -76,6 +88,7 @@ namespace DeepUnity
                 cs = DeepUnityMeta.CosyVoiceFlowCS;
                 kLinear = cs.FindKernel("LinearBias");
                 kConv = cs.FindKernel("Conv1D");
+                kConvTile = cs.FindKernel("Conv1DTileTC");
                 kSnake = cs.FindKernel("SnakeAct");
                 kActivate = cs.FindKernel("Activate");
                 kRepeat = cs.FindKernel("RepeatTime");
@@ -137,10 +150,22 @@ namespace DeepUnity
                 cs.Dispatch(kLinear, 1, (T + 7) / 8, (outDim + 31) / 32);
             }
 
+            // Conv1DTileTC eligibility (DEEPOPT.md §3.3): the tile stages a 64+halo window
+            // and 4*K weight rows — everything in HiFT qualifies except the strided
+            // source_downs.0/.1 (0.7 GMAC total, stay on the naive kernel).
+            static bool TileEligible(int kernel, int stride, int dilation)
+                => stride == 1 && kernel <= 16 && (kernel - 1) * dilation <= 50;
+
             void Conv(string name, ComputeBuffer x, ComputeBuffer y, int outLen, int inLen,
                       int inCh, int outCh, int kernel, int stride, int dilation, int padLeft,
                       int act = 0, float leaky = 0.01f)
             {
+                if (FastConv && TileEligible(kernel, stride, dilation))
+                {
+                    ConvTile(name, x, y, outLen, inLen, inCh, outCh, kernel, dilation, padLeft,
+                             act, leaky, inMode: 0, outMode: 0, repeat: 1, snakeAlpha: null);
+                    return;
+                }
                 cs.SetInt("seq_len", outLen); cs.SetInt("in_len", inLen);
                 cs.SetInt("in_dim", inCh); cs.SetInt("out_dim", outCh);
                 cs.SetInt("conv_kernel", kernel); cs.SetInt("conv_stride", stride);
@@ -152,6 +177,32 @@ namespace DeepUnity
                 cs.SetBuffer(kConv, "W_bias", weights.Get(name + ".bias"));
                 cs.SetBuffer(kConv, "Y", y);
                 cs.Dispatch(kConv, Div256(outLen * outCh), 1, 1);
+            }
+
+            // Conv1DTileTC dispatch: stride-1 tile conv with an optional fused producer
+            // (inMode 1 snake / 2 leaky / 3 leaky+nearest-repeat(repeat)) and writeback
+            // mode (outMode 0 Y= / 1 Y+=). snake_alpha must be bound whenever the kernel
+            // is compiled with a reference to it, so a dummy (W) is bound for inMode != 1.
+            void ConvTile(string name, ComputeBuffer x, ComputeBuffer y, int outLen, int inLen,
+                          int inCh, int outCh, int kernel, int dilation, int padLeft,
+                          int act, float leaky, int inMode, int outMode, int repeat,
+                          ComputeBuffer snakeAlpha)
+            {
+                var w = weights.Get(name + ".weight");
+                cs.SetInt("seq_len", outLen); cs.SetInt("in_len", inLen);
+                cs.SetInt("in_dim", inCh); cs.SetInt("out_dim", outCh);
+                cs.SetInt("conv_kernel", kernel); cs.SetInt("conv_stride", 1);
+                cs.SetInt("conv_dilation", dilation); cs.SetInt("pad_left", padLeft);
+                cs.SetInt("activation_type", act); cs.SetInt("has_bias", 1);
+                cs.SetFloat("leaky_slope", leaky);
+                cs.SetInt("conv_in_mode", inMode); cs.SetInt("conv_out_mode", outMode);
+                cs.SetInt("conv_repeat", repeat);
+                cs.SetBuffer(kConvTile, "X", x);
+                cs.SetBuffer(kConvTile, "W", w);
+                cs.SetBuffer(kConvTile, "W_bias", weights.Get(name + ".bias"));
+                cs.SetBuffer(kConvTile, "snake_alpha", snakeAlpha ?? w);
+                cs.SetBuffer(kConvTile, "Y", y);
+                cs.Dispatch(kConvTile, (outLen + 63) / 64, (outCh + 63) / 64, 1);
             }
 
             void SnakeOp(string alphaName, ComputeBuffer buf, int T, int ch)
@@ -219,15 +270,35 @@ namespace DeepUnity
             void ResBlock(string p, ComputeBuffer x, ComputeBuffer outSum, int T, int ch, int kernel, bool accumulate)
             {
                 CopyOp(rbAcc, x, T * ch);
-                for (int j = 0; j < 3; j++)
+                if (FastConv)
                 {
-                    int dil = CosyVoiceConfig.RESBLOCK_DILATIONS[j];
-                    CopyOp(rbT1, rbAcc, T * ch);
-                    SnakeOp(p + $".activations1.{j}.alpha", rbT1, T, ch);
-                    Conv(p + $".convs1.{j}", rbT1, rbT2, T, T, ch, ch, kernel, 1, dil, kernel * dil - dil);
-                    SnakeOp(p + $".activations2.{j}.alpha", rbT2, T, ch);
-                    Conv(p + $".convs2.{j}", rbT2, rbT1, T, T, ch, ch, kernel, 1, 1, kernel - 1);
-                    AddOp(rbAcc, rbT1, T * ch);
+                    // Fused form (DEEPOPT §4.1): snake recomputed in the tile prologue (same
+                    // fp32 expression), conv2 accumulates straight into rbAcc (out_mode 1) —
+                    // 20 -> 8 dispatches per resblock. No SRV/UAV aliasing: conv1 reads
+                    // rbAcc / writes rbT2, conv2 reads rbT2 / writes rbAcc.
+                    for (int j = 0; j < 3; j++)
+                    {
+                        int dil = CosyVoiceConfig.RESBLOCK_DILATIONS[j];
+                        ConvTile(p + $".convs1.{j}", rbAcc, rbT2, T, T, ch, ch, kernel, dil,
+                                 kernel * dil - dil, act: 0, leaky: 0.01f, inMode: 1, outMode: 0,
+                                 repeat: 1, snakeAlpha: weights.Get(p + $".activations1.{j}.alpha"));
+                        ConvTile(p + $".convs2.{j}", rbT2, rbAcc, T, T, ch, ch, kernel, 1,
+                                 kernel - 1, act: 0, leaky: 0.01f, inMode: 1, outMode: 1,
+                                 repeat: 1, snakeAlpha: weights.Get(p + $".activations2.{j}.alpha"));
+                    }
+                }
+                else
+                {
+                    for (int j = 0; j < 3; j++)
+                    {
+                        int dil = CosyVoiceConfig.RESBLOCK_DILATIONS[j];
+                        CopyOp(rbT1, rbAcc, T * ch);
+                        SnakeOp(p + $".activations1.{j}.alpha", rbT1, T, ch);
+                        Conv(p + $".convs1.{j}", rbT1, rbT2, T, T, ch, ch, kernel, 1, dil, kernel * dil - dil);
+                        SnakeOp(p + $".activations2.{j}.alpha", rbT2, T, ch);
+                        Conv(p + $".convs2.{j}", rbT2, rbT1, T, T, ch, ch, kernel, 1, 1, kernel - 1);
+                        AddOp(rbAcc, rbT1, T * ch);
+                    }
                 }
                 if (accumulate) AddOp(outSum, rbAcc, T * ch);
                 else CopyOp(outSum, rbAcc, T * ch);
@@ -359,13 +430,28 @@ namespace DeepUnity
                 int curLen = Vg;
                 for (int i = 0; i < 3; i++)
                 {
-                    ActivateOp(vA, curLen * chs[i], 4, CosyVoiceConfig.LRELU_SLOPE);
-
-                    // CausalConv1dUpsample: nearest-neighbor x stride, then conv k LEFT-pad k-1
+                    // CausalConv1dUpsample: leaky -> nearest-neighbor x stride -> conv k LEFT-pad k-1
                     int outLen = curLen * ups[i];
-                    RepeatOp(vA, vB, outLen, chs[i], ups[i]);
-                    curLen = outLen;
-                    Conv($"hift/ups.{i}", vB, vA, curLen, curLen, chs[i], chs[i + 1], ker[i], 1, 1, ker[i] - 1);
+                    if (FastConv)
+                    {
+                        // repeat-fused tile conv (DEEPOPT §4.1): leaky + nearest-repeat happen in
+                        // the X staging (in_mode 3, conv_repeat = ups[i]), in_len = the REPEATED
+                        // length — kills the Activate + RepeatTime dispatches and never
+                        // materializes the 8-120*Tg x ch intermediate. Output lands in vB; swap
+                        // so vA holds it like the legacy path.
+                        ConvTile($"hift/ups.{i}", vA, vB, outLen, outLen, chs[i], chs[i + 1],
+                                 ker[i], 1, ker[i] - 1, act: 0, leaky: CosyVoiceConfig.LRELU_SLOPE,
+                                 inMode: 3, outMode: 0, repeat: ups[i], snakeAlpha: null);
+                        curLen = outLen;
+                        (vA, vB) = (vB, vA);
+                    }
+                    else
+                    {
+                        ActivateOp(vA, curLen * chs[i], 4, CosyVoiceConfig.LRELU_SLOPE);
+                        RepeatOp(vA, vB, outLen, chs[i], ups[i]);
+                        curLen = outLen;
+                        Conv($"hift/ups.{i}", vB, vA, curLen, curLen, chs[i], chs[i + 1], ker[i], 1, 1, ker[i] - 1);
+                    }
                     DebugTap?.Invoke($"up{i}", vA, curLen * chs[i + 1]);
 
                     if (i == 2)
@@ -401,8 +487,14 @@ namespace DeepUnity
 
                 // conv_post: leaky(0.01) -> k7 LEFT-pad6 -> 18ch, mag/phase -> iSTFT -> clamp.
                 // curLen = S/4 + 1 here (reflection pad), so (curLen-1)*4 = S samples exactly.
-                ActivateOp(vA, curLen * 64, 4, 0.01f);
-                Conv("hift/conv_post", vA, sstftBuf, curLen, curLen, 64, 18, 7, 1, 1, 6);
+                if (FastConv)
+                    ConvTile("hift/conv_post", vA, sstftBuf, curLen, curLen, 64, 18, 7, 1, 6,
+                             act: 0, leaky: 0.01f, inMode: 2, outMode: 0, repeat: 1, snakeAlpha: null);
+                else
+                {
+                    ActivateOp(vA, curLen * 64, 4, 0.01f);
+                    Conv("hift/conv_post", vA, sstftBuf, curLen, curLen, 64, 18, 7, 1, 1, 6);
+                }
                 DebugTap?.Invoke("conv_post", sstftBuf, curLen * 18);
 
                 cs.SetInt("n_frames", curLen);
