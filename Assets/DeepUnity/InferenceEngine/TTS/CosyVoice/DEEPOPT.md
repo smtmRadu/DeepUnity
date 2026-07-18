@@ -1,6 +1,15 @@
-# CosyVoice3 DEEPOPT — kernel-generation audit + optimization plan (NOT IMPLEMENTED)
+# CosyVoice3 DEEPOPT — kernel-generation audit + optimization plan
 
-> **STATUS: PLAN ONLY. No code has been written.** This document is the full audit of the
+> **STATUS: IMPLEMENTED (branch `cosyvoice-deepopt`, 2026-07-18) — UNVALIDATED.** All three
+> levers landed per this plan: `HiFTVocoder.FastConv` (Conv1DTileTC, §4.1),
+> `CosyVoiceFlow.FastDit31` (AdaLNStats/DitQKVCoal/DitLinearCoal/RopeQKPair/PackEstIn, §4.2),
+> `CosyVoiceLM.FastPrefill` (QKVProjBias/OProj/GateUp/Down GemmCoal + LmHeadPredict1VecCoal,
+> §4.3) — each defaulting ON with the legacy path preserved, plus
+> `validation/Editor/CosyVoiceFastKernelsProbe.cs` (§6 gates + LEGACY menu twins). The §6
+> validation checklist has NOT yet been run in Unity (no compile / parity / timing evidence);
+> every number below remains a prediction. Original audit text follows unchanged.
+>
+> This document is the full audit of the
 > CosyVoice3-0.5B port against the engine's current "#31" kernel generation (coalesced
 > GEMV/GemmCoal, Kokoro Conv1DTile2/#33), plus a ready-to-execute implementation plan: cost
 > models, eligibility tables, kernel sketches, call-site routing, parity gates and the
