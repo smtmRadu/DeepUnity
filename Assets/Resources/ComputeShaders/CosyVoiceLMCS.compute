@@ -1669,6 +1669,215 @@ void DecHead(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
 }
 
 
+// ============================================================================
+//        #31 COALESCED PREFILL GEMMs — cosyvoice-deepopt (DEEPOPT.md §4.3)
+// ============================================================================
+// Ported from Gemma3CS.compute's GVC_*/GMM_* #31 generation (2026-07). The legacy
+// prefill projections (QProjBias/KProjBias/VProjBias/OProj/GateUp/Down) give each
+// (token, output-row) pair ONE thread that walks K serially — adjacent threads
+// read weight rows K apart, so every warp transaction is wasted (Gemma3 GemmCoal
+// precedent: prefill 417 -> 1258 tok/s). Here a 256-thread group owns 8 output
+// rows x 8 tokens: the token tile is staged in groupshared in 128-column chunks
+// and every (coalesced) weight read is reused by all 8 tokens.
+// CosyVoice3 deltas vs the Gemma3 donor:
+//   * NO concatenated q|k|v / gate|up blobs in this export — the fused QKV kernel
+//     routes by gid.x range over the three separate weight buffers instead
+//     (112 Q + 16 K + 16 V groups, exactly like DecQKV), and GateUp reads
+//     mlp_gate_w/mlp_up_w separately.
+//   * q/k/v carry fp16 biases (proj_bias/proj_bias_k/proj_bias_v), added at
+//     writeback after the row scale — same expression as the legacy kernels.
+// All Ks are % 128 == 0 (896 = 7x128, 4864 = 38x128). Row counts are exact
+// multiples of 8 (896/128/4864), so only LmHeadPredict1VecCoal needs a tail
+// guard (846 groups cover vocab 6761). Split-k tree reduction => DETERMINISTIC
+// but NOT bit-identical to the legacy kernels (accumulation order; ~ulp) — the
+// same contract FastLM Phase 6b established. Routed by CosyVoiceLM.FastPrefill
+// for seqLen > 1 only; decode (T=1) keeps the Phase-6b kernels untouched.
+// INT4 compiles via the readW macro (per-group scale inside readW) but never
+// ships — same note as the Phase-6b kernels.
+#define GVC_LANES 32
+#define GVC_ROWS 8
+#define GVC_THREADS 256
+#define GVC_XMAX 4864            // largest staged K (mlp intermediate)
+groupshared float gvc_x[GVC_XMAX];
+groupshared float gvc_red[GVC_THREADS];
+
+// 32-lane tree reduction of gvc_red within this row's lane block; result in gvc_red[rowBase]
+#define GVC_REDUCE(acc) { \
+    gvc_red[tid.x] = acc; GroupMemoryBarrierWithGroupSync(); \
+    [unroll] for (uint ss = 16u; ss > 0u; ss >>= 1u) { \
+        if (lane < ss) gvc_red[tid.x] += gvc_red[tid.x + ss]; \
+        GroupMemoryBarrierWithGroupSync(); } }
+
+#define GVC_STAGE(SRC, K) { \
+    for (uint xx = tid.x; xx < (K); xx += GVC_THREADS) gvc_x[xx] = SRC[xx]; \
+    GroupMemoryBarrierWithGroupSync(); }
+
+#define GMM_TOK 8
+#define GMM_CHUNK 128
+groupshared float gmm_x[GMM_TOK * GMM_CHUNK];
+
+// acc[GMM_TOK] += (4 consecutive weights of the row at flat base `base`, chunk offset h0) x
+// (staged tokens). Each lane owns 4 consecutive columns of the 128-column chunk (32x4 = 128).
+#define GMM_STEP(acc, W, WS, base, h0) { \
+    uint bse = (base) + (h0) + lane * 4u; \
+    float w0 = readW(W, WS, bse), w1 = readW(W, WS, bse + 1u), \
+          w2 = readW(W, WS, bse + 2u), w3 = readW(W, WS, bse + 3u); \
+    [unroll] for (uint t = 0; t < GMM_TOK; t++) { \
+        uint xb = t * GMM_CHUNK + lane * 4u; \
+        acc[t] += gmm_x[xb] * w0 + gmm_x[xb + 1u] * w1 + gmm_x[xb + 2u] * w2 + gmm_x[xb + 3u] * w3; } }
+
+#define GMM_STAGE(SRC, K, seqN, h0) { \
+    for (uint i = tid.x; i < GMM_TOK * GMM_CHUNK; i += GVC_THREADS) { \
+        uint tt = i >> 7; uint hh = i & (GMM_CHUNK - 1u); uint tok = t0 + tt; \
+        gmm_x[i] = tok < (seqN) ? SRC[tok * (K) + (h0) + hh] : 0.0; } \
+    GroupMemoryBarrierWithGroupSync(); }
+
+// ---- QKVProjBiasGemmCoal: fused q/k/v prefill projections (+ biases) ----------
+// Dispatch(144, ceil(seq/8)): gid.x 0..111 = Q (row = gid.x*8+slot), 112..127 = K,
+// 128..143 = V — exact row coverage (896 = 112x8, 128 = 16x8), no row tails.
+#pragma kernel QKVProjBiasGemmCoal
+[numthreads(GVC_THREADS, 1, 1)]
+void QKVProjBiasGemmCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (GVC_LANES - 1u);
+    uint mode = gid.x < 112u ? 0u : (gid.x < 128u ? 1u : 2u);   // 0=Q 1=K 2=V
+    uint row = (mode == 0u ? gid.x : (mode == 1u ? gid.x - 112u : gid.x - 128u)) * GVC_ROWS + (tid.x >> 5);
+    uint t0 = gid.y * GMM_TOK;
+    uint q_full = num_heads_q * head_dim;      // 896
+    uint kv_full = num_heads_kv * head_dim;    // 128
+    float acc[GMM_TOK];
+    [unroll] for (uint z = 0; z < GMM_TOK; z++) acc[z] = 0.0;
+    for (uint h0 = 0; h0 < embedding_dim; h0 += GMM_CHUNK)
+    {
+        GMM_STAGE(X, embedding_dim, sequence_length_q, h0);
+        if (mode == 0u)      { GMM_STEP(acc, W_Q, W_Q_scales, row * embedding_dim, h0) }
+        else if (mode == 1u) { GMM_STEP(acc, W_K, W_K_scales, row * embedding_dim, h0) }
+        else                 { GMM_STEP(acc, W_V, W_V_scales, row * embedding_dim, h0) }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    for (uint t = 0; t < GMM_TOK; t++)   // NOT [unroll]: fxc mis-schedules barriers in unrolled loops
+    {
+        GVC_REDUCE(acc[t]);
+        if (lane == 0u && t0 + t < sequence_length_q)
+        {
+            float s = gvc_red[tid.x];
+            if (mode == 0u)      Q_out[(t0 + t) * q_full + row]  = s * wScale(W_Q_scales, row) + readH(proj_bias, row);
+            else if (mode == 1u) K_out[(t0 + t) * kv_full + row] = s * wScale(W_K_scales, row) + readH(proj_bias_k, row);
+            else                 V_out[(t0 + t) * kv_full + row] = s * wScale(W_V_scales, row) + readH(proj_bias_v, row);
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+}
+
+// ---- OProjGemmCoal: o_proj (no bias). Dispatch(112, ceil(seq/8)) ---------------
+#pragma kernel OProjGemmCoal
+[numthreads(GVC_THREADS, 1, 1)]
+void OProjGemmCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (GVC_LANES - 1u);
+    uint row = gid.x * GVC_ROWS + (tid.x >> 5);          // hidden index (896 = 112x8, exact)
+    uint t0 = gid.y * GMM_TOK;
+    float acc[GMM_TOK];
+    [unroll] for (uint z = 0; z < GMM_TOK; z++) acc[z] = 0.0;
+    // prefill AttendedValues is [t, heads*head_dim] = [t, inner_embedding_dim] flat
+    for (uint h0 = 0; h0 < inner_embedding_dim; h0 += GMM_CHUNK)
+    {
+        GMM_STAGE(AttendedValues, inner_embedding_dim, sequence_length_q, h0);
+        GMM_STEP(acc, W_O, W_O_scales, row * inner_embedding_dim, h0)
+        GroupMemoryBarrierWithGroupSync();
+    }
+    for (uint t = 0; t < GMM_TOK; t++)   // NOT [unroll]: fxc mis-schedules barriers in unrolled loops
+    {
+        GVC_REDUCE(acc[t]);
+        if (lane == 0u && t0 + t < sequence_length_q)
+            O[(t0 + t) * embedding_dim + row] = gvc_red[tid.x] * wScale(W_O_scales, row);
+        GroupMemoryBarrierWithGroupSync();
+    }
+}
+
+// ---- GateUpGemmCoal: gate & up GEMMs + silu/gelu(g)*u. Dispatch(608, ceil(seq/8))
+#pragma kernel GateUpGemmCoal
+[numthreads(GVC_THREADS, 1, 1)]
+void GateUpGemmCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (GVC_LANES - 1u);
+    uint row = gid.x * GVC_ROWS + (tid.x >> 5);          // intermediate index (4864 = 608x8, exact)
+    uint t0 = gid.y * GMM_TOK;
+    float ag[GMM_TOK], au[GMM_TOK];
+    [unroll] for (uint z = 0; z < GMM_TOK; z++) { ag[z] = 0.0; au[z] = 0.0; }
+    for (uint h0 = 0; h0 < hidden_size; h0 += GMM_CHUNK)
+    {
+        GMM_STAGE(input, hidden_size, sequence_length_q, h0);
+        GMM_STEP(ag, mlp_gate_w, mlp_gate_scales, row * hidden_size, h0)
+        GMM_STEP(au, mlp_up_w, mlp_up_scales, row * hidden_size, h0)
+        GroupMemoryBarrierWithGroupSync();
+    }
+    for (uint t = 0; t < GMM_TOK; t++)   // NOT [unroll]: fxc mis-schedules barriers in unrolled loops
+    {
+        GVC_REDUCE(ag[t]);
+        float g = gvc_red[tid.x & ~(GVC_LANES - 1u)];
+        GroupMemoryBarrierWithGroupSync();
+        GVC_REDUCE(au[t]);
+        if (lane == 0u && t0 + t < sequence_length_q)
+        {
+            float gg = g * wScale(mlp_gate_scales, row);
+            float uu = gvc_red[tid.x] * wScale(mlp_up_scales, row);
+            intermediate[(t0 + t) * intermediate_size + row] = (activation_type == 0) ? silu(gg) * uu : gelu(gg) * uu;
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+}
+
+// ---- DownGemmCoal: down projection (K = 4864 -> 38 staged chunks). Dispatch(112, ceil(seq/8))
+#pragma kernel DownGemmCoal
+[numthreads(GVC_THREADS, 1, 1)]
+void DownGemmCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (GVC_LANES - 1u);
+    uint row = gid.x * GVC_ROWS + (tid.x >> 5);          // hidden index (896 = 112x8, exact)
+    uint t0 = gid.y * GMM_TOK;
+    float acc[GMM_TOK];
+    [unroll] for (uint z = 0; z < GMM_TOK; z++) acc[z] = 0.0;
+    for (uint h0 = 0; h0 < intermediate_size; h0 += GMM_CHUNK)
+    {
+        GMM_STAGE(intermediate, intermediate_size, sequence_length_q, h0);
+        GMM_STEP(acc, mlp_down_w, mlp_down_scales, row * intermediate_size, h0)
+        GroupMemoryBarrierWithGroupSync();
+    }
+    for (uint t = 0; t < GMM_TOK; t++)   // NOT [unroll]: fxc mis-schedules barriers in unrolled loops
+    {
+        GVC_REDUCE(acc[t]);
+        if (lane == 0u && t0 + t < sequence_length_q)
+            input[(t0 + t) * hidden_size + row] = gvc_red[tid.x] * wScale(mlp_down_scales, row);
+        GroupMemoryBarrierWithGroupSync();
+    }
+}
+
+// ---- LmHeadPredict1VecCoal: T=1 speech-head GEMV (lm head ALWAYS fp16) --------
+// Straight Gemma3 port: 8 rows x 32 lanes, Dispatch(846,1,1) covers 6768 >= vocab
+// 6761 (tail guarded). Replaces the 1-thread-per-row LmHeadPredict1Vec.
+#pragma kernel LmHeadPredict1VecCoal
+[numthreads(GVC_THREADS, 1, 1)]
+void LmHeadPredict1VecCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    uint lane = tid.x & (GVC_LANES - 1u);
+    uint row = gid.x * GVC_ROWS + (tid.x >> 5);          // vocab index
+    GVC_STAGE(lm_input, hidden_size);
+    float acc = 0.0;
+    if (row < vocab_size)
+    {
+        uint bse = row * hidden_size;
+        for (uint hh = lane * 4u; hh < hidden_size; hh += GVC_LANES * 4u)
+            acc += gvc_x[hh]      * readH(lm_weights, bse + hh)
+                 + gvc_x[hh + 1u] * readH(lm_weights, bse + hh + 1u)
+                 + gvc_x[hh + 2u] * readH(lm_weights, bse + hh + 2u)
+                 + gvc_x[hh + 3u] * readH(lm_weights, bse + hh + 3u);
+    }
+    GVC_REDUCE(acc);
+    if (lane == 0u && row < vocab_size) lm_output[row] = gvc_red[tid.x];
+}
+
+
 // ================================ LM head + sampling ===========================
 #pragma kernel LmHeadPredict
 #pragma kernel LmHeadPredict

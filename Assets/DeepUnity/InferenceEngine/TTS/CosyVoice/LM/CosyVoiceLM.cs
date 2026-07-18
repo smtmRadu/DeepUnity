@@ -41,7 +41,8 @@ namespace DeepUnity
 
             int kEmbed, kRmsNorm, kQProj, kKProj, kVProj, kRope, kWriteCache, kFlashAttn,
                 kOProj, kGateUp, kDown, kLmHead, kZero, kCopy, kCopySlice, kAdd, kSampleRas,
-                kDecQKV, kDecRope, kDecOProj, kDecGateUp, kDecDown, kDecHead;
+                kDecQKV, kDecRope, kDecOProj, kDecGateUp, kDecDown, kDecHead,
+                kQkvCoal, kOProjCoal, kGateUpCoal, kDownCoal, kLmHeadCoal;
 
             /// <summary>A6-max Phase 6b fused decode path (default ON): 6 dispatches/layer + 1
             /// head (145/token, was 411), split-k GEMVs (32-64 lanes per output row, coalesced
@@ -52,6 +53,19 @@ namespace DeepUnity
             /// 0.99999; sampled token sequences may diverge from pre-6b runs. false = the
             /// legacy per-op kernels for bisection. Prefill always uses the original kernels.</summary>
             public static bool FastLM = true;
+
+            /// <summary>cosyvoice-deepopt lever 3 (DEEPOPT.md §4.3, default ON): prefill
+            /// (seqLen &gt; 1) projection GEMMs run the #31 GemmCoal kernels — one fused
+            /// QKV dispatch (was 3) plus coalesced O/GateUp/Down, 8 output rows x 8 tokens
+            /// per group with the token tile staged in groupshared (the legacy kernels are
+            /// thread-per-(token,row) with K-strided weight walks, ~1/32 warp efficiency).
+            /// DispatchFinalLast's speech head also routes to LmHeadPredict1VecCoal.
+            /// DETERMINISTIC but NOT bit-identical to the legacy prefill (GEMM reduction
+            /// reorder, ~ulp — the same contract FastLM Phase 6b established; RAS-sampled
+            /// sequences may diverge run-to-run vs old builds, dump gates unaffected).
+            /// Decode (seqLen == 1) is untouched either way — the FastLM=false bisect arm
+            /// survives. false = the legacy per-projection kernels.</summary>
+            public static bool FastPrefill = true;
 
             /// <summary>GPU-side RAS sampling (SampleTokenRAS kernel + 4-byte async readback) —
             /// removes the per-token 27 KB logits readback entirely. NOT bit-equal to the CPU
@@ -130,6 +144,11 @@ namespace DeepUnity
                 kDecGateUp = cs.FindKernel("DecGateUp");
                 kDecDown = cs.FindKernel("DecDownRes");
                 kDecHead = cs.FindKernel("DecHead");
+                kQkvCoal = cs.FindKernel("QKVProjBiasGemmCoal");
+                kOProjCoal = cs.FindKernel("OProjGemmCoal");
+                kGateUpCoal = cs.FindKernel("GateUpGemmCoal");
+                kDownCoal = cs.FindKernel("DownGemmCoal");
+                kLmHeadCoal = cs.FindKernel("LmHeadPredict1VecCoal");
 
                 for (int i = 0; i < LAYERS; i++)
                 {
@@ -324,26 +343,51 @@ namespace DeepUnity
                 cs.SetInt("num_heads_kv", HKV);
                 cs.SetInt("head_dim", HD);
 
-                cs.SetBuffer(kQProj, "X", normOutBuf);
-                cs.SetBuffer(kQProj, "W_Q", lwQ[li]);
-                cs.SetBuffer(kQProj, "proj_bias", lbQ[li]);
-                cs.SetBuffer(kQProj, "Q_out", qBuf);
-                if (isInt8) cs.SetBuffer(kQProj, "W_Q_scales", lsQ[li]);
-                cs.Dispatch(kQProj, 1, (seqLen + 7) / 8, (HQ * HD + 31) / 32);
+                bool coal = FastPrefill && seqLen > 1;   // decode (T=1) keeps the legacy/Phase-6b split intact
+                if (coal)
+                {
+                    // #31 fused QKV GemmCoal: 112 Q + 16 K + 16 V row-groups x ceil(seq/8) token tiles
+                    cs.SetBuffer(kQkvCoal, "X", normOutBuf);
+                    cs.SetBuffer(kQkvCoal, "W_Q", lwQ[li]);
+                    cs.SetBuffer(kQkvCoal, "W_K", lwK[li]);
+                    cs.SetBuffer(kQkvCoal, "W_V", lwV[li]);
+                    cs.SetBuffer(kQkvCoal, "proj_bias", lbQ[li]);
+                    cs.SetBuffer(kQkvCoal, "proj_bias_k", lbK[li]);
+                    cs.SetBuffer(kQkvCoal, "proj_bias_v", lbV[li]);
+                    cs.SetBuffer(kQkvCoal, "Q_out", qBuf);
+                    cs.SetBuffer(kQkvCoal, "K_out", kBuf);
+                    cs.SetBuffer(kQkvCoal, "V_out", vBuf);
+                    if (isInt8)
+                    {
+                        cs.SetBuffer(kQkvCoal, "W_Q_scales", lsQ[li]);
+                        cs.SetBuffer(kQkvCoal, "W_K_scales", lsK[li]);
+                        cs.SetBuffer(kQkvCoal, "W_V_scales", lsV[li]);
+                    }
+                    cs.Dispatch(kQkvCoal, 144, (seqLen + 7) / 8, 1);
+                }
+                else
+                {
+                    cs.SetBuffer(kQProj, "X", normOutBuf);
+                    cs.SetBuffer(kQProj, "W_Q", lwQ[li]);
+                    cs.SetBuffer(kQProj, "proj_bias", lbQ[li]);
+                    cs.SetBuffer(kQProj, "Q_out", qBuf);
+                    if (isInt8) cs.SetBuffer(kQProj, "W_Q_scales", lsQ[li]);
+                    cs.Dispatch(kQProj, 1, (seqLen + 7) / 8, (HQ * HD + 31) / 32);
 
-                cs.SetBuffer(kKProj, "X", normOutBuf);
-                cs.SetBuffer(kKProj, "W_K", lwK[li]);
-                cs.SetBuffer(kKProj, "proj_bias", lbK[li]);
-                cs.SetBuffer(kKProj, "K_out", kBuf);
-                if (isInt8) cs.SetBuffer(kKProj, "W_K_scales", lsK[li]);
-                cs.Dispatch(kKProj, 1, (seqLen + 7) / 8, (HKV * HD + 31) / 32);
+                    cs.SetBuffer(kKProj, "X", normOutBuf);
+                    cs.SetBuffer(kKProj, "W_K", lwK[li]);
+                    cs.SetBuffer(kKProj, "proj_bias", lbK[li]);
+                    cs.SetBuffer(kKProj, "K_out", kBuf);
+                    if (isInt8) cs.SetBuffer(kKProj, "W_K_scales", lsK[li]);
+                    cs.Dispatch(kKProj, 1, (seqLen + 7) / 8, (HKV * HD + 31) / 32);
 
-                cs.SetBuffer(kVProj, "X", normOutBuf);
-                cs.SetBuffer(kVProj, "W_V", lwV[li]);
-                cs.SetBuffer(kVProj, "proj_bias", lbV[li]);
-                cs.SetBuffer(kVProj, "V_out", vBuf);
-                if (isInt8) cs.SetBuffer(kVProj, "W_V_scales", lsV[li]);
-                cs.Dispatch(kVProj, 1, (seqLen + 7) / 8, (HKV * HD + 31) / 32);
+                    cs.SetBuffer(kVProj, "X", normOutBuf);
+                    cs.SetBuffer(kVProj, "W_V", lwV[li]);
+                    cs.SetBuffer(kVProj, "proj_bias", lbV[li]);
+                    cs.SetBuffer(kVProj, "V_out", vBuf);
+                    if (isInt8) cs.SetBuffer(kVProj, "W_V_scales", lsV[li]);
+                    cs.Dispatch(kVProj, 1, (seqLen + 7) / 8, (HKV * HD + 31) / 32);
+                }
 
                 RopeOp(qBuf, seqLen, HQ, CachedTokenCount);
                 RopeOp(kBuf, seqLen, HKV, CachedTokenCount);
@@ -367,11 +411,22 @@ namespace DeepUnity
                 cs.Dispatch(kFlashAttn, seqLen, HQ, 1);
 
                 cs.SetInt("inner_embedding_dim", HQ * HD);
-                cs.SetBuffer(kOProj, "AttendedValues", attendedBuf);
-                cs.SetBuffer(kOProj, "W_O", lwO[li]);
-                cs.SetBuffer(kOProj, "O", attnOutBuf);
-                if (isInt8) cs.SetBuffer(kOProj, "W_O_scales", lsO[li]);
-                cs.Dispatch(kOProj, 1, (seqLen + 3) / 4, (H + 31) / 32);
+                if (coal)
+                {
+                    cs.SetBuffer(kOProjCoal, "AttendedValues", attendedBuf);
+                    cs.SetBuffer(kOProjCoal, "W_O", lwO[li]);
+                    cs.SetBuffer(kOProjCoal, "O", attnOutBuf);
+                    if (isInt8) cs.SetBuffer(kOProjCoal, "W_O_scales", lsO[li]);
+                    cs.Dispatch(kOProjCoal, H / 8, (seqLen + 7) / 8, 1);          // 112 row-groups
+                }
+                else
+                {
+                    cs.SetBuffer(kOProj, "AttendedValues", attendedBuf);
+                    cs.SetBuffer(kOProj, "W_O", lwO[li]);
+                    cs.SetBuffer(kOProj, "O", attnOutBuf);
+                    if (isInt8) cs.SetBuffer(kOProj, "W_O_scales", lsO[li]);
+                    cs.Dispatch(kOProj, 1, (seqLen + 3) / 4, (H + 31) / 32);
+                }
                 AddOp(attnOutBuf, skipBuf, hidTotal);
 
                 CopyOp(skipBuf, attnOutBuf, hidTotal);
@@ -380,22 +435,44 @@ namespace DeepUnity
                 cs.SetInt("seq_len", seqLen);
                 cs.SetInt("intermediate_size", MLP_DIM);
                 cs.SetInt("activation_type", 0);   // silu
-                cs.SetBuffer(kGateUp, "input", normOutBuf);
-                cs.SetBuffer(kGateUp, "mlp_gate_w", lwG[li]);
-                cs.SetBuffer(kGateUp, "mlp_up_w", lwU[li]);
-                cs.SetBuffer(kGateUp, "intermediate", mlpInterBuf);
-                if (isInt8)
+                if (coal)
                 {
-                    cs.SetBuffer(kGateUp, "mlp_gate_scales", lsG[li]);
-                    cs.SetBuffer(kGateUp, "mlp_up_scales", lsU[li]);
-                }
-                cs.Dispatch(kGateUp, (MLP_DIM + 63) / 64, (seqLen + 7) / 8, 1);
+                    cs.SetBuffer(kGateUpCoal, "input", normOutBuf);
+                    cs.SetBuffer(kGateUpCoal, "mlp_gate_w", lwG[li]);
+                    cs.SetBuffer(kGateUpCoal, "mlp_up_w", lwU[li]);
+                    cs.SetBuffer(kGateUpCoal, "intermediate", mlpInterBuf);
+                    if (isInt8)
+                    {
+                        cs.SetBuffer(kGateUpCoal, "mlp_gate_scales", lsG[li]);
+                        cs.SetBuffer(kGateUpCoal, "mlp_up_scales", lsU[li]);
+                    }
+                    cs.Dispatch(kGateUpCoal, MLP_DIM / 8, (seqLen + 7) / 8, 1);   // 608 row-groups
 
-                cs.SetBuffer(kDown, "intermediate", mlpInterBuf);
-                cs.SetBuffer(kDown, "mlp_down_w", lwD[li]);
-                cs.SetBuffer(kDown, "input", hiddenBuf);   // Down writes `input` -> new hidden
-                if (isInt8) cs.SetBuffer(kDown, "mlp_down_scales", lsD[li]);
-                cs.Dispatch(kDown, (H + 63) / 64, (seqLen + 7) / 8, 1);
+                    cs.SetBuffer(kDownCoal, "intermediate", mlpInterBuf);
+                    cs.SetBuffer(kDownCoal, "mlp_down_w", lwD[li]);
+                    cs.SetBuffer(kDownCoal, "input", hiddenBuf);
+                    if (isInt8) cs.SetBuffer(kDownCoal, "mlp_down_scales", lsD[li]);
+                    cs.Dispatch(kDownCoal, H / 8, (seqLen + 7) / 8, 1);           // 112 row-groups
+                }
+                else
+                {
+                    cs.SetBuffer(kGateUp, "input", normOutBuf);
+                    cs.SetBuffer(kGateUp, "mlp_gate_w", lwG[li]);
+                    cs.SetBuffer(kGateUp, "mlp_up_w", lwU[li]);
+                    cs.SetBuffer(kGateUp, "intermediate", mlpInterBuf);
+                    if (isInt8)
+                    {
+                        cs.SetBuffer(kGateUp, "mlp_gate_scales", lsG[li]);
+                        cs.SetBuffer(kGateUp, "mlp_up_scales", lsU[li]);
+                    }
+                    cs.Dispatch(kGateUp, (MLP_DIM + 63) / 64, (seqLen + 7) / 8, 1);
+
+                    cs.SetBuffer(kDown, "intermediate", mlpInterBuf);
+                    cs.SetBuffer(kDown, "mlp_down_w", lwD[li]);
+                    cs.SetBuffer(kDown, "input", hiddenBuf);   // Down writes `input` -> new hidden
+                    if (isInt8) cs.SetBuffer(kDown, "mlp_down_scales", lsD[li]);
+                    cs.Dispatch(kDown, (H + 63) / 64, (seqLen + 7) / 8, 1);
+                }
                 AddOp(hiddenBuf, skipBuf, hidTotal);
             }
 
@@ -413,10 +490,11 @@ namespace DeepUnity
 
                 cs.SetInt("vocab_size", VOCAB);
                 cs.SetInt("hidden_size", H);
-                cs.SetBuffer(kLmHead, "lm_input", normSingleBuf);
-                cs.SetBuffer(kLmHead, "lm_weights", wDecoder);
-                cs.SetBuffer(kLmHead, "lm_output", logitsBuf);
-                cs.Dispatch(kLmHead, (VOCAB + 511) / 512, 1, 1);
+                int kHead = FastPrefill ? kLmHeadCoal : kLmHead;   // coal twin: 8 rows x 32 lanes
+                cs.SetBuffer(kHead, "lm_input", normSingleBuf);
+                cs.SetBuffer(kHead, "lm_weights", wDecoder);
+                cs.SetBuffer(kHead, "lm_output", logitsBuf);
+                cs.Dispatch(kHead, FastPrefill ? (VOCAB + 7) / 8 : (VOCAB + 511) / 512, 1, 1);
             }
 
             public static int LayersPerYield = LAYERS * 8;
