@@ -1641,6 +1641,275 @@ void RopeQK(uint3 id : SV_DispatchThreadID)
     inout_buf[b + 1u] = a0 * s + a1 * c;
 }
 
+// ============================================================================
+//   #31 DiT FAST KERNELS — cosyvoice-deepopt lever 2 (DEEPOPT.md §4.2),
+//   routed by CosyVoiceFlow.FastDit31 (fp16 + Q8 twins share macro bodies —
+//   this file uses per-tensor Q8 kernels, NOT multi_compile).
+// ============================================================================
+// The DiT block chain was 13-14 dispatches with AdaLN/GateAdd round-tripping a
+// [1152,1024] fp32 activation through DRAM at 4 sites per block. Here:
+//   * AdaLNStats writes only (mean, rstd) per row — the modulate expression
+//     moves into the GEMM X staging unchanged, so GEMM INPUTS are bit-identical
+//     to the AdaLNModulate output; only the GEMM sum order changes (gated).
+//   * DitQKVCoal fuses to_q/to_k/to_v (+biases) into one GemmCoal dispatch
+//     (gid.x mode ranges 128/128/128 over W / W_k / W_v).
+//   * DitLinearCoal covers to_out (gate-add epilogue), FF1 (modulate staging +
+//     GELU-tanh), FF2 (gate-add) and proj_out (modulate staging). The out-mode-1
+//     float ops match the legacy GateAdd exactly given the same acc.
+//   * RopeQKPair ropes q AND k in one dispatch (bit-exact RopeQK math).
+//   * PackEstIn builds the whole [2*Le, 320] estimator input in one dispatch
+//     (bit-exact data movement vs the legacy Zero+Pack chain).
+// 13/14 -> 8/9 dispatches per block; 299 -> 184 per offline Euler step.
+
+#define FMM_TOK 8
+#define FMM_LANES 32
+#define FMM_THREADS 256
+#define FMM_CHUNK 128
+groupshared float fmm_x[FMM_TOK * FMM_CHUNK];
+groupshared float fmm_red[FMM_THREADS];
+
+// staged token tile [8, 128] with the optional AdaLN modulate fused per element:
+// dit_in_mode 1 applies (x - mean)*rstd*(1 + mod_vec[scale+c]) + mod_vec[shift+c]
+// from est_stats — the exact AdaLNModulate expression on the exact same stats.
+#define FMM_STAGE(SRC, KDIM, rows, h0) { \
+    for (uint i = tid.x; i < FMM_TOK * FMM_CHUNK; i += FMM_THREADS) { \
+        uint tt = i >> 7; uint hh = i & (FMM_CHUNK - 1u); uint tok = t0 + tt; \
+        float v = 0.0; \
+        if (tok < (rows)) { \
+            v = SRC[tok * (KDIM) + (h0) + hh]; \
+            if (dit_in_mode == 1u) { \
+                uint c = (h0) + hh; \
+                v = (v - est_stats[tok * 2u]) * est_stats[tok * 2u + 1u] \
+                    * (1.0 + mod_vec[mod_scale_off + c]) + mod_vec[mod_shift_off + c]; \
+            } \
+        } \
+        fmm_x[i] = v; } \
+    GroupMemoryBarrierWithGroupSync(); }
+
+// 32-lane fixed tree reduction; result in fmm_red[row slot base]
+#define FMM_REDUCE(acc) { \
+    fmm_red[tid.x] = acc; GroupMemoryBarrierWithGroupSync(); \
+    [unroll] for (uint ss = 16u; ss > 0u; ss >>= 1u) { \
+        if (lane < ss) fmm_red[tid.x] += fmm_red[tid.x + ss]; \
+        GroupMemoryBarrierWithGroupSync(); } }
+
+// acc[8] += 4 consecutive fp16 weights x staged tokens (2 coalesced uints/lane)
+#define FMM_STEP_H(acc, WBUF, base, h0) { \
+    uint bse = (base) + (h0) + lane * 4u; \
+    uint wa = WBUF[bse >> 1], wb = WBUF[(bse >> 1) + 1u]; \
+    float w0 = f16tof32(wa & 0xFFFFu), w1 = f16tof32(wa >> 16), \
+          w2 = f16tof32(wb & 0xFFFFu), w3 = f16tof32(wb >> 16); \
+    [unroll] for (uint t = 0; t < FMM_TOK; t++) { \
+        uint xb = t * FMM_CHUNK + lane * 4u; \
+        acc[t] += fmm_x[xb] * w0 + fmm_x[xb + 1u] * w1 + fmm_x[xb + 2u] * w2 + fmm_x[xb + 3u] * w3; } }
+
+// int8 twin: 4 consecutive elements = one coalesced uint/lane; per-row scale at writeback
+#define FMM_STEP_Q8(acc, WBUF, base, h0) { \
+    uint bse = (base) + (h0) + lane * 4u; \
+    int w4 = (int)WBUF[bse >> 2]; \
+    float w0 = (float)((w4 << 24) >> 24), w1 = (float)((w4 << 16) >> 24), \
+          w2 = (float)((w4 << 8)  >> 24), w3 = (float)( w4        >> 24); \
+    [unroll] for (uint t = 0; t < FMM_TOK; t++) { \
+        uint xb = t * FMM_CHUNK + lane * 4u; \
+        acc[t] += fmm_x[xb] * w0 + fmm_x[xb + 1u] * w1 + fmm_x[xb + 2u] * w2 + fmm_x[xb + 3u] * w3; } }
+
+// ---- DitQKVCoal[Q8]: fused to_q/to_k/to_v (+biases), modulate staged ----------
+// Dispatch(384, ceil(rows/8)): gid.x 0..127 = Q rows (1024 = 128x8, exact),
+// 128..255 = K, 256..383 = V. Outputs Y/Y2/Y3, biases W_bias/W_k_bias/W_v_bias.
+#define DIT_QKV_BODY(STEP, SCALE_Q, SCALE_K, SCALE_V) \
+    uint lane = tid.x & (FMM_LANES - 1u); \
+    uint mode = gid.x >> 7; \
+    uint row = (gid.x & 127u) * 8u + (tid.x >> 5); \
+    uint t0 = gid.y * FMM_TOK; \
+    float acc[FMM_TOK]; \
+    { [unroll] for (uint z = 0; z < FMM_TOK; z++) acc[z] = 0.0; } \
+    for (uint h0 = 0; h0 < in_dim; h0 += FMM_CHUNK) \
+    { \
+        FMM_STAGE(X, in_dim, seq_len, h0); \
+        if (mode == 0u)      { STEP(acc, W,   row * in_dim, h0) } \
+        else if (mode == 1u) { STEP(acc, W_k, row * in_dim, h0) } \
+        else                 { STEP(acc, W_v, row * in_dim, h0) } \
+        GroupMemoryBarrierWithGroupSync(); \
+    } \
+    for (uint t = 0; t < FMM_TOK; t++)   /* NOT [unroll]: fxc mis-schedules barriers in unrolled loops */ \
+    { \
+        FMM_REDUCE(acc[t]); \
+        if (lane == 0u && t0 + t < seq_len) \
+        { \
+            float s = fmm_red[tid.x]; \
+            if (mode == 0u)      Y [(t0 + t) * out_dim + row] = s * (SCALE_Q) + readH(W_bias, row); \
+            else if (mode == 1u) Y2[(t0 + t) * out_dim + row] = s * (SCALE_K) + readH(W_k_bias, row); \
+            else                 Y3[(t0 + t) * out_dim + row] = s * (SCALE_V) + readH(W_v_bias, row); \
+        } \
+        GroupMemoryBarrierWithGroupSync(); \
+    }
+
+#pragma kernel DitQKVCoal
+[numthreads(FMM_THREADS, 1, 1)]
+void DitQKVCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    DIT_QKV_BODY(FMM_STEP_H, 1.0, 1.0, 1.0)
+}
+
+#pragma kernel DitQKVCoalQ8
+[numthreads(FMM_THREADS, 1, 1)]
+void DitQKVCoalQ8(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    DIT_QKV_BODY(FMM_STEP_Q8, readH(W_scales, row), readH(W_k_scales, row), readH(W_v_scales, row))
+}
+
+// ---- DitLinearCoal[Q8]: generic GemmCoal with modulate staging + epilogues ----
+// dit_in_mode: 0 raw X / 1 AdaLN-modulate (est_stats + mod offsets).
+// dit_out_mode: 0 Y = apply_act(acc(*scale) + b)
+//               1 Y += mod_vec[mod_gate_off + row] * apply_act(acc(*scale) + b)
+//                 (act 0 at the out-mode-1 call sites -> exact legacy GateAdd ops)
+// Covers to_out (raw, gate-add), FF1 (modulate, act 8), FF2 (raw, gate-add),
+// proj_out (modulate, plain; norm_out order = SCALE,shift via the offsets).
+#define DIT_LIN_BODY(STEP, SCALE) \
+    uint lane = tid.x & (FMM_LANES - 1u); \
+    uint row = gid.x * 8u + (tid.x >> 5); \
+    uint t0 = gid.y * FMM_TOK; \
+    float acc[FMM_TOK]; \
+    { [unroll] for (uint z = 0; z < FMM_TOK; z++) acc[z] = 0.0; } \
+    for (uint h0 = 0; h0 < in_dim; h0 += FMM_CHUNK) \
+    { \
+        FMM_STAGE(X, in_dim, seq_len, h0); \
+        if (row < out_dim) { STEP(acc, W, row * in_dim, h0) } \
+        GroupMemoryBarrierWithGroupSync(); \
+    } \
+    for (uint t = 0; t < FMM_TOK; t++)   /* NOT [unroll]: fxc mis-schedules barriers in unrolled loops */ \
+    { \
+        FMM_REDUCE(acc[t]); \
+        if (lane == 0u && row < out_dim && t0 + t < seq_len) \
+        { \
+            float v = apply_act(fmm_red[tid.x] * (SCALE) + readH(W_bias, row)); \
+            uint yi = (t0 + t) * out_dim + row; \
+            if (dit_out_mode == 0u) Y[yi] = v; \
+            else                    Y[yi] += mod_vec[mod_gate_off + row] * v; \
+        } \
+        GroupMemoryBarrierWithGroupSync(); \
+    }
+
+#pragma kernel DitLinearCoal
+[numthreads(FMM_THREADS, 1, 1)]
+void DitLinearCoal(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    DIT_LIN_BODY(FMM_STEP_H, 1.0)
+}
+
+#pragma kernel DitLinearCoalQ8
+[numthreads(FMM_THREADS, 1, 1)]
+void DitLinearCoalQ8(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
+{
+    DIT_LIN_BODY(FMM_STEP_Q8, readH(W_scales, row))
+}
+
+// ========================= AdaLNStats =========================================
+// First half of the fused AdaLN: AdaLNModulate's EXACT 256-thread mean/var trees
+// (same reduction structure, same eps => bit-identical stats), but only
+// est_stats_w[row*2] = mean and [row*2+1] = rstd are written — the modulate
+// expression is applied lazily in the Dit*Coal X staging.
+#pragma kernel AdaLNStats
+[numthreads(256, 1, 1)]
+void AdaLNStats(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    uint pos = gid.x;
+    uint tid = gtid.x;
+    if (pos >= seq_len) return;
+    uint base_idx = pos * norm_dim;
+
+    float s = 0.0;
+    for (uint i = tid; i < norm_dim; i += 256u) s += norm_input[base_idx + i];
+    aln_red[tid] = s;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint r = 128u; r > 0u; r >>= 1)
+    {
+        if (tid < r) aln_red[tid] += aln_red[tid + r];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    float mean = aln_red[0] / (float)norm_dim;
+    GroupMemoryBarrierWithGroupSync();
+
+    float v = 0.0;
+    for (uint j = tid; j < norm_dim; j += 256u)
+    {
+        float d = norm_input[base_idx + j] - mean;
+        v += d * d;
+    }
+    aln_red[tid] = v;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint r2 = 128u; r2 > 0u; r2 >>= 1)
+    {
+        if (tid < r2) aln_red[tid] += aln_red[tid + r2];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (tid == 0)
+    {
+        est_stats_w[pos * 2u] = mean;
+        est_stats_w[pos * 2u + 1u] = rsqrt(aln_red[0] / (float)norm_dim + norm_eps);
+    }
+}
+
+// ========================= RopeQKPair =========================================
+// RopeQK applied to inout_buf (q) AND inout_buf2 (k) in ONE dispatch — the
+// per-element rotation math and table indexing are verbatim RopeQK (bit-exact);
+// saves one dispatch per (block, Euler step).
+#pragma kernel RopeQKPair
+[numthreads(256, 1, 1)]
+void RopeQKPair(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= seq_len * 32u) return;
+    uint t = idx / 32u;
+    uint j = idx % 32u;
+    uint pos = pos_offset + (batch_seq != 0u ? t % batch_seq : t);
+    float th = (float)pos * readH(rope_freqs, j);
+    float c = cos(th), s = sin(th);
+    uint b = t * in_dim + 2u * j;        // in_dim = row stride (1024)
+    float a0 = inout_buf[b];
+    float a1 = inout_buf[b + 1u];
+    inout_buf[b]      = a0 * c - a1 * s;
+    inout_buf[b + 1u] = a0 * s + a1 * c;
+    float b0 = inout_buf2[b];
+    float b1 = inout_buf2[b + 1u];
+    inout_buf2[b]      = b0 * c - b1 * s;
+    inout_buf2[b + 1u] = b0 * s + b1 * c;
+}
+
+// ========================= PackEstIn ==========================================
+// One dispatch builds the whole [2*Le, 320] batch-2 estimator input — replaces
+// the legacy ZeroBuffer + 4/6x PackChannels + PackBroadcastCh chain with the
+// EXACT same data movement (enumerated from EstimatorFull/EstimatorCachedStep):
+//   lane 0 (ch 0-79, x)    both halves: row < apron ? est_tail[tail_row + row]
+//                                                   : est_x[est_xrow + row - apron]
+//   lane 1 (cond) / 2 (mu) cond half only, from row est_cond_row + row; uncond 0
+//   lane 3 (spk broadcast) cond half only; uncond 0
+// Offline: apron 0, est_xrow 0, Le = M (est_tail bound but never read).
+#pragma kernel PackEstIn
+[numthreads(256, 1, 1)]
+void PackEstIn(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= 2u * est_rows * 320u) return;
+    uint rowOut = idx / 320u;
+    uint c = idx - rowOut * 320u;
+    uint half_i = rowOut / est_rows;
+    uint r = rowOut - half_i * est_rows;
+    uint lane = c / 80u;
+    uint cl = c - lane * 80u;
+    float v = 0.0;
+    if (lane == 0u)
+        v = (r < est_apron) ? est_tail[(est_tail_row + r) * 80u + cl]
+                            : est_x[(est_xrow + r - est_apron) * 80u + cl];
+    else if (half_i == 0u)
+    {
+        if (lane == 1u)      v = est_cond[(est_cond_row + r) * 80u + cl];
+        else if (lane == 2u) v = est_mu[(est_cond_row + r) * 80u + cl];
+        else                 v = est_spk[cl];
+    }
+    est_out[idx] = v;
+}
+
 // ========================= EulerCfgStep =======================================
 // CFM step with classifier-free guidance folded in:
 // inout[dst_off+i] += dt_val * ((1+scale_val)*X[i] - scale_val*buf_b[src_off+i]).

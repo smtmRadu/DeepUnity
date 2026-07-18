@@ -56,7 +56,8 @@ namespace DeepUnity
 
             int kTokenEmbed, kLinear, kLinearT, kLinearQ8, kLinearTQ8, kConv, kConvG, kAdaLN, kGateAdd, kRope, kBidir, kTimeEmb,
                 kRepeat, kPack, kPackB, kZero, kCopy, kCopySlice, kAdd, kActivate, kEulerCfg,
-                kBidirKV, kWriteKV, kBidirQT, kBidirKVQT, kLinearB2, kLinearB2Q8;
+                kBidirKV, kWriteKV, kBidirQT, kBidirKVQT, kLinearB2, kLinearB2Q8,
+                kStats, kDitQkv, kDitQkvQ8, kDitLin, kDitLinQ8, kRopePair, kPackEst;
 
             /// <summary>A6-max Phase 3, Q-tiled attention (default ON): 8 queries/group share
             /// each staged 64-key K tile and the V accumulation runs on ALL 256 lanes — the
@@ -69,10 +70,25 @@ namespace DeepUnity
             /// was shared-bandwidth-bound). Same per-(row,out) k-order -> BIT-EXACT.
             /// false = Phase-1 kernel. Separate from FastAttention so probes can bisect.</summary>
             public static bool FastGemm = true;
+            /// <summary>cosyvoice-deepopt lever 2 (DEEPOPT.md §4.2, default ON): the DiT block
+            /// chain runs the #31 GemmCoal fusion set — AdaLNStats writes only (mean, rstd)
+            /// per row and the modulate expression moves into the GEMM X staging (GEMM inputs
+            /// bit-identical); DitQKVCoal fuses to_q/to_k/to_v (+biases) in one dispatch;
+            /// DitLinearCoal fuses the GateAdd epilogues into to_out/FF2 and the modulate +
+            /// GELU into FF1/proj_out; RopeQKPair ropes q and k together; PackEstIn replaces
+            /// the per-step Zero+Pack chain (bit-exact data movement). 13/14 -> 8/9 dispatches
+            /// per block, 299 -> 184 per offline Euler step, and the 4x-per-block [2M,1024]
+            /// AdaLN/GateAdd DRAM round-trips disappear. GEMM sum order differs from
+            /// LinearTileBias2 -> TOLERANCE-equal, not bit-equal (mel A/B gate: maxAbs <=
+            /// 5e-3, corr >= 0.9999 — CosyVoiceFastKernelsProbe). Streaming semantics (hop
+            /// schedule, K/V cache, x-tails, chunk masks, EulerCfg offsets) are untouched.
+            /// false = the legacy A2/A6-validated per-op path.</summary>
+            public static bool FastDit31 = true;
 
             ComputeBuffer tokIdsBuf, embBuf, plaBuf, hBuf, muBuf, condBuf, xBuf;
             ComputeBuffer spkInBuf, spkBuf, tFreqBuf, tMidBuf, tEmbBuf, tSiluBuf, modTmpBuf, modFBuf;
             ComputeBuffer estInBuf, eA, eB, eS, qBuf, kBuf, vBuf, attnBuf, ffBuf, dxdtA, dxdtB;
+            ComputeBuffer statsBuf;                       // FastDit31: per-row (mean, rstd) pairs
             ComputeBuffer modAllSteps, modFSteps;         // precomputed AdaLN mods, all Euler steps
             int modsNT = -1;
             int curTok, curM;
@@ -119,6 +135,7 @@ namespace DeepUnity
             ComputeBuffer[] wMod, bMod, wQ, bQ, wK, bK, wV, bV, wO, bO, wF1, bF1, wF2, bF2;
             ComputeBuffer[] sMod, sQ, sK, sV, sO, sF1, sF2;   // q8 per-row scales (null = fp16)
             ComputeBuffer wProj, bProj, wCp1, bCp1, wCp2, bCp2, ropeFreq;
+            ComputeBuffer wPo, bPo, sPo;                      // proj_out (FastDit31 coal path)
 
             ComputeBuffer Sc(string tensor)   // scales sibling of a q8 matmul, null when fp16
                 => weights.Has(tensor + ".scales") ? weights.Get(tensor + ".scales") : null;
@@ -153,6 +170,8 @@ namespace DeepUnity
                     sV[b] = Sc(blk + "attn.to_v.weight"); sO[b] = Sc(blk + "attn.to_out.0.weight");
                     sF1[b] = Sc(blk + "ff.ff.0.0.weight"); sF2[b] = Sc(blk + "ff.ff.2.weight");
                 }
+                wPo = weights.Get(EST + "proj_out.weight"); bPo = weights.Get(EST + "proj_out.bias");
+                sPo = Sc(EST + "proj_out.weight");
                 wProj = weights.Get(EST + "input_embed.proj.weight"); bProj = weights.Get(EST + "input_embed.proj.bias");
                 wCp1 = weights.Get(EST + "input_embed.conv_pos_embed.conv1.0.weight"); bCp1 = weights.Get(EST + "input_embed.conv_pos_embed.conv1.0.bias");
                 wCp2 = weights.Get(EST + "input_embed.conv_pos_embed.conv2.0.weight"); bCp2 = weights.Get(EST + "input_embed.conv_pos_embed.conv2.0.bias");
@@ -180,6 +199,13 @@ namespace DeepUnity
                 kWriteKV = cs.FindKernel("WriteFlowKV");
                 kLinearB2 = cs.FindKernel("LinearTileBias2");
                 kLinearB2Q8 = cs.FindKernel("LinearTileBias2Q8");
+                kStats = cs.FindKernel("AdaLNStats");
+                kDitQkv = cs.FindKernel("DitQKVCoal");
+                kDitQkvQ8 = cs.FindKernel("DitQKVCoalQ8");
+                kDitLin = cs.FindKernel("DitLinearCoal");
+                kDitLinQ8 = cs.FindKernel("DitLinearCoalQ8");
+                kRopePair = cs.FindKernel("RopeQKPair");
+                kPackEst = cs.FindKernel("PackEstIn");
                 kTimeEmb = cs.FindKernel("SinusTimeEmb");
                 kRepeat = cs.FindKernel("RepeatTime");
                 kPack = cs.FindKernel("PackChannels");
@@ -257,6 +283,7 @@ namespace DeepUnity
                 Grow(ref ffBuf, 2 * curM * FF);
                 Grow(ref dxdtA, 2 * curM * MEL);
                 Grow(ref dxdtB, curM * MEL);   // uncond tap copy for the A2 probe only
+                Grow(ref statsBuf, 2 * curM * 2);   // FastDit31 per-row (mean, rstd)
             }
 
             void EnsureKvCache(int NT)
@@ -427,6 +454,94 @@ namespace DeepUnity
                 cs.Dispatch(kRope, Div256(2 * rowsHalf * 32), 1, 1);
             }
 
+            // ---------------- FastDit31 dispatch helpers (DEEPOPT §4.2) --------------------------
+            // AdaLNStats: per-row (mean, rstd) into statsBuf — the exact AdaLNModulate trees.
+            void StatsOp(ComputeBuffer x, int rows)
+            {
+                cs.SetInt("seq_len", rows); cs.SetInt("norm_dim", DIM);
+                cs.SetFloat("norm_eps", CosyVoiceConfig.DIT_LN_EPS);
+                cs.SetBuffer(kStats, "norm_input", x);
+                cs.SetBuffer(kStats, "est_stats_w", statsBuf);
+                cs.Dispatch(kStats, rows, 1, 1);
+            }
+
+            // Generic #31 GemmCoal linear: inMode 1 stages AdaLN-modulate from statsBuf +
+            // mod (scaleOff/shiftOff); outMode 1 fuses the GateAdd epilogue (gateOff).
+            void DitLinear(ComputeBuffer w, ComputeBuffer b, ComputeBuffer scales,
+                           ComputeBuffer x, ComputeBuffer y, int rows, int inDim, int outDim,
+                           ComputeBuffer mod, int inMode = 0, int scaleOff = 0, int shiftOff = 0,
+                           int act = 0, int outMode = 0, int gateOff = 0)
+            {
+                cs.SetInt("seq_len", rows); cs.SetInt("in_dim", inDim); cs.SetInt("out_dim", outDim);
+                cs.SetInt("activation_type", act);
+                cs.SetInt("dit_in_mode", inMode); cs.SetInt("dit_out_mode", outMode);
+                cs.SetInt("mod_scale_off", scaleOff); cs.SetInt("mod_shift_off", shiftOff);
+                cs.SetInt("mod_gate_off", gateOff);
+                int k = scales != null ? kDitLinQ8 : kDitLin;
+                cs.SetBuffer(k, "X", x);
+                cs.SetBuffer(k, "W", w);
+                cs.SetBuffer(k, "W_bias", b);
+                if (scales != null) cs.SetBuffer(k, "W_scales", scales);
+                cs.SetBuffer(k, "Y", y);
+                cs.SetBuffer(k, "mod_vec", mod);
+                cs.SetBuffer(k, "est_stats", statsBuf);
+                cs.Dispatch(k, (outDim + 7) / 8, (rows + 7) / 8, 1);
+            }
+
+            // Fused to_q/to_k/to_v (+biases) with modulate staging. Caller guarantees the
+            // three tensors share one quant status (Sc() is per-tensor).
+            void DitQkv(int b, ComputeBuffer x, int rows, int scaleOff, int shiftOff)
+            {
+                cs.SetInt("seq_len", rows); cs.SetInt("in_dim", DIM); cs.SetInt("out_dim", DIM);
+                cs.SetInt("activation_type", 0);
+                cs.SetInt("dit_in_mode", 1);
+                cs.SetInt("mod_scale_off", scaleOff); cs.SetInt("mod_shift_off", shiftOff);
+                bool q8 = sQ[b] != null;
+                int k = q8 ? kDitQkvQ8 : kDitQkv;
+                cs.SetBuffer(k, "X", x);
+                cs.SetBuffer(k, "W", wQ[b]); cs.SetBuffer(k, "W_k", wK[b]); cs.SetBuffer(k, "W_v", wV[b]);
+                cs.SetBuffer(k, "W_bias", bQ[b]); cs.SetBuffer(k, "W_k_bias", bK[b]); cs.SetBuffer(k, "W_v_bias", bV[b]);
+                if (q8)
+                {
+                    cs.SetBuffer(k, "W_scales", sQ[b]);
+                    cs.SetBuffer(k, "W_k_scales", sK[b]);
+                    cs.SetBuffer(k, "W_v_scales", sV[b]);
+                }
+                cs.SetBuffer(k, "Y", qBuf); cs.SetBuffer(k, "Y2", kBuf); cs.SetBuffer(k, "Y3", vBuf);
+                cs.SetBuffer(k, "mod_vec", modAllSteps);
+                cs.SetBuffer(k, "est_stats", statsBuf);
+                cs.Dispatch(k, 384, (rows + 7) / 8, 1);   // 128 Q + 128 K + 128 V row-groups
+            }
+
+            void RopePairOp(int rowsHalf, int posOff)
+            {
+                cs.SetInt("seq_len", 2 * rowsHalf);
+                cs.SetInt("in_dim", DIM);
+                cs.SetInt("batch_seq", rowsHalf);
+                cs.SetInt("pos_offset", posOff);
+                cs.SetBuffer(kRopePair, "rope_freqs", ropeFreq);
+                cs.SetBuffer(kRopePair, "inout_buf", qBuf);
+                cs.SetBuffer(kRopePair, "inout_buf2", kBuf);
+                cs.Dispatch(kRopePair, Div256(2 * rowsHalf * 32), 1, 1);
+            }
+
+            // One-dispatch estimator-input build (bit-exact vs the legacy Zero+Pack chain).
+            void PackEstInOp(int Le, int apron, int xrow, int condRow, int tailRow, ComputeBuffer tail)
+            {
+                cs.SetInt("est_rows", Le);
+                cs.SetInt("est_apron", apron);
+                cs.SetInt("est_xrow", xrow);
+                cs.SetInt("est_cond_row", condRow);
+                cs.SetInt("est_tail_row", tailRow);
+                cs.SetBuffer(kPackEst, "est_x", xBuf);
+                cs.SetBuffer(kPackEst, "est_tail", tail);
+                cs.SetBuffer(kPackEst, "est_cond", condBuf);
+                cs.SetBuffer(kPackEst, "est_mu", muBuf);
+                cs.SetBuffer(kPackEst, "est_spk", spkBuf);
+                cs.SetBuffer(kPackEst, "est_out", estInBuf);
+                cs.Dispatch(kPackEst, Div256(2 * Le * CosyVoiceConfig.DIT_IN_CONCAT), 1, 1);
+            }
+
             // x[F..F+rows) += dt * ((1+β)·cond − β·uncond); cond = dxdtA rows [0,rows),
             // uncond = dxdtA rows [rows, 2rows) via the kernel's src offset.
             void EulerCfg(int rows, int dstRowOff, float dt)
@@ -487,12 +602,34 @@ namespace DeepUnity
                     int off = modBase + b * 6 * DIM;   // shift_msa|scale_msa|gate_msa|shift_mlp|scale_mlp|gate_mlp
 
                     // attn branch
-                    AdaLN(resid, eB, rows2, modAllSteps, off + DIM, off);
-                    LinearW(wQ[b], bQ[b], eB, qBuf, rows2, DIM, DIM, scales: sQ[b]);
-                    LinearW(wK[b], bK[b], eB, kBuf, rows2, DIM, DIM, scales: sK[b]);
-                    LinearW(wV[b], bV[b], eB, vBuf, rows2, DIM, DIM, scales: sV[b]);
-                    RopeBatched(qBuf, rowsHalf, cached ? F : 0);
-                    RopeBatched(kBuf, rowsHalf, cached ? F : 0);
+                    if (FastDit31)
+                    {
+                        StatsOp(resid, rows2);
+                        // fused QKV only when q/k/v share one quant status (Sc is per-tensor)
+                        bool q8m = sQ[b] != null && sK[b] != null && sV[b] != null;
+                        bool fpm = sQ[b] == null && sK[b] == null && sV[b] == null;
+                        if (q8m || fpm)
+                            DitQkv(b, resid, rows2, off + DIM, off);
+                        else
+                        {
+                            DitLinear(wQ[b], bQ[b], sQ[b], resid, qBuf, rows2, DIM, DIM,
+                                      modAllSteps, inMode: 1, scaleOff: off + DIM, shiftOff: off);
+                            DitLinear(wK[b], bK[b], sK[b], resid, kBuf, rows2, DIM, DIM,
+                                      modAllSteps, inMode: 1, scaleOff: off + DIM, shiftOff: off);
+                            DitLinear(wV[b], bV[b], sV[b], resid, vBuf, rows2, DIM, DIM,
+                                      modAllSteps, inMode: 1, scaleOff: off + DIM, shiftOff: off);
+                        }
+                        RopePairOp(rowsHalf, cached ? F : 0);
+                    }
+                    else
+                    {
+                        AdaLN(resid, eB, rows2, modAllSteps, off + DIM, off);
+                        LinearW(wQ[b], bQ[b], eB, qBuf, rows2, DIM, DIM, scales: sQ[b]);
+                        LinearW(wK[b], bK[b], eB, kBuf, rows2, DIM, DIM, scales: sK[b]);
+                        LinearW(wV[b], bV[b], eB, vBuf, rows2, DIM, DIM, scales: sV[b]);
+                        RopeBatched(qBuf, rowsHalf, cached ? F : 0);
+                        RopeBatched(kBuf, rowsHalf, cached ? F : 0);
+                    }
 
                     cs.SetInt("num_heads", CosyVoiceConfig.DIT_HEADS);
                     cs.SetInt("head_dim", CosyVoiceConfig.DIT_HEAD_DIM);
@@ -528,14 +665,29 @@ namespace DeepUnity
                         else cs.Dispatch(ka, rows2, CosyVoiceConfig.DIT_HEADS, 1);
                     }
 
-                    LinearW(wO[b], bO[b], attnBuf, eB, rows2, DIM, DIM, scales: sO[b]);
-                    GateAdd(resid, eB, rows2, modAllSteps, off + 2 * DIM);
+                    if (FastDit31)
+                    {
+                        // to_out with the gate-add epilogue fused, then the ff branch:
+                        // stats -> FF1 (modulate staging + GELU-tanh) -> FF2 (gate-add)
+                        DitLinear(wO[b], bO[b], sO[b], attnBuf, resid, rows2, DIM, DIM,
+                                  modAllSteps, outMode: 1, gateOff: off + 2 * DIM);
+                        StatsOp(resid, rows2);
+                        DitLinear(wF1[b], bF1[b], sF1[b], resid, ffBuf, rows2, DIM, FF,
+                                  modAllSteps, inMode: 1, scaleOff: off + 4 * DIM, shiftOff: off + 3 * DIM, act: 8);
+                        DitLinear(wF2[b], bF2[b], sF2[b], ffBuf, resid, rows2, FF, DIM,
+                                  modAllSteps, outMode: 1, gateOff: off + 5 * DIM);
+                    }
+                    else
+                    {
+                        LinearW(wO[b], bO[b], attnBuf, eB, rows2, DIM, DIM, scales: sO[b]);
+                        GateAdd(resid, eB, rows2, modAllSteps, off + 2 * DIM);
 
-                    // ff branch (GELU tanh)
-                    AdaLN(resid, eB, rows2, modAllSteps, off + 4 * DIM, off + 3 * DIM);
-                    LinearW(wF1[b], bF1[b], eB, ffBuf, rows2, DIM, FF, act: 8, scales: sF1[b]);
-                    LinearW(wF2[b], bF2[b], ffBuf, eB, rows2, FF, DIM, scales: sF2[b]);
-                    GateAdd(resid, eB, rows2, modAllSteps, off + 5 * DIM);
+                        // ff branch (GELU tanh)
+                        AdaLN(resid, eB, rows2, modAllSteps, off + 4 * DIM, off + 3 * DIM);
+                        LinearW(wF1[b], bF1[b], eB, ffBuf, rows2, DIM, FF, act: 8, scales: sF1[b]);
+                        LinearW(wF2[b], bF2[b], ffBuf, eB, rows2, FF, DIM, scales: sF2[b]);
+                        GateAdd(resid, eB, rows2, modAllSteps, off + 5 * DIM);
+                    }
                 }
             }
 
@@ -545,12 +697,20 @@ namespace DeepUnity
             void EstimatorFull(int M, int modBase, int modFBase, ComputeBuffer dxdtOut)
             {
                 int IN = CosyVoiceConfig.DIT_IN_CONCAT;
-                ZeroOp(estInBuf, 2 * M * IN);
-                PackOp(estInBuf, IN, 0, xBuf, M, MEL);
-                PackOp(estInBuf, IN, MEL, condBuf, M, MEL);
-                PackOp(estInBuf, IN, 2 * MEL, muBuf, M, MEL);
-                PackSpk(M, IN);
-                PackOp(estInBuf, IN, 0, xBuf, M, MEL, 0, M);   // uncond half keeps x only
+                if (FastDit31)
+                {
+                    // one dispatch, bit-exact data movement (apron 0, est_tail never read)
+                    PackEstInOp(M, apron: 0, xrow: 0, condRow: 0, tailRow: 0, tail: xBuf);
+                }
+                else
+                {
+                    ZeroOp(estInBuf, 2 * M * IN);
+                    PackOp(estInBuf, IN, 0, xBuf, M, MEL);
+                    PackOp(estInBuf, IN, MEL, condBuf, M, MEL);
+                    PackOp(estInBuf, IN, 2 * MEL, muBuf, M, MEL);
+                    PackSpk(M, IN);
+                    PackOp(estInBuf, IN, 0, xBuf, M, MEL, 0, M);   // uncond half keeps x only
+                }
 
                 LinearW(wProj, bProj, estInBuf, eA, 2 * M, IN, DIM);
                 // += CausalConvPos: 2x (grouped k31 LEFT-pad30 + Mish), per half
@@ -565,8 +725,17 @@ namespace DeepUnity
                 RunBlocks(eA, M, modBase, cachedStep: -1, F: 0);
 
                 // final AdaLN — NOTE norm_out chunk order is (SCALE, shift), reversed vs blocks
-                AdaLN(eA, eB, 2 * M, modFSteps, modFBase, modFBase + DIM);
-                Linear(EST + "proj_out", eB, dxdtOut, 2 * M, DIM, MEL);
+                if (FastDit31)
+                {
+                    StatsOp(eA, 2 * M);
+                    DitLinear(wPo, bPo, sPo, eA, dxdtOut, 2 * M, DIM, MEL,
+                              modFSteps, inMode: 1, scaleOff: modFBase, shiftOff: modFBase + DIM);
+                }
+                else
+                {
+                    AdaLN(eA, eB, 2 * M, modFSteps, modFBase, modFBase + DIM);
+                    Linear(EST + "proj_out", eB, dxdtOut, 2 * M, DIM, MEL);
+                }
             }
 
             // ---------------- single-pass streaming estimator, one Euler step --------------------
@@ -582,18 +751,27 @@ namespace DeepUnity
                 int Le = apron + Mn;
                 int IN = CosyVoiceConfig.DIT_IN_CONCAT;
 
-                ZeroOp(estInBuf, 2 * Le * IN);
-                if (apron > 0)
+                if (FastDit31)
                 {
-                    int tailRow = step0 * APRON + (APRON - apron);   // tail stores rows [F-apron, F)
-                    PackOp(estInBuf, IN, 0, xTailA, apron, MEL, tailRow, 0);
-                    PackOp(estInBuf, IN, 0, xTailA, apron, MEL, tailRow, Le);
+                    // one dispatch; reproduces the Zero+Pack chain below exactly (DEEPOPT §4.2.5)
+                    PackEstInOp(Le, apron, xrow: F, condRow: F - apron,
+                                tailRow: step0 * APRON + (APRON - apron), tail: xTailA);
                 }
-                PackOp(estInBuf, IN, 0, xBuf, Mn, MEL, F, apron);
-                PackOp(estInBuf, IN, 0, xBuf, Mn, MEL, F, Le + apron);
-                PackOp(estInBuf, IN, MEL, condBuf, Le, MEL, F - apron, 0);
-                PackOp(estInBuf, IN, 2 * MEL, muBuf, Le, MEL, F - apron, 0);
-                PackSpk(Le, IN);
+                else
+                {
+                    ZeroOp(estInBuf, 2 * Le * IN);
+                    if (apron > 0)
+                    {
+                        int tailRow = step0 * APRON + (APRON - apron);   // tail stores rows [F-apron, F)
+                        PackOp(estInBuf, IN, 0, xTailA, apron, MEL, tailRow, 0);
+                        PackOp(estInBuf, IN, 0, xTailA, apron, MEL, tailRow, Le);
+                    }
+                    PackOp(estInBuf, IN, 0, xBuf, Mn, MEL, F, apron);
+                    PackOp(estInBuf, IN, 0, xBuf, Mn, MEL, F, Le + apron);
+                    PackOp(estInBuf, IN, MEL, condBuf, Le, MEL, F - apron, 0);
+                    PackOp(estInBuf, IN, 2 * MEL, muBuf, Le, MEL, F - apron, 0);
+                    PackSpk(Le, IN);
+                }
 
                 LinearW(wProj, bProj, estInBuf, eA, 2 * Le, IN, DIM);
                 ConvGroupedW(wCp1, bCp1, eA, eB, 2 * Le, DIM,
@@ -610,8 +788,17 @@ namespace DeepUnity
 
                 RunBlocks(eS, Mn, modBase, cachedStep: step0, F: F);
 
-                AdaLN(eS, eB, 2 * Mn, modFSteps, modFBase, modFBase + DIM);
-                Linear(EST + "proj_out", eB, dxdtOut, 2 * Mn, DIM, MEL);
+                if (FastDit31)
+                {
+                    StatsOp(eS, 2 * Mn);
+                    DitLinear(wPo, bPo, sPo, eS, dxdtOut, 2 * Mn, DIM, MEL,
+                              modFSteps, inMode: 1, scaleOff: modFBase, shiftOff: modFBase + DIM);
+                }
+                else
+                {
+                    AdaLN(eS, eB, 2 * Mn, modFSteps, modFBase, modFBase + DIM);
+                    Linear(EST + "proj_out", eB, dxdtOut, 2 * Mn, DIM, MEL);
+                }
             }
 
             // Save x_s of the rows that freeze this chunk ([FNew-APRON, FNew)) into xTailB[step].
@@ -794,6 +981,7 @@ namespace DeepUnity
                 modTmpBuf?.Release(); modFBuf?.Release();
                 modAllSteps?.Release(); modFSteps?.Release();
                 estInBuf?.Release(); eA?.Release(); eB?.Release(); eS?.Release();
+                statsBuf?.Release();
                 qBuf?.Release(); kBuf?.Release(); vBuf?.Release(); attnBuf?.Release();
                 ffBuf?.Release(); dxdtA?.Release(); dxdtB?.Release();
                 xTailA?.Release(); xTailB?.Release();
