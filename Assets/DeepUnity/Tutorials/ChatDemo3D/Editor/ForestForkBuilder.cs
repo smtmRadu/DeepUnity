@@ -948,7 +948,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             root.AddComponent<BreathingIdle>();
             var npc = root.AddComponent<NPCInteractor3D>();
             SetRef(npc, "dialogueCameraPoint", camPoint);
-            SetString(npc, "npc_name", "Cobb, the Roadside Beggar");
+            SetString(npc, "NpcName", "Cobb, the Roadside Beggar");
             SetString(npc, "system_prompt",
                 "You are Cobb, a ragged old beggar slumped against a crate at the spot where the forest road splits in " +
                 "two. Your knees are ruined, your cloak is patched sacking, and you live off whatever travellers spare " +
@@ -961,7 +961,6 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 "keep to the right-hand path and never set foot on the left one. If they are rude or demanding, you " +
                 "grumble and mutter darkly that the mire is fond of proud folk who won't spare a beggar a crumb. " +
                 "Stay in character at all times. Keep your replies to one to three short sentences.");
-            SetString(npc, "approach_text", "The beggar stirs against his crate and rattles a battered bowl at you...");
             // Cobb REMEMBERS between dialogues (his whole shtick is warming up to kindness across
             // visits): live KV reused while resident, transcript re-prefilled after an unload; at
             // the context limit he auto-compacts and keeps going
@@ -1108,6 +1107,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             AddThinBorder(promptGO.transform, gold);
             MakeTMP("Text", promptGO.transform, "Speak   —   [ I ]", cinzel, 26, parchment,
                     TextAlignmentOptions.Center, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            promptGO.AddComponent<NPCInteractPrompt>();   // its own component: fade/bob live here
             promptGO.SetActive(false);
 
             // --- chat panel (right-docked, slides in)
@@ -1207,7 +1207,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
 
             var npc = npcGO.GetComponent<NPCInteractor3D>();
             SetRef(npc, "chatWindow", win);
-            SetRef(npc, "interactPrompt", promptGO);
+            SetRef(npc, "interactPrompt", promptGO.GetComponent<NPCInteractPrompt>());
             UnityEventTools.AddPersistentListener(sendBtn.onClick, new UnityAction(npc.AskNPC));
             UnityEventTools.AddPersistentListener(leaveBtn.onClick, new UnityAction(npc.CloseInteraction));
             UnityEventTools.AddVoidPersistentListener(inputField.onSubmit, new UnityAction(npc.AskNPC));

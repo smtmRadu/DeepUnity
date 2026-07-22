@@ -45,6 +45,9 @@ namespace DeepUnity
         [Tooltip("First chunk cuts at this smaller size so speech starts ASAP; later chunks use minChunkChars.")]
         public int firstChunkChars = 16;
 
+        [Tooltip("Sentences per synthesized chunk. Smaller = faster response, lower quality (prosody resets each sentence); larger = higher quality (intonation flows across sentences), slower response. Soft cuts (comma/semicolon/colon past the min size) still fire immediately.")]
+        [Range(1, 3)] public int clausesPerChunk = 1;
+
         [Tooltip("Milliseconds of main-thread pump per frame for the TTS pipelines. This decouples " +
                  "synthesis speed from the framerate: T3 (next chunk) and S3Gen (current chunk) both " +
                  "advance every frame within this budget, in parallel with the LLM's own coroutine.")]
@@ -179,23 +182,33 @@ namespace DeepUnity
 
         void CutCompleteChunks()
         {
-            // cut at sentence enders always; at commas/semicolons/colons only past the min size.
-            // The FIRST chunk uses a much smaller threshold — time-to-first-audio beats prosody there.
-            string s = pendingText.ToString();
-            int minChars = firstCutDone ? minChunkChars : firstChunkChars;
-            int cut = -1;
-            for (int i = 0; i < s.Length; i++)
+            // sentence cuts land after the Nth ender (clausesPerChunk): batched sentences render
+            // as ONE utterance with flowing prosody. Soft cuts (, ; : past the min size) stay
+            // immediate — they are the latency/length guard, and the FIRST chunk keeps its much
+            // smaller threshold (time-to-first-audio beats prosody there). Loops: one delta can
+            // complete several chunks.
+            while (true)
             {
-                char c = s[i];
-                bool sentenceEnd = c == '.' || c == '!' || c == '?' || c == '\n';
-                bool softEnd = (c == ',' || c == ';' || c == ':') && i >= minChars;
-                if (sentenceEnd || softEnd) cut = i;
+                string s = pendingText.ToString();
+                int minChars = firstCutDone ? minChunkChars : firstChunkChars;
+                int need = clausesPerChunk < 1 ? 1 : clausesPerChunk, enders = 0, cut = -1;
+                for (int i = 0; i < s.Length; i++)
+                {
+                    char c = s[i];
+                    if ((c == ',' || c == ';' || c == ':') && i >= minChars) { cut = i; break; }
+                    bool sentenceEnd = c == '.' || c == '!' || c == '?' || c == '\n';
+                    if (!sentenceEnd) continue;
+                    // an ender run ("...", "?!") counts once, at its end; a run touching the
+                    // buffer end waits for the next delta (FlushText covers the reply end)
+                    if (i + 1 >= s.Length || s[i + 1] == '.' || s[i + 1] == '!' || s[i + 1] == '?' || s[i + 1] == '\n') continue;
+                    if (++enders >= need) { cut = i; break; }
+                }
+                if (cut < 0) return;
+                string chunk = s.Substring(0, cut + 1).Trim();
+                if (chunk.Length > 1) { chunkQueue.Enqueue(chunk); firstCutDone = true; }
+                pendingText.Clear();
+                pendingText.Append(s.Substring(cut + 1));
             }
-            if (cut < 0) return;
-            string chunk = s.Substring(0, cut + 1).Trim();
-            if (chunk.Length > 1) { chunkQueue.Enqueue(chunk); firstCutDone = true; }
-            pendingText.Clear();
-            pendingText.Append(s.Substring(cut + 1));
         }
 
         void EnsurePump() => streaming = true;   // the pump lives in Update(); nothing to start

@@ -123,7 +123,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             {
                 player.cam.MoveToDefault();
                 player.ExitInteractiveMode();
-                if (interactPrompt != null) interactPrompt.SetActive(true);   // still in range
+                if (interactPrompt != null) interactPrompt.Show();   // still in range
             }
         }
 

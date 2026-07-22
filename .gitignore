@@ -137,3 +137,7 @@ unsloth_compiled_cache/
 Assets/DeepUnity/Tutorials/AnyaChatDemo/Art/Female_Adult_01/Export/
 Assets/DeepUnity/Tutorials/AnyaChatDemo/Art/Female_Adult_01/Export.meta
 Assets/DeepUnity/Tutorials/AnyaChatDemo/Art/Female_Adult_01/Textures/f001_*
+
+# local-only: NVIDIA Audio2Face port staging (model weights, ~300 MB) + ad-hoc bench scripts
+/A2FPort/
+/run_bench_*.sh

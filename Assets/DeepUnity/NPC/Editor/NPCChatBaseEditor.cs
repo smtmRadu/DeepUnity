@@ -9,7 +9,19 @@ namespace DeepUnity
     [CanEditMultipleObjects]
     public class NPCChatBaseEditor : Editor
     {
-        static readonly string[] VOICE_FIELDS = { "ttsModel", "voicePitch", "ttsVoice", "ttsQuantization", "clonedVoiceClip" };
+        static readonly string[] VOICE_FIELDS = { "ttsModel", "voicePitch", "voiceVolume", "ttsVoice", "ttsQuantization", "clonedVoiceClip",
+                                                  "clausesPerChunk", "sentencePauseSeconds", "semicolonPauseSeconds", "commaPauseSeconds", "replyTailSeconds" };
+
+        // first field of each inspector category — a thin separator line is drawn above it
+        static readonly string[] SECTION_STARTS = { "model", "temperature", "ttsModel", "interactPrompt", "usePrefetchZone" };
+
+        static void SectionDivider()
+        {
+            EditorGUILayout.Space(8f);
+            var r = EditorGUILayout.GetControlRect(false, 1f);
+            EditorGUI.DrawRect(r, new Color(0.5f, 0.5f, 0.5f, 0.35f));
+            EditorGUILayout.Space(2f);
+        }
 
         public override void OnInspectorGUI()
         {
@@ -28,12 +40,9 @@ namespace DeepUnity
                     continue;
                 }
                 if (llmOnly && System.Array.IndexOf(VOICE_FIELDS, it.name) >= 0) continue;
-                if (it.propertyPath == "maxContextLength")   // only used by the continue modes
-                {
-                    var hm = serializedObject.FindProperty("historyMode");
-                    if (hm == null || hm.enumValueIndex == (int)NPCChatBase.HistoryMode.ResetEveryTime)
-                        continue;
-                }
+                if (System.Array.IndexOf(SECTION_STARTS, it.name) >= 0) SectionDivider();
+                // maxContextLength is shown in EVERY history mode (user 2026-07-22): even in
+                // ResetEveryTime it sizes the KV cache, so it's a real (VRAM) knob worth seeing.
                 if (it.propertyPath == "model") { DrawModelPopup(it); continue; }
                 if (it.propertyPath == "smoothVsSpeed") { DrawSmoothSpeed(it); continue; }
                 if (it.propertyPath == "ttsVoice") { DrawVoicePopup(it); continue; }
@@ -169,15 +178,12 @@ namespace DeepUnity
             string assetPath = $"{PocketTTSModeling.PocketTTSVoiceBaker.ASSET_DIR}/{_cloneKey}.bytes";
             bool baked = System.IO.File.Exists(assetPath);
             float cap = PocketTTSModeling.PocketTTS.MAX_REF_SECONDS;
-            float min = PocketTTSModeling.PocketTTS.MIN_CROP_SECONDS;
             string capNote = _crop.cropped
-                ? (_crop.atPause
-                    ? $"\nClip is {_crop.totalSeconds:F1}s — cropped at a natural pause to {_crop.croppedSeconds:F2}s, never mid-word ({cap:F0}s is the model's native reference length). The cached latents cover exactly this cropped audio."
-                    : $"\nClip is {_crop.totalSeconds:F1}s — no natural pause detected in the {min:F0}-{cap:F0}s window, hard cut at {_crop.croppedSeconds:F2}s (the model's native reference length). The cached latents cover exactly this cropped audio.")
-                : $"\nClip is {_crop.totalSeconds:F1}s — fits the model's native {cap:F0}s reference window, used in full (no cropping).";
+                ? $"  Clip {_crop.totalSeconds:F1}s → cut to {_crop.croppedSeconds:F2}s ({cap:F1}s cap)."
+                : $"  Clip {_crop.totalSeconds:F1}s (under the {cap:F1}s cap, used in full).";
             EditorGUILayout.HelpBox((baked
-                ? $"Voice-clone cache baked ✓ — runtime is a pure load (editor + builds).\n{assetPath}"
-                : "Not precomputed — the first runtime use encodes this clip once (~1-2 s on approach). Bake it to make runtime loading instant.")
+                ? "Baked ✓ — runtime is a pure load (editor + builds)."
+                : "Not precomputed — first runtime use encodes once (~1-2 s). Bake for instant load.")
                 + capNote,
                 baked ? MessageType.Info : MessageType.None);
             using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
@@ -197,7 +203,8 @@ namespace DeepUnity
         // mode (and the live AutoTune decision in play mode).
         static void DrawSmoothSpeed(SerializedProperty prop)
         {
-            EditorGUILayout.LabelField(new GUIContent("Reply Pacing",
+            EditorGUILayout.Space(4f);
+            EditorGUILayout.LabelField(new GUIContent("LLM Processing",
                 "Hardware adaptation is fully automatic (AutoTune measures the GPU each session, 60 fps anchor). This slider is pure preference for this NPC's dialogues."), EditorStyles.boldLabel);
             using (new EditorGUILayout.HorizontalScope())
             {

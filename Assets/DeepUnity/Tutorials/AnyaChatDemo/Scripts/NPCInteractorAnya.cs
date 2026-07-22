@@ -43,8 +43,14 @@ namespace DeepUnity.Tutorials.AnyaChatDemo
             src.playOnAwake = false;
         }
 
-        // static portrait camera — nothing to move on open/close
-        protected override void OnInteractionStarted() { }
+        // static portrait camera — nothing to move on open/close. BUT: this always-on talking head has
+        // no walk-up zone, and the zone is normally what streams the pocket-tts weights. So kick the
+        // voice load (weights + kernels) ourselves the moment the chat opens, or she never gets a voice.
+        protected override void OnInteractionStarted()
+        {
+            pkVoice?.PrewarmKernels();
+            pkVoice?.PrefetchNow();
+        }
 
         protected override void OnInteractionClosed(bool interrupted)
         {

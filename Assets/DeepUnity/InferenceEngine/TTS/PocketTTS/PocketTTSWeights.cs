@@ -383,6 +383,12 @@ namespace DeepUnity
             public void Dispose()
             {
                 _disposed = true;
+                // Drop readiness BEFORE nulling the slots: in-flight synthesis coroutines gate every
+                // resume on IsReady (see PocketTTS.SynthesizeStreaming) — without this, a play-mode
+                // exit disposing the shared engine mid-prewarm let one more MoveNext run into
+                // SetBuffer(null) (ArgumentNullException at PocketTTSFlowLM.LinearRows).
+                IsReady = false;
+                Residency = ModelResidency.Unloaded;
                 foreach (var kv in _entries)
                 {
                     kv.Value.slot[0]?.Release();

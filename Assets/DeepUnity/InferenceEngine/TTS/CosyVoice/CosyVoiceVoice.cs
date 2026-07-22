@@ -31,6 +31,9 @@ namespace DeepUnity
             [Tooltip("Fed text cuts ONLY at sentence enders (. ! ? ;). A comma may cut too, but only past this many pending characters — an escape hatch for run-on sentences.")]
             public int emergencyChunkChars = 220;
 
+            [Tooltip("Sentences per synthesized chunk. Smaller = faster response, lower quality (prosody resets each sentence); larger = higher quality (intonation flows across sentences), slower response.")]
+            [Range(1, 3)] public int clausesPerChunk = 1;
+
             [Tooltip("Milliseconds of main-thread pump per frame for the TTS pipeline.")]
             public float gpuBudgetMs = 6f;
 
@@ -162,21 +165,20 @@ namespace DeepUnity
 
             void CutCompleteChunks()
             {
-                // sentence-level cuts only (comma = run-on escape hatch; see KokoroVoice)
-                string s = pendingText.ToString();
-                int cut = -1;
-                for (int i = 0; i < s.Length; i++)
+                // sentence-level cuts only (comma = run-on escape hatch; see KokoroVoice). The cut
+                // lands after the Nth sentence ender (clausesPerChunk, see TtsClauseCut) so batched
+                // sentences render as ONE utterance with flowing prosody. Loops: one delta can
+                // complete several chunks.
+                while (true)
                 {
-                    char c = s[i];
-                    bool sentenceEnd = c == '.' || c == '!' || c == '?' || c == ';' || c == '\n';
-                    bool emergency = c == ',' && i >= emergencyChunkChars;
-                    if (sentenceEnd || emergency) cut = i;
+                    string s = pendingText.ToString();
+                    int cut = TtsClauseCut.FindCut(s, clausesPerChunk, emergencyChunkChars);
+                    if (cut < 0) return;
+                    string chunk = s.Substring(0, cut + 1).Trim();
+                    if (chunk.Length > 1) clauseQueue.Enqueue(chunk);
+                    pendingText.Clear();
+                    pendingText.Append(s.Substring(cut + 1));
                 }
-                if (cut < 0) return;
-                string chunk = s.Substring(0, cut + 1).Trim();
-                if (chunk.Length > 1) clauseQueue.Enqueue(chunk);
-                pendingText.Clear();
-                pendingText.Append(s.Substring(cut + 1));
             }
 
             // ---- budget pump: advance the in-flight clause every frame within gpuBudgetMs -------

@@ -246,6 +246,10 @@ namespace DeepUnity
 
             public string CurrentVoice { get; private set; } = "jean";
 
+            /// <summary>Editor/probe diagnostics: the audio_prompt currently bound [frames*1024]
+            /// (baked voice or clone). Read-only snapshot for validation tooling.</summary>
+            public float[] CurrentVoicePrompt => voicePrompt;
+
             /// <summary>Rebind the baked voice (cheap CPU read of voices/&lt;name&gt;/audio_prompt — no
             /// GPU reload). Unknown names fall back to the currently-loaded voice with a warning
             /// (only baked voices in the export are available; bake more with import_params.py pocket-tts --voice).</summary>
@@ -293,9 +297,30 @@ namespace DeepUnity
             /// KV caches), the shipping tier of the clone cache.</summary>
             public const string RES_VOICE_DIR = "Cache";
 
-            /// <summary>Where the last CloneVoice found its prompt: "persistent" (runtime disk cache) |
-            /// "resources" (editor-baked, ships in builds) | "encoded" (computed now + cached).</summary>
+            /// <summary>Where the last CloneVoice found its prompt: "resources" (editor-baked, ships
+            /// in builds — the AUTHORITATIVE tier) | "persistent" (runtime disk cache) | "encoded"
+            /// (computed now + cached).</summary>
             public string LastCloneSource { get; private set; }
+
+            /// <summary>Sanity gate on an audio_prompt before it is bound or cached. A GPU device
+            /// reset (TDR) mid-encode makes every dispatch silently no-op and GetData return zeros —
+            /// binding that yields pure gibberish speech, and caching it POISONS the voice on disk
+            /// forever (root cause of the female-voice-2 gibberish, 2026-07-22: the persistent .bin
+            /// was 512 KB of exact 0.0f while the editor bake of the same clip was healthy).
+            /// Healthy prompts have RMS ~0.04-0.09; reject NaN/Inf, empty, non-[T,1024] and
+            /// near-silent (all-zero) buffers.</summary>
+            static bool PromptIsValid(float[] p)
+            {
+                if (p == null || p.Length == 0 || p.Length % Cfg.DIM != 0) return false;
+                double acc = 0;
+                for (int i = 0; i < p.Length; i++)
+                {
+                    float v = p[i];
+                    if (float.IsNaN(v) || float.IsInfinity(v)) return false;
+                    acc += (double)v * v;
+                }
+                return Math.Sqrt(acc / p.Length) > 1e-4;
+            }
 
             // Content-addressed: the key IS the SHA-256 of the capped 24 kHz wav — labels don't enter
             // the key (identical audio = identical cache entry, regardless of clip name/renames).
@@ -329,6 +354,12 @@ namespace DeepUnity
                 float[] wav = PrepRef(samples, sampleRate, out crop);   // resample to 24k + cap at MAX_REF_SECONDS
                 key = KeyFor(wav);   // content-addressed (label only names the voice, never the key)
                 float[] prompt = EncodeToPrompt(wav);
+                if (prompt != null && !PromptIsValid(prompt))
+                {
+                    ConsoleMessage.Warning($"pocket-tts precompute: the Mimi encoder returned a silent/invalid prompt for " +
+                                           $"'{label}' (GPU device reset mid-encode?). Refusing to bake it — retry the bake.");
+                    return null;
+                }
                 return prompt == null ? null : PromptToBytes(prompt);
             }
             public byte[] PrecomputePromptBytes(AudioClip clip, out string key)
@@ -356,19 +387,30 @@ namespace DeepUnity
                 return CloneVoice(mono, clip.frequency, label ?? clip.name);
             }
 
-            /// <summary>Max reference length for cloning — 10 s = 125 latent frames, the model's NATIVE
-            /// audio_prompt length (every Kyutai baked voice is exactly this). Longer references only
-            /// slow each reply's prefill and overflow the encoder's 1D dispatch limit (~10.9 s at the
-            /// 24 kHz stage), so a longer clip is cropped at a natural pause near this cap (PrepRef;
-            /// hard 10 s cut only if the 7-10 s window has no pause). The cache key hashes the CROPPED
-            /// wav, so bake and runtime always agree on the same key.</summary>
-            public const float MAX_REF_SECONDS = 10f;
+            /// <summary>Max reference length for cloning. HARD TECHNICAL CEILING — do NOT raise.
+            /// EXACT single-dimension GPU-dispatch boundary: the encoder's widest pass (stage-0,
+            /// 64 ch x wavLen elements) is dispatched at 256 threads/group, so it stays within ONE
+            /// dispatch dimension only while ceil(64*wavLen / 256) &lt;= 65535 (the D3D11 per-dimension
+            /// group cap) -> wavLen &lt;= 262140 samples -> 262140 / 24000 Hz = 10.9225 s exactly. Past
+            /// that, Dispatch1D falls back to a Y-spill (works to ~30 s in theory) which we DELIBERATELY
+            /// never lean on. Set to 10.8 s: safely under the 10.9225 s boundary, no overshoot. It's
+            /// moot for quality anyway -- the model's native audio_prompt is ~10 s (125 latent frames;
+            /// every Kyutai baked voice is exactly this) and Kyutai embeds speakers from ~10 s, so more
+            /// reference barely improves timbre while lengthening EVERY reply's prefill (the audio_prompt
+            /// is prepended to the FlowLM each utterance). A longer clip is HARD-CUT at exactly this
+            /// cap (the pause-aware detector below exists but is DISABLED — USE_PAUSE_AWARE_CROP).
+            /// The cache key hashes the CROPPED wav, so bake and runtime always agree on the key.</summary>
+            public const float MAX_REF_SECONDS = 10.8f;
 
             // Pause-aware crop: a long reference is cut at a NATURAL PAUSE near the cap instead of
-            // mid-word at exactly 10.0 s — a chopped word in the prompt conditions the voice on a
-            // truncation artifact. Never cropped shorter than MIN_CROP_SECONDS; a "pause" is
-            // >= 3 consecutive 30 ms hops whose RMS sits under 15% of the clip's mean hop-RMS
-            // (stop-consonant closures are shorter, real pauses are longer).
+            // mid-word — a chopped word in the prompt conditions the voice on a truncation artifact.
+            // Never cropped shorter than MIN_CROP_SECONDS; a "pause" is >= 3 consecutive 30 ms hops
+            // whose RMS sits under 15% of the clip's mean hop-RMS (stop-consonant closures are
+            // shorter, real pauses are longer).
+            // DISABLED (user 2026-07-22): references are cut at exactly MAX_REF_SECONDS, no pause
+            // auto-detection. The detector is kept, not removed — flip this flag to re-enable it.
+            // NOTE: flipping it changes the cropped wav for >cap clips, hence their cache keys.
+            static readonly bool USE_PAUSE_AWARE_CROP = false;
             public const float MIN_CROP_SECONDS = 7f;
             const float PAUSE_WIN_SECONDS = 0.03f;
 
@@ -397,7 +439,7 @@ namespace DeepUnity
                     crop.atPause = false;
                     return wav;
                 }
-                int cut = FindPauseCut(wav, cap);
+                int cut = USE_PAUSE_AWARE_CROP ? FindPauseCut(wav, cap) : cap;
                 crop.cropped = true;
                 crop.atPause = cut < cap;
                 crop.croppedSeconds = cut / (float)Cfg.SAMPLE_RATE;
@@ -552,40 +594,64 @@ namespace DeepUnity
                 string key = KeyFor(wav);   // content-addressed (label only names the voice, never the key)
                 string path = System.IO.Path.Combine(CacheDir, key + ".bin");
 
-                float[] prompt;
-                if (System.IO.File.Exists(path))
+                // Tier order (every tier VALIDATED — see PromptIsValid):
+                //   1. Editor-precomputed Resources/Cache/<key>.bytes (inspector "Precompute
+                //      voice-clone cache" button / PocketTTSVoiceBaker) — bake-time-verified, ships
+                //      inside builds, so a baked voice NEVER re-encodes on any machine. Checked
+                //      FIRST so a corrupt runtime .bin can never shadow a healthy shipped bake.
+                //   2. Persistent runtime cache <persistentDataPath>/pockettts_voices/<key>.bin —
+                //      machine-written; a poisoned entry (all-zero prompt from a GPU reset
+                //      mid-encode) is DELETED here so the voice self-heals.
+                //   3. Fresh encode — validated BEFORE it is bound or cached, so a failed GPU
+                //      encode falls back to the baked voiceName instead of caching gibberish.
+                float[] prompt = null;
+                var baked = Resources.Load<TextAsset>(RES_VOICE_DIR + "/" + key);
+                if (baked != null)
                 {
-                    prompt = ReadPromptBin(path);   // runtime-written cache hit
-                    LastCloneSource = "persistent";
-                }
-                else
-                {
-                    // Editor-precomputed cache (inspector "Precompute voice-clone cache" button /
-                    // PocketTTSVoiceBaker): a raw-float TextAsset at Resources/Cache/<key> (shared content-addressed cache)
-                    // — ships inside builds, so a baked voice NEVER re-encodes on any machine.
-                    var baked = Resources.Load<TextAsset>(RES_VOICE_DIR + "/" + key);
-                    if (baked != null)
-                    {
-                        prompt = PromptFromBytes(baked.bytes);
-                        Resources.UnloadAsset(baked);
-                        LastCloneSource = "resources";
-                    }
+                    prompt = PromptFromBytes(baked.bytes);
+                    Resources.UnloadAsset(baked);
+                    if (PromptIsValid(prompt)) LastCloneSource = "resources";
                     else
                     {
-                        // crop info logs ONLY here — an actual encode. Cache hits (persistent or
-                        // editor-baked Resources) stay silent: the crop already happened at bake
-                        // time and the inspector's precompute box reports the real cropped length.
-                        if (crop.cropped)
-                            Debug.Log(crop.atPause
-                                ? $"[PocketTTS] voice-clone reference '{label ?? key}' is {crop.totalSeconds:F1}s — cropped at a " +
-                                  $"natural pause to {crop.croppedSeconds:F2}s (native prompt cap {MAX_REF_SECONDS:F0}s)."
-                                : $"[PocketTTS] voice-clone reference '{label ?? key}' is {crop.totalSeconds:F1}s — no pause found " +
-                                  $"near the cap, using the first {MAX_REF_SECONDS:F0}s.");
-                        prompt = EncodeToPrompt(wav);   // encode once
-                        if (prompt == null) return false;
-                        WritePromptBin(path, prompt);   // cache for the next runtime
-                        LastCloneSource = "encoded";
+                        ConsoleMessage.Warning($"pocket-tts CloneVoice: baked Resources/{RES_VOICE_DIR}/{key}.bytes is " +
+                                               "silent/invalid — re-bake it (Precompute voice-clone cache). Ignoring it.");
+                        prompt = null;
                     }
+                }
+                if (prompt == null && System.IO.File.Exists(path))
+                {
+                    prompt = ReadPromptBin(path);   // runtime-written cache hit
+                    if (PromptIsValid(prompt)) LastCloneSource = "persistent";
+                    else
+                    {
+                        ConsoleMessage.Warning($"pocket-tts CloneVoice: persistent cache {path} held a silent/invalid " +
+                                               "prompt (a GPU device reset poisoned an earlier encode) — deleted; re-encoding.");
+                        try { System.IO.File.Delete(path); } catch { }
+                        prompt = null;
+                    }
+                }
+                if (prompt == null)
+                {
+                    // crop info logs ONLY here — an actual encode. Cache hits (persistent or
+                    // editor-baked Resources) stay silent: the crop already happened at bake
+                    // time and the inspector's precompute box reports the real cropped length.
+                    if (crop.cropped)
+                        Debug.Log(crop.atPause
+                            ? $"[PocketTTS] voice-clone reference '{label ?? key}' is {crop.totalSeconds:F1}s — cropped at a " +
+                              $"natural pause to {crop.croppedSeconds:F2}s (native prompt cap {MAX_REF_SECONDS:F1}s)."
+                            : $"[PocketTTS] voice-clone reference '{label ?? key}' is {crop.totalSeconds:F1}s — no pause found " +
+                              $"near the cap, using the first {MAX_REF_SECONDS:F1}s.");
+                    prompt = EncodeToPrompt(wav);   // encode once
+                    if (prompt == null) return false;
+                    if (!PromptIsValid(prompt))
+                    {
+                        ConsoleMessage.Warning($"pocket-tts CloneVoice: the Mimi encoder returned a silent/invalid prompt " +
+                                               $"for '{label ?? key}' (GPU device reset mid-encode?). NOT cached — keeping " +
+                                               "the current voice. Precompute the clone in-editor to avoid runtime encodes.");
+                        return false;
+                    }
+                    WritePromptBin(path, prompt);   // cache for the next runtime
+                    LastCloneSource = "encoded";
                 }
                 voicePrompt = prompt;
                 CurrentVoice = string.IsNullOrEmpty(label) ? key : label;   // readable name; key stays content-addressed
@@ -951,8 +1017,14 @@ namespace DeepUnity
                 flm.ResetKV();
                 // bug C + #29: prefill yields per layer AND each tick ends the frame (FrameBreak) —
                 // the pump's CPU-time budget would otherwise re-enter all 6 ticks in one frame.
+                // Every multi-frame loop below re-checks IsReady: on play-mode exit / assembly
+                // reload the shared engine is disposed (weight buffers nulled) while this
+                // coroutine may still get one more MoveNext — resuming into a dispatch then threw
+                // ArgumentNullException from SetBuffer (LinearRows:178, seen 2026-07-22). Abort
+                // quietly instead; PocketTTSWeights.Dispose drops IsReady.
                 var pf = flm.PrefillKVYielding(prefix, Lp, Lp + maxFrames);
-                while (pf.MoveNext()) { LastHeavyTick = "prefill"; yield return FrameBreak; }
+                while (IsReady && pf.MoveNext()) { LastHeavyTick = "prefill"; yield return FrameBreak; }
+                if (!IsReady) { onSamples?.Invoke(null); yield break; }
 
                 var latents = new List<float[]>(maxFrames);
                 var rawAll = new List<float>(maxFrames * Cfg.LDIM);   // raw flow latents, growing
@@ -976,6 +1048,7 @@ namespace DeepUnity
 
                 for (int n = 0; n < maxFrames; n++)
                 {
+                    if (!IsReady) { onSamples?.Invoke(null); yield break; }   // disposed mid-utterance
                     bool stop;
                     if (gpuAr)
                     {
@@ -983,7 +1056,8 @@ namespace DeepUnity
                         flm.UploadNoiseBlock(noiseRow1, 1);
                         flm.DecodeFrameGpuIssue(0, n);
                         var rb = flm.ReadEosLatYielding(1, slot1, AsyncReadback);
-                        while (rb.MoveNext()) { LastHeavyTick = "ar_frame"; yield return rb.Current; }
+                        while (IsReady && rb.MoveNext()) { LastHeavyTick = "ar_frame"; yield return rb.Current; }
+                        if (!IsReady) { onSamples?.Invoke(null); yield break; }
                         float eosG = slot1[0];
                         if (eosG > Cfg.EOS_THRESHOLD && eosStep < 0) eosStep = n;
                         stop = eosStep >= 0 && n >= eosStep + framesAfterEos;
@@ -1000,7 +1074,8 @@ namespace DeepUnity
                     float[] token = (n == 0) ? flm.BosLatentEmbedding() : flm.InputLinear(latents[n - 1]);
                     // bug C: async readbacks — yield while the GPU drains instead of a blocking GetData
                     var ds = flm.DecodeStepKVYielding(token, c, AsyncReadback);
-                    while (ds.MoveNext()) { LastHeavyTick = "ar_decode"; yield return ds.Current; }
+                    while (IsReady && ds.MoveNext()) { LastHeavyTick = "ar_decode"; yield return ds.Current; }
+                    if (!IsReady) { onSamples?.Invoke(null); yield break; }
                     float eos = flm.OutEos(c);
                     if (eos > Cfg.EOS_THRESHOLD && eosStep < 0) eosStep = n;
                     stop = eosStep >= 0 && n >= eosStep + framesAfterEos;
@@ -1008,7 +1083,8 @@ namespace DeepUnity
                     {
                         float[] noise = deterministic ? injectNoise[n] : Gauss(Cfg.LDIM, Mathf.Sqrt(Cfg.TEMPERATURE));
                         var fh = flm.FlowHeadYielding(c, noise, 0f, 1f, vel, AsyncReadback);
-                        while (fh.MoveNext()) { LastHeavyTick = "ar_flowhead"; yield return fh.Current; }
+                        while (IsReady && fh.MoveNext()) { LastHeavyTick = "ar_flowhead"; yield return fh.Current; }
+                        if (!IsReady) { onSamples?.Invoke(null); yield break; }
                         float[] lat = new float[Cfg.LDIM];
                         for (int i = 0; i < Cfg.LDIM; i++) lat[i] = noise[i] + vel[i];
                         latents.Add(lat);
@@ -1041,11 +1117,12 @@ namespace DeepUnity
                         var de = mimi.DecodeYielding(win, nWin, embMean, embStd, wv, AsyncReadback, newFrames);
                         // GPU-issue slices end the frame (FrameBreak); readback waits surface as
                         // GpuWait so the pump can catch a mid-frame completion cheaply.
-                        while (de.MoveNext())
+                        while (IsReady && de.MoveNext())
                         {
                             LastHeavyTick = "mimi_decode";
                             yield return ReferenceEquals(de.Current, GpuWait) ? GpuWait : FrameBreak;
                         }
+                        if (!IsReady) { onSamples?.Invoke(null); yield break; }
                         int newN = newFrames * Cfg.SAMPLES_PER_LATENT;
                         float[] tail = new float[newN];
                         Array.Copy(wv, wv.Length - newN, tail, 0, newN);

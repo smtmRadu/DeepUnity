@@ -1699,7 +1699,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             SetRef(npc, "dialogueCameraPoint", camPoint);
             // identity lives here since the NPC component became the generic NPCChatBase — the
             // base class defaults are a nameless villager
-            SetString(npc, "npc_name", "Velmire, the Pale Herald");
+            SetString(npc, "NpcName", "Velmire, the Pale Herald");
             SetString(npc, "system_prompt",
                 "You are Velmire, the Pale Herald: a white-masked, soft-spoken emissary lingering by the gate of a ruined castle. " +
                 "You greet travellers with honeyed courtesy that thinly veils mockery. You pity the player for wandering these dead " +
@@ -1709,7 +1709,6 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 "hollow knight wielding a halberd, who has felled every challenger before. If asked about the mist, the arch or " +
                 "the boss, you foreshadow it with morbid delight — urging the lambkin onward while clearly expecting them to die. " +
                 "Stay in character at all times. Keep your replies to one to three short sentences.");
-            SetString(npc, "approach_text", "The pale figure regards you in silence...");
             // Velmire is the ResumeFromCompact demo (user 2026-07-15): paired with the small
             // context below, the model auto-compacts its history after a few replies and keeps
             // talking on the short compacted prefix.
@@ -1829,7 +1828,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             root.AddComponent<BreathingIdle>();
             var npc = root.AddComponent<NPCInteractor3D>();
             SetRef(npc, "dialogueCameraPoint", camPoint);
-            SetString(npc, "npc_name", "Morwenna, the Hollow Witch");
+            SetString(npc, "NpcName", "Morwenna, the Hollow Witch");
             SetString(npc, "system_prompt",
                 "You are Morwenna, the Hollow Witch: a crooked, sharp-tongued crone crouched among candles and bones in a " +
                 "corner of the ruined courtyard. You mutter over your brews, barter in riddles, and treat every question as a " +
@@ -1840,7 +1839,6 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 "Sentinel of the Mist, a towering hollow knight with a halberd — you claim you cursed it yourself long ago, " +
                 "and cackle that the player's bones will make a fine addition to your collection when it fells them. " +
                 "Stay in character at all times. Keep your replies to one to three short sentences.");
-            SetString(npc, "approach_text", "The crone squints at you over her candles, muttering...");
             // history-mode A/B spread: the witch forgets you the moment you leave (fresh
             // InitializeChat every opening — the pre-history-modes behavior)
             SetEnum(npc, "historyMode", (int)NPCInteractor3D.HistoryMode.ResetEveryTime);
@@ -1901,6 +1899,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             AddThinBorder(promptGO.transform, gold);
             var promptText = MakeTMP("Text", promptGO.transform, "Speak   —   [ I ]", cinzel, 26, parchment,
                                      TextAlignmentOptions.Center, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            promptGO.AddComponent<NPCInteractPrompt>();   // its own component: fade/bob live here
             promptGO.SetActive(false);
 
             // --- "Traverse the mist" prompt (same slot — the NPC and the fog wall are far apart)
@@ -2078,7 +2077,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             foreach (var it in new[] { npc, witch })
             {
                 SetRef(it, "chatWindow", win);
-                SetRef(it, "interactPrompt", promptGO);
+                SetRef(it, "interactPrompt", promptGO.GetComponent<NPCInteractPrompt>());
                 UnityEventTools.AddPersistentListener(sendBtn.onClick, new UnityAction(it.AskNPC));
                 UnityEventTools.AddPersistentListener(leaveBtn.onClick, new UnityAction(it.CloseInteraction));
                 UnityEventTools.AddVoidPersistentListener(inputField.onSubmit, new UnityAction(it.AskNPC));

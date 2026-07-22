@@ -158,20 +158,20 @@ markers** — re-run the aggregator to refresh. One block per distinct GPU (`mac
 
 #### Table 2 — Speed
 
-| model | weight | kv | prefill tok/s (2048) | decode tok/s (ctx≈0) | decode tok/s (max ctx) | decay % |
-|---|---|---|---:|---:|---:|---:|
-| qwen3.5-2B | fp16 | fp16 | — | 0.0 | 0.0 | 0.0 |
-| qwen3.5-2B | int8 | int8 | 64.8 | 20.3 | 17.5 | 13.8 |
-| qwen3.5-2B | int4 | int8 | 57.5 | 17.3 | 15.3 | 11.8 |
-| minicpm5-1B | fp16 | fp16 | 21.7 | 6.9 | 6.0 | 13.2 |
-| minicpm5-1B | int8 | int8 | 21.4 | 7.4 | 6.2 | 15.7 |
-| minicpm5-1B | int4 | int8 | 17.2 | 2.2 | 2.1 | 5.2 |
-| qwen3.5-0.8B | fp16 | fp16 | 127.4 | 37.8 | 30.8 | 18.5 |
-| qwen3.5-0.8B | int8 | int8 | 125.0 | 40.7 | 31.2 | 23.3 |
-| qwen3.5-0.8B | int4 | int8 | 116.4 | 37.2 | 29.0 | 21.9 |
-| gemma3-270M | fp16 | fp16 | 127.9 | 22.5 | 21.0 | 6.5 |
-| gemma3-270M | int8 | int8 | 125.4 | 22.9 | 21.0 | 8.1 |
-| gemma3-270M | int4 | int8 | 112.1 | 19.6 | 18.2 | 7.1 |
+| model | weight | kv | prefill tok/s (2048) | TTFT ms (2048-tok prompt) | decode tok/s (ctx≈0) | decode tok/s (max ctx) | decay % |
+|---|---|---|---:|---:|---:|---:|---:|
+| qwen3.5-2B | fp16 | fp16 | — | — | 0.0 | 0.0 | 0.0 |
+| qwen3.5-2B | int8 | int8 | 64.8 | 31622.3 | 20.3 | 17.5 | 13.8 |
+| qwen3.5-2B | int4 | int8 | 57.5 | 35628.2 | 17.3 | 15.3 | 11.8 |
+| minicpm5-1B | fp16 | fp16 | 21.7 | 94410.1 | 6.9 | 6.0 | 13.2 |
+| minicpm5-1B | int8 | int8 | 21.4 | 95753.4 | 7.4 | 6.2 | 15.7 |
+| minicpm5-1B | int4 | int8 | 17.2 | 119026.8 | 2.2 | 2.1 | 5.2 |
+| qwen3.5-0.8B | fp16 | fp16 | — | — | 37.8 | 30.8 | 18.5 |
+| qwen3.5-0.8B | int8 | int8 | 126.0 | 16257.6 | 40.1 | 30.5 | 24.1 |
+| qwen3.5-0.8B | int4 | int8 | 114.6 | 17868.2 | 36.6 | 27.9 | 23.8 |
+| gemma3-270M | fp16 | fp16 | 476.5 | 4298.2 | 93.3 | 71.4 | 23.5 |
+| gemma3-270M | int8 | int8 | 449.4 | 4557.2 | 97.9 | 70.7 | 27.8 |
+| gemma3-270M | int4 | int8 | 439.9 | 4655.8 | 97.1 | 70.3 | 27.6 |
 
 #### Table 3 — Quality vs fp16 (fp16 = 0 reference)
 
@@ -181,10 +181,10 @@ markers** — re-run the aggregator to refresh. One block per distinct GPU (`mac
 | qwen3.5-2B | int4 | int8 | 3.069 | 0.477405 | 4/8 | 1 | 0.97x |
 | minicpm5-1B | int8 | int8 | 0.9556 | 0.103492 | 8/8 | 101 | 1.06x |
 | minicpm5-1B | int4 | int8 | 6.2644 | 1.007999 | 7/8 | 97 | 0.31x |
-| qwen3.5-0.8B | int8 | int8 | 0.4579 | 0.075324 | 7/8 | -1 | 1.08x |
-| qwen3.5-0.8B | int4 | int8 | 3.3898 | 0.503406 | 7/8 | 1 | 0.99x |
-| gemma3-270M | int8 | int8 | 3.8474 | 0.757592 | 8/8 | 7 | 1.02x |
-| gemma3-270M | int4 | int8 | 24.9383 | 3.775131 | 1/8 | 1 | 0.87x |
+| qwen3.5-0.8B | int8 | int8 | 0.4579 | 0.075324 | 7/8 | -1 | 1.07x |
+| qwen3.5-0.8B | int4 | int8 | 3.3898 | 0.503406 | 7/8 | 1 | 0.98x |
+| gemma3-270M | int8 | int8 | 4.4469 | 0.878738 | 8/8 | 7 | 1.04x |
+| gemma3-270M | int4 | int8 | 25.4968 | 3.778429 | 1/8 | 1 | 1.03x |
 
 #### Table 4 — Boot / load & frame pacing
 
@@ -197,11 +197,11 @@ markers** — re-run the aggregator to refresh. One block per distinct GPU (`mac
 | minicpm5-1B | int8 | int8 | 1.74 | 758.9 | 888.8 | 23.6 | 0.59 | 39.04 | 1 | 22 |
 | minicpm5-1B | int4 | int8 | 1.59 | 301.2 | 439.4 | 23.4 | 0.5 | 39.13 | 1 | 4 |
 | qwen3.5-0.8B | fp16 | fp16 | 1.54 | 345.0 | 966.3 | 31.7 | 0.86 | 62.23 | 2 | 6 |
-| qwen3.5-0.8B | int8 | int8 | 1.41 | 327.2 | 933.0 | 29.2 | 0.71 | 46.34 | 1 | 5 |
-| qwen3.5-0.8B | int4 | int8 | 1.61 | 812.7 | 1096.3 | 24.7 | 0.43 | 37.98 | 1 | 22 |
-| gemma3-270M | fp16 | fp16 | 1.55 | 312.2 | 1395.0 | 20.7 | 1.09 | 98.12 | 2 | 10 |
-| gemma3-270M | int8 | int8 | 1.58 | 221.5 | 1419.9 | 22.9 | 1.2 | 88.21 | 2 | 5 |
-| gemma3-270M | int4 | int8 | 1.49 | 226.2 | 1309.1 | 21.7 | 1.09 | 146.09 | 3 | 4 |
+| qwen3.5-0.8B | int8 | int8 | 1.28 | 355.4 | 689.0 | 31.6 | 0.77 | 48.05 | 1 | 5 |
+| qwen3.5-0.8B | int4 | int8 | 1.53 | 456.6 | 1284.3 | 47.0 | 0.86 | 70.74 | 1 | 5 |
+| gemma3-270M | fp16 | fp16 | 1.76 | 279.9 | 1669.7 | 23.1 | 1.4 | 155.8 | 2 | 4 |
+| gemma3-270M | int8 | int8 | 3.8 | 3319.3 | 3347.9 | 25.2 | 0.4 | 68.3 | 4 | 5 |
+| gemma3-270M | int4 | int8 | 1.83 | 331.3 | 1731.9 | 27.7 | 1.41 | 44.7 | 1 | 8 |
 ### GPU: `NVIDIA GeForce RTX 4060 Laptop GPU`
 
 #### Table 2 — Speed

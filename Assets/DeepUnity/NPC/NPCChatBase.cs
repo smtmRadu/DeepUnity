@@ -79,13 +79,11 @@ namespace DeepUnity
         }
 
         [SerializeField, ViewOnly] protected NPCState state = NPCState.Idle;
-        [SerializeField] protected string npc_name = "Villager";
+        [SerializeField, UnityEngine.Serialization.FormerlySerializedAs("npc_name")] protected string NpcName = "Villager";
         [TextArea(4, 12)]
         [SerializeField] protected string system_prompt =
             "You are a friendly villager. Stay in character at all times. " +
             "Keep your replies to one to three short sentences.";
-        [Tooltip("Flavor line shown in the chat window while the model loads (per NPC).")]
-        [SerializeField] protected string approach_text = "They wait for you to speak...";
 
         [Header("Conversation")]
         [Tooltip("LlmOnly = text-only replies (talk animation follows the writing; voice fields hidden below). LlmPlusTts = replies are spoken: the talk animation follows the AUDIO, and the next sentence synthesizes while the current one plays.")]
@@ -105,9 +103,6 @@ namespace DeepUnity
         [SerializeField] protected int maxContextLength = 8192;
         [Tooltip("Let a thinking-capable model (Qwen3.5) reason in <think> before answering. The reasoning is NEVER voiced and never shown as reply text (the window's ShowThinkingTokens debug toggle can render it dimmed); while the model thinks, the dialog pulses an animated 'Thinking…' placeholder until the final answer starts. Non-thinking models ignore this.")]
         [SerializeField] protected bool allowThinking = false;
-        [Tooltip("The auto-detection ALWAYS computes reply pacing for a stable 60+ fps; this only biases around its result while you talk to THIS NPC. 0.5 = pure auto. Offsets multiply the measured budgets (toward Speed the frames may carry more decode → faster text; toward Smooth they carry less). The hard ends force the implementation limits: full Smooth = async decode + 1 layer/frame prefill, full Speed = sync decode + bulk prefill. Live: moving it mid-dialogue re-probes on the next reply.")]
-        [Range(0f, 1f)] [SerializeField] protected float smoothVsSpeed = 0.5f;
-        float appliedSmoothVsSpeed = -1f;   // last value pushed into InferencePerf (per dialogue)
 
         [Header("Sampling (-1 = model preset)")]
         [SerializeField] protected float temperature = 0.8f;
@@ -123,6 +118,11 @@ namespace DeepUnity
         [SerializeField] protected float presencePenalty = -1f;
         [Tooltip("-1 = model preset. 1 disables the repetition penalty.")]
         [SerializeField] protected float repetitionPenalty = -1f;
+        // "LLM Processing" (smooth <-> speed): drawn by NPCChatBaseEditor as its own labeled
+        // slider at the end of this Sampling section.
+        [Tooltip("The auto-detection ALWAYS computes reply pacing for a stable 60+ fps; this only biases around its result while you talk to THIS NPC. 0.5 = pure auto. Offsets multiply the measured budgets (toward Speed the frames may carry more decode → faster text; toward Smooth they carry less). The hard ends force the implementation limits: full Smooth = async decode + 1 layer/frame prefill, full Speed = sync decode + bulk prefill. Live: moving it mid-dialogue re-probes on the next reply.")]
+        [Range(0f, 1f)] [SerializeField] protected float smoothVsSpeed = 0.5f;
+        float appliedSmoothVsSpeed = -1f;   // last value pushed into InferencePerf (per dialogue)
 
         [Header("Voice (TTS)")]
         [Tooltip("PocketTTS = Kyutai 100M AR, RTF ~0.15 int8 (speaks in real time DURING generation, voice cloning — DEFAULT); Kokoro = 82M non-AR, RTF ~0.3; Chatterbox = clause-streamed (RTF~1.4); CosyVoice3 = streaming-native. 2D demo NPCs are Kokoro-only and ignore this.")]
@@ -133,18 +133,23 @@ namespace DeepUnity
         [SerializeField] protected float voicePitch = 1.0f;
         [Tooltip("Loudness of this NPC's voice. AudioSource.volume tops out at 1, so this multiplies the samples themselves — >1 = louder (peaks clamp at full scale).")]
         [Min(0f)] [SerializeField] protected float voiceVolume = 1.4f;
-        [Tooltip("PocketTTS pacing: pause between spoken sentences (after . ! ?), in seconds. Each sentence is synthesized separately, so this silence is what separates them.")]
-        [Min(0f)] [SerializeField] protected float sentencePauseSeconds = 0.36f;
-        [Tooltip("PocketTTS pacing: pause after a clause cut at a semicolon, in seconds.")]
-        [Min(0f)] [SerializeField] protected float semicolonPauseSeconds = 0.2f;
-        [Tooltip("PocketTTS pacing: pause after an emergency comma cut (very long run-on sentences), in seconds.")]
-        [Min(0f)] [SerializeField] protected float commaPauseSeconds = 0.15f;
-        [Tooltip("PocketTTS pacing: extra model-generated tail on the reply's last sentence, in seconds — lets the final word decay naturally instead of cutting ~0.16 s after it.")]
-        [Min(0f)] [SerializeField] protected float replyTailSeconds = 0.32f;
         [Tooltip("BAKED voice shipped inside the selected TTS engine's weights export (voices/<name> dirs for PocketTTS/CosyVoice3, voices/<name>.bin voicepacks for Kokoro) — the inspector dropdown lists what's on disk. Pick 'Clone (reference clip)' on PocketTTS to clone from an AudioClip instead; a non-null clip always overrides this name.")]
         [SerializeField] protected string ttsVoice = "jean";
         [Tooltip("PocketTTS only: reference clip to VOICE-CLONE for this NPC (overrides the baked ttsVoice). First runtime use encodes it once through the Mimi encoder and caches by content hash; press 'Precompute voice-clone cache' below to bake the embedding into the shared Resources/Cache so runtime (editor AND builds) is a pure load — no recompute, ever.")]
         [SerializeField] protected AudioClip clonedVoiceClip;
+        [Tooltip("Sentences per spoken chunk. Smaller = faster response, lower quality (prosody resets each sentence); larger = higher quality (intonation flows across sentences), slower response.")]
+        [Range(1, 3)] [SerializeField] protected int clausesPerChunk = 1;
+        [Tooltip("PocketTTS pacing: pause between spoken chunks that ended at a sentence ender (. ! ?), in seconds. Inside a batched chunk the model renders its own natural pauses.")]
+        [Min(0f)] [SerializeField] protected float sentencePauseSeconds = 0.36f;
+        [Tooltip("PocketTTS pacing: pause after a chunk cut at a semicolon, in seconds.")]
+        [Min(0f)] [SerializeField] protected float semicolonPauseSeconds = 0.2f;
+        [Tooltip("PocketTTS pacing: pause after an emergency comma cut (very long run-on sentences), in seconds.")]
+        [Min(0f)] [SerializeField] protected float commaPauseSeconds = 0.15f;
+        [Tooltip("PocketTTS pacing: extra model-generated tail on the reply's last chunk, in seconds — lets the final word decay naturally instead of cutting ~0.16 s after it.")]
+        [Min(0f)] [SerializeField] protected float replyTailSeconds = 0.32f;
+
+        [Tooltip("The walk-up prompt (\"[I] Speak\" / \"Talk — [ E ]\") shown while the player is in the talk trigger. Its OWN component on its OWN GameObject (fade/bob/text knobs live there) — the NPC only calls Show/Hide on it.")]
+        [SerializeField] protected NPCInteractPrompt interactPrompt;
 
         [Header("Prefetch Zone (A/B test)")]
         [Tooltip("ON: the big sphere (3D) / circle (2D — auto-detected) around the NPC is the model-RESIDENCY zone: entering slow-prefetches the LLM + TTS in the background, both stay on the GPU while the player is inside (closing the chat releases nothing), and leaving unloads both. OFF: the small talk trigger plays that role instead — load on contact, unload when the player walks off it.")]
@@ -168,9 +173,6 @@ namespace DeepUnity
                  "the stream to full speed regardless, so this only shapes the background portion. " +
                  "3s suits walking approaches; raise toward 5-10s for large zones or low-end hardware.")]
         [SerializeField] protected float slowPrefetchSeconds = 3f;
-
-        [Tooltip("Screen-space interaction prompt (\"[I] Speak\" / \"Talk — [ E ]\") shown while the player is in the talk trigger.")]
-        [SerializeField] protected GameObject interactPrompt;
 
         // ---------------------------------------------------------------- runtime state
         protected LLM llm;
@@ -290,8 +292,8 @@ namespace DeepUnity
             if (speakReplies)
                 EnsureVoice();
 
-            if (interactPrompt != null) interactPrompt.SetActive(false);
-            Window?.SetTitle(npc_name);
+            if (interactPrompt != null) interactPrompt.HideInstant();
+            Window?.SetTitle(NpcName);
 
             var playerGO = GameObject.FindWithTag("Player");
             if (playerGO != null) playerZoneT = playerGO.transform;
@@ -386,9 +388,15 @@ namespace DeepUnity
             // actually audible — the NPC keeps talking after the window closes too). Text-only:
             // it follows the token stream (state). Chatterbox/CosyVoice have no audio probe wired
             // yet, so (as before) they drive no gesture in TTS mode.
-            bool talking = speakReplies
+            bool audibleNow = speakReplies
                 ? IsVoiceAudible
                 : state == NPCState.TalkingInInteraction;
+            // hysteresis: hold the talk gesture through short audio gaps (inter-chunk pauses, a
+            // synth briefly behind playback) so the NPC doesn't flick to idle for a fraction of
+            // a second between spoken chunks
+            if (audibleNow) lastAudibleRealtime = Time.realtimeSinceStartup;
+            bool talking = audibleNow || (speakReplies && talkAnimActive
+                && Time.realtimeSinceStartup - lastAudibleRealtime < TALK_HOLD_SECONDS);
             if (talking != talkAnimActive)
             {
                 talkAnimActive = talking;
@@ -433,6 +441,12 @@ namespace DeepUnity
                 CloseInteraction();
         }
 
+        // Talk-gesture hysteresis: when the voice was last audible. Bridges short audio gaps
+        // (inter-chunk pauses, a synth briefly behind playback) so the talk animation doesn't
+        // flick to idle for a fraction of a second between spoken chunks.
+        float lastAudibleRealtime = -999f;
+        const float TALK_HOLD_SECONDS = 0.45f;
+
         // Scene-start prewarm completion flag — the prefetch zone waits for it (cold Acquire hitches).
         private bool prewarmDone;
         private IEnumerator RunPrewarm(IEnumerator job)
@@ -461,6 +475,7 @@ namespace DeepUnity
                     pkVoice.semicolonPauseSeconds = semicolonPauseSeconds;
                     pkVoice.commaPauseSeconds = commaPauseSeconds;
                     pkVoice.replyTailSeconds = replyTailSeconds;
+                    pkVoice.clausesPerChunk = clausesPerChunk;
                     pkVoice.voiceName = ttsVoice;   // baked voices/<name> (default "jean")
                     if (pkVoice.clonedVoiceClip != clonedVoiceClip)
                         pkVoice.SetClonedVoice(clonedVoiceClip);   // clone-from-clip (cached) overrides baked
@@ -478,6 +493,7 @@ namespace DeepUnity
                     kkVoice.pitch = voicePitch;
                     kkVoice.volume = voiceVolume;
                     kkVoice.voiceName = ttsVoice;
+                    kkVoice.clausesPerChunk = clausesPerChunk;
                     kkVoice.loadOnStart = false;   // load-on-approach, see Update / OnPlayerContact
                     kkVoice.OnClauseSpoken -= OnClauseSpokenHandler;   // audio-synced text reveal
                     kkVoice.OnClauseSpoken += OnClauseSpokenHandler;
@@ -488,6 +504,7 @@ namespace DeepUnity
                     cvVoice.pitch = voicePitch;
                     cvVoice.volume = voiceVolume;
                     cvVoice.voiceName = ttsVoice;   // unknown names fall back inside CosyVoiceTTS (warned)
+                    cvVoice.clausesPerChunk = clausesPerChunk;
                     cvVoice.loadOnStart = false;    // load-on-approach — the zone/trigger drives the stream
                     // streaming synth currently runs ~2.9x real-time on a 4060 (pre-int8) — a
                     // generous prebuffer turns that into one early gap instead of mid-word stutter
@@ -501,6 +518,7 @@ namespace DeepUnity
                     voice.volume = voiceVolume;
                     voice.voiceName = ttsVoice;   // applied in ChatterboxVoice.Start (TTS is lazy-built)
                     voice.quantization = ttsQuantization;
+                    voice.clausesPerChunk = clausesPerChunk;
                     break;
             }
             var src = GetComponent<AudioSource>();
@@ -598,7 +616,7 @@ namespace DeepUnity
         {
             dialogueEpoch++;
             state = NPCState.PreparingForInteraction;
-            if (interactPrompt != null) interactPrompt.SetActive(false);
+            if (interactPrompt != null) interactPrompt.Hide();
             OnInteractionStarted();
             dialogueCoroutine = StartCoroutine(OpenConversation());
         }
@@ -633,9 +651,9 @@ namespace DeepUnity
             var w = Window;
             w.Open();
             // several NPCs share the one chat window — stamp THIS NPC's name every interaction
-            w.SetTitle(npc_name);
+            w.SetTitle(NpcName);
             w.Clear();   // a straggler bubble from a just-canceled reply must not survive into this session
-            w.SetInfoText(approach_text);
+            w.SetInfoText("");
             // model still loading: Send pulses dots and stays disabled, but the input field is
             // live so the first question can be typed while the weights stream in
             w.SetSendLoading(true);
@@ -774,7 +792,7 @@ namespace DeepUnity
             // compaction/interrupt/reply would double-forward the model (audit #3)
             if (compactRoutine != null || interruptPending || dialogueCoroutine != null || VoicesAudible())
             {
-                ConsoleMessage.Warning($"[NPC] {npc_name}: AskNPCSilent dropped — model busy (reply/compaction in flight).");
+                ConsoleMessage.Warning($"[NPC] {NpcName}: AskNPCSilent dropped — model busy (reply/compaction in flight).");
                 return;
             }
             PrepareForNextReply(w);
@@ -793,6 +811,29 @@ namespace DeepUnity
         // an ask there must still take the interrupt path, not talk over the playing audio.
         bool VoicesAudible() => (pkVoice != null && (pkVoice.IsSpeaking || pkVoice.IsAudioPlaying))
                              || (kkVoice != null && (kkVoice.IsSpeaking || kkVoice.IsAudioPlaying));
+
+        // LLM-output sanitizer: glyphs outside the UI font (emoji, dingbats, CJK, symbols —
+        // rendered as squares) also make the TTS produce strange sounds. Kept: ASCII, Latin-1 +
+        // Latin Extended (covers Romanian and Western diacritics), and general punctuation
+        // (curly quotes, dashes, ellipsis). Everything else — including emoji surrogates — drops.
+        static bool RenderableChar(char c) =>
+            c == '\n' || c == '\t'
+            || (c >= 0x20 && c <= 0x7E)
+            || (c >= 0xA0 && c <= 0x024F)
+            || (c >= 0x2010 && c <= 0x2027);
+
+        static string StripUnrenderable(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s ?? "";
+            bool clean = true;
+            for (int i = 0; i < s.Length; i++)
+                if (!RenderableChar(s[i])) { clean = false; break; }
+            if (clean) return s;   // the overwhelmingly common case — zero allocation
+            var sb = new StringBuilder(s.Length);
+            foreach (char c in s)
+                if (RenderableChar(c)) sb.Append(c);
+            return sb.ToString();
+        }
 
         IEnumerator InterruptThenAsk(string question, INPCChatWindow w)
         {
@@ -870,7 +911,7 @@ namespace DeepUnity
                 yield return new WaitForSecondsRealtime(0.4f);
                 if (state != NPCState.TalkingInInteraction) break;
                 w.PopLastMessage();
-                w.AddMessage(npc_name, StatusStyled(label + frames[i++ % 3]));
+                w.AddMessage(NpcName, StatusStyled(label + frames[i++ % 3]));
             }
             dotsJob = null;
         }
@@ -938,7 +979,7 @@ namespace DeepUnity
                     if (!revealActive || state == NPCState.Idle) break;
                     spokenShown = string.IsNullOrEmpty(spokenShown) ? words[i] : spokenShown + " " + words[i];
                     w.PopLastMessage();
-                    w.AddMessage(npc_name, spokenShown);
+                    w.AddMessage(NpcName, spokenShown);
                     float share = chars > 0 ? (words[i].Length + 1f) / chars : 0f;
                     yield return new WaitForSecondsRealtime(Mathf.Max(0.02f, dur * 0.98f * share));
                 }
@@ -964,7 +1005,7 @@ namespace DeepUnity
             if (pendingFullReply != null && spokenShown != pendingFullReply)
             {
                 w.PopLastMessage();
-                w.AddMessage(npc_name, pendingFullReply);
+                w.AddMessage(NpcName, pendingFullReply);
             }
             revealActive = false;
         }
@@ -972,9 +1013,17 @@ namespace DeepUnity
         // A starved voice (a GPU too slow to synthesize pocket-tts in real time) can leave IsSpeaking
         // stuck / never cleanly drain. The synced reveal must NOT wait on it forever, or the bubble
         // stays blank AND everything gated on the reveal (the dialogue settling, the pause menu)
-        // wedges. If neither the shown text nor the reveal queue advances for this long, we stop
-        // waiting and force-render the full reply.
-        const float RevealStallTimeout = 4f;
+        // wedges. If nothing at all advances for this long, we stop waiting and force-render the
+        // full reply. IMPORTANT (bug fix, user 2026-07-22): "progress" MUST include the voice's
+        // synthesis counter (SamplesPushed), not just the visible text — on a slow GPU a long
+        // reply pauses for several seconds BETWEEN clauses while the next chunk's prebuffer
+        // synthesizes (nothing audible, no words dripping), and the old text-only watchdog
+        // executed a perfectly healthy voice mid-reply: audio died, full text dumped at once.
+        const float RevealStallTimeout = 6f;
+
+        // total samples the synced-reveal voices have synthesized — advancing = the voice is alive
+        long SynthProgress() => (pkVoice != null ? pkVoice.SamplesPushed : 0)
+                              + (kkVoice != null ? kkVoice.SamplesPushed : 0);
 
         IEnumerator FinishSyncedReveal(string full)
         {
@@ -983,13 +1032,20 @@ namespace DeepUnity
             float lastProgress = Time.unscaledTime;
             string lastShown = spokenShown;
             int lastQueued = revealQueue.Count;
-            while (revealActive && ((kkVoice != null && kkVoice.IsSpeaking)
-                                    || (pkVoice != null && pkVoice.IsSpeaking)
+            long lastSynth = SynthProgress();
+            // HasPendingSpeech, NOT IsSpeaking: this coroutine starts the same frame the reply's
+            // tail was flushed into the voice, and IsSpeaking only latches on the voice's NEXT
+            // Update. With clausesPerChunk>1 a short reply queues ALL its speech at flush time —
+            // gating on IsSpeaking judged the voice "done" one frame before it ever spoke and
+            // dumped the full text instantly (user bug, 2026-07-22).
+            while (revealActive && ((kkVoice != null && kkVoice.HasPendingSpeech)
+                                    || (pkVoice != null && pkVoice.HasPendingSpeech)
                                     || revealJob != null || revealQueue.Count > 0))
             {
-                if (spokenShown != lastShown || revealQueue.Count != lastQueued)
+                long synth = SynthProgress();
+                if (spokenShown != lastShown || revealQueue.Count != lastQueued || synth != lastSynth)
                 {
-                    lastShown = spokenShown; lastQueued = revealQueue.Count;
+                    lastShown = spokenShown; lastQueued = revealQueue.Count; lastSynth = synth;
                     lastProgress = Time.unscaledTime;   // real progress — keep waiting
                 }
                 else if (Time.unscaledTime - lastProgress > RevealStallTimeout)
@@ -1008,7 +1064,7 @@ namespace DeepUnity
             if (spokenShown != full)   // voice done (or stalled) but tail text never got audio — settle it
             {
                 w.PopLastMessage();
-                w.AddMessage(npc_name, full);
+                w.AddMessage(NpcName, full);
                 spokenShown = full;
             }
             revealActive = false;
@@ -1042,7 +1098,7 @@ namespace DeepUnity
             bool contentShown = false;  // the animated dots own the bubble until real content
 
             // thinking placeholder: ". / .. / ..." pulses until the first real content lands
-            w.AddMessage(npc_name, StatusStyled("."));
+            w.AddMessage(NpcName, StatusStyled("."));
             StartThinkingDots(w);
 
             // A background conversation-KV save still reading this model's GPU state holds the Busy
@@ -1064,6 +1120,11 @@ namespace DeepUnity
                 enable_thinking: allowThinking,
                 onTokenGenerated: (token) =>
                 {
+                    // emoji/symbols the UI font can't render (squares) also drive the TTS into
+                    // garbage sounds — strip them HERE, before anything consumes the token
+                    // (window, voices, transcript all flow from `response`)
+                    token = StripUnrenderable(token);
+                    if (token.Length == 0) return;
                     response.Append(token);
                     SplitThink(response.ToString(), out visibleFull, out thinkFull);
                     // reasoning NEVER reaches the TTS — only newly-VISIBLE text is fed
@@ -1080,7 +1141,7 @@ namespace DeepUnity
                         {
                             StopThinkingDots();
                             w.PopLastMessage();
-                            w.AddMessage(npc_name, ThinkStyled(thinkFull));
+                            w.AddMessage(NpcName, ThinkStyled(thinkFull));
                         }
                         return;
                     }
@@ -1090,7 +1151,7 @@ namespace DeepUnity
                     if (display.Length == 0) return;   // still inside <think> — dots keep pulsing
                     StopThinkingDots();
                     w.PopLastMessage();
-                    w.AddMessage(npc_name, display);
+                    w.AddMessage(NpcName, display);
                     contentShown = true;
                 });
             if (speakReplies && !replyCanceled)
@@ -1102,7 +1163,7 @@ namespace DeepUnity
             // surface the model's hidden reasoning in the console so its behavior can be verified
             // (it is never voiced and only rendered in-window behind the ShowThinkingTokens toggle)
             if (thinkFull.Length > 0)
-                ConsoleMessage.Info($"[Think] {npc_name}: <i>{thinkFull.Trim()}</i>");
+                ConsoleMessage.Info($"[Think] {NpcName}: <i>{thinkFull.Trim()}</i>");
             bool stillOpen = state == NPCState.TalkingInInteraction && epoch == dialogueEpoch;   // close mid-reply drops state/epoch
             // transcripts/window always carry the VISIBLE text (raw kept only if nothing parsed)
             string finalVisible = visibleFull.Length > 0 ? visibleFull
@@ -1115,7 +1176,7 @@ namespace DeepUnity
             else if (!contentShown && stillOpen)   // reply was pure <think> with display off — settle the bubble
             {
                 w.PopLastMessage();
-                w.AddMessage(npc_name, finalVisible.Length > 0 ? finalVisible : "...");
+                w.AddMessage(NpcName, finalVisible.Length > 0 ? finalVisible : "...");
             }
 
             if (turn != null) turn.npc = finalVisible;
@@ -1355,7 +1416,7 @@ namespace DeepUnity
         {
             if (llm == null) return;
             if ((kvSavesInFlight.TryGetValue(llm, out var saver) && saver == this) || compactingNpc == this)
-                ConsoleMessage.Warning($"[NPC] {npc_name}: destroyed with its conversation-KV save/compaction " +
+                ConsoleMessage.Warning($"[NPC] {NpcName}: destroyed with its conversation-KV save/compaction " +
                                        "still reading the model — releasing the pool ref anyway.");
             ReleaseLlm();
         }
@@ -1403,7 +1464,7 @@ namespace DeepUnity
         protected void OnPlayerContact()
         {
             if (interactPrompt != null && state == NPCState.Idle)
-                interactPrompt.SetActive(true);
+                interactPrompt.Show();
 
             // contact loading (no prefetch zone): start streaming the TTS + LLM weights the
             // moment the player reaches the interaction trigger
@@ -1422,7 +1483,7 @@ namespace DeepUnity
         protected void OnPlayerLeft()
         {
             if (interactPrompt != null)
-                interactPrompt.SetActive(false);
+                interactPrompt.Hide();
 
             // contact-loading mode: the talk trigger IS the residency zone — walking off it
             // unloads what contact loaded (the prefetch zone owns residency otherwise, and its
@@ -1464,7 +1525,7 @@ namespace DeepUnity
                 var t = transcript[i];
                 sb.Append("\nPlayer: ").Append(t.user);
                 if (!string.IsNullOrEmpty(t.npc))
-                    sb.Append('\n').Append(npc_name).Append(": ").Append(t.npc);
+                    sb.Append('\n').Append(NpcName).Append(": ").Append(t.npc);
             }
             return sb.ToString();
         }
@@ -1476,7 +1537,7 @@ namespace DeepUnity
         // when compaction is triggered LIVE at the context limit (mid-session or on open).
         private IEnumerator ShowCompactingUntilDone(INPCChatWindow w)
         {
-            w.AddMessage(npc_name, StatusStyled("Compacting.."));
+            w.AddMessage(NpcName, StatusStyled("Compacting.."));
             string[] frames = { "..", "...", "." };
             int fi = 0;
             float next = Time.unscaledTime + 0.4f;
@@ -1487,7 +1548,7 @@ namespace DeepUnity
                 if (Time.unscaledTime >= next)
                 {
                     w.PopLastMessage();
-                    w.AddMessage(npc_name, StatusStyled("Compacting" + frames[fi++ % 3]));
+                    w.AddMessage(NpcName, StatusStyled("Compacting" + frames[fi++ % 3]));
                     next = Time.unscaledTime + 0.4f;
                 }
                 yield return null;
@@ -1519,7 +1580,7 @@ namespace DeepUnity
                 w.SetInfoText("— conversation reset —");
                 if (w.SendButton != null) w.SendButton.interactable = true;
             }
-            ConsoleMessage.Info($"[Reset] {npc_name}: conversation wiped (manual reset).");
+            ConsoleMessage.Info($"[Reset] {NpcName}: conversation wiped (manual reset).");
         }
 
         // ~4 chars/token: a model-agnostic estimate of what the conversation costs in context
@@ -1584,7 +1645,7 @@ namespace DeepUnity
                 compactingNpc = null;
                 yield break;
             }
-            ConsoleMessage.Info($"[Compact] {npc_name}: compaction started at the context limit " +
+            ConsoleMessage.Info($"[Compact] {NpcName}: compaction started at the context limit " +
                                 $"(~{ContextTokensNow()} tokens ≥ {maxContextLength})");
 
             // the re-seeded prefix is one-shot (same rule as the resume prefill) — don't let
@@ -1606,7 +1667,7 @@ namespace DeepUnity
             }
             if (string.IsNullOrEmpty(summary))
             {
-                ConsoleMessage.Warning($"[Compact] {npc_name}: model returned an empty compact — " +
+                ConsoleMessage.Warning($"[Compact] {NpcName}: model returned an empty compact — " +
                                        "keeping the full state, will retry at the next clean close");
                 yield break;
             }
@@ -1614,10 +1675,10 @@ namespace DeepUnity
             compactSummary = summary;
             transcript.Clear();   // the HISTORY block stands in for every turn so far
             LLMPool.ClaimConversation(llm, this);   // the compacted prefix carries OUR conversation
-            ConsoleMessage.Info($"[Compact] {npc_name}: compaction done — history → " +
+            ConsoleMessage.Info($"[Compact] {NpcName}: compaction done — history → " +
                                 $"{summary.Length}-char HISTORY block, KV recomputed");
             // the compact text itself, so its quality can be inspected in the console
-            ConsoleMessage.Info($"[Compact] {npc_name}: <i>{summary.Trim()}</i>");
+            ConsoleMessage.Info($"[Compact] {NpcName}: <i>{summary.Trim()}</i>");
             if (cacheKVCache && chatLive && !KvSaveInFlightFor(llm))
                 StartCoroutine(SaveConversationKvRoutine());
         }
@@ -1631,7 +1692,7 @@ namespace DeepUnity
             {
                 w.AddMessage("You", t.user);
                 if (!string.IsNullOrEmpty(t.npc))
-                    w.AddMessage(npc_name, t.npc);
+                    w.AddMessage(NpcName, t.npc);
             }
         }
 
@@ -1641,9 +1702,9 @@ namespace DeepUnity
         // model/quant/kv-quant/system-prompt hash to the file name itself).
         private string ConversationKvKey()
         {
-            if (string.IsNullOrEmpty(npc_name)) return "npc";
-            var sb = new StringBuilder(npc_name.Length);
-            foreach (char c in npc_name)
+            if (string.IsNullOrEmpty(NpcName)) return "npc";
+            var sb = new StringBuilder(NpcName.Length);
+            foreach (char c in NpcName)
                 sb.Append(char.IsLetterOrDigit(c) || c == '-' || c == '_' ? c : '_');
             return sb.ToString();
         }

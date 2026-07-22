@@ -48,6 +48,9 @@ namespace DeepUnity
             [Tooltip("Extra model-generated tail on the reply's LAST clause (seconds, in post-EOS frames of ~0.08 s). The default EOS stop keeps only ~0.16 s after the final word — an audible hard cut; this lets the model render the word's natural decay and release.")]
             [Min(0f)] public float replyTailSeconds = 0.32f;
 
+            [Tooltip("Sentences per synthesized chunk. Smaller = faster response, lower quality (prosody resets each sentence); larger = higher quality (intonation flows across sentences), slower response.")]
+            [Range(1, 3)] public int clausesPerChunk = 1;
+
             [Tooltip("Frames of audio produced between streaming decodes (chunk cadence). 8 = 0.64s @ 12.5Hz.")]
             public int streamChunkFrames = 8;
 
@@ -69,6 +72,13 @@ namespace DeepUnity
             public bool loadOnStart = true;
 
             public bool IsSpeaking { get; private set; }
+
+            /// <summary>True from the MOMENT text/clauses are queued — unlike <see cref="IsSpeaking"/>,
+            /// which only latches in the next Update() when the pump picks the work up. Callers that
+            /// decide "is this voice done?" right after FeedText/FlushText must use THIS, or they race
+            /// the pump (with clausesPerChunk>1 a short reply queues everything at flush time and was
+            /// judged 'finished' one frame before it ever spoke).</summary>
+            public bool HasPendingSpeech => IsSpeaking || feedingText || clauseQueue.Count > 0 || streamJob != null;
             public bool IsReady => tts != null && tts.IsReady;
 
             /// <summary>True while buffered speech is actually audible (drive talk animations from
@@ -382,20 +392,20 @@ namespace DeepUnity
 
             void CutCompleteChunks()
             {
-                string s = pendingText.ToString();
-                int cut = -1;
-                for (int i = 0; i < s.Length; i++)
+                // cut after the Nth sentence ender (clausesPerChunk, see TtsClauseCut): the batched
+                // sentences reach the model as ONE utterance, so prosody flows across their
+                // boundaries instead of resetting per sentence. Loops: one delta can complete
+                // several chunks.
+                while (true)
                 {
-                    char c = s[i];
-                    bool sentenceEnd = c == '.' || c == '!' || c == '?' || c == ';' || c == '\n';
-                    bool emergency = c == ',' && i >= emergencyChunkChars;
-                    if (sentenceEnd || emergency) cut = i;
+                    string s = pendingText.ToString();
+                    int cut = TtsClauseCut.FindCut(s, clausesPerChunk, emergencyChunkChars);
+                    if (cut < 0) return;
+                    string chunk = s.Substring(0, cut + 1).Trim();
+                    if (chunk.Length > 1) EnqueueClause(chunk);
+                    pendingText.Clear();
+                    pendingText.Append(s.Substring(cut + 1));
                 }
-                if (cut < 0) return;
-                string chunk = s.Substring(0, cut + 1).Trim();
-                if (chunk.Length > 1) EnqueueClause(chunk);
-                pendingText.Clear();
-                pendingText.Append(s.Substring(cut + 1));
             }
 
             void EnqueueClause(string text)

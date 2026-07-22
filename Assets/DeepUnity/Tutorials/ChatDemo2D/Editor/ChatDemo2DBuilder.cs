@@ -150,6 +150,15 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        static void SetInt(Component c, string field, int value)
+        {
+            var so = new SerializedObject(c);
+            var prop = so.FindProperty(field);
+            if (prop == null) throw new Exception($"No serialized field '{field}' on {c.GetType().Name}");
+            prop.intValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         static void SetBool(Component c, string field, bool value)
         {
             var so = new SerializedObject(c);
@@ -675,8 +684,9 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
                 // history-mode A/B spread: Hobb forgets you the moment the chat closes
                 NPCInteractor2D.HistoryMode.ResetEveryTime,
                 // Qwen3.5-0.8B int8: the force-optimized default on EVERY demo NPC (coalesced
-                // kernels + disk-KV restore + InferencePerf pacing dials all target it)
-                "Qwen3.5-0.8B", think: false);
+                // kernels + disk-KV restore + InferencePerf pacing dials all target it).
+                // Hobb resets every time, so a tiny 1k window is plenty and saves KV VRAM.
+                "Qwen3.5-0.8B", think: false, maxContext: 1024, maxNewTokens: 512);
 
             var marla = BuildNpc(font, white, "GrannyMarla", "char_granny", T(30, 19), "Granny Marla",
                 "You are Granny Marla, the warm, talkative grandmother who runs the little red-roofed general store on " +
@@ -696,7 +706,8 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
                 // context limit she auto-compacts and keeps going. Residency is the zone's job.
                 // She is also the THINKING arm of the A/B.
                 NPCInteractor2D.HistoryMode.ResumeFromCompact,
-                "Qwen3.5-0.8B", think: true);
+                // Marla remembers + compacts, so she keeps the full 16k window
+                "Qwen3.5-0.8B", think: true, maxContext: 16384, maxNewTokens: 8000);
 
             return new[] { hobb, marla };
         }
@@ -706,7 +717,7 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
                                         string approach, NPCInteractor2D.ConversationMode mode,
                                         string voice, float pitch,
                                         NPCInteractor2D.HistoryMode history,
-                                        string model, bool think)
+                                        string model, bool think, int maxContext, int maxNewTokens)
         {
             var go = new GameObject(goName);
             go.transform.position = pos;
@@ -731,9 +742,8 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
 
             var npc = go.AddComponent<NPCInteractor2D>();
             SetRef(npc, "charAnim", anim);
-            SetString(npc, "npc_name", displayName);
+            SetString(npc, "NpcName", displayName);
             SetString(npc, "system_prompt", systemPrompt);
-            SetString(npc, "approach_text", approach);
             // Per-villager LLM (user pick 2026-07-14): Qwen3.5-0.8B int8 on BOTH — the
             // force-optimized default. Thinking stays the live A/B: Hobb answers directly,
             // Marla REASONS in <think> first (never shown/voiced; the window pulses
@@ -741,6 +751,9 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             SetString(npc, "model", model);
             SetBool(npc, "allowThinking", think);
             SetEnum(npc, "historyMode", (int)history);
+            // per-NPC context window + reply cap (user 2026-07-22)
+            SetInt(npc, "maxContextLength", maxContext);
+            SetInt(npc, "maxNewTokens", maxNewTokens);
             // modern voice wiring: Kokoro-only, mode as enum, voicepack by manifest name
             // (field unified with the 3D demo as "ttsVoice" when the NPCs moved onto NPCChatBase)
             SetEnum(npc, "conversationMode", (int)mode);
@@ -869,6 +882,7 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             AddThinBorder(promptGO.transform, trim);
             MakeTMP("Text", promptGO.transform, "[ E ]  Talk", font, 26, cream,
                     TextAlignmentOptions.Center, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            promptGO.AddComponent<NPCInteractPrompt>();   // its own component: fade/bob live here
             promptGO.SetActive(false);
 
             // --- chat overlay (no box): dialogue lines float as drop-shadowed text above a thin
@@ -906,17 +920,30 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
 
             // approach flavor line, italic grey, at the base of the float region
             var infoGO = MakeTMP("InfoText", panelGO.transform, "", null, 22, new Color(0.88f, 0.83f, 0.70f, 0.95f),
-                                 TextAlignmentOptions.Center, new Vector2(0, 0), new Vector2(1, 0), new Vector2(-160, 28), new Vector2(0, 102));
+                                 TextAlignmentOptions.Center, new Vector2(0, 0), new Vector2(1, 0), new Vector2(-160, 28), new Vector2(0, 112));
             infoGO.GetComponent<TMP_Text>().fontStyle = FontStyles.Italic;
+
+            // context-fill bar (user 2026-07-21): silver track + golden fill, right above the input
+            // row — live view of the conversation vs Max Context Length (NPCChatBase drives it per
+            // frame via SetContextFill; the villager compacts/resets when it fills)
+            var ctxBarGO = MakeRect("ContextBar", panelGO.transform, new Vector2(0, 0), new Vector2(1, 0), new Vector2(-140, 6), new Vector2(0, 88));
+            var ctxTrackImg = ctxBarGO.AddComponent<Image>();
+            ctxTrackImg.color = new Color(0.62f, 0.62f, 0.66f, 0.45f);   // silver = empty
+            ctxTrackImg.raycastTarget = false;
+            var ctxFillGO = MakeRect("Fill", ctxBarGO.transform, new Vector2(0, 0), new Vector2(0, 1), Vector2.zero, Vector2.zero);
+            ((RectTransform)ctxFillGO.transform).pivot = new Vector2(0f, 0.5f);
+            var ctxFillImg = ctxFillGO.AddComponent<Image>();
+            ctxFillImg.color = nameGold;   // golden = filled
+            ctxFillImg.raycastTarget = false;
 
             // input row: the only visible chrome — a very light strip with an underline input
             // and text-only Say/Leave buttons
             var rowGO = MakeRect("InputRow", panelGO.transform, new Vector2(0, 0), new Vector2(1, 0), new Vector2(-140, 46), new Vector2(0, 34));
             var stripImg = rowGO.AddComponent<Image>();
-            // solid dark-wood input bar (was 20%-alpha black — invisible over the bright farm);
-            // gives the cream input text + Say/Leave labels a consistent dark backing to read against
-            stripImg.color = new Color(0.11f, 0.08f, 0.05f, 0.80f);
-            AddThinBorder(rowGO.transform, trim);   // wooden trim so the bar has a defined edge
+            // user 2026-07-22: no dark strip behind the row — the rounded blue input box and the
+            // small rounded button chips are the only chrome now (the full-width dark rectangle looked bad)
+            stripImg.color = new Color(0f, 0f, 0f, 0f);
+            stripImg.raycastTarget = false;
             var rowHlg = rowGO.AddComponent<HorizontalLayoutGroup>();
             rowHlg.padding = new RectOffset(14, 10, 6, 6);
             rowHlg.spacing = 8;
@@ -943,6 +970,7 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             SetRef(win, "leaveButton", leaveBtn);
             SetRef(win, "infoText", infoGO.GetComponent<TMP_Text>());
             SetRef(win, "titleText", titleGO.GetComponent<TMP_Text>());
+            SetRef(win, "contextFill", (RectTransform)ctxFillGO.transform);
 
             // UI sounds: source on the canvas so the Leave click isn't cut off by the panel deactivating
             var uiAudio = canvasGO.AddComponent<AudioSource>();
@@ -966,7 +994,7 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             foreach (var npc in npcs)
             {
                 SetRef(npc, "chatWindow", win);
-                SetRef(npc, "interactPrompt", promptGO);
+                SetRef(npc, "interactPrompt", promptGO.GetComponent<NPCInteractPrompt>());
                 UnityEventTools.AddPersistentListener(sendBtn.onClick, new UnityAction(npc.AskNPC));
                 UnityEventTools.AddPersistentListener(giveBtn.onClick, new UnityAction(npc.GiveItems));
                 UnityEventTools.AddPersistentListener(leaveBtn.onClick, new UnityAction(npc.CloseInteraction));
@@ -1080,13 +1108,18 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
         {
             var go = new GameObject("InputField", typeof(RectTransform));
             go.transform.SetParent(parent, false);
-            // invisible click target — the 20%-alpha strip behind the row is the only visible chrome
+            // user 2026-07-21: rounded, blue-toned input box to match the game theme — a 9-sliced
+            // rounded-rect sprite tinted a soft steel blue (replaces the old invisible field + gold underline)
             var bg = go.AddComponent<Image>();
-            bg.color = new Color(0f, 0f, 0f, 0f);
+            bg.sprite = CreateRoundedRectSprite();
+            bg.type = Image.Type.Sliced;
+            // user 2026-07-22: lighter, softer sky-blue to fit the cozy farm theme
+            bg.color = new Color(0.44f, 0.62f, 0.80f, 0.92f);
 
             field = go.AddComponent<TMP_InputField>();
 
-            var areaGO = MakeRect("Text Area", go.transform, Vector2.zero, Vector2.one, new Vector2(-12, -8), Vector2.zero);
+            // extra horizontal padding so the text clears the rounded corners
+            var areaGO = MakeRect("Text Area", go.transform, Vector2.zero, Vector2.one, new Vector2(-28, -10), Vector2.zero);
             areaGO.AddComponent<RectMask2D>();
 
             // placeholder + typed text bumped to a legible weight over the dark input bar
@@ -1096,12 +1129,6 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             phGO.GetComponent<TMP_Text>().fontStyle = FontStyles.Italic;
             var txtGO = MakeTMP("Text", areaGO.transform, "", null, 20, cream,
                                 TextAlignmentOptions.Left, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-
-            // thin underline instead of a box — gold, near-opaque so the field edge is clearly visible
-            var underGO = MakeRect("Underline", go.transform, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 2), new Vector2(0, 2));
-            var underImg = underGO.AddComponent<Image>();
-            underImg.color = new Color(gold.r, gold.g, gold.b, 0.85f);
-            underImg.raycastTarget = false;
 
             field.textViewport = (RectTransform)areaGO.transform;
             field.textComponent = txtGO.GetComponent<TMP_Text>();
@@ -1120,10 +1147,16 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
         static Button BuildTextButton(Transform parent, string label, TMP_FontAsset font,
                                       Color textColor, float width)
         {
-            // minimal, boxless button: the label itself is the target graphic (hover/press tints)
             var go = new GameObject(label + "Button", typeof(RectTransform));
             go.transform.SetParent(parent, false);
             go.AddComponent<LayoutElement>().preferredWidth = width;
+
+            // user 2026-07-22: a small rounded dark chip behind each button so the label reads over
+            // the bright farm now that the full-width dark strip is gone
+            var chip = go.AddComponent<Image>();
+            chip.sprite = CreateRoundedRectSprite();
+            chip.type = Image.Type.Sliced;
+            chip.color = new Color(0.10f, 0.07f, 0.04f, 0.72f);
 
             var labelGO = MakeTMP("Label", go.transform, label, font, 21, textColor, TextAlignmentOptions.Center,
                                   Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
@@ -1209,11 +1242,16 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             // existing asset (the old early-return froze the first-ever bake forever). A near-black
             // dilated shadow behind every glyph keeps the floating text readable over bright grass.
             mat.EnableKeyword(ShaderUtilities.Keyword_Underlay);
-            mat.SetColor(ShaderUtilities.ID_UnderlayColor, new Color(0f, 0f, 0f, 0.95f));
-            mat.SetFloat(ShaderUtilities.ID_UnderlayOffsetX, 0.85f);
-            mat.SetFloat(ShaderUtilities.ID_UnderlayOffsetY, -0.85f);
-            mat.SetFloat(ShaderUtilities.ID_UnderlayDilate, 0.4f);
-            mat.SetFloat(ShaderUtilities.ID_UnderlaySoftness, 0.15f);
+            mat.SetColor(ShaderUtilities.ID_UnderlayColor, new Color(0f, 0f, 0f, 1f));
+            mat.SetFloat(ShaderUtilities.ID_UnderlayOffsetX, 0.6f);
+            mat.SetFloat(ShaderUtilities.ID_UnderlayOffsetY, -0.6f);
+            mat.SetFloat(ShaderUtilities.ID_UnderlayDilate, 0.35f);
+            mat.SetFloat(ShaderUtilities.ID_UnderlaySoftness, 0.1f);
+            // user 2026-07-22: a THICK near-black outline hugging every glyph so the light dialogue
+            // text pops hard over the bright farm (the previous 0.22 stroke was still too faint).
+            // The default TMP SDF shader draws the outline straight from these two properties — no keyword.
+            mat.SetColor(ShaderUtilities.ID_OutlineColor, new Color(0f, 0f, 0f, 1f));
+            mat.SetFloat(ShaderUtilities.ID_OutlineWidth, 0.3f);
             EditorUtility.SetDirty(mat);
             return mat;
         }
@@ -1289,6 +1327,60 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
                 AssetDatabase.ImportAsset(pngPath);
             }
             ConfigureSprite(pngPath, 16f, new Vector2(0.5f, 0.5f));
+            return AssetDatabase.LoadAssetAtPath<Sprite>(pngPath);
+        }
+
+        // 9-sliceable rounded rectangle (white, alpha-AA corners) for the blue input box.
+        // Bilinear + a border equal to the corner radius so it scales to any field size without
+        // distorting the corners.
+        static Sprite CreateRoundedRectSprite()
+        {
+            const int SZ = 48, R = 14;
+            string pngPath = GEN + "/RoundedRect.png";
+            if (!File.Exists(pngPath))
+            {
+                var tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+                var px = new Color32[SZ * SZ];
+                for (int y = 0; y < SZ; y++)
+                    for (int x = 0; x < SZ; x++)
+                    {
+                        float dx = Mathf.Min(x, SZ - 1 - x);
+                        float dy = Mathf.Min(y, SZ - 1 - y);
+                        float a = 1f;
+                        if (dx < R && dy < R)   // inside a corner region — round it off with a 1px AA edge
+                        {
+                            float d = Mathf.Sqrt((R - dx) * (R - dx) + (R - dy) * (R - dy));
+                            a = Mathf.Clamp01(R - d + 0.5f);
+                        }
+                        px[y * SZ + x] = new Color32(255, 255, 255, (byte)(a * 255));
+                    }
+                tex.SetPixels32(px);
+                tex.Apply();
+                File.WriteAllBytes(pngPath, tex.EncodeToPNG());
+                UnityEngine.Object.DestroyImmediate(tex);
+                AssetDatabase.ImportAsset(pngPath);
+            }
+            var imp = (TextureImporter)AssetImporter.GetAtPath(pngPath);
+            var settings = new TextureImporterSettings();
+            imp.ReadTextureSettings(settings);
+            bool dirty = imp.textureType != TextureImporterType.Sprite
+                      || imp.filterMode != FilterMode.Bilinear
+                      || imp.mipmapEnabled
+                      || settings.spriteBorder != new Vector4(R, R, R, R);
+            if (dirty)
+            {
+                imp.textureType = TextureImporterType.Sprite;
+                imp.spriteImportMode = SpriteImportMode.Single;
+                imp.filterMode = FilterMode.Bilinear;
+                imp.textureCompression = TextureImporterCompression.Uncompressed;
+                imp.mipmapEnabled = false;
+                imp.alphaIsTransparency = true;
+                imp.ReadTextureSettings(settings);
+                settings.spriteBorder = new Vector4(R, R, R, R);
+                settings.spriteMeshType = SpriteMeshType.FullRect;
+                imp.SetTextureSettings(settings);
+                imp.SaveAndReimport();
+            }
             return AssetDatabase.LoadAssetAtPath<Sprite>(pngPath);
         }
 

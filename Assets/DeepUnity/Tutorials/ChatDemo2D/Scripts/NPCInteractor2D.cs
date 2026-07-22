@@ -125,7 +125,7 @@ namespace DeepUnity.Tutorials.ChatDemo2D
             {
                 player.cam.ExitDialogue();
                 player.ExitInteractiveMode();
-                if (interactPrompt != null) interactPrompt.SetActive(true);   // still in range
+                if (interactPrompt != null) interactPrompt.Show();   // still in range
             }
         }
 

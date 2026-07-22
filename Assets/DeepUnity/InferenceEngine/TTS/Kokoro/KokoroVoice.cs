@@ -51,12 +51,25 @@ namespace DeepUnity
         [Tooltip("Fed text cuts ONLY at sentence enders (. ! ? ;). A comma may cut too, but only past this many pending characters — an escape hatch for run-on sentences, not the normal path.")]
         public int emergencyChunkChars = 220;
 
+        [Tooltip("Sentences per synthesized chunk. Smaller = faster response, lower quality (prosody resets each sentence); larger = higher quality (intonation flows across sentences), slower response.")]
+        [Range(1, 3)] public int clausesPerChunk = 1;
+
         public bool IsSpeaking { get; private set; }
         public bool IsReady => tts != null && tts.IsReady;
 
         /// <summary>True while buffered speech is actually audible (ring playing + non-empty) —
         /// drive talk animations from THIS, not from IsSpeaking (which includes synthesis).</summary>
         public bool IsAudioPlaying => streamStarted && RingCount() > 0;
+
+        /// <summary>Monotonic count of samples synthesis has produced — a LIVENESS signal: while it
+        /// advances the voice is genuinely working (maybe slowly), even if nothing is audible yet.
+        /// NPCChatBase's reveal stall-watchdog keys on this (mirrors PocketTTSVoice.SamplesPushed).</summary>
+        public long SamplesPushed { get { lock (ringLock) return totalWritten; } }
+
+        /// <summary>True from the MOMENT text/clauses are queued — unlike <see cref="IsSpeaking"/>,
+        /// which only latches when the pump picks the work up. "Is this voice done?" checks made
+        /// right after FeedText/FlushText must use THIS or they race the pump (see PocketTTSVoice).</summary>
+        public bool HasPendingSpeech => IsSpeaking || feedingText || clauseQueue.Count > 0;
 
         static KokoroTTS shared;
         KokoroTTS tts;
@@ -201,21 +214,20 @@ namespace DeepUnity
         {
             // sentence-level cuts only — prosody stays whole; the pump already synthesizes the
             // next sentence WHILE the current one plays, so there is no latency reason to cut
-            // at commas (the comma path exists purely for run-on sentences)
-            string s = pendingText.ToString();
-            int cut = -1;
-            for (int i = 0; i < s.Length; i++)
+            // at commas (the comma path exists purely for run-on sentences). The cut lands after
+            // the Nth sentence ender (clausesPerChunk, see TtsClauseCut) so batched sentences are
+            // rendered as ONE utterance with flowing prosody. Loops: one delta can complete
+            // several chunks.
+            while (true)
             {
-                char c = s[i];
-                bool sentenceEnd = c == '.' || c == '!' || c == '?' || c == ';' || c == '\n';
-                bool emergency = c == ',' && i >= emergencyChunkChars;
-                if (sentenceEnd || emergency) cut = i;
+                string s = pendingText.ToString();
+                int cut = TtsClauseCut.FindCut(s, clausesPerChunk, emergencyChunkChars);
+                if (cut < 0) return;
+                string chunk = s.Substring(0, cut + 1).Trim();
+                if (chunk.Length > 1) clauseQueue.Enqueue(chunk);
+                pendingText.Clear();
+                pendingText.Append(s.Substring(cut + 1));
             }
-            if (cut < 0) return;
-            string chunk = s.Substring(0, cut + 1).Trim();
-            if (chunk.Length > 1) clauseQueue.Enqueue(chunk);
-            pendingText.Clear();
-            pendingText.Append(s.Substring(cut + 1));
         }
 
         void Update()
