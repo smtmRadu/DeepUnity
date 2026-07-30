@@ -111,10 +111,23 @@ namespace DeepUnity
             // unless the reveal genuinely needs to lead or trail the voice.
             [Tooltip("Seconds to shift the clause text reveal relative to the AUDIBLE playback position (the reader's own lead is already compensated). Negative = text trails the voice, positive = text leads it. 0 = in sync.")]
             public float clauseRevealLead = 0f;
-            sealed class ClauseMark { public string text; public long start; public long end = -1; }
+            sealed class ClauseMark
+            {
+                public string text;
+                public long start;             // WRITTEN-sample index of the clause's first sample
+                public long end = -1;          // WRITTEN-sample index one past its last sample
+                public long streamStart = -1;  // STREAM-time position of `start` — stamped on the
+                                               // audio thread when that sample is actually handed
+                                               // to the PCM reader (zero-fill shifts it correctly)
+            }
             readonly Queue<ClauseMark> spokenQueue = new Queue<ClauseMark>();
+            // Marks awaiting their streamStart stamp, in enqueue order (audio thread, ringLock).
+            readonly Queue<ClauseMark> stampQueue = new Queue<ClauseMark>();
             ClauseMark inflightMark;              // the clause the current streamJob is synthesizing
             long totalWritten, totalRead;         // monotonic sample counters (ringLock-guarded)
+            long streamPos;                       // cumulative samples handed to the PCM reader (zero-fill INCLUDED)
+            long audiblePlayed;                   // cumulative stream samples the DSP has actually played
+            int lastTimeSamples;                  // source.timeSamples at the last Update (wrap tracking)
 
             static PocketTTS shared;
             PocketTTS tts;
@@ -262,6 +275,11 @@ namespace DeepUnity
 
             /// <summary>Load-on-approach spread over ~targetSeconds (budgeted per frame).</summary>
             public void SlowPrefetchNow(float targetSeconds) { EnsureTts(); holders.Add(this); tts.SlowPrefetch(targetSeconds); }
+
+            /// <summary>Conversation-open boost: finish a still-streaming voice at the tier's full
+            /// upload rate. Prefetch policy (2026-07-30): the zone only ever pays walk-up pacing —
+            /// the boost belongs to the dialogue opening, nowhere else.</summary>
+            public void BoostPrefetchNow() { EnsureTts(); holders.Add(this); tts.BoostPrefetch(); }
 
             /// <summary>Drop THIS voice's residency claim; the weights actually unload (budgeted)
             /// only when the LAST holder lets go. A later prefetch re-streams.</summary>
@@ -475,6 +493,7 @@ namespace DeepUnity
                     ringCount = 0; ringRead = 0; ringWrite = 0;
                     totalRead = totalWritten;   // dropped audio counts as consumed (accounting stays sane)
                     spokenQueue.Clear();
+                    stampQueue.Clear();         // stale marks must not receive a next-reply stamp
                 }
                 streamStarted = false;
                 ttfaArmed = false;
@@ -638,7 +657,12 @@ namespace DeepUnity
                         // clause mark: first sample of this clause lands at totalWritten (single
                         // synthesis in flight) -> OnClauseSpoken fires when playback reaches it
                         inflightMark = new ClauseMark { text = text };
-                        lock (ringLock) { inflightMark.start = totalWritten; spokenQueue.Enqueue(inflightMark); }
+                        lock (ringLock)
+                        {
+                            inflightMark.start = totalWritten;
+                            spokenQueue.Enqueue(inflightMark);
+                            stampQueue.Enqueue(inflightMark);   // audio thread stamps streamStart
+                        }
                         // reply's LAST clause: extra post-EOS frames so the final word decays
                         // naturally (model-rendered) instead of cutting ~0.16 s after it.
                         bool lastClause = !feedingText && clauseQueue.Count == 0;
@@ -688,6 +712,12 @@ namespace DeepUnity
                 if (streamClip != null) return;
                 int sr = Cfg.SAMPLE_RATE;
                 ring = new float[Mathf.CeilToInt(ringSeconds * sr)];
+                // A fresh clip is a fresh STREAM TIMELINE: the measured-reveal counters must
+                // restart with it, or a hard cut (which destroys the clip with 0.2-0.8 s pulled
+                // but never played) leaves audiblePlayed permanently behind streamPos.
+                lock (ringLock) streamPos = 0;
+                audiblePlayed = 0;
+                lastTimeSamples = 0;
                 streamClip = AudioClip.Create("PocketTTSStream", sr, 1, sr, true, OnPcmRead);
                 source.clip = streamClip;
                 source.loop = true;
@@ -951,34 +981,47 @@ namespace DeepUnity
                     }
                 }
 
-                // audio-synced clause reveal (mirrors KokoroVoice.Update): pop every clause whose
-                // playback position has been reached, ~clauseRevealLead early.
+                // audio-synced clause reveal: pop every clause whose MEASURED playback position has
+                // been reached, ~clauseRevealLead early.
+                //
+                // History, because this spot has now failed in BOTH directions:
+                //  - raw totalRead (pre 2026-07-26): the PCM reader runs AHEAD of the sound, so text
+                //    led the voice ("textul a fost randat inaintea intregului audio").
+                //  - totalRead - audioTailSeconds (2026-07-26..30): an ESTIMATE of that lead, tuned
+                //    in the starved-ring era. The moment #33 made the ring healthy the reader ran a
+                //    different (shorter-lag) regime and the fixed 0.8 s over-corrected: text trailed
+                //    the voice by the difference (user 2026-07-30). Any constant here is regime-
+                //    dependent and breaks when TTS throughput changes.
+                // So it is MEASURED now, no estimate anywhere: the audio thread stamps each mark
+                // with the STREAM position where its first sample was handed to the reader
+                // (streamStart — zero-fill included, so dropouts shift text exactly like they shift
+                // sound), and audiblePlayed below is the stream position the DSP has actually
+                // played, tracked from source.timeSamples. Reveal fires when played crosses stamp —
+                // within one DSP buffer (~20-40 ms) of the speakers by construction.
+                if (source != null && streamClip != null)
+                {
+                    int ts = source.timeSamples;
+                    if (source.isPlaying)
+                    {
+                        int len = streamClip.samples;
+                        audiblePlayed += (((long)ts - lastTimeSamples) % len + len) % len;   // wrap-safe
+                    }
+                    lastTimeSamples = ts;   // paused/stopped frames just resync (delta 0 anyway)
+                }
                 long lead = (long)(clauseRevealLead * Cfg.SAMPLE_RATE);
                 while (true)
                 {
                     string fire = null; float dur = 0f; bool dequeued = false;
                     lock (ringLock)
                     {
-                        // totalRead is the PCM READER's position, and the reader runs audioTailSeconds
-                        // AHEAD of what the player hears (DSP mix buffer + stream-clip lookahead) — the
-                        // same offset the grace pause already compensates for. Comparing raw totalRead
-                        // here let a clause's text appear up to audioTailSeconds + clauseRevealLead
-                        // before its audio, and it showed up worst at a clause boundary where the ring
-                        // runs dry: the reader gulps the remainder and jumps ahead of the sound in one
-                        // frame. Subtract the tail so the reveal tracks the AUDIBLE position; the lead
-                        // is then a deliberate offset on top of a correct baseline. (user 2026-07-26:
-                        // "textul a fost randat inaintea intregului audio pe a doua clauza")
-                        long audible = totalRead - (long)(audioTailSeconds * Cfg.SAMPLE_RATE);
-                        // ...but NEVER strand a mark behind that offset. `totalRead >= mk.end` means the
-                        // whole clause has been handed to the reader — there is nothing honest left to
-                        // wait for, and holding it back froze the LAST clause of any reply shorter than
-                        // audioTailSeconds: at drain totalRead == totalWritten, the mark never dequeued,
-                        // then streamStarted went false and the reveal condition could never run again.
-                        // The stale mark then fired on the NEXT reply's gate-open — typing the previous
-                        // reply's closing sentence into the new bubble. Regression from the audible-
-                        // position fix itself, caught in audit before it shipped (2026-07-26).
+                        // The `totalRead >= mk.end` fallback stays: a mark whose WHOLE clause has been
+                        // handed to the reader has nothing honest left to wait for. Without it the
+                        // LAST clause of a short reply could sit un-revealed into the drain path (the
+                        // 2026-07-26 stale-mark regression, caught in audit) — and it also covers a
+                        // mark that somehow never got its stamp.
                         if (spokenQueue.Count > 0 && streamStarted &&
-                            (audible + lead >= spokenQueue.Peek().start ||
+                            ((spokenQueue.Peek().streamStart >= 0 &&
+                              audiblePlayed + lead >= spokenQueue.Peek().streamStart) ||
                              (spokenQueue.Peek().end > 0 && totalRead >= spokenQueue.Peek().end)))
                         {
                             ClauseMark mk = spokenQueue.Dequeue();
@@ -1023,7 +1066,13 @@ namespace DeepUnity
                         ringRead = (ringRead + 1) % ring.Length;
                         ringCount--;
                         totalRead++;                            // consumed (zero-fill doesn't count)
+                        // stamp: this stream sample is a queued clause's FIRST sample — record
+                        // where it sits in STREAM time, for the measured reveal in Update. One
+                        // Peek per real sample; marks are stamped in enqueue order.
+                        while (stampQueue.Count > 0 && totalRead > stampQueue.Peek().start)
+                            stampQueue.Dequeue().streamStart = streamPos + i;
                     }
+                    streamPos += data.Length;   // reader consumption advances stream time, zeros too
                 }
             }
 

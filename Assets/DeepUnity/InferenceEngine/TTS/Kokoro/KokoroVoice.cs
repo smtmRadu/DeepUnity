@@ -151,6 +151,16 @@ namespace DeepUnity
             tts.SlowPrefetch(targetSeconds);
         }
 
+        /// <summary>Conversation-open boost: finish a still-streaming prefetch at full speed
+        /// (ModelBase.BoostFetch — the budget is live, effect next frame). Prefetch policy
+        /// (2026-07-30): the zone only pays walk-up pacing; the boost belongs to the dialogue.</summary>
+        public void BoostPrefetchNow()
+        {
+            EnsureTts();
+            holders.Add(this);
+            tts.BoostFetch();
+        }
+
         /// <summary>Drop THIS voice's residency claim; the weights actually unload (budgeted,
         /// frame-friendly) only when the LAST holder lets go. Prefetch again re-streams.</summary>
         public void DefetchNow()

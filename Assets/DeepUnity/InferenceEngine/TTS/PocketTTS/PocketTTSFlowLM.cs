@@ -475,7 +475,14 @@ namespace DeepUnity
                     }
                     if (!req.hasError)
                     {
-                        req.GetData<float>().CopyTo(dst);
+                        // Explicit-length copy, NOT CopyTo(dst): CopyTo demands dst.Length == the
+                        // native array's length, and #StreamArBatch reads ramped blocks (count =
+                        // blk*33) into a steady-K-sized dst — the mismatch threw here on the very
+                        // first prewarm block (2026-07-30) and killed the voice for the session.
+                        // The probes never saw it: they run AsyncReadback=false, and the sync
+                        // GetData below is partial-copy tolerant. Copying `count` matches this
+                        // method's contract ("readback of `count` floats into dst") on both paths.
+                        Unity.Collections.NativeArray<float>.Copy(req.GetData<float>(), 0, dst, 0, count);
                         yield break;
                     }
                 }

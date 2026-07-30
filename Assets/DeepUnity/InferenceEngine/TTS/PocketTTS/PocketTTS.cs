@@ -147,7 +147,8 @@ namespace DeepUnity
             /// token->transformer->eos->flow-head->latent chain stays on the GPU (feedback via a
             /// GPU latent buffer, eos+latent written to per-frame slots), the offline loop reads
             /// results back ONCE per ArBatchFrames block instead of TWICE PER FRAME, streaming
-            /// makes one combined async readback per frame instead of two. Plus the fused
+            /// makes one combined async readback per StreamArBatchFrames block (per frame until
+            /// 2026-07-30 — see that field). Plus the fused
             /// transformer step (LN folded into the GEMV staging, residual adds folded into GEMV
             /// epilogues, slice+RoPE+KV-append as one kernel): ~49 dispatches/frame vs R1's ~96.
             /// Default ON; false restores the exact R1 dispatch list (three-tier bisect:
@@ -156,8 +157,29 @@ namespace DeepUnity
 
             /// <summary>#31-R2: frames per GPU-resident offline batch (1..16). Larger = fewer
             /// pipeline drains but more post-EOS overshoot compute (up to K-1 discarded frames,
-            /// ~2% of a 130-frame clip at 8). Streaming always runs per-frame (latency).</summary>
+            /// ~2% of a 130-frame clip at 8). Streaming has its own K — see StreamArBatchFrames.</summary>
             public static int ArBatchFrames = 8;
+
+            /// <summary>Streaming twin of ArBatchFrames (2026-07-30). #31-R2 left streaming
+            /// per-frame "for latency" — and that per-frame readback turned out to be exactly what
+            /// caps production on the reference GTX 1650: ~73 ms/latent while the LLM decodes
+            /// (≈1 latent per Unity frame at decode-era frame times), i.e. ~1.0× playback, so the
+            /// ring limit-cycles off zero and every bounce is an ~80 ms blip (2026-07-30 log:
+            /// 15 bursts in one reply). K chained GPU-resident frames per combined [eos|latent]
+            /// readback amortize that latency K-fold. EOS overshoot compute is bounded at K-1
+            /// discarded frames per clause and emitted audio is identical by the same construction
+            /// as the offline block loop (a frame's latent never depends on later frames; overshoot
+            /// KV rows are never attended by emitted frames; issued frames never exceed maxFrames,
+            /// so KV capacity needs are unchanged). Pacing stays honest: one FrameBreak per issued
+            /// frame, so the per-frame GPU load the tier's tick cap admits is unchanged — the block
+            /// only removes the readback stalls between frames.</summary>
+            public static int StreamArBatchFrames = 4;
+
+            /// <summary>TTFA ramp for the first streaming blocks of EACH clause (clamped to
+            /// StreamArBatchFrames; later blocks run it flat). Block 0 = 1 keeps the first
+            /// readback — and with it StreamFirstChunkFrames' first flush — exactly as early as
+            /// the old per-frame path. null = flat K from the first block.</summary>
+            public static int[] StreamArBatchRamp = { 1, 2 };
 
             /// <summary>#31-R3 lever 2 (TTFA ramp): frame counts for the FIRST offline blocks (each
             /// clamped to ArBatchFrames; later blocks use ArBatchFrames). Flat K=8 regressed the
@@ -261,6 +283,19 @@ namespace DeepUnity
             {
                 if (targetSeconds > 0.01f && weights.BytesTotal > 0)
                     weights.BudgetBytesPerFrame = Math.Max(1, (long)(weights.BytesTotal / (targetSeconds * 60f)));
+                BeginLoad();
+            }
+
+            /// <summary>Conversation-open boost: lift an in-flight budgeted upload to the tier's
+            /// full rate — the pump samples BudgetBytesPerFrame live, so it takes effect next
+            /// frame. Until 2026-07-30 nothing ever raised a SlowPrefetch budget again, so a
+            /// player who opened the dialogue during the walk-up spoke over a still-streaming
+            /// voice for its whole remaining window (log: `pockettts fully streamed` landing
+            /// seconds into the conversation, with the upload competing against decode + synth
+            /// for the GPU — the 0.60 s of dry bursts in that reply). No-op once resident.</summary>
+            public void BoostPrefetch()
+            {
+                weights.BudgetBytesPerFrame = Math.Max(1, BackendTradeoffTable.FetchBytesPerFrame);
                 BeginLoad();
             }
 
@@ -1156,11 +1191,17 @@ namespace DeepUnity
 
                 // #31-R2: GPU-resident frame — one combined [eos|latent] readback replaces the
                 // legacy pair (c then velocity) and kills the token/cond uploads + CPU input_linear.
-                // Per-frame pacing and the flush block are UNCHANGED (pump semantics intact); the
-                // only extra work is one discarded flow-head pass on the final stop frame.
+                // 2026-07-30: readbacks are now one per StreamArBatchFrames BLOCK, not per frame
+                // (see that field's docs). The flush block is UNCHANGED; the only extra work is
+                // up to K-1 discarded overshoot frames past the stop frame.
                 bool gpuAr = flm.CanRunGpuFrames();
-                float[] slot1 = gpuAr ? new float[Cfg.LDIM + 1] : null;
-                float[][] noiseRow1 = gpuAr ? new float[1][] : null;
+                // #StreamArBatch state: frames arrive in K-sized blocks (one readback per block),
+                // the outer loop scans them one per iteration so EOS/flush semantics are untouched.
+                int steadyK = gpuAr ? Mathf.Clamp(StreamArBatchFrames, 1, 8) : 1;
+                int slotStride = Cfg.LDIM + 1;
+                float[] slotBlk = gpuAr ? new float[steadyK * slotStride] : null;
+                float[][] noiseBlk = gpuAr ? new float[steadyK][] : null;
+                int blkCount = 0, blkNext = 0, blkIdx = 0;   // buffered frames, scan cursor, block #
                 // #31-R3: first flush after StreamFirstChunkFrames (GPU-frame path), then the
                 // normal cadence — earlier first audio, identical samples (windowed tail-exact).
                 int firstChunk = gpuAr ? Mathf.Clamp(StreamFirstChunkFrames, 1, chunk) : chunk;
@@ -1171,22 +1212,44 @@ namespace DeepUnity
                     bool stop;
                     if (gpuAr)
                     {
-                        noiseRow1[0] = deterministic ? injectNoise[n] : Gauss(Cfg.LDIM, Mathf.Sqrt(Cfg.TEMPERATURE));
-                        flm.UploadNoiseBlock(noiseRow1, 1);
-                        flm.DecodeFrameGpuIssue(0, n);
-                        var rb = flm.ReadEosLatYielding(1, slot1, AsyncReadback);
-                        while (IsReady && rb.MoveNext()) { LastHeavyTick = "ar_frame"; yield return rb.Current; }
-                        if (!IsReady) { onSamples?.Invoke(null); yield break; }
-                        float eosG = slot1[0];
+                        if (blkNext >= blkCount)
+                        {
+                            // Issue the next block: one noise upload, kThis chained GPU-resident
+                            // frames (feedback on-GPU, no readbacks inside), then ONE combined
+                            // [eos|latent] readback for the whole block. The per-frame readback
+                            // this replaces was the production cap behind the 2026-07-30 blips.
+                            int kThis = (StreamArBatchRamp != null && blkIdx < StreamArBatchRamp.Length)
+                                        ? Mathf.Clamp(StreamArBatchRamp[blkIdx], 1, steadyK) : steadyK;
+                            int blk = Math.Min(kThis, maxFrames - n);
+                            for (int f = 0; f < blk; f++)
+                                noiseBlk[f] = deterministic ? injectNoise[n + f]
+                                                            : Gauss(Cfg.LDIM, Mathf.Sqrt(Cfg.TEMPERATURE));
+                            flm.UploadNoiseBlock(noiseBlk, blk);
+                            for (int f = 0; f < blk; f++)
+                            {
+                                // one FrameBreak per issued frame, BETWEEN issues (blk == 1 goes
+                                // straight to its readback — exactly the old per-frame pacing):
+                                // the tier's tick cap still bounds per-frame GPU load.
+                                if (f > 0) { LastHeavyTick = "ar_frame"; yield return FrameBreak; }
+                                if (!IsReady) { onSamples?.Invoke(null); yield break; }
+                                flm.DecodeFrameGpuIssue(f, n + f);
+                            }
+                            var rb = flm.ReadEosLatYielding(blk, slotBlk, AsyncReadback);
+                            while (IsReady && rb.MoveNext()) { LastHeavyTick = "ar_frame"; yield return rb.Current; }
+                            if (!IsReady) { onSamples?.Invoke(null); yield break; }
+                            blkCount = blk; blkNext = 0; blkIdx++;
+                        }
+                        float eosG = slotBlk[blkNext * slotStride];
                         if (eosG > Cfg.EOS_THRESHOLD && eosStep < 0) eosStep = n;
                         stop = eosStep >= 0 && n >= eosStep + framesAfterEos;
                         if (!stop)
                         {
                             float[] lat = new float[Cfg.LDIM];
-                            Array.Copy(slot1, 1, lat, 0, Cfg.LDIM);
+                            Array.Copy(slotBlk, blkNext * slotStride + 1, lat, 0, Cfg.LDIM);
                             latents.Add(lat);
                             rawAll.AddRange(lat);
                         }
+                        blkNext++;
                     }
                     else
                     {

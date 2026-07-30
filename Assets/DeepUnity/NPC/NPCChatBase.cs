@@ -116,6 +116,9 @@ namespace DeepUnity
         /// <summary>How the NPC answers: text-only, or text + streaming speech.</summary>
         public enum ConversationMode { LlmOnly, LlmPlusTts }
 
+        /// <summary>Granularity of the audio-synced text reveal (see syncedTextReveal).</summary>
+        public enum RevealGranularity { CharByChar, WordByWord }
+
         /// <summary>
         /// What happens to the conversation HISTORY between two openings of the dialogue.
         /// (GPU residency is NOT decided here — the prefetch zone / talk trigger owns that.)
@@ -204,6 +207,8 @@ namespace DeepUnity
         [Tooltip("LlmOnly = text-only replies (talk animation follows the writing; voice fields hidden below). LlmPlusTts = replies are spoken: the talk animation follows the AUDIO, and the next sentence synthesizes while the current one plays.")]
         [SerializeField] protected ConversationMode conversationMode = ConversationMode.LlmOnly;
         protected bool speakReplies => conversationMode == ConversationMode.LlmPlusTts;
+        [Tooltip("How the audio-synced reply types itself into the window while the NPC speaks (LlmPlusTts only). CharByChar = typewriter, letters land in step with the voice. WordByWord = whole words pop in on their spoken beat. Text-only replies stream per LLM token and ignore this.")]
+        [SerializeField] protected RevealGranularity syncedTextReveal = RevealGranularity.CharByChar;
         [Tooltip("ResetEveryTime = the chat starts from the bare system prompt EVERY opening (only the system-prompt KV is cached). ResumeFromCompact = the history is permanent — it survives closing the dialogue AND quitting the app, with every reply — until it fills Max Context Length, at which point the model compacts the whole conversation into one text that is APPENDED TO THE SYSTEM PROMPT (the Compact Summary field below) and the replies are dropped. See the dropdown's own tooltips for the full lifecycle.")]
         [SerializeField] protected HistoryMode historyMode = HistoryMode.ResetEveryTime;
         [Tooltip("Runaway guard, NOT a feature limit. One exchange may legitimately run text → call → text → call → text: decoding stops at each call, the result lands in the context, and the NPC carries on from there, so a single player line can produce several calls and several spoken stretches. This caps only the INTERNAL reads (an un-finetuned small model handed a read will happily read the same thing forever); AskUserQuestion is not counted, because it cannot loop — it waits for a human. Past the cap the read is REFUSED to the model as {\"error\": \"read_limit_reached\"}, which is what makes it stop and speak. 0 = no internal reads at all (every one is refused).")]
@@ -279,13 +284,14 @@ namespace DeepUnity
                  "radius ≥ player speed × slowPrefetchSeconds, larger on slow GPUs/disks.")]
         [SerializeField] protected float prefetchRadius = 10f;
         [Min(1f)]
-        [Tooltip("BOTH weight streams (LLM + TTS) are spread over ~this many seconds of walking-up " +
-                 "time. BIGGER = gentler per-frame upload budget (imperceptible, zero frame drops) " +
-                 "but the models need longer to become ready — pair with a larger prefetchRadius. " +
+        [Tooltip("The TTS weight stream is spread over ~this many seconds of walking-up time. " +
+                 "BIGGER = gentler per-frame upload budget (imperceptible, zero frame drops) " +
+                 "but the voice needs longer to become ready — pair with a larger prefetchRadius. " +
                  "SMALLER = ready sooner after zone entry, but each frame uploads more bytes and " +
-                 "weak GPUs/disks may show hitches during the walk-up. Opening the dialogue BOOSTS " +
-                 "the stream to full speed regardless, so this only shapes the background portion. " +
-                 "3s suits walking approaches; raise toward 5-10s for large zones or low-end hardware.")]
+                 "weak GPUs/disks may show hitches during the walk-up. The LLM does NOT use this " +
+                 "window: inside the zone it streams at the tier's slow rate for as long as the " +
+                 "player idles there, and BOOSTS to full speed only when the dialogue opens " +
+                 "(or the model finishes / the zone releases it).")]
         [SerializeField] protected float slowPrefetchSeconds = 3f;
 
         // Sits below the zone knobs (user 2026-07-25): it is a scene reference the author wires once,
@@ -751,13 +757,17 @@ namespace DeepUnity
                 StartCoroutine(CollectGarbageIncremental());
         }
 
-        // slowPrefetchSeconds applies to the LLM stream too. The legacy LLM loaders sample ONE
-        // global per-frame budget (LLM.UploadBudgetBytes) live each frame — until WS-F gives them
-        // per-instance budgets, this governor retargets that global every frame so the REMAINING
-        // bytes land in roughly the walk-up window, then restores the full-speed budget. Ends
-        // early (and boosts) when the dialogue opens, the model finishes, or the zone releases it.
-        // BOTH ends of the rate come from the dial (BackendTradeoffTable): SlowFetchBytesPerFrame to
-        // start on, FetchBytesPerFrame to boost back to. This used to latch the full-speed baseline
+        // The legacy LLM loaders sample ONE global per-frame budget (LLM.UploadBudgetBytes) live
+        // each frame — until WS-F gives them per-instance budgets, this governor holds that global
+        // at the tier's SLOW rate for the whole time the player is merely Idle inside the zone,
+        // and restores the full-speed budget on the exit edges: the dialogue opening (state
+        // leaves Idle), the model finishing, or the zone releasing it. That restore IS the boost —
+        // the zone itself never boosts (user 2026-07-30: "while in the zone it gets only slow
+        // prefetched"; the previous version retargeted the budget to finish the WHOLE model inside
+        // slowPrefetchSeconds — ~5.6 MB/frame for a 1 GB model in a 3 s window, nearly full rate —
+        // and then boosted outright when the window elapsed, with the player just standing there).
+        // BOTH ends of the rate come from the dial (BackendTradeoffTable): SlowFetchBytesPerFrame
+        // while idle, FetchBytesPerFrame on the edges. This used to latch the full-speed baseline
         // into a static on first use, because with overlapping zones two governors run concurrently
         // and the second must not adopt the first one's SLOWED value as "full speed" — reading the
         // row instead makes that class of bug impossible (2026-07-26): the dial is the truth
@@ -778,28 +788,30 @@ namespace DeepUnity
 
         private IEnumerator LlmSlowPrefetch()
         {
-            float deadline = Time.unscaledTime + slowPrefetchSeconds;
             bool announced = false;
-            while (llm != null && !llm.IsReady && state == NPCState.Idle
-                   && Time.unscaledTime < deadline)
+            while (llm != null && !llm.IsReady && state == NPCState.Idle)
             {
-                long remaining = llm.TotalWeightBytes - llm.UploadedWeightBytes;
-                if (remaining > 0)
+                // Shared global budget: while ANY dialogue is open — not this NPC's (state would
+                // not be Idle) but another one boosting the pooled instance — its boost owns the
+                // budget; an idle zone must not fight it back down to the slow rate every frame.
+                if (!AnyConversationOpen)
                 {
-                    long frames = (long)Mathf.Max(1f, (deadline - Time.unscaledTime) * 60f);
-                    LLM.UploadBudgetBytes = (int)System.Math.Min(BackendTradeoffTable.FetchBytesPerFrame,
-                        System.Math.Max(64 * 1024, remaining / frames));
-                    if (!announced)
+                    long remaining = llm.TotalWeightBytes - llm.UploadedWeightBytes;
+                    if (remaining > 0)
                     {
-                        // one line with the REAL retargeted rate + ETA for the walk-up window
-                        ResidencyLog.Budget(llm.WeightsLabel, LLM.UploadBudgetBytes, remaining);
-                        announced = true;
+                        LLM.UploadBudgetBytes = BackendTradeoffTable.SlowFetchBytesPerFrame;
+                        if (!announced)
+                        {
+                            ResidencyLog.Budget(llm.WeightsLabel, LLM.UploadBudgetBytes, remaining);
+                            announced = true;
+                        }
                     }
                 }
                 yield return null;
             }
-            // boost: dialogue opened / window elapsed / released. Announce it only when there is
-            // actually something left to stream — completion has its own "resident" line.
+            // boost/restore: dialogue opened, model finished, or the zone released it. Announce it
+            // only when there is actually something left to stream — completion has its own
+            // "resident" line.
             if (llm != null && !llm.IsReady)
                 ResidencyLog.Budget(llm.WeightsLabel, BackendTradeoffTable.FetchBytesPerFrame,
                                     System.Math.Max(0, llm.TotalWeightBytes - llm.UploadedWeightBytes));
@@ -841,6 +853,18 @@ namespace DeepUnity
             dialogueEpoch++;
             state = NPCState.PreparingForInteraction;
             conversing.Add(this);
+            // Prefetch policy (user 2026-07-30): entering the conversation IS the boost edge —
+            // for EVERY stream, not just the LLM's. The LLM governor exits on the state flip
+            // above but only on its next tick, so set the global budget NOW: the voice boosts
+            // below copy it (ModelBase.BoostFetch) and any remaining LLM bytes run at the full
+            // rate from this very frame. Level first — a shared-window sibling can reach here
+            // before any zone/contact adoption ran for this NPC.
+            if (BackendTradeoffTable.Level != backendTradeoff)
+                BackendTradeoffTable.Level = backendTradeoff;
+            LLM.UploadBudgetBytes = BackendTradeoffTable.FetchBytesPerFrame;
+            kkVoice?.BoostPrefetchNow();
+            cvVoice?.BoostPrefetchNow();
+            pkVoice?.BoostPrefetchNow();
             if (interactPrompt != null) interactPrompt.Hide();
             OnInteractionStarted();
             dialogueCoroutine = StartCoroutine(OpenConversation());
@@ -1945,12 +1969,18 @@ namespace DeepUnity
                                                     asToolResult: true));
         }
 
-        // Word-by-word reveal: each clause event carries its spoken DURATION, and a single
-        // pacing coroutine drips the clause's words into the bubble across ~that window
-        // (char-weighted per word, finishing slightly early) — the text "types itself" in step
-        // with the voice instead of whole sentences popping in.
+        // Audio-synced reveal: each clause event carries its spoken DURATION, and a single
+        // pacing coroutine drips the clause into the bubble across ~that window (char-by-char
+        // or whole words — syncedTextReveal), finishing slightly early — the text "types
+        // itself" in step with the voice instead of whole sentences popping in.
         readonly Queue<(string clause, float dur)> revealQueue = new Queue<(string, float)>();
         Coroutine revealJob;
+        // Verbatim accumulation of everything fed to the voices this reply — the ONLY place
+        // the whitespace BETWEEN clauses still exists (the clause cutter trims it off every
+        // chunk), and therefore the only honest source for the separator the reveal joins
+        // clauses with. See the alignment note in RevealWordsJob.
+        readonly System.Text.StringBuilder revealSource = new System.Text.StringBuilder();
+        int revealSrcPos;   // chars of revealSource already consumed by revealed clauses
 
         void OnClauseSpokenHandler(string clause, float duration)
         {
@@ -1967,32 +1997,64 @@ namespace DeepUnity
                 (string clause, float dur) = revealQueue.Dequeue();
                 var w = Window;
                 if (!revealActive || w == null || state == NPCState.Idle) break;
-                // Reveal a growing PREFIX OF THE CLAUSE ITSELF, rather than re-joining split words
-                // with single spaces. The old form rebuilt the text instead of following it, so every
-                // newline the model wrote was flattened into a space: the reveal drew one running
-                // paragraph, then FinishSyncedReveal settled the window on the REAL text and the
-                // paragraph break appeared all at once, re-flowing the bubble at the exact moment it
-                // finished (user 2026-07-26 — "apare urat fix cand abia se termina sa se repozitioneze").
-                // A prefix of the true string cannot disagree with the final text, so there is nothing
-                // left to settle and no class of whitespace can go missing.
+                // Reveal a growing PREFIX OF THE REAL STREAMED TEXT, never a re-joined copy. Two
+                // regressions taught this shape (both looked the same: whitespace missing until
+                // FinishSyncedReveal settled the bubble on the real text and it re-flowed "urat
+                // fix cand abia se termina"):
+                //  - 2026-07-26: re-joining split WORDS with single spaces flattened newlines
+                //    INSIDE a clause -> fixed by typing a prefix of the clause string.
+                //  - 2026-07-30: the clause CUTTER trims the ender run off every chunk
+                //    (TtsClauseCut cuts at the end of "...\n\n", then Trim() eats it), so a
+                //    paragraph break BETWEEN clauses survived in no clause at all and the
+                //    single-space join drew one running paragraph again.
+                // So each clause is ALIGNED against revealSource — the verbatim accumulation of
+                // what was fed to the voices — and the separator between clauses is copied from
+                // there. The alignment is exact (a chunk is a Trim of a substring of the feed);
+                // if it ever fails (foreign clause), the old one-space join is the fallback.
                 string basis = spokenShown ?? "";
-                if (basis.Length > 0 && !char.IsWhiteSpace(basis[basis.Length - 1])
-                    && clause.Length > 0 && !char.IsWhiteSpace(clause[0]))
+                string src = revealSource.ToString();
+                int start = revealSrcPos;
+                while (start < src.Length && char.IsWhiteSpace(src[start])) start++;
+                if (start + clause.Length <= src.Length &&
+                    string.CompareOrdinal(src, start, clause, 0, clause.Length) == 0)
+                {
+                    // the real separator — where any "\n\n" lives. Dropped before the reply's
+                    // FIRST clause, where it would render as a leading blank line.
+                    if (basis.Length > 0) basis += src.Substring(revealSrcPos, start - revealSrcPos);
+                    revealSrcPos = start + clause.Length;
+                }
+                else if (basis.Length > 0 && !char.IsWhiteSpace(basis[basis.Length - 1])
+                         && clause.Length > 0 && !char.IsWhiteSpace(clause[0]))
                     basis += " ";                     // clause boundary the model did not punctuate
                 int chars = Mathf.Max(1, clause.Length);
+                float window = Mathf.Max(0.05f, dur * 0.98f);   // finish slightly early, as before
+                float t0 = Time.realtimeSinceStartup;
                 int shown = 0;
                 while (shown < clause.Length)
                 {
                     if (!revealActive || state == NPCState.Idle) break;
-                    int sp = clause.IndexOf(' ', shown);
-                    int next = sp < 0 ? clause.Length : sp + 1;
-                    int added = next - shown;
-                    shown = next;
-                    spokenShown = bubbleLive = basis + clause.Substring(0, shown);
-                    w.PopLastMessage();
-                    w.AddMessage(NpcName, Bubble(spokenShown));
-                    yield return new WaitForSecondsRealtime(
-                        Mathf.Max(0.02f, dur * 0.98f * (added / (float)chars)));
+                    // Elapsed-based pacing (2026-07-30): the target index tracks the wall clock, so
+                    // a slow frame CATCHES UP instead of drifting behind the voice — the old
+                    // fixed-wait-per-word form accumulated its 0.02 s floors and its dropped
+                    // frames, and every clause ended a little later than its audio.
+                    float frac = Mathf.Clamp01((Time.realtimeSinceStartup - t0) / window);
+                    int target = Mathf.Clamp(Mathf.CeilToInt(frac * chars), shown, clause.Length);
+                    if (syncedTextReveal == RevealGranularity.WordByWord && target > shown)
+                    {
+                        // words land whole: extend to the end of every word the clock has entered
+                        int e = shown;
+                        while (e < target)
+                        { int sp = clause.IndexOf(' ', e); e = sp < 0 ? clause.Length : sp + 1; }
+                        target = e;
+                    }
+                    if (target > shown)
+                    {
+                        shown = target;
+                        spokenShown = bubbleLive = basis + clause.Substring(0, shown);
+                        w.PopLastMessage();
+                        w.AddMessage(NpcName, Bubble(spokenShown));
+                    }
+                    if (shown < clause.Length) yield return null;
                 }
             }
             revealJob = null;
@@ -2106,7 +2168,11 @@ namespace DeepUnity
             StringBuilder response = new StringBuilder();
             activeResponse = response;
             bool synced = SyncedReveal;
-            if (synced) { spokenShown = null; pendingFullReply = null; revealActive = true; StopRevealJob(); }
+            if (synced)
+            {
+                spokenShown = null; pendingFullReply = null; revealActive = true; StopRevealJob();
+                revealSource.Clear(); revealSrcPos = 0;   // fresh reply, fresh alignment source
+            }
             // unconditional (both paths draw into the bubble): a stale value here would mark the NEXT
             // reply's opening bubble with the previous reply's interruption. drainTurn goes with it —
             // once a new reply starts, the previous one is no longer the thing being cut short.
@@ -2352,6 +2418,13 @@ namespace DeepUnity
 
             state = NPCState.Idle;
             conversing.Remove(this);   // world audio comes back up from here (ConversationAudioDucker)
+            // Prefetch policy (user 2026-07-30): the conversation-open BOOST dies with the
+            // conversation. Still inside the zone with weights left to stream -> back to the
+            // zone's SLOW rate (the governor exited the moment the dialogue opened and left the
+            // budget at full speed; nothing else would ever lower it again while the player
+            // idles here). Zone exit keeps its own full-defetch edge in Update.
+            if (usePrefetchZone && inPrefetchZone && llm != null && !llm.IsReady)
+                BeginLlmSlowPrefetch();
             // reveal machinery dies WITH the dialogue — a leaked revealActive/pendingFullReply
             // otherwise resurrects the previous reply's text at the NEXT dialogue's first send
             // (PrepareForNextReply settles stale state), even on ResetEveryTime
@@ -2546,6 +2619,9 @@ namespace DeepUnity
         /// <summary>Per-token TTS fan-out to whichever voice component this NPC runs.</summary>
         protected void FeedVoiceText(string token)
         {
+            // verbatim copy of the feed — the reveal aligns clauses against it (the clause
+            // cutter destroys inter-clause whitespace, see RevealWordsJob)
+            if (revealActive) revealSource.Append(token);
             voice?.FeedText(token);
             cvVoice?.FeedText(token);
             kkVoice?.FeedText(token);

@@ -116,6 +116,10 @@ namespace DeepUnity
                 tts.SlowPrefetch(targetSeconds);
             }
 
+            /// <summary>Conversation-open boost — finish a still-streaming prefetch at full speed
+            /// (same as PrefetchNow; named for the NPC's uniform boost call, policy 2026-07-30).</summary>
+            public void BoostPrefetchNow() => PrefetchNow();
+
             /// <summary>Unload the weights (safe mid-prefetch); a later prefetch starts fresh.</summary>
             public void DefetchNow() => tts?.Defetch();
 

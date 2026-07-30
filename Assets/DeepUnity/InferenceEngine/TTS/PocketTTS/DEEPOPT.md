@@ -524,3 +524,75 @@ Retention is a SINGLE slot, so in a two-NPC conversation the first clause of eac
 full prefill (the voice swapped) and only clauses 2..N of that reply are cheap. A per-voice slot
 would need either a second set of cache buffers (2× the KV VRAM) or a prompt-region allocator —
 deliberately out of scope here.
+
+# Round 5 (#33) — the blips: panic band + K-blocked streaming AR
+
+## 33.0 Why (what the 2026-07-30 logs proved)
+
+Two findings from the same day, one reply pattern: `in-reply silence 2.36-4.28 s` per long reply,
+split by the `pause after drain` line into a **re-gated** term and a **dry** term.
+
+1. **Re-gate was chunk-quantized.** Audio reached the ring only in whole-chunk lumps (chunk 16 =
+   1.28 s), so after a dry event the 0.25 s `TtsRegateSeconds` re-gate actually waited for the
+   next full lump: measured 1.20-2.80 s of re-gated silence carried by dry spells half that size.
+2. **Production sat at ~1.0× playback.** The streaming AR path read back every frame
+   (`#31-R2 "streaming always runs per-frame (latency)"`), and that per-frame readback latency —
+   ~73 ms/latent while the LLM decodes, ≈ 1 latent per Unity frame at decode-era frame times —
+   capped production at almost exactly playback speed. The ring limit-cycled off zero; after the
+   panic band (below) removed the long holes, what remained was 2-15 bursts of ~80 ms per reply:
+   the "blips".
+
+## 33.1 Panic band (`InferencePerf.TtsPanicFloorSeconds = 0.25`)
+
+Below it (or while playback is gated), two things change:
+- **hurry-flush** — `PocketTTS.StreamHurry` (a voice-owned hook, null in probes) suspends the
+  chunk cadence and decodes every `StreamHurryMinFrames = 4` pending latents. Delivery
+  granularity while it matters becomes 0.32 s, which is what a 0.25 s re-gate can actually
+  resume on. Above the band the chunk-16 cadence (and its tick amortization) is untouched.
+- **the LLM waits** — a third `NoteTtsStarving` site in `PumpPipeline`: mid-reply low ring still
+  does not hold the LLM (reverse-arbiter reasoning stands), but below the band a hole is a
+  certainty at playback speed, not a risk.
+
+Result (2026-07-30 log, same GTX 1650): re-gated silence **1.20-2.80 s → 0.00 s on every reply**;
+5 of 9 replies fully clean; `buffer-gate` 1175-1248 → 644-687 ms on LLM-idle replies.
+
+## 33.2 K-blocked streaming AR (`StreamArBatchFrames = 4`, ramp `{1, 2}`)
+
+The streaming loop now issues K chained GPU-resident frames per combined `[eos|latent]` readback
+(the offline #31-R2 block construction, applied to streaming): the readback latency that WAS the
+production cap is amortized K-fold. The outer loop scans buffered frames one per iteration, so
+EOS semantics, the flush schedule and the hurry-flush are untouched; overshoot is bounded at K-1
+discarded frames per clause; issued frames never exceed maxFrames, so KV capacity needs are
+unchanged. Pacing stays honest — one `FrameBreak` per issued frame (between issues, so K=1
+degenerates to exactly the old schedule) — the block only removes readback stalls.
+
+## 33.3 Validation
+
+- `PocketTTSStreamBatchProbe` — menu `DeepUnity/PocketTTS/#StreamArBatch K-Block Parity`
+  (+ `(int8)`), batch `Run` / `RunInt8`. Same text + same injected noise: K=1 ramp-off (the exact
+  old per-frame schedule) vs K=3 flat (ragged blocks, EOS mid-block) vs K=4 ramped (shipping
+  config). **maxAbs exactly 0, identical frame counts, both quant tiers** (2026-07-30).
+- `PocketTTSPromptCacheProbe` re-run after both changes: all gates PASS, and its per-run
+  frames/samples/rms line matched the per-frame path's morning run digit for digit —
+  cross-implementation identity, not just within-run parity.
+- **Async-path incident (2026-07-30, in-game):** the first shipped build crashed in
+  `ReadbackYielding` — `NativeArray.CopyTo(dst)` demands `dst.Length ==` the request's length,
+  and the ramped blocks read `count = blk*33` into a steady-K-sized dst. Every probe above runs
+  `AsyncReadback = false`, whose sync `GetData(dst,0,0,count)` is partial-copy tolerant, so none
+  of them could see it; the voice prewarm hit it on the first block and the voice was dead for
+  the session. Fixed with an explicit-length `NativeArray.Copy(..., count)` (the method's stated
+  contract), and the probe gained a third entry — `#StreamArBatch Async-Path Parity` — that runs
+  the SAME synthesis with `AsyncReadback = true` pumped from `EditorApplication.update`
+  (`AsyncGPUReadback.WaitAllRequests()` closes each fence: an idle unfocused editor stops pumping
+  readbacks entirely, and the hardwait guard counts `Time.frameCount`, frozen in edit mode — a
+  harness constraint, play mode pumps every frame). Result: 94080 samples, **maxAbs 0** vs the
+  sync path. Rule this bought: any change on the streaming path must run the async gate too.
+- P5 (`PocketTTSStreamProbe`) needs Python reference dumps (`validation/dump/*.npy`) absent on
+  this machine — not runnable here, before or after.
+
+## 33.4 Open
+
+The panic band and K-blocking fix delivery and rate; what they cannot fix is fps itself — at
+sub-15 fps (sync LLM decode) production margin is thin whatever the schedule. If blips return on
+longer replies: raise `StreamArBatchFrames` toward 6-8 (watch per-frame GPU: the tick cap
+already bounds it), or revisit the Smooth speaking-ticks column.

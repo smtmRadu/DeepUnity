@@ -220,6 +220,16 @@ namespace DeepUnity
                 {
                     while (inFlight < LLM.SaveReadbacksInFlight && nextToIssue < total)
                     {
+                        // Play-exit can release the model (LLM.OnPlayModeChanged -> Release) while
+                        // this save is mid-flight; a released ComputeBuffer reaches Request as a
+                        // null src and throws (2026-07-30: PauseMenu Exit right after a reply).
+                        // Abort cleanly — the snapshot is simply not written this time; requests
+                        // already in flight land in the hasError abort below.
+                        if (bufs[nextToIssue] == null || !bufs[nextToIssue].IsValid())
+                        {
+                            ConsoleMessage.Warning("Qwen3.5 KV-cache save aborted: cache released mid-save (play exit?)");
+                            yield break;
+                        }
                         reqs[nextToIssue] = AsyncGPUReadback.Request(bufs[nextToIssue], sizes[nextToIssue], 0);
                         nextToIssue++; inFlight++;
                     }
