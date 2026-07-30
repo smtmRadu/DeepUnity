@@ -18,13 +18,18 @@ namespace DeepUnity
             return n.StartsWith("weights_") ? n.Substring("weights_".Length) : n;
         }
 
+        // Compared against the MAX budget, not the LIVE one: the live budget is what a slow prefetch
+        // just lowered, so comparing against it made "throttled" and "unthrottled" indistinguishable at
+        // exactly the moment it mattered — and judged each TTS model against the LLM's unrelated
+        // budget. "full" here means "not throttled", NOT "in one frame". See LLM.MaxUploadBudgetBytes.
         public static string Mode(long bytesPerFrame) =>
             bytesPerFrame <= 0 ? "paused"
-            : bytesPerFrame < LLM.UploadBudgetBytes ? "slow"
-            : bytesPerFrame > LLM.UploadBudgetBytes ? "boost" : "normal";
+            : bytesPerFrame < LLM.MaxUploadBudgetBytes ? "slow"
+            : "full";
 
-        // "SLOW prefetch started" vs plain full-speed "streaming started" — the reader must be
-        // able to tell latent walk-up loading from a boot-time full-speed stream at a glance.
+        // "SLOW prefetch started" vs "streaming at MAX budget" — the reader must be able to tell a
+        // latent walk-up load from an unthrottled one at a glance. Deliberately NOT "full
+        // speed": every mode streams across frames, and that phrasing read as "all at once".
         public static void Loading(string model, long totalBytes, long bytesPerFrame)
         {
             string size = totalBytes > 0 ? $"{totalBytes / 1e6:0} MB at " : "";
@@ -32,7 +37,7 @@ namespace DeepUnity
                 ? $" (~{totalBytes / (double)bytesPerFrame / 60.0:0.0} s @60fps)" : "";
             string verb = Mode(bytesPerFrame) == "slow" ? "SLOW prefetch started"
                         : Mode(bytesPerFrame) == "paused" ? "prefetch parked (budget 0)"
-                        : "streaming started (full speed)";
+                        : "streaming at MAX budget";
             ConsoleMessage.Info($"[GPU] {model} {verb} — {size}{bytesPerFrame / 1e6:0.0} MB/frame{eta}");
         }
 
@@ -48,7 +53,7 @@ namespace DeepUnity
                 ? $" (~{remainingBytes / (double)bytesPerFrame / 60.0:0.0} s left @60fps)" : "";
             string verb = Mode(bytesPerFrame) == "slow" ? "SLOW prefetch retargeted"
                         : Mode(bytesPerFrame) == "paused" ? "prefetch parked (budget 0)"
-                        : "BOOSTED to full speed";
+                        : "BOOSTED to max budget";
             ConsoleMessage.Info($"[GPU] {model} {verb} — {bytesPerFrame / 1e6:0.0} MB/frame{eta}");
         }
 

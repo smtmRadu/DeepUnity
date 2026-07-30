@@ -236,7 +236,7 @@ namespace DeepUnity
                 onTokenGenerated?.Invoke(tokenId.ToString() + " ");
             yield return null;
 
-            int tokensPerFrame = System.Math.Max(1, InferencePerf.LlmDecodeTokensPerFrame);
+            int tokensPerFrame = BackendTradeoffTable.DecodeTokensPerFrame;
             for (int t = 0; t < max_new_tokens - 1; t++)
             {
                 // #29 reverse arbiter: audible SILENCE with synthesis pending outranks tok/s —
@@ -257,8 +257,8 @@ namespace DeepUnity
                 else
                     onTokenGenerated?.Invoke(tokenId.ToString() + " ");
                 TokensPerSecond = sw.ElapsedMilliseconds > 0 ? 1000f / sw.ElapsedMilliseconds : 0f;
-                // hand a frame back to rendering every LlmDecodeTokensPerFrame tokens (forced every
-                // token while a voice is starving, so the TTS pump keeps its frames)
+                // hand a frame back to rendering every tokensPerFrame tokens — the dial's decode row
+                // (forced every token while a voice is starving, so the TTS pump keeps its frames)
                 if (cede || t % tokensPerFrame == tokensPerFrame - 1) yield return null;
             }
 
@@ -280,10 +280,13 @@ namespace DeepUnity
         IEnumerator DecodeStep(Tensor input, int[] result, float temperature, int top_k, float top_p,
                                float min_p, float presence_penalty, float repetition_penalty)
         {
-            // #32 AutoTune: the async path also serves when the MEASURED per-token stall doesn't
-            // fit this device's frame budget (InferencePerf decides once per session from the
-            // first sync tokens' cost) — sync-at-any-price undid #20's smoothness on strong GPUs.
-            bool cede = FramePacing.TtsStarving || !InferencePerf.UseSyncDecode;
+            // Decode is always synchronous now (BackendTradeoffTable.UseSyncDecode, a const): the dial's
+            // low rows buy smoothness with small fetch/prefill budgets and one token per frame
+            // instead, because async on a weak GPU dribbles ~fps/3.5 tok/s and a fixed table cannot
+            // measure its way to that call — see BackendTradeoff.cs, 2026-07-26. The async path survives
+            // for the ONE case that is not a taste question: a starving voice, where audio
+            // continuity outranks tok/s.
+            bool cede = FramePacing.TtsStarving || !BackendTradeoffTable.UseSyncDecode;
             if (cede)
             {
                 var e = model.ForwardYielding(input, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
@@ -293,10 +296,8 @@ namespace DeepUnity
             }
             else
             {
-                var sw = Stopwatch.StartNew();
                 model.Forward(input, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
                 result[0] = model.Sample(temperature, top_k, top_p, min_p, presence_penalty, repetition_penalty);
-                InferencePerf.NoteSyncTokenMs((float)sw.Elapsed.TotalMilliseconds);   // probe feed (no-op once decided)
             }
         }
 
@@ -324,13 +325,20 @@ namespace DeepUnity
 
             Stopwatch sw = Stopwatch.StartNew();
 
+            // The system turn, per Qwen3_5ChatTemplate (= the vendored chat_template.jinja L46-64).
+            // Every tag is emitted as its own token ID and only the text BETWEEN tags is encoded;
+            // the fragments come from the template class so the ids and the template's text spelling
+            // can never drift apart. The .Trim() is the template's `| trim` on message content
+            // (L55) — without it, trailing whitespace left in an authored prompt (the inspector's
+            // descriptionAndRules is a TextArea, so this happens) shifts every byte after it and
+            // silently forks the KV-cache key away from what apply_chat_template hashes.
             var ids = new System.Collections.Generic.List<float>();
             ids.Add(Qwen3_5Modeling.Qwen3_5Config.IM_START_TOKEN_ID);
-            AppendTextTokens("system\n", ids);
-            (Tensor sysTok, _) = tokenizer.Encode(system_prompt, add_special_tokens: false, truncation: true, max_length: 2048);
+            AppendTextTokens(Qwen3_5Modeling.Qwen3_5ChatTemplate.SystemRoleLine, ids);
+            (Tensor sysTok, _) = tokenizer.Encode((system_prompt ?? "").Trim(), add_special_tokens: false, truncation: true, max_length: 2048);
             for (int i = 0; i < sysTok.Size(-1); i++) ids.Add(sysTok[i]);
             ids.Add(Qwen3_5Modeling.Qwen3_5Config.IM_END_TOKEN_ID);
-            AppendTextTokens("\n", ids);
+            AppendTextTokens(Qwen3_5Modeling.Qwen3_5ChatTemplate.TurnEndTail, ids);
 
             // Disk-cached system prompt: same prompt + same weights + same kv quant -> restore
             // the KV/SSM state (frame-budgeted uploads) instead of recomputing the chunked
@@ -342,7 +350,11 @@ namespace DeepUnity
             if (SystemPromptDiskCache && DiskKVCache && Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE)
             {
                 promptHash = PromptCacheKey(ids);
-                cacheFile = System.IO.Path.Combine(CacheDir(), $"qwen35_prompt_{promptHash:x16}.kv");
+                // named after the OWNER when there is one (one file per NPC, overwritten when its prompt
+                // changes), else content-addressed as before. The hash still gates the load either way.
+                cacheFile = System.IO.Path.Combine(CacheDir(), string.IsNullOrEmpty(CacheOwnerKey)
+                    ? $"qwen35_prompt_{promptHash:x16}.kv"
+                    : $"qwen35_prompt_{SanitizeKey(CacheOwnerKey)}.kv");
                 if (System.IO.File.Exists(cacheFile))
                 {
                     CurrentPhase = "kv-restore";
@@ -380,6 +392,30 @@ namespace DeepUnity
         protected override IEnumerator ChatCore(string prompt, Action<string> onTokenGenerated,
             int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
             float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false)
+            => ChatTurn(prompt, false, onTokenGenerated, max_new_tokens, temperature, top_k, top_p, min_p,
+                        presence_penalty, repetition_penalty, enable_thinking);
+
+        protected override IEnumerator ChatToolResultCore(string toolResultJson, Action<string> onTokenGenerated,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
+            float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false)
+            => ChatTurn(toolResultJson, true, onTokenGenerated, max_new_tokens, temperature, top_k, top_p, min_p,
+                        presence_penalty, repetition_penalty, enable_thinking);
+
+        // Shared turn body for Chat / ChatToolResult — the ONLY difference is how the incoming
+        // user turn is rendered: a tool result rides inside <tool_response> SPECIAL tokens
+        // (<|im_start|>user\n<tool_response>\n{json}\n</tool_response><|im_end|>\n), exactly the
+        // shape Qwen's chat template gives a role:"tool" message; a plain prompt renders as the
+        // usual user turn.
+        // Every literal in here comes from Qwen3_5ChatTemplate (the vendored chat_template.jinja):
+        // the tags themselves are token IDS from Qwen3_5Config and the class supplies only the text
+        // that sits between them, so there is nothing to hand-copy and nothing to drift. The
+        // template splits the same bytes at other seams — it writes '<|im_start|>user' with no
+        // newline (L133) and gets it from the head of '\n<tool_response>\n' (L135), where this emits
+        // "user\n" and then the tag — so compare BYTES, not line-for-line shapes, before "fixing"
+        // anything below.
+        IEnumerator ChatTurn(string prompt, bool asToolResponse, Action<string> onTokenGenerated,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
+            float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false)
         {
             if (!IsReady) throw new Exception("Call InitializeChat before Chat.");
             chatCancelRequested = false;
@@ -388,33 +424,50 @@ namespace DeepUnity
 
             if (!isFreshlyInitialized)
             {
-                // Close prior assistant turn that Chat() left open (we broke before forwarding <|im_end|>).
+                // Close prior assistant turn that Chat() left open (we broke before forwarding
+                // <|im_end|>) — the template's L130 turn end, paid one turn late.
                 ids.Add(Qwen3_5Modeling.Qwen3_5Config.IM_END_TOKEN_ID);
-                AppendTextTokens("\n", ids);
+                AppendTextTokens(Qwen3_5Modeling.Qwen3_5ChatTemplate.TurnEndTail, ids);
             }
             isFreshlyInitialized = false;
 
-            // Open user turn.
+            // Open user turn (template L88; L133-141 for the tool-result flavour).
             ids.Add(Qwen3_5Modeling.Qwen3_5Config.IM_START_TOKEN_ID);
-            AppendTextTokens("user\n", ids);
-            (Tensor userTok, _) = tokenizer.Encode(prompt, add_special_tokens: false, truncation: true, max_length: 2048);
+            AppendTextTokens(Qwen3_5Modeling.Qwen3_5ChatTemplate.UserRoleLine, ids);
+            if (asToolResponse)
+            {
+                ids.Add(Qwen3_5Modeling.Qwen3_5Config.TOOL_RESPONSE_OPEN_TOKEN_ID);
+                AppendTextTokens(Qwen3_5Modeling.Qwen3_5ChatTemplate.ToolResponseOpenTail, ids);
+            }
+            // .Trim() = the template's `| trim` on user (L63) and tool (L82) content. A leading space
+            // in the player's input field survives AskNPC's IsNullOrWhiteSpace check, and the tool
+            // result arrives as serialized JSON whose framing whitespace is not ours to keep.
+            (Tensor userTok, _) = tokenizer.Encode((prompt ?? "").Trim(), add_special_tokens: false, truncation: true, max_length: 2048);
             for (int i = 0; i < userTok.Size(-1); i++) ids.Add(userTok[i]);
+            if (asToolResponse)
+            {
+                AppendTextTokens(Qwen3_5Modeling.Qwen3_5ChatTemplate.ToolResponseCloseHead, ids);
+                ids.Add(Qwen3_5Modeling.Qwen3_5Config.TOOL_RESPONSE_CLOSE_TOKEN_ID);
+            }
             ids.Add(Qwen3_5Modeling.Qwen3_5Config.IM_END_TOKEN_ID);
-            AppendTextTokens("\n", ids);
+            AppendTextTokens(Qwen3_5Modeling.Qwen3_5ChatTemplate.TurnEndTail, ids);
 
-            // Open assistant turn with thinking prefix (mirrors ApplyChatTemplate).
+            // Open the assistant turn with its thinking prefix — the template's generation prompt
+            // (L147-153). Thinking OFF still emits an EMPTY <think></think> block, which is the
+            // template's default branch (it takes it whenever enable_thinking is undefined), so the
+            // model always starts its answer past a closed </think> rather than never seeing one.
             ids.Add(Qwen3_5Modeling.Qwen3_5Config.IM_START_TOKEN_ID);
-            AppendTextTokens("assistant\n", ids);
+            AppendTextTokens(Qwen3_5Modeling.Qwen3_5ChatTemplate.AssistantRoleLine, ids);
             ids.Add(Qwen3_5Modeling.Qwen3_5Config.THINK_OPEN_TOKEN_ID);
             if (enable_thinking)
             {
-                AppendTextTokens("\n", ids);
+                AppendTextTokens(Qwen3_5Modeling.Qwen3_5ChatTemplate.ThinkPrefillTail, ids);
             }
             else
             {
-                AppendTextTokens("\n\n", ids);
+                AppendTextTokens(Qwen3_5Modeling.Qwen3_5ChatTemplate.EmptyThinkMid, ids);
                 ids.Add(Qwen3_5Modeling.Qwen3_5Config.THINK_CLOSE_TOKEN_ID);
-                AppendTextTokens("\n\n", ids);
+                AppendTextTokens(Qwen3_5Modeling.Qwen3_5ChatTemplate.EmptyThinkTail, ids);
             }
 
             CurrentPhase = "decode";
@@ -444,7 +497,7 @@ namespace DeepUnity
 
             var genSw = Stopwatch.StartNew();   // wall-clock over the decode loop, for the tok/s report
             int holdFrames = 0, cededToks = 0;  // diagnostic split for the tok/s report
-            int tokensPerFrame = System.Math.Max(1, InferencePerf.LlmDecodeTokensPerFrame);
+            int tokensPerFrame = BackendTradeoffTable.DecodeTokensPerFrame;
             for (int t = 0; !canceledInPrefill && t < max_new_tokens - 1; t++)
             {
                 // #29 reverse arbiter: audible SILENCE with synthesis pending outranks tok/s —
@@ -470,8 +523,8 @@ namespace DeepUnity
                 onTokenGenerated?.Invoke(tokenStr);
                 genTokens++;
                 TokensPerSecond = sw.ElapsedMilliseconds > 0 ? 1000f / sw.ElapsedMilliseconds : 0f;
-                // hand a frame back to rendering every LlmDecodeTokensPerFrame tokens (forced every
-                // token while a voice is starving, so the TTS pump keeps its frames)
+                // hand a frame back to rendering every tokensPerFrame tokens — the dial's decode row
+                // (forced every token while a voice is starving, so the TTS pump keeps its frames)
                 if (cede || t % tokensPerFrame == tokensPerFrame - 1) yield return null;
             }
 
@@ -482,7 +535,7 @@ namespace DeepUnity
             if (genSec > 0 && genTokens > 0)
                 ConsoleMessage.Info($"Qwen3.5 decode: {genTokens} tokens in {genSec:F2}s = {genTokens / genSec:F1} tok/s (in-game; " +
                                     $"held {holdFrames} frames for starving TTS, {cededToks} ceded tokens, " +
-                                    $"sync={InferencePerf.UseSyncDecode}).");
+                                    $"sync={BackendTradeoffTable.UseSyncDecode}).");
 
             TokensPerSecond = 0f;
             CurrentPhase = "idle";
@@ -532,13 +585,23 @@ namespace DeepUnity
             foreach (char c in path) Mix(c);
             Mix((ulong)model.cache.Capacity);
             Mix((ulong)(int)model.KV);
-            foreach (char c in systemPrompt ?? "") Mix(c);
+            // .Trim() so the hash describes what is actually TOKENIZED, not what the caller handed in
+            // (fix 2026-07-28). The turn encoders trim now, per the template's `| trim`; hashing the
+            // raw string left this hash blind to that change, so a conversation saved yesterday from a
+            // prompt with trailing whitespace passed validation today while its KV still encoded the
+            // extra newline token and every position after it was shifted by one. Untrimmed
+            // "…\n" + "\nYou are…" tokenizes [system][\n][\n][You]; the trimmed span gives
+            // [system][\n\n][You]. Same hash, different KV — the worst kind of cache hit.
+            foreach (char c in (systemPrompt ?? "").Trim()) Mix(c);
             return h;
         }
 
+        // ONE file per conversation owner. The context hash used to be part of the name, which meant
+        // editing an NPC's system prompt silently orphaned its saved conversation (and left the old file
+        // behind forever) instead of replacing it. The hash still rides in the header, so a prompt change
+        // fails validation, the stale file is deleted and the next clean close rewrites this same path.
         string ConversationCacheFile(string key, string systemPrompt)
-            => System.IO.Path.Combine(CacheDir(),
-                $"qwen35_conv_{SanitizeKey(key)}_{ConversationContextHash(systemPrompt):x16}.kv");
+            => System.IO.Path.Combine(CacheDir(), $"qwen35_conv_{SanitizeKey(key)}.kv");
 
         static string SanitizeKey(string key)
         {
@@ -608,7 +671,15 @@ namespace DeepUnity
             {
                 string dir = CacheDir();
                 if (!System.IO.Directory.Exists(dir)) return;
-                foreach (var f in System.IO.Directory.GetFiles(dir, $"qwen35_conv_{SanitizeKey(key)}_*.kv"))
+                // BOTH shapes: the current one-file-per-owner name AND the legacy
+                // qwen35_conv_<owner>_<contexthash>.kv written before the hash left the filename. The
+                // pattern used to be the legacy one only, so after the rename this method deleted
+                // nothing at all — a "forget this conversation" that quietly forgot nothing, and it
+                // also left every pre-rename file orphaned on disk forever.
+                string k = SanitizeKey(key);
+                foreach (var f in System.IO.Directory.GetFiles(dir, $"qwen35_conv_{k}.kv"))
+                    System.IO.File.Delete(f);
+                foreach (var f in System.IO.Directory.GetFiles(dir, $"qwen35_conv_{k}_*.kv"))
                     System.IO.File.Delete(f);
             }
             catch (System.Exception e) { ConsoleMessage.Warning($"Qwen3.5 DeleteConversationKV: {e.Message}"); }
@@ -709,23 +780,31 @@ namespace DeepUnity
                     : $"system prompt computed ({promptTokens} tokens, {systemPromptMs:0} ms)");
             ConsoleMessage.Info($"Qwen3.5-{SizeLabel(size)} {model.Quant} ready — load {loadMs:0} ms, {prompt}");
 
-            // Detailed per-step breakdown, kept for debugging:
-            // double blocking = w.bootTokenizerMs + w.bootKernelsMs + w.allocMs + w.bootCacheMs + w.bootRopeMs + w.bootScratchMs;
-            // double total = blocking + w.uploadMs + systemPromptMs;
-            // ConsoleMessage.Info(
-            //     $"Qwen3.5 model booted up — {total:0} ms total\n" +
-            //     $"   tokenizer ctor (main thread) : {w.bootTokenizerMs:0} ms\n" +
-            //     $"   compute kernels lookup       : {w.bootKernelsMs:0} ms\n" +
-            //     $"   weight manifest build        : {w.allocMs:0} ms (buffers created lazily during upload)\n" +
-            //     $"   kv cache alloc               : {w.bootCacheMs:0} ms\n" +
-            //     $"   rope kick (async)            : {w.bootRopeMs:0} ms\n" +
-            //     $"   scratch buffers alloc        : {w.bootScratchMs:0} ms\n" +
-            //     $"   = blocking (one frame)       : {blocking:0} ms\n" +
-            //     $"   rope compute (async)         : {w.ropeAsyncMs:0} ms (overlaps upload)\n" +
-            //     $"   weight stream (async)        : {w.uploadMs:0} ms over {w.uploadFrames} frames, worst slice {w.worstUploadMs:0.0} ms\n" +
-            //     $"   kernel warmup (behind load)  : {w.warmupMs:0} ms (0 = warmup didn't run)\n" +
-            //     $"   system prompt cache          : {systemPromptMs:0} ms" +
-            //     (promptFromDisk ? " (restored from disk)" : ""));
+            // Detailed per-step breakdown. UNCOMMENTED 2026-07-26: the summed `load` figure
+            // above cannot tell you WHICH step owns a hitch, and the ~4 s of 20 fps at play
+            // start was being attributed by guesswork. Costs one log line per boot.
+            double blocking = w.bootTokenizerMs + w.bootKernelsMs + w.allocMs + w.bootCacheMs + w.bootRopeMs + w.bootScratchMs;
+            double total = blocking + w.uploadMs + systemPromptMs;
+            ConsoleMessage.Info(
+                $"Qwen3.5 model booted up — {total:0} ms total\n" +
+                $"   tokenizer ctor (main thread) : {w.bootTokenizerMs:0} ms\n" +
+                $"   compute kernels lookup       : {w.bootKernelsMs:0} ms\n" +
+                $"   weight manifest build        : {w.allocMs:0} ms (buffers created lazily during upload)\n" +
+                $"   kv cache alloc               : {w.bootCacheMs:0} ms\n" +
+                $"   rope kick (async)            : {w.bootRopeMs:0} ms\n" +
+                $"   scratch buffers alloc        : {w.bootScratchMs:0} ms\n" +
+                $"   = blocking (one frame)       : {blocking:0} ms\n" +
+                $"   rope compute (async)         : {w.ropeAsyncMs:0} ms (overlaps upload)\n" +
+                $"   weight stream (async)        : {w.uploadMs:0} ms over {w.uploadFrames} frames, worst slice {w.worstUploadMs:0.0} ms\n" +
+                $"   kernel warmup (behind load)  : {w.warmupMs:0} ms (0 = warmup didn't run)\n" +
+                $"   system prompt cache          : {systemPromptMs:0} ms" +
+                (promptFromDisk ? " (restored from disk)" : ""));
+
+            // The pacing the numbers above were produced under. This line replaces the old
+            // AutoTune verdict (which could only be printed after the first reply had already been
+            // measured): the dial is fixed, so a session can state its budgets at boot and any later
+            // "why was this load/reply that speed?" is answered from the log instead of guessed.
+            ConsoleMessage.Info(BackendTradeoffTable.Summary);
         }
 
         // Forwards a prompt in small chunks — the KV cache / SSM states carry context between them —
@@ -743,23 +822,26 @@ namespace DeepUnity
             }
 
             const int CHUNK = 8;
-            // #32 adaptive prefill packing: InferencePerf grows/shrinks the per-frame slice pack
-            // off measured prefill frame times (60 fps anchor, Smooth⇄Speed-biased) — fast GPUs
-            // open dialogues in a fraction of the old fixed-pack time.
+            // Prefill pacing = the dial, nothing measured (BackendTradeoffTable, 2026-07-26). `step`
+            // counts ForwardYielding's yields, which are one per transformer layer plus one at the
+            // end — so on a 24-layer model a whole CHUNK is 25 steps, and the top row's 25
+            // steps/frame is exactly "one 8-token chunk per frame", the implementation limit.
             int step = 0;
             for (int start = 0; start < ids.Count; start += CHUNK)
             {
                 int len = Math.Min(CHUNK, ids.Count - start);
                 float[] part = new float[len];
                 for (int i = 0; i < len; i++) part[i] = ids[start + i];
-                var e = model.ForwardYielding(Tensor.Constant(part), useCache: true, lastPosOnly: true);
+                // Only the LAST chunk's logits are ever read (ChatTurn samples the first reply token
+                // right after this loop; InitializeChat reads none at all). Running the vocab GEMV on
+                // every 8-token chunk streamed ~509 MB of fp16 lm_head per chunk — ~30% of prefill
+                // GPU time — and threw all of it away. 2026-07-26.
+                bool lastChunk = start + len >= ids.Count;
+                var e = model.ForwardYielding(Tensor.Constant(part), useCache: true, lastPosOnly: true,
+                                              computeLogits: lastChunk);
                 while (e.MoveNext())
-                    if (++step % InferencePerf.EffectivePrefillPack() == 0)
-                    {
-                        float tYield = Time.realtimeSinceStartup;
+                    if (++step % BackendTradeoffTable.PrefillStepsPerFrame == 0)
                         yield return e.Current;
-                        InferencePerf.NotePrefillFrameMs((Time.realtimeSinceStartup - tYield) * 1000f);
-                    }
             }
         }
 

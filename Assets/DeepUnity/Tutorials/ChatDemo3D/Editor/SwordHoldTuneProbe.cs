@@ -43,6 +43,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             var anim = pc.GetComponentInChildren<Animator>();
             Transform sword = FindDeep(root, "Sword");
             if (anim == null || sword == null) { Debug.LogError("[SwordHoldTune] animator/sword missing"); return; }
+            // the scene ships empty-handed since the gear beat (PlayerGear deactivates the sword until
+            // Velmire hands it over), and an inactive object renders nothing — this probe exists to
+            // photograph the HELD pose, so force it visible. Edit-mode only, never saved.
+            sword.gameObject.SetActive(true);
 
             // hand must be in the game idle pose, not the bind pose
             AnimationClip idle = null;

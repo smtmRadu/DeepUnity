@@ -186,8 +186,8 @@ namespace DeepUnity
         IEnumerator ForwardPromptChunked(Tensor input_ids)
         {
             const int CHUNK = 8;
-            // #32 adaptive prefill packing off measured prefill frame times (see
-            // Qwen3_5.ForwardPromptChunked — same pattern).
+            // Prefill pacing = the Backend Tradeoff dial's steps/frame (see
+            // Qwen3_5.ForwardPromptChunked — same pattern, same yield unit).
             int total = input_ids.Size(-1);
             int step = 0;
             for (int start = 0; start < total; start += CHUNK)
@@ -197,12 +197,8 @@ namespace DeepUnity
                 for (int i = 0; i < len; i++) part[i] = input_ids[start + i];
                 var e = model.ForwardYielding(Tensor.Constant(part), useCache: true, lastPosOnly: true);
                 while (e.MoveNext())
-                    if (++step % InferencePerf.EffectivePrefillPack() == 0)
-                    {
-                        float tYield = Time.realtimeSinceStartup;
+                    if (++step % BackendTradeoffTable.PrefillStepsPerFrame == 0)
                         yield return e.Current;
-                        InferencePerf.NotePrefillFrameMs((Time.realtimeSinceStartup - tYield) * 1000f);
-                    }
             }
         }
 

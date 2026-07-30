@@ -401,7 +401,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
 
             GameObject player = BuildPlayer(playerCtrl);
             GameObject cameraRig = BuildCamera(player);
-            GameObject npc = BuildNpc(npcCtrl);
+            GameObject npc = BuildNpc(npcCtrl, player);   // he carries the gear he offers the player
             GameObject witch = BuildWitchNpc(npcCtrl);
             GameObject boss = BuildBoss(bossCtrl, bossSwings);
 
@@ -424,6 +424,12 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             ambience.playOnAwake = true;
             ambience.volume = 0.144f;  // user 2026-07-15: 80% of 0.18 — still competed with the NPC voices
             ambience.spatialBlend = 0f;
+
+            // …and the reason it still competed: everything outside a conversation now eases down to
+            // the talking NPC's worldAudioWhileTalking over ~3 s (exponential, so it reads as an even
+            // fade) and back up on close. The ducker finds the sources itself and leaves the NPCs and
+            // the dialogue window alone; it lives on Ambience because that object is always active.
+            ambience.gameObject.AddComponent<ConversationAudioDucker>();
 
             // Kernel prewarm now lives INSIDE NPCChatBase.Awake (frame-0, per model, automatic) —
             // no helper object needed. Only the dormant frame-spike probe remains (tick its
@@ -1173,6 +1179,11 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             var map = new (string state, string fbx, string clip)[]
             {
                 ("Idle",      "Animations/UAL1.fbx", "Sword_Idle"),
+                // The gear beat (user 2026-07-25) starts the warrior empty-handed, so Sword_Idle —
+                // a guard stance closed around a blade — can no longer be the only idle: it read as
+                // the player miming a sword he does not own. Idle_Loop is the same rig's arms-down
+                // stance (the NPCs already use it). SoulsPlayerController picks between the two.
+                ("IdleUnarmed", "Animations/UAL1.fbx", "Idle_Loop"),
                 ("Walk",      "Animations/UAL1.fbx", "Walk_Loop"),
                 ("Run",       "Animations/UAL1.fbx", "Jog_Fwd_Loop"),
                 ("Sprint",    "Animations/UAL1.fbx", "Sprint_Loop"),
@@ -1210,7 +1221,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 };
                 Debug.Log($"[ChatDemo3DBuilder] state {state}: clip {clipName} len {clip.length:0.00}s " +
                           $"natSpeed {natural:0.00} m/s -> playback x{st.speed:0.00}");
-                if (state == "Idle") sm.defaultState = st;
+                // default = the EMPTY-HANDED stance, because that is how the scene now starts. It is
+                // what plays on frame 0 before the first CrossFade, and it is also the pose
+                // ScreenshotBatch samples, so both match the gear the player actually has.
+                if (state == "IdleUnarmed") sm.defaultState = st;
             }
             return ctrl;
         }
@@ -1327,6 +1341,15 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             if (sword != null) SetRef(stower, "sword", sword.transform);
             if (shield != null) SetRef(stower, "shield", shield.transform);
 
+            // The gear beat (user 2026-07-25): the warrior starts EMPTY-HANDED. These two objects
+            // stay built, sized, posed and stower-wired exactly as above — they are only
+            // DEACTIVATED, so nothing about the held poses has to be re-tuned when they turn up. He
+            // gets them if Velmire offers his own pair and the player accepts the choice popup
+            // (PlayerGear + NPCGearOffer); BuildHud hides the two quick-slot icons to match.
+            var gear = root.AddComponent<PlayerGear>();
+            if (sword != null) { SetRef(gear, "sword", sword.transform); sword.SetActive(false); }
+            if (shield != null) { SetRef(gear, "shield", shield.transform); shield.SetActive(false); }
+
             // footsteps
             var stepSource = root.AddComponent<AudioSource>();
             stepSource.playOnAwake = false;
@@ -1370,6 +1393,19 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             Transform t = anim.GetBoneTransform(bone);
             if (t == null) { Debug.LogWarning("[ChatDemo3DBuilder] missing bone " + bone); return null; }
             return AttachToTransform(t, prefab, name);
+        }
+
+        // A static carry socket on a bone, authored in CHARACTER-ROOT axes (x=right, y=up, z=forward)
+        // — the same math WeaponStower.MakeSocket uses at runtime, so a placement tuned once via
+        // StowTuneProbe transfers to any character on this rig. Built here in the bind pose, then it
+        // rides the bone once the animator takes over.
+        static Transform CarrySocket(string name, Transform charRoot, Transform bone, Vector3 rootPos, Vector3 rootEuler)
+        {
+            var s = new GameObject(name).transform;
+            s.position = charRoot.TransformPoint(rootPos);
+            s.rotation = charRoot.rotation * Quaternion.Euler(rootEuler);
+            s.SetParent(bone, true);
+            return s;
         }
 
         static GameObject AttachToTransform(Transform t, GameObject prefab, string name)
@@ -1644,7 +1680,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             return camGO;
         }
 
-        static GameObject BuildNpc(RuntimeAnimatorController ctrl)
+        static GameObject BuildNpc(RuntimeAnimatorController ctrl, GameObject playerGO)
         {
             var root = new GameObject("NPC_Velmire");
             root.layer = 2;
@@ -1682,6 +1718,36 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             anim.applyRootMotion = false;
             anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
+            // He CARRIES the pair he offers the player (user 2026-07-25): shield slung across his
+            // back, sword hanging along his right leg — the very sockets WeaponStower stows the
+            // player's gear into, so the same steel reads identically before and after it changes
+            // hands. Both vanish the instant the player accepts (NPCGearOffer.Grant).
+            GameObject velmireSword = null, velmireShield = null;
+            Transform gearHips = anim.GetBoneTransform(HumanBodyBones.Hips);
+            Transform gearChest = anim.GetBoneTransform(HumanBodyBones.Chest);
+            if (gearChest == null) gearChest = anim.GetBoneTransform(HumanBodyBones.Spine);
+            if (gearHips != null)
+            {
+                var waist = CarrySocket("CarrySocket_Waist", root.transform, gearHips,
+                                        new Vector3(0.24f, 0.88f, -0.10f), new Vector3(105f, -10f, 90f));
+                velmireSword = AttachToTransform(waist, LoadModel("Weapons/Sword.fbx"), "Sword");
+                NormalizeWorldSize(velmireSword, 1.15f);
+                SetLayerRecursive(velmireSword, 2);
+            }
+            if (gearChest != null)
+            {
+                // y 0.95, not the player's 0.80: the Monk is taller (1.85 m) and his robe is long, so
+                // the placement tuned on the Warrior rides his backside instead of his back
+                var back = CarrySocket("CarrySocket_Back", root.transform, gearChest,
+                                       new Vector3(0.02f, 0.95f, -0.26f), new Vector3(270f, 180f, 0f));
+                velmireShield = AttachToTransform(back, LoadModel("Weapons/Shield_Heater.fbx"), "Shield");
+                NormalizeWorldSize(velmireShield, 0.80f);
+                SetLayerRecursive(velmireShield, 2);
+            }
+            if (velmireSword == null || velmireShield == null)
+                Debug.LogWarning("[ChatDemo3DBuilder] Velmire's carry sockets need Hips + Chest/Spine on the " +
+                                 "Monk avatar — gear skipped, the offer will have nothing to hand over.");
+
             // his little corner: candles and a skull (parented to the environment — the NPC
             // root rotates toward the player at runtime and must not drag props with it)
             PlacePiece("Candles_1", npcPos + root.transform.right * 0.9f + root.transform.forward * 0.2f, Range(0, 360), envRoot, collider: false);
@@ -1700,7 +1766,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // identity lives here since the NPC component became the generic NPCChatBase — the
             // base class defaults are a nameless villager
             SetString(npc, "NpcName", "Velmire, the Pale Herald");
-            SetString(npc, "system_prompt",
+            SetString(npc, "descriptionAndRules",
                 "You are Velmire, the Pale Herald: a white-masked, soft-spoken emissary lingering by the gate of a ruined castle. " +
                 "You greet travellers with honeyed courtesy that thinly veils mockery. You pity the player for wandering these dead " +
                 "lands guideless and lordless, and you address them as 'lambkin' or 'poor wanderer'. You speak in flowery, " +
@@ -1708,14 +1774,52 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 "You know what waits beyond the wall of golden mist at the northern arch: the Sentinel of the Mist, a towering " +
                 "hollow knight wielding a halberd, who has felled every challenger before. If asked about the mist, the arch or " +
                 "the boss, you foreshadow it with morbid delight — urging the lambkin onward while clearly expecting them to die. " +
-                "Stay in character at all times. Keep your replies to one to three short sentences.");
+                "Stay in character at all times. Keep your replies to one to three short sentences. " +
+                // The gear beat, in his own voice — the tools block teaches the FORMAT, the persona
+                // teaches WHEN. It opens by overriding his evasiveness on purpose: with only "never
+                // give a straight answer" above, the 0.8B dodged the request no matter how often the
+                // player asked (user 2026-07-25), so the exception and "never withhold" are the two
+                // load-bearing phrases here.
+                // The gear beat, kept SHORT on purpose. A numbered three-step version was tried and
+                // measured WORSE (2026-07-25): the 0.8B latched onto its "say you cannot help them"
+                // clause and refused without ever looking, and the persona alone had grown to 364 of
+                // the prompt's 943 tokens. The sequence is still stated — look, then let them choose —
+                // just not narrated step by step.
+                "You carry a sword and a heater shield you no longer need, and you give them to any wanderer who " +
+                "asks for a weapon. Look before you offer: call CheckMyGear, then say what you found and let them " +
+                "take it with AskUserQuestion. Never withhold that offer. " +
+                // Phrasing lives HERE, not in the shared tools block (user 2026-07-26): it matters
+                // because Velmire is VOICED — his line is spoken, the popup is not — so a first-person
+                // question would read as dialogue the player never heard. A text-only NPC has no such
+                // split and gets no such rule.
+                "Word an AskUserQuestion as a label on the screen rather than speech, naming yourself: " +
+                "'Take Velmire's sword and shield?', never 'Do you want to take mine?'.");
+            // Two tools on this NPC: the built-in AskUserQuestion popup (ON by default since
+            // 2026-07-24) plus the internal GetPlayerGear read contributed by NPCGearOffer below.
+            SetBool(npc, "enableAskUserQuestion", true);
             // Velmire is the ResumeFromCompact demo (user 2026-07-15): paired with the small
             // context below, the model auto-compacts its history after a few replies and keeps
             // talking on the short compacted prefix.
             SetEnum(npc, "historyMode", (int)NPCInteractor3D.HistoryMode.ResumeFromCompact);
             // small context on purpose (user default 2026-07-15): compaction demos trigger after
-            // a few replies; the context bar above the input row makes the fill visible
-            SetInt(npc, "maxContextLength", 400);
+            // a few replies; the context bar above the input row makes the fill visible.
+            // 400 -> 600 when AskUserQuestion became a default, then -> 1200 for the gear beat (user
+            // 2026-07-25). The prefix measures 686 tokens with the real tokenizer: the persona (285,
+            // gear instructions included) plus Qwen3.5's own tools preamble with both schemas (401),
+            // and the rule is REAL conversation headroom
+            // above it: at 600 the prefix nearly filled the window, so he compacted after almost every
+            // single reply — the transcript was wiped each time and reopening always looked like an
+            // amnesiac reset. 1200 leaves ~510 tokens of actual chat, so the ResumeFromCompact demo
+            // fires after a genuine conversation instead of immediately. That is also the interesting
+            // case for the gear: once compacted, he only still knows he handed his sword over because
+            // GetPlayerGear tells him so.
+            // 1200 -> 1800 (2026-07-25): the prefix is bigger than it looks. Measured with the real
+            // tokenizer, the persona is only 300-360 of it — the # Tools block (282 for the header plus
+            // both schemas) and the format spec + <IMPORTANT> reminder (295) are another ~580 that never
+            // show up in the inspector's System Prompt field. Total ~860. At 1200 that left ~340 tokens of
+            // actual conversation, i.e. compaction after two or three exchanges; 1800 leaves ~940.
+            // The inspector's "Effective System Prompt" foldout shows the whole thing with an estimate.
+            SetInt(npc, "maxContextLength", 1800);
             // Velmire speaks through Kokoro (82M non-AR, RTF ~0.3 — speaks DURING generation)
             // with the am_onyx voicepack: the same deep Freeman-esque narrator timbre the
             // CosyVoice "velmire" voice was baked from. CosyVoice3 stays selectable on the enum
@@ -1732,11 +1836,52 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 "Assets/DeepUnity/Tutorials/ChatDemo3D/Voices/Ansbach_4-15s.mp3"));
             SetFloat(npc, "voicePitch", 1.0f);
             SetFloat(npc, "voiceVolume", 5f);   // user 2026-07-15
+            // the world drops to HALF while Velmire talks and eases back on close, so the voice sits
+            // on top of the ambience instead of next to it (user 2026-07-25)
+            SetFloat(npc, "worldAudioWhileTalking", 0.5f);
+            // Qwen3.5-IT's own recommended sampling, verbatim (user 2026-07-25). presence_penalty 2.0
+            // is the high end of Qwen's 0-2 range: it is what keeps a 0.8B from looping a phrase, and
+            // it costs some willingness to repeat a NAME — if the NPC starts avoiding "Velmire" or
+            // "the Sentinel", that is the knob to walk back, not the temperature.
+            SetFloat(npc, "temperature", 1.0f);
+            SetFloat(npc, "topP", 1.0f);
+            SetInt(npc, "topK", 20);
+            SetFloat(npc, "minP", 0.0f);
+            SetFloat(npc, "presencePenalty", 2.0f);
+            SetFloat(npc, "repetitionPenalty", 1.0f);
+            // 2 clauses per utterance: fewer, longer synthesis calls suit this GPU better than one
+            // clause at a time, and the prosody flows across the comma (user 2026-07-25)
+            SetInt(npc, "clausesPerChunk", 2);
             // residency A/B test: the big transparent-green sphere slow-prefetches Qwen+Kokoro
             // on entry, HOLDS both on the GPU while the player is inside, and unloads both on
             // exit; toggle off in the inspector for contact loading (talk trigger = mini zone)
             SetBool(npc, "usePrefetchZone", true);
             SetFloat(npc, "prefetchRadius", 10f);
+
+            // The gear beat's engine half: contributes the internal GetPlayerGear tool to his prompt
+            // and performs the hand-over when the player accepts. It is a plain INPCToolProvider
+            // component, which is the whole point of that interface — WHICH tools an NPC has is
+            // authored in the scene, so Morwenna across the courtyard gets none of this.
+            var offer = root.AddComponent<NPCGearOffer>();
+            var playerGear = playerGO != null ? playerGO.GetComponent<PlayerGear>() : null;
+            if (playerGear != null) SetRef(offer, "playerGear", playerGear);
+            else Debug.LogWarning("[ChatDemo3DBuilder] no PlayerGear on the player — Velmire's offer cannot land.");
+            if (velmireSword != null) SetRef(offer, "npcSword", velmireSword.transform);
+            if (velmireShield != null) SetRef(offer, "npcShield", velmireShield.transform);
+
+            // LAST, once every tool this NPC has actually exists on the object: bake the # Tools block
+            // INTO Description And Rules (user 2026-07-25). Nothing is injected at runtime any more, so
+            // the field is the whole system prompt bar the NAME heading and the ## MEMORY block — and
+            // that is exactly what the inspector shows. Same call the inspector button makes.
+            // toolsFirst: false — who he is reads first, tools under it (user's call; note the 300
+            // finetuning samples are written tools-first, so this is a deliberate divergence).
+            var chat = root.GetComponent<NPCInteractor3D>();
+            if (chat != null)
+            {
+                var f = typeof(NPCChatBase).GetField("descriptionAndRules",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                f.SetValue(chat, chat.WithToolsBlock((string)f.GetValue(chat), toolsFirst: false));
+            }
             return root;
         }
 
@@ -1829,7 +1974,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             var npc = root.AddComponent<NPCInteractor3D>();
             SetRef(npc, "dialogueCameraPoint", camPoint);
             SetString(npc, "NpcName", "Morwenna, the Hollow Witch");
-            SetString(npc, "system_prompt",
+            SetString(npc, "descriptionAndRules",
                 "You are Morwenna, the Hollow Witch: a crooked, sharp-tongued crone crouched among candles and bones in a " +
                 "corner of the ruined courtyard. You mutter over your brews, barter in riddles, and treat every question as a " +
                 "foolish waste of your time — yet you cannot resist showing off how much you know. You call the player " +
@@ -1838,7 +1983,14 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 "trust his honeyed tongue. You too know what waits beyond the wall of golden mist at the northern arch: the " +
                 "Sentinel of the Mist, a towering hollow knight with a halberd — you claim you cursed it yourself long ago, " +
                 "and cackle that the player's bones will make a fine addition to your collection when it fells them. " +
-                "Stay in character at all times. Keep your replies to one to three short sentences.");
+                "Stay in character at all times. Keep your replies to one to three short sentences. " +
+                // Voiced, like Velmire — same reason, her own words. See his persona for the why.
+                "Word an AskUserQuestion as a label on the screen rather than speech, naming yourself: " +
+                "'Take Morwenna's charm?', never 'Do you want mine?'.");
+            // AskUserQuestion is ON by default on NPCChatBase; the witch keeps it — barters-in-
+            // riddles is exactly the persona that puts deals to the player. Her context is the
+            // 8192 default, so the tools block costs her nothing in headroom.
+            SetBool(npc, "enableAskUserQuestion", true);
             // history-mode A/B spread: the witch forgets you the moment you leave (fresh
             // InitializeChat every opening — the pre-history-modes behavior)
             SetEnum(npc, "historyMode", (int)NPCInteractor3D.HistoryMode.ResetEveryTime);
@@ -1858,6 +2010,14 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             SetObject(npc, "clonedVoiceClip", AssetDatabase.LoadAssetAtPath<AudioClip>(
                 "Assets/DeepUnity/Tutorials/ChatDemo3D/Voices/FingerReaderEnia_0-15s.mp3"));
             SetFloat(npc, "voiceVolume", 5f);   // user 2026-07-15 (both castle NPCs at 5)
+            // her tools go into the field too — AskUserQuestion only, no provider (see Velmire)
+            var chat = root.GetComponent<NPCInteractor3D>();
+            if (chat != null)
+            {
+                var f = typeof(NPCChatBase).GetField("descriptionAndRules",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                f.SetValue(chat, chat.WithToolsBlock((string)f.GetValue(chat)));
+            }
             return root;
         }
 
@@ -2094,11 +2254,14 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
         static void BuildFpsAndPauseMenu(Transform canvas, TMP_FontAsset cinzel, Color gold,
                                          Color parchment, Color darkBG, SoulsChatWindow win)
         {
-            // --- FPS counter, top-right (never blocks clicks; under the menu dim)
+            // --- FPS counter, bottom-left (never blocks clicks; still built before PauseMenu, so it
+            // stays under the menu dim). The position is the exact mirror of the old top-right
+            // placement — 24 px in from the side, 14 px off the edge — which also parks it in the
+            // 50 px strip below the quick-slot block instead of overlapping it.
             var fpsGO = MakeTMP("FpsCounter", canvas, "-- FPS", cinzel, 22,
                                 new Color(parchment.r, parchment.g, parchment.b, 0.75f),
-                                TextAlignmentOptions.TopRight, new Vector2(1, 1), new Vector2(1, 1),
-                                new Vector2(170, 32), new Vector2(-109, -30));
+                                TextAlignmentOptions.BottomLeft, Vector2.zero, Vector2.zero,
+                                new Vector2(170, 32), new Vector2(109, 30));
             var fps = fpsGO.AddComponent<FpsCounter>();
             SetRef(fps, "label", fpsGO.GetComponent<TMP_Text>());
 
@@ -2166,19 +2329,29 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             var fpFill = MakeBar("FP", -50, 230, new Color(0.16f, 0.27f, 0.55f), 1f);
             var stFill = MakeBar("Stamina", -72, 310, new Color(0.38f, 0.50f, 0.18f), 1f);
 
-            // --- quick slots, bottom-left (spell / left hand / right hand / item)
-            var slots = MakeRect("QuickSlots", hudGO.transform, Vector2.zero, Vector2.zero, new Vector2(240, 240), new Vector2(150, 150));
-            (string name, Vector2 pos, string asset, string icon)[] slotDefs =
+            // --- quick slots, bottom-left. Three columns instead of the old diamond of four squares,
+            // which is what actually reads as a souls HUD: left hand | spell over item | right hand.
+            const float slotW = 64f;    // ONE shared width for every frame — columns must line up exactly
+            const float pitch = 68f;    // centre-to-centre, i.e. the same 4 px gutter the diamond used
+            const float handH = 84f;    // hand frames are ~1.3:1, only slightly taller than wide, never thin bars
+            // The middle column sets the band height: two squares one pitch apart = pitch + slotW = 132.
+            // The hand frames are centred in that same band, so all three columns share one centre line.
+            const float bandH = pitch + slotW;
+            const float bandW = pitch * 2f + slotW;
+            // Centre chosen so the block keeps the diamond's 50 px left/bottom screen margins.
+            var slots = MakeRect("QuickSlots", hudGO.transform, Vector2.zero, Vector2.zero,
+                                 new Vector2(bandW, bandH), new Vector2(50f + bandW * 0.5f, 50f + bandH * 0.5f));
+            (string name, Vector2 pos, Vector2 size, string asset, string icon)[] slotDefs =
             {
-                ("SlotSpell", new Vector2(0,  68), "Ruins/Torch.fbx",          "torch"),
-                ("SlotLeft",  new Vector2(-68, 0), "Weapons/Shield_Heater.fbx","shield"),
-                ("SlotRight", new Vector2(68,  0), "Weapons/Sword.fbx",        "sword"),
-                ("SlotItem",  new Vector2(0, -68), "Ruins/Pot1.fbx",           "pot"),
+                ("SlotLeft",  new Vector2(-pitch, 0),         new Vector2(slotW, handH), "Weapons/Shield_Heater.fbx","shield"),
+                ("SlotSpell", new Vector2(0,  pitch * 0.5f),  new Vector2(slotW, slotW), "Ruins/Torch.fbx",          "torch"),
+                ("SlotItem",  new Vector2(0, -pitch * 0.5f),  new Vector2(slotW, slotW), "Ruins/Pot1.fbx",           "pot"),
+                ("SlotRight", new Vector2(pitch, 0),          new Vector2(slotW, handH), "Weapons/Sword.fbx",        "sword"),
             };
-            GameObject itemSlot = null;
-            foreach (var (name, pos, asset, icon) in slotDefs)
+            GameObject itemSlot = null, swordIcon = null, shieldIcon = null;
+            foreach (var (name, pos, size, asset, icon) in slotDefs)
             {
-                var slot = MakeRect(name, slots.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(64, 64), pos);
+                var slot = MakeRect(name, slots.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), size, pos);
                 var bg = slot.AddComponent<Image>(); bg.color = new Color(0.05f, 0.05f, 0.06f, 0.82f); bg.raycastTarget = false;
                 AddThinBorder(slot.transform, frame);
                 Sprite sprite = RenderItemIcon(asset, icon);
@@ -2186,8 +2359,20 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 {
                     var iconGO = MakeRect("Icon", slot.transform, Vector2.zero, Vector2.one, new Vector2(-10, -10), Vector2.zero);
                     var img = iconGO.AddComponent<Image>(); img.sprite = sprite; img.preserveAspect = true; img.raycastTarget = false;
+                    if (name == "SlotRight") swordIcon = iconGO;
+                    else if (name == "SlotLeft") shieldIcon = iconGO;
                 }
                 if (name == "SlotItem") itemSlot = slot;
+            }
+
+            // The weapon slots start EMPTY — the bordered frames stay, only the icons go, which is
+            // what makes them visibly fill in when Velmire's sword and shield change hands. Ownership
+            // (and therefore the icons) belongs to PlayerGear on the player, not to the HUD.
+            var playerGear = playerGO != null ? playerGO.GetComponent<PlayerGear>() : null;
+            if (playerGear != null)
+            {
+                if (swordIcon != null) { SetRef(playerGear, "swordSlotIcon", swordIcon); swordIcon.SetActive(false); }
+                if (shieldIcon != null) { SetRef(playerGear, "shieldSlotIcon", shieldIcon); shieldIcon.SetActive(false); }
             }
 
             // flask charge counter on the item slot (drinking is on R)

@@ -59,6 +59,20 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         public void Stow() => Restart(true);
         public void Draw() => Restart(false);
 
+        /// <summary>Snap the gear onto the stow sockets with no tween. For gear that appears DURING a
+        /// conversation (Velmire handing his sword and shield over, see <see cref="PlayerGear"/>): the
+        /// chat already stowed when it opened, so newly enabled items must not pop into the hands.
+        /// Leaving the dialogue draws them for the first time, which reads as the player equipping.</summary>
+        public void StowInstant()
+        {
+            if (!enabled) return;
+            if (job != null) { StopCoroutine(job); job = null; }
+            sword.SetParent(waistSocket, false);
+            sword.localPosition = Vector3.zero; sword.localRotation = Quaternion.identity;
+            shield.SetParent(backSocket, false);
+            shield.localPosition = Vector3.zero; shield.localRotation = Quaternion.identity;
+        }
+
         void Restart(bool stow)
         {
             if (!enabled) return;

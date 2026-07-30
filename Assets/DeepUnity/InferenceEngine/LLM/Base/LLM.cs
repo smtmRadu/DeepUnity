@@ -238,9 +238,9 @@ namespace DeepUnity
             yield break;
         }
 
-        // Prompt-prefill pacing is fully automatic: InferencePerf.EffectivePrefillPack() adapts
-        // the per-frame slice pack off measured prefill frame times (60 fps anchor, biased by
-        // the scene's Smooth⇄Speed dial). The old per-NPC PrefillLayersPerFrame knob is gone.
+        // Prompt-prefill pacing comes from the dial: BackendTradeoffTable.PrefillStepsPerFrame is how
+        // many of ForwardYielding's yields each model's chunked prefill packs into one Unity frame.
+        // No per-NPC knob and nothing measured — the level says it (BackendTradeoff.cs, 2026-07-26).
 
         /// <summary>Rolling decode speed of the most recent generation step (0 while idle).</summary>
         public float TokensPerSecond { get; protected set; }
@@ -271,13 +271,56 @@ namespace DeepUnity
         /// <summary>
         /// Per-frame main-thread GPU budget in BYTES for WEIGHT STREAMING during boot — both lazy
         /// buffer creation (charged at full buffer size) and SetData slices count against it, so no
-        /// boot frame does more than this much GPU work. This is the PRIMARY boot-vs-framedrop knob:
-        /// LOWER = smoother frames while weights stream in but a longer load; HIGHER = faster load
-        /// but fatter worst-frame slices (24 MB gave a ~10.7 ms worst slice / visible fps dip; 8 MB
-        /// keeps slices ~3x smaller). Read live by every model's *Weights upload pump each frame, so
-        /// one assignment applies across models and can be swept between boots (see LMBootKnobProbe).
+        /// boot frame does more than this much GPU work. This is the LIVE budget, deliberately
+        /// mutable: ~15 weights/STT/TTS loaders read it per frame, a walk-up prefetch retargets it
+        /// so the remaining bytes land inside the player's approach, and a boot probe sweeps it
+        /// between boots (see LMBootKnobProbe). Its full-speed VALUE is not a constant any more
+        /// (2026-07-26) — it is the Backend Tradeoff dial's fetch row, so lowering the dial lowers this
+        /// too, and everything that restores "full speed" restores it from the table (which is also
+        /// what <see cref="MaxUploadBudgetBytes"/> reports) rather than from a literal.
         /// </summary>
-        public static int UploadBudgetBytes = 8 * 1024 * 1024;
+        /// <para>A PROPERTY, not a field (fix 2026-07-28). As a field initializer this captured the
+        /// fetch row once at type-init — whichever tier <c>BackendTradeoffTable.Level</c> happened to
+        /// hold before any NPC adopted its own, i.e. the static default Balanced/16 MB — and then never
+        /// tracked the dial, flatly contradicting the paragraph above. Measured consequence with
+        /// <c>usePrefetchZone = false</c> (the default): a Smooth machine streamed weights at 16 MB per
+        /// frame instead of 8, in exactly the frames the dial exists to protect, because only the
+        /// slow-prefetch path ever wrote this. The getter re-bases when the tier moves; the setter
+        /// stamps the tier the value belongs to, so a deliberately lowered walk-up budget is NOT
+        /// re-based out from under a running prefetch by an unrelated read.</para>
+        public static int UploadBudgetBytes
+        {
+            get
+            {
+                if (uploadBudgetLevel != BackendTradeoffTable.Level)
+                {
+                    uploadBudgetLevel = BackendTradeoffTable.Level;
+                    uploadBudgetBytes = BackendTradeoffTable.FetchBytesPerFrame;
+                }
+                return uploadBudgetBytes;
+            }
+            set
+            {
+                uploadBudgetBytes = value;
+                uploadBudgetLevel = BackendTradeoffTable.Level;
+            }
+        }
+        static int uploadBudgetBytes = BackendTradeoffTable.FetchBytesPerFrame;
+        static BackendTradeoffLevel uploadBudgetLevel = BackendTradeoffTable.Level;
+
+        /// <summary>The MAX per-frame streaming budget: the Backend Tradeoff dial's fetch row (4-32
+        /// MB/frame — BackendTradeoffTable owns the numbers and the measurement note behind them). Note
+        /// what this is NOT: it is not "load everything in one frame" — weights always stream across
+        /// frames, this is only the ceiling on how many bytes one frame may carry (user 2026-07-26).
+        /// <see cref="UploadBudgetBytes"/> is the budget in force RIGHT NOW — a walk-up prefetch
+        /// lowers it and a boost restores it — so it cannot also serve as the yardstick for "is this
+        /// slow or full speed?". ResidencyLog used to compare against it and therefore called a slow
+        /// prefetch "BOOSTED to full speed" whenever the two happened to be equal (which is exactly
+        /// the moment the slow prefetch announces its own retargeted rate), and judged every TTS
+        /// model's budget against the LLM's unrelated one (user 2026-07-26: the prefetch lines "apar
+        /// putin intr o ordine ciudatica"). A property, not a readonly field, because the dial can
+        /// move between two boots in one editor session.</summary>
+        public static int MaxUploadBudgetBytes => BackendTradeoffTable.FetchBytesPerFrame;
 
         /// <summary>
         /// Coarse, frame-accurate tag of what the LLM machinery is doing right now ("idle" when
@@ -402,6 +445,29 @@ namespace DeepUnity
             float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false);
 
         /// <summary>
+        /// One TOOL-RESULT turn: feeds <paramref name="toolResultJson"/> back to the model as the
+        /// outcome of the tool call it just emitted, rendered with the model's tool template
+        /// (Qwen3.5: a user turn wrapping the payload in &lt;tool_response&gt; special tokens), then
+        /// streams the model's reaction exactly like <see cref="Chat"/>. Models without a tool
+        /// template fall back to a plain user turn carrying the payload in literal tags.
+        /// </summary>
+        public IEnumerator ChatToolResult(string toolResultJson, Action<string> onTokenGenerated,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
+            float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false)
+            => Guarded("ChatToolResult", ChatToolResultCore(toolResultJson, onTokenGenerated, max_new_tokens,
+                                                            temperature, top_k, top_p, min_p, presence_penalty,
+                                                            repetition_penalty, enable_thinking));
+
+        /// <summary>Model-side implementation of <see cref="ChatToolResult"/> (runs inside the Busy
+        /// guard). Base fallback: a plain <see cref="ChatCore"/> turn with literal tags.</summary>
+        protected virtual IEnumerator ChatToolResultCore(string toolResultJson, Action<string> onTokenGenerated,
+            int max_new_tokens = 128, float temperature = 1f, int top_k = 0, float top_p = 1f, float min_p = 0f,
+            float presence_penalty = 0f, float repetition_penalty = 1f, bool enable_thinking = false)
+            => ChatCore("<tool_response>\n" + toolResultJson + "\n</tool_response>", onTokenGenerated,
+                        max_new_tokens, temperature, top_k, top_p, min_p, presence_penalty,
+                        repetition_penalty, enable_thinking);
+
+        /// <summary>
         /// Cooperatively stops the in-flight <see cref="Chat"/> at the NEXT TOKEN BOUNDARY. The
         /// decode loop exits exactly like a natural stop-token end: every already-generated token
         /// stays on the KV and the assistant turn is left open the same way, so the next Chat
@@ -419,17 +485,23 @@ namespace DeepUnity
         /// <summary>The EXACT user turn the model is asked on compaction. Deliberately BARE (user
         /// spec): the model answers it with the complete conversation compact in ONE message, as a
         /// natural continuation of the chat — no elaborate instructions. Its reply is then re-seeded
-        /// as [system_prompt]\n\nHISTORY:\n[reply] (see <see cref="CompactCore"/>). Stock instruct
+        /// as [system_prompt]\n\n## MEMORY\n[reply] (see <see cref="CompactCore"/>). Stock instruct
         /// models handle it acceptably today; the roadmap item is a model FINETUNED to emit its
         /// compact instantly on this trigger (see InferenceEngine/CLAUDE.md). Public so game code
         /// (e.g. NPCChatBase) can surface/inspect it.</summary>
         public const string COMPACT_PROMPT = "Compact the conversation.";
 
+        /// <summary>The ONLY thing ever appended to a system prompt by the engine. A re-seeded prompt is
+        /// exactly <c>[system prompt]\n\n## MEMORY\n[compact]</c> and nothing else — no
+        /// framing sentences, no instructions to "resume naturally" (user spec 2026-07-25). Callers that
+        /// build their own resume prefix must use this same heading so the model sees one shape.</summary>
+        public const string HISTORY_HEADING = "## MEMORY";
+
         /// <summary>
         /// Compacts the running conversation to reclaim context: the model answers a bare
         /// "Compact the conversation." user prompt with a single-shot compact of the ENTIRE
         /// history (greedy, capped at <paramref name="max_summary_tokens"/>), then the chat is
-        /// re-initialized as [<paramref name="system_prompt"/> + "HISTORY:" + compact] — the
+        /// re-initialized as [<paramref name="system_prompt"/> + "## MEMORY" + compact] — the
         /// recompute leaves the KV cache a short prefix while the NPC "remembers" everything
         /// through the HISTORY block.
         /// Call it between turns (e.g. when the history nears the context limit); it is a coroutine and
@@ -460,7 +532,7 @@ namespace DeepUnity
             string seeded = string.IsNullOrEmpty(summary)
                 ? system_prompt
                 : (string.IsNullOrEmpty(system_prompt) ? "" : system_prompt + "\n\n")
-                  + "HISTORY:\n" + summary;
+                  + HISTORY_HEADING + "\n" + summary;
             var init = InitializeChatCore(seeded);
             while (init.MoveNext()) yield return init.Current;
 
@@ -479,6 +551,21 @@ namespace DeepUnity
         /// ignore it.
         /// </summary>
         public bool DiskKVCache = true;
+
+        /// <summary>
+        /// Who OWNS the disk caches this instance writes — an NPC's stable id, set by the caller before
+        /// <see cref="InitializeChat"/> (see <c>NPCChatBase</c>). When set, the cache files are named
+        /// after the owner instead of after the prompt's content hash, so **one NPC keeps exactly one
+        /// cache file**: edit its system prompt and the next run overwrites that file instead of
+        /// orphaning it and starting a fresh one (user spec 2026-07-25 — there is no point keeping the
+        /// cache of a prompt that no longer exists). Correctness does not depend on the name: the
+        /// content hash still rides in the file HEADER and a mismatch makes the load fail, delete the
+        /// stale file and recompute. Leave null on a shared/anonymous instance to keep the old
+        /// content-addressed behaviour, where NPCs with identical prompts share one file.
+        /// <para>Pooled instances are shared between NPCs, so whoever is about to drive the model sets
+        /// this alongside <see cref="DiskKVCache"/>.</para>
+        /// </summary>
+        public string CacheOwnerKey;
 
         /// <summary>
         /// Persists the model's ENTIRE current conversation state to disk under

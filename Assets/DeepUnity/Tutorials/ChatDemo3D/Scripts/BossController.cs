@@ -46,6 +46,8 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 
         private CharacterController cc;
         private Animator animator;
+        private float musicLevel;      // pre-duck volumes: what the fades drive, before WorldScale
+        private float ambienceLevel;
         private float health;
         private float verticalVelocity;
         private float nextAttackAt;
@@ -65,6 +67,18 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             health = maxHealth;
             homePos = transform.position;
             homeRot = transform.rotation;
+
+            // These two volumes are driven every frame below, so the conversation ducker must not
+            // also write them (it would fight the MoveTowards and settle at neither value) — we take
+            // its scale into our own multiply instead.
+            ConversationAudioDucker.SelfDucking(musicSource);
+            ConversationAudioDucker.SelfDucking(ambienceSource);
+            // The overworld level is whatever the SCENE authored on the ambience source — the builder
+            // tunes it against the NPC voices (0.144). Without this, the serialized default silently
+            // ramped the ambience UP to 0.3 on the first frame and undid that tuning.
+            if (ambienceSource != null && ambienceSource.volume > 0f) ambienceVolume = ambienceSource.volume;
+            if (musicSource != null) musicLevel = musicSource.volume;
+            if (ambienceSource != null) ambienceLevel = ambienceSource.volume;
         }
 
         /// <summary>Wakes the Sentinel — called by the mist door when the player steps through.</summary>
@@ -100,17 +114,25 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             if (barGroup != null)
                 barGroup.alpha = Mathf.MoveTowards(barGroup.alpha, fightOn ? 1f : 0f, Time.deltaTime * 2.5f);
 
-            // music: boss theme swells in as the fight starts, fades back to the ambience after
+            // music: boss theme swells in as the fight starts, fades back to the ambience after.
+            // The fade drives the PRE-DUCK level; what reaches the source is that times the
+            // conversation ducker's scale, so talking to an NPC lowers the fight music without the
+            // two fades fighting each other.
+            float duck = ConversationAudioDucker.WorldScale;
             if (musicSource != null)
             {
-                musicSource.volume = Mathf.MoveTowards(musicSource.volume, fightOn ? musicVolume : 0f,
-                                                       Time.deltaTime * (fightOn ? 0.35f : 0.15f));
+                musicLevel = Mathf.MoveTowards(musicLevel, fightOn ? musicVolume : 0f,
+                                               Time.deltaTime * (fightOn ? 0.35f : 0.15f));
+                musicSource.volume = musicLevel * duck;
                 if (fightOn && !musicSource.isPlaying) musicSource.Play();
-                if (!fightOn && musicSource.isPlaying && musicSource.volume <= 0.001f) musicSource.Stop();
+                if (!fightOn && musicSource.isPlaying && musicLevel <= 0.001f) musicSource.Stop();
             }
             if (ambienceSource != null)
-                ambienceSource.volume = Mathf.MoveTowards(ambienceSource.volume, fightOn ? 0.04f : ambienceVolume,
-                                                          Time.deltaTime * 0.12f);
+            {
+                ambienceLevel = Mathf.MoveTowards(ambienceLevel, fightOn ? 0.04f : ambienceVolume,
+                                                  Time.deltaTime * 0.12f);
+                ambienceSource.volume = ambienceLevel * duck;
+            }
 
             if (state != BossState.Combat || busy || player == null) return;
 

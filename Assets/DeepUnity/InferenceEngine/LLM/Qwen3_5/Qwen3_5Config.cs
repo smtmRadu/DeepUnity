@@ -19,6 +19,10 @@ namespace DeepUnity
                 EOS_TOKEN_ID = 248046,          // alias for IM_END
                 THINK_OPEN_TOKEN_ID = 248068,   // <think>
                 THINK_CLOSE_TOKEN_ID = 248069,  // </think>
+                TOOL_CALL_OPEN_TOKEN_ID = 248058,      // <tool_call>
+                TOOL_CALL_CLOSE_TOKEN_ID = 248059,     // </tool_call>
+                TOOL_RESPONSE_OPEN_TOKEN_ID = 248066,  // <tool_response>
+                TOOL_RESPONSE_CLOSE_TOKEN_ID = 248067, // </tool_response>
                 IMAGE_TOKEN_ID = 248056,
                 VIDEO_TOKEN_ID = 248057,
                 VISION_START_TOKEN_ID = 248053,

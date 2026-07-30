@@ -13,11 +13,12 @@ stable how-it-works + how-to-change-it reference.
                          ├─ NPCInteractor3D (Tutorials/ChatDemo3D)   presentation subclasses:
                          └─ NPCInteractor2D (Tutorials/ChatDemo2D)   camera, window type, triggers, anim
    serialized per NPC:   npc_name · system_prompt · approach_text
+                         backendTradeoff ("Backend Tradeoff" dial, 5 levels → BackendTradeoffTable;
+                           2nd field of the CONVERSATION group, right under chatWindow)
                          conversationMode {LlmOnly, LlmPlusTts}
                          historyMode {ResetEveryTime, ContinueWhereLeftOff, ResumeFromCompact}
                          cacheKVCache · maxContextLength (sizes the KV; halt/compact threshold)
                          model (string id → LLMRegistry dropdown) · quantization · allowThinking
-                         smoothVsSpeed ("Reply Pacing" Smooth⇄Speed dial, per NPC)
                          sampling fields (-1 = model Config preset)
                          ttsModel {PocketTTS(default), Kokoro, CosyVoice3, Chatterbox} · ttsVoice ·
                          voicePitch · ttsQuantization · clonedVoiceClip (PocketTTS clone)
@@ -33,8 +34,10 @@ stable how-it-works + how-to-change-it reference.
    concrete:    Qwen3_5ForCausalLM (flagship: disk-KV, thinking, coalesced kernels),
                 MiniCPM5, Gemma3-270M
 
-   cross-cutting: FramePacing (LLM⇄TTS frame arbiter) · InferencePerf (tuning board + #32
-   AutoTune; fed by the NPC's Smooth⇄Speed dial) · DiskKVCache files in persistentDataPath
+   cross-cutting: BackendTradeoffTable (every per-frame budget that is a statement about the
+   machine — LLM fetch/prefill/decode AND the voice's ticks/prebuffer/chunk/cede-headroom/tick-MACs)
+   · FramePacing (LLM⇄TTS frame arbiter) · InferencePerf (what is left: arbitration rates and
+   shapes) · DiskKVCache files in persistentDataPath
 ```
 
 Chat windows implement `INPCChatWindow` (SoulsChatWindow 3D, ChatWindow2D). Several NPCs share
@@ -158,23 +161,34 @@ radius. Rebuild via the `DeepUnity/...Build...` menu.
 
 ### R5 — Performance: which knob for which symptom
 
-All cross-engine knobs live in `InferencePerf.cs` (documented statics); the intent is NOBODY
-hand-tunes per GPU — measure-driven AutoTune (#32) decides per session:
+EVERY per-frame budget that is a statement about the MACHINE is one of the five fixed rows of
+`BackendTradeoff.cs` (`BackendTradeoffTable`) — the LLM's fetch/prefill/decode AND the voice's
+heavy ticks per frame (speaking + refilling), prebuffer seconds, decode chunk frames, cede
+headroom and MACs per tick. What is left in `InferencePerf.cs` is only the arbitration's rates and
+shapes (cede stride, refill floor, budget scale, readback spin). NOTHING self-tunes any more: the
+two controllers behind the old `smoothVsSpeed` slider went 2026-07-26, and the voice's three
+adaptive loops — the PlayerPrefs-persisted prebuffer/chunk escalation ladder, the tick-cost
+calibrator, the refill-rate EMA — went 2026-07-27 (BackendTradeoff.cs documents why at length):
 
-- **"Replies stutter the framerate" / "text too slow"** → the ONE user dial:
-  `smoothVsSpeed` — the "Reply Pacing" Smooth ⇄ Speed slider ON THE NPC (applies while
-  talking to that NPC). The auto-detection always computes for a stable 60+ fps; the slider
-  only biases around it (hard ends force the implementation limits: async + 1 layer/frame
-  vs sync + bulk prefill). Moving it mid-dialogue re-probes on the next reply. Do NOT
-  hardcode `LlmDecodeTokensPerFrame`/sync mode — AutoTune owns them.
-- **"Hitch when the dialog opens"** → prefill pacing is automatic (adaptive pack, 60 fps
-  anchor; the Smooth ⇄ Speed ends force 1 layer/frame vs bulk). If opens still feel slow,
-  shorten the system prompt (prefill cost is linear in it).
-- **"Voice underruns / word-dribble"** → nothing to tune by hand: `PocketTTSVoice` escalates
-  prebuffer/chunk itself, persists PER-GPU (v3 keys), and walks back one rung after each clean
-  session — a contended session can't permanently degrade a device.
+- **"Replies stutter the framerate" / "text too slow"** → the ONE user dial: **Backend Tradeoff**
+  (`backendTradeoff` ON THE NPC, second field of the CONVERSATION group, five levels Very
+  Smooth…Very Fast; applies while talking to that NPC, and the level in force is logged in the LLM
+  boot summary). One pick sets fetch bytes, prefill steps, decode tokens AND the whole of the
+  voice's pacing. Moving it mid-dialogue lands on the next frame (the two fields pushed onto the
+  voice component are written in `EnsureVoice`, so those follow at the next scene load). Do NOT
+  hardcode any of those numbers anywhere — the table is the only place they exist.
+- **"Hitch when the dialog opens"** → that IS the prompt prefill, paced by the dial's
+  prefill-steps row (a lower level = smaller frames, a longer open). If opens still feel slow at
+  a high level, shorten the system prompt (prefill cost is linear in it).
+- **"Voice underruns / word-dribble"** → move the dial DOWN a level, which is counter-intuitive
+  and correct: the tts tick rows run OPPOSITE to the LLM ones, so a lower tier spends MORE frames
+  on the voice (4 ticks/frame at Very Smooth vs 1 at Very Fast). At 1 tick/frame synthesis runs
+  0.35-0.8× real-time on a 1650 and the ring can only drain, whatever the prebuffer is. The voice
+  no longer tunes itself — it just logs `ring starved mid-reply` and leaves the decision to you.
 - **"Loading hitches on approach"** → `slowPrefetchSeconds` / `prefetchRadius` (give the
-  stream more walk-up time), `LLM.UploadBudgetBytes` only for global load-rate policy.
+  stream more walk-up time), or a lower **Backend Tradeoff** level (its fetch row is the ceiling on
+  bytes per frame; the walk-up governor runs at that ÷8). `LLM.UploadBudgetBytes` is the LIVE
+  value the governor writes — read it, don't set it.
 
 ### R6 — Scripted events (quests, gifts, reactions)
 

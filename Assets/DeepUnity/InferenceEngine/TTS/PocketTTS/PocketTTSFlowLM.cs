@@ -64,6 +64,18 @@ namespace DeepUnity
             int kvLen;                        // rows currently cached (prefill + generated tokens)
             int kvCap;                        // allocated cache length
 
+            // ---- #32: retained voice-prompt KV (cross-clause) ----
+            // Cache rows [0, promptRows) hold the [bbv | voicePrompt] speaker conditioning. Those
+            // rows are IDENTICAL in content AND in absolute position on every clause of a reply, so
+            // re-prefilling them is pure waste (the measured 392-604 ms clause dead window).
+            // promptKey is the IDENTITY of the array those rows were built from — NOT a "have I
+            // prefilled before" flag: this FlowLM is SHARED between voices (two NPCs with different
+            // audio prompts alternate on one engine), so a rebind MUST fall back to a full prefill.
+            // Only the speaker conditioning is retained — no text, no latents, no EOS — so the model
+            // still sees exactly one utterance per clause.
+            object promptKey;
+            int promptRows;
+
             /// <summary>Flow-head intermediate tap for P3 localization (name, readback values).</summary>
             public Action<string, float[]> FlowTap;
             void Tap(string name, ComputeBuffer b, int n)
@@ -289,6 +301,12 @@ namespace DeepUnity
                 if (kCache == null) { kCache = new ComputeBuffer[Cfg.TF_LAYERS]; vCache = new ComputeBuffer[Cfg.TF_LAYERS]; }
                 if (kvCap < maxLen)
                 {
+                    // #32: GrowKV RELEASES and re-creates the caches — every retained prompt row is
+                    // gone. Invalidate here so a longer clause (maxTotal = Lp + maxFrames grows with
+                    // the text) can never silently decode against a dropped prompt. CanReusePromptKV
+                    // also refuses up front when kvCap is too small, so on the retained path this
+                    // branch is unreachable; it is the safety net for every other caller.
+                    InvalidatePromptKV();
                     kvCap = maxLen;
                     for (int li = 0; li < Cfg.TF_LAYERS; li++)
                     {
@@ -336,6 +354,7 @@ namespace DeepUnity
             public System.Collections.IEnumerator PrefillKVYielding(float[] promptSeq, int Lp, int maxTotal)
             {
                 int dim = Cfg.DIM, heads = Cfg.TF_HEADS, hd = Cfg.HEAD_DIM;
+                InvalidatePromptKV();   // #32: this rewrites rows from 0 — whatever was retained is stale
                 EnsureKV(maxTotal);
                 // Inline the exact P2 full-forward over the prompt, additionally snapshotting each
                 // layer's RoPE'd K/V ([Lp, H*D], same layout as the caches) via a whole-block Copy.
@@ -463,7 +482,120 @@ namespace DeepUnity
                 buf.GetData(dst, 0, 0, count);   // unsupported/error fallback: sync
             }
 
-            public void ResetKV() { kvLen = 0; }
+            // #32: the cursor going back to 0 means the next appended row lands ON the prompt rows,
+            // so the retained marker cannot survive a reset (every ResetKV caller re-prefills).
+            public void ResetKV() { kvLen = 0; InvalidatePromptKV(); }
+
+            // ================= #32: retained voice-prompt KV =================
+
+            /// <summary>Rows of prompt currently retained (0 = nothing). Diagnostics/probes.</summary>
+            public int RetainedPromptRows => promptRows;
+
+            /// <summary>True when cache rows [0, rows) still hold the prompt built from
+            /// <paramref name="voiceKey"/> AND the caches are big enough for <paramref name="maxTotal"/>
+            /// rows — i.e. the caller may skip the prompt prefill and append only its text rows.
+            /// Every clause of this check must hold or the caller MUST do the full prefill:
+            /// <list type="bullet">
+            /// <item>identity, not "warm": the FlowLM is shared, so a different voicePrompt array
+            /// (SetVoice / CloneVoice both assign a fresh one) fails ReferenceEquals and falls back;</item>
+            /// <item>row count, so a prompt of a different length can never be read as this one;</item>
+            /// <item>kvCap, because EnsureKV reallocates when it grows (see there);</item>
+            /// <item>buffer liveness, because play-mode exit / device loss destroys ComputeBuffers
+            /// under us while this managed object still holds the references.</item>
+            /// </list></summary>
+            /// <para>BOUNDED SELF-HEAL (added 2026-07-28 after review). Every knob above detects a
+            /// released buffer or a swapped prompt; NONE of them detects a buffer that is still alive
+            /// with LOST CONTENTS. This box takes GPU device resets — PocketTTS.cs documents that during
+            /// one "every dispatch silently no-ops and GetData returns zeros" — and after a reset
+            /// promptKey still matches and IsValid() is still true, so a retained cache would decode
+            /// every later clause against zeroed prompt rows: a corrupt voice, no error, persisting
+            /// until the voice changed or the dialogue ended. Before retention, the next clause
+            /// re-prefilled and healed within one clause. So force a full prefill every
+            /// PROMPT_REUSE_LIMIT clauses: it restores that self-healing property at a cost of one
+            /// clause in N (~4% at 24), and it is the only defence here that does not require the
+            /// failure to announce itself.</para>
+            public bool CanReusePromptKV(object voiceKey, int rows, int maxTotal)
+                => promptRows > 0 && rows == promptRows && voiceKey != null
+                   && ReferenceEquals(promptKey, voiceKey) && kvCap >= maxTotal
+                   && promptReuseCount < PROMPT_REUSE_LIMIT
+                   && kCache != null && kCache[0] != null && kCache[0].IsValid()
+                   && vCache != null && vCache[0] != null && vCache[0].IsValid();
+
+            const int PROMPT_REUSE_LIMIT = 24;
+            int promptReuseCount;
+
+            /// <summary>Count a retained-path clause. Called by the reuse branch so the limit above is
+            /// driven by actual reuses, not by elapsed time or clause attempts.</summary>
+            public void NotePromptKVReuse() => promptReuseCount++;
+
+            /// <summary>Mark rows [0, rows) as the retained prompt for <paramref name="voiceKey"/>.
+            /// Call right after a COMPLETED full prefill whose first `rows` rows were exactly
+            /// [bbv | voicePrompt] — those cache rows already hold the right K/V, so retaining them
+            /// costs nothing beyond this bookkeeping.</summary>
+            public void RetainPromptKV(object voiceKey, int rows)
+            {
+                if (voiceKey == null || rows <= 0 || rows > kvLen) { InvalidatePromptKV(); return; }
+                promptKey = voiceKey;
+                promptRows = rows;
+                promptReuseCount = 0;   // a fresh full prefill restarts the self-heal window
+            }
+
+            /// <summary>Forget the retained prompt (weight defetch/dispose, unverifiable rebind).</summary>
+            public void InvalidatePromptKV() { promptKey = null; promptRows = 0; promptReuseCount = 0; }
+
+            /// <summary>Retained-prompt clause start: park the append cursor just after the prompt
+            /// rows. Everything past them is stale and gets overwritten by this clause's text rows
+            /// and AR frames — the caches are a plain append region, not a ring.</summary>
+            public void BeginFromRetainedPromptKV() { kvLen = promptRows; }
+
+            /// <summary>#32: append <paramref name="count"/> already-embedded rows (flattened
+            /// [count,1024] — the clause's text embeddings) at the current cursor through the PER-ROW
+            /// decode path, yielding on the same MAC budget the block prefill uses. This is the
+            /// retained-prompt clause start: rows [0, promptRows) are already cached, so only the
+            /// ~25 text rows are computed instead of the whole ~151-row prefix.
+            /// <para>Precondition: CanReusePromptKV said yes (so kvCap covers the clause and the
+            /// 1-row scratch is allocated by the earlier prefill's EnsureKV).</para>
+            /// <para>BIT-EXACT vs the block prefill, and not by luck:
+            /// (a) every matmul routes to the same kernel tier — CoalEligible keys on in_dim only —
+            /// and LinearBiasCoal's per-lane order (4 consecutive, stride 128, same PVC_REDUCE tree)
+            /// is exactly LinearBiasGemm's for a single token;
+            /// (b) CausalAttentionKV over kv_len rows IS CausalAttention's last-row output (same
+            /// j-ascending accumulation, same online-softmax constants — see the kernel comment);
+            /// (c) LinearBiasGemm keeps one accumulator per token, so a row's value is independent of
+            /// Lp and of the LinearRows slicing — rows cached during a SHORTER prefill are the rows a
+            /// longer prefill would have written.
+            /// Proven end-to-end (sample-exact, maxAbs 0) by PocketTTSPromptCacheProbe.</para>
+            /// <para>DecodeStepKVIssue also writes out_norm into d1Out; for a text row that output is
+            /// meaningless and DISCARDED (1 extra LayerNorm dispatch per row) — reusing the decode
+            /// path verbatim is what buys the bit-exactness above.</para></summary>
+            public System.Collections.IEnumerator AppendRowsKVYielding(float[] rows, int count)
+            {
+                int dim = Cfg.DIM;
+                // One tick per MAC-budget batch, mirroring LinearRows: a text row is ~76 MMAC
+                // (6 layers x [in_proj 3.1M, out_proj 1.0M, linear1 4.2M, linear2 4.2M]), so the tick
+                // dial buys 11 rows at Smooth / 19 at Balanced / 52 at Very Fast — a 25-row clause is
+                // 1-3 ticks against the block prefill's 24.
+                //
+                // ROWS_HARD_CAP is there because a text row is CPU-ISSUE bound, not MAC bound: ~40
+                // tiny dispatches per row, measured ~0.4 ms of issue on the GTX 1650 box against
+                // ~76 MMAC of GPU. The MAC dial alone would hand the Very Fast tier a 52-row tick =
+                // ~21 ms of uninterruptible issue, past the pump's 12 ms clause-start budget
+                // (gpuBudgetMs 6 x TtsSilentRefillBudgetScale 2) — exactly the frame spike #29 sliced
+                // the block prefill to avoid. 24 rows ≈ 10 ms fits that budget and never binds at the
+                // smoother tiers, so the table stays the dial everywhere it can be.
+                const int ROWS_HARD_CAP = 24;
+                long macsPerRow = Cfg.TF_LAYERS * ((long)dim * 3 * dim + (long)dim * dim
+                                                   + 2L * dim * Cfg.TF_FFN);
+                int perTick = (int)Math.Max(1, PocketTTS.GpuMacsPerTick / Math.Max(macsPerRow, 1));
+                perTick = Math.Min(perTick, ROWS_HARD_CAP);
+                var row = new float[dim];
+                for (int i = 0; i < count; i++)
+                {
+                    Array.Copy(rows, i * dim, row, 0, dim);
+                    DecodeStepKVIssue(row);
+                    if ((i + 1) % perTick == 0 && i + 1 < count) yield return null;
+                }
+            }
 
             // out_norm on the LAST row -> c [1024] (readback)
             public float[] OutNormLastRow(ComputeBuffer tfOut, int L)
@@ -990,6 +1122,8 @@ namespace DeepUnity
 
             public void Dispose()
             {
+                InvalidatePromptKV();   // #32: the cache buffers go away with this object
+                kvLen = 0; kvCap = 0;
                 tfIn?.Release(); tfNorm?.Release(); qkv?.Release(); q?.Release(); k?.Release(); v?.Release();
                 attn?.Release(); ff?.Release(); tmp?.Release(); onesB?.Release(); zerosB?.Release();
                 fx?.Release(); fy?.Release(); fh?.Release(); fmod?.Release(); ftmp?.Release(); ftime0?.Release(); ftime1?.Release();

@@ -16,7 +16,6 @@ namespace DeepUnity.Tutorials.ChatDemo3D
     /// </summary>
     public class NPCInteractor3D : NPCChatBase
     {
-        [SerializeField] private SoulsChatWindow chatWindow;
         [SerializeField] private Transform dialogueCameraPoint;    // fixed viewpoint framing the NPC
 
         [ViewOnly, SerializeField] private SoulsPlayerController player;
@@ -27,7 +26,6 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         private float lastTypeTime = -10f;
         private bool playerTypingPose;
 
-        protected override INPCChatWindow Window => chatWindow != null ? chatWindow : null;
         protected override KeyCode InteractKey => KeyCode.I;
         protected override bool PlayerReady => player != null && !player.IsBusy;
         protected override float DialogueOpenDelay => player.cam.TransitionDuration + 0.01f;

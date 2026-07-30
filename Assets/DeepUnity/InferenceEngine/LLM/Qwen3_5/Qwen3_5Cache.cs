@@ -36,6 +36,17 @@ namespace DeepUnity
             public ComputeBuffer[] convStates;      // length numLayers; null on full layers
             public ComputeBuffer[] recurrentStates; // length numLayers; null on full layers
 
+            /// <summary>How many tokens of this cache are live. The setter exists for the restore
+            /// paths (<see cref="LoadYielding"/>), which set it AFTER uploading a matching state.
+            /// <para><b>It is not a rewind.</b> Assigning a SMALLER value to drop the tail of a
+            /// conversation truncates the full-attention layers correctly — the K/V layout is
+            /// token-major, so the first N rows really are the first N tokens — and leaves the 18
+            /// Gated DeltaNet layers holding <c>conv_state</c>/<c>recurrent_state</c> for the WHOLE
+            /// conversation, because that state is running, not indexed by position. The result is a
+            /// model that forgot in a quarter of its layers and remembers in the rest: no error, no
+            /// exception, nothing a smoke test sees. Anything that needs to go back to an earlier
+            /// prefix must re-establish the whole state instead (re-initialize, or restore a snapshot
+            /// taken AT that prefix) — see NPCChatBase.ResetConversationRoutine and its probe.</para></summary>
             public int CachedTokenCount { get; set; }
             public int Capacity => capacity;
 

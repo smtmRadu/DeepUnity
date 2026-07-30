@@ -57,6 +57,7 @@ checklist at the bottom is the main session's runbook.
   exactly as before (a ragged 8-token tail tile recomputes ≤7 rows with the same kernel —
   idempotent, the documented #29 overlap rule). Pump ticks, FrameBreak/GpuWait yields and the
   `GpuMacsPerTick` budget are untouched — InferencePerf AutoTune just re-measures cheaper ticks.
+  (2026-07-27: nothing re-measures any more — `GpuMacsPerTick` is a fixed Backend Tradeoff row.)
 - `FlowHeadIssue` gains a fused branch (`FlowHeadIssueFused`): input_proj → cached
   0.5·(temb_s+temb_t) (`fTimeComb`, computed once with the SAME legacy dispatches — (s,t) is
   constant (0,1) every frame, so caching is bit-identical) → cond_embed + assemble → 6×
@@ -137,6 +138,8 @@ buzz, or truncation vs the previous run.
 no new frame spikes; `PocketTTS.GpuMacsPerTick` converges upward (coarser slices) — that is the
 expected AutoTune response to cheaper ticks, not a bug. Streaming RTF should drop from ~0.29
 proportionally to the AR-loop gain.
+(Gate 6 as written expired 2026-07-27: `GpuMacsPerTick` no longer converges, it is a fixed Backend
+Tradeoff row per tier. Re-run the gate by comparing frame spikes at a FIXED slice instead.)
 
 **Rollback:** any failure → `PocketTTS.FastKernels2 = false` (one static; restores the exact
 pre-#31 dispatch list — legacy kernels and the legacy flow-head body are byte-untouched) and
@@ -399,3 +402,125 @@ skipped deliberately, per the brief's escape clause.
   prints; TOTAL is the cross-round comparable.
 - Streaming first-flush ramp changes flush BOUNDARIES only; the ring consumes variable-size
   pushes by design (same mechanism as the existing end-of-stream partial flush).
+
+# Round 4 (#32) — retained voice-prompt KV across clauses (no flag, no new kernels)
+
+## 32.0 Why (what the streaming TTFA line proved)
+
+Every clause re-prefilled the flow LM from scratch: `ResetKV()` then a block
+`PrefillKVYielding(prefix, Lp, Lp + maxFrames)` over `prefix = [bbv (1 row) | voicePrompt
+(125 rows) | textEmb (~25 rows)]`. Rows 0..125 are byte-identical AND position-identical on
+every clause of a reply — only the text rows differ. That waste was the measured **392-604 ms
+`synth→first-audio` dead window** in the `[TTFA]` line, during which playback drains and the
+ring starves.
+
+The cost is NOT mainly GPU time: `PrefillKVYielding` yields ~4 ticks per layer × 6 layers, and the
+pump admits only `maxHeavyTicks` of those per frame — 6 on Very Smooth/Smooth, 2 on Very Fast.
+So ~24 ticks spreads over 4-12 frames, **67-200 ms** at 60 fps. (An earlier draft of this section
+said "one tick = one frame, so ~24 ticks ≈ 400 ms": wrong on both counts — `PumpPipeline` counts
+FrameBreaks and breaks at the cap, it does not end the frame on each one. The measured 63-78 ms
+compute saving stands; only the pacing figure was inflated.) Cutting rows cuts ticks, which is
+what the ring actually feels.
+
+**The trade this buys, stated honestly (review 2026-07-28).** The per-row path is CPU-*issue*
+bound where the block path was GPU bound, so clause-start main-thread issue time goes UP ~6.5×
+and lands in ONE frame instead of spread over 4-12: measured 20.8 ms across 3 MoveNexts for a
+55-row clause versus 3.2 ms across 24 for the equivalent block prefill. `ROWS_HARD_CAP` bounds the
+per-TICK cost (~9 ms), not the per-FRAME cost — the pump's own 12 ms `frameBudgetMs` is what bounds
+that, plus one tick of overshoot. Net: one likely dropped frame at each clause boundary, in
+exchange for removing ~75 ms and 4-12 frames of dead window in which the ring drains and the voice
+starves. On the low tiers that is the right direction (audio continuity over frame smoothness is
+the whole premise of those rows), but it IS a regression in frame time and should not be described
+as a free win.
+
+## 32.1 What was built
+
+Retain ONLY the speaker conditioning — no text, no latents, no EOS — so the model still sees
+exactly one utterance per clause and nothing goes out of distribution.
+
+- `PocketTTSFlowLM.cs`: `promptKey`/`promptRows` + `CanReusePromptKV` / `RetainPromptKV` /
+  `InvalidatePromptKV` / `BeginFromRetainedPromptKV` / `RetainedPromptRows`, and
+  `AppendRowsKVYielding(rows, count)` — pushes the text rows through the EXISTING per-row
+  `DecodeStepKVIssue`, batching rows per tick against `PocketTTS.GpuMacsPerTick` the way
+  `LinearRows` does. No new compute kernels; the shader is untouched.
+- `PocketTTS.cs`: the clause start branches on `CanReusePromptKV`. On a hit it appends only the
+  text rows; on a miss it does the old full prefill and then `RetainPromptKV(voicePrompt, Lv)` —
+  free, because the prefix STARTS with the prompt, so rows [0,Lv) already hold its K/V.
+
+**Measured** (GTX 1650, fp16, prompt-cache probe 2026-07-28; 125-frame prompt ⇒ Lv = 126 — the
+same 126 prompt rows are skipped either way):
+
+| clause | prefill rows | prefill `FrameBreak` ticks | whole-clause synth |
+|---|---|---|---|
+| 14 tokens | 140 → **14** | 24 → **0** | 541 → **467 ms** (−74) |
+| 25 tokens | 151 → **25** | 24 → **1** | 1016 → **953 ms** (−63) |
+
+≈ 11.4 → 1.9 GMAC. The tick column is the second, larger win: the pump ends the frame on a
+`FrameBreak` and allows 2-6 heavy ticks per frame at a clause start, so ~4 frames of pacing
+disappear on top of the 63-74 ms of compute. This is NOT the whole 392-604 ms window — the AR
+frames up to the first flush and that flush's Mimi decode are the rest — but it is the part that
+was pure waste.
+
+Cost side, measured and bounded: the per-row path is CPU-ISSUE bound (~40 tiny dispatches/row,
+~0.4 ms of issue each) where the block path was GPU bound (~0.04 ms of issue per tick buying
+~15 ms of GPU). A 25-row clause is ~10 ms of issue, inside the pump's 12 ms clause-start budget
+(`gpuBudgetMs` 6 × `TtsSilentRefillBudgetScale` 2); `ROWS_HARD_CAP = 24` in
+`AppendRowsKVYielding` keeps one tick under that budget at the Very Fast tier, where the MAC dial
+alone would have handed it a 52-row (~21 ms) tick.
+
+## 32.2 Invalidation (the whole risk — the flow LM is SHARED between voices)
+
+Keyed on the **identity of the `voicePrompt` array**, never on "have I prefilled before": two
+NPCs with different voices alternate on one engine, and `SetVoice`/`CloneVoice`/
+`BindRawVoicePrompt` all assign a FRESH array, so a swap fails `ReferenceEquals` and falls back.
+`CanReusePromptKV` additionally requires: the same row count; `kvCap >= maxTotal` (because
+`EnsureKV` releases and re-creates the caches when it grows, and `maxTotal = Lp + maxFrames`
+varies with text length); and live `ComputeBuffer`s (play-mode exit / device loss). Invalidated
+by `EnsureKV` on growth, `PrefillKVYielding` (rewrites row 0), `ResetKV`, `Dispose`,
+`PocketTTS.Defetch` and `LoadCpuTensors` (it re-reads `bbv`, which is row 0). Anything
+uncertain ⇒ full prefill.
+
+## 32.3 Parity contract — BIT-EXACT, and why that bar is reachable
+
+Unlike #31 (tolerance-gated), this round is bit-exact, because the per-row path is the same
+arithmetic in the same order as the block path for a single token:
+
+- `CoalEligible` keys on `in_dim` only, so both T=1 and T>1 route to the same tier; and
+  `LinearBiasCoal`'s per-lane order (4 consecutive, stride 128, same `PVC_REDUCE` tree) is
+  exactly `LinearBiasGemm`'s. Same for the q8 twins.
+- `CausalAttentionKV` over `kv_len` rows IS `CausalAttention`'s last-row output (same
+  j-ascending accumulation, same online-softmax constants — see the kernel comment).
+- `LinearBiasGemm` keeps one accumulator per token, so a row's value is independent of `Lp`
+  and of the `LinearRows` slicing: rows cached during a SHORTER prefill are the rows a longer
+  prefill would have written.
+- LayerNorm/RoPE/residual are per-row ops; RoPE gets the same absolute position either way.
+
+## 32.4 Validation
+
+`PocketTTSPromptCacheProbe` — menu `DeepUnity/PocketTTS/#32 Retained Voice-Prompt KV Parity`
+(+ `(int8)`), batch entries `Run` / `RunInt8` (self-exiting 0/1, report in
+`ProbeLogs/pockettts_prompt_cache.md`). Six runs on ONE engine and ONE injected noise block:
+cold voice2/A, full voice1/A, full voice1/B (grows kvCap), **retained** voice1/A, **retained**
+voice1/B, then a voice swap back to voice2/A to fire the fallback. `LastPrefillRows` is asserted
+on every run so a silent reuse (or a silent fallback that would make parity trivial) fails, and
+an `Alive` gate rejects a "parity" of two silent runs.
+
+Result 2026-07-28, both quant tiers, **maxAbs exactly 0** on all three comparisons:
+
+| gate | fp16 | int8 |
+|---|---|---|
+| clause A retained vs full | 51840 samples, maxAbs 0 | 48000 samples, maxAbs 0 |
+| clause B retained vs full | 103680 samples, maxAbs 0 | 96000 samples, maxAbs 0 |
+| voice swap fallback vs cold full | 59520 samples, maxAbs 0 | 63360 samples, maxAbs 0 |
+
+Regression: `Kernel Parity #31-R2 (GPU-resident AR, fp16)` re-run after the change — all #31-R2
+and #31-R3 gates still PASS (bit-exact ones included). The OFFLINE path is untouched: it still
+does the full prefill every call (`GenerateOffline` → `ResetKV`, which now also drops the
+retained marker).
+
+## 32.5 Known limitation (not a correctness issue)
+
+Retention is a SINGLE slot, so in a two-NPC conversation the first clause of each turn pays the
+full prefill (the voice swapped) and only clauses 2..N of that reply are cheap. A per-voice slot
+would need either a second set of cache buffers (2× the KV VRAM) or a prompt-region allocator —
+deliberately out of scope here.

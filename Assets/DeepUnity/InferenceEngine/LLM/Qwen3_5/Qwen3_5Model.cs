@@ -862,7 +862,17 @@ namespace DeepUnity
             }
 #endif
 
-            public IEnumerator ForwardYielding(Tensor input_ids, bool useCache, bool lastPosOnly)
+            // computeLogits:false skips the final norm + lm_head for a forward whose logits NOTHING
+            // reads — the mid-prompt chunks of a chunked prefill (Qwen3_5.ForwardPromptChunked).
+            // The head is a vocab-sized GEMV over the tied fp16 embedding: 248320 × 1024 × 2 B ≈
+            // 509 MB streamed per chunk, ~30% of prefill GPU time, and every chunk's result except
+            // the LAST one is overwritten by the next chunk before anyone can look at it. Safe
+            // because the head only WRITES logitsBuf (via lastHiddenBuf/normSingleBuf, which have no
+            // other consumer) and touches neither the KV/SSM state nor tokenSeenBuf — the
+            // penalty/mark-seen state is written exclusively by DispatchSampleKernels, which runs
+            // only after the whole prefill has completed. Defaults to true so decode, Generate,
+            // Warmup and the probes are bit-identical.
+            public IEnumerator ForwardYielding(Tensor input_ids, bool useCache, bool lastPosOnly, bool computeLogits = true)
             {
                 int seqLen = input_ids.Size(-1);
                 int cacheLen = useCache ? cache.CachedTokenCount : 0;
@@ -887,19 +897,28 @@ namespace DeepUnity
                 // caller's async SampleYielding readback then paces the CPU to the GPU (the game
                 // renders smoothly across the readback wait). Same kernels/order → bit-identical.
                 bool spread = seqLen > 1 || DebugSpreadDecode;
-                // prefill spreads LlmPrefillLayersPerFrame layers per frame (decode-speed⇄FPS dial);
-                // decode (seqLen==1) issues in one shot and is paced by the caller's per-token loop.
-                int perFrame = Math.Max(1, InferencePerf.LlmPrefillLayersPerFrame);
+                // Prefill yields ONE LAYER AT A TIME, unconditionally. That granularity is the UNIT
+                // the Backend Tradeoff dial counts (BackendTradeoffTable.PrefillStepsPerFrame = how many of
+                // these yields the CALLER swallows per Unity frame), so it must not change; what went
+                // away 2026-07-26 is only the layers-per-frame knob that used to be applied here.
+                // Packing belongs to the caller anyway — this coroutine cannot see how many frames
+                // the prefill is allowed to take. Decode (seqLen==1) issues in one shot and is paced
+                // by the caller's per-token loop.
                 for (int i = 0; i < numLayers; i++)
                 {
                     DispatchLayer(i, seqLen, totalKvLen, useCache);
-                    if (spread && (i % perFrame == perFrame - 1)) yield return null;
+                    if (spread) yield return null;
                 }
 
                 if (useCache) cache.CachedTokenCount += seqLen;
 
-                if (lastPosOnly) DispatchFinalLast(seqLen);
-                else DispatchFinalAll(seqLen);
+                // The trailing yield happens either way: the caller's prefill pacing counts yields,
+                // so skipping the head must not change the frame cadence, only its GPU cost.
+                if (computeLogits)
+                {
+                    if (lastPosOnly) DispatchFinalLast(seqLen);
+                    else DispatchFinalAll(seqLen);
+                }
                 yield return null;
             }
 

@@ -10,10 +10,24 @@ namespace DeepUnity
     public class NPCChatBaseEditor : Editor
     {
         static readonly string[] VOICE_FIELDS = { "ttsModel", "voicePitch", "voiceVolume", "ttsVoice", "ttsQuantization", "clonedVoiceClip",
-                                                  "clausesPerChunk", "sentencePauseSeconds", "semicolonPauseSeconds", "commaPauseSeconds", "replyTailSeconds" };
+                                                  "clausesPerChunk", "clausePauseSeconds", "replyTailSeconds" };
 
         // first field of each inspector category — a thin separator line is drawn above it
         static readonly string[] SECTION_STARTS = { "model", "temperature", "ttsModel", "interactPrompt", "usePrefetchZone" };
+
+        // Braced groups: (first field, last field, the label that reads down the brace). The three
+        // system-prompt fields are the third, drawn by DrawSystemPromptGroup because they are pulled
+        // out of iteration order. A group replaces its section header — the brace says it better and
+        // takes no row (user 2026-07-25).
+        static readonly (string first, string last, string label)[] BRACE_GROUPS =
+        {
+            ("chatWindow", "cacheKVCache", "CONVERSATION"),
+            // backendTradeoff used to end this group; it moved into CONVERSATION 2026-07-27 (it is
+            // not an LLM setting — it paces the TTS too), so the last sampling field ends it now.
+            ("model", "repetitionPenalty", "LLM"),
+            ("ttsModel", "replyTailSeconds", "TTS"),
+            ("usePrefetchZone", "slowPrefetchSeconds", "PREFETCH"),
+        };
 
         static void SectionDivider()
         {
@@ -35,33 +49,193 @@ namespace DeepUnity
             {
                 enterChildren = false;
                 if (it.propertyPath == "m_Script")
-                {
-                    using (new EditorGUI.DisabledScope(true)) EditorGUILayout.PropertyField(it);
-                    continue;
-                }
+                    continue;   // hidden (user 2026-07-25): it is locked anyway, and it only takes up a row
                 if (llmOnly && System.Array.IndexOf(VOICE_FIELDS, it.name) >= 0) continue;
                 if (System.Array.IndexOf(SECTION_STARTS, it.name) >= 0) SectionDivider();
                 // maxContextLength is shown in EVERY history mode (user 2026-07-22): even in
                 // ResetEveryTime it sizes the KV cache, so it's a real (VRAM) knob worth seeing.
-                if (it.propertyPath == "model") { DrawModelPopup(it); continue; }
-                if (it.propertyPath == "smoothVsSpeed") { DrawSmoothSpeed(it); continue; }
-                if (it.propertyPath == "ttsVoice") { DrawVoicePopup(it); continue; }
-                if (it.propertyPath == "clonedVoiceClip") { DrawCloneClip(it); continue; }
-                EditorGUILayout.PropertyField(it, true);
+                // The three fields that ARE the system prompt are drawn as one braced group
+                if (it.propertyPath == "NpcName") { DrawSystemPromptGroup(); continue; }
+                if (it.propertyPath == "descriptionAndRules" || it.propertyPath == "compactSummary") continue;
+
+                // …and the LLM / TTS runs get one brace each, so the component reads as what it is:
+                // what the model is TOLD, what the model IS, and how it speaks.
+                foreach (var g in BRACE_GROUPS)
+                    if (it.propertyPath == g.first) { OpenBraceGroup(g.label); break; }
+
+                if (it.propertyPath == "model") DrawModelPopup(it);
+                else if (it.propertyPath == "backendTradeoff") DrawBackendTradeoff(it);
+                else if (it.propertyPath == "ttsVoice") DrawVoicePopup(it);
+                else if (it.propertyPath == "clonedVoiceClip") DrawCloneClip(it);
+                else EditorGUILayout.PropertyField(it, true);
+
+                if (_groupOpen && it.propertyPath == _groupLast)
+                {
+                    if (_groupLabel == "CONVERSATION") DrawResetConversationButton();
+                    CloseBraceGroup();
+                }
             }
+            if (_groupOpen) CloseBraceGroup();   // last field missing from a subclass: never leak the layout
             serializedObject.ApplyModifiedProperties();
 
-            // Manual conversation reset (also on the component's right-click context menu). Useful
-            // for ContinueWhereLeftOff once it halts at the context limit, and for wiping a
-            // ResumeFromCompact/continue history during testing. Works in play mode.
-            var hmProp = serializedObject.FindProperty("historyMode");
-            if (target is NPCChatBase npc && hmProp != null
-                && hmProp.enumValueIndex != (int)NPCChatBase.HistoryMode.ResetEveryTime)
+            // AFTER Apply, never during the draw: ResetConversation clears compactSummary on the
+            // instance, and applying the (still stale) serialized snapshot on top would write the old
+            // summary straight back in.
+            if (_resetRequested)
             {
-                EditorGUILayout.Space();
-                if (GUILayout.Button("Reset Conversation")) npc.ResetConversation();
+                _resetRequested = false;
+                if (target is NPCChatBase npc) npc.ResetConversation();
             }
         }
+
+        bool _resetRequested;
+
+        // Last thing in the CONVERSATION group (user 2026-07-25) — it acts on the history the two
+        // fields above define. Also on the component's right-click menu. Hidden in ResetEveryTime,
+        // where there is never anything to reset.
+        //
+        // DISABLED (greyed, not hidden) unless there is an actual conversation to send back to state
+        // 0 (user 2026-07-28): play mode, AND the player has already said something. Stopped, there is
+        // no model and no live chat; before the player's first line the NPC is holding nothing but its
+        // system prompt, which is exactly what a reset produces. Disabled rather than hidden so the
+        // button stays where the author expects it and simply reads as unavailable, with the reason on
+        // the line under it.
+        //
+        // NOTE, so this is not filed as a regression later: gating the BUTTON to play mode means the
+        // edit-mode reset path (no llm — it clears the fields, the compact sidecar and the on-disk
+        // conversation snapshots) is no longer reachable from HERE. It stays reachable, and must keep
+        // working, through the component's right-click [ContextMenu("Reset Conversation")].
+        //
+        // The ResetEveryTime hide and the HasPlayerMessage gate AGREE, and neither is redundant —
+        // change one and you have to think about the other. ResetEveryTime NPCs never record turns at
+        // all (Talk only builds a Turn when historyMode != ResetEveryTime), so HasPlayerMessage is
+        // permanently false in that mode: un-hiding the button there would only ever show a disabled
+        // one. The reset ITSELF works perfectly well in ResetEveryTime — mid-dialogue it is exactly as
+        // necessary, since the live KV is the thing being cleared — and it is reached there through the
+        // right-click menu.
+        void DrawResetConversationButton()
+        {
+            var hm = serializedObject.FindProperty("historyMode");
+            if (hm == null || hm.enumValueIndex == (int)NPCChatBase.HistoryMode.ResetEveryTime) return;
+            // Gated on `target`, the PRIMARY selection — which is also the only NPC the click resets
+            // (see the _resetRequested handler); that scoping predates this gate and is unchanged.
+            bool enabled = Application.isPlaying
+                        && target is NPCChatBase npc && npc.HasPlayerMessage;
+            EditorGUILayout.Space(2f);
+            using (new EditorGUI.DisabledScope(!enabled))
+            {
+                if (GUILayout.Button("Reset Conversation")) _resetRequested = true;
+            }
+            if (!enabled)
+                EditorGUILayout.LabelField(Application.isPlaying
+                    ? "nothing to reset yet — the player has not spoken in this conversation"
+                    : "play mode only — there is no live conversation while stopped",
+                    EditorStyles.miniLabel);
+        }
+
+        // ---- the three fields that ARE the system prompt ----------------------------------
+        // NPC Name, Description And Rules and Compact Summary are not three unrelated settings: they
+        // are the model's system message, in that order (## NAME / the authored text / ## MEMORY).
+        // Nothing about three stacked fields said so, and the confusion was real (user 2026-07-25), so
+        // a brace is drawn around them with the label reading down its side.
+        const float GROUP_GUTTER = 30f;
+
+        bool _groupOpen;
+        string _groupLabel, _groupLast;
+
+        void OpenBraceGroup(string label, string lastField = null)
+        {
+            if (_groupOpen) CloseBraceGroup();     // a group that never saw its last field
+            _groupLabel = label;
+            _groupLast = lastField ?? System.Array.Find(BRACE_GROUPS, g => g.label == label).last;
+            _groupOpen = true;
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(GROUP_GUTTER);         // the brace lives on the LEFT (user 2026-07-25)
+            EditorGUILayout.BeginVertical();
+        }
+
+        void CloseBraceGroup()
+        {
+            EditorGUILayout.EndVertical();
+            Rect fields = GUILayoutUtility.GetLastRect();
+            EditorGUILayout.EndHorizontal();
+            _groupOpen = false;
+            if (Event.current.type == EventType.Repaint && fields.height > 4f)
+                DrawBraceAndLabel(new Rect(fields.x - GROUP_GUTTER + 2f, fields.y + 1f,
+                                           GROUP_GUTTER - 4f, fields.height - 2f), _groupLabel);
+        }
+
+        void DrawSystemPromptGroup()
+        {
+            OpenBraceGroup("SYSTEM PROMPT", "compactSummary");
+            foreach (string path in new[] { "NpcName", "descriptionAndRules", "compactSummary" })
+            {
+                var p = serializedObject.FindProperty(path);
+                if (p != null) EditorGUILayout.PropertyField(p, true);
+            }
+            // Inside the brace, under the Compact Summary: the three fields above are the prompt, and
+            // this is the prompt as the model receives it — an editor-only look, in its own window
+            // (user 2026-07-25). A button rather than a foldout: it tokenizes for a real count, which
+            // is a 13 MB vocab load, not something to do on every inspector repaint.
+            if (!serializedObject.isEditingMultipleObjects && target is NPCChatBase npcForPrompt)
+                if (GUILayout.Button("See Effective System Prompt"))
+                    EffectivePromptWindow.Open(npcForPrompt);
+            CloseBraceGroup();
+            DrawToolsBlockButton();
+        }
+
+        // A '{' built from rects: the spine sits against the fields with a tick at each end reaching
+        // toward them, and a nub in the middle pointing back at the label. Glyph-free on purpose — a
+        // real curly character scales with the editor font and never lines up with the group it is
+        // supposed to embrace.
+        static void DrawBraceAndLabel(Rect r, string label)
+        {
+            var col = new Color(0.55f, 0.55f, 0.55f, 0.85f);
+            float x = r.xMax - 5f, mid = r.y + r.height * 0.5f;
+            EditorGUI.DrawRect(new Rect(x, r.y, 1f, r.height), col);                 // spine
+            EditorGUI.DrawRect(new Rect(x, r.y, 4f, 1f), col);                       // top tick →
+            EditorGUI.DrawRect(new Rect(x, r.yMax - 1f, 4f, 1f), col);               // bottom tick →
+            EditorGUI.DrawRect(new Rect(x - 4f, mid, 4f, 1f), col);                  // middle nub ←
+
+            var style = new GUIStyle(EditorStyles.miniLabel)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = col }
+            };
+            Matrix4x4 m = GUI.matrix;
+            var pivot = new Vector2(r.x + 8f, mid);
+            GUIUtility.RotateAroundPivot(90f, pivot);
+            GUI.Label(new Rect(pivot.x - r.height * 0.5f, pivot.y - 8f, r.height, 16f), label, style);
+            GUI.matrix = m;
+        }
+
+        // Tools live IN Description And Rules (user 2026-07-25) so that the field is the whole truth
+        // rather than a third of it. They still have to GET there: this writes the block the NPC's
+        // granted tools imply, replacing a stale one rather than stacking a second.
+        void DrawToolsBlockButton()
+        {
+            if (serializedObject.isEditingMultipleObjects) return;
+            var npc = target as NPCChatBase;
+            var prop = serializedObject.FindProperty("descriptionAndRules");
+            if (npc == null || prop == null) return;
+            string want = npc.WithToolsBlock(prop.stringValue);
+            if (want == prop.stringValue) return;          // already exactly right — no button, no noise
+
+            bool has = prop.stringValue.Contains(Qwen3_5Modeling.Qwen3_5ChatTemplate.ToolsHeading);
+            string block = npc.ComposeToolsBlock();
+            string verb = block.Length == 0 ? "Remove the # Tools block (this NPC has no tools)"
+                        : has ? "Refresh the # Tools block in Description And Rules"
+                              : "Write the # Tools block into Description And Rules";
+            EditorGUILayout.Space(2f);
+            if (GUILayout.Button(verb))
+            {
+                prop.stringValue = want;
+                serializedObject.ApplyModifiedProperties();
+                GUI.FocusControl(null);
+            }
+        }
+
 
         // ---- TTS voice dropdown -----------------------------------------------------------
         // Voices are REAL assets on disk, shipped inside each engine's weights export:
@@ -197,29 +371,28 @@ namespace DeepUnity
             }
         }
 
-        // ---- Smooth ⇄ Speed (reply pacing preference) ---------------------------------------
-        // The auto-detection always computes for a stable 60+ fps; this dial only biases around
-        // that result while the player talks to THIS NPC. Drawn with named ends + the current
-        // mode (and the live AutoTune decision in play mode).
-        static void DrawSmoothSpeed(SerializedProperty prop)
+        // ---- Backend Tradeoff (how capable is this machine) --------------------------------------
+        // Five fixed rows, so what a level MEANS is a lookup the inspector can just show. The old
+        // continuous slider could only promise that an auto-tuner would work the numbers out, and
+        // printed its measured verdict on this line after the fact (2026-07-26 — BackendTradeoff.cs
+        // documents why that turned out to be the wrong instrument). The label is passed explicitly
+        // for the same reason it always was: the drawer, not Unity's nicifier, owns what this row
+        // says. TWO mini-lines since 2026-07-27, one per pipeline — the second is where the
+        // counter-intuition is visible at a glance (ticks/frame FALL as the tier rises).
+        static void DrawBackendTradeoff(SerializedProperty prop)
         {
             EditorGUILayout.Space(4f);
-            EditorGUILayout.LabelField(new GUIContent("LLM Processing",
-                "Hardware adaptation is fully automatic (AutoTune measures the GPU each session, 60 fps anchor). This slider is pure preference for this NPC's dialogues."), EditorStyles.boldLabel);
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                GUILayout.Label("Smooth", GUILayout.Width(50));
-                prop.floatValue = GUILayout.HorizontalSlider(prop.floatValue, 0f, 1f);
-                GUILayout.Label("Speed", GUILayout.Width(42));
-            }
-            float v = prop.floatValue;
-            string mode = v <= 0.02f ? "forced gentlest: async decode, 1 layer/frame prefill"
-                        : v >= 0.98f ? "forced fastest: sync decode, bulk prefill"
-                        : Mathf.Approximately(v, 0.5f) ? "pure auto — computed for a stable 60+ fps"
-                        : $"auto (60 fps anchor) with bias ×{Mathf.Pow(4f, (v - 0.5f) * 2f):F2} on the measured budgets";
-            EditorGUILayout.LabelField(Application.isPlaying
-                ? $"{mode}   |   AutoTune: {InferencePerf.AutoTuneStatus}"
-                : mode, EditorStyles.miniLabel);
+            EditorGUILayout.PropertyField(prop, new GUIContent("Backend Tradeoff", prop.tooltip));
+            if (prop.hasMultipleDifferentValues) return;   // mixed multi-selection: no single row to describe
+            var row = BackendTradeoffTable.At((BackendTradeoffLevel)prop.enumValueIndex);
+            EditorGUILayout.LabelField(
+                $"fetch {row.fetchBytesPerFrame / 1e6:0.0} MB/frame, prefill {row.prefillStepsPerFrame} steps/frame, " +
+                $"decode {row.decodeTokensPerFrame} tok/frame, sync decode", EditorStyles.miniLabel);
+            EditorGUILayout.LabelField(
+                $"tts {row.ttsSpeakingTicksPerFrame} ticks/frame speaking, {row.ttsSilentTicksPerFrame} refilling, " +
+                $"prebuffer {row.ttsPrebufferSeconds:0.##}s, chunk {row.ttsStreamChunkFrames}f " +
+                $"({row.ttsStreamChunkFrames * 0.08f:0.00}s), cede above {row.ttsCedeHeadroomSeconds:0.#}s",
+                EditorStyles.miniLabel);
         }
 
         // The LLM is a string id backed by LLMRegistry (auto-discovered [LLMEntry] methods) —

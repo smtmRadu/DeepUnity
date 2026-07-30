@@ -8,192 +8,46 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 {
     /// <summary>
     /// Dark-souls styled chat panel docked to the right edge of the screen; slides in when the
-    /// dialogue starts and out when it ends. Message API mirrors the 2D demo's ChatWindow
-    /// (AddMessage / PopLastMessage / Clear / SetInfoText) — both implement
-    /// <see cref="INPCChatWindow"/>, the surface NPCChatBase drives.
+    /// dialogue starts and out when it ends. Everything environment-agnostic — the send-loading
+    /// pulse, caret, UI sounds, title/info, the context bar and the AskUserQuestion choice popup —
+    /// comes from <see cref="NPCDialogueWindow"/>; this class only adds the souls presentation:
+    /// the slide animation and the scrolling message list.
     /// </summary>
-    public class SoulsChatWindow : MonoBehaviour, INPCChatWindow
+    public class SoulsChatWindow : NPCDialogueWindow
     {
-        [Header("Reasoning models")]
-        [Tooltip("Render <think> reasoning content in the window (dimmed italic). It is never spoken by the TTS either way.")]
-        [SerializeField] private bool showThinkingTokens = false;
-        public bool ShowThinkingTokens => showThinkingTokens;
-
-        [Header("UI References (wired by the scene builder)")]
+        [Header("Souls panel (wired by the scene builder)")]
         [SerializeField] private RectTransform panel;
         [SerializeField] private Transform messageContainer;
-        [SerializeField] private TMP_InputField inputField;
-        [SerializeField] private Button sendButton;
-        [SerializeField] private Button leaveButton;
         [SerializeField] private GameObject messageTemplate;
         [SerializeField] private ScrollRect scrollRect;
-        [SerializeField] private TMP_Text infoText;
-        [SerializeField] private TMP_Text titleText;
         [SerializeField] private float slideDuration = 0.4f;
-
-        [Header("UI sounds")]
-        [SerializeField] private AudioSource uiAudio;   // lives on the canvas — must survive this panel deactivating
-        [SerializeField] private AudioClip buttonClip;
-        [SerializeField] private AudioClip[] typeClips;
-
-        public Button SendButton => sendButton;
-        public Button LeaveButton => leaveButton;
-        public TMP_InputField InputField => inputField;
-        public bool IsOpen { get; private set; }
 
         private readonly List<GameObject> messages = new List<GameObject>();
         private Coroutine slideCoroutine;
         private float shownX, hiddenX;
 
-        private TMP_Text sendLabel;
-        private string sendLabelIdle;
-        private Coroutine sendLoadingCoroutine;
-        private static readonly string[] loadingFrames = { ".", ". .", ". . ." };
+        // gold/parchment accent used by the scene builder — the caret must be unmissable, and the
+        // choice popup inherits the same gold through the base class's theme hooks
+        private static readonly Color SoulsGold = new Color(0.77f, 0.66f, 0.42f);
+        protected override Color CaretColor => SoulsGold;
 
-        // input-state feedback caches (dim while the send button is loading, restore after)
-        private Color inputTextIdle;
-        private bool inputIdleCached;
-        private string placeholderIdle;
-
-        // gold/parchment accent used by the scene builder — the caret must be unmissable
-        private static readonly Color CaretGold = new Color(0.77f, 0.66f, 0.42f);
-
-        private void Awake()
+        protected override void Awake()
         {
             if (panel == null) panel = (RectTransform)transform;
             shownX = panel.anchoredPosition.x;
             hiddenX = shownX + panel.rect.width + 60f;
             panel.anchoredPosition = new Vector2(hiddenX, panel.anchoredPosition.y);
             if (messageTemplate != null) messageTemplate.SetActive(false);
-            if (inputField != null)
-            {
-                inputField.onValueChanged.AddListener(_ => PlayTypeTick());
-                // refocusing (e.g. after the model finishes loading) must not select the
-                // half-typed question — the next keystroke would erase it
-                inputField.onFocusSelectAll = false;
-            }
-            ConfigureCaret();
+            base.Awake();   // input listeners + caret
             gameObject.SetActive(false);
         }
 
-        /// <summary>Thick, clearly blinking gold caret so it's obvious when typing is possible.
-        /// The builder bakes the same settings; this re-applies them defensively so
-        /// runtime-created/replaced input fields get the treatment too.</summary>
-        private void ConfigureCaret()
+        // ---------------------------------------------------------------- open / close
+
+        protected override void OnOpen() => SlideTo(shownX, null);
+
+        protected override void OnClose()
         {
-            if (inputField == null) return;
-            inputField.customCaretColor = true;
-            inputField.caretColor = CaretGold;
-            inputField.caretWidth = 3;
-            inputField.caretBlinkRate = 0.85f;
-        }
-
-        /// <summary>Send-button "loading" mode while the model streams in: the button is disabled
-        /// and its label pulses dots, but the input field stays usable so the first question can
-        /// be typed before the model is ready. Turning it off restores the original label.</summary>
-        public void SetSendLoading(bool loading)
-        {
-            if (sendButton == null) return;
-            if (sendLabel == null)
-            {
-                sendLabel = sendButton.GetComponentInChildren<TMP_Text>();
-                sendLabelIdle = sendLabel != null ? sendLabel.text : "";
-            }
-
-            if (sendLoadingCoroutine != null)
-            {
-                StopCoroutine(sendLoadingCoroutine);
-                sendLoadingCoroutine = null;
-            }
-
-            sendButton.interactable = !loading;
-            if (loading && sendLabel != null && isActiveAndEnabled)
-                sendLoadingCoroutine = StartCoroutine(PulseSendLabel());
-            else if (sendLabel != null)
-                sendLabel.text = sendLabelIdle;
-
-            SetInputLoadingLook(loading);
-        }
-
-        /// <summary>Subtle input-state feedback while the model streams in: the typed text dims
-        /// slightly and the placeholder becomes "…"; both restore when Send is interactable
-        /// again. The field itself stays usable (the first question can be typed early).</summary>
-        private void SetInputLoadingLook(bool loading)
-        {
-            if (inputField == null) return;
-            var txt = inputField.textComponent;
-            if (txt != null)
-            {
-                if (!inputIdleCached) { inputTextIdle = txt.color; inputIdleCached = true; }
-                txt.color = loading
-                    ? new Color(inputTextIdle.r, inputTextIdle.g, inputTextIdle.b, inputTextIdle.a * 0.55f)
-                    : inputTextIdle;
-            }
-            if (inputField.placeholder is TMP_Text ph)
-            {
-                if (placeholderIdle == null) placeholderIdle = ph.text;
-                ph.text = loading ? "…" : placeholderIdle;
-            }
-        }
-
-        private IEnumerator PulseSendLabel()
-        {
-            var step = new WaitForSeconds(0.4f);
-            for (int i = 0; ; i = (i + 1) % loadingFrames.Length)
-            {
-                sendLabel.text = loadingFrames[i];
-                yield return step;
-            }
-        }
-
-        /// <summary>Hooked to the Speak/Leave buttons by the scene builder.</summary>
-        public void PlayButtonClick()
-        {
-            if (uiAudio == null || buttonClip == null) return;
-            uiAudio.pitch = Random.Range(0.96f, 1.04f);
-            uiAudio.PlayOneShot(buttonClip, 0.5f);
-        }
-
-        private void PlayTypeTick()
-        {
-            // skip the programmatic clears (send/Clear set text to "") — only real keystrokes tick
-            if (uiAudio == null || typeClips == null || typeClips.Length == 0 || inputField.text.Length == 0) return;
-            uiAudio.pitch = Random.Range(0.92f, 1.12f);
-            uiAudio.PlayOneShot(typeClips[Random.Range(0, typeClips.Length)], 0.35f);
-        }
-
-        public void SetTitle(string title)
-        {
-            if (titleText != null) titleText.text = title;
-        }
-
-        // ---- context-fill bar: golden fill inside a silver track, above the input row --------
-        [SerializeField] private RectTransform contextFill;
-        private float ctxTarget, ctxShown;
-
-        public void SetContextFill(float fill01) => ctxTarget = Mathf.Clamp01(fill01);
-
-        private void Update()
-        {
-            if (contextFill == null) return;
-            // exponential smoothing — the bar glides toward the live token count
-            ctxShown = Mathf.Lerp(ctxShown, ctxTarget, 1f - Mathf.Exp(-6f * Time.unscaledDeltaTime));
-            contextFill.anchorMax = new Vector2(ctxShown, 1f);
-        }
-
-        public void Open()
-        {
-            gameObject.SetActive(true);
-            IsOpen = true;
-            ConfigureCaret();   // defensive: fields wired/replaced at runtime get the caret too
-            SlideTo(shownX, null);
-        }
-
-        public void Close()
-        {
-            // clear IsOpen FIRST — must never stay stuck true (PauseMenu keys its Esc-swallow off it;
-            // a stale value soft-locks the pause menu). Safe even when already inactive.
-            IsOpen = false;
             if (!gameObject.activeSelf) return;
             SlideTo(hiddenX, () => gameObject.SetActive(false));
         }
@@ -221,12 +75,12 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             onDone?.Invoke();
         }
 
-        // Streaming contract (same as ChatWindow2D): the base pops + re-adds the newest NPC
-        // line many times a second during the token stream / audio-synced word reveal.
-        // Destroy() is deferred to end of frame, so a naive pop+add briefly lays out BOTH the
-        // old and the new message — the visible one-frame text bob. PopLastMessage therefore
-        // PARKS the newest message and the AddMessage that follows in the same call stack
-        // reclaims it as a pure text mutation on the SAME GameObject. A parked message never
+        // ---------------------------------------------------------------- transcript
+        // Streaming contract (see NPCDialogueWindow): the NPC pops + re-adds the newest line many
+        // times a second. Destroy() is deferred to end of frame, so a naive pop+add briefly lays
+        // out BOTH the old and the new message — the visible one-frame text bob. PopLastMessage
+        // therefore PARKS the newest message and the AddMessage that follows in the same call
+        // stack reclaims it as a pure text mutation on the SAME GameObject. A parked message never
         // reclaimed (a genuine pop) is destroyed in LateUpdate.
         private GameObject recycledMsg;
 
@@ -242,7 +96,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             }
         }
 
-        public void AddMessage(string username, string message)
+        public override void AddMessage(string username, string message)
         {
             if (messageTemplate == null || messageContainer == null) return;
 
@@ -275,7 +129,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
                 scrollRect.verticalNormalizedPosition = 0f;   // pin to bottom
         }
 
-        public void PopLastMessage()
+        public override void PopLastMessage()
         {
             if (messages.Count == 0) return;
 
@@ -289,7 +143,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             // (or LateUpdate for a genuine pop) settles the layout exactly once
         }
 
-        public void Clear()
+        public override void Clear()
         {
             recycledMsg = null;   // parked message is a container child — destroyed below
             if (messageContainer != null)
@@ -304,11 +158,6 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             messages.Clear();
             if (inputField != null) inputField.text = "";
             if (infoText != null) infoText.text = "";
-        }
-
-        public void SetInfoText(string text)
-        {
-            if (infoText != null) infoText.text = text;
         }
     }
 }

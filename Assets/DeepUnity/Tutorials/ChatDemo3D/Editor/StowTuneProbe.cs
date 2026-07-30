@@ -137,6 +137,11 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             sword = FindDeep(root, "Sword");
             shield = FindDeep(root, "Shield");
             if (sword == null || shield == null) { Debug.LogError("[StowTune] Sword/Shield not found under player"); return false; }
+            // the scene ships empty-handed since the gear beat (PlayerGear deactivates both until
+            // Velmire hands them over), and inactive objects render nothing — every menu item here
+            // poses that gear for a screenshot, so force it visible. A rebuild puts it back off.
+            sword.gameObject.SetActive(true);
+            shield.gameObject.SetActive(true);
             return true;
         }
 

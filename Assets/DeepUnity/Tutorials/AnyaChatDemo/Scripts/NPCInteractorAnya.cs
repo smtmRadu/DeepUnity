@@ -14,10 +14,8 @@ namespace DeepUnity.Tutorials.AnyaChatDemo
     /// </summary>
     public class NPCInteractorAnya : NPCChatBase
     {
-        [SerializeField] private ChatWindow2D chatWindow;
         private bool opened;
 
-        protected override INPCChatWindow Window => chatWindow;
         protected override KeyCode InteractKey => KeyCode.None;   // no walk-up; we auto-open
         protected override bool PlayerReady => true;
         protected override float DialogueOpenDelay => 0f;

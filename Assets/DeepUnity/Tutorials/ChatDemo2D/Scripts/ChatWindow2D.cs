@@ -12,8 +12,10 @@ namespace DeepUnity.Tutorials.ChatDemo2D
     /// older ones up, lines drift slowly upward and fade out with height until they fully
     /// vanish near the top of the float region. The only chrome left is a thin 20%-alpha
     /// input strip at the bottom (underline-style input + text-only Say/Leave buttons).
-    /// Implements <see cref="INPCChatWindow"/> (same surface as the 3D SoulsChatWindow) so
-    /// NPCChatBase drives it unchanged.
+    ///
+    /// Derives from <see cref="NPCDialogueWindow"/> like every NPC window, so the send-loading
+    /// pulse, caret, UI sounds, title/info, context bar and the AskUserQuestion choice popup are
+    /// inherited; only the float presentation lives here.
     ///
     /// Streaming contract: the base pops + re-adds the newest NPC line many times a second
     /// (token stream and audio-synced reveal). PopLastMessage therefore PARKS the newest line
@@ -23,23 +25,13 @@ namespace DeepUnity.Tutorials.ChatDemo2D
     /// LateUpdate, so a standalone pop still removes the line by end of frame. The newest
     /// line stays pinned at the bottom slot until a subsequent AddMessage pushes it up.
     /// </summary>
-    public class ChatWindow2D : MonoBehaviour, INPCChatWindow
+    public class ChatWindow2D : NPCDialogueWindow
     {
-        [Header("Reasoning models")]
-        [Tooltip("Render <think> reasoning content in the window (dimmed italic). It is never spoken by the TTS either way.")]
-        [SerializeField] private bool showThinkingTokens = false;
-        public bool ShowThinkingTokens => showThinkingTokens;
-
-        [Header("UI References (wired by the scene builder)")]
+        [Header("Farm overlay (wired by the scene builder)")]
         [SerializeField] private CanvasGroup canvasGroup;       // fades the whole overlay open/closed
         [SerializeField] private RectTransform linesContainer;  // float region: lines spawn at its bottom, die near its top
         [SerializeField] private GameObject lineTemplate;       // one TMP + CanvasGroup per line
-        [SerializeField] private TMP_InputField inputField;
-        [SerializeField] private Button sendButton;
         [SerializeField] private Button giveButton;      // hands the basket over; shown only when it has items
-        [SerializeField] private Button leaveButton;
-        [SerializeField] private TMP_Text infoText;             // approach flavor, italic grey
-        [SerializeField] private TMP_Text titleText;            // small gold NPC-name label above the strip
 
         [Header("Float animation")]
         [SerializeField] private float fadeDuration = 0.25f;
@@ -49,28 +41,14 @@ namespace DeepUnity.Tutorials.ChatDemo2D
         [SerializeField] private float pushCatchupSpeed = 420f;
         [SerializeField] private float lineSpacing = 10f;
 
-        [Header("UI sounds")]
-        [SerializeField] private AudioSource uiAudio;   // lives on the canvas — must survive this overlay deactivating
-        [SerializeField] private AudioClip buttonClip;
-        [SerializeField] private AudioClip[] typeClips;
-
-        public Button SendButton => sendButton;
-        public Button LeaveButton => leaveButton;
         /// <summary>2D-only extra: gives the harvested basket to the NPC (NPCInteractor2D toggles
         /// its visibility per dialogue state + basket contents).</summary>
         public Button GiveButton => giveButton;
-        public TMP_InputField InputField => inputField;
-        public bool IsOpen { get; private set; }
 
-        [Tooltip("Optional golden context-fill rect inside a silver track; null = no bar in this window.")]
-        [SerializeField] private RectTransform contextFill;
-        public void SetContextFill(float fill01)
-        {
-            if (contextFill != null) contextFill.anchorMax = new Vector2(Mathf.Clamp01(fill01), 1f);
-        }
-
-        // farm-gold accent shared with the builder — the caret must be unmissable
-        private static readonly Color CaretGold = new Color(0.90f, 0.72f, 0.35f);
+        // farm-gold accent shared with the builder — the caret must be unmissable, and the
+        // AskUserQuestion popup picks the same accent up through the base class
+        private static readonly Color FarmGold = new Color(0.90f, 0.72f, 0.35f);
+        protected override Color CaretColor => FarmGold;
 
         private class Line
         {
@@ -85,49 +63,21 @@ namespace DeepUnity.Tutorials.ChatDemo2D
         private Line recycled;   // newest line parked by PopLastMessage, reclaimed by the next AddMessage
         private Coroutine fadeCoroutine;
 
-        private TMP_Text sendLabel;
-        private string sendLabelIdle;
-        private Coroutine sendLoadingCoroutine;
-        private static readonly string[] loadingFrames = { ".", ". .", ". . ." };
-
-        // input-state feedback caches (dim while the send button is loading, restore after)
-        private Color inputTextIdle;
-        private bool inputIdleCached;
-        private string placeholderIdle;
-
-        private void Awake()
+        protected override void Awake()
         {
             if (canvasGroup == null) canvasGroup = GetComponent<CanvasGroup>();
             if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
             canvasGroup.alpha = 0f;
             if (lineTemplate != null) lineTemplate.SetActive(false);
-            if (inputField != null)
-            {
-                inputField.onValueChanged.AddListener(_ => PlayTypeTick());
-                // refocusing (e.g. after the model finishes loading) must not select the
-                // half-typed question — the next keystroke would erase it
-                inputField.onFocusSelectAll = false;
-            }
-            ConfigureCaret();
+            base.Awake();   // input listeners + caret
             gameObject.SetActive(false);
-        }
-
-        /// <summary>Thick, clearly blinking gold caret so it's obvious when typing is possible.
-        /// The builder bakes the same settings; this re-applies them defensively so
-        /// runtime-created/replaced input fields get the treatment too.</summary>
-        private void ConfigureCaret()
-        {
-            if (inputField == null) return;
-            inputField.customCaretColor = true;
-            inputField.caretColor = CaretGold;
-            inputField.caretWidth = 3;
-            inputField.caretBlinkRate = 0.85f;
         }
 
         // ---------------------------------------------------------------- float animation
 
-        private void Update()
+        protected override void Update()
         {
+            base.Update();   // context-fill bar
             if (linesContainer == null || lines.Count == 0) return;
 
             // Stack maintenance, newest (bottom) to oldest (top). The newest line is frozen at
@@ -171,9 +121,9 @@ namespace DeepUnity.Tutorials.ChatDemo2D
             }
         }
 
-        // ---------------------------------------------------------------- INPCChatWindow
+        // ---------------------------------------------------------------- transcript
 
-        public void AddMessage(string username, string message)
+        public override void AddMessage(string username, string message)
         {
             if (lineTemplate == null || linesContainer == null) return;
 
@@ -205,7 +155,7 @@ namespace DeepUnity.Tutorials.ChatDemo2D
             lines.Add(line);   // previous newest is unpinned by the index shift and gets pushed up
         }
 
-        public void PopLastMessage()
+        public override void PopLastMessage()
         {
             if (lines.Count == 0) return;
             Line last = lines[lines.Count - 1];
@@ -223,7 +173,7 @@ namespace DeepUnity.Tutorials.ChatDemo2D
             return $"<color={nameHex}>{username}</color>  <color={bodyHex}>{message}</color>";
         }
 
-        public void Clear()
+        public override void Clear()
         {
             foreach (Line l in lines)
                 if (l.go != null) Destroy(l.go);
@@ -237,88 +187,13 @@ namespace DeepUnity.Tutorials.ChatDemo2D
             if (infoText != null) infoText.text = "";
         }
 
-        public void SetTitle(string title)
-        {
-            if (titleText != null) titleText.text = title;
-        }
-
-        public void SetInfoText(string text)
-        {
-            if (infoText != null) infoText.text = text;
-        }
-
-        /// <summary>Send-button "loading" mode while the model streams in: the button is disabled
-        /// and its label pulses dots, but the input field stays usable so the first question can
-        /// be typed before the model is ready. Turning it off restores the original label.</summary>
-        public void SetSendLoading(bool loading)
-        {
-            if (sendButton == null) return;
-            if (sendLabel == null)
-            {
-                sendLabel = sendButton.GetComponentInChildren<TMP_Text>();
-                sendLabelIdle = sendLabel != null ? sendLabel.text : "";
-            }
-
-            if (sendLoadingCoroutine != null)
-            {
-                StopCoroutine(sendLoadingCoroutine);
-                sendLoadingCoroutine = null;
-            }
-
-            sendButton.interactable = !loading;
-            if (loading && sendLabel != null && isActiveAndEnabled)
-                sendLoadingCoroutine = StartCoroutine(PulseSendLabel());
-            else if (sendLabel != null)
-                sendLabel.text = sendLabelIdle;
-
-            SetInputLoadingLook(loading);
-        }
-
-        private IEnumerator PulseSendLabel()
-        {
-            var step = new WaitForSeconds(0.4f);
-            for (int i = 0; ; i = (i + 1) % loadingFrames.Length)
-            {
-                sendLabel.text = loadingFrames[i];
-                yield return step;
-            }
-        }
-
-        /// <summary>Subtle input-state feedback while the model streams in: the typed text dims
-        /// slightly and the placeholder becomes "…"; both restore when Send is interactable
-        /// again. The field itself stays usable (the first question can be typed early).</summary>
-        private void SetInputLoadingLook(bool loading)
-        {
-            if (inputField == null) return;
-            var txt = inputField.textComponent;
-            if (txt != null)
-            {
-                if (!inputIdleCached) { inputTextIdle = txt.color; inputIdleCached = true; }
-                txt.color = loading
-                    ? new Color(inputTextIdle.r, inputTextIdle.g, inputTextIdle.b, inputTextIdle.a * 0.55f)
-                    : inputTextIdle;
-            }
-            if (inputField.placeholder is TMP_Text ph)
-            {
-                if (placeholderIdle == null) placeholderIdle = ph.text;
-                ph.text = loading ? "…" : placeholderIdle;
-            }
-        }
-
         // ---------------------------------------------------------------- open / close
 
-        public void Open()
-        {
-            gameObject.SetActive(true);
-            IsOpen = true;
-            ConfigureCaret();   // defensive: fields wired/replaced at runtime get the caret too
-            FadeTo(1f, null);
-        }
+        protected override void OnOpen() => FadeTo(1f, null);
 
-        public void Close()
+        protected override void OnClose()
         {
             if (!gameObject.activeSelf) return;
-            IsOpen = false;
             FadeTo(0f, () => gameObject.SetActive(false));
         }
 
@@ -341,24 +216,6 @@ namespace DeepUnity.Tutorials.ChatDemo2D
             canvasGroup.alpha = target;
             fadeCoroutine = null;
             onDone?.Invoke();
-        }
-
-        // ---------------------------------------------------------------- UI sounds
-
-        /// <summary>Hooked to the Say/Leave buttons by the scene builder.</summary>
-        public void PlayButtonClick()
-        {
-            if (uiAudio == null || buttonClip == null) return;
-            uiAudio.pitch = Random.Range(0.96f, 1.04f);
-            uiAudio.PlayOneShot(buttonClip, 0.5f);
-        }
-
-        private void PlayTypeTick()
-        {
-            // skip the programmatic clears (send/Clear set text to "") — only real keystrokes tick
-            if (uiAudio == null || typeClips == null || typeClips.Length == 0 || inputField.text.Length == 0) return;
-            uiAudio.pitch = Random.Range(0.92f, 1.12f);
-            uiAudio.PlayOneShot(typeClips[Random.Range(0, typeClips.Length)], 0.35f);
         }
     }
 }

@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,9 +9,10 @@ using UnityEngine.UI;
 namespace DeepUnity
 {
     /// <summary>
-    /// The chat-window surface NPCChatBase drives. SoulsChatWindow (3D) and ChatWindow2D (2D)
-    /// already share this exact member set — the interface just names it so the base class can
-    /// talk to either without knowing the concrete type.
+    /// The chat-window surface NPCChatBase drives, so the NPC can talk to any environment's
+    /// window without knowing the concrete type. Do NOT implement this directly: derive the
+    /// window from <see cref="NPCDialogueWindow"/>, which implements the whole surface (plus the
+    /// AskUserQuestion popup) and leaves only the presentation to the subclass.
     /// </summary>
     public interface INPCChatWindow
     {
@@ -31,6 +33,57 @@ namespace DeepUnity
         /// bar above the input row; fed live per frame while a dialogue is open. Windows without
         /// a bar treat this as a no-op.</summary>
         void SetContextFill(float fill01);
+    }
+
+    /// <summary>
+    /// Chat-window capability: the question+options panel behind the NPC's AskUserQuestion tool. It
+    /// REPLACES the typing chrome while it is up — input field, context bar, Speak and Leave give
+    /// way to the question and its options, so the window never offers both ways to answer at once.
+    /// <see cref="NPCDialogueWindow"/> implements it for every environment, so deriving a window from
+    /// that class is all any new environment needs; NPCChatBase feature-detects it
+    /// (<c>Window as INPCToolQuestionWindow</c>) and drops the tool call with a console warning on a
+    /// window that somehow lacks it. Implement it yourself only to replace the panel wholesale — to
+    /// merely restyle it, override the base class's ToolQuestion* theme hooks; to change WHICH chrome
+    /// it stands down, override CollectToolQuestionChrome.
+    /// </summary>
+    public interface INPCToolQuestionWindow
+    {
+        /// <summary>Show the choice panel (question + 2-4 clickable options) in place of the typing
+        /// chrome. <paramref name="onPick"/> fires ONCE with the picked option's exact text; the panel
+        /// tears itself down on pick and restores what it hid.</summary>
+        void ShowToolQuestion(string npcName, string question, IReadOnlyList<string> options, System.Action<string> onPick);
+        /// <summary>Tear the popup down without a pick (dialogue closed underneath it).</summary>
+        void HideToolQuestion();
+    }
+
+    /// <summary>
+    /// A component that gives its NPC EXTRA tools on top of the built-in AskUserQuestion popup.
+    /// A provider is a MonoBehaviour on the same GameObject as the <see cref="NPCChatBase"/>, so
+    /// which tools an NPC has is authored in the SCENE (Velmire can hand his gear over; Morwenna
+    /// cannot) instead of being hard-coded in the base class.
+    /// <para>Providers own <b>internal</b> tools: world-state reads the player never sees. The
+    /// returned JSON goes straight back to the model as the &lt;tool_response&gt; and generation
+    /// resumes in the same breath — no window, no player turn. Anything the player must decide
+    /// belongs in AskUserQuestion instead, and any real value transfer belongs in the engine code
+    /// that reacts to the pick (<see cref="NPCChatBase.ToolQuestionAnswered"/>), which keeps the
+    /// dataset's gating law intact: reads are free, asking is free, giving is not.</para>
+    /// <para>Because a read is re-callable, it is also how NPC memory survives compaction: state
+    /// that lives in the world (has the player got the sword? did I already give mine away?) can be
+    /// re-established with one call after the transcript is summarized away.</para>
+    /// </summary>
+    public interface INPCToolProvider
+    {
+        /// <summary>One JSON function schema per tool, in the same compact
+        /// <c>{"type": "function", "function": {...}}</c> shape the SFT dataset uses — spliced into
+        /// the prompt's &lt;tools&gt; block. Keep them SHORT: the NPC pays for every tool in context
+        /// on every single turn.</summary>
+        IEnumerable<string> ToolSchemas { get; }
+
+        /// <summary>Answer a call this provider owns and return its result as JSON, or return null
+        /// when <paramref name="toolName"/> is not ours (the next provider is offered the call).
+        /// Runs synchronously on the main thread — a tool that must wait does not belong here.</summary>
+        string TryHandleTool(string toolName, string argumentsJson);
+
     }
 
     /// <summary>
@@ -63,49 +116,114 @@ namespace DeepUnity
         /// <summary>How the NPC answers: text-only, or text + streaming speech.</summary>
         public enum ConversationMode { LlmOnly, LlmPlusTts }
 
-        /// <summary>What happens to the conversation HISTORY between two openings of the dialogue.
-        /// (GPU residency is NOT decided here — the prefetch zone / talk trigger owns that.)</summary>
+        /// <summary>
+        /// What happens to the conversation HISTORY between two openings of the dialogue.
+        /// (GPU residency is NOT decided here — the prefetch zone / talk trigger owns that.)
+        /// <para><b>ResetEveryTime</b> — only the SYSTEM PROMPT is ever cached. Closing the dialogue
+        /// wipes the transcript and marks the live KV dead, so the next opening is a fresh
+        /// <c>InitializeChat(EffectiveSystemPrompt)</c> that hits the system-prompt KV disk cache and
+        /// nothing else. Same after quitting the app. Exactly like restarting a Claude Code session:
+        /// the persona is there, the conversation is not.</para>
+        /// <para><b>ResumeFromCompact</b> — the history is PERMANENT: closing the dialogue, walking out
+        /// of the residency zone (the model unloads) or quitting the app all keep every reply. Three
+        /// tiers serve a reopen, in order: (a) our conversation KV is still live on the pooled GPU
+        /// instance → just keep talking; (b) restore the whole conversation from the disk snapshot
+        /// written on the last clean close (KV/SSM + sampler state + transcript + compact) — this is
+        /// the tier that survives an app restart, and it needs <c>cacheKVCache</c>; (c) re-prefill
+        /// <see cref="BuildResumePrompt"/> (system prompt + HISTORY block + the recorded turns). The
+        /// window is repopulated with the stored turns either way, so the player sees the chat they
+        /// left.</para>
+        /// <para><b>What compaction does</b> (ResumeFromCompact only, at <c>maxContextLength</c>): the
+        /// model summarizes the WHOLE conversation into one text; that text is appended to the system
+        /// prompt as a <c>## MEMORY</c> block, the KV is recomputed from that prefix alone, and the
+        /// individual replies are dropped (the window starts visually empty on the next open). So a
+        /// compacted NPC is in the same shape as ResetEveryTime — except its system prompt now carries
+        /// the compact. There is only ever ONE compact in the prompt: a later compaction REPLACES it,
+        /// and it can do that losslessly because the old HISTORY block is still in the model's context
+        /// when it is asked to compact, so it folds forward whatever it judges worth keeping (the
+        /// dataset teaches exactly this). The compact is visible in the inspector as Compact Summary.</para>
+        /// </summary>
         public enum HistoryMode
         {
-            [Tooltip("The conversation ceases to exist the moment the chat CLOSES (same session): transcript wiped + live KV marked dead on close, fresh InitializeChat on the next open (the system-prompt KV disk cache still applies).")]
+            [Tooltip("Only the SYSTEM PROMPT is cached. The conversation ceases to exist the moment the chat CLOSES (transcript wiped, live KV marked dead), so every opening — and every app restart — starts from the bare persona, like restarting a Claude Code session.")]
             ResetEveryTime,
             // NOTE: the former middle value ContinueWhereLeftOff was removed 2026-07-15 — halting at
             // the limit was pointless (a full conversation is simply over); ResumeFromCompact keeps
             // talking instead. The enum is kept CONTIGUOUS (0,1) so (int)value == enumValueIndex ==
             // the serialized value; the builders' SetEnum uses enumValueIndex, so a gap would throw
             // "enum index is out of range". Scenes that used the old value were remapped to this one.
-            [Tooltip("Reopening resumes the SAME conversation (live KV while the model is resident, else restored from disk / re-prefilled). When it reaches Max Context Length the model COMPACTS itself: it summarizes the whole chat in one shot and the result rides in the system prompt as a HISTORY block, so talking continues on a short prefix forever. The KV is allocated larger than the limit so the compact pass has room. The limit-hitting reply is always delivered IN FULL (decoded, typed and spoken to the end) — 'Compacting…' appears only after the voice finishes (input blocked until it lands); the window keeps the whole conversation until the dialogue closes, and reopening starts visually empty (the compact lives only in the system prompt). Crash-recovery: compacts on the next open if one never landed. Never canceled once started.")]
+            [Tooltip("The history is PERMANENT — with every reply, across closing the dialogue, unloading the model and quitting the app (live KV while resident, else the disk snapshot, else a re-prefill of the recorded turns; the window is repopulated so you see the chat you left). When the conversation reaches Max Context Length the model COMPACTS itself: it summarizes the whole chat in one shot, that text is APPENDED TO THE SYSTEM PROMPT as a HISTORY block (visible below as Compact Summary), the KV is recomputed from that prefix and the individual replies are dropped — from there it is like ResetEveryTime, but with the compact baked into the prompt. Only ONE compact ever exists: the next compaction replaces it and folds forward whatever still matters (the old block is still in context when it compacts). The KV is allocated above the limit so the compact pass has room; the limit-hitting reply is always delivered IN FULL (decoded, typed and spoken to the end) and 'Compacting…' appears only after the voice finishes, with input blocked until it lands. Crash-recovery: compacts on the next open if one never landed. Never canceled once started.")]
             ResumeFromCompact,
         }
 
         [SerializeField, ViewOnly] protected NPCState state = NPCState.Idle;
         [SerializeField, UnityEngine.Serialization.FormerlySerializedAs("npc_name")] protected string NpcName = "Villager";
+        // NOT called system_prompt (renamed 2026-07-25): "system prompt" is reserved, in this
+        // project's vocabulary, for the WHOLE text that goes into Qwen's system message — tools,
+        // rules, this description and the ## MEMORY block. This field is only the description-and-
+        // rules part an author writes, so calling it the system prompt made people (rightly) expect
+        // the inspector field to be everything the model reads. The Effective System Prompt foldout
+        // below shows the real thing.
+        [Tooltip("Who this NPC is: persona, world facts, its rules — its only source of truth. NOT the whole system prompt: the model receives the # Tools block first (while tools are on), then this text, then the Compact Summary below under a ## MEMORY heading. The 'Effective System Prompt' foldout shows the assembled result. Editing this invalidates the NPC's KV caches.")]
         [TextArea(4, 12)]
-        [SerializeField] protected string system_prompt =
+        [SerializeField, UnityEngine.Serialization.FormerlySerializedAs("system_prompt")]
+        protected string descriptionAndRules =
             "You are a friendly villager. Stay in character at all times. " +
             "Keep your replies to one to three short sentences.";
+        // Sits directly under the description on purpose (user 2026-07-25): it IS part of the prompt
+        // the model sees — EffectiveSystemPrompt/BuildResumePrompt append it under ## MEMORY — so the
+        // two read together in the inspector.
+        [Tooltip("RUNTIME STATE (ResumeFromCompact): the model's own summary of everything before the last compaction, appended to the text above under a ## MEMORY heading. Only ever ONE — a new compaction replaces it, folding forward what still matters. Survives leaving play mode; Reset Conversation clears it. Edit it to hand-write the NPC's memory.")]
+        [TextArea(2, 8)]
+        [SerializeField] protected string compactSummary;
 
-        [Header("Conversation")]
+        // Lives in the BASE class (user 2026-07-25): every window derives from NPCDialogueWindow, which
+        // implements the whole surface NPCChatBase drives, and the component cannot run a single
+        // dialogue without one — so it is a base-class requirement, not a per-environment detail. The
+        // field name is unchanged from the subclasses' own, so existing scene references still bind.
+        [Tooltip("The dialogue window this NPC talks through — REQUIRED, nothing works without it. Any window deriving from NPCDialogueWindow (SoulsChatWindow in 3D, ChatWindow2D in 2D); one window is normally shared by every NPC in the scene.")]
+        [SerializeField] protected NPCDialogueWindow chatWindow;
+        // "Backend Tradeoff": drawn by NPCChatBaseEditor as its own labeled dial with the selected
+        // row's numbers under it. Serialized PER NPC but engine-wide once applied
+        // (BackendTradeoffTable.Level is static, as it must be — one GPU, one frame): the level of the
+        // NPC you are talking to is the level in force. Replaced the continuous smoothVsSpeed float
+        // 2026-07-26 (float→enum cannot be migrated by FormerlySerializedAs, so those scene values
+        // were dropped); renamed from llmTradeoff 2026-07-27, which enum→enum DOES migrate.
+        // SECOND field of the CONVERSATION group, not the tail of the LLM one (moved 2026-07-27): it
+        // stopped being an LLM setting the moment the table started pacing the voice too, and the
+        // machine you are on is the frame every other choice here is made inside — so it reads
+        // directly under the window, before the modes.
+        [Tooltip("How capable is this machine, as five fixed presets — the ONE dial the engine has. One pick sets EVERY per-frame backend budget at once: weight bytes fetched per frame while any model loads, prompt-prefill steps per frame, whole tokens decoded per frame, AND the voice's pacing (heavy TTS ticks per frame speaking and refilling, prebuffer seconds, decode chunk size, and how much banked audio makes it yield a frame to the LLM). Very Smooth = an old 2 GB card, Smooth = a GTX 1650 / 4 GB laptop (the reference machine), Balanced = a healthy mid-range desktop GPU, Fast / Very Fast = cards with headroom, where a loading hitch is cheaper than waiting. Note the TTS numbers run the OTHER WAY: a weak machine must spend MORE frames defending the audio, because a stutter in speech is worse than a stutter in framerate. Nothing self-tunes: this dial IS how the engine learns which machine it is on. Live — moving it mid-dialogue applies from the next frame, except the two fields pushed onto the voice component (prebuffer, chunk frames), which are written once in EnsureVoice like every other voice setting.")]
+        // Smooth, not Balanced: this repo's reference machine is a GTX 1650 / 4 GB laptop, and Smooth's
+        // 8 MB/frame fetch is EXACTLY the literal the engine shipped before this dial existed — so a
+        // scene rebuilt after the refactor loads at the same rate it always did, and only prefill and
+        // decode change (both because the old self-tuner was pinned at its floor, not by design).
+        // A stronger machine raises this per NPC; it is the one number a new machine has to be told.
+        [UnityEngine.Serialization.FormerlySerializedAs("llmTradeoff")]
+        [SerializeField] protected BackendTradeoffLevel backendTradeoff = BackendTradeoffLevel.Smooth;
         [Tooltip("LlmOnly = text-only replies (talk animation follows the writing; voice fields hidden below). LlmPlusTts = replies are spoken: the talk animation follows the AUDIO, and the next sentence synthesizes while the current one plays.")]
         [SerializeField] protected ConversationMode conversationMode = ConversationMode.LlmOnly;
         protected bool speakReplies => conversationMode == ConversationMode.LlmPlusTts;
-        [Tooltip("ResetEveryTime = wiped when the chat closes (same session). ResumeFromCompact = fully persistent (live KV while resident, restored from disk / re-prefilled after a release); once the conversation fills Max Context Length the model auto-compacts the history into a HISTORY block and keeps going (see the mode tooltip). The limit is driven by Max Context Length below.")]
+        [Tooltip("ResetEveryTime = the chat starts from the bare system prompt EVERY opening (only the system-prompt KV is cached). ResumeFromCompact = the history is permanent — it survives closing the dialogue AND quitting the app, with every reply — until it fills Max Context Length, at which point the model compacts the whole conversation into one text that is APPENDED TO THE SYSTEM PROMPT (the Compact Summary field below) and the replies are dropped. See the dropdown's own tooltips for the full lifecycle.")]
         [SerializeField] protected HistoryMode historyMode = HistoryMode.ResetEveryTime;
-        [Tooltip("Persist this NPC's KV cache to disk (persistentDataPath/DeepUnity): the system-prompt state in EVERY mode, plus — in the continue modes — the WHOLE conversation on a clean close (KV + sampler state + transcript), so reopening after the model was released (or the scene reloaded) restores the chat from disk instead of re-prefilling. Qwen3.5 only for now; Gemma3 NPCs fall back to the re-prefill path.")]
+        [Tooltip("Runaway guard, NOT a feature limit. One exchange may legitimately run text → call → text → call → text: decoding stops at each call, the result lands in the context, and the NPC carries on from there, so a single player line can produce several calls and several spoken stretches. This caps only the INTERNAL reads (an un-finetuned small model handed a read will happily read the same thing forever); AskUserQuestion is not counted, because it cannot loop — it waits for a human. Past the cap the read is REFUSED to the model as {\"error\": \"read_limit_reached\"}, which is what makes it stop and speak. 0 = no internal reads at all (every one is refused).")]
+        [Min(0)] [SerializeField] protected int maxToolReadsPerTurn = 6;
+        [Tooltip("Persist this NPC's KV cache to disk (persistentDataPath/DeepUnity): the system-prompt state in EVERY mode, plus — in ResumeFromCompact — the WHOLE conversation on a clean close (KV + sampler state + transcript + compact), so reopening after the model was released, the scene reloaded or the app restarted restores the chat from disk instead of re-prefilling. This is what makes ResumeFromCompact survive an app restart, so leave it ON for that mode. Qwen3.5 only for now; Gemma3 NPCs fall back to the re-prefill path.")]
         [SerializeField] protected bool cacheKVCache = true;
 
-        [Header("Text (LLM)")]
         [Tooltip("Which local LLM voices this NPC — the dropdown lists every model registered in LLMRegistry, so a freshly ported LLM appears here automatically. Sampling fields at -1 fall back to this model's Config presets.")]
         [SerializeField] protected string model = "Qwen3.5-0.8B";
         [Tooltip("Weight format. INT8 is ~lossless at half the VRAM — the recommended default. INT4 is lossy on models this small (Gemma int4 collapses outright).")]
         [SerializeField] protected LLMQuant quantization = LLMQuant.INT8;
         [Tooltip("Context window (tokens) — the conversation size the history mode acts on. ResumeFromCompact auto-compacts here (and allocates the KV +8192 above it for the compact pass). Sizes the KV cache (pre-allocated → more = more VRAM). 8192 default. Instances are pooled per (model, quant, KV, this length + headroom), so NPCs sharing a model should share this value.")]
-        [SerializeField] protected int maxContextLength = 8192;
+        [Min(256)] [SerializeField] protected int maxContextLength = 8192;
         [Tooltip("Let a thinking-capable model (Qwen3.5) reason in <think> before answering. The reasoning is NEVER voiced and never shown as reply text (the window's ShowThinkingTokens debug toggle can render it dimmed); while the model thinks, the dialog pulses an animated 'Thinking…' placeholder until the final answer starts. Non-thinking models ignore this.")]
         [SerializeField] protected bool allowThinking = false;
+        [Tooltip("The NPC's built-in interactive tool, ON by default. A # Tools block rides in the system prompt; a <tool_call> in the reply pulses 'Tool calling…' and then replaces the input row with the question + its clickable options (the JSON itself is never rendered, but the QUESTION is spoken like any other line), and the player's pick returns to the model as the <tool_response> result — the model then reacts to the choice in a fresh streamed turn. Every window deriving from NPCDialogueWindow renders it. Costs ~300 tokens of system prompt (Qwen3.5's own tools preamble — a shorter paraphrase measurably stops the model from ever calling): turn it off for an NPC with a very small Max Context Length, or one that should never offer choices.")]
+        [SerializeField] protected bool enableAskUserQuestion = true;
 
         [Header("Sampling (-1 = model preset)")]
-        [SerializeField] protected float temperature = 0.8f;
+        [Min(0f)] [SerializeField] protected float temperature = 0.8f;
         [Tooltip("Reply length cap in tokens.")]
         [SerializeField] protected int maxNewTokens = 1024;
         [Tooltip("-1 = model preset. 0 disables top-k filtering.")]
@@ -118,13 +236,7 @@ namespace DeepUnity
         [SerializeField] protected float presencePenalty = -1f;
         [Tooltip("-1 = model preset. 1 disables the repetition penalty.")]
         [SerializeField] protected float repetitionPenalty = -1f;
-        // "LLM Processing" (smooth <-> speed): drawn by NPCChatBaseEditor as its own labeled
-        // slider at the end of this Sampling section.
-        [Tooltip("The auto-detection ALWAYS computes reply pacing for a stable 60+ fps; this only biases around its result while you talk to THIS NPC. 0.5 = pure auto. Offsets multiply the measured budgets (toward Speed the frames may carry more decode → faster text; toward Smooth they carry less). The hard ends force the implementation limits: full Smooth = async decode + 1 layer/frame prefill, full Speed = sync decode + bulk prefill. Live: moving it mid-dialogue re-probes on the next reply.")]
-        [Range(0f, 1f)] [SerializeField] protected float smoothVsSpeed = 0.5f;
-        float appliedSmoothVsSpeed = -1f;   // last value pushed into InferencePerf (per dialogue)
 
-        [Header("Voice (TTS)")]
         [Tooltip("PocketTTS = Kyutai 100M AR, RTF ~0.15 int8 (speaks in real time DURING generation, voice cloning — DEFAULT); Kokoro = 82M non-AR, RTF ~0.3; Chatterbox = clause-streamed (RTF~1.4); CosyVoice3 = streaming-native. 2D demo NPCs are Kokoro-only and ignore this.")]
         [SerializeField] protected TtsModel ttsModel = TtsModel.PocketTTS;
         [Tooltip("TTS weight format. PocketTTS: int8 = 116 MB vs 209 MB fp16, same speed, mel-gated parity (also picks which voice-clone cache dir is used). Chatterbox: int8 = T3 matmuls int8 (~300 MB less, parity-validated); s3gen stays fp16 either way. Kokoro/CosyVoice ignore this (their voice component's weightsPath decides).")]
@@ -133,25 +245,27 @@ namespace DeepUnity
         [SerializeField] protected float voicePitch = 1.0f;
         [Tooltip("Loudness of this NPC's voice. AudioSource.volume tops out at 1, so this multiplies the samples themselves — >1 = louder (peaks clamp at full scale).")]
         [Min(0f)] [SerializeField] protected float voiceVolume = 1.4f;
+        [Tooltip("How loud the rest of the game stays while THIS NPC's dialogue is open — music, ambience, footsteps, everything outside the conversation. 1 = untouched, 0.5 = half, 0 = silence. Needs a ConversationAudioDucker in the scene, which eases there over ~3 s and back on close.")]
+        [Range(0f, 1f)] [SerializeField] protected float worldAudioWhileTalking = 1f;
         [Tooltip("BAKED voice shipped inside the selected TTS engine's weights export (voices/<name> dirs for PocketTTS/CosyVoice3, voices/<name>.bin voicepacks for Kokoro) — the inspector dropdown lists what's on disk. Pick 'Clone (reference clip)' on PocketTTS to clone from an AudioClip instead; a non-null clip always overrides this name.")]
         [SerializeField] protected string ttsVoice = "jean";
         [Tooltip("PocketTTS only: reference clip to VOICE-CLONE for this NPC (overrides the baked ttsVoice). First runtime use encodes it once through the Mimi encoder and caches by content hash; press 'Precompute voice-clone cache' below to bake the embedding into the shared Resources/Cache so runtime (editor AND builds) is a pure load — no recompute, ever.")]
         [SerializeField] protected AudioClip clonedVoiceClip;
         [Tooltip("Sentences per spoken chunk. Smaller = faster response, lower quality (prosody resets each sentence); larger = higher quality (intonation flows across sentences), slower response.")]
-        [Range(1, 3)] [SerializeField] protected int clausesPerChunk = 1;
-        [Tooltip("PocketTTS pacing: pause between spoken chunks that ended at a sentence ender (. ! ?), in seconds. Inside a batched chunk the model renders its own natural pauses.")]
-        [Min(0f)] [SerializeField] protected float sentencePauseSeconds = 0.36f;
-        [Tooltip("PocketTTS pacing: pause after a chunk cut at a semicolon, in seconds.")]
-        [Min(0f)] [SerializeField] protected float semicolonPauseSeconds = 0.2f;
-        [Tooltip("PocketTTS pacing: pause after an emergency comma cut (very long run-on sentences), in seconds.")]
-        [Min(0f)] [SerializeField] protected float commaPauseSeconds = 0.15f;
+        // 2, not 1 (user 2026-07-26): one sentence per chunk restarts prosody at every full stop and
+        // pays a TTS round-trip per sentence, which on this 4 GB card is the shakier trade. This value
+        // is pushed onto whichever voice component the NPC ends up with (see the ttsModel switch), so
+        // it — not the voice component's own default — is what every NPC actually runs.
+        [Range(1, 3)] [SerializeField] protected int clausesPerChunk = 2;
+        // Collapsed from three knobs to one (user 2026-07-26): a cut only ever lands at an ender, and
+        // every pause INSIDE a clause is the TTS model's own prosody — there was nothing for a
+        // comma-specific value to control.
+        [Tooltip("PocketTTS pacing: pause between spoken chunks, in seconds. Pauses inside a chunk are rendered by the model itself.")]
+        [Min(0f)] [SerializeField] [UnityEngine.Serialization.FormerlySerializedAs("sentencePauseSeconds")]
+        protected float clausePauseSeconds = 0.36f;
         [Tooltip("PocketTTS pacing: extra model-generated tail on the reply's last chunk, in seconds — lets the final word decay naturally instead of cutting ~0.16 s after it.")]
         [Min(0f)] [SerializeField] protected float replyTailSeconds = 0.32f;
 
-        [Tooltip("The walk-up prompt (\"[I] Speak\" / \"Talk — [ E ]\") shown while the player is in the talk trigger. Its OWN component on its OWN GameObject (fade/bob/text knobs live there) — the NPC only calls Show/Hide on it.")]
-        [SerializeField] protected NPCInteractPrompt interactPrompt;
-
-        [Header("Prefetch Zone (A/B test)")]
         [Tooltip("ON: the big sphere (3D) / circle (2D — auto-detected) around the NPC is the model-RESIDENCY zone: entering slow-prefetches the LLM + TTS in the background, both stay on the GPU while the player is inside (closing the chat releases nothing), and leaving unloads both. OFF: the small talk trigger plays that role instead — load on contact, unload when the player walks off it.")]
         [SerializeField] protected bool usePrefetchZone = false;
         [Min(0f)]
@@ -173,6 +287,11 @@ namespace DeepUnity
                  "the stream to full speed regardless, so this only shapes the background portion. " +
                  "3s suits walking approaches; raise toward 5-10s for large zones or low-end hardware.")]
         [SerializeField] protected float slowPrefetchSeconds = 3f;
+
+        // Sits below the zone knobs (user 2026-07-25): it is a scene reference the author wires once,
+        // not something tuned while iterating, so it does not belong up among the dialogue settings.
+        [Tooltip("The walk-up prompt (\"[I] Speak\" / \"Talk — [ E ]\") shown while the player is in the talk trigger. Its OWN component on its OWN GameObject (fade/bob/text knobs live there) — the NPC only calls Show/Hide on it.")]
+        [SerializeField] protected NPCInteractPrompt interactPrompt;
 
         // ---------------------------------------------------------------- runtime state
         protected LLM llm;
@@ -208,12 +327,51 @@ namespace DeepUnity
         public NPCState State => state;
         public bool LlmLoaded => llm != null;
         public bool LlmReady => llm != null && llm.IsReady;
+        /// <summary>True once the player has actually SPOKEN in this conversation — at least one
+        /// recorded turn they typed. A <c>tool</c> turn does NOT count: its <c>user</c> text is a
+        /// &lt;tool_response&gt; carrying an AskUserQuestion pick or a provider read, which the player
+        /// never typed (see <see cref="Turn"/>). The inspector's Reset Conversation button is gated on
+        /// this, so "there is nothing but the system prompt yet" reads as an unavailable button rather
+        /// than a click that does nothing.</summary>
+        public bool HasPlayerMessage
+        {
+            get
+            {
+                foreach (var t in transcript)
+                    if (!t.tool && !string.IsNullOrWhiteSpace(t.user)) return true;
+                return false;
+            }
+        }
 
-        [System.Serializable] private class Turn { public string user; public string npc; }
+        // `tool` marks a turn the PLAYER never typed: the <tool_response> that carried an
+        // AskUserQuestion pick or an internal provider read. It still belongs in the history (the
+        // NPC's reply only makes sense next to it) but it must never be replayed as a player line
+        // on a resume, nor drawn as a "You" bubble when the window is repopulated.
+        // `cut` marks a turn the player talked over: generation was cancelled mid-reply, so the text
+        // ends wherever the token stream happened to stop — usually mid-word. It is presentation only
+        // (the window appends CutMark) and deliberately NOT baked into `npc`: that string is the
+        // model-facing record and rich-text tags have no business in it. JsonUtility defaults a
+        // missing bool to false, so older on-disk transcripts deserialize as "not cut".
+        // `npcShown` is what the window actually REVEALED of a cut turn, which is less than `npc`: the
+        // reveal follows the voice, generation ran ahead of it, and cancelling stops generation later
+        // than speech. Only `npc` is the model-facing record (it matches the KV); this one exists so a
+        // reopened window shows what the player HEARD instead of paragraphs they never got.
+        //   null => a cut path that did not capture it: fall back to `npc` rather than lose text
+        //   ""   => captured, nothing was revealed: draw no bubble at all
+        //   text => captured: draw it with CutMark
+        [System.Serializable] private class Turn
+        { public string user; public string npc; public bool tool; public bool cut; public string npcShown; }
         [System.Serializable] private class TranscriptState { public List<Turn> turns = new List<Turn>(); public string summary; }
         private readonly List<Turn> transcript = new List<Turn>();
         private bool chatLive;
         private Turn activeTurn;                 // turn currently being generated (for interrupt finalize)
+        // The turn that has finished GENERATING but is still being spoken/revealed. Generation ends
+        // seconds before the voice does (pocket synthesizes ~6x realtime, so late in a reply that
+        // window is SECONDS long — the same reason AskNPC tests VoicesAudible() and not
+        // dialogueCoroutine). activeTurn is null throughout it, so marking a cut off activeTurn alone
+        // missed every interrupt and every Leave that happened while he was still talking, which is
+        // the majority of them (found by audit 2026-07-28).
+        private Turn drainTurn;
         private StringBuilder activeResponse;    // its streaming reply buffer
         // A background conversation-KV save is reading GPU state. Keyed PER LLM INSTANCE (audit
         // #9): pooled instances are shared across NPCs, so nobody may reset/forward THAT model
@@ -221,22 +379,46 @@ namespace DeepUnity
         // DIFFERENT one. Value = the NPC that latched the entry (OnDisable drops only its own).
         private static readonly Dictionary<LLM, NPCChatBase> kvSavesInFlight = new Dictionary<LLM, NPCChatBase>();
         private static bool KvSaveInFlightFor(LLM m) => m != null && kvSavesInFlight.ContainsKey(m);
-        // ResumeFromCompact maintenance state: the compact standing in for every turn before it
-        // (rides in the transcript JSON on disk), the in-flight compaction coroutine, and —
-        // STATIC, same pooled-model reasoning as kvSavesInFlight — which NPC is compacting, so a
-        // dialogue opening on the shared instance WAITS for it before driving the model itself
-        // (user rule: a compaction is never canceled once its Chat started — the window pulses
-        // "Compacting…" and input stays blocked until the compact lands).
-        private string compactSummary;
+        // ResumeFromCompact maintenance state: the in-flight compaction coroutine and — STATIC, same
+        // pooled-model reasoning as kvSavesInFlight — which NPC is compacting, so a dialogue opening
+        // on the shared instance WAITS for it before driving the model itself (user rule: a
+        // compaction is never canceled once its Chat started — the window pulses "Compacting…" and
+        // input stays blocked until the compact lands). The compact TEXT itself is the serialized
+        // compactSummary field up in the Conversation section, so it is visible in the inspector.
         private Coroutine compactRoutine;
         private static NPCChatBase compactingNpc;
+        // The in-flight manual reset (ResetConversation). Deliberately NOT paired with a static
+        // "resettingNpc" the way compactRoutine is paired with compactingNpc: a reset only ever runs
+        // when THIS NPC owns the conversation on the instance, and it re-establishes that same NPC's
+        // system prompt — so a sibling on the same pooled model has nothing to wait for, whereas a
+        // sibling's compaction genuinely drives the shared model.
+        private Coroutine resetRoutine;
+
+#if UNITY_EDITOR
+        // Sampling GATES, not defaults (user 2026-07-25): stop nonsense values being typed in, without
+        // touching what the fields mean. -1 stays the "use this model's preset" sentinel on every field
+        // that has one (see how Chat() reads them: `topK >= 0 ? topK : Config.DefaultTopK`), so anything
+        // negative snaps to exactly -1 rather than being clamped up into a real value — clamping topP to
+        // 0 would silently turn "let the model decide" into "nucleus off", which is a different run.
+        // topK keeps 0 as its own meaning (top-k filtering disabled), so it is not floored at 1.
+        protected virtual void OnValidate()
+        {
+            if (temperature < 0f) temperature = 0f;
+            if (topK < 0) topK = -1;
+            topP = topP < 0f ? -1f : Mathf.Clamp01(topP);
+            minP = minP < 0f ? -1f : Mathf.Clamp01(minP);
+            if (presencePenalty < 0f) presencePenalty = -1f;
+            if (repetitionPenalty < 0f) repetitionPenalty = -1f;
+        }
+#endif
 
         // ---------------------------------------------------------------- subclass surface
 
-        /// <summary>The shared chat window. IMPORTANT: implement with a Unity null check
-        /// (<c>chatWindow != null ? chatWindow : null</c>) so an unassigned serialized field
-        /// reads as real null through the interface.</summary>
-        protected abstract INPCChatWindow Window { get; }
+        /// <summary>The shared chat window, from the serialized field the base class now owns. The
+        /// <c>!= null</c> is a Unity null check on purpose: an unassigned or destroyed component must
+        /// read as real null through the interface, which a plain cast would not give.
+        /// <para>Override only to source the window from somewhere other than the field.</para></summary>
+        protected virtual INPCChatWindow Window => chatWindow != null ? chatWindow : null;
         /// <summary>Key that opens the dialogue while the player is in the talk trigger.</summary>
         protected abstract KeyCode InteractKey { get; }
         /// <summary>True when a player is in the trigger and free to start an interaction.</summary>
@@ -371,18 +553,13 @@ namespace DeepUnity
             if (state != NPCState.Idle && maxContextLength > 0 && llm != null)
                 Window?.SetContextFill(ContextTokensNow() / (float)maxContextLength);
 
-            // per-NPC Smooth⇄Speed preference: pushed to the (global) pacing runtime while THIS
-            // NPC's dialogue is the active one; live slider moves re-probe on the next reply
-            if (state != NPCState.Idle && !Mathf.Approximately(appliedSmoothVsSpeed, smoothVsSpeed))
-            {
-                bool reprobe = appliedSmoothVsSpeed >= 0f
-                               || !Mathf.Approximately(InferencePerf.SmoothVsSpeed, smoothVsSpeed);
-                InferencePerf.SmoothVsSpeed = smoothVsSpeed;
-                if (reprobe) InferencePerf.ResetAutoTune();
-                appliedSmoothVsSpeed = smoothVsSpeed;
-            }
-            else if (state == NPCState.Idle)
-                appliedSmoothVsSpeed = -1f;   // re-arm for the next dialogue (another NPC may have set it)
+            // per-NPC Backend Tradeoff level: pushed to the (global) table while THIS NPC's dialogue is
+            // the active one, so opening a conversation adopts that NPC's level even if another NPC
+            // left a different one behind. Comparing against the table needs no "applied" bookkeeping
+            // of its own (the old float did, to trigger an auto-tuner re-probe that no longer exists),
+            // and an inspector change mid-dialogue lands on the very next frame.
+            if (state != NPCState.Idle && BackendTradeoffTable.Level != backendTradeoff)
+                BackendTradeoffTable.Level = backendTradeoff;
 
             // Talk-animation watch. LLM+TTS with Kokoro: the gesture follows the AUDIO (ring
             // actually audible — the NPC keeps talking after the window closes too). Text-only:
@@ -416,6 +593,18 @@ namespace DeepUnity
                 bool inside = IsPlayerInsideZone(playerZoneT.position);
                 if (inside && !inPrefetchZone)
                 {
+                    // Adopt THIS NPC's level before the streams start (fix 2026-07-28). The push below
+                    // is gated on leaving Idle, but the whole point of the walk-up is that we are still
+                    // Idle — so every prefetch ran on whatever level was left over, which on a fresh
+                    // play is the static default (Balanced). Visible in the 2026-07-28 log on the
+                    // reference 1650: `SLOW prefetch started — 1009 MB at 2.1 MB/frame` is Balanced's
+                    // 16.8/8, then `BOOSTED to max budget — 8.4 MB/frame` is Smooth's — the same load
+                    // changing budget mid-flight because the NPC woke up. A weak machine was streaming
+                    // at twice its configured rate during precisely the seconds the dial exists to
+                    // protect. Same last-writer-wins semantics as the conversation push: the NPC the
+                    // player is walking toward is the one about to be talked to.
+                    if (BackendTradeoffTable.Level != backendTradeoff)
+                        BackendTradeoffTable.Level = backendTradeoff;
                     kkVoice?.SlowPrefetchNow(slowPrefetchSeconds);
                     kkVoice?.PrewarmKernels();   // shader compiles hide in the walk-up too
                     cvVoice?.SlowPrefetchNow(slowPrefetchSeconds);
@@ -471,11 +660,17 @@ namespace DeepUnity
                     if (pkVoice == null) pkVoice = gameObject.AddComponent<PocketTTSModeling.PocketTTSVoice>();
                     pkVoice.pitch = voicePitch;
                     pkVoice.volume = voiceVolume;
-                    pkVoice.sentencePauseSeconds = sentencePauseSeconds;
-                    pkVoice.semicolonPauseSeconds = semicolonPauseSeconds;
-                    pkVoice.commaPauseSeconds = commaPauseSeconds;
+                    pkVoice.clausePauseSeconds = clausePauseSeconds;
                     pkVoice.replyTailSeconds = replyTailSeconds;
                     pkVoice.clausesPerChunk = clausesPerChunk;
+                    // Tier-driven, not authored per NPC (2026-07-27): both are statements about the
+                    // GPU, not about this character, and PocketTTSVoice used to learn them per device
+                    // with an escalation ladder that cost an audible gap per rung. Pushed from the
+                    // NPC's OWN row rather than BackendTradeoffTable.Current, because the static Level
+                    // only becomes this NPC's while its dialogue is open — EnsureVoice runs earlier.
+                    var tier = BackendTradeoffTable.At(backendTradeoff);
+                    pkVoice.prebufferSeconds = tier.ttsPrebufferSeconds;
+                    pkVoice.streamChunkFrames = tier.ttsStreamChunkFrames;
                     pkVoice.voiceName = ttsVoice;   // baked voices/<name> (default "jean")
                     if (pkVoice.clonedVoiceClip != clonedVoiceClip)
                         pkVoice.SetClonedVoice(clonedVoiceClip);   // clone-from-clip (cached) overrides baked
@@ -540,6 +735,7 @@ namespace DeepUnity
             int cap = historyMode == HistoryMode.ResumeFromCompact ? maxContextLength + COMPACT_HEADROOM : maxContextLength;
             llm = LLMPool.Acquire(model, quantization, kv, cap);
             llm.DiskKVCache = cacheKVCache;   // per-NPC toggle: system-prompt + conversation KV disk cache
+            llm.CacheOwnerKey = ConversationKvKey();   // one cache file per NPC, overwritten when its prompt changes
             chatLive = false;   // we held no reference — whatever KV it carries isn't OUR conversation
         }
 
@@ -560,20 +756,21 @@ namespace DeepUnity
         // per-instance budgets, this governor retargets that global every frame so the REMAINING
         // bytes land in roughly the walk-up window, then restores the full-speed budget. Ends
         // early (and boosts) when the dialogue opens, the model finishes, or the zone releases it.
-        // The full-speed baseline is captured ONCE per session (static) — with overlapping zones
-        // two governors run concurrently, and the second must not adopt the first one's slowed
-        // value as "full speed".
+        // BOTH ends of the rate come from the dial (BackendTradeoffTable): SlowFetchBytesPerFrame to
+        // start on, FetchBytesPerFrame to boost back to. This used to latch the full-speed baseline
+        // into a static on first use, because with overlapping zones two governors run concurrently
+        // and the second must not adopt the first one's SLOWED value as "full speed" — reading the
+        // row instead makes that class of bug impossible (2026-07-26): the dial is the truth
+        // regardless of how many governors are mid-flight, or which of them ran first.
         private Coroutine llmSlowJob;
-        private static int llmFullBudget = -1;
 
         // Entry point for the zone: seeds a SLOW budget BEFORE the Acquire so the loader's own
         // "[GPU] ... SLOW prefetch started" line tells the truth from the first frame (the exact
         // remaining/window rate takes over on the next frames once totals are known).
         private void BeginLlmSlowPrefetch()
         {
-            if (llmFullBudget < 0) llmFullBudget = LLM.UploadBudgetBytes;
             bool fresh = llm == null;
-            if (fresh) LLM.UploadBudgetBytes = System.Math.Max(64 * 1024, llmFullBudget / 8);
+            if (fresh) LLM.UploadBudgetBytes = BackendTradeoffTable.SlowFetchBytesPerFrame;
             EnsureLlm();
             if (llmSlowJob != null) StopCoroutine(llmSlowJob);
             llmSlowJob = StartCoroutine(LlmSlowPrefetch());
@@ -590,7 +787,7 @@ namespace DeepUnity
                 if (remaining > 0)
                 {
                     long frames = (long)Mathf.Max(1f, (deadline - Time.unscaledTime) * 60f);
-                    LLM.UploadBudgetBytes = (int)System.Math.Min(llmFullBudget,
+                    LLM.UploadBudgetBytes = (int)System.Math.Min(BackendTradeoffTable.FetchBytesPerFrame,
                         System.Math.Max(64 * 1024, remaining / frames));
                     if (!announced)
                     {
@@ -604,18 +801,46 @@ namespace DeepUnity
             // boost: dialogue opened / window elapsed / released. Announce it only when there is
             // actually something left to stream — completion has its own "resident" line.
             if (llm != null && !llm.IsReady)
-                ResidencyLog.Budget(llm.WeightsLabel, llmFullBudget,
+                ResidencyLog.Budget(llm.WeightsLabel, BackendTradeoffTable.FetchBytesPerFrame,
                                     System.Math.Max(0, llm.TotalWeightBytes - llm.UploadedWeightBytes));
-            LLM.UploadBudgetBytes = llmFullBudget;
+            LLM.UploadBudgetBytes = BackendTradeoffTable.FetchBytesPerFrame;
             llmSlowJob = null;
         }
 
         // ---------------------------------------------------------------- interaction flow
 
+        // Which NPCs currently have their dialogue open. A SET rather than a counter so a double
+        // open, a disable mid-conversation or a destroyed NPC can never leak the "someone is
+        // talking" state — the thing <see cref="ConversationAudioDucker"/> hangs the world-audio
+        // duck off, and a stuck true would leave the game permanently quiet.
+        static readonly HashSet<NPCChatBase> conversing = new HashSet<NPCChatBase>();
+
+        /// <summary>True while ANY NPC in the scene has its dialogue open — from the moment the
+        /// window starts opening until it has fully closed, replies and silences alike. Environments
+        /// use it to step out of the NPC's way while it speaks (see
+        /// <see cref="ConversationAudioDucker"/>, which ducks every non-conversation sound).</summary>
+        public static bool AnyConversationOpen => conversing.Count > 0;
+
+        /// <summary>Where world audio should sit right now: the QUIETEST
+        /// <c>worldAudioWhileTalking</c> among the NPCs currently in conversation, or 1 (untouched)
+        /// when nobody is talking. The minimum — not the last one to open — so overlapping dialogues
+        /// cannot let a permissive NPC undo a strict one's ducking.</summary>
+        public static float WorldAudioTarget
+        {
+            get
+            {
+                float t = 1f;
+                foreach (var npc in conversing)
+                    if (npc != null && npc.worldAudioWhileTalking < t) t = npc.worldAudioWhileTalking;
+                return t;
+            }
+        }
+
         public void StartInteraction()
         {
             dialogueEpoch++;
             state = NPCState.PreparingForInteraction;
+            conversing.Add(this);
             if (interactPrompt != null) interactPrompt.Hide();
             OnInteractionStarted();
             dialogueCoroutine = StartCoroutine(OpenConversation());
@@ -637,7 +862,7 @@ namespace DeepUnity
         ///                             The state being resumed may be a background-COMPACTED one:
         ///                             when a chat reaches Max Context Length,
         ///                             CompactConversationRoutine collapses the history to
-        ///                             [system prompt + HISTORY: compact], so every tier below
+        ///                             [system prompt + ## MEMORY + compact], so every tier below
         ///                             stays short (live KV, disk KV and the re-prefill all carry
         ///                             the compacted prefix). Reopening mid-compaction WAITS on it
         ///                             behind a "Compacting…" pulse (input stays blocked).
@@ -667,7 +892,13 @@ namespace DeepUnity
             // "Thinking…" pulses "Compacting…" instead until the routine finishes.
             if (compactingNpc != null && compactingNpc.llm == llm)
                 yield return ShowCompactingUntilDone(w);
+            // a manual reset is tearing this conversation down and re-initializing the model on the
+            // bare system prompt — let it land before we init/restore onto the same instance. Its
+            // InitializeChat holds the model's Busy guard, so ours would be REFUSED, and silently
+            // (LLM.Guarded warns and yield-breaks). Bounded: the reset is itself bounded.
+            while (resetRoutine != null) yield return null;
             llm.DiskKVCache = cacheKVCache;   // re-assert (a compaction/resume prefill clears it temporarily)
+            llm.CacheOwnerKey = ConversationKvKey();   // pooled instance: claim the cache names for THIS NPC
 
             // a background conversation-KV save still reading THIS model's GPU state must finish
             // before anything resets/forwards it again (the SSM snapshot would tear mid-read) —
@@ -701,7 +932,7 @@ namespace DeepUnity
                     // — what the player saw is ground truth. Gemma3 doesn't implement the API yet
                     // (base no-op reports false) so its NPCs always take the fallback below.
                     yield return llm.TryRestoreConversationKV(ConversationKvKey(), ok => restored = ok,
-                        system_prompt, AcceptRestoredTranscript);
+                        EffectiveSystemPrompt, AcceptRestoredTranscript);
                 }
                 if (!restored)
                 {
@@ -718,7 +949,7 @@ namespace DeepUnity
                     bool resume = historyMode != HistoryMode.ResetEveryTime
                         && (transcript.Count > 0 || !string.IsNullOrEmpty(compactSummary));
                     if (resume) llm.DiskKVCache = false;
-                    yield return llm.InitializeChat(system_prompt: resume ? BuildResumePrompt() : system_prompt);
+                    yield return llm.InitializeChat(system_prompt: resume ? BuildResumePrompt() : EffectiveSystemPrompt);
                     llm.DiskKVCache = cacheKVCache;
                 }
                 chatLive = true;
@@ -726,20 +957,25 @@ namespace DeepUnity
             }
             if (epoch != dialogueEpoch) yield break;   // closed during restore/prefill
 
-            if (historyMode != HistoryMode.ResetEveryTime && transcript.Count > 0)
-                RepopulateWindow();   // restore the turns since the last compaction (the compact itself stays invisible)
+            // (No repopulate here. RepaintTranscript below is the ONE painter — see the note on it.
+            // Until 2026-07-28 this line called RepopulateWindow() as well and every reopen drew the
+            // whole history TWICE. Painting after the on-open compaction is also the correct order:
+            // a compact that lands here changes what should be visible.)
 
             // Context-window state now that the conversation KV is live (ResumeFromCompact only):
             // a state restored ABOVE the trigger means a previous compaction never landed (game
             // stopped mid-compact) — compact it now, before the player talks, behind the
             // "Compacting…" pulse. Normal live triggering happens after each reply.
-            if (historyMode == HistoryMode.ResumeFromCompact && compactRoutine == null && ContextFull())
+            WarnIfPrefixOverBudget();
+            if (historyMode == HistoryMode.ResumeFromCompact && compactRoutine == null && ContextFull()
+                && HasCompactableHistory())
             {
                 compactRoutine = StartCoroutine(CompactConversationRoutine());
                 yield return ShowCompactingUntilDone(w);
             }
 
             if (epoch != dialogueEpoch) yield break;   // closed during the on-open compaction
+            RepaintTranscript(w);
             w.SetInfoText("");
             w.SetSendLoading(false);
             if (w.SendButton != null) w.SendButton.interactable = true;
@@ -757,7 +993,14 @@ namespace DeepUnity
                 return;
             if (state != NPCState.WaitingInInteraction && state != NPCState.TalkingInInteraction)
                 return;
-            if (compactRoutine != null || interruptPending)   // compacting owns the model / interrupt already queued
+            // compacting owns the model / interrupt already queued / a manual reset is demolishing the
+            // conversation this line would have been part of
+            if (compactRoutine != null || interruptPending || resetRoutine != null)
+                return;
+            // the model is mid-tool-call and owns the turn: either the choice panel is up, or the reply
+            // that ended in a call is still being spoken and the panel is about to replace this very
+            // input row. A user turn slipped in between would orphan the pending call.
+            if (toolQuestionOpen || awaitingToolDispatch)
                 return;
 
             string question = w.InputField.text;
@@ -789,8 +1032,10 @@ namespace DeepUnity
             if (w == null || string.IsNullOrWhiteSpace(prompt) || state != NPCState.WaitingInInteraction)
                 return;
             // scripted events obey the same gates as the player — a Talk launched over a running
-            // compaction/interrupt/reply would double-forward the model (audit #3)
-            if (compactRoutine != null || interruptPending || dialogueCoroutine != null || VoicesAudible())
+            // compaction/interrupt/reply would double-forward the model (audit #3); an open tool
+            // question owns the turn the same way
+            if (compactRoutine != null || interruptPending || dialogueCoroutine != null || VoicesAudible()
+                || toolQuestionOpen || resetRoutine != null)
             {
                 ConsoleMessage.Warning($"[NPC] {NpcName}: AskNPCSilent dropped — model busy (reply/compaction in flight).");
                 return;
@@ -846,6 +1091,10 @@ namespace DeepUnity
             StopRevealJob();
             bool wasSynced = revealActive;
             revealActive = false;
+            // Mark NOW, before any wait: Talk clears activeTurn as it unwinds, and the unwind is what
+            // we are about to wait on. bubbleLive is the frozen on-screen text, so a reopened window
+            // replays what was heard, not what was generated.
+            MarkReplyCutShort();
             llm?.CancelChat();
             FadeOutVoices();          // ~1 s smooth ramp to silence, never a hard cut
             float deadline = Time.unscaledTime + 10f;
@@ -864,9 +1113,32 @@ namespace DeepUnity
             while (compactRoutine != null && epoch == dialogueEpoch) yield return null;
             interruptPending = false;
             if (dialogueCoroutine != null || state != NPCState.WaitingInInteraction || epoch != dialogueEpoch)
+            {
+                // This bail drops the player's question on the floor and, until 2026-07-28, said so
+                // nowhere: the symptom is "I sent a message mid-reply and nothing ever happened", with
+                // a silent log. Name the guard that fired and how long we waited, so the next report is
+                // a diagnosis instead of three rounds of guessing.
+                ConsoleMessage.Warning(
+                    $"[NPC] {NpcName}: interrupt dropped the queued question — " +
+                    $"dialogueCoroutine {(dialogueCoroutine != null ? "STILL RUNNING" : "null")}, " +
+                    $"state {state} (need WaitingInInteraction), " +
+                    $"epoch {epoch}->{dialogueEpoch}, " +
+                    $"waited {Time.unscaledTime - (deadline - 10f):F1}s.");
                 yield break;          // model stuck (fallback close handles it) or dialogue closed meanwhile
+            }
+            ConsoleMessage.Info($"[NPC] {NpcName}: interrupt handed over after " +
+                                $"{Time.unscaledTime - (deadline - 10f):F1}s — asking the queued question.");
             // a reply cut before it SPOKE anything leaves its dots/Thinking bubble behind
             if (wasSynced && string.IsNullOrEmpty(spokenShown)) w.PopLastMessage();
+            // ...and one that DID get some words out keeps them, now flagged as cut short. Drawn here,
+            // after every wait above: the settle paths are all gated on revealActive (false since the
+            // top of this method) so none of them can repaint over it from this point on.
+            else if (!string.IsNullOrEmpty(bubbleLive))
+            {
+                w.PopLastMessage();
+                w.AddMessage(NpcName, Bubble(WithCutMark(bubbleLive)));
+                bubbleLive = null;
+            }
             w.AddMessage("You", question);
             w.InputField.ActivateInputField();   // the fade window steals focus — hand it back
             dialogueCoroutine = StartCoroutine(Talk(question));
@@ -881,16 +1153,21 @@ namespace DeepUnity
         string spokenShown;          // what the window currently shows of the in-flight reply
         string pendingFullReply;     // full generated text (set once generation completes)
         bool revealActive;
+        // The LIVE part (no exchangePrefix) of the reply bubble as last drawn — the text an interrupt
+        // has to append CutMark to. Tracked separately from spokenShown because that one only exists
+        // on the voice-paced path: without TTS the bubble follows the raw token stream instead, and an
+        // interrupt there needs marking just the same.
+        string bubbleLive;
 
         bool SyncedReveal => speakReplies && (kkVoice != null || pkVoice != null);
 
         // ---- thinking-dots placeholder + <think> stream filtering --------------------------
         Coroutine dotsJob;
 
-        void StartThinkingDots(INPCChatWindow w)
+        void StartThinkingDots(INPCChatWindow w, string label = null)
         {
             StopThinkingDots();
-            dotsJob = StartCoroutine(ThinkingDots(w));
+            dotsJob = StartCoroutine(ThinkingDots(w, label));
         }
 
         void StopThinkingDots()
@@ -898,12 +1175,39 @@ namespace DeepUnity
             if (dotsJob != null) { StopCoroutine(dotsJob); dotsJob = null; }
         }
 
-        IEnumerator ThinkingDots(INPCChatWindow w)
+        /// <summary>Redraw the surviving conversation into a freshly opened window.
+        /// <para>The continue modes keep their transcript across a close, and with the disk cache
+        /// across an app restart too — but the window was cleared unconditionally on open, so a
+        /// resumed conversation LOOKED like a first meeting while the KV remembered everything the
+        /// player could no longer see (user 2026-07-26). Turns already compacted away are
+        /// deliberately absent: <c>transcript</c> is cleared when a compaction lands because the
+        /// summary stands in for them, which is exactly "load the messages that were NOT compacted".
+        /// ResetEveryTime is unaffected — it wipes the transcript on open, so there is nothing to
+        /// draw, and that mode's whole point is to forget.</para>
+        /// A <c>tool</c> turn draws only the NPC's side: its `user` text is a
+        /// &lt;tool_response&gt; the player never typed (see <see cref="Turn"/>).</summary>
+        void RepaintTranscript(INPCChatWindow w)
+        {
+            if (transcript.Count == 0 && string.IsNullOrEmpty(compactSummary)) return;
+            // without this the conversation appears to begin mid-thought — the earlier turns exist,
+            // they are just folded into the summary the model still reads
+            if (!string.IsNullOrEmpty(compactSummary))
+                w.AddMessage(NpcName, Bubble(StatusStyled("(earlier conversation summarized)")));
+            foreach (var t in transcript)
+            {
+                if (!t.tool && !string.IsNullOrWhiteSpace(t.user)) w.AddMessage("You", t.user);
+                string npcText = DisplayedNpcText(t);
+                if (!string.IsNullOrWhiteSpace(npcText)) w.AddMessage(NpcName, Bubble(npcText));
+            }
+        }
+
+        IEnumerator ThinkingDots(INPCChatWindow w, string labelOverride = null)
         {
             string[] frames = { "..", "...", "." };
             // with thinking enabled the model REALLY reasons behind these dots (until the final
-            // </think>), so say so; plain models just get the typing pulse
-            string label = allowThinking ? "Thinking" : "";
+            // </think>), so say so; plain models just get the typing pulse. A caller can name what
+            // is actually happening instead — "Tool calling" while a <tool_call> streams.
+            string label = labelOverride ?? (allowThinking ? "Thinking" : "");
             int i = 0;
             // self-terminates when the reply ends or the dialogue closes
             while (state == NPCState.TalkingInInteraction)
@@ -911,9 +1215,39 @@ namespace DeepUnity
                 yield return new WaitForSecondsRealtime(0.4f);
                 if (state != NPCState.TalkingInInteraction) break;
                 w.PopLastMessage();
-                w.AddMessage(NpcName, StatusStyled(label + frames[i++ % 3]));
+                w.AddMessage(NpcName, Bubble(StatusStyled(label + frames[i++ % 3])));
             }
             dotsJob = null;
+        }
+
+        /// <summary>What a rebuilt window should show for one transcript turn: the full reply normally,
+        /// and for a turn the player cut short (send-while-talking or Leave-while-talking) only the part
+        /// that was actually revealed, marked. Returns "" for a turn cut before it said anything — the
+        /// player never heard it, so it gets no bubble, matching what the live interrupt does.
+        /// <para>Never touches <c>Turn.npc</c>, which is the model's record and must stay whole.</para></summary>
+        /// <summary>Record that the player cut this reply short — by sending over it or by leaving —
+        /// so a rebuilt window shows what was HEARD plus the cut marker instead of paragraphs that were
+        /// generated but never spoken. Covers the generating turn AND the one still draining through
+        /// the voice.
+        /// <para>Self-cancelling: if everything generated was also revealed, there is nothing to mark
+        /// and this returns without touching the turn. That is what keeps it safe to call
+        /// unconditionally on every close, including clean ones.</para></summary>
+        void MarkReplyCutShort()
+        {
+            Turn t = activeTurn ?? drainTurn;
+            if (t == null) return;
+            string shown = bubbleLive ?? "";
+            // t.npc is null while still generating (Talk sets it at the end) — then it is certainly cut.
+            if (t.npc != null && shown.Length >= t.npc.Length) return;
+            t.cut = true;
+            t.npcShown = shown;
+        }
+
+        static string DisplayedNpcText(Turn t)
+        {
+            if (!t.cut) return t.npc;
+            if (t.npcShown == null) return WithCutMark(t.npc);   // cut, but nothing captured
+            return t.npcShown.Length == 0 ? "" : WithCutMark(t.npcShown);
         }
 
         static string ThinkStyled(string think)
@@ -923,6 +1257,25 @@ namespace DeepUnity
         // render them italic + slightly dimmed so they read as a different breed of text
         static string StatusStyled(string status)
             => $"<i><color=#CFCFCFC8>{status}</color></i>";
+
+        // A call that was thrown away. Same italic meta-text breed as StatusStyled, but a DESATURATED
+        // red so it reads as "this did not happen" at a glance without shouting like a real error would
+        // (user 2026-07-28: "mai cu un rosu asa cu saturatie redusa"). Deliberately close in value to
+        // the grey above so the two sit together in one bubble without one of them dominating.
+        static string CanceledStyled(string status)
+            => $"<i><color=#C68B8BC8>{status}</color></i>";
+
+        // "the player talked over him here". Three ASCII periods, not U+2026: the demos use static
+        // TMP font atlases and a missing glyph renders as a hollow box, which would read as a bug.
+        // The blue is desaturated and slightly transparent on purpose — it has to be noticeable as a
+        // different KIND of mark from dialogue without competing with the words it follows.
+        const string CutMark = "<color=#7FA6D0C0>...</color>";
+
+        /// <summary>Dialogue text plus the interrupted marker, unless it is already there (the freeze
+        /// path can be reached twice — a queued ask during a fade, then the unwind).</summary>
+        static string WithCutMark(string shown)
+            => string.IsNullOrEmpty(shown) || shown.EndsWith(CutMark, System.StringComparison.Ordinal)
+             ? shown : shown + CutMark;
 
         /// <summary>Split the accumulated reply into visible/think channels. Re-parses the FULL
         /// string every token (replies are short) so tags split across tokens just work; a
@@ -937,7 +1290,8 @@ namespace DeepUnity
             {
                 if (full[i] == '<')
                 {
-                    string tag = inThink ? "</think>" : "<think>";
+                    string tag = inThink ? Qwen3_5Modeling.Qwen3_5ChatTemplate.ThinkEndTag
+                                        : Qwen3_5Modeling.Qwen3_5ChatTemplate.ThinkTag;
                     int remain = full.Length - i, match = 0;
                     while (match < tag.Length && match < remain && full[i + match] == tag[match]) match++;
                     if (match == tag.Length) { inThink = !inThink; i += tag.Length; continue; }
@@ -948,6 +1302,647 @@ namespace DeepUnity
             }
             visible = vis.ToString();
             think = thk.ToString();
+        }
+
+        // ---- Tools (enableAskUserQuestion + INPCToolProvider components) ------------------------
+        // One generic interactive tool covers every window interaction: the model emits
+        // AskUserQuestion(question, options[]) inside <tool_call> tags → the window shows a modal
+        // with clickable options → the pick returns as the <tool_response> result → the model
+        // reacts in a fresh streamed turn. The JSON never reaches the screen or the TTS (same
+        // channel-split treatment as <think>).
+        // INTERNAL tools come from INPCToolProvider components on the NPC (see the interface above):
+        // same wire format, but the result goes straight back to the model with no window in
+        // between, so an NPC can read world state mid-reply before deciding what to offer.
+
+        // The block is Qwen3.5's OWN preamble — ~300 tokens for AskUserQuestion alone, ~400 with
+        // Velmire's gear read, and every one of them is charged to the NPC's Max Context Length on
+        // every turn. It stays verbatim rather than paraphrased because it is what the model was
+        // trained on; a compact paraphrase measurably degraded tool calling.
+        //
+        // Qwen's text itself does NOT live here any more (moved 2026-07-28): it is owned by
+        // Qwen3_5Modeling.Qwen3_5ChatTemplate, transcribed from the vendored chat_template.jinja and
+        // guarded against drift by Qwen3_5ChatTemplateProbe. A gameplay behaviour class holding a
+        // tokenizer-level contract as a hand-typed string was exactly how three prompt divergences
+        // got into the training data before they were caught by eye on 2026-07-26. What DOES stay
+        // here is the two bullets that are OURS (below), because they are ours — the finetune
+        // depends on them and they must never be mistaken for something Qwen shipped.
+        //
+        // EVERYTHING that pushes the model to call lives HERE, in the prompt the author can read in the
+        // inspector — that is a deliberate constraint (user 2026-07-25: "no hidden mechanisms; put it all
+        // in the system prompt, the finetune fixes the rest"). An earlier engine-side rescue that quietly
+        // asked the model to convert its own prose question into a call was removed for exactly that
+        // reason, even though it worked.
+        //
+        // MEASURED, 2026-07-25, un-finetuned Qwen/Qwen3.5-0.8B, greedy, Velmire's persona, three
+        // "I need a weapon" turns each: a compact JSON block called 1/3 times (and that one call copied
+        // the block's own worked example verbatim, which is why no example lives here now), Qwen3.5's
+        // official XML preamble 0/3, +"HARD RULE: never ask in prose" 0/3. So prompt-only elicitation on
+        // a 0.8B is weak, and the two <IMPORTANT> lines below are the honest best effort until the v1.4
+        // finetune lands — after which whatever format IT is trained on becomes the right thing to ship
+        // here (the parser already accepts both).
+        // Deliberately says NOTHING about how to PHRASE the question. This block is shared by every NPC
+        // that gets the tool, so anything specific in here travels: the phrasing rule used to carry a
+        // worked example naming one demo character, and Velmire's sword and shield ended up in Granny
+        // Marla's and Anya's prompts (user 2026-07-26). Phrasing is a per-NPC concern — impersonal,
+        // third-person question text matters for a VOICED NPC, where the spoken line and the on-screen
+        // prompt are different channels, and much less for a text-only 2D demo — so it belongs in that
+        // NPC's own descriptionAndRules, and in the finetune. Dropping the clause also returns ~45
+        // tokens of every tool-bearing NPC's context.
+        // The SHAPE matters as much as the words: this is byte-for-byte what `tool | tojson` emits
+        // for this schema (compact one-line JSON, ", " and ": " separators). That is the only reason
+        // the assembled block is byte-identical to the template's — a re-indented or differently
+        // spaced schema would still be valid JSON and still be a divergence from the dataset.
+        const string AskUserQuestionSchema =
+            "{\"type\": \"function\", \"function\": {\"name\": \"AskUserQuestion\", \"description\": " +
+            "\"Put a choice to the player: shows the question with 2-4 clickable options and returns the one they pick. " +
+            "Use it for any real decision - taking or refusing what you offer, picking a path, agreeing to a deal.\", " +
+            "\"parameters\": {\"type\": \"object\", \"properties\": {" +
+            "\"question\": {\"type\": \"string\"}, " +
+            "\"options\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}}, " +
+            "\"required\": [\"question\", \"options\"]}}}";
+
+        // ---- the two <IMPORTANT> bullets that are OURS, not Qwen's -----------------------------
+        // Everything else in the block — the header, the schema list, the call-format spec and the
+        // four reminder bullets above these — is Qwen3.5's own preamble and lives in
+        // Qwen3_5ChatTemplate, transcribed from the vendored chat_template.jinja. These two are
+        // DeepUnity's, spliced in at the end of the reminder list (the one seam that moves none of
+        // Qwen's bytes), and they are kept HERE precisely so the boundary stays visible: the v1.4
+        // finetune is trained on them, so they must never be edited as if they were Qwen's, and
+        // Qwen's must never be edited as if they were ours.
+        // Measured cost of paraphrasing Qwen's part away: with a compact block that has no format
+        // spec, the elicitation pass stops converting — the model just repeats its prose line
+        // (2026-07-25). It costs ~66 tokens more than the compact block did; that is the price of
+        // the offer actually reaching the player, so do not "optimize" it back out without
+        // re-running the elicitation check.
+
+        // OURS: the engine answers a call it cannot honour with {"error": …} (see RefuseToolCall)
+        // and the model has to know what that means, or it retries the same call until the turn
+        // dies. Says nothing about tools out loud — the player must never hear it. Unconditional:
+        // any tool at all can come back refused.
+        const string ErrorResultRule =
+            "- If a result comes back as an error, do NOT call that function again: say what you can from what " +
+            "you already know, in character, without mentioning the error or any function\n";
+
+        // A rule of OUR OWN, appended to the reminder list only when the NPC actually has
+        // AskUserQuestion: an NPC with nothing but provider reads would otherwise be ordered to call a
+        // tool that is not in its <tools> block. The dataset follows the same rule (a sample's prompt
+        // carries this line iff it declares the tool), so training and inference see one prefix.
+        // It governs WHEN to call, never how to word the question — see AskUserQuestionSchema.
+        const string AskUserQuestionRules =
+            "- When your reply would put a decision to the player - taking or refusing something you offer, " +
+            "choosing between paths, agreeing to a deal - you MUST call AskUserQuestion for that decision in the " +
+            "same reply: say your line, then make the call. NEVER ask the player a question in prose and leave it " +
+            "hanging, and NEVER answer on their behalf\n";
+
+        INPCToolProvider[] toolProviders;
+        /// <summary>Tool-provider components on this NPC, cached — <see cref="ToolsEnabled"/> is
+        /// polled per streamed TOKEN, so this must never allocate.</summary>
+        protected INPCToolProvider[] ToolProviders
+        {
+            get
+            {
+                if (toolProviders == null) toolProviders = GetComponents<INPCToolProvider>();
+                return toolProviders;
+            }
+        }
+
+        /// <summary>True when this NPC has ANY tool in its prompt. The streaming &lt;tool_call&gt;
+        /// filter and the dispatch tail hang off THIS, not off <c>enableAskUserQuestion</c> alone —
+        /// an NPC with only provider tools still emits calls that must not reach the screen.</summary>
+        protected bool ToolsEnabled => enableAskUserQuestion || ToolProviders.Length > 0;
+
+        /// <summary>The # Tools block this NPC's granted tools imply: Qwen3.5's canonical block for
+        /// the schemas this NPC actually grants — asked for by name, not retyped here — with
+        /// DeepUnity's own two reminder bullets appended inside its &lt;IMPORTANT&gt; list
+        /// (<see cref="ErrorResultRule"/> always, <see cref="AskUserQuestionRules"/> only when that
+        /// tool is granted, since an NPC with nothing but provider reads must not be ordered to call
+        /// a tool that is missing from its own &lt;tools&gt;). Empty when the NPC has no tools.
+        /// <para>This is a GENERATOR, not what runs: the text belongs in
+        /// <c>descriptionAndRules</c>, written there once by the inspector button or the scene builder,
+        /// so that everything the model reads is visible and editable in one field (user 2026-07-25).
+        /// Nothing is appended behind the author's back at runtime.</para></summary>
+        public string ComposeToolsBlock()
+        {
+            var schemas = new List<string>();
+            if (enableAskUserQuestion) schemas.Add(AskUserQuestionSchema);
+            foreach (var p in ToolProviders)
+            {
+                if (p.ToolSchemas == null) continue;
+                foreach (string s in p.ToolSchemas)
+                    if (!string.IsNullOrWhiteSpace(s)) schemas.Add(s.Trim());
+            }
+            if (schemas.Count == 0) return "";
+
+            // Order is load-bearing: the error rule then the AskUserQuestion rule, both AFTER
+            // Qwen's four bullets and before its </IMPORTANT>. That is the order all 300 finetuning
+            // samples carry, so it is not a free choice.
+            string ourRules = enableAskUserQuestion ? ErrorResultRule + AskUserQuestionRules : ErrorResultRule;
+            return Qwen3_5Modeling.Qwen3_5ChatTemplate.RenderToolsBlock(schemas, ourRules);
+        }
+
+        /// <summary>Where a # Tools block ends inside an authored prompt: the first
+        /// <c>&lt;/IMPORTANT&gt;</c> after a <c># Tools</c> heading. Used to REPLACE a stale block
+        /// instead of stacking a second one. The template's own terminator — searching for anything
+        /// else here would silently stop finding blocks the moment Qwen changed it.</summary>
+        public const string ToolsBlockTerminator = Qwen3_5Modeling.Qwen3_5ChatTemplate.ReminderTerminator;
+
+        /// <summary>Remove a previously written # Tools block from authored text, leaving the persona.
+        /// Idempotent, and a no-op on text that never had one.</summary>
+        public static string StripToolsBlock(string authored)
+        {
+            if (string.IsNullOrEmpty(authored)) return authored ?? "";
+            int i = authored.IndexOf(Qwen3_5Modeling.Qwen3_5ChatTemplate.ToolsHeading, System.StringComparison.Ordinal);
+            if (i < 0) return authored;
+            int j = authored.IndexOf(ToolsBlockTerminator, i, System.StringComparison.Ordinal);
+            if (j < 0) return authored;                     // half a block: leave it, don't guess
+            return (authored.Substring(0, i) + authored.Substring(j + ToolsBlockTerminator.Length))
+                   .TrimStart('\n', '\r', ' ');
+        }
+
+        /// <summary>The authored text with THIS NPC's current # Tools block joined to it, replacing any
+        /// block already there. What the inspector button and the scene builders write into
+        /// <c>descriptionAndRules</c> — the tools live in the field, visible, not injected at runtime.
+        /// <para><paramref name="toolsFirst"/> defaults to TRUE because that is the CANONICAL order:
+        /// Qwen3_5ChatTemplate's tools branch opens the system message, writes the block, and only
+        /// then appends the persona after a blank line (vendored template L46-58), and all 300
+        /// finetuning samples are written that way. Passing false puts the persona on top instead —
+        /// ChatDemo3D does exactly that for Velmire, by request, and it is kept ON PURPOSE: it is
+        /// more readable for a long persona. It is nonetheless a deliberate divergence from the
+        /// canonical order and from the training data, not an alternative spelling of it, so flip the
+        /// dataset too if it ever becomes the house style.</para></summary>
+        public string WithToolsBlock(string authored, bool toolsFirst = true)
+        {
+            string persona = StripToolsBlock(authored).Trim('\n', '\r', ' ');
+            string block = ComposeToolsBlock();
+            if (block.Length == 0) return persona;
+            // The blank line between them is the template's own (L57: '\n\n' + content), in both
+            // orders — swapping which side is on top must not also change the separator.
+            string sep = Qwen3_5Modeling.Qwen3_5ChatTemplate.SystemContentSeparator;
+            return toolsFirst ? block + sep + persona : persona + sep + block;
+        }
+
+        /// <summary>What the model actually receives as its system prompt: the NAME heading composed
+        /// from <see cref="NpcName"/>, then the authored text verbatim — tools, rules and persona
+        /// alike, exactly as the inspector shows them. The compact rides underneath as ## MEMORY
+        /// (see <see cref="BuildResumePrompt"/> / <see cref="EffectivePromptPreview"/>).
+        /// <para>EVERY re-seed path goes through this (fresh init, resume prefix, compaction,
+        /// conversation-KV key), so the prompt hash tracks edits to the field and correctly
+        /// invalidates KV disk caches.</para></summary>
+        protected string EffectiveSystemPrompt =>
+            // WHO first, in a heading of its own (user 2026-07-25). It costs a handful of tokens and
+            // duplicates a name the description usually repeats, but it puts the one fact the model
+            // must never lose at the very top of the prompt — the position a compaction re-seed, a
+            // long history and a truncated context all preserve longest.
+            "## NAME\n" + NpcName + "\n\n" + descriptionAndRules;
+
+        /// <summary>Editor-facing view of <see cref="EffectiveSystemPrompt"/> plus the compact, i.e. the
+        /// EXACT text the model is seeded with. Exists because the inspector's System Prompt field is only
+        /// the persona — roughly a third of what actually goes in — and there was no way to read the rest
+        /// without stepping through code (user 2026-07-25). Rendered by NPCChatBaseEditor.</summary>
+        public string EffectivePromptPreview
+        {
+            get
+            {
+                string p = EffectiveSystemPrompt;
+                return string.IsNullOrEmpty(compactSummary)
+                    ? p : p + "\n\n" + LLM.HISTORY_HEADING + "\n" + compactSummary;
+            }
+        }
+
+        /// <summary>Split the (already think-stripped) reply into the visible channel and the
+        /// machine &lt;tool_call&gt; channel. Same contract as <see cref="SplitThink"/>: re-parses the
+        /// full string every token, holds a trailing partial tag back until disambiguated.</summary>
+        static void SplitToolCall(string full, out string visible, out string tool)
+        {
+            var vis = new StringBuilder(full.Length);
+            var tl = new StringBuilder();
+            bool inCall = false;
+            int i = 0;
+            while (i < full.Length)
+            {
+                if (full[i] == '<')
+                {
+                    string tag = inCall ? Qwen3_5Modeling.Qwen3_5ChatTemplate.ToolCallEndTag
+                                        : Qwen3_5Modeling.Qwen3_5ChatTemplate.ToolCallTag;
+                    int remain = full.Length - i, match = 0;
+                    while (match < tag.Length && match < remain && full[i + match] == tag[match]) match++;
+                    if (match == tag.Length) { inCall = !inCall; i += tag.Length; continue; }
+                    if (match == remain) break;   // trailing partial tag — hold it back
+                }
+                if (inCall) tl.Append(full[i]); else vis.Append(full[i]);
+                i++;
+            }
+            visible = vis.ToString();
+            tool = tl.ToString();
+        }
+
+        [System.Serializable] class ToolCallMsg { public string name; public ToolCallArgs arguments; }
+        [System.Serializable] class ToolCallArgs { public string question; public string[] options; }
+        [System.Serializable] class ToolPickResult { public string selected; }
+        [System.Serializable] class StringArrayWrap { public string[] items; }
+
+        /// <summary>A &lt;tool_call&gt; body parsed out of EITHER wire shape (see below), normalized:
+        /// a name, a JSON arguments string for providers, and the AskUserQuestion fields.</summary>
+        class ParsedToolCall
+        {
+            public string name;
+            public string argsJson = "{}";
+            public string question;
+            public readonly List<string> options = new List<string>();
+        }
+
+        // TWO shapes are accepted, because the model and the finetune do not agree on one:
+        //  (1) XML — what Qwen3.5's OWN chat template declares, and therefore what an un-finetuned
+        //      Qwen3.5-0.8B actually emits (measured against Qwen/Qwen3.5-0.8B on 2026-07-25):
+        //        <tool_call><function=NAME><parameter=KEY>\nvalue\n</parameter>…</function></tool_call>
+        //      Array/object parameter values are rendered as JSON by that template.
+        //  (2) JSON — the Qwen2.5/3-era Hermes style the SFT dataset (dataset_creation v1.3) uses:
+        //        <tool_call>{"name": NAME, "arguments": {…}}</tool_call>
+        // Accepting both means the demo works BEFORE the finetune lands and keeps working after,
+        // whichever shape the trained model settles on — and a model that drifts between them mid
+        // conversation never silently drops the player's choice.
+        static readonly Regex FunctionTagRe = new Regex(@"<function\s*=\s*([^>\s]+)\s*>", RegexOptions.Compiled);
+        static readonly Regex ParameterRe = new Regex(@"<parameter\s*=\s*([^>\s]+)\s*>(.*?)</parameter>",
+                                                      RegexOptions.Compiled | RegexOptions.Singleline);
+
+        static ParsedToolCall ParseToolCall(string body)
+        {
+            if (string.IsNullOrWhiteSpace(body)) return null;
+            Match fn = FunctionTagRe.Match(body);
+            if (fn.Success) return ParseXmlToolCall(body, fn);
+
+            string json = FirstJsonObject(body);
+            if (json == null) return null;
+            ToolCallMsg msg = null;
+            try { msg = JsonUtility.FromJson<ToolCallMsg>(json); } catch { }
+            if (msg == null || string.IsNullOrWhiteSpace(msg.name)) return null;
+            var call = new ParsedToolCall { name = msg.name.Trim(), argsJson = ArgumentsJson(json) };
+            if (msg.arguments != null)
+            {
+                call.question = msg.arguments.question;
+                if (msg.arguments.options != null)
+                    foreach (string o in msg.arguments.options) AddOption(call.options, o);
+            }
+            return call;
+        }
+
+        static ParsedToolCall ParseXmlToolCall(string body, Match fn)
+        {
+            var call = new ParsedToolCall { name = fn.Groups[1].Value.Trim() };
+            var args = new StringBuilder("{");
+            bool first = true;
+            foreach (Match p in ParameterRe.Matches(body))
+            {
+                string key = p.Groups[1].Value.Trim();
+                string val = p.Groups[2].Value.Trim();
+                if (key.Length == 0) continue;
+                if (!first) args.Append(", ");
+                first = false;
+                args.Append('"').Append(JsonEscape(key)).Append("\": ");
+                // a value the template already rendered as JSON (arrays, objects) rides through
+                // untouched; anything else is a plain string
+                if (val.StartsWith("[") || val.StartsWith("{")) args.Append(val);
+                else args.Append('"').Append(JsonEscape(val)).Append('"');
+
+                if (key.Equals("question", System.StringComparison.OrdinalIgnoreCase)) call.question = val;
+                else if (key.Equals("options", System.StringComparison.OrdinalIgnoreCase))
+                    AppendOptions(call.options, val);
+            }
+            call.argsJson = args.Append('}').ToString();
+            return call;
+        }
+
+        /// <summary>Options as the model wrote them: the template's own JSON array, or — when it
+        /// free-hands the parameter — one per line, or comma-separated.</summary>
+        static void AppendOptions(List<string> into, string val)
+        {
+            val = val.Trim();
+            if (val.StartsWith("["))
+            {
+                try   // JsonUtility cannot parse a bare array — wrap it
+                {
+                    var w = JsonUtility.FromJson<StringArrayWrap>("{\"items\":" + val + "}");
+                    if (w?.items != null && w.items.Length > 0)
+                    {
+                        foreach (string s in w.items) AddOption(into, s);
+                        return;
+                    }
+                }
+                catch { }
+                val = val.Trim('[', ']');
+            }
+            char sep = val.IndexOf('\n') >= 0 ? '\n' : ',';
+            foreach (string part in val.Split(sep)) AddOption(into, part.Trim('"', '\'', ',', ' ', '\t', '\r'));
+        }
+
+        static void AddOption(List<string> into, string s)
+        {
+            s = s?.Trim();
+            if (!string.IsNullOrEmpty(s) && into.Count < 4) into.Add(s);
+        }
+
+        static string JsonEscape(string s)
+        {
+            var sb = new StringBuilder(s.Length + 8);
+            foreach (char c in s)
+            {
+                if (c == '"' || c == '\\') sb.Append('\\').Append(c);
+                else if (c == '\n') sb.Append("\\n");
+                else if (c == '\t') sb.Append("\\t");
+                else if (c != '\r') sb.Append(c);
+            }
+            return sb.ToString();
+        }
+
+        // choice panel is up — typed sends are dropped until the pick lands (the model is mid-tool-call;
+        // a user turn slipped in between would orphan the pending question)
+        bool toolQuestionOpen;
+        // the reply ended in a call and the NPC is still SAYING the line that came before it: the panel
+        // must not appear over a talking NPC, and a send in between would orphan the call
+        bool awaitingToolDispatch;
+
+        /// <summary>Let the spoken part of a reply finish — voice AND the word-by-word reveal — and only
+        /// then dispatch the call it ended with. This is the user-specified order: the NPC says its line
+        /// to the end, and the question replaces the input row afterwards. Bounded, because a stalled
+        /// voice must never park the dialogue.</summary>
+        IEnumerator DispatchAfterSpeaking(string toolJson, int epoch)
+        {
+            awaitingToolDispatch = true;
+            try
+            {
+                float deadline = Time.unscaledTime + 30f;
+                while (epoch == dialogueEpoch && Time.unscaledTime < deadline
+                       && (revealActive || revealJob != null || revealQueue.Count > 0 || VoicesAudible()))
+                    yield return null;
+            }
+            finally { awaitingToolDispatch = false; }
+            // a close, an interrupt-then-ask, or a compaction that started meanwhile owns the turn now
+            if (epoch != dialogueEpoch || state != NPCState.WaitingInInteraction
+                || dialogueCoroutine != null || compactRoutine != null)
+                yield break;
+            TryDispatchToolCall(toolJson, epoch);
+        }
+
+        // ---- one bubble per EXCHANGE -----------------------------------------------------------
+        // A tool call splits what the player experiences as one reply into several decodes (speak → call →
+        // result → speak → call → …). Each of those used to open its own bubble, so the NPC's name was
+        // repeated above every fragment. Everything now renders into the SAME bubble: `exchangePrefix`
+        // holds what the NPC has already committed to in this exchange (its earlier lines plus the
+        // "Tool Called (…)" markers) and every render draws prefix + whatever is currently live.
+        // Reset only when the PLAYER speaks — that is what starts a new exchange.
+        string exchangePrefix = "";
+
+        /// <summary>prefix + live, newline-joined — what the NPC's bubble should read right now.</summary>
+        string Bubble(string live)
+            => string.IsNullOrEmpty(exchangePrefix) ? live
+             : string.IsNullOrEmpty(live) ? exchangePrefix
+             : exchangePrefix + "\n" + live;
+
+        /// <summary>The window's PERMANENT record that a call happened, appended INTO the current bubble
+        /// (user spec: the call stays written, under the same NPC title as the line before it). Styled
+        /// like the other meta lines, but unlike the pulses it is never popped.</summary>
+        /// <param name="refused">The call was rejected before it ran (malformed, unknown tool, window
+        /// without the popup). Say so in the line. Until 2026-07-28 a refused call rendered EXACTLY like
+        /// an honoured one, so the player read "Tool Called (AskUserQuestion)" and waited for a choice
+        /// panel that was never going to open — reported as "he made a tool call and I didn't see the
+        /// option to choose, it was just called and that's it". The engine was recovering correctly
+        /// underneath (the model gets an error result and answers in words); only the label lied.</param>
+        void ShowToolCalledLine(INPCChatWindow w, string toolName, bool refused = false)
+        {
+            if (w == null) return;
+            exchangePrefix = Bubble(refused ? CanceledStyled($"Tool Call Canceled ({toolName})")
+                                            : StatusStyled($"Tool Called ({toolName})"));
+            pendingFullReply = null;   // committed into the prefix; a later settle must not re-add it
+            w.PopLastMessage();
+            w.AddMessage(NpcName, exchangePrefix);
+        }
+
+        /// <summary>First balanced {...} object in <paramref name="s"/> (string-and-escape aware),
+        /// or null — the model sometimes pads the tool JSON with newlines/prose.</summary>
+        static string FirstJsonObject(string s)
+        {
+            int start = s.IndexOf('{');
+            if (start < 0) return null;
+            int depth = 0; bool inStr = false, esc = false;
+            for (int i = start; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (esc) { esc = false; continue; }
+                if (inStr) { if (c == '\\') esc = true; else if (c == '"') inStr = false; continue; }
+                if (c == '"') inStr = true;
+                else if (c == '{') depth++;
+                else if (c == '}' && --depth == 0) return s.Substring(start, i - start + 1);
+            }
+            return null;
+        }
+
+        /// <summary>Raw JSON of a call's "arguments" sub-object — providers parse their own argument
+        /// shape, and JsonUtility cannot hand back an untyped node. "{}" when the call has none.</summary>
+        static string ArgumentsJson(string callJson)
+        {
+            int k = callJson.IndexOf("\"arguments\"", System.StringComparison.Ordinal);
+            if (k < 0) return "{}";
+            return FirstJsonObject(callJson.Substring(k)) ?? "{}";
+        }
+
+        /// <summary>Fires when the player picks an option, BEFORE the pick goes back to the model:
+        /// <c>(question, pickedOption)</c>. This is where gated ACTIONS live — handing gear over,
+        /// taking payment — so the value transfer is engine code reacting to a player choice, never
+        /// something the model can do by itself. Subscribers must not block.</summary>
+        public event System.Action<string, string> ToolQuestionAnswered;
+
+        /// <summary>Internal (provider) reads already answered in the current player turn — see
+        /// <c>maxToolReadsPerTurn</c> for why there is a cap at all and why AskUserQuestion is exempt.</summary>
+        int internalToolCalls;
+
+        /// <summary>An unhonourable call has already been refused in this exchange. ONE per exchange:
+        /// the refusal is itself a &lt;tool_response&gt; the model answers, so a model that responds to
+        /// "no" by calling again would ping-pong forever. The second failure ends the turn instead.</summary>
+        bool toolRefusalSent;
+
+        /// <summary>ANSWER a call the engine cannot honour instead of dropping it. Dropping it silently
+        /// was the old behaviour and it dead-ends the exchange: decoding stopped at
+        /// <c>&lt;/tool_call&gt;</c>, so the NPC has said its line, is waiting on a result that never
+        /// comes, and the player is left staring at a half-finished thought — while the model, never
+        /// told anything went wrong, cheerfully makes the same call next turn. So the failure goes back
+        /// as a <c>{"error": …}</c> tool result: the model reads it and speaks in the SAME exchange,
+        /// which is also the shape the finetune teaches (a refused read is answered from what the NPC
+        /// already knows, and never retried).</summary>
+        void RefuseToolCall(string toolName, string errorJson, string logMessage)
+        {
+            ConsoleMessage.Warning(logMessage);
+            var w = Window;
+            if (w == null) return;
+            if (toolRefusalSent)
+            {
+                ConsoleMessage.Warning($"[NPC] {NpcName}: second unhonourable call in one exchange — " +
+                                       "turn ended instead of refusing again (ping-pong guard).");
+                StopThinkingDots();
+                return;
+            }
+            toolRefusalSent = true;
+            PrepareForNextReply(w);
+            ShowToolCalledLine(w, toolName, refused: true);
+            dialogueCoroutine = StartCoroutine(Talk(errorJson, asToolResult: true));
+        }
+
+        /// <summary>Parse + validate a completed &lt;tool_call&gt; body and either answer it in-engine
+        /// (internal provider tool → result straight back to the model) or open the choice window
+        /// (AskUserQuestion). Malformed calls, unknown tool names and windows without the popup
+        /// capability degrade to a console warning — the dialogue continues as if no call happened.</summary>
+        void TryDispatchToolCall(string toolJson, int epoch)
+        {
+            ParsedToolCall call = ParseToolCall(toolJson);
+            if (call == null || string.IsNullOrWhiteSpace(call.name))
+            {
+                // Also retryable: an unreadable call is a formatting slip, and the model gets one more
+                // go (the ping-pong guard bounds it). Only tool_unavailable / unknown_tool /
+                // read_limit_reached send it to words, because for those a retry cannot succeed.
+                RefuseToolCall("tool", "{\"error\": \"malformed_call\", \"detail\": \"that tool call could not " +
+                               "be read - write it again in the exact format from your instructions\"}",
+                               $"[NPC] {NpcName}: malformed <tool_call>: {toolJson.Trim()}");
+                return;
+            }
+
+            // internal tools first: a world-state read the player never sees. The result feeds
+            // straight into a fresh turn, so the model reads, then decides, in one breath.
+            if (!"AskUserQuestion".Equals(call.name, System.StringComparison.OrdinalIgnoreCase))
+            {
+                string argsJson = call.argsJson;
+                foreach (var p in ToolProviders)
+                {
+                    string result = p.TryHandleTool(call.name, argsJson);
+                    if (result == null) continue;   // not this provider's tool
+                    if (++internalToolCalls > maxToolReadsPerTurn)
+                    {
+                        RefuseToolCall(call.name,
+                            "{\"error\": \"read_limit_reached\", \"detail\": \"no more lookups this turn - " +
+                            "answer the player with what you already know\"}",
+                            $"[NPC] {NpcName}: {call.name} called {internalToolCalls}x in one turn — " +
+                            "refused (loop guard).");
+                        return;
+                    }
+                    ConsoleMessage.Info($"[Tool] {NpcName}: {call.name} → {result}");
+                    var wi = Window;
+                    if (wi == null) return;
+                    PrepareForNextReply(wi);          // settles any half-revealed line FIRST…
+                    ShowToolCalledLine(wi, call.name);// …so this line is never popped off again
+                    dialogueCoroutine = StartCoroutine(Talk(result, asToolResult: true));
+                    return;
+                }
+                RefuseToolCall(call.name,
+                    $"{{\"error\": \"unknown_tool\", \"name\": \"{JsonEscape(call.name)}\", \"detail\": " +
+                    "\"not one of your tools - answer the player without it\"}",
+                    $"[NPC] {NpcName}: unknown tool '{call.name}'. Add an INPCToolProvider that handles it, " +
+                    "or drop it from the prompt.");
+                return;
+            }
+
+            // The tool is not available at all — a retry cannot succeed, so send it to words.
+            if (!enableAskUserQuestion)
+            {
+                RefuseToolCall(call.name, "{\"error\": \"tool_unavailable\", \"detail\": \"AskUserQuestion is not " +
+                               "one of your tools here - answer the player in words instead\"}",
+                               $"[NPC] {NpcName}: AskUserQuestion called but it is disabled on this NPC.");
+                return;
+            }
+            // SHAPE errors below are RETRYABLE (user 2026-07-28). They used to say "ask the player in
+            // words instead", which tells the model to give up on a call it was right to want — the
+            // player saw the offer vanish into prose. Tell it what was wrong and to call again instead.
+            // Bounded by the same `toolRefusalSent` ping-pong guard that already existed: exactly ONE
+            // retry per exchange, then the turn ends. So "call it again" cannot become a loop.
+            if (string.IsNullOrWhiteSpace(call.question))
+            {
+                RefuseToolCall(call.name, "{\"error\": \"malformed_call\", \"detail\": \"AskUserQuestion was " +
+                               "called with no question - call it again with a question and 2-4 options\"}",
+                               $"[NPC] {NpcName}: AskUserQuestion called with no question: {toolJson.Trim()}");
+                return;
+            }
+            var opts = call.options;
+            if (opts.Count < 2)
+            {
+                string detail = $"AskUserQuestion does not work with {opts.Count} " +
+                                (opts.Count == 1 ? "option" : "options") +
+                                " - the player needs something to choose between. " +
+                                "Call it again with 2-4 options.";
+                RefuseToolCall(call.name,
+                    "{\"error\": \"malformed_call\", \"detail\": \"" + JsonEscape(detail) + "\"}",
+                    $"[NPC] {NpcName}: AskUserQuestion needs 2-4 options, got {opts.Count} — asking it to retry.");
+                return;
+            }
+            if (!(Window is INPCToolQuestionWindow tw))
+            {
+                ConsoleMessage.Warning($"[NPC] {NpcName}: AskUserQuestion fired but this chat window cannot show " +
+                                       "the choice popup — call dropped. Derive the window from NPCDialogueWindow " +
+                                       "(it implements INPCToolQuestionWindow for every environment).");
+                return;
+            }
+            StopThinkingDots();                        // the "Tool calling" pulse has served its purpose
+            ShowToolCalledLine(Window, call.name);     // and this stays under the spoken line for good
+            StartCoroutine(AskUserQuestionRoutine(tw, call.question.Trim(), opts, epoch));
+        }
+
+        /// <summary>DEBUG: fire a synthetic AskUserQuestion as if the model had emitted it, so the
+        /// popup + pick + &lt;tool_response&gt; resume can be verified independently of whether the
+        /// (un-finetuned) model actually calls the tool. Right-click the component in play mode,
+        /// with the dialogue open.</summary>
+        [ContextMenu("Debug/Fire a test AskUserQuestion")]
+        public void DebugFireTestToolCall()
+        {
+            if (!Application.isPlaying || state != NPCState.WaitingInInteraction || dialogueCoroutine != null)
+            {
+                ConsoleMessage.Warning($"[NPC] {NpcName}: test tool call needs an OPEN dialogue, idle between replies " +
+                                       "(enter play mode, talk to the NPC, then fire it).");
+                return;
+            }
+            TryDispatchToolCall("{\"name\": \"AskUserQuestion\", \"arguments\": {\"question\": " +
+                                "\"Will you walk beneath the golden mist, or turn back while you still may?\", " +
+                                "\"options\": [\"I will walk through\", \"I turn back\"]}}", dialogueEpoch);
+        }
+
+        IEnumerator AskUserQuestionRoutine(INPCToolQuestionWindow tw, string question, List<string> options, int epoch)
+        {
+            var w = Window;
+            toolQuestionOpen = true;
+            if (w.SendButton != null) w.SendButton.interactable = false;
+            string picked = null;
+
+            // The question is NOT spoken (user spec 2026-07-25). That is WHY a voiced NPC should word it
+            // impersonally — "Take <name>'s offer?", not "Do you want to take mine?" — so it reads as the
+            // game asking the player rather than as unspoken NPC dialogue. Nothing here enforces that: it
+            // is asked for in the NPC's own descriptionAndRules (Velmire does) and learned from the
+            // finetune, because a text-only 2D demo has no such split and does not need the rule (user
+            // 2026-07-26). The NPC's own line, the one before the call, was already spoken in full:
+            // DispatchAfterSpeaking waited for it before this panel opened.
+            // The reveal job is stood down defensively: a leftover clause callback would otherwise drip
+            // text into the last bubble while the panel is up.
+            StopRevealJob();
+            revealActive = false;
+
+            tw.ShowToolQuestion(NpcName, question, options, opt => picked = opt);
+            while (picked == null && epoch == dialogueEpoch && state == NPCState.WaitingInInteraction)
+                yield return null;
+            toolQuestionOpen = false;
+            if (picked == null || epoch != dialogueEpoch || state != NPCState.WaitingInInteraction
+                || dialogueCoroutine != null || compactRoutine != null)
+            {
+                // dialogue closed / a new session took over under the popup — tear down, no result
+                tw.HideToolQuestion();
+                if (epoch == dialogueEpoch && w.SendButton != null) w.SendButton.interactable = true;
+                yield break;
+            }
+            // GATED ACTION: engine logic reacts to the pick FIRST (gear changes hands, payment is
+            // taken), so the world is already updated when the model's reaction streams — and so a
+            // value transfer is never something the model can do on its own, only something the
+            // player's own choice triggers.
+            try { ToolQuestionAnswered?.Invoke(question, picked); }
+            catch (System.Exception e) { ConsoleMessage.Warning($"[NPC] {NpcName}: tool-pick handler threw: {e.Message}"); }
+
+            // the pick goes back as the tool result; the model reads it and reacts in a fresh turn
+            PrepareForNextReply(w);
+            if (w.SendButton != null) w.SendButton.interactable = true;
+            dialogueCoroutine = StartCoroutine(Talk(JsonUtility.ToJson(new ToolPickResult { selected = picked }),
+                                                    asToolResult: true));
         }
 
         // Word-by-word reveal: each clause event carries its spoken DURATION, and a single
@@ -972,16 +1967,32 @@ namespace DeepUnity
                 (string clause, float dur) = revealQueue.Dequeue();
                 var w = Window;
                 if (!revealActive || w == null || state == NPCState.Idle) break;
-                string[] words = clause.Split(' ');
-                int chars = clause.Length;
-                for (int i = 0; i < words.Length; i++)
+                // Reveal a growing PREFIX OF THE CLAUSE ITSELF, rather than re-joining split words
+                // with single spaces. The old form rebuilt the text instead of following it, so every
+                // newline the model wrote was flattened into a space: the reveal drew one running
+                // paragraph, then FinishSyncedReveal settled the window on the REAL text and the
+                // paragraph break appeared all at once, re-flowing the bubble at the exact moment it
+                // finished (user 2026-07-26 — "apare urat fix cand abia se termina sa se repozitioneze").
+                // A prefix of the true string cannot disagree with the final text, so there is nothing
+                // left to settle and no class of whitespace can go missing.
+                string basis = spokenShown ?? "";
+                if (basis.Length > 0 && !char.IsWhiteSpace(basis[basis.Length - 1])
+                    && clause.Length > 0 && !char.IsWhiteSpace(clause[0]))
+                    basis += " ";                     // clause boundary the model did not punctuate
+                int chars = Mathf.Max(1, clause.Length);
+                int shown = 0;
+                while (shown < clause.Length)
                 {
                     if (!revealActive || state == NPCState.Idle) break;
-                    spokenShown = string.IsNullOrEmpty(spokenShown) ? words[i] : spokenShown + " " + words[i];
+                    int sp = clause.IndexOf(' ', shown);
+                    int next = sp < 0 ? clause.Length : sp + 1;
+                    int added = next - shown;
+                    shown = next;
+                    spokenShown = bubbleLive = basis + clause.Substring(0, shown);
                     w.PopLastMessage();
-                    w.AddMessage(NpcName, spokenShown);
-                    float share = chars > 0 ? (words[i].Length + 1f) / chars : 0f;
-                    yield return new WaitForSecondsRealtime(Mathf.Max(0.02f, dur * 0.98f * share));
+                    w.AddMessage(NpcName, Bubble(spokenShown));
+                    yield return new WaitForSecondsRealtime(
+                        Mathf.Max(0.02f, dur * 0.98f * (added / (float)chars)));
                 }
             }
             revealJob = null;
@@ -1005,7 +2016,8 @@ namespace DeepUnity
             if (pendingFullReply != null && spokenShown != pendingFullReply)
             {
                 w.PopLastMessage();
-                w.AddMessage(NpcName, pendingFullReply);
+                w.AddMessage(NpcName, Bubble(pendingFullReply));
+                bubbleLive = pendingFullReply;   // settled to the full text: no longer a cut reply
             }
             revealActive = false;
         }
@@ -1064,17 +2076,20 @@ namespace DeepUnity
             if (spokenShown != full)   // voice done (or stalled) but tail text never got audio — settle it
             {
                 w.PopLastMessage();
-                w.AddMessage(NpcName, full);
-                spokenShown = full;
+                w.AddMessage(NpcName, Bubble(full));
+                spokenShown = bubbleLive = full;   // bubbleLive too: it is what MarkReplyCutShort compares
             }
             revealActive = false;
         }
 
-        private IEnumerator Talk(string question)
+        private IEnumerator Talk(string question, bool asToolResult = false)
         {
             state = NPCState.TalkingInInteraction;
             int epoch = dialogueEpoch;
             replyCanceled = false;
+            // a real player line opens a fresh budget of internal reads; a tool-result turn is a
+            // continuation of the same one (that is exactly what the loop guard must count)
+            if (!asToolResult) { internalToolCalls = 0; toolRefusalSent = false; exchangePrefix = ""; }
             var w = Window;
             // Send stays interactable: sending mid-reply cancels this reply at a token boundary
             // and asks anew (InterruptThenAsk) — the state machine gates it, not the button.
@@ -1083,7 +2098,7 @@ namespace DeepUnity
             if (historyMode != HistoryMode.ResetEveryTime)
             {
                 // recorded up-front so an Escape mid-reply still keeps the (partial) exchange
-                turn = new Turn { user = question, npc = "" };
+                turn = new Turn { user = question, npc = "", tool = asToolResult };
                 transcript.Add(turn);
                 activeTurn = turn;
             }
@@ -1092,13 +2107,22 @@ namespace DeepUnity
             activeResponse = response;
             bool synced = SyncedReveal;
             if (synced) { spokenShown = null; pendingFullReply = null; revealActive = true; StopRevealJob(); }
+            // unconditional (both paths draw into the bubble): a stale value here would mark the NEXT
+            // reply's opening bubble with the previous reply's interruption. drainTurn goes with it —
+            // once a new reply starts, the previous one is no longer the thing being cut short.
+            bubbleLive = null;
+            if (!asToolResult) drainTurn = null;
             bool showThink = w.ShowThinkingTokens;
-            string visibleFull = "", thinkFull = "";
+            string visibleFull = "", thinkFull = "", toolCallFull = "";
             int voicedLen = 0;          // visible chars already handed to the voice
             bool contentShown = false;  // the animated dots own the bubble until real content
+            bool toolPulseShown = false;// the dots were relabelled "Tool calling" for this reply
+            bool toolCallClosed = false;// </tool_call> seen — decoding was stopped there
+            bool toolSendLocked = false;// Speak was taken away because a call is mid-flight
 
             // thinking placeholder: ". / .. / ..." pulses until the first real content lands
-            w.AddMessage(NpcName, StatusStyled("."));
+            if (asToolResult) w.PopLastMessage();   // keep writing in THIS exchange's bubble
+            w.AddMessage(NpcName, Bubble(StatusStyled(".")));
             StartThinkingDots(w);
 
             // A background conversation-KV save still reading this model's GPU state holds the Busy
@@ -1110,15 +2134,7 @@ namespace DeepUnity
             while (KvSaveInFlightFor(llm) && epoch == dialogueEpoch) yield return null;
             if (epoch != dialogueEpoch) { StopThinkingDots(); yield break; }
 
-            // -1 inspector values fall back to the selected model's recommended Config preset
-            yield return llm.Chat(question, max_new_tokens: maxNewTokens, temperature: temperature,
-                top_k: topK >= 0 ? topK : llm.Config.DefaultTopK,
-                top_p: topP >= 0f ? topP : llm.Config.DefaultTopP,
-                min_p: minP >= 0f ? minP : llm.Config.DefaultMinP,
-                presence_penalty: presencePenalty >= 0f ? presencePenalty : llm.Config.DefaultPresencePenalty,
-                repetition_penalty: repetitionPenalty >= 0f ? repetitionPenalty : llm.Config.DefaultRepetitionPenalty,
-                enable_thinking: allowThinking,
-                onTokenGenerated: (token) =>
+            System.Action<string> onTok = (token) =>
                 {
                     // emoji/symbols the UI font can't render (squares) also drive the TTS into
                     // garbage sounds — strip them HERE, before anything consumes the token
@@ -1126,7 +2142,47 @@ namespace DeepUnity
                     token = StripUnrenderable(token);
                     if (token.Length == 0) return;
                     response.Append(token);
-                    SplitThink(response.ToString(), out visibleFull, out thinkFull);
+                    string raw = response.ToString();
+                    SplitThink(raw, out visibleFull, out thinkFull);
+                    // the <tool_call> body is a machine channel: split it out of the visible text
+                    // (never rendered, never voiced — same treatment as <think>); a completed call
+                    // dispatches AFTER the turn ends, from Talk's tail
+                    if (ToolsEnabled)
+                    {
+                        SplitToolCall(visibleFull, out visibleFull, out toolCallFull);
+                        // the call body is invisible by design, so without this the window would sit
+                        // on anonymous dots while the model works a tool — name it, the same way
+                        // "Thinking…" and "Compacting…" name their phases
+                        if (!toolPulseShown && !contentShown && toolCallFull.Length > 0 && visibleFull.Length == 0)
+                        {
+                            toolPulseShown = true;
+                            StartThinkingDots(w, "Tool calling");
+                        }
+                        // Once a call has STARTED streaming, take Speak away until the turn resolves
+                        // (user 2026-07-26). A send landing mid-call cancels the decode at the next
+                        // token boundary, so </tool_call> never arrives, the tool never runs, and the
+                        // player's own message is what killed it — with nothing on screen saying so.
+                        // The normal reply tail (state → WaitingInInteraction) re-enables it, as it
+                        // does after any turn; this only closes the window where the call is in flight.
+                        if (!toolSendLocked && toolCallFull.Length > 0)
+                        {
+                            toolSendLocked = true;
+                            if (w.SendButton != null) w.SendButton.interactable = false;
+                        }
+                        // THE TURN ENDS AT THE CALL. Stop decoding the moment </tool_call> lands: the
+                        // NPC must not run on past it (user spec 2026-07-25 — "the model has to wait for
+                        // the answer, it cannot continue"), and anything it wrote after the call used to
+                        // be rendered AND voiced. Cancelling here leaves the KV holding the turn exactly
+                        // as far as the call, which is what a trained model would have emitted anyway,
+                        // and the next turn closes it like any truncated turn. replyCanceled stays
+                        // FALSE — this reply finished on purpose, it was not interrupted.
+                        if (!toolCallClosed && raw.IndexOf(Qwen3_5Modeling.Qwen3_5ChatTemplate.ToolCallEndTag,
+                                                           System.StringComparison.Ordinal) >= 0)
+                        {
+                            toolCallClosed = true;
+                            llm.CancelChat();
+                        }
+                    }
                     // reasoning NEVER reaches the TTS — only newly-VISIBLE text is fed
                     if (speakReplies && !replyCanceled && visibleFull.Length > voicedLen)
                     {
@@ -1141,7 +2197,7 @@ namespace DeepUnity
                         {
                             StopThinkingDots();
                             w.PopLastMessage();
-                            w.AddMessage(NpcName, ThinkStyled(thinkFull));
+                            w.AddMessage(NpcName, Bubble(ThinkStyled(thinkFull)));
                         }
                         return;
                     }
@@ -1151,9 +2207,30 @@ namespace DeepUnity
                     if (display.Length == 0) return;   // still inside <think> — dots keep pulsing
                     StopThinkingDots();
                     w.PopLastMessage();
-                    w.AddMessage(NpcName, display);
+                    w.AddMessage(NpcName, Bubble(display));
+                    bubbleLive = display;
                     contentShown = true;
-                });
+                };
+            // -1 inspector values fall back to the selected model's recommended Config preset.
+            // A tool-result turn renders as <tool_response> (the model's tool template) instead
+            // of a plain user turn — same streaming contract either way.
+            yield return asToolResult
+                ? llm.ChatToolResult(question, max_new_tokens: maxNewTokens, temperature: temperature,
+                    top_k: topK >= 0 ? topK : llm.Config.DefaultTopK,
+                    top_p: topP >= 0f ? topP : llm.Config.DefaultTopP,
+                    min_p: minP >= 0f ? minP : llm.Config.DefaultMinP,
+                    presence_penalty: presencePenalty >= 0f ? presencePenalty : llm.Config.DefaultPresencePenalty,
+                    repetition_penalty: repetitionPenalty >= 0f ? repetitionPenalty : llm.Config.DefaultRepetitionPenalty,
+                    enable_thinking: allowThinking,
+                    onTokenGenerated: onTok)
+                : llm.Chat(question, max_new_tokens: maxNewTokens, temperature: temperature,
+                    top_k: topK >= 0 ? topK : llm.Config.DefaultTopK,
+                    top_p: topP >= 0f ? topP : llm.Config.DefaultTopP,
+                    min_p: minP >= 0f ? minP : llm.Config.DefaultMinP,
+                    presence_penalty: presencePenalty >= 0f ? presencePenalty : llm.Config.DefaultPresencePenalty,
+                    repetition_penalty: repetitionPenalty >= 0f ? repetitionPenalty : llm.Config.DefaultRepetitionPenalty,
+                    enable_thinking: allowThinking,
+                    onTokenGenerated: onTok);
             if (speakReplies && !replyCanceled)
             {
                 if (visibleFull.Length > voicedLen) FeedVoiceText(visibleFull.Substring(voicedLen));
@@ -1176,10 +2253,15 @@ namespace DeepUnity
             else if (!contentShown && stillOpen)   // reply was pure <think> with display off — settle the bubble
             {
                 w.PopLastMessage();
-                w.AddMessage(NpcName, finalVisible.Length > 0 ? finalVisible : "...");
+                if (finalVisible.Length > 0) w.AddMessage(NpcName, Bubble(finalVisible));
+                // a reply that is ONLY a tool call has no dialogue to settle: the permanent
+                // "Tool Called (…)" line the dispatch leaves behind stands in for it, so don't
+                // park an empty "..." bubble above it
+                else if (string.IsNullOrWhiteSpace(toolCallFull)) w.AddMessage(NpcName, Bubble("..."));
             }
 
             if (turn != null) turn.npc = finalVisible;
+            drainTurn = turn;      // still being spoken — keep it markable, see the field's note
             activeTurn = null;
             activeResponse = null;
             if (stillOpen) state = NPCState.WaitingInInteraction;
@@ -1191,7 +2273,8 @@ namespace DeepUnity
             // at the limit, compact NOW (auto) behind the "Compacting…" pulse, then talking resumes
             // on the short compacted prefix. The KV headroom above the threshold gives the compact
             // pass room to run.
-            if (stillOpen && historyMode == HistoryMode.ResumeFromCompact && compactRoutine == null && ContextFull())
+            if (stillOpen && historyMode == HistoryMode.ResumeFromCompact && compactRoutine == null
+                && ContextFull() && HasCompactableHistory())
             {
                 // STANDARD (user spec): the reply that hit the limit is delivered IN FULL —
                 // decoded, typed AND spoken to the end (the KV headroom above the limit
@@ -1221,6 +2304,20 @@ namespace DeepUnity
             w.SendButton.interactable = true;
             w.InputField.ActivateInputField();
             if (!replyCanceled) OnReplyFinished();
+
+            // A completed <tool_call> is dispatched once the NPC has finished SAYING the line that came
+            // before it (user spec: text, spoken to the end, then the question) — DispatchAfterSpeaking
+            // owns that wait. An internal provider read then answers itself and re-enters Talk with the
+            // result; AskUserQuestion opens the choice panel whose pick comes back as the
+            // <tool_response>. Both continue THIS exchange — dialogueCoroutine was cleared just above,
+            // so the new turn owns the handle.
+            if (!replyCanceled && ToolsEnabled && !string.IsNullOrWhiteSpace(toolCallFull))
+                StartCoroutine(DispatchAfterSpeaking(toolCallFull, epoch));
+            // No call: the reply stands as spoken. There is deliberately NO engine-side rescue here —
+            // a hidden second pass that asked the model to convert its own prose question into a call was
+            // tried and REMOVED (user 2026-07-25): it injected an instruction turn the author could not
+            // see into the NPC's own context. Everything that pushes the model toward calling now lives
+            // in the system prompt, in plain sight, and the v1.4 finetune is what makes it reliable.
         }
 
         /// <summary>Closes the dialogue from any state — Escape, the Leave button, or scripted.</summary>
@@ -1244,7 +2341,17 @@ namespace DeepUnity
                 StartCoroutine(CloseConversationWhenReplyUnwinds());
             }
 
+            // OUTSIDE the `interrupted` branch on purpose. Leaving mid-reply IS an interrupt (user
+            // 2026-07-28), but `interrupted` only means "still GENERATING" — leave while he is merely
+            // still TALKING and it is false, which is the common case and was the whole bug: the turn
+            // kept only its full decoded text and a reopen replayed paragraphs he never said out loud
+            // ("i see the entire text in the conversation that was unspoken part"). Safe here because
+            // MarkReplyCutShort no-ops when everything generated was also revealed, so a clean close
+            // marks nothing. Must run BEFORE bubbleLive is wiped a few lines down.
+            MarkReplyCutShort();
+
             state = NPCState.Idle;
+            conversing.Remove(this);   // world audio comes back up from here (ConversationAudioDucker)
             // reveal machinery dies WITH the dialogue — a leaked revealActive/pendingFullReply
             // otherwise resurrects the previous reply's text at the NEXT dialogue's first send
             // (PrepareForNextReply settles stale state), even on ResetEveryTime
@@ -1253,6 +2360,12 @@ namespace DeepUnity
             revealActive = false;
             pendingFullReply = null;
             spokenShown = null;
+            bubbleLive = null;
+            // Reset the exchange prefix too (fix 2026-07-28). It was written only by ShowToolCalledLine
+            // and cleared only by the next PLAYER turn in Talk, so it outlived the dialogue: reopening
+            // after a tool exchange made RepaintTranscript prepend the old spoken line + "Tool Called
+            // (…)" to EVERY repainted bubble, including the "(earlier conversation summarized)" banner.
+            exchangePrefix = "";
             FadeOutVoices();   // Leave: speech fades to silence (~1 s) instead of cutting or
                                // talking on; the NPC settles to idle as IsAudioPlaying drops.
             if (!interrupted) CloseConversation(false);
@@ -1348,7 +2461,10 @@ namespace DeepUnity
                 && compactRoutine == null   // a running compaction is FORWARDING the model — it re-saves itself when it lands
                 && llm != null && LLMPool.OwnsConversation(llm, this)   // the GPU state must be OURS, not a sibling's (audit #1)
                 && historyMode != HistoryMode.ResetEveryTime
-                && transcript.Count > 0;
+                // a JUST-compacted conversation has an empty transcript but is far from empty — its
+                // whole past is the compact, and without this it would never reach disk on a close
+                // right after a compaction (so an app restart would lose it)
+                && HasCompactableHistory();
             if (saveConversation)
                 StartCoroutine(SaveConversationKvRoutine());
 
@@ -1368,7 +2484,7 @@ namespace DeepUnity
             kvSavesInFlight[saving] = this;
             try
             {
-                yield return saving.SaveConversationKV(ConversationKvKey(), SerializeTranscript(), system_prompt);
+                yield return saving.SaveConversationKV(ConversationKvKey(), SerializeTranscript(), EffectiveSystemPrompt);
             }
             finally
             {
@@ -1386,8 +2502,10 @@ namespace DeepUnity
         private IEnumerator ReleaseLlmAfterKvSave()
         {
             // also outlast an unwinding canceled reply — releasing mid-forward NREs the Talk
-            // coroutine and tears the KV (audit #8)
-            while (compactRoutine != null || KvSaveInFlightFor(llm) || dialogueCoroutine != null) yield return null;
+            // coroutine and tears the KV (audit #8) — and a manual reset, which is re-prefilling the
+            // system prompt on this very instance
+            while (compactRoutine != null || KvSaveInFlightFor(llm) || dialogueCoroutine != null
+                   || resetRoutine != null) yield return null;
             if (state == NPCState.Idle && !(usePrefetchZone && inPrefetchZone))
                 ReleaseLlm(collectGarbage: true);
         }
@@ -1397,9 +2515,11 @@ namespace DeepUnity
         // sibling's in-flight save (even on the same shared instance) stays latched.
         protected virtual void OnDisable()
         {
+            conversing.Remove(this);   // disabled mid-dialogue: never leave the world ducked forever
             foreach (var m in new List<LLM>(kvSavesInFlight.Keys))
                 if (kvSavesInFlight[m] == this) kvSavesInFlight.Remove(m);
             compactRoutine = null;                     // its coroutine died with the component
+            resetRoutine = null;                       // ...so did a manual reset; never leave the gate latched
             if (compactingNpc == this) compactingNpc = null;
             if (llm != null) llm.DiskKVCache = cacheKVCache;   // a dying compaction dropped it for its re-seed
             interruptPending = false;                  // interrupt-ask coroutine died with the component
@@ -1470,6 +2590,10 @@ namespace DeepUnity
             // moment the player reaches the interaction trigger
             if (!usePrefetchZone)
             {
+                // same reason as the zone path in Update: these streams start while state is Idle, so
+                // without this they run on the leftover/default level rather than this NPC's
+                if (BackendTradeoffTable.Level != backendTradeoff)
+                    BackendTradeoffTable.Level = backendTradeoff;
                 kkVoice?.PrefetchNow();
                 kkVoice?.PrewarmKernels();
                 cvVoice?.PrefetchNow();
@@ -1505,11 +2629,17 @@ namespace DeepUnity
         // mirroring exactly what CompactConversationRoutine seeded into the live KV.
         private string BuildResumePrompt()
         {
-            var sb = new StringBuilder(system_prompt);
-            if (!string.IsNullOrEmpty(compactSummary))
-                sb.Append("\n\nHISTORY:\n").Append(compactSummary);
+            var sb = new StringBuilder(EffectiveSystemPrompt);
+            if (string.IsNullOrEmpty(compactSummary) && transcript.Count == 0) return sb.ToString();
+            // exactly [system prompt] + ## MEMORY + the history, nothing else: same shape
+            // the compaction re-seed produces, so the model only ever learns one layout
+            sb.Append("\n\n").Append(LLM.HISTORY_HEADING).Append('\n');
+            if (!string.IsNullOrEmpty(compactSummary)) sb.Append(compactSummary);
             if (transcript.Count > 0)
-                sb.Append("\n\n").Append(BuildRecentTurnsBlock(transcript.Count));
+            {
+                if (!string.IsNullOrEmpty(compactSummary)) sb.Append("\n\n");
+                sb.Append(BuildRecentTurnsBlock(transcript.Count));
+            }
             return sb.ToString();
         }
 
@@ -1517,13 +2647,15 @@ namespace DeepUnity
         // prompt above and the post-summary context of a compaction share this shape).
         private string BuildRecentTurnsBlock(int lastN)
         {
+            // No framing sentence: the heading above already says what this is, and every extra word here
+            // is a line the model sees at the start of every resumed conversation (user spec 2026-07-25).
             var sb = new StringBuilder();
-            sb.Append("[The conversation below already happened between you and the player. ")
-              .Append("Resume it naturally and stay consistent with everything said.]");
             for (int i = Mathf.Max(0, transcript.Count - lastN); i < transcript.Count; i++)
             {
                 var t = transcript[i];
-                sb.Append("\nPlayer: ").Append(t.user);
+                // a tool turn was never spoken by the player — replay it as what it was, the result
+                // that came back from a tool, so the resumed model reads the exchange correctly
+                sb.Append(t.tool ? "\n[Tool result: " : "\nPlayer: ").Append(t.user).Append(t.tool ? "]" : "");
                 if (!string.IsNullOrEmpty(t.npc))
                     sb.Append('\n').Append(NpcName).Append(": ").Append(t.npc);
             }
@@ -1556,32 +2688,369 @@ namespace DeepUnity
             w.PopLastMessage();
         }
 
-        /// <summary>Wipe this NPC's conversation back to a blank slate (right-click the component →
-        /// "Reset Conversation"; also public so an in-window button can call it). Clears the
-        /// transcript, the compact summary and the live/disk conversation KV, so the next open
-        /// starts a fresh InitializeChat(system_prompt). Handy for ResumeFromCompact NPCs when you
-        /// want to drop the accumulated (compacted) history without waiting for a natural reset.</summary>
+        // ---------------------------------------------------------------- manual reset
+        //
+        // STATE 0 (user spec 2026-07-28): "reset conversation efectiv trimite modelul in starea 0,
+        // doar cu sys prompt si fara memorie" — the system prompt, nothing else, no memory. The end
+        // state is IDENTICAL in both history modes; ResumeFromCompact differs only in having had a
+        // ## MEMORY block to throw away, which makes its post-reset prompt SHORTER than the prefix it
+        // was running on. There is deliberately no `historyMode` branch anywhere below.
+        //
+        // HOW, and why it is not clever: the text is cleared and the model is RE-INITIALIZED on the
+        // bare system prompt. That is a full re-establish of the whole cache — see the warning on
+        // ResetConversationRoutine before reaching for anything cheaper-looking.
+        //
+        // Same 10 s budget the other cooperative waiters use (CloseConversationWhenReplyUnwinds,
+        // InterruptThenAsk): a canceled reply lands at its next TOKEN boundary, so this is a
+        // stuck-model allowance, not an expected wait.
+        private const float RESET_SETTLE_SECONDS = 10f;
+
+        /// <summary>
+        /// Send this NPC back to STATE 0 — its system prompt and nothing else — right-click the
+        /// component → "Reset Conversation", or call it from an in-window button.
+        /// <para>Everything a conversation consists of goes: the recorded turns, the compact summary
+        /// (the <c>## MEMORY</c> block, so a ResumeFromCompact NPC forgets what it remembered too),
+        /// the on-disk snapshot, AND the LIVE KV cache — which is what used to be missing. Until
+        /// 2026-07-28 this method changed bookkeeping only: the window cleared and the context bar
+        /// did not move, because the bar reads <c>llm.CurrentContextTokens</c> and the model was
+        /// still holding the entire conversation. Every reply for the rest of that session was still
+        /// answered with the full pre-reset context (and got recorded into the now-"empty"
+        /// transcript, so a later reopen resumed from it) — a reset that reset the UI and nothing
+        /// else.</para>
+        /// <para>IMMEDIATE, dialogue open or not: when it lands, the window, the context bar and the
+        /// model's KV all agree, because the bar's number is genuinely the system prompt's length.</para>
+        /// <para>Two shapes, because the button has two very different callers. <b>With a live
+        /// conversation of OURS on a model</b> it runs as a coroutine — in-flight work has to be
+        /// settled before the model may be touched (see <see cref="ResetConversationRoutine"/>).
+        /// <b>Without one</b> — the inspector button in EDIT mode, where there is no <c>llm</c> at
+        /// all; a released model; or a POOLED instance whose KV currently belongs to a sibling NPC —
+        /// it is synchronous and never touches a model.</para>
+        /// </summary>
         [ContextMenu("Reset Conversation")]
         public void ResetConversation()
         {
+            // FIRST, on every path: the live KV is no longer a record of anything worth keeping.
+            // Dropping the flag here rather than at the end is what makes a close landing mid-reset
+            // harmless — CloseConversation gates its disk snapshot on chatLive, so it cannot
+            // re-persist the conversation we are in the middle of deleting.
+            chatLive = false;
+
+            // `Application.isPlaying` is load-bearing, not defensive: StartCoroutine throws in edit
+            // mode, and the inspector button in edit mode is a path that already worked and must keep
+            // working. OwnsConversation is the pooled-instance guard (audit #1): if the shared KV
+            // carries a SIBLING's conversation, re-initializing the model would delete THEIR chat, so
+            // we clear only what is ours and leave the GPU state alone.
+            bool oursOnTheGpu = Application.isPlaying && llm != null && LLMPool.OwnsConversation(llm, this);
+            if (!oursOnTheGpu)
+            {
+                ForgetConversation();
+                ShowResetInWindow();
+                ConsoleMessage.Info($"[Reset] {NpcName}: conversation wiped (manual reset) — " +
+                                    (llm == null
+                                        ? "no model resident, so there was no live KV to clear."
+                                        : "the shared model's KV belongs to another NPC and was left untouched."));
+                return;
+            }
+            if (resetRoutine != null) return;   // already resetting; a second click is not a second reset
+            resetRoutine = StartCoroutine(ResetConversationRoutine());
+        }
+
+        /// <summary>
+        /// The live half of <see cref="ResetConversation"/>: settle, forget, re-initialize.
+        ///
+        /// <para><b>Do not "optimise" the re-initialize into a cache rewind.</b>
+        /// <c>Qwen3_5Cache.CachedTokenCount</c> has a setter and the K/V layout is token-major, so
+        /// walking the cursor back to the prompt length looks like the same thing for free. It is
+        /// silently wrong on this model: Qwen3.5 is HYBRID — 18 Gated DeltaNet layers next to 6
+        /// full-attention ones — and the DeltaNet layers hold <c>conv_state</c>/<c>recurrent_state</c>,
+        /// running state that is not indexed by token position and cannot be truncated. A cursor
+        /// rewind forgets the conversation in the attention layers and keeps it in the other
+        /// eighteen: no error, no exception, and nothing a smoke test would notice. A full
+        /// re-initialize rebuilds K/V AND the SSM states from zero, so that failure mode cannot
+        /// arise at all — and it is not the expensive option it looks like, because
+        /// <c>InitializeChat</c> hits the system-prompt KV disk cache
+        /// (<c>qwen35_prompt_&lt;owner&gt;.kv</c>) and pays a frame-budgeted upload instead of a
+        /// prefill. Qwen3_5ResetProbe gate 2 is the regression guard: it reads the DeltaNet buffers
+        /// back and fails on any implementation that leaves them holding the old conversation.</para>
+        ///
+        /// <para>Ordering is the entire content of this method, so it is spelled out:
+        /// <list type="number">
+        /// <item>let an OPENING dialogue finish — it is the thing establishing the prefix we are
+        ///       about to replace, so resetting under it would race its own init/restore;</item>
+        /// <item>bump <see cref="dialogueEpoch"/>, this file's one signal for "everything in flight,
+        ///       stand down". It retires the coroutines a reset must not let run: an open
+        ///       AskUserQuestion panel (its pick would come back as a &lt;tool_response&gt; to a call
+        ///       that is no longer in the context), a pending DispatchAfterSpeaking, a queued
+        ///       InterruptThenAsk. It also retires OUR OWN window tail, which is why every UI touch
+        ///       at the bottom is re-checked against it;</item>
+        /// <item>cancel a generating reply COOPERATIVELY and wait for it to unwind. StopCoroutine is
+        ///       the fallback after the deadline, never the first move — and a reset is the one
+        ///       caller for which that fallback is genuinely safe, because a half-written KV is
+        ///       about to be overwritten wholesale; only the Busy guard has to be released by hand;</item>
+        /// <item>wait out a COMPACTION — ours, or a sibling's on the same pooled instance. Never
+        ///       canceled once its Chat started (house rule, enforced everywhere in this file);</item>
+        /// <item>wait out an in-flight conversation-KV save on this instance. It holds the model's
+        ///       Busy guard, and it is writing the very file step 6 deletes — deleting first would
+        ///       leave the snapshot behind, which is precisely the class of bug this change is
+        ///       about;</item>
+        /// <item>forget the conversation (fields + sidecar + disk), then</item>
+        /// <item>re-initialize the model on the bare system prompt, and re-claim the shared KV only
+        ///       if that actually happened.</item>
+        /// </list></para>
+        /// </summary>
+        private IEnumerator ResetConversationRoutine()
+        {
+            // The gate MUST always drop: an exception in here would otherwise brick the NPC forever
+            // (AskNPC refuses while resetting and OpenConversation waits on it) — audit #12's rule.
+            try
+            {
+                // 1. an opening dialogue owns the prefix — let it land.
+                float openDeadline = Time.unscaledTime + RESET_SETTLE_SECONDS;
+                while (state == NPCState.PreparingForInteraction && Time.unscaledTime < openDeadline)
+                    yield return null;
+
+                // 2. retire everything in flight.
+                int epoch = ++dialogueEpoch;
+
+                // 3. stop the reply at its next token boundary and wait for it to unwind. No
+                //    MarkReplyCutShort: the transcript this would annotate is about to be deleted.
+                replyCanceled = true;   // its tail must not flush the voice or fire OnReplyFinished
+                llm?.CancelChat();
+                StopVoices();           // he is not finishing a line about a conversation that no longer exists
+                StopThinkingDots();
+                StopRevealJob();
+                float replyDeadline = Time.unscaledTime + RESET_SETTLE_SECONDS;
+                while (dialogueCoroutine != null
+                       && (compactRoutine != null || Time.unscaledTime < replyDeadline))
+                    yield return null;
+                if (dialogueCoroutine != null)
+                {
+                    ConsoleMessage.Warning($"[Reset] {NpcName}: the in-flight reply did not unwind in " +
+                                           $"{RESET_SETTLE_SECONDS:0}s — abandoning it. Safe here, and only here: " +
+                                           "the reset rebuilds the whole KV, so a half-written one is discarded anyway.");
+                    StopCoroutine(dialogueCoroutine);
+                    dialogueCoroutine = null;
+                    // StopCoroutine skips Guarded's finally, so the abandoned Chat would leave the
+                    // (pooled) instance latched and every later Chat/InitializeChat would refuse forever.
+                    llm?.AbandonGuardedOperation();
+                }
+
+                // 4. a compaction is never canceled — not ours, not a sibling's on this instance.
+                while (compactRoutine != null || (compactingNpc != null && compactingNpc.llm == llm))
+                    yield return null;
+                // 5. ...and a conversation-KV save holds the Busy guard AND writes the file step 6 deletes.
+                while (KvSaveInFlightFor(llm)) yield return null;
+
+                // The presentation state a discarded reply leaves behind — the same block
+                // CloseInteraction clears, for the same reason: a leaked revealActive or
+                // exchangePrefix resurrects the deleted reply's text in the next bubble.
+                revealActive = false;
+                pendingFullReply = null;
+                spokenShown = null;
+                bubbleLive = null;
+                drainTurn = null;
+                exchangePrefix = "";
+                internalToolCalls = 0;
+                toolRefusalSent = false;
+                interruptPending = false;
+                // An open choice panel is orphaned by the reset (the call it belongs to is gone from
+                // the context) — tear it down here instead of waiting for AskUserQuestionRoutine to
+                // notice the epoch moved, so the panel never outlives its conversation. Its own
+                // teardown may run too; HideToolQuestion is idempotent.
+                toolQuestionOpen = false;
+                awaitingToolDispatch = false;
+                (Window as INPCToolQuestionWindow)?.HideToolQuestion();
+
+                // 6. everything outside the model.
+                ForgetConversation();
+
+                // 7. ...and the model itself. Re-assert both cache settings first: on a POOLED
+                //    instance a sibling's open stamped its own CacheOwnerKey, and a compaction/resume
+                //    prefill borrows DiskKVCache — writing OUR prompt state under THEIR file name
+                //    would thrash their cache (the header hash keeps it correct, just wasteful).
+                bool reinitialized = false;
+                if (llm != null)
+                {
+                    llm.DiskKVCache = cacheKVCache;
+                    llm.CacheOwnerKey = ConversationKvKey();
+                    // Busy is checked BEFORE the call on purpose: InitializeChat is Guarded, and
+                    // Guarded declines a busy instance with a warning plus a bare yield break —
+                    // indistinguishable from success to the caller (LLM.cs:~368). A reset that
+                    // silently did nothing is the bug being fixed, so it is never assumed to have
+                    // happened. Nothing can grab the guard between this check and the first
+                    // MoveNext: coroutines are single-threaded and steps 3-5 already settled every
+                    // operation that could hold it.
+                    if (llm.Busy)
+                        ConsoleMessage.Warning($"[Reset] {NpcName}: the model is still busy after the settle " +
+                                               "waits — skipping the live re-initialize (it would be refused).");
+                    else
+                    {
+                        yield return llm.InitializeChat(system_prompt: EffectiveSystemPrompt);
+                        reinitialized = true;
+                    }
+                }
+                if (reinitialized)
+                {
+                    // The KV now holds OUR conversation again: an empty one, on the bare prompt.
+                    chatLive = true;
+                    LLMPool.ClaimConversation(llm, this);
+                    ConsoleMessage.Info($"[Reset] {NpcName}: state 0 — system prompt only, no memory " +
+                                        $"({ContextTokensNow()} of {maxContextLength} context tokens).");
+                }
+                else
+                {
+                    // chatLive stays false, so the next open re-initializes from scratch; the
+                    // transcript, the memory and the disk snapshot are already gone, so there is
+                    // nothing left that could bring the conversation back either way.
+                    ConsoleMessage.Warning($"[Reset] {NpcName}: the conversation is gone (transcript, memory and " +
+                                           "disk snapshot), but the LIVE KV was not re-initialized — it will be " +
+                                           "rebuilt on the next open.");
+                }
+
+                if (epoch != dialogueEpoch) yield break;   // a close+reopen owns the window now — never touch its state
+                ShowResetInWindow();
+                var w = Window;
+                if (w != null && state != NPCState.Idle)
+                {
+                    // Step 2 retired the reply's own tail, so the "ready for the next line" state it
+                    // would have restored is restored here instead.
+                    w.SetSendLoading(false);
+                    state = NPCState.WaitingInInteraction;
+                    w.InputField?.ActivateInputField();
+                }
+            }
+            finally { resetRoutine = null; }
+        }
+
+        /// <summary>Everything a conversation consists of OUTSIDE the model: the recorded turns, the
+        /// compact (and its sidecar, so the inspector stops showing a memory that no longer exists),
+        /// our claim on the shared KV, and the on-disk snapshot. No <c>historyMode</c> branch — state
+        /// 0 is state 0 in both modes.</summary>
+        private void ForgetConversation()
+        {
             transcript.Clear();
             compactSummary = null;
-            chatLive = false;                       // forces a fresh InitializeChat on next open
+            SaveCompactSidecar();   // an empty summary DELETES the sidecar — a reset must leave no memory behind
+            activeTurn = null;      // a reply that was mid-generation is never going to be finished
+            activeResponse = null;
             if (llm != null)
             {
                 if (LLMPool.OwnsConversation(llm, this))
-                    LLMPool.ClaimConversation(llm, null);   // drop our claim on the shared KV
-                if (cacheKVCache) llm.DeleteConversationKV(ConversationKvKey());   // remove the disk snapshot
+                    LLMPool.ClaimConversation(llm, null);   // we no longer vouch for what is in the shared KV
+                if (cacheKVCache) llm.DeleteConversationKV(ConversationKvKey());
             }
-            var w = Window;
-            if (w != null && state != NPCState.Idle)
-            {
-                w.Clear();
-                w.SetInfoText("— conversation reset —");
-                if (w.SendButton != null) w.SendButton.interactable = true;
-            }
-            ConsoleMessage.Info($"[Reset] {NpcName}: conversation wiped (manual reset).");
+            // ...and delete the snapshot WITHOUT a model too (fix 2026-07-28). The branch above is
+            // unreachable from the inspector button in edit mode — there is no llm then — so the
+            // button cleared the in-memory transcript (which is not serialized anyway) and left the
+            // on-disk conversation untouched. Next play restored it verbatim: "conversation restored
+            // from disk (1011 tokens)", i.e. a reset that reset nothing. Deliberately NOT gated on
+            // cacheKVCache either: if a file is there, a reset removes it, whatever the toggle says
+            // now. Family-agnostic pattern rather than the Qwen-specific name, so this does not have
+            // to learn about every model that persists a conversation.
+            DeleteConversationSnapshots();
         }
+
+        /// <summary>The window half of a reset: an emptied transcript view, the notice, and the
+        /// context bar pushed to what the model is NOW holding. The bar is written here as well as
+        /// per-frame in <see cref="Update"/> so it agrees with the cleared window in the SAME frame —
+        /// that disagreement (empty chat, full bar) was the visible tell of the old reset.
+        /// No-ops without an open dialogue: the inspector button in edit mode has no window, and a
+        /// closed one is repainted from scratch on the next open anyway.</summary>
+        private void ShowResetInWindow()
+        {
+            var w = Window;
+            if (w == null || state == NPCState.Idle) return;
+            w.Clear();
+            w.SetInfoText("— conversation reset —");
+            w.SetContextFill(ContextTokensNow() / (float)Mathf.Max(1, maxContextLength));
+            if (w.SendButton != null) w.SendButton.interactable = true;
+        }
+
+        /// <summary>Delete this NPC's on-disk conversation snapshots, with or without a live model.
+        /// Matches <c>&lt;family&gt;_conv_&lt;key&gt;.kv</c> and the legacy
+        /// <c>&lt;family&gt;_conv_&lt;key&gt;_&lt;hash&gt;.kv</c> in the shared DeepUnity cache directory —
+        /// the same two shapes <c>Qwen3_5.DeleteConversationKV</c> knows about, matched by convention so
+        /// this stays model-agnostic like the rest of NPCChatBase.</summary>
+        private void DeleteConversationSnapshots()
+        {
+            try
+            {
+                string dir = System.IO.Path.Combine(Application.persistentDataPath, "DeepUnity");
+                if (!System.IO.Directory.Exists(dir)) return;
+                string key = ConversationKvKey();
+                int n = 0;
+                foreach (var f in System.IO.Directory.GetFiles(dir, $"*_conv_{key}*.kv"))
+                {
+                    // The glob has to allow the legacy `<key>_<contexthash>` suffix, which means it also
+                    // matches a SIBLING whose name merely starts with this key: key "Anya" would glob
+                    // "..._conv_Anya_Two.kv" and a reset on Anya would wipe Anya Two's conversation.
+                    // So accept only the exact name or the key followed by a pure hex hash.
+                    string name = System.IO.Path.GetFileNameWithoutExtension(f);
+                    int at = name.IndexOf("_conv_", System.StringComparison.Ordinal);
+                    if (at < 0) continue;
+                    string tail = name.Substring(at + 6);
+                    if (tail != key)
+                    {
+                        if (!tail.StartsWith(key + "_", System.StringComparison.Ordinal)) continue;
+                        string suffix = tail.Substring(key.Length + 1);
+                        if (suffix.Length == 0) continue;
+                        bool hex = true;
+                        foreach (char c in suffix)
+                            if (!System.Uri.IsHexDigit(c)) { hex = false; break; }
+                        if (!hex) continue;
+                    }
+                    System.IO.File.Delete(f); n++;
+                }
+                if (n > 0) ConsoleMessage.Info($"[Reset] {NpcName}: deleted {n} on-disk conversation snapshot(s).");
+            }
+            catch (System.Exception e)
+            { ConsoleMessage.Warning($"[Reset] {NpcName}: could not delete the conversation snapshot — {e.Message}"); }
+        }
+
+        // ---------------------------------------------------------------- compact sidecar
+        // Unity throws away play-mode changes to serialized fields when you press Stop, so a compact
+        // that happened while playing would vanish from the inspector the moment the session ended.
+        // It is written next to the KV caches instead, and read back when the component loads in the
+        // EDITOR — so a compact from the last play session is still on the inspector afterwards, and
+        // across editor restarts (user spec 2026-07-25: "it is persistent, the script reads and sees
+        // whether a cache exists"). Plain assignment, no SetDirty: the scene is NOT marked dirty, so
+        // this never sneaks a stale memory into a committed scene — save it yourself if you want that.
+        private string CompactSidecarPath()
+            => System.IO.Path.Combine(Application.persistentDataPath, "DeepUnity",
+                                      $"npc_compact_{ConversationKvKey()}.txt");
+
+        private void SaveCompactSidecar()
+        {
+            try
+            {
+                string path = CompactSidecarPath();
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
+                if (string.IsNullOrEmpty(compactSummary)) System.IO.File.Delete(path);
+                else System.IO.File.WriteAllText(path, compactSummary);
+            }
+            catch (System.Exception e)
+            {
+                ConsoleMessage.Warning($"[Compact] {NpcName}: could not persist the compact: {e.Message}");
+            }
+        }
+
+        private void LoadCompactSidecar()
+        {
+            try
+            {
+                string path = CompactSidecarPath();
+                if (System.IO.File.Exists(path)) compactSummary = System.IO.File.ReadAllText(path);
+            }
+            catch { }   // unreadable sidecar: the inspector just shows nothing
+        }
+
+#if UNITY_EDITOR
+        // edit mode only — at runtime the field is owned by the live conversation
+        protected virtual void OnEnable()
+        {
+            if (!Application.isPlaying && string.IsNullOrEmpty(compactSummary)) LoadCompactSidecar();
+        }
+#endif
 
         // ~4 chars/token: a model-agnostic estimate of what the conversation costs in context
         // (the HISTORY compact counts too once one exists — compaction re-triggers when the
@@ -1602,11 +3071,40 @@ namespace DeepUnity
         // The conversation has reached the context window and this mode must act on it.
         private bool ContextFull() => ContextTokensNow() >= maxContextLength;
 
+        /// <summary>There is actual CONVERSATION to compact. The system prefix (persona + any
+        /// # Tools block) is charged to the same budget but compaction cannot shrink it, so a
+        /// prefix that alone fills the window would otherwise trigger an endless compact loop —
+        /// on every open and after every reply.</summary>
+        private bool HasCompactableHistory() => transcript.Count > 0 || !string.IsNullOrEmpty(compactSummary);
+
+        /// <summary>Report a system prefix that eats its own context budget. This has bitten once
+        /// for real (enabling the AskUserQuestion tools block pushed a 400-token NPC over its
+        /// limit, so it compacted on every open forever); the symptom reads like a model or engine
+        /// bug, so name the cause and the fix explicitly. Called once per opened dialogue.</summary>
+        private void WarnIfPrefixOverBudget()
+        {
+            int prefix = ContextTokensNow();
+            if (prefix * 4 < maxContextLength * 3) return;   // under 75% — plenty of room to talk
+            int suggested = prefix * 4 / 3 + 64;
+            string fix = enableAskUserQuestion
+                ? $"raise Max Context Length to >= {suggested}, shorten the description, or turn " +
+                  "Enable Ask User Question off (its schema plus the shared call-format block is ~520 " +
+                  "tokens, measured)"
+                : $"raise Max Context Length to >= {suggested} or shorten the system prompt";
+            string msg = $"[NPC] {NpcName}: the system prompt alone is ~{prefix} tokens of a " +
+                         $"{maxContextLength}-token budget — {fix}.";
+            if (prefix >= maxContextLength)
+                ConsoleMessage.Error(msg + " It does not fit AT ALL: the NPC cannot hold a conversation " +
+                                     "and (in ResumeFromCompact) would try to compact forever.");
+            else
+                ConsoleMessage.Warning(msg);
+        }
+
         /// <summary>The EXACT request the model is asked when compacting (ResumeFromCompact hitting
         /// Max Context Length). It is one bare USER turn, continuing the tracked conversation —
         /// greedy (temperature 0), capped at 256 tokens. The model's reply IS the compact, which is
         /// then re-seeded as the KV prefix:
-        /// <code>[this NPC's system_prompt]\n\nHISTORY:\n[the model's reply]</code>
+        /// <code>[this NPC's description and rules]\n\n## MEMORY\n[the model's reply]</code>
         /// so the NPC "remembers" everything through the HISTORY block on a short prefix.
         /// This mirrors the engine constant (single source of truth); change the wording there.</summary>
         public const string CompactRequestPrompt = LLM.COMPACT_PROMPT;   // == "Compact the conversation."
@@ -1623,7 +3121,7 @@ namespace DeepUnity
         //   1. wait out the full-state snapshot CloseConversation kicked (it reads the same GPU
         //      buffers this will re-write),
         //   2. LLM.Compact — the model answers "Compact the conversation." with a one-shot
-        //      compact of the whole history, then the chat recomputes as [system + HISTORY:
+        //      compact of the whole history, then the chat recomputes as [system + ## MEMORY +
         //      compact] (a short KV prefix),
         //   3. reset the transcript (the HISTORY block now IS the history) and keep the compact,
         //   4. snapshot the compacted state to disk (overwrites the pre-compact save).
@@ -1654,7 +3152,7 @@ namespace DeepUnity
             string summary = null;
             try
             {
-                var compact = llm.Compact(system_prompt, s => summary = s);
+                var compact = llm.Compact(EffectiveSystemPrompt, s => summary = s);
                 while (compact.MoveNext()) yield return compact.Current;
             }
             finally
@@ -1673,6 +3171,7 @@ namespace DeepUnity
             }
 
             compactSummary = summary;
+            SaveCompactSidecar();   // so the inspector still shows it after play mode ends
             transcript.Clear();   // the HISTORY block stands in for every turn so far
             LLMPool.ClaimConversation(llm, this);   // the compacted prefix carries OUR conversation
             ConsoleMessage.Info($"[Compact] {NpcName}: compaction done — history → " +
@@ -1683,18 +3182,10 @@ namespace DeepUnity
                 StartCoroutine(SaveConversationKvRoutine());
         }
 
-        private void RepopulateWindow()
-        {
-            var w = Window;
-            // the compacted past is NOT rendered (user spec): a reopen after compaction starts
-            // visually empty — the compact lives only in the system prompt's HISTORY block
-            foreach (var t in transcript)
-            {
-                w.AddMessage("You", t.user);
-                if (!string.IsNullOrEmpty(t.npc))
-                    w.AddMessage(NpcName, t.npc);
-            }
-        }
+        // RepopulateWindow was deleted 2026-07-28. It was the older, thinner painter (no compact
+        // banner, drew a tool turn's <tool_response> as a player line) and RepaintTranscript
+        // superseded it — but its call site was left behind, so both ran on every open and drew the
+        // history twice. One painter, one call site; do not reintroduce a second one.
 
         // ---------------------------------------------------------------- conversation KV disk cache
 

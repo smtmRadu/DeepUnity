@@ -416,7 +416,13 @@ namespace DeepUnity.Tutorials.AnyaChatDemo
             "You are Anya, a warm, curious and down-to-earth young woman talking to someone face to " +
             "face over a video call. Speak naturally in the first person, like a real person — relaxed " +
             "and friendly. Keep your replies short, one to three sentences. Never mention being an AI, " +
-            "a model, or a program; you are simply Anya.";
+            "a model, or a program; you are simply Anya. " +
+            // Anya is VOICED, so the phrasing rule applies to her — and it lives here rather than in
+            // the shared tools block, which is the same text for every NPC (user 2026-07-26). Her
+            // spoken line is what pocket-tts reads; the popup is silent, so a first-person question
+            // there would be dialogue the listener never hears.
+            "Word an AskUserQuestion as a label on the screen rather than speech, naming yourself: " +
+            "'Take Anya's suggestion?', never 'Do you want to take mine?'.";
 
         static void BuildChatAndNpc(GameObject anya)
         {
@@ -490,7 +496,7 @@ namespace DeepUnity.Tutorials.AnyaChatDemo
             var npc = anya.AddComponent<NPCInteractorAnya>();
             SetObj(npc, "chatWindow", win);
             SetStr(npc, "NpcName", "Anya");
-            SetStr(npc, "system_prompt", PERSONA);
+            SetStr(npc, "descriptionAndRules", PERSONA);
             SetStr(npc, "model", "Qwen3.5-0.8B");
             SetEnum(npc, "quantization", (int)LLMQuant.INT8);
             SetEnum(npc, "conversationMode", (int)NPCChatBase.ConversationMode.LlmPlusTts);
@@ -506,6 +512,23 @@ namespace DeepUnity.Tutorials.AnyaChatDemo
 
             UnityEventTools.AddPersistentListener(sendBtn.GetComponent<Button>().onClick, new UnityAction(npc.AskNPC));
             UnityEventTools.AddVoidPersistentListener(inputField.onSubmit, new UnityAction(npc.AskNPC));
+
+            // LAST, once every field is in place: bake the # Tools block INTO Description And Rules
+            // (user 2026-07-25). The block is no longer injected at runtime, so what is not in this
+            // field is not in the prompt — and Anya inherits enableAskUserQuestion = true, meaning the
+            // engine was already parsing and dispatching her AskUserQuestion calls off a prompt that
+            // declared no tools. Read-then-write instead of composing off PERSONA, because
+            // WithToolsBlock REPLACES a stale block rather than stacking a second one — that is what
+            // keeps a rebuild idempotent. toolsFirst stays default TRUE (Qwen3.5's own template order,
+            // and the order the finetuning samples are written in). ~640 tokens of her 4096, which she
+            // can afford — her persona is short and she is ResetEveryTime.
+            var darProp = Prop(npc, "descriptionAndRules", out var darSO);
+            if (darProp != null)
+            {
+                darProp.stringValue = npc.WithToolsBlock(darProp.stringValue);
+                darSO.ApplyModifiedPropertiesWithoutUndo();
+            }
+
             Debug.Log("[Anya] chat + NPC wired (Qwen3.5-0.8B int8 + pocket-tts).");
         }
 

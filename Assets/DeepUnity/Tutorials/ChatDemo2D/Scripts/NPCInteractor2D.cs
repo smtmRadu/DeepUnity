@@ -21,7 +21,6 @@ namespace DeepUnity.Tutorials.ChatDemo2D
     /// </summary>
     public class NPCInteractor2D : NPCChatBase
     {
-        [SerializeField] private ChatWindow2D chatWindow;
         [SerializeField] private CharacterAnimator2D charAnim;  // idle bob — quickened while talking
         [Tooltip("Wired by the builder — enables the Give-items flow (hand the harvest over, get thanked, get paid).")]
         [SerializeField] private FarmingSystem farm;
@@ -30,7 +29,8 @@ namespace DeepUnity.Tutorials.ChatDemo2D
 
         [ViewOnly, SerializeField] private PlayerController2D player;
 
-        protected override INPCChatWindow Window => chatWindow != null ? chatWindow : null;
+        // the base owns the window reference now; this is the 2D-only surface on top of it
+        private ChatWindow2D Window2D => chatWindow as ChatWindow2D;
         protected override KeyCode InteractKey => KeyCode.E;
         protected override bool PlayerReady => player != null && !player.IsBusy;
         protected override float DialogueOpenDelay => player.cam.TransitionDuration + 0.01f;
@@ -46,7 +46,7 @@ namespace DeepUnity.Tutorials.ChatDemo2D
             base.Update();
             // GIVE appears only while THIS NPC's dialogue is idle-waiting and the basket has
             // something in it (the Idle twin never writes, so the two NPCs can't fight over it)
-            var give = chatWindow != null ? chatWindow.GiveButton : null;
+            var give = Window2D != null ? Window2D.GiveButton : null;
             if (give != null && state != NPCState.Idle)
             {
                 bool show = state == NPCState.WaitingInInteraction && farm != null && farm.HasAnyHarvest;
@@ -118,8 +118,8 @@ namespace DeepUnity.Tutorials.ChatDemo2D
                 farm.AddCoins(pendingCoins);
                 pendingCoins = 0;
             }
-            if (chatWindow != null && chatWindow.GiveButton != null)
-                chatWindow.GiveButton.gameObject.SetActive(false);
+            if (Window2D != null && Window2D.GiveButton != null)
+                Window2D.GiveButton.gameObject.SetActive(false);
 
             if (player != null)
             {

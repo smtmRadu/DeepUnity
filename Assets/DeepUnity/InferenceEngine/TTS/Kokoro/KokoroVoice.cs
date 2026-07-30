@@ -49,7 +49,11 @@ namespace DeepUnity
         public bool loadOnStart = true;
 
         [Tooltip("Fed text cuts ONLY at sentence enders (. ! ? ;). A comma may cut too, but only past this many pending characters — an escape hatch for run-on sentences, not the normal path.")]
-        public int emergencyChunkChars = 220;
+        // 1000, not 220 (user 2026-07-26): this is a LAST-RESORT valve for a sentence that never
+        // ends, not a pacing knob. At 220 it fired on ordinary NPC replies and cut mid-sentence at
+        // a comma, ignoring clausesPerChunk entirely — the audible symptom was speech stopping in
+        // the middle of a sentence instead of after the Nth ender.
+        public int emergencyChunkChars = 1000;
 
         [Tooltip("Sentences per synthesized chunk. Smaller = faster response, lower quality (prosody resets each sentence); larger = higher quality (intonation flows across sentences), slower response.")]
         [Range(1, 3)] public int clausesPerChunk = 1;

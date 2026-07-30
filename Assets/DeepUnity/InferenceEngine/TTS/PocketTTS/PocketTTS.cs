@@ -81,6 +81,24 @@ namespace DeepUnity
             /// kept-tail samples are position-exact, so emitted audio is unchanged. Applied on the
             /// GPU-frame path (FastKernels3) only, keeping the legacy path A/B-identical.</summary>
             public int StreamFirstChunkFrames = 2;
+
+            /// <summary>Emergency-flush hook (2026-07-30), set by PocketTTSVoice while it owns the
+            /// stream: returns true while audible silence is imminent (playback gated, or the ring
+            /// below <c>InferencePerf.TtsPanicFloorSeconds</c>). While true, the flush schedule
+            /// ignores the chunk cadence and decodes every <c>StreamHurryMinFrames</c> accumulated
+            /// latents — small lumps land in the ring NOW instead of one chunk-sized lump up to a
+            /// second later, which is what the 0.25 s re-gate needs to actually resume on. Emitted
+            /// samples are unchanged (windowed tail-exact decode — only the flush BOUNDARY moves,
+            /// same argument as StreamFirstChunkFrames). Null (probes, raw callers) = pure cadence,
+            /// so probe timing and parity runs are untouched. GPU-frame path only, like firstChunk.</summary>
+            public Func<bool> StreamHurry;
+
+            /// <summary>Smallest hurry flush. A flush costs ~16 heavy ticks whatever its size (see
+            /// the chunk column's docs in BackendTradeoffTable), so 1-2 latent flushes are nearly
+            /// all overhead; 4 latents = 0.32 s of audio — one re-gate's worth per emergency
+            /// decode — is the floor of usefulness.</summary>
+            public const int StreamHurryMinFrames = 4;
+
             public int StreamLastTokenCount { get; private set; }   // frames actually emitted (streaming)
 
             /// <summary>Streaming path only (bug C): per-frame GPU readbacks via AsyncGPUReadback —
@@ -106,11 +124,14 @@ namespace DeepUnity
             public static readonly object GpuWait = new object();
 
             /// <summary>#29: MAC budget of one GPU-heavy pipeline tick (a prefill chunk / Mimi-decode
-            /// slice). NOT hardware-tuned: this is only the starting guess — PocketTTSVoice
-            /// self-calibrates it at runtime from real frame feedback (a heavy tick should cost
-            /// ~3-7 ms over the scene's baseline frame, whatever the GPU). Slower cards converge
-            /// to finer slices, faster cards to coarser ones.</summary>
-            public static long GpuMacsPerTick = 900_000_000;
+            /// slice). Hardware-tuned by the DIAL, not by measurement: it is the Backend Tradeoff
+            /// tier's row (900M on the two low tiers, 4G at Very Fast), so slower cards get finer
+            /// slices and faster ones coarser ones without anything having to discover that at
+            /// runtime. Read-only on purpose (2026-07-27): PocketTTSVoice.CalibrateTickBudget used to
+            /// walk this between 200M and 4G chasing a 3-7 ms measured tick cost, and since slice
+            /// COUNT is derived from it, its shrink branch fed straight back into the ring starvation
+            /// it existed to prevent — see BackendTradeoff.cs.</summary>
+            public static long GpuMacsPerTick => BackendTradeoffTable.TtsMacsPerTick;
 
             /// <summary>#31-P: routes every eligible matmul (FlowLM backbone GEMVs + prefill GEMMs,
             /// flow head, mimi decoder_transformer) through the coalesced/fused kernel generation
@@ -184,6 +205,26 @@ namespace DeepUnity
             public bool IsReady => weights.IsReady;
             public long WeightBytes => weights.BytesTotal;   // resident weight footprint (fp16 vs int8 delta)
 
+            /// <summary>#32: prompt rows the LAST SynthesizeStreaming actually prefilled — the whole
+            /// prefix (1 + voiceFrames + textIds) on a cold clause / voice swap, only textIds.Length
+            /// when the voice-prompt K/V was retained. Read by the prompt-cache probe and useful in
+            /// the TTFA breakdown; nothing behavioural hangs off it.</summary>
+            public int LastPrefillRows { get; private set; }
+
+            /// <summary>#32: FrameBreak ticks the last clause's prefill cost, and the wall time to the
+            /// end of it. TICKS is the number that matters in the game, but NOT one-for-one with frames:
+            /// the pump does NOT end the frame on a FrameBreak (corrected 2026-07-28) — it counts them
+            /// and breaks at maxHeavyTicks, which is 6 on Very Smooth/Smooth down to 2 on Very Fast
+            /// during a clause prefill. So 24 ticks is 4-12 frames, 67-200 ms at 60 fps, not the ~400 ms
+            /// an earlier version of this comment claimed. Distinct from PrefillMs, which stays the
+            /// OFFLINE path's breakdown; and note LastPrefillMs is dispatch-ISSUE time, not GPU
+            /// completion, because the dispatches are queued rather than awaited.</summary>
+            public int LastPrefillTicks { get; private set; }
+            public float LastPrefillMs { get; private set; }
+
+            /// <summary>#32: rows of voice-prompt K/V currently retained in the flow LM (0 = cold).</summary>
+            public int RetainedPromptRows => flm.RetainedPromptRows;
+
             public PocketTTS(string weightsDir = null)
             {
                 // resolved HERE (not just in PocketTTSWeights) — the tokenizer + encoder sibling
@@ -225,7 +266,15 @@ namespace DeepUnity
 
             /// <summary>Release GPU weights (budgeted when slow=true). A later BeginLoad re-streams.</summary>
             public void Defetch(bool slow = true)
-                => weights.Defetch(slow ? weights.BudgetBytesPerFrame : 0);
+            {
+                // #32: the KV caches outlive a defetch (they are ours, not the weight pump's) and the
+                // re-streamed weights carry the same values, so the retained rows would still be
+                // numerically right — drop them anyway. Residency churn is exactly where "is this
+                // cache still meaningful?" stops being locally verifiable, and one extra full prefill
+                // per walk-away is free next to a weight re-upload.
+                flm.InvalidatePromptKV();
+                weights.Defetch(slow ? weights.BudgetBytesPerFrame : 0);
+            }
 
             // emb_mean/std + voice/bbv are tiny CPU reads (ReadFloats streams from disk directly,
             // independent of the GPU upload pump) — safe to load as soon as the manifest is parsed.
@@ -235,6 +284,10 @@ namespace DeepUnity
                 embStd = weights.ReadFloats("flow_lm.emb_std");
                 bbv = weights.ReadFloats("flow_lm.bos_before_voice");
                 voicePrompt ??= weights.ReadFloats("voices/jean/audio_prompt");
+                // #32: row 0 of the retained prompt is bbv, and this just replaced it with a fresh
+                // array. The voicePrompt identity key cannot see that (the `??=` keeps the SAME array),
+                // so invalidate explicitly — the retained rows depend on both tensors.
+                flm.InvalidatePromptKV();
             }
 
             /// <summary>Editor/probe: synchronous blocking load of everything.</summary>
@@ -250,6 +303,27 @@ namespace DeepUnity
             /// (baked voice or clone). Read-only snapshot for validation tooling.</summary>
             public float[] CurrentVoicePrompt => voicePrompt;
 
+            /// <summary>Validation tooling: bind a raw audio_prompt [frames*1024] directly, past the
+            /// baked voices and the clone cache. Only the export's baked voices are reachable through
+            /// SetVoice (this export ships exactly one), so the #32 prompt-KV probe needs this to
+            /// prove the retained-cache key FALLS BACK on a second speaker of the SAME row count —
+            /// the one case a "have I prefilled before" flag would get wrong. Same PromptIsValid gate
+            /// as the clone path; a rejected prompt leaves the current voice bound.</summary>
+            public bool BindRawVoicePrompt(float[] prompt, string label)
+            {
+                if (!PromptIsValid(prompt)) return false;
+                // Invalidate EXPLICITLY, at the assignment, rather than relying on the new array failing
+                // ReferenceEquals (review 2026-07-28). Reference identity provably holds today — every
+                // path that assigns voicePrompt allocates fresh, no indexed write into it exists — but
+                // that is a property of code far from here, and the failure it would allow is a retained
+                // cache serving the WRONG SPEAKER with no error. Three assignment sites, three calls; it
+                // costs nothing because they only run on a real swap.
+                voicePrompt = prompt;
+                flm?.InvalidatePromptKV();
+                CurrentVoice = string.IsNullOrEmpty(label) ? "raw" : label;
+                return true;
+            }
+
             /// <summary>Rebind the baked voice (cheap CPU read of voices/&lt;name&gt;/audio_prompt — no
             /// GPU reload). Unknown names fall back to the currently-loaded voice with a warning
             /// (only baked voices in the export are available; bake more with import_params.py pocket-tts --voice).</summary>
@@ -263,6 +337,7 @@ namespace DeepUnity
                     return;
                 }
                 voicePrompt = weights.ReadFloats($"voices/{name}/audio_prompt");
+                flm?.InvalidatePromptKV();   // see BindRawVoicePrompt: invalidate at the assignment
                 CurrentVoice = name;
             }
 
@@ -654,6 +729,7 @@ namespace DeepUnity
                     LastCloneSource = "encoded";
                 }
                 voicePrompt = prompt;
+                flm?.InvalidatePromptKV();   // see BindRawVoicePrompt: invalidate at the assignment
                 CurrentVoice = string.IsNullOrEmpty(label) ? key : label;   // readable name; key stays content-addressed
                 return true;
             }
@@ -1007,24 +1083,67 @@ namespace DeepUnity
                 int dim = Cfg.DIM;
                 float[] textEmb = flm.EmbedLookup(textIds);
                 int voiceFrames = voicePrompt.Length / dim;
-                int Lp = 1 + voiceFrames + textIds.Length;
-                var prefix = new float[Lp * dim];
-                Array.Copy(bbv, 0, prefix, 0, dim);
-                Array.Copy(voicePrompt, 0, prefix, dim, voiceFrames * dim);
-                Array.Copy(textEmb, 0, prefix, (1 + voiceFrames) * dim, textIds.Length * dim);
+                int Lv = 1 + voiceFrames;                      // [bbv | voicePrompt] — speaker conditioning
+                int Lp = Lv + textIds.Length;
 
                 var swAll = System.Diagnostics.Stopwatch.StartNew();
-                flm.ResetKV();
-                // bug C + #29: prefill yields per layer AND each tick ends the frame (FrameBreak) —
-                // the pump's CPU-time budget would otherwise re-enter all 6 ticks in one frame.
+                // #32: the prompt rows are identical in CONTENT and in POSITION on every clause, so
+                // their K/V is retained across clauses and only the text rows are prefilled. This
+                // attacks the measured 392-604 ms synth->first-audio dead window in the [TTFA] line,
+                // during which playback drains and the ring starves.
+                // Measured on the GTX 1650 box (125-frame prompt => Lv 126, prompt-cache probe
+                // 2026-07-28, fp16): prefill rows 140 -> 14 (14-token clause) and 151 -> 25
+                // (25-token clause), i.e. the same 126 prompt rows skipped either way => 11.4 -> 1.9
+                // GMAC, whole-clause synth 541 -> 467 ms and 1016 -> 953 ms (63-74 ms of compute), and
+                // the FrameBreak ticks the pump pays for the prefill 24 -> 0-1 (at the clause-start
+                // allowance of 2-6 heavy ticks/frame that is ~4 frames of pacing gone on top).
+                // Not the WHOLE window — the AR frames up to the first flush and that flush's Mimi
+                // decode are the rest — but it is the part that was pure waste.
+                //
+                // Only the speaker conditioning is retained — never the previous clause's text or
+                // latents. Continuing [voice][text1][latents1][text2] would be out of distribution
+                // for an utterance-at-a-time TTS, the inter-clause pause is injected as literal zeros
+                // into the ring (so the model's prosody timeline would diverge from the audio one),
+                // and every clause ends with EOS + tail frames — i.e. the model already decided to
+                // stop. None of that applies to the prompt rows.
+                bool reusePrompt = flm.CanReusePromptKV(voicePrompt, Lv, Lp + maxFrames);
+                LastPrefillRows = reusePrompt ? textIds.Length : Lp;
                 // Every multi-frame loop below re-checks IsReady: on play-mode exit / assembly
                 // reload the shared engine is disposed (weight buffers nulled) while this
                 // coroutine may still get one more MoveNext — resuming into a dispatch then threw
                 // ArgumentNullException from SetBuffer (LinearRows:178, seen 2026-07-22). Abort
                 // quietly instead; PocketTTSWeights.Dispose drops IsReady.
-                var pf = flm.PrefillKVYielding(prefix, Lp, Lp + maxFrames);
-                while (IsReady && pf.MoveNext()) { LastHeavyTick = "prefill"; yield return FrameBreak; }
-                if (!IsReady) { onSamples?.Invoke(null); yield break; }
+                int prefillTicks = 0;
+                if (reusePrompt)
+                {
+                    // Text rows go through the PER-ROW decode path (same kernels as the block
+                    // prefill for a single token -> bit-exact; see AppendRowsKVYielding).
+                    flm.BeginFromRetainedPromptKV();
+                    flm.NotePromptKVReuse();   // drives the bounded self-heal — see CanReusePromptKV
+                    var tp = flm.AppendRowsKVYielding(textEmb, textIds.Length);
+                    while (IsReady && tp.MoveNext()) { prefillTicks++; LastHeavyTick = "prefill_text"; yield return FrameBreak; }
+                    if (!IsReady) { onSamples?.Invoke(null); yield break; }
+                }
+                else
+                {
+                    var prefix = new float[Lp * dim];
+                    Array.Copy(bbv, 0, prefix, 0, dim);
+                    Array.Copy(voicePrompt, 0, prefix, dim, voiceFrames * dim);
+                    Array.Copy(textEmb, 0, prefix, Lv * dim, textIds.Length * dim);
+                    flm.ResetKV();
+                    // bug C + #29: prefill yields per layer AND each tick ends the frame (FrameBreak) —
+                    // the pump's CPU-time budget would otherwise re-enter all 6 ticks in one frame.
+                    var pf = flm.PrefillKVYielding(prefix, Lp, Lp + maxFrames);
+                    while (IsReady && pf.MoveNext()) { prefillTicks++; LastHeavyTick = "prefill"; yield return FrameBreak; }
+                    if (!IsReady) { onSamples?.Invoke(null); yield break; }
+                    // The prefix STARTS with the prompt, so rows [0,Lv) of the caches are already the
+                    // prompt's K/V — retaining them is bookkeeping only, no extra compute. Keyed on
+                    // the voicePrompt array's identity: SetVoice/CloneVoice both assign a fresh array,
+                    // so the next clause on another voice fails the key and re-prefills.
+                    flm.RetainPromptKV(voicePrompt, Lv);
+                }
+                LastPrefillTicks = prefillTicks;
+                LastPrefillMs = (float)swAll.Elapsed.TotalMilliseconds;
 
                 var latents = new List<float[]>(maxFrames);
                 var rawAll = new List<float>(maxFrames * Cfg.LDIM);   // raw flow latents, growing
@@ -1095,8 +1214,13 @@ namespace DeepUnity
                     // emit a chunk when enough new frames accumulated, or at end-of-stream.
                     // Schedule form (== the old `% chunk` cadence when firstChunk == chunk): next
                     // flush at emitted + (first ? firstChunk : chunk) scanned frames.
-                    bool flush = stop || (latents.Count > 0 &&
-                        latents.Count >= emittedFrames + (emittedFrames == 0 ? firstChunk : chunk));
+                    // StreamHurry (gpuAr path, like firstChunk): while audible silence is imminent
+                    // the cadence is suspended and any StreamHurryMinFrames pending decode NOW —
+                    // only delivery timing moves, samples are boundary-invariant.
+                    int pending = latents.Count - emittedFrames;
+                    bool flush = stop || (pending > 0 &&
+                        (latents.Count >= emittedFrames + (emittedFrames == 0 ? firstChunk : chunk) ||
+                         (gpuAr && pending >= StreamHurryMinFrames && StreamHurry != null && StreamHurry())));
                     if (flush && latents.Count > emittedFrames)
                     {
                         // windowed decode: [ctx context ; new frames] — new samples are exact

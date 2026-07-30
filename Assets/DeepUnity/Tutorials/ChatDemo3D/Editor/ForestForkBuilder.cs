@@ -949,7 +949,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             var npc = root.AddComponent<NPCInteractor3D>();
             SetRef(npc, "dialogueCameraPoint", camPoint);
             SetString(npc, "NpcName", "Cobb, the Roadside Beggar");
-            SetString(npc, "system_prompt",
+            SetString(npc, "descriptionAndRules",
                 "You are Cobb, a ragged old beggar slumped against a crate at the spot where the forest road splits in " +
                 "two. Your knees are ruined, your cloak is patched sacking, and you live off whatever travellers spare " +
                 "you. You know these woods better than anyone: the RIGHT-hand path is the safe road and carries on " +

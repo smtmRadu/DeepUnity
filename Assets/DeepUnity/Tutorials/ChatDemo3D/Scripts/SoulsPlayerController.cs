@@ -7,8 +7,13 @@ namespace DeepUnity.Tutorials.ChatDemo3D
     /// Souls-like third person character. WASD moves relative to the camera, Shift sprints,
     /// Space dodge-rolls, left click swings the sword (3 hit combo), holding right click blocks
     /// with the shield. The Animator is driven from code via CrossFade onto plain states
-    /// (one per clip, no transition graph): Idle, Walk, Run, Sprint, Roll,
+    /// (one per clip, no transition graph): Idle, IdleUnarmed, Walk, Run, Sprint, Roll,
     /// Attack1..3, BlockIdle, Hit. The scene builder wires the controller and clip durations.
+    /// <para>Three of those states are GEAR-SPECIFIC — Idle is Sword_Idle (a guard around a blade),
+    /// Attack1..3 are the sword swings, BlockIdle is the shield stance — so since the gear beat
+    /// (user 2026-07-25) they are gated on <see cref="PlayerGear"/>: an empty-handed warrior idles
+    /// on IdleUnarmed and cannot swing or block at all. Everything else (Walk/Run/Sprint/Roll/Hit/
+    /// Death/Talking/Interact/MistWalk) is gear-neutral and plays either way.</para>
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public class SoulsPlayerController : MonoBehaviour
@@ -91,6 +96,20 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         public int FlaskCharges => flaskCharges;
 
         private WeaponStower stower;   // sheathes sword/shield during conversations (optional)
+        private PlayerGear gear;       // gear ownership; absent on the ForestFork player, which is always armed
+
+        /// <summary>
+        /// Whether the steel is actually GRIPPED, which is what the armed animation set depicts —
+        /// not merely owned. Two things can empty the hands: the gear beat (the warrior starts with
+        /// nothing until Velmire hands his pair over) and the conversation stow, which parks the
+        /// sword on the hip and the shield on the back. WeaponStower.Stow/Draw are called from
+        /// Enter/ExitInteractiveMode and nowhere else, so the mode is an exact stand-in for "stowed"
+        /// and costs no extra state to keep in sync.
+        /// <para>No PlayerGear at all means the pre-gear-beat player (ForestFork builds one, and its
+        /// animator has no IdleUnarmed state) — always armed, exactly as before.</para>
+        /// </summary>
+        private bool SwordInHand => gear == null || (gear.HasSword && mode == PlayerMode.Exploring);
+        private bool ShieldInHand => gear == null || (gear.HasShield && mode == PlayerMode.Exploring);
 
         private void Start()
         {
@@ -98,6 +117,8 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             animator = GetComponentInChildren<Animator>();
             audioSource = GetComponent<AudioSource>();
             stower = GetComponent<WeaponStower>();
+            gear = GetComponent<PlayerGear>();
+            if (gear != null) gear.GearChanged += OnGearChanged;
             stamina = maxStamina;
             health = maxHealth;
             flaskCharges = maxFlaskCharges;
@@ -107,6 +128,18 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
+
+        private void OnDestroy()
+        {
+            if (gear != null) gear.GearChanged -= OnGearChanged;
+        }
+
+        /// <summary>The gear changed hands. Clearing the cached state is all it takes: the next
+        /// PlayLocomotion re-resolves Idle against the new ownership and crossfades. In the real flow
+        /// the gear arrives DURING a conversation and therefore stowed, so nothing visibly changes
+        /// until ExitInteractiveMode draws it — which is the beat we want, the player equipping as he
+        /// walks away. The debug grant (stowed: false) swaps the stance on the spot.</summary>
+        private void OnGearChanged() => locomotionState = "";
 
         /// <summary>Freezes gameplay input and frees the mouse so the player can type in the chat.</summary>
         public void EnterInteractiveMode()
@@ -144,7 +177,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D
                 return;
 
             Vector3 wishDir = WishDirection();
-            blocking = Input.GetMouseButton(1);
+            // no shield, no guard: this kills the BlockIdle stance AND the damage reduction in
+            // TakeDamage in one place, so an empty-handed warrior cannot mime a block he has nothing
+            // to block with. Walk is only ever reached while blocking, so it goes with it.
+            blocking = Input.GetMouseButton(1) && ShieldInHand;
 
             bool sprinting = Input.GetKey(KeyCode.LeftShift) && !exhausted && wishDir != Vector3.zero && !blocking;
             if (sprinting)
@@ -182,7 +218,11 @@ namespace DeepUnity.Tutorials.ChatDemo3D
                 StartCoroutine(Roll(wishDir));
                 return;
             }
-            if (Input.GetMouseButtonDown(0) && stamina >= attackCost * 0.5f)
+            // Attack1..3 ARE the sword swings (Sword_Regular_A/B/C) — there is no unarmed move set in
+            // the UAL packs worth wiring for this demo, and swinging an invisible blade is the exact
+            // thing the gear beat is about. So the combo is simply unavailable until Velmire's sword
+            // is in the hand; that is also what makes the Sentinel a reason to talk to him first.
+            if (Input.GetMouseButtonDown(0) && SwordInHand && stamina >= attackCost * 0.5f)
             {
                 StartCoroutine(AttackCombo());
                 return;
@@ -507,15 +547,26 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 
         private void PlayLocomotion(string state)
         {
+            // cache the RESOLVED name, not the requested one: the same "Idle" request means a
+            // different clip before and after the hand-over, and comparing the raw name would let
+            // the first post-gear Idle short-circuit and leave the unarmed stance playing
+            state = GearState(state);
             if (locomotionState == state) return;
             locomotionState = state;
             CrossFade(state, 0.15f);
         }
 
+        /// <summary>The one place gear-neutral state names become gear-specific ones. Only Idle needs
+        /// it — "Idle" is Sword_Idle, a guard stance closed around a blade that may not be there, so
+        /// an empty right hand falls back to the plain Idle_Loop the NPCs use. The other two
+        /// gear-specific states never reach here unarmed: Attack1..3 and BlockIdle are gated at the
+        /// input in Update.</summary>
+        private string GearState(string state) => state == "Idle" && !SwordInHand ? "IdleUnarmed" : state;
+
         private void CrossFade(string state, float fade)
         {
             if (animator != null)
-                animator.CrossFadeInFixedTime(state, fade, 0);
+                animator.CrossFadeInFixedTime(GearState(state), fade, 0);
         }
     }
 }
