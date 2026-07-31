@@ -82,6 +82,48 @@ namespace DeepUnity
             /// GPU-frame path (FastKernels3) only, keeping the legacy path A/B-identical.</summary>
             public int StreamFirstChunkFrames = 2;
 
+            /// <summary>Default frame cap of a single synthesized clause (~41 s at 12.5 Hz — EOS
+            /// ends real clauses far earlier; this is the runaway bound). Shared by both synthesis
+            /// entry points and by PrewarmAllocationsYielding, which must pre-size the KV for the
+            /// same worst case the real clauses will ask for.</summary>
+            public const int DefaultMaxFrames = 512;
+
+            /// <summary>Text rows PrewarmAllocationsYielding budgets per clause. Calibrated with
+            /// the real Unigram tokenizer (verifier 2026-07-30): a verbose two-sentence clause
+            /// (clausesPerChunk = 2, the shipped setting) measures ~109 tokens, so 192 covers it
+            /// with headroom. The emergency comma cut (a 1000-char run with no sentence ender)
+            /// tokenizes to ~279 and is DELIBERATELY out of bound — it is pathological for NPC
+            /// dialogue, and covering it would double the scratch; if it ever fires, that clause
+            /// regrows once (the old cost, once).</summary>
+            const int PREALLOC_TEXT_ROWS = 192;
+
+            /// <summary>Voice-prompt rows the preallocation budgets: the CLONE CAP, not the
+            /// currently bound voice — at prewarm time the bound prompt is the 125-row baked
+            /// default, while cloned NPC voices bind ceil(MAX_REF_SECONDS x FRAME_RATE) = 135
+            /// rows right after (verifier finding H: sizing on the default left 118 effective
+            /// text rows and every voice swap under-covered).</summary>
+            static readonly int PREALLOC_VOICE_ROWS = Mathf.CeilToInt(MAX_REF_SECONDS * Cfg.FRAME_RATE);
+
+            /// <summary>Pre-allocate the flow-LM's clause-lifetime buffers at the in-game worst
+            /// case (clone-cap voice prompt + PREALLOC_TEXT_ROWS text rows + DefaultMaxFrames),
+            /// one real driver allocation per MoveNext — call from a prewarm coroutine while the
+            /// player walks up, so the warmup synth and the first real clause allocate NOTHING
+            /// mid-conversation (2026-07-30 spike hunt: 174 ms + 286 ms single-frame stalls, both
+            /// allocation). Covered buffers yield nothing, so re-running is a same-frame no-op.</summary>
+            public IEnumerator PrewarmAllocationsYielding()
+            {
+                if (!IsReady) yield break;
+                if (embMean == null)
+                {
+                    LoadCpuTensors();   // ~258 KB disk + 128k half-float decodes: give it its own
+                    yield return null;  // frame instead of sharing one with the first KV create
+                }
+                int voiceFrames = Math.Max((voicePrompt?.Length ?? 0) / Cfg.DIM, PREALLOC_VOICE_ROWS);
+                int maxLp = 1 + voiceFrames + PREALLOC_TEXT_ROWS;
+                var e = flm.PreallocateYielding(maxLp, maxLp + DefaultMaxFrames);
+                while (IsReady && e.MoveNext()) yield return null;
+            }
+
             /// <summary>Emergency-flush hook (2026-07-30), set by PocketTTSVoice while it owns the
             /// stream: returns true while audible silence is imminent (playback gated, or the ring
             /// below <c>InferencePerf.TtsPanicFloorSeconds</c>). While true, the flush schedule
@@ -864,7 +906,7 @@ namespace DeepUnity
             /// default for real RTF); false = the full-forward-each-step path (O(T·L²), P2-shaped).
             /// The two are bit-identical — KV decode is exactly the full causal forward, amortized.</summary>
             public float[] GenerateOffline(int[] textIds, float[][] injectNoise = null,
-                                           int maxFrames = 512, int framesAfterEos = 2,
+                                           int maxFrames = DefaultMaxFrames, int framesAfterEos = 2,
                                            bool useKvCache = true)
             {
                 var swAll = System.Diagnostics.Stopwatch.StartNew();
@@ -1105,7 +1147,7 @@ namespace DeepUnity
             // (PocketTTSVoice) pushes them into its ring buffer. Yields between frames/chunks so the
             // GPU work spreads across ticks and never blocks a single frame.
             public IEnumerator SynthesizeStreaming(int[] textIds, Action<float[]> onSamples,
-                                                    int maxFrames = 512, int framesAfterEos = 2,
+                                                    int maxFrames = DefaultMaxFrames, int framesAfterEos = 2,
                                                     float[][] injectNoise = null)
             {
                 if (!IsReady) { onSamples?.Invoke(null); yield break; }

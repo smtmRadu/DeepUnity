@@ -295,6 +295,83 @@ namespace DeepUnity
 
             static void GrowKV(ref ComputeBuffer b, int n) { if (b != null && b.count >= n) return; b?.Release(); b = new ComputeBuffer(Math.Max(n, 1), 4, ComputeBufferType.Structured); }
 
+            /// <summary>Pre-allocate every clause-lifetime buffer at the caller's worst-case sizes,
+            /// ONE actual driver allocation per MoveNext — so neither the warmup synthesis nor the
+            /// first real clause ever allocates or grows mid-frame. The 2026-07-30 spike hunt
+            /// measured exactly that: a 174 ms frame (warmup's cold EnsureKV + prefill scratch) and
+            /// a 286 ms frame (the first real clause regrowing it all, kvCap ~138 -> ~700) — the
+            /// same driver-stall class as the 250-550 ms monolithic frees documented on DisposeSlow.
+            /// <para>Cost honesty (verifier 2026-07-30): allocation cost calibrated from that log is
+            /// ~6-14 ms per create (byte-model up to ~12 ms/MB, i.e. ~40 ms for a 3 MB KV buffer),
+            /// so these frames are NOT free — they are simply placed in the walk-up, where a
+            /// 20-40 ms frame is invisible next to the same bytes landing mid-conversation. A
+            /// buffer is atomic; it cannot be split finer than one per frame.</para>
+            /// <para>Yields happen ONLY on frames that actually allocated: a re-run over covered
+            /// buffers completes without yielding once, so re-prewarming is a same-frame no-op.</para>
+            /// <para>Growth stays possible afterwards (a clause beyond the caller's bound pays the
+            /// old cost once). Value-neutral: fresh buffers carry no state until a prefill writes
+            /// them, and a bigger kvCap only means later EnsureKV calls no-op — which also fixes a
+            /// real #32 miss: CanReusePromptKV demands kvCap >= maxTotal, so before this, EVERY
+            /// clause longer than all previous ones was refused and re-prefilled cold (the hunt log
+            /// shows those as mid-reply `prefill` spikes at t=32 and t=39). Pinned at the bound,
+            /// the retained-prompt path now serves every clause under it.</para>
+            /// <para>TWO ordering/ownership rules, both load-bearing:
+            /// (1) kvCap is published LAST, after every layer's buffers exist — published first, a
+            /// prefill racing this coroutine would see "capacity ok" in EnsureKV and dispatch
+            /// against still-small caches.
+            /// (2) NEVER grow while kvLen > 0 (verifier finding A): GrowKV releases-and-recreates,
+            /// and a concurrent clause on the shared engine owns live rows in these buffers —
+            /// growing under it replaces its prompt K/V with zeroed memory that RetainPromptKV
+            /// would then mark as the retained prompt (silent corrupt voice for up to
+            /// PROMPT_REUSE_LIMIT clauses). Preallocation is for idle engines; a live one keeps
+            /// the sizes it already negotiated.</para></summary>
+            public System.Collections.IEnumerator PreallocateYielding(int maxLp, int maxTotal)
+            {
+                int dim = Cfg.DIM;
+                if (kCache == null) { kCache = new ComputeBuffer[Cfg.TF_LAYERS]; vCache = new ComputeBuffer[Cfg.TF_LAYERS]; }
+                if (kvCap < maxTotal && kvLen == 0)   // rule (2): idle engines only
+                {
+                    InvalidatePromptKV();   // same contract as EnsureKV: growth drops retained rows
+                    for (int li = 0; li < Cfg.TF_LAYERS; li++)
+                    {
+                        bool grewK = kCache[li] == null || kCache[li].count < maxTotal * dim;
+                        GrowKV(ref kCache[li], maxTotal * dim);
+                        if (grewK) yield return null;            // one ~3 MB create per frame
+                        bool grewV = vCache[li] == null || vCache[li].count < maxTotal * dim;
+                        GrowKV(ref vCache[li], maxTotal * dim);
+                        if (grewV) yield return null;
+                    }
+                    kvCap = maxTotal;        // published last — rule (1) above
+                }
+                // single-row scratch: ~40 KB all told, one frame is plenty
+                GrowKV(ref d1In, dim); GrowKV(ref d1Norm, dim); GrowKV(ref d1Qkv, 3 * dim);
+                GrowKV(ref d1Q, dim); GrowKV(ref d1K, dim); GrowKV(ref d1V, dim);
+                GrowKV(ref d1Attn, dim); GrowKV(ref d1Ff, Cfg.TF_FFN); GrowKV(ref d1Tmp, dim);
+                GrowKV(ref d1Out, dim);
+                // the block-prefill scratch, sized by prompt rows — without this the first clause
+                // LONGER than the warmup's regrows every one of these mid-conversation. One
+                // create per frame, skipping frames for buffers already covered.
+                var scratch = new (System.Func<ComputeBuffer> get, System.Action grow)[]
+                {
+                    (() => tfIn,   () => Grow(ref tfIn,   maxLp * dim)),
+                    (() => tfNorm, () => Grow(ref tfNorm, maxLp * dim)),
+                    (() => qkv,    () => Grow(ref qkv,    maxLp * 3 * dim)),
+                    (() => q,      () => Grow(ref q,      maxLp * dim)),
+                    (() => k,      () => Grow(ref k,      maxLp * dim)),
+                    (() => v,      () => Grow(ref v,      maxLp * dim)),
+                    (() => attn,   () => Grow(ref attn,   maxLp * dim)),
+                    (() => tmp,    () => Grow(ref tmp,    maxLp * dim)),
+                    (() => ff,     () => Grow(ref ff,     maxLp * Cfg.TF_FFN)),
+                };
+                foreach (var (get, grow) in scratch)
+                {
+                    var before = get();   // Grow releases-and-news on real growth -> reference moves
+                    grow();
+                    if (!ReferenceEquals(before, get())) yield return null;   // it actually allocated
+                }
+                EnsureAr(Mathf.Clamp(PocketTTS.StreamArBatchFrames, 1, 8));
+            }
+
             void EnsureKV(int maxLen)
             {
                 int dim = Cfg.DIM;

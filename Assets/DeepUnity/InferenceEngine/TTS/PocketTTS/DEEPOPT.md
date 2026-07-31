@@ -596,3 +596,26 @@ The panic band and K-blocking fix delivery and rate; what they cannot fix is fps
 sub-15 fps (sync LLM decode) production margin is thin whatever the schedule. If blips return on
 longer replies: raise `StreamArBatchFrames` toward 6-8 (watch per-frame GPU: the tick cap
 already bounds it), or revisit the Smooth speaking-ticks column.
+
+## 33.5 Addendum (#33b) — clause-lifetime preallocation (the 174/286 ms stalls)
+
+The armed FrameSpikeProbe run (2026-07-30, `ProbeLogs/frame_spikes.csv`) attributed the felt
+"load-up freezes" to ALLOCATION, not streaming: 174.8 ms (warmup's cold `EnsureKV` + prefill
+scratch) and 286.4 ms (first real clause regrowing kvCap ~138 → ~700 — ~45 MB re-created in one
+frame). Fix: `PocketTTSFlowLM.PreallocateYielding` + `PocketTTS.PrewarmAllocationsYielding`,
+drained by `PocketTTSVoice.PrewarmRoutine` in the walk-up — one REAL driver allocation per frame
+(a buffer is atomic; per-create cost calibrated from the log at ~6-40 ms, placed where the player
+isn't looking), yields only on frames that allocated, `kvCap` published last, growth refused
+while `kvLen > 0` (a live clause owns the rows — verifier finding A). Bounds are voice-independent
+worst cases: clone-cap prompt rows (135) + 192 text rows (a verbose two-sentence clause measures
+~109 tokens; the 1000-char emergency comma cut ≈ 279 stays deliberately out) + DefaultMaxFrames.
+Side effect worth knowing (verifier finding B): `CanReusePromptKV` demands `kvCap >= maxTotal`,
+so pre-fix every clause longer than all previous ones re-prefilled COLD (mid-reply `prefill`
+spikes at t=32/t=39 in the log); pinned at the bound, #32 retention now serves every clause under
+it. Adversarially verified (opus agent, 8 attack surfaces): two must-fix findings (the `warmed`
+latch burning on defetch-mid-prealloc; the original one-buffer-PAIR-per-frame spread still being
+6 x 40-77 ms frames) and two should-fix (the 118-row effective bound; the kvLen race) — all four
+landed. Deferred with eyes open: Mimi's decode scratch re-creates (~47-110 MB across the first
+clause's flushes) are unproven as a visible spike against the decode-contention plateau; ~55 MB
+of prealloc VRAM is held from first zone entry for the session. All five parity probes PASS
+after the change (PromptCache fp16/int8, K-Block fp16/int8, Async-Path).

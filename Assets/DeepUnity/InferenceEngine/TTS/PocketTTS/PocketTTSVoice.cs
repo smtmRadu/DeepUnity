@@ -303,6 +303,21 @@ namespace DeepUnity
             {
                 EnsureTts();
                 while (!tts.IsReady) yield return null;
+                // Pre-size every clause-lifetime buffer BEFORE the warmup synth (2026-07-30 spike
+                // hunt): the synth's own EnsureKV was the session's cold allocation — a 174 ms
+                // frame — and the first REAL clause then regrew it all for its bigger prompt+cap,
+                // a 286 ms frame mid-conversation. Spread here, one driver allocation per frame
+                // (~6-40 ms each, see PreallocateYielding's cost-honesty note) across the walk-up.
+                // NOTE `warmed` is static and PrewarmKernels gates on it: this whole routine runs
+                // for the session's FIRST voice only, which is sufficient BECAUSE the bounds below
+                // are voice-independent worst cases (clone cap, not the bound prompt).
+                var pa = tts.PrewarmAllocationsYielding();
+                while (pa.MoveNext()) yield return null;
+                // Defetched mid-drain (zone-edge turnaround: the exact frames the weights finish
+                // streaming)? Then NOTHING below would warm anything — bail WITHOUT burning the
+                // once-per-session `warmed` latch, or no voice ever prewarms again and both stalls
+                // return mid-conversation (verifier finding E, 2026-07-30).
+                if (!tts.IsReady) { prewarmJob = null; yield break; }
                 if (!warmed)
                 {
                     warmed = true;

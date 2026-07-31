@@ -15,7 +15,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
     public class FrameSpikeProbe : MonoBehaviour
     {
         [Tooltip("Diagnostic only — flip on when hunting fps dips. Off = no console reports, no CSV, near-zero overhead.")]
-        [SerializeField] bool record = false;
+        public bool record = false;   // public so the scene builder can arm it for a hunt
         [SerializeField] float spikeMs = 18f;
 
         readonly List<string> rows = new List<string>(1024);
@@ -35,10 +35,15 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 
             if (ms < spikeMs) return;
 
+            // llm_phase says what the LLM was doing; tts_tick is the LAST heavy TTS slice issued
+            // (prefill_text / ar_frame / mimi_decode / flush_push...) — together with the wall
+            // clock they line the spike up against the [GPU]/[PocketTTSVoice] console lines, which
+            // is how a "freeze during load-up / warmup" gets attributed instead of guessed at.
             string phase = LLM.CurrentPhase + (gcThisFrame ? "+GC" : "");
+            string ttsTick = PocketTTSModeling.PocketTTS.LastHeavyTick ?? "";
             spikeCount++;
-            rows.Add($"{Time.unscaledTime:0.00},{ms:0.0},{phase}");
-            if (ms > worstMs) { worstMs = ms; worstPhase = phase; }
+            rows.Add($"{Time.unscaledTime:0.00},{System.DateTime.Now:HH:mm:ss.ff},{ms:0.0},{phase},{ttsTick}");
+            if (ms > worstMs) { worstMs = ms; worstPhase = $"{phase}/{ttsTick}"; }
 
             if (Time.unscaledTime >= nextReportAt)
             {
@@ -53,7 +58,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             try
             {
                 Directory.CreateDirectory("ProbeLogs");
-                var all = new List<string>(rows.Count + 1) { "time_s,frame_ms,llm_phase" };
+                var all = new List<string>(rows.Count + 1) { "time_s,clock,frame_ms,llm_phase,tts_tick" };
                 all.AddRange(rows);
                 File.WriteAllLines(Path.Combine("ProbeLogs", "frame_spikes.csv"), all);
                 Debug.Log($"[FrameSpikeProbe] wrote {rows.Count} spikes to ProbeLogs/frame_spikes.csv");

@@ -432,9 +432,11 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             ambience.gameObject.AddComponent<ConversationAudioDucker>();
 
             // Kernel prewarm now lives INSIDE NPCChatBase.Awake (frame-0, per model, automatic) —
-            // no helper object needed. Only the dormant frame-spike probe remains (tick its
-            // `record` in the inspector when hunting fps dips).
-            new GameObject("FrameSpikeProbe").AddComponent<FrameSpikeProbe>();
+            // no helper object needed. The frame-spike probe is ARMED for now (user 2026-07-30:
+            // small freezes during model load-up / at fully-resident / at voice warmup) — it
+            // writes ProbeLogs/frame_spikes.csv with wall-clock + llm-phase + tts-tick columns.
+            // Flip `record` back to false here once the hunt closes.
+            new GameObject("FrameSpikeProbe").AddComponent<FrameSpikeProbe>().record = true;
 
             // final cross-wiring
             SetRef(player.GetComponent<SoulsPlayerController>(), "cam", cameraRig.GetComponent<SoulsCameraRig>());
@@ -486,6 +488,16 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             sun.shadowStrength = 0.75f;
             // moon hangs north-east, ~30° up — visible when walking toward the NPC
             sunGO.transform.rotation = Quaternion.Euler(30f, 205f, 0f);
+
+            // Shadow budget for that one shadow-casting light. 150 m (the project's Ultra level) is
+            // ~2.5x the playable radius and the fog is 94% opaque at 70 m, so the far half of the
+            // cascade set was rendering casters whose shadows nothing can see. The fitter is a runtime
+            // component because the built-in pipeline keeps shadow distance in global QualitySettings;
+            // it restores the old value on disable so ForestFork (bright daylight, density 0.006 fog)
+            // keeps its long range. Verified with ChatDemo3DPerfProbe.ShadowDistanceAB: 150 -> 70 moves
+            // no shadow by more than 1-3 of 255 levels through the mist, while every cascade gets
+            // ~2.1x denser, i.e. crisper shadows near the player.
+            sunGO.AddComponent<DeepUnity.Tutorials.ChatDemo3D.ShadowDistanceFitter>();
 
             RenderSettings.skybox = sky;
             RenderSettings.sun = sun;
@@ -657,22 +669,27 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
 
             BuildGround(hx, hz);
 
-            // --- floor: tile the courtyard, sink so tile tops sit at y=0
-            var floorRoot = new GameObject("Floor").transform; floorRoot.SetParent(envRoot);
+            // --- floor: NOT PLACED any more, it was never visible (perf, 2026-07-30).
+            // The tiles were sunk so their TOP face sat at y=0 — which is exactly where the ground
+            // mesh sits inside the walls (GroundHeight returns 0 across the whole castle footprint),
+            // so all 309 tile renderers were coplanar with the ground and lost the z-fight
+            // everywhere. Measured with ChatDemo3DPerfProbe.FloorTileAB (same six poses rendered with
+            // the tile renderers on vs off): worst case 1-2 of 255 levels on hairline seams, 6-61
+            // pixels per 1600x900 frame above 8 levels. They were not free though — 599 of the
+            // scene's 1833 material slots (33%), a ForwardAdd pass per torch touching them under the
+            // torch ring (~2.4k extra draw calls at pixelLightCount 4), and 599 shadow-caster slots
+            // in every cascade. Dropping them also removes the z-fight itself, so the courtyard can
+            // no longer flicker between moss and stone as the camera moves.
+            // The rng draws STAY: one seeded System.Random feeds the whole builder, so skipping draws
+            // here would re-roll every wall piece and every tree placed after this point.
+            // For a visibly tiled courtyard, place them ABOVE the ground (pos.y > 0) — re-enabling
+            // them at y=0 only brings the z-fight back.
             int nx = Mathf.CeilToInt(hx * 2f / U), nz = Mathf.CeilToInt(hz * 2f / U);
             for (int ix = 0; ix < nx; ix++)
                 for (int iz = 0; iz < nz; iz++)
                 {
-                    string tile = rng.NextDouble() switch
-                    {
-                        < 0.62 => "Floor_Standard",
-                        < 0.80 => "Floor_Squares",
-                        < 0.93 => "Floor_Diamond",
-                        _ => "Floor_SquareLarge",
-                    };
-                    float x = -hx + U * 0.5f + ix * U;
-                    float z = -hz + U * 0.5f + iz * U;
-                    PlacePiece(tile, new Vector3(x, 0, z), Pick(0f, 90f, 180f, 270f), floorRoot, groundTopAtZero: true, collider: false);
+                    rng.NextDouble();            // tile variant roll
+                    Pick(0f, 90f, 180f, 270f);   // tile yaw roll
                 }
 
             // --- perimeter walls, two stacked rows + a ruined third row (south side gets the gate)
@@ -764,20 +781,15 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             var bossRoot = new GameObject("BossRoom").transform; bossRoot.SetParent(envRoot);
             float bD = bossHalfZ * 2f;
 
+            // arena floor: same story as the courtyard floor above — top face at y=0, coplanar with
+            // the flat ground mesh (the terrain is flattened over the whole chamber footprint), never
+            // visible, so not placed. Rolls kept so the rng sequence downstream is untouched.
             int bnx = Mathf.CeilToInt(bossHalfX * 2f / U), bnz = Mathf.CeilToInt(bD / U);
             for (int ix = 0; ix < bnx; ix++)
                 for (int iz = 0; iz < bnz; iz++)
                 {
-                    string tile = rng.NextDouble() switch
-                    {
-                        < 0.62 => "Floor_Standard",
-                        < 0.80 => "Floor_Squares",
-                        < 0.93 => "Floor_Diamond",
-                        _ => "Floor_SquareLarge",
-                    };
-                    float x = bossCx - bossHalfX + U * 0.5f + ix * U;
-                    float z = hz + U * 0.5f + iz * U;
-                    PlacePiece(tile, new Vector3(x, 0, z), Pick(0f, 90f, 180f, 270f), bossRoot, groundTopAtZero: true, collider: false);
+                    rng.NextDouble();            // tile variant roll
+                    Pick(0f, 90f, 180f, 270f);   // tile yaw roll
                 }
 
             // chamber perimeter is fully solid — the mist door is the only way in
@@ -1622,7 +1634,12 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             if (anim == null) anim = model.AddComponent<Animator>();
             anim.runtimeAnimatorController = ctrl;
             anim.applyRootMotion = false;
-            anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            // Sealed in the arena behind an opaque mist wall until the player walks through it, and
+            // still off-camera whenever the player turns away mid-fight. Safe to cull the transform
+            // writes: BossController drives everything off ROOT positions (to.magnitude vs. the
+            // player) and fixed clip durations, never off bone transforms or animation events, so the
+            // fight plays out identically whether or not his skeleton was written that frame.
+            anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
 
             Transform mount = FindDeep(model.transform, "Weapon.R");
             if (mount == null) mount = anim.GetBoneTransform(HumanBodyBones.RightHand);
@@ -1673,6 +1690,13 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             cam.fieldOfView = 55f;
             cam.nearClipPlane = 0.1f;
             cam.farClipPlane = 400f;
+            // No post-processing anywhere in this scene, so an HDR camera buys nothing: with nothing
+            // to tonemap or bloom, values above 1 clamp on the final blit exactly like they clamp on
+            // write in LDR. What it costs is real — forward rendering has to go through a full-screen
+            // RGBA16F target (8 B/px instead of 4 at 4x MSAA) and then blit it to the backbuffer every
+            // frame. Off = render straight into the (still MSAA'd) backbuffer. Turn this back on the
+            // day a bloom/tonemap pass lands, otherwise the torch highlights will clip.
+            cam.allowHDR = false;
             camGO.AddComponent<AudioListener>();
             camGO.AddComponent<SoulsCameraRig>();
             camGO.transform.position = player.transform.position + new Vector3(0, 2.6f, -4.2f);
@@ -1716,7 +1740,12 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             if (anim == null) anim = model.AddComponent<Animator>();
             anim.runtimeAnimatorController = ctrl;
             anim.applyRootMotion = false;
-            anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            // He stands in one corner of a 32x24 courtyard, so he is off-camera most of the time.
+            // CullUpdateTransforms keeps the state machine ticking (so nothing about the dialogue
+            // timing changes) and only skips the humanoid retarget + bone writes while none of his
+            // renderers are visible; the pose is written again on the first visible frame. The PLAYER
+            // stays AlwaysAnimate — he is always on screen and his bones carry the weapon sockets.
+            anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
 
             // He CARRIES the pair he offers the player (user 2026-07-25): shield slung across his
             // back, sword hanging along his right leg — the very sockets WeaponStower stows the
@@ -1766,32 +1795,32 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // identity lives here since the NPC component became the generic NPCChatBase — the
             // base class defaults are a nameless villager
             SetString(npc, "NpcName", "Velmire, the Pale Herald");
+            // SIMPLIFIED PERSONA (user 2026-07-30: "prompt mai simplu... sa nu o mai suceasca cu
+            // vorbele lui lungi. Sa-mi dea sabia cand ii cer si cu asta basta"). The flowery/evasive
+            // version ("never give a straight answer", "honeyed courtesy") actively fought the gear
+            // beat and padded every reply; on a 0.8B the style rules win over the task rules. Plain
+            // speech + straight answers ALSO buys real headroom: shorter replies fill the 1800-token
+            // window slower, so ResumeFromCompact compaction fires later and the prose-format
+            // poisoning it can seed (see the 2026-07-30 CheckMyGear-in-prose incident) gets rarer.
             SetString(npc, "descriptionAndRules",
-                "You are Velmire, the Pale Herald: a white-masked, soft-spoken emissary lingering by the gate of a ruined castle. " +
-                "You greet travellers with honeyed courtesy that thinly veils mockery. You pity the player for wandering these dead " +
-                "lands guideless and lordless, and you address them as 'lambkin' or 'poor wanderer'. You speak in flowery, " +
-                "old-fashioned phrases, hint that you know more than you say, and never give a straight answer. " +
-                "You know what waits beyond the wall of golden mist at the northern arch: the Sentinel of the Mist, a towering " +
-                "hollow knight wielding a halberd, who has felled every challenger before. If asked about the mist, the arch or " +
-                "the boss, you foreshadow it with morbid delight — urging the lambkin onward while clearly expecting them to die. " +
-                "Stay in character at all times. Keep your replies to one to three short sentences. " +
-                // The gear beat, in his own voice — the tools block teaches the FORMAT, the persona
-                // teaches WHEN. It opens by overriding his evasiveness on purpose: with only "never
-                // give a straight answer" above, the 0.8B dodged the request no matter how often the
-                // player asked (user 2026-07-25), so the exception and "never withhold" are the two
-                // load-bearing phrases here.
-                // The gear beat, kept SHORT on purpose. A numbered three-step version was tried and
-                // measured WORSE (2026-07-25): the 0.8B latched onto its "say you cannot help them"
-                // clause and refused without ever looking, and the persona alone had grown to 364 of
-                // the prompt's 943 tokens. The sequence is still stated — look, then let them choose —
-                // just not narrated step by step.
+                "You are Velmire, the Pale Herald: a white-masked warden resting by the gate of a ruined castle. " +
+                "You speak plainly and briefly - one or two short sentences, no riddles, no flourishes. " +
+                "Answer exactly what you are asked. You call the player 'wanderer'. " +
+                "You know what waits beyond the wall of golden mist at the northern arch: the Sentinel of the Mist, " +
+                "a towering hollow knight with a halberd that has felled every challenger. Warn about it plainly when asked. " +
+                "Stay in character at all times. " +
+                // The gear beat — the tools block teaches the FORMAT, the persona teaches WHEN. Kept
+                // SHORT on purpose: a numbered three-step version measured WORSE (2026-07-25, the
+                // 0.8B latched onto a refusal clause). "Never withhold" stays load-bearing, and the
+                // new last phrase pins the user's actual ask: sword requested -> offer NOW, same
+                // reply, no stalling.
                 "You carry a sword and a heater shield you no longer need, and you give them to any wanderer who " +
                 "asks for a weapon. Look before you offer: call CheckMyGear, then say what you found and let them " +
-                "take it with AskUserQuestion. Never withhold that offer. " +
-                // Phrasing lives HERE, not in the shared tools block (user 2026-07-26): it matters
-                // because Velmire is VOICED — his line is spoken, the popup is not — so a first-person
-                // question would read as dialogue the player never heard. A text-only NPC has no such
-                // split and gets no such rule.
+                "take it with AskUserQuestion. Never withhold or delay that offer - when they ask for the sword, " +
+                "you offer it in that same reply. " +
+                // Phrasing lives HERE, not in the shared tools block (user 2026-07-26): Velmire is
+                // VOICED — his line is spoken, the popup is not — so a first-person question would
+                // read as dialogue the player never heard.
                 "Word an AskUserQuestion as a label on the screen rather than speech, naming yourself: " +
                 "'Take Velmire's sword and shield?', never 'Do you want to take mine?'.");
             // Two tools on this NPC: the built-in AskUserQuestion popup (ON by default since
@@ -1928,7 +1957,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             anim.runtimeAnimatorController = CreateOwnClipAnimator("WitchAnimator",
                 "Characters/Witch.fbx", "Idle_Neutral", "Interact");
             anim.applyRootMotion = false;
-            anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;   // see Velmire, same reason
 
             // the Wizard model brings its own pointed hat + staff-in-hand; just plant a spare
             // crooked staff by her corner for set dressing
