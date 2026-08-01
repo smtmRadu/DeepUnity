@@ -11,21 +11,26 @@ namespace DeepUnity
     /// Base class for EVERY NPC dialogue window, in every environment (3D souls castle, 2D farm,
     /// Anya, and anything added later). It implements the whole <see cref="INPCChatWindow"/>
     /// surface that does NOT depend on how a given window looks — the send-button loading pulse,
-    /// the input caret and typing sounds, title/info text, the context-fill bar — plus the
-    /// built-in <b>AskUserQuestion</b> choice popup (<see cref="INPCToolQuestionWindow"/>), so
-    /// every derived window supports the NPC's interactive tool for free.
+    /// the input caret and typing sounds, title/info text, the context-fill bar — plus BOTH built-in
+    /// interactive panels: the <b>AskUserQuestion</b> choice popup
+    /// (<see cref="INPCToolQuestionWindow"/>) and the <b>GiveTool</b> offer popup
+    /// (<see cref="INPCToolGiveWindow"/>), so every derived window supports the NPC's interactive
+    /// tools for free. Those two are the whole set — an NPC's belt may carry either, both or neither,
+    /// and anything else it does is an internal read that never reaches the screen.
     ///
     /// A concrete window only supplies its own PRESENTATION: how it opens and closes
     /// (<see cref="OnOpen"/> / <see cref="OnClose"/>) and how it renders the transcript
     /// (<see cref="AddMessage"/> / <see cref="PopLastMessage"/> / <see cref="Clear"/>). Restyle the
-    /// popup by overriding the ToolQuestion* theme properties — never by re-implementing it.
+    /// popups by overriding the ToolQuestion* theme properties (shared by both) and
+    /// <see cref="ToolGiveCurrency"/> / <see cref="FormatToolGive"/> — never by re-implementing them.
     ///
     /// Streaming contract every subclass must honor: the NPC pops + re-adds the newest line many
     /// times a second during the token stream, so <see cref="PopLastMessage"/> should PARK the
     /// newest line and let the <see cref="AddMessage"/> that follows in the same call stack reclaim
     /// it as a pure text mutation — destroying and re-instantiating it flickers.
     /// </summary>
-    public abstract class NPCDialogueWindow : MonoBehaviour, INPCChatWindow, INPCToolQuestionWindow
+    public abstract class NPCDialogueWindow : MonoBehaviour, INPCChatWindow, INPCToolQuestionWindow,
+                                              INPCToolGiveWindow
     {
         [Header("Reasoning models")]
         [Tooltip("Render <think> reasoning content in the window (dimmed italic). It is never spoken by the TTS either way.")]
@@ -67,6 +72,27 @@ namespace DeepUnity
         protected virtual Color ToolQuestionText => new Color(0.86f, 0.83f, 0.75f);
         /// <summary>Option button fill of the choice popup.</summary>
         protected virtual Color ToolQuestionOptionFill => new Color(0.15f, 0.13f, 0.105f, 0.97f);
+
+        /// <summary>What a GiveTool price is quoted IN, in this environment — "souls" in the 3D castle,
+        /// "coins" on the farm. Empty (the default) prints the bare number, because the base class has
+        /// no business inventing a currency for a game it knows nothing about.</summary>
+        protected virtual string ToolGiveCurrency => "";
+
+        /// <summary>The one line the offer panel shows above Accept | Decline: the item, its quantity
+        /// when the NPC named one, and its price when there is one. Override to reword or restyle it;
+        /// the two buttons are fixed, because the tool's result is a yes/no and nothing else.</summary>
+        protected virtual string FormatToolGive(ToolGiveOffer offer)
+        {
+            var s = new System.Text.StringBuilder(offer.item ?? "");
+            if (offer.quantity.HasValue) s.Append(" x").Append(offer.quantity.Value);
+            if (offer.price.HasValue)
+            {
+                s.Append("  -  ").Append(offer.price.Value);
+                string cur = ToolGiveCurrency;
+                if (!string.IsNullOrEmpty(cur)) s.Append(' ').Append(cur);
+            }
+            return s.ToString();
+        }
 
         // ---------------------------------------------------------------- lifecycle
 
@@ -116,14 +142,14 @@ namespace DeepUnity
             OnOpen();
         }
 
-        /// <summary>Closes the window. A live choice popup is ALWAYS torn down first — it must
-        /// never outlive the dialogue underneath it (it is a full-screen input blocker).</summary>
+        /// <summary>Closes the window. A live interactive panel is ALWAYS torn down first — it must
+        /// never outlive the dialogue underneath it (it replaces the input row).</summary>
         public void Close()
         {
             // clear IsOpen FIRST — must never stay stuck true (pause menus key their Esc-swallow
             // off it; a stale value soft-locks them). Safe even when already inactive.
             IsOpen = false;
-            HideToolQuestion();
+            HideToolPanel();   // whichever of the two was up
             OnClose();
         }
 
@@ -238,22 +264,28 @@ namespace DeepUnity
             uiAudio.PlayOneShot(typeClips[Random.Range(0, typeClips.Length)], 0.35f);
         }
 
-        // ---------------------------------------------------------------- AskUserQuestion panel
-        // The NPC's one generic interactive tool, implemented ONCE for every environment. It TAKES
-        // THE PLACE OF THE INPUT ROW (user spec 2026-07-25): the input field, the context bar and the
-        // Speak/Leave buttons go away, and the question + its 2-4 clickable options occupy exactly
-        // that strip until the player picks — you answer with a choice instead of typing, so the
-        // window can never show both affordances at once. Built at runtime (no prefab, no scene
-        // rebuild), themed through the ToolQuestion* properties, torn down on pick / Close / demand;
+        // ---------------------------------------------------------------- interactive tool panels
+        // The NPC's TWO interactive tools — AskUserQuestion (a choice) and GiveTool (an item offer) —
+        // implemented ONCE for every environment and sharing one panel builder, because they are the
+        // same affordance with different labels: a line of text above a row of buttons whose click is
+        // the tool's result. The panel TAKES THE PLACE OF THE INPUT ROW (user spec 2026-07-25): the
+        // input field, the context bar and the Speak/Leave buttons go away and the panel occupies
+        // exactly that strip until the player answers — you answer by clicking instead of typing, so
+        // the window can never show both affordances at once. Built at runtime (no prefab, no scene
+        // rebuild), themed through the ToolQuestion* properties, torn down on click / Close / demand;
         // teardown re-activates everything it hid, and ONLY that (a Speak button already disabled
-        // for other reasons stays as it was).
+        // for other reasons stays as it was). Only ONE panel is ever up: opening either tears down
+        // whatever was there.
 
-        private GameObject toolQuestionRoot;
-        private System.Action<string> toolPick;
-        private readonly List<GameObject> toolQuestionHidden = new List<GameObject>();
+        private GameObject toolPanelRoot;
+        // index-based, so the choice panel maps it back to the option TEXT and the offer panel to
+        // accept/decline — the builder itself never needs to know which tool it is serving
+        private System.Action<int> toolPanelPick;
+        private readonly List<GameObject> toolPanelHidden = new List<GameObject>();
 
-        /// <summary>The chrome the choice panel replaces: the input row (with its Speak/Leave
-        /// buttons) and the context bar. Override to hide more/less in a custom window.</summary>
+        /// <summary>The chrome an interactive panel replaces: the input row (with its Speak/Leave
+        /// buttons) and the context bar. Shared by both panels. Override to hide more/less in a custom
+        /// window.</summary>
         protected virtual void CollectToolQuestionChrome(List<GameObject> hide)
         {
             // one row usually parents input + Speak + Leave — hide the row itself so its layout
@@ -279,9 +311,39 @@ namespace DeepUnity
         public virtual void ShowToolQuestion(string npcName, string question, IReadOnlyList<string> options,
                                              System.Action<string> onPick)
         {
-            HideToolQuestion();
+            // the pick comes back as the option's exact TEXT, which is what the model is answered with
+            var labels = new List<string>(options);
+            ShowToolPanel(question, labels, null, i => onPick?.Invoke(labels[i]));
+        }
+
+        /// <inheritdoc/>
+        public virtual void ShowToolGive(string npcName, ToolGiveOffer offer, bool canAccept,
+                                         System.Action<bool> onDecide)
+        {
+            // EXACTLY two buttons, always in this order. Accept can be gated off (no money); Decline
+            // never is, so an offer the player cannot afford still ends the exchange with a real answer
+            // instead of a dead panel.
+            ShowToolPanel(FormatToolGive(offer),
+                          new List<string> { AcceptLabel, DeclineLabel },
+                          new List<bool> { canAccept, true },
+                          i => onDecide?.Invoke(i == 0));
+        }
+
+        /// <summary>The offer panel's two fixed labels — the tool's result is a yes/no, so these are
+        /// not authored per NPC.</summary>
+        protected const string AcceptLabel = "Accept";
+        protected const string DeclineLabel = "Decline";
+
+        /// <summary>Build the interactive strip: one line of text above a row of buttons, one button per
+        /// label, and report the clicked INDEX exactly once. Both tools' panels are this.</summary>
+        /// <param name="enabled">Per-button interactability, or null for "all clickable". A disabled
+        /// button is still drawn (dimmed) — the player must see the offer they cannot take.</param>
+        private void ShowToolPanel(string prompt, IReadOnlyList<string> labels, IReadOnlyList<bool> enabled,
+                                   System.Action<int> onPick)
+        {
+            HideToolPanel();
             EnsureEventSystem();   // a scene without one renders the buttons but never clicks them
-            toolPick = onPick;
+            toolPanelPick = onPick;
 
             TMP_FontAsset font = ToolQuestionFont;
             Color accent = ToolQuestionAccent, text = ToolQuestionText;
@@ -293,14 +355,14 @@ namespace DeepUnity
             {
                 if (go == null || !go.activeSelf) continue;
                 go.SetActive(false);
-                toolQuestionHidden.Add(go);
+                toolPanelHidden.Add(go);
             }
 
             // the panel sits in the strip the input row occupied, pinned to the window's bottom edge
-            // and growing UPWARD (pivot y = 0 + a vertical fitter) as the option count demands
-            toolQuestionRoot = new GameObject("NPCToolQuestion", typeof(RectTransform), typeof(Image),
-                                              typeof(VerticalLayoutGroup), typeof(ContentSizeFitter), typeof(Outline));
-            var boxRT = (RectTransform)toolQuestionRoot.transform;
+            // and growing UPWARD (pivot y = 0 + a vertical fitter) as the button count demands
+            toolPanelRoot = new GameObject("NPCToolPanel", typeof(RectTransform), typeof(Image),
+                                           typeof(VerticalLayoutGroup), typeof(ContentSizeFitter), typeof(Outline));
+            var boxRT = (RectTransform)toolPanelRoot.transform;
             boxRT.SetParent(transform, false);
             boxRT.anchorMin = new Vector2(0f, 0f);
             boxRT.anchorMax = new Vector2(1f, 0f);
@@ -308,20 +370,20 @@ namespace DeepUnity
             boxRT.offsetMin = new Vector2(18f, 6f);
             boxRT.offsetMax = new Vector2(-18f, 6f);
             boxRT.SetAsLastSibling();   // above the message list it may overlap
-            toolQuestionRoot.GetComponent<Image>().color = ToolQuestionPanel;
-            var boxLine = toolQuestionRoot.GetComponent<Outline>();
+            toolPanelRoot.GetComponent<Image>().color = ToolQuestionPanel;
+            var boxLine = toolPanelRoot.GetComponent<Outline>();
             boxLine.effectColor = new Color(accent.r, accent.g, accent.b, 0.9f);
             boxLine.effectDistance = new Vector2(2f, -2f);
-            var lay = toolQuestionRoot.GetComponent<VerticalLayoutGroup>();
+            var lay = toolPanelRoot.GetComponent<VerticalLayoutGroup>();
             lay.padding = new RectOffset(20, 20, 14, 14);
             lay.spacing = 10f;
             lay.childControlWidth = true; lay.childControlHeight = true;
             lay.childForceExpandWidth = true; lay.childForceExpandHeight = false;
-            toolQuestionRoot.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            toolPanelRoot.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            MakeModalText(boxRT, question, font, text, 22f, FontStyles.Normal);
+            MakeModalText(boxRT, prompt, font, text, 22f, FontStyles.Normal);
 
-            // options laid out side by side like the buttons they replace, splitting the width
+            // buttons laid out side by side like the ones they replace, splitting the width
             var rowGO = new GameObject("Options", typeof(RectTransform), typeof(HorizontalLayoutGroup),
                                        typeof(LayoutElement));
             rowGO.transform.SetParent(boxRT, false);
@@ -331,20 +393,21 @@ namespace DeepUnity
             rowLay.childForceExpandWidth = true; rowLay.childForceExpandHeight = true;
             rowGO.GetComponent<LayoutElement>().minHeight = 46f;
 
-            foreach (string opt in options)
+            for (int b = 0; b < labels.Count; b++)
             {
-                string choice = opt;   // per-iteration capture for the click closure
+                int index = b;             // per-iteration capture for the click closure
+                bool live = enabled == null || b >= enabled.Count || enabled[b];
                 var btnGO = new GameObject("Option", typeof(RectTransform), typeof(Image),
                                            typeof(Outline), typeof(Button), typeof(LayoutElement));
                 btnGO.transform.SetParent(rowGO.transform, false);
                 var img = btnGO.GetComponent<Image>();
                 img.color = ToolQuestionOptionFill;
                 var line = btnGO.GetComponent<Outline>();
-                line.effectColor = new Color(accent.r, accent.g, accent.b, 0.5f);
+                line.effectColor = new Color(accent.r, accent.g, accent.b, live ? 0.5f : 0.2f);
                 line.effectDistance = new Vector2(1f, -1f);
                 var btnLay = btnGO.GetComponent<LayoutElement>();
                 btnLay.minHeight = 46f;
-                btnLay.flexibleWidth = 1f;   // 2-4 options share the row evenly
+                btnLay.flexibleWidth = 1f;   // 2-4 buttons share the row evenly
                 var btn = btnGO.GetComponent<Button>();
                 btn.targetGraphic = img;
                 var colors = btn.colors;
@@ -352,39 +415,54 @@ namespace DeepUnity
                 colors.highlightedColor = Color.white;
                 colors.selectedColor = Color.white;
                 colors.pressedColor = new Color(0.6f, 0.6f, 0.6f);
+                // spelled out rather than left at uGUI's default, so a gated Accept reads as clearly
+                // unavailable at a glance instead of merely slightly paler
+                colors.disabledColor = new Color(0.38f, 0.38f, 0.38f, 0.85f);
                 colors.fadeDuration = 0.08f;
                 btn.colors = colors;
-                var label = MakeModalText(btnGO.transform, choice, font, text, 20f, FontStyles.Normal);
+                btn.interactable = live;
+                Color labelColor = live
+                    ? text
+                    : new Color(text.r, text.g, text.b, text.a * 0.45f);
+                var label = MakeModalText(btnGO.transform, labels[b], font, labelColor, 20f, FontStyles.Normal);
                 var labelRT = (RectTransform)label.transform;   // fill the button, not layout-driven
                 labelRT.anchorMin = Vector2.zero; labelRT.anchorMax = Vector2.one;
                 labelRT.offsetMin = Vector2.zero; labelRT.offsetMax = Vector2.zero;
                 label.raycastTarget = false;
+                if (!live) continue;       // drawn, dimmed, and it answers nothing
                 btn.onClick.AddListener(() =>
                 {
                     PlayButtonClick();
-                    var pick = toolPick;      // HideToolQuestion clears the field — fire AFTER teardown
-                    HideToolQuestion();
-                    pick?.Invoke(choice);
+                    var pick = toolPanelPick;   // the teardown clears the field — fire AFTER it
+                    HideToolPanel();
+                    pick?.Invoke(index);
                 });
             }
         }
 
         /// <inheritdoc/>
-        public virtual void HideToolQuestion()
+        public virtual void HideToolQuestion() => HideToolPanel();
+
+        /// <inheritdoc/>
+        public virtual void HideToolGive() => HideToolPanel();
+
+        /// <summary>Tear down whichever interactive panel is up and give the typing chrome back.
+        /// Idempotent, and a no-op when no panel was ever built.</summary>
+        private void HideToolPanel()
         {
-            toolPick = null;
-            if (toolQuestionRoot != null)
+            toolPanelPick = null;
+            if (toolPanelRoot != null)
             {
                 // DestroyImmediate off the play loop: an editor probe that renders this panel in edit
                 // mode would otherwise leak it into the scene (plain Destroy is refused there)
-                if (Application.isPlaying) Destroy(toolQuestionRoot);
-                else DestroyImmediate(toolQuestionRoot);
-                toolQuestionRoot = null;
+                if (Application.isPlaying) Destroy(toolPanelRoot);
+                else DestroyImmediate(toolPanelRoot);
+                toolPanelRoot = null;
             }
             // give the typing chrome back — only the objects this panel actually hid
-            foreach (var go in toolQuestionHidden)
+            foreach (var go in toolPanelHidden)
                 if (go != null) go.SetActive(true);
-            toolQuestionHidden.Clear();
+            toolPanelHidden.Clear();
         }
 
         // A uGUI Button is dead without an EventSystem in the scene. Every demo builder makes one,
@@ -400,8 +478,11 @@ namespace DeepUnity
 #endif
             var go = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
             Debug.LogWarning("[NPCDialogueWindow] no EventSystem in the scene — created one so the " +
-                             "AskUserQuestion options are clickable.");
-            DontDestroyOnLoad(go);
+                             "interactive tool panel's buttons are clickable.");
+            // Play mode ONLY: DontDestroyOnLoad THROWS from an editor script, and an edit-mode probe
+            // that renders this panel in an empty scene hits exactly that (NpcGiveToolProbe did). The
+            // object is created either way — it simply has nothing to survive outside play mode.
+            if (Application.isPlaying) DontDestroyOnLoad(go);
         }
 
         private static TMP_Text MakeModalText(Transform parent, string content, TMP_FontAsset font,

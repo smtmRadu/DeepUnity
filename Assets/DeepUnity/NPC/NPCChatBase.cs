@@ -57,6 +57,48 @@ namespace DeepUnity
     }
 
     /// <summary>
+    /// What a <b>GiveTool</b> call offers the player: an item, optionally a price, optionally a
+    /// quantity. The two optional fields are NULLABLE and not defaulted, because "no price named"
+    /// (a gift) and "priced at 0" are different offers and the panel renders them differently — the
+    /// schema makes both parameters optional for exactly that reason.
+    /// <para>Carried verbatim into <see cref="NPCChatBase.ToolGiveAcceptGate"/> and
+    /// <see cref="NPCChatBase.ToolGiveAccepted"/>, so a host game reads the model's own numbers.</para>
+    /// </summary>
+    public struct ToolGiveOffer
+    {
+        /// <summary>What is being handed over, in the NPC's own words. Never null/empty — a call
+        /// without it is refused before an offer is ever built (the schema requires it).</summary>
+        public string item;
+        /// <summary>The price the NPC named, or null when the offer carries none (a gift).</summary>
+        public int? price;
+        /// <summary>How many, or null when the NPC did not say (one of it).</summary>
+        public int? quantity;
+    }
+
+    /// <summary>
+    /// Chat-window capability: the item+Accept/Decline panel behind the NPC's <b>GiveTool</b> tool —
+    /// the SECOND and last interactive tool the dialogue window handles (the other is
+    /// AskUserQuestion). It replaces the typing chrome exactly like the choice panel does, shows the
+    /// item (with its quantity and price when the NPC named them) and returns the player's decision
+    /// as a bool. <see cref="NPCDialogueWindow"/> implements it for every environment, so deriving a
+    /// window from that class is all any new environment needs; NPCChatBase feature-detects it
+    /// (<c>Window as INPCToolGiveWindow</c>) and drops the call with a console warning on a window
+    /// that somehow lacks it. Restyle through the base class's ToolQuestion* / ToolGive* hooks rather
+    /// than implementing this yourself.
+    /// </summary>
+    public interface INPCToolGiveWindow
+    {
+        /// <summary>Show the offer panel (item line + Accept | Decline) in place of the typing chrome.
+        /// <paramref name="onDecide"/> fires ONCE with true (accept) or false (decline); the panel tears
+        /// itself down on the click and restores what it hid. <paramref name="canAccept"/> false renders
+        /// Accept DISABLED — the host game's accept-gate said no (no money, no room) — while Decline
+        /// always works, so the exchange can never dead-end.</summary>
+        void ShowToolGive(string npcName, ToolGiveOffer offer, bool canAccept, System.Action<bool> onDecide);
+        /// <summary>Tear the panel down without a decision (dialogue closed underneath it).</summary>
+        void HideToolGive();
+    }
+
+    /// <summary>
     /// A component that gives its NPC EXTRA tools on top of the built-in AskUserQuestion popup.
     /// A provider is a MonoBehaviour on the same GameObject as the <see cref="NPCChatBase"/>, so
     /// which tools an NPC has is authored in the SCENE (Velmire can hand his gear over; Morwenna
@@ -211,7 +253,7 @@ namespace DeepUnity
         [SerializeField] protected RevealGranularity syncedTextReveal = RevealGranularity.CharByChar;
         [Tooltip("ResetEveryTime = the chat starts from the bare system prompt EVERY opening (only the system-prompt KV is cached). ResumeFromCompact = the history is permanent — it survives closing the dialogue AND quitting the app, with every reply — until it fills Max Context Length, at which point the model compacts the whole conversation into one text that is APPENDED TO THE SYSTEM PROMPT (the Compact Summary field below) and the replies are dropped. See the dropdown's own tooltips for the full lifecycle.")]
         [SerializeField] protected HistoryMode historyMode = HistoryMode.ResetEveryTime;
-        [Tooltip("Runaway guard, NOT a feature limit. One exchange may legitimately run text → call → text → call → text: decoding stops at each call, the result lands in the context, and the NPC carries on from there, so a single player line can produce several calls and several spoken stretches. This caps only the INTERNAL reads (an un-finetuned small model handed a read will happily read the same thing forever); AskUserQuestion is not counted, because it cannot loop — it waits for a human. Past the cap the read is REFUSED to the model as {\"error\": \"read_limit_reached\"}, which is what makes it stop and speak. 0 = no internal reads at all (every one is refused).")]
+        [Tooltip("Runaway guard, NOT a feature limit. One exchange may legitimately run text → call → text → call → text: decoding stops at each call, the result lands in the context, and the NPC carries on from there, so a single player line can produce several calls and several spoken stretches. This caps only the INTERNAL reads (an un-finetuned small model handed a read will happily read the same thing forever); the two INTERACTIVE tools (AskUserQuestion, GiveTool) are not counted, because neither can loop — both wait for a human. Past the cap the read is REFUSED to the model as {\"error\": \"read_limit_reached\"}, which is what makes it stop and speak. 0 = no internal reads at all (every one is refused).")]
         [Min(0)] [SerializeField] protected int maxToolReadsPerTurn = 6;
         [Tooltip("Persist this NPC's KV cache to disk (persistentDataPath/DeepUnity): the system-prompt state in EVERY mode, plus — in ResumeFromCompact — the WHOLE conversation on a clean close (KV + sampler state + transcript + compact), so reopening after the model was released, the scene reloaded or the app restarted restores the chat from disk instead of re-prefilling. This is what makes ResumeFromCompact survive an app restart, so leave it ON for that mode. Qwen3.5 only for now; Gemma3 NPCs fall back to the re-prefill path.")]
         [SerializeField] protected bool cacheKVCache = true;
@@ -226,6 +268,8 @@ namespace DeepUnity
         [SerializeField] protected bool allowThinking = false;
         [Tooltip("The NPC's built-in interactive tool, ON by default. A # Tools block rides in the system prompt; a <tool_call> in the reply pulses 'Tool calling…' and then replaces the input row with the question + its clickable options (the JSON itself is never rendered, but the QUESTION is spoken like any other line), and the player's pick returns to the model as the <tool_response> result — the model then reacts to the choice in a fresh streamed turn. Every window deriving from NPCDialogueWindow renders it. Costs ~300 tokens of system prompt (Qwen3.5's own tools preamble — a shorter paraphrase measurably stops the model from ever calling): turn it off for an NPC with a very small Max Context Length, or one that should never offer choices.")]
         [SerializeField] protected bool enableAskUserQuestion = true;
+        [Tooltip("The NPC's second interactive tool — handing the player an ITEM: a gift, promised gear, or a sale at a price the NPC names. A <tool_call> replaces the input row with the item (its quantity and price too, when he named them) and exactly two buttons, Accept and Decline, and the player's decision returns to the model as {\"accepted\": true} or {\"accepted\": false}. The game decides whether Accept is even offered (accept-gate: not enough money -> Accept is disabled, Decline always works) and performs the transfer itself when it lands, so the model can offer but never give. OFF by default: it costs ~130 tokens of system prompt and only an NPC that actually hands things over needs it. Every window deriving from NPCDialogueWindow renders it. These two are the ONLY interactive tools; anything else an NPC does is an internal read on an INPCToolProvider.")]
+        [SerializeField] protected bool enableGiveTool = false;
 
         [Header("Sampling (-1 = model preset)")]
         [Min(0f)] [SerializeField] protected float temperature = 0.8f;
@@ -1328,12 +1372,13 @@ namespace DeepUnity
             think = thk.ToString();
         }
 
-        // ---- Tools (enableAskUserQuestion + INPCToolProvider components) ------------------------
-        // One generic interactive tool covers every window interaction: the model emits
-        // AskUserQuestion(question, options[]) inside <tool_call> tags → the window shows a modal
-        // with clickable options → the pick returns as the <tool_response> result → the model
-        // reacts in a fresh streamed turn. The JSON never reaches the screen or the TTS (same
-        // channel-split treatment as <think>).
+        // ---- Tools (enableAskUserQuestion + enableGiveTool + INPCToolProvider components) --------
+        // TWO generic interactive tools cover every window interaction, and there are deliberately no
+        // more: the model emits AskUserQuestion(question, options[]) — "decide something" — or
+        // GiveTool(item, price?, quantity?) — "take this" — inside <tool_call> tags → the window shows
+        // that tool's panel in place of the input row → the click returns as the <tool_response> result
+        // → the model reacts in a fresh streamed turn. The JSON never reaches the screen or the TTS
+        // (same channel-split treatment as <think>). An NPC's belt may grant either, both or neither.
         // INTERNAL tools come from INPCToolProvider components on the NPC (see the interface above):
         // same wire format, but the result goes straight back to the model with no window in
         // between, so an NPC can read world state mid-reply before deciding what to offer.
@@ -1376,7 +1421,9 @@ namespace DeepUnity
         // for this schema (compact one-line JSON, ", " and ": " separators). That is the only reason
         // the assembled block is byte-identical to the template's — a re-indented or differently
         // spaced schema would still be valid JSON and still be a divergence from the dataset.
-        const string AskUserQuestionSchema =
+        // PUBLIC like every other pinned wire string in this repo (see Qwen3_5ChatTemplate's consts):
+        // the drift guard that compares it to dataset_creation/wire_format.py reads it by name.
+        public const string AskUserQuestionSchema =
             "{\"type\": \"function\", \"function\": {\"name\": \"AskUserQuestion\", \"description\": " +
             "\"Put a choice to the player: shows the question with 2-4 clickable options and returns the one they pick. " +
             "Use it for any real decision - taking or refusing what you offer, picking a path, agreeing to a deal.\", " +
@@ -1384,6 +1431,30 @@ namespace DeepUnity
             "\"question\": {\"type\": \"string\"}, " +
             "\"options\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}}, " +
             "\"required\": [\"question\", \"options\"]}}}";
+
+        // The SECOND (and last) interactive tool. Same pinning discipline as the schema above and for
+        // the same reason: these bytes are what the model reads at inference, so they must be the bytes
+        // the finetune was trained on. Mirrors dataset_creation/wire_format.py's GIVE_TOOL_SCHEMA
+        // EXACTLY — that constant is the pin and this is the copy; NpcGiveToolProbe compares them
+        // byte for byte and fails the build on a divergence, because a wrong prompt produces perfectly
+        // plausible output and nothing else in Unity notices.
+        // The 2026-07-31 corpus normalization folded the old catalog tools give_item (free handout,
+        // {"status": "given"}) and sell_item (paid sale, item+quantity) into this ONE name and result
+        // shape, corpus-wide: item required, price and quantity optional integers, and the result is
+        // the player's own button press — exactly {"accepted": true} or {"accepted": false}.
+        // Same one-line `tool | tojson` shape as AskUserQuestionSchema (", " and ": " separators):
+        // re-indenting it would still be valid JSON and still be a divergence from the dataset.
+        public const string GiveToolSchema =
+            "{\"type\": \"function\", \"function\": {\"name\": \"GiveTool\", \"description\": " +
+            "\"Hand the player an item - a gift, promised gear, or a sale at the price you name. " +
+            "Shows the item (with the price, when there is one) with Accept and Decline buttons and " +
+            "returns their decision. Call it to hand something over, or to table a final " +
+            "take-it-or-leave-it offer.\", " +
+            "\"parameters\": {\"type\": \"object\", \"properties\": {" +
+            "\"item\": {\"type\": \"string\"}, " +
+            "\"price\": {\"type\": \"integer\"}, " +
+            "\"quantity\": {\"type\": \"integer\"}}, " +
+            "\"required\": [\"item\"]}}}";
 
         // ---- the two <IMPORTANT> bullets that are OURS, not Qwen's -----------------------------
         // Everything else in the block — the header, the schema list, the call-format spec and the
@@ -1433,7 +1504,7 @@ namespace DeepUnity
         /// <summary>True when this NPC has ANY tool in its prompt. The streaming &lt;tool_call&gt;
         /// filter and the dispatch tail hang off THIS, not off <c>enableAskUserQuestion</c> alone —
         /// an NPC with only provider tools still emits calls that must not reach the screen.</summary>
-        protected bool ToolsEnabled => enableAskUserQuestion || ToolProviders.Length > 0;
+        protected bool ToolsEnabled => enableAskUserQuestion || enableGiveTool || ToolProviders.Length > 0;
 
         /// <summary>The # Tools block this NPC's granted tools imply: Qwen3.5's canonical block for
         /// the schemas this NPC actually grants — asked for by name, not retyped here — with
@@ -1448,7 +1519,12 @@ namespace DeepUnity
         public string ComposeToolsBlock()
         {
             var schemas = new List<string>();
+            // Interactive tools first, AskUserQuestion before GiveTool. That order is load-bearing the
+            // same way the rule order below is: every one of the 279 corpus samples that declares BOTH
+            // writes them in exactly this sequence, so it is not a free choice. A belt may carry
+            // either, both or neither.
             if (enableAskUserQuestion) schemas.Add(AskUserQuestionSchema);
+            if (enableGiveTool) schemas.Add(GiveToolSchema);
             foreach (var p in ToolProviders)
             {
                 if (p.ToolSchemas == null) continue;
@@ -1566,13 +1642,20 @@ namespace DeepUnity
         [System.Serializable] class StringArrayWrap { public string[] items; }
 
         /// <summary>A &lt;tool_call&gt; body parsed out of EITHER wire shape (see below), normalized:
-        /// a name, a JSON arguments string for providers, and the AskUserQuestion fields.</summary>
+        /// a name, a JSON arguments string for providers, the AskUserQuestion fields and the GiveTool
+        /// ones.</summary>
         class ParsedToolCall
         {
             public string name;
             public string argsJson = "{}";
             public string question;
             public readonly List<string> options = new List<string>();
+            // GiveTool. Read out of argsJson AFTER either branch built it, so both wire shapes are
+            // served by one piece of code — the XML template renders every scalar as bare text inside
+            // <parameter=…> while the JSON shape writes a real number, and neither is special-cased.
+            public string item;
+            public int? price;
+            public int? quantity;
         }
 
         // TWO shapes are accepted, because the model and the finetune do not agree on one:
@@ -1593,7 +1676,7 @@ namespace DeepUnity
         {
             if (string.IsNullOrWhiteSpace(body)) return null;
             Match fn = FunctionTagRe.Match(body);
-            if (fn.Success) return ParseXmlToolCall(body, fn);
+            if (fn.Success) return WithGiveArgs(ParseXmlToolCall(body, fn));
 
             string json = FirstJsonObject(body);
             if (json == null) return null;
@@ -1607,7 +1690,109 @@ namespace DeepUnity
                 if (msg.arguments.options != null)
                     foreach (string o in msg.arguments.options) AddOption(call.options, o);
             }
+            return WithGiveArgs(call);
+        }
+
+        /// <summary>GiveTool's three arguments, read off the normalized <c>argsJson</c> both wire
+        /// shapes already produced. Done here rather than in either branch precisely so there is ONE
+        /// reading of them: JsonUtility cannot tell an absent integer from a zero, and price 0 (a free
+        /// handout the NPC still called a price) is a different offer from no price at all.</summary>
+        static ParsedToolCall WithGiveArgs(ParsedToolCall call)
+        {
+            if (call == null) return null;
+            call.item = ArgValue(call.argsJson, "item");
+            call.price = ArgInt(call.argsJson, "price");
+            call.quantity = ArgInt(call.argsJson, "quantity");
             return call;
+        }
+
+        /// <summary>Value of a TOP-LEVEL key in a flat arguments object as text, or null when the key
+        /// is absent. Quoted and bare values both come back unquoted, because the XML template renders
+        /// numbers as text and the JSON shape renders them as numbers.</summary>
+        static string ArgValue(string argsJson, string key)
+        {
+            if (string.IsNullOrEmpty(argsJson)) return null;
+            string needle = "\"" + key + "\"";
+            int depth = 0, i = 0;
+            while (i < argsJson.Length)
+            {
+                char c = argsJson[i];
+                if (c == '"')
+                {
+                    if (depth == 1 && i + needle.Length <= argsJson.Length
+                        && string.CompareOrdinal(argsJson, i, needle, 0, needle.Length) == 0)
+                    {
+                        int j = i + needle.Length;
+                        while (j < argsJson.Length && char.IsWhiteSpace(argsJson[j])) j++;
+                        if (j < argsJson.Length && argsJson[j] == ':') return ReadScalar(argsJson, j + 1);
+                    }
+                    // skip the whole literal, so a VALUE that happens to read "item" is never a key
+                    i = SkipString(argsJson, i);
+                    continue;
+                }
+                if (c == '{' || c == '[') depth++;
+                else if (c == '}' || c == ']') depth--;
+                i++;
+            }
+            return null;
+        }
+
+        /// <summary>Index just past the string literal opening at <paramref name="open"/>.</summary>
+        static int SkipString(string s, int open)
+        {
+            for (int i = open + 1; i < s.Length; i++)
+            {
+                if (s[i] == '\\') { i++; continue; }
+                if (s[i] == '"') return i + 1;
+            }
+            return s.Length;
+        }
+
+        /// <summary>One JSON scalar starting at <paramref name="at"/> (after the colon), unquoted and
+        /// unescaped. Objects/arrays are not scalars and come back as their raw text — GiveTool has
+        /// none, and a model that writes one gets it rejected by the int parse below.</summary>
+        static string ReadScalar(string s, int at)
+        {
+            while (at < s.Length && char.IsWhiteSpace(s[at])) at++;
+            if (at >= s.Length) return null;
+            if (s[at] != '"')
+            {
+                int e = at;
+                while (e < s.Length && s[e] != ',' && s[e] != '}' && s[e] != ']') e++;
+                return s.Substring(at, e - at).Trim();
+            }
+            var sb = new StringBuilder();
+            for (int i = at + 1; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (c == '"') break;
+                if (c != '\\') { sb.Append(c); continue; }
+                if (++i >= s.Length) break;
+                char n = s[i];
+                if (n == 'n') sb.Append('\n');
+                else if (n == 't') sb.Append('\t');
+                else if (n == 'r') { }
+                else sb.Append(n);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>A whole-number argument, or null when absent/unreadable. Tolerant on purpose: a
+        /// 0.8B writes "80 souls" or "80.0" often enough that failing the whole offer over it would
+        /// cost the player a deal the NPC already agreed to, so the LEADING integer wins.</summary>
+        static int? ArgInt(string argsJson, string key)
+        {
+            string raw = ArgValue(argsJson, key);
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            raw = raw.Trim();
+            int i = 0;
+            bool neg = raw[0] == '-';
+            if (neg || raw[0] == '+') i = 1;
+            int start = i;
+            while (i < raw.Length && raw[i] >= '0' && raw[i] <= '9') i++;
+            if (i == start) return null;
+            if (!int.TryParse(raw.Substring(start, i - start), out int v)) return null;
+            return neg ? -v : v;
         }
 
         static ParsedToolCall ParseXmlToolCall(string body, Match fn)
@@ -1775,8 +1960,63 @@ namespace DeepUnity
         /// something the model can do by itself. Subscribers must not block.</summary>
         public event System.Action<string, string> ToolQuestionAnswered;
 
+        // ---- GiveTool's two extension hooks ----------------------------------------------------
+        // GENERAL, not any one demo's: the base class owns the panel and the wire format, the host
+        // game owns money and inventory. Same division of labour as ToolQuestionAnswered above — the
+        // model proposes, the player disposes, and the ENGINE performs.
+
+        /// <summary>Optional accept-gate: can the player take THIS offer at all? Returns false and the
+        /// panel's Accept button is rendered DISABLED — that is the "not enough money" case, and the
+        /// place to put "no room in the pack" or "already have one" too. Decline is never gated, so a
+        /// refused offer still ends the exchange cleanly. Null (the default) = always acceptable.
+        /// <para>Evaluated ONCE, when the panel opens. It is a PRESENTATION hint, not the transaction:
+        /// the authoritative check belongs in the <see cref="ToolGiveAccepted"/> handler, which is
+        /// where value actually changes hands — a gate that throws is reported and treated as "yes"
+        /// for that reason.</para></summary>
+        public System.Func<ToolGiveOffer, bool> ToolGiveAcceptGate { get; set; }
+
+        /// <summary>Fires when the player ACCEPTS an offer, BEFORE the decision goes back to the model:
+        /// take the payment, grant the item, update the HUD here. Declining fires nothing — the model
+        /// simply reads {"accepted": false} and answers in character. Subscribers must not block.</summary>
+        public event System.Action<ToolGiveOffer> ToolGiveAccepted;
+
+        // The ONLY two results a GiveTool call can return, byte for byte what the corpus teaches
+        // (dataset_creation validate.py: 'GiveTool result must be exactly {"accepted": true} or
+        // {"accepted": false}'). Literals, not JsonUtility.ToJson — which writes {"accepted":true},
+        // without the separator space every sample in the corpus has.
+        const string ToolGiveAcceptedResult = "{\"accepted\": true}";
+        const string ToolGiveDeclinedResult = "{\"accepted\": false}";
+
+        /// <summary>The tool result a give decision sends back to the model. THE mapping — the window's
+        /// Accept/Decline click goes nowhere else, and the headless probe asserts these bytes.</summary>
+        public static string ToolGiveResult(bool accepted)
+            => accepted ? ToolGiveAcceptedResult : ToolGiveDeclinedResult;
+
+        /// <summary>Read a &lt;tool_call&gt; body as a GiveTool offer: true when it parses AND names an
+        /// item (the schema's one required parameter), false when the model wrote something the panel
+        /// cannot show. The seam <see cref="DispatchGiveTool"/> and the headless probe share, so what
+        /// the probe exercises IS what the dialogue runs.</summary>
+        public static bool TryReadGiveToolCall(string toolCallBody, out ToolGiveOffer offer)
+        {
+            offer = default;
+            ParsedToolCall call = ParseToolCall(toolCallBody);
+            if (call == null || string.IsNullOrWhiteSpace(call.item)) return false;
+            offer = OfferOf(call);
+            return true;
+        }
+
+        /// <summary>The offer a parsed call describes. ONE construction, shared by the dispatch and by
+        /// <see cref="TryReadGiveToolCall"/>, so the probe cannot drift from the dialogue.</summary>
+        static ToolGiveOffer OfferOf(ParsedToolCall call) => new ToolGiveOffer
+        {
+            item = call.item?.Trim(),
+            price = call.price,
+            quantity = call.quantity,
+        };
+
         /// <summary>Internal (provider) reads already answered in the current player turn — see
-        /// <c>maxToolReadsPerTurn</c> for why there is a cap at all and why AskUserQuestion is exempt.</summary>
+        /// <c>maxToolReadsPerTurn</c> for why there is a cap at all and why the interactive tools are
+        /// exempt.</summary>
         int internalToolCalls;
 
         /// <summary>An unhonourable call has already been refused in this exchange. ONE per exchange:
@@ -1811,9 +2051,10 @@ namespace DeepUnity
         }
 
         /// <summary>Parse + validate a completed &lt;tool_call&gt; body and either answer it in-engine
-        /// (internal provider tool → result straight back to the model) or open the choice window
-        /// (AskUserQuestion). Malformed calls, unknown tool names and windows without the popup
-        /// capability degrade to a console warning — the dialogue continues as if no call happened.</summary>
+        /// (internal provider tool → result straight back to the model) or open an interactive panel:
+        /// the choice popup (AskUserQuestion) or the offer popup (GiveTool). Malformed calls, unknown
+        /// tool names and windows without the panel capability degrade to a console warning — the
+        /// dialogue continues as if no call happened.</summary>
         void TryDispatchToolCall(string toolJson, int epoch)
         {
             ParsedToolCall call = ParseToolCall(toolJson);
@@ -1828,9 +2069,20 @@ namespace DeepUnity
                 return;
             }
 
+            // The dialogue window handles EXACTLY TWO interactive tools — AskUserQuestion (a choice)
+            // and GiveTool (an item). Everything else is an internal provider read.
+            bool isAsk = "AskUserQuestion".Equals(call.name, System.StringComparison.OrdinalIgnoreCase);
+            bool isGive = "GiveTool".Equals(call.name, System.StringComparison.OrdinalIgnoreCase);
+
+            if (isGive)
+            {
+                DispatchGiveTool(call, toolJson, epoch);
+                return;
+            }
+
             // internal tools first: a world-state read the player never sees. The result feeds
             // straight into a fresh turn, so the model reads, then decides, in one breath.
-            if (!"AskUserQuestion".Equals(call.name, System.StringComparison.OrdinalIgnoreCase))
+            if (!isAsk)
             {
                 string argsJson = call.argsJson;
                 foreach (var p in ToolProviders)
@@ -1967,6 +2219,127 @@ namespace DeepUnity
             if (w.SendButton != null) w.SendButton.interactable = true;
             dialogueCoroutine = StartCoroutine(Talk(JsonUtility.ToJson(new ToolPickResult { selected = picked }),
                                                     asToolResult: true));
+        }
+
+        // ---- GiveTool: the same shape as AskUserQuestion, one step shorter ----------------------
+        // The model names an item (and may name a price and a quantity), the window shows it with
+        // Accept and Decline, and the player's button press IS the result. There is no wording to
+        // interpret and nothing to guess: the old gear beat had to read the NPC's own option text to
+        // tell "Take them" from "Keep your steel", and that guesswork is exactly what this tool
+        // removes from the engine.
+
+        /// <summary>Validate a GiveTool call and open the offer panel. Same three failure modes as the
+        /// choice path: the tool is not on this NPC's belt (fatal — send it to words), the call names no
+        /// item (retryable — the schema requires one), or the window cannot show the panel (dropped with
+        /// a warning).</summary>
+        void DispatchGiveTool(ParsedToolCall call, string toolJson, int epoch)
+        {
+            if (!enableGiveTool)
+            {
+                RefuseToolCall(call.name, "{\"error\": \"tool_unavailable\", \"detail\": \"GiveTool is not one " +
+                               "of your tools here - answer the player in words instead\"}",
+                               $"[NPC] {NpcName}: GiveTool called but it is disabled on this NPC.");
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(call.item))
+            {
+                // RETRYABLE, like AskUserQuestion's shape errors: it wanted to hand something over and
+                // was right to, so tell it what was missing instead of sending the offer to prose.
+                RefuseToolCall(call.name, "{\"error\": \"malformed_call\", \"detail\": \"GiveTool was called " +
+                               "with no item - call it again and name the item you are handing over\"}",
+                               $"[NPC] {NpcName}: GiveTool called with no item: {toolJson.Trim()}");
+                return;
+            }
+            if (!(Window is INPCToolGiveWindow gw))
+            {
+                ConsoleMessage.Warning($"[NPC] {NpcName}: GiveTool fired but this chat window cannot show the " +
+                                       "offer panel — call dropped. Derive the window from NPCDialogueWindow " +
+                                       "(it implements INPCToolGiveWindow for every environment).");
+                return;
+            }
+            ToolGiveOffer offer = OfferOf(call);
+            StopThinkingDots();                        // the "Tool calling" pulse has served its purpose
+            ShowToolCalledLine(Window, call.name);     // and this stays under the spoken line for good
+            StartCoroutine(GiveToolRoutine(gw, offer, epoch));
+        }
+
+        IEnumerator GiveToolRoutine(INPCToolGiveWindow gw, ToolGiveOffer offer, int epoch)
+        {
+            var w = Window;
+            // the SAME flag the choice panel raises: it means "a panel owns the turn", so a typed send
+            // cannot slip in under this one either and orphan the pending call
+            toolQuestionOpen = true;
+            if (w.SendButton != null) w.SendButton.interactable = false;
+            bool? accepted = null;
+
+            // stand the reveal down for the same reason the choice panel does — a leftover clause
+            // callback would drip text into the last bubble while the panel is up
+            StopRevealJob();
+            revealActive = false;
+
+            bool canAccept = true;
+            if (ToolGiveAcceptGate != null)
+            {
+                // A throwing gate is a bug in the host game, not a reason to refuse the player: it is
+                // reported and read as "yes", because the transaction itself lives in the accepted
+                // handler and can still decline there. See ToolGiveAcceptGate.
+                try { canAccept = ToolGiveAcceptGate(offer); }
+                catch (System.Exception e)
+                {
+                    ConsoleMessage.Warning($"[NPC] {NpcName}: GiveTool accept-gate threw: {e.Message} — " +
+                                           "Accept left enabled.");
+                    canAccept = true;
+                }
+            }
+            ConsoleMessage.Info($"[Tool] {NpcName}: GiveTool → {offer.item}"
+                              + (offer.quantity.HasValue ? $" x{offer.quantity.Value}" : "")
+                              + (offer.price.HasValue ? $" @ {offer.price.Value}" : " (no price)")
+                              + (canAccept ? "" : " — Accept gated off"));
+
+            gw.ShowToolGive(NpcName, offer, canAccept, ok => accepted = ok);
+            while (accepted == null && epoch == dialogueEpoch && state == NPCState.WaitingInInteraction)
+                yield return null;
+            toolQuestionOpen = false;
+            if (accepted == null || epoch != dialogueEpoch || state != NPCState.WaitingInInteraction
+                || dialogueCoroutine != null || compactRoutine != null)
+            {
+                // dialogue closed / a new session took over under the panel — tear down, no result
+                gw.HideToolGive();
+                if (epoch == dialogueEpoch && w.SendButton != null) w.SendButton.interactable = true;
+                yield break;
+            }
+            // GATED ACTION, exactly as above: the world is updated BEFORE the model's reaction streams,
+            // and only ever by the player's own click. Declining does nothing at all — the model just
+            // reads the "no" and answers in character.
+            if (accepted == true)
+            {
+                try { ToolGiveAccepted?.Invoke(offer); }
+                catch (System.Exception e)
+                {
+                    ConsoleMessage.Warning($"[NPC] {NpcName}: GiveTool accepted handler threw: {e.Message}");
+                }
+            }
+
+            PrepareForNextReply(w);
+            if (w.SendButton != null) w.SendButton.interactable = true;
+            dialogueCoroutine = StartCoroutine(Talk(ToolGiveResult(accepted == true), asToolResult: true));
+        }
+
+        /// <summary>DEBUG: fire a synthetic GiveTool as if the model had emitted it — the XML wire shape
+        /// its own chat template declares — so the offer panel, the accept-gate, the hand-over and the
+        /// &lt;tool_response&gt; resume can be verified without waiting for the model to call it.
+        /// Right-click the component in play mode, with the dialogue open.</summary>
+        [ContextMenu("Debug/Fire a test GiveTool")]
+        public void DebugFireTestGiveTool()
+        {
+            if (!Application.isPlaying || state != NPCState.WaitingInInteraction || dialogueCoroutine != null)
+            {
+                ConsoleMessage.Warning($"[NPC] {NpcName}: test tool call needs an OPEN dialogue, idle between replies " +
+                                       "(enter play mode, talk to the NPC, then fire it).");
+                return;
+            }
+            TryDispatchToolCall("<function=GiveTool>\n<parameter=item>\nlongsword\n</parameter>\n" +
+                                "<parameter=price>\n80\n</parameter>\n</function>", dialogueEpoch);
         }
 
         // Audio-synced reveal: each clause event carries its spoken DURATION, and a single
@@ -2374,9 +2747,10 @@ namespace DeepUnity
             // A completed <tool_call> is dispatched once the NPC has finished SAYING the line that came
             // before it (user spec: text, spoken to the end, then the question) — DispatchAfterSpeaking
             // owns that wait. An internal provider read then answers itself and re-enters Talk with the
-            // result; AskUserQuestion opens the choice panel whose pick comes back as the
-            // <tool_response>. Both continue THIS exchange — dialogueCoroutine was cleared just above,
-            // so the new turn owns the handle.
+            // result; an INTERACTIVE tool opens its panel — the choice popup (AskUserQuestion) or the
+            // offer popup (GiveTool) — whose click comes back as the <tool_response>. All of them
+            // continue THIS exchange: dialogueCoroutine was cleared just above, so the new turn owns
+            // the handle.
             if (!replyCanceled && ToolsEnabled && !string.IsNullOrWhiteSpace(toolCallFull))
                 StartCoroutine(DispatchAfterSpeaking(toolCallFull, epoch));
             // No call: the reply stands as spoken. There is deliberately NO engine-side rescue here —
@@ -2929,13 +3303,14 @@ namespace DeepUnity
                 internalToolCalls = 0;
                 toolRefusalSent = false;
                 interruptPending = false;
-                // An open choice panel is orphaned by the reset (the call it belongs to is gone from
-                // the context) — tear it down here instead of waiting for AskUserQuestionRoutine to
-                // notice the epoch moved, so the panel never outlives its conversation. Its own
-                // teardown may run too; HideToolQuestion is idempotent.
+                // An open interactive panel (choice OR offer) is orphaned by the reset — the call it
+                // belongs to is gone from the context — so tear it down here instead of waiting for the
+                // routine to notice the epoch moved, and the panel never outlives its conversation. Its
+                // own teardown may run too; both Hide calls are idempotent.
                 toolQuestionOpen = false;
                 awaitingToolDispatch = false;
                 (Window as INPCToolQuestionWindow)?.HideToolQuestion();
+                (Window as INPCToolGiveWindow)?.HideToolGive();
 
                 // 6. everything outside the model.
                 ForgetConversation();
@@ -3162,10 +3537,10 @@ namespace DeepUnity
             int prefix = ContextTokensNow();
             if (prefix * 4 < maxContextLength * 3) return;   // under 75% — plenty of room to talk
             int suggested = prefix * 4 / 3 + 64;
-            string fix = enableAskUserQuestion
-                ? $"raise Max Context Length to >= {suggested}, shorten the description, or turn " +
-                  "Enable Ask User Question off (its schema plus the shared call-format block is ~520 " +
-                  "tokens, measured)"
+            string fix = enableAskUserQuestion || enableGiveTool
+                ? $"raise Max Context Length to >= {suggested}, shorten the description, or turn an " +
+                  "interactive tool off (AskUserQuestion's schema plus the shared call-format block is " +
+                  "~520 tokens, measured; GiveTool's own schema is ~130 on top of that block)"
                 : $"raise Max Context Length to >= {suggested} or shorten the system prompt";
             string msg = $"[NPC] {NpcName}: the system prompt alone is ~{prefix} tokens of a " +
                          $"{maxContextLength}-token budget — {fix}.";

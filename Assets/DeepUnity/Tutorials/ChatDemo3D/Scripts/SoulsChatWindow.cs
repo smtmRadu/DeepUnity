@@ -31,6 +31,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         private static readonly Color SoulsGold = new Color(0.77f, 0.66f, 0.42f);
         protected override Color CaretColor => SoulsGold;
 
+        // what a GiveTool price is quoted in here, so the offer panel reads "Longsword  -  80 souls"
+        // instead of a bare number (the base class has no currency of its own, by design)
+        protected override string ToolGiveCurrency => "souls";
+
         protected override void Awake()
         {
             if (panel == null) panel = (RectTransform)transform;

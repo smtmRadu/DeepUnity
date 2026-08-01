@@ -1356,11 +1356,16 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // The gear beat (user 2026-07-25): the warrior starts EMPTY-HANDED. These two objects
             // stay built, sized, posed and stower-wired exactly as above — they are only
             // DEACTIVATED, so nothing about the held poses has to be re-tuned when they turn up. He
-            // gets them if Velmire offers his own pair and the player accepts the choice popup
-            // (PlayerGear + NPCGearOffer); BuildHud hides the two quick-slot icons to match.
+            // gets them if Velmire offers his sword and the player presses Accept on the GiveTool
+            // panel (PlayerGear + NPCGearOffer); BuildHud hides the two quick-slot icons to match.
             var gear = root.AddComponent<PlayerGear>();
             if (sword != null) { SetRef(gear, "sword", sword.transform); sword.SetActive(false); }
             if (shield != null) { SetRef(gear, "shield", shield.transform); shield.SetActive(false); }
+
+            // The purse the sale is paid out of (2026-07-31). 100 souls against Velmire's 80-soul asking
+            // price: affordable once, so the deal is real, and not affordable twice, so haggling him
+            // toward his 60 floor is worth doing. BuildHud wires its top-left counter.
+            root.AddComponent<PlayerSouls>();
 
             // footsteps
             var stepSource = root.AddComponent<AudioSource>();
@@ -1809,23 +1814,27 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 "You know what waits beyond the wall of golden mist at the northern arch: the Sentinel of the Mist, " +
                 "a towering hollow knight with a halberd that has felled every challenger. Warn about it plainly when asked. " +
                 "Stay in character at all times. " +
-                // The gear beat — the tools block teaches the FORMAT, the persona teaches WHEN. Kept
-                // SHORT on purpose: a numbered three-step version measured WORSE (2026-07-25, the
-                // 0.8B latched onto a refusal clause). "Never withhold" stays load-bearing, and the
-                // new last phrase pins the user's actual ask: sword requested -> offer NOW, same
-                // reply, no stalling.
-                "You carry a sword and a heater shield you no longer need, and you give them to any wanderer who " +
-                "asks for a weapon. Look before you offer: call CheckMyGear, then say what you found and let them " +
-                "take it with AskUserQuestion. Never withhold or delay that offer - when they ask for the sword, " +
-                "you offer it in that same reply. " +
-                // Phrasing lives HERE, not in the shared tools block (user 2026-07-26): Velmire is
-                // VOICED — his line is spoken, the popup is not — so a first-person question would
-                // read as dialogue the player never heard.
-                "Word an AskUserQuestion as a label on the screen rather than speech, naming yourself: " +
-                "'Take Velmire's sword and shield?', never 'Do you want to take mine?'.");
-            // Two tools on this NPC: the built-in AskUserQuestion popup (ON by default since
-            // 2026-07-24) plus the internal GetPlayerGear read contributed by NPCGearOffer below.
-            SetBool(npc, "enableAskUserQuestion", true);
+                // The SALE (2026-07-31, replacing the free hand-over): the tools block teaches the
+                // FORMAT, the persona teaches WHEN and FOR HOW MUCH. Still deliberately short — a
+                // numbered multi-step version measured WORSE on a 0.8B (2026-07-25, it latched onto
+                // the refusal clause and stopped offering at all). The floor is stated ONCE, with his
+                // own refusal line quoted so the model has the words to reuse instead of inventing a
+                // negotiation it then loses: an NPC that can be talked down to nothing is the failure
+                // mode this clause exists to prevent.
+                "You carry a sword you no longer need, and you sell it: you ask 80 souls, and you will haggle " +
+                "down to 60 but never lower. Below 60 you refuse, in your own words - 'Sixty souls, wanderer. " +
+                "I said my price, and I do not say it twice.' - and no sad story, no flattery and no asking " +
+                "again moves you. Look before you offer: call CheckMyGear first. When the wanderer agrees a " +
+                "price, call GiveTool with the sword and that price in the same reply.");
+            // His belt is GiveTool ONLY (2026-07-31): the beat is now "hand over an item at a price",
+            // which is exactly that tool, and a 0.8B handed both interactive tools picked the wrong one.
+            // AskUserQuestion is OFF, so its schema and its <IMPORTANT> bullet both leave his prompt —
+            // that plus the (smaller) GiveTool schema makes the prefix SHORTER than the old pair, so
+            // the context budget below is if anything more generous than before.
+            // The internal CheckMyGear read stays, contributed by NPCGearOffer further down: it is not
+            // an interactive tool, and it is what keeps him honest about the sword after a compaction.
+            SetBool(npc, "enableAskUserQuestion", false);
+            SetBool(npc, "enableGiveTool", true);
             // Velmire is the ResumeFromCompact demo (user 2026-07-15): paired with the small
             // context below, the model auto-compacts its history after a few replies and keeps
             // talking on the short compacted prefix.
@@ -1887,14 +1896,18 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             SetBool(npc, "usePrefetchZone", true);
             SetFloat(npc, "prefetchRadius", 10f);
 
-            // The gear beat's engine half: contributes the internal GetPlayerGear tool to his prompt
-            // and performs the hand-over when the player accepts. It is a plain INPCToolProvider
+            // The sale's engine half: contributes the internal CheckMyGear read to his prompt, answers
+            // GiveTool's accept-gate (souls in hand >= the price he named) and performs the hand-over —
+            // souls out, sword in — when the player presses Accept. It is a plain INPCToolProvider
             // component, which is the whole point of that interface — WHICH tools an NPC has is
             // authored in the scene, so Morwenna across the courtyard gets none of this.
             var offer = root.AddComponent<NPCGearOffer>();
             var playerGear = playerGO != null ? playerGO.GetComponent<PlayerGear>() : null;
             if (playerGear != null) SetRef(offer, "playerGear", playerGear);
             else Debug.LogWarning("[ChatDemo3DBuilder] no PlayerGear on the player — Velmire's offer cannot land.");
+            var playerSouls = playerGO != null ? playerGO.GetComponent<PlayerSouls>() : null;
+            if (playerSouls != null) SetRef(offer, "playerSouls", playerSouls);
+            else Debug.LogWarning("[ChatDemo3DBuilder] no PlayerSouls on the player — Velmire's price cannot be paid.");
             if (velmireSword != null) SetRef(offer, "npcSword", velmireSword.transform);
             if (velmireShield != null) SetRef(offer, "npcShield", velmireShield.transform);
 
@@ -2274,7 +2287,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             UnityEventTools.AddPersistentListener(sendBtn.onClick, new UnityAction(win.PlayButtonClick));
             UnityEventTools.AddPersistentListener(leaveBtn.onClick, new UnityAction(win.PlayButtonClick));
 
-            BuildHud(canvasGO.transform, gold, win, playerGO);
+            BuildHud(canvasGO.transform, cinzel, gold, parchment, darkBG, win, playerGO);
             BuildFpsAndPauseMenu(canvasGO.transform, cinzel, gold, parchment, darkBG, win);
         }
 
@@ -2335,7 +2348,8 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
 
         // ---------------------------------------------------------------- souls HUD
 
-        static void BuildHud(Transform canvas, Color gold, SoulsChatWindow win, GameObject playerGO)
+        static void BuildHud(Transform canvas, TMP_FontAsset cinzel, Color gold, Color parchment,
+                             Color darkBG, SoulsChatWindow win, GameObject playerGO)
         {
             var hudGO = MakeRect("SoulsHud", canvas, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             hudGO.AddComponent<CanvasGroup>();
@@ -2414,6 +2428,38 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             SetRef(hud, "hpFill", hpFill);
             SetRef(hud, "fpFill", fpFill);
             SetRef(hud, "staminaFill", stFill);
+
+            BuildSoulsCounter(canvas, cinzel, gold, parchment, darkBG, playerGO);
+        }
+
+        // --- souls counter, top-left under the three bars: the price Velmire names is in souls, so the
+        // player has to be able to read their own purse. Deliberately a SIBLING of SoulsHud rather than
+        // a child of it: the HUD fades to nothing while the chat is open (CanvasGroup), and the one
+        // moment this number matters most is exactly while the offer panel is up asking for 80 of them.
+        // Styled as the same dark bordered plate as the bars and quick slots, so it still reads as HUD.
+        static void BuildSoulsCounter(Transform canvas, TMP_FontAsset cinzel, Color gold, Color parchment,
+                                      Color darkBG, GameObject playerGO)
+        {
+            var souls = playerGO != null ? playerGO.GetComponent<PlayerSouls>() : null;
+            if (souls == null)
+            {
+                Debug.LogWarning("[ChatDemo3DBuilder] no PlayerSouls on the player — no souls counter built.");
+                return;
+            }
+
+            // 28 px in from the left like the bars, and just under Stamina (which ends at y = -72 - 15)
+            var plate = MakeRect("SoulsCounter", canvas, new Vector2(0, 1), new Vector2(0, 1),
+                                 new Vector2(150, 34), new Vector2(28, -100));
+            ((RectTransform)plate.transform).pivot = new Vector2(0f, 1f);
+            var bg = plate.AddComponent<Image>();
+            bg.color = darkBG;
+            bg.raycastTarget = false;
+            AddThinBorder(plate.transform, new Color(gold.r, gold.g, gold.b, 0.55f));
+
+            var label = MakeTMP("Count", plate.transform, "100 souls", cinzel, 20, parchment,
+                                TextAlignmentOptions.Left, Vector2.zero, Vector2.one,
+                                new Vector2(-20, -6), Vector2.zero);
+            SetRef(souls, "hudLabel", label.GetComponent<TMP_Text>());
         }
 
         // renders an actual item model to a transparent 128px sprite — real icons, zero art budget
@@ -2818,6 +2864,22 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 string outDir = Path.Combine(Directory.GetCurrentDirectory(), "ProbeLogs", "chatdemo3d_shots");
                 Directory.CreateDirectory(outDir);
                 Shoot(cam, Path.Combine(outDir, "ui_probe.png"), 1920, 1080);
+
+                // GiveTool's offer panel. It is built at RUNTIME (no prefab, nothing in the scene to
+                // inspect), so a screenshot is the only honest check that the strip it puts in place of
+                // the input row actually lays out — twice: once takeable, once with the accept-gate off,
+                // which is what 50 souls against an 80-soul price looks like.
+                var offer = new ToolGiveOffer { item = "Velmire's sword", price = 80 };
+                win.ShowToolGive("Velmire, the Pale Herald", offer, canAccept: true, _ => { });
+                Canvas.ForceUpdateCanvases();
+                Shoot(cam, Path.Combine(outDir, "ui_probe_givetool.png"), 1920, 1080);
+                win.HideToolGive();
+
+                win.ShowToolGive("Velmire, the Pale Herald", offer, canAccept: false, _ => { });
+                Canvas.ForceUpdateCanvases();
+                Shoot(cam, Path.Combine(outDir, "ui_probe_givetool_gated.png"), 1920, 1080);
+                win.HideToolGive();
+
                 Debug.Log("[ChatDemo3DBuilder] ui probe done");
                 EditorApplication.Exit(0);
             }

@@ -1,65 +1,60 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
 
 namespace DeepUnity.Tutorials.ChatDemo3D
 {
     /// <summary>
-    /// Velmire's gear beat — the demo's full model-decides / engine-executes loop, in one component:
+    /// Velmire's sword SALE — the demo's full model-decides / engine-executes loop, in one component:
     /// <list type="number">
-    /// <item>an INTERNAL tool, <c>GetPlayerGear</c>, that reports what the player carries and whether
-    /// this NPC has already given his own away. It is a READ, so it is ungated: the model may call it
-    /// freely, and its prompt tells it to call it before offering anything. Because the answer comes
-    /// from the world and not from the transcript, the NPC still knows he gave his sword away after a
-    /// context compaction has wiped the conversation that mentioned it.</item>
-    /// <item>the GATED ACTION: the gear only changes hands when
-    /// <see cref="NPCChatBase.ToolQuestionAnswered"/> reports that the PLAYER accepted the offer the
-    /// NPC put up through AskUserQuestion. The model can offer; it cannot give.</item>
+    /// <item>an INTERNAL tool, <c>CheckMyGear</c>, that reports what the NPC carries and whether he has
+    /// already handed it over. It is a READ, so it is ungated: the model may call it freely, and its
+    /// prompt tells it to look before it offers. Because the answer comes from the world and not from
+    /// the transcript, he still knows the sword is gone after a context compaction has wiped the
+    /// conversation that mentioned it.</item>
+    /// <item>the GATED ACTION, now through <b>GiveTool</b>: the accept-gate
+    /// (<see cref="NPCChatBase.ToolGiveAcceptGate"/>) says whether the player can afford the price he
+    /// named, and the hand-over (<see cref="NPCChatBase.ToolGiveAccepted"/>) takes the souls and gives
+    /// the gear only once the PLAYER has pressed Accept. The model can offer; it cannot give, and it
+    /// cannot set the player's purse.</item>
     /// </list>
-    /// Accept/refuse is read out of the picked option's own words, because the NPC writes the options
-    /// himself in character. Refusals are tested FIRST — "No, keep your sword" contains "keep" AND
-    /// "sword", and a false accept would hand over gear the player just declined.
+    /// <para>Nothing here reads the NPC's words any more. The old beat ran on AskUserQuestion, so it had
+    /// to tell a click of "Take them" from a click of "Keep your steel" with keyword lists — GiveTool
+    /// returns a BOOL, which is the whole reason it exists: <c>{"accepted": true}</c> or
+    /// <c>{"accepted": false}</c>, no wording to interpret and nothing to get wrong.</para>
     /// </summary>
     [DisallowMultipleComponent]
     public class NPCGearOffer : MonoBehaviour, INPCToolProvider
     {
         [SerializeField, Tooltip("The player's gear ownership — read by the tool, written on accept.")]
         private PlayerGear playerGear;
+        [SerializeField, Tooltip("The player's purse — the accept-gate reads it, the hand-over spends it. Null = the offer is free (no gate, no deduction).")]
+        private PlayerSouls playerSouls;
 
         [Header("This NPC's own carried copies (hidden the moment the player takes them)")]
         [SerializeField] private Transform npcSword;
         [SerializeField] private Transform npcShield;
 
-        // NOTHING here makes the model CALL a tool — the model decides that entirely on its own, from
-        // the schemas and rules in its prompt. These words are only read AFTERWARDS, to interpret the
-        // option the player clicked, because the model words its own options and a click of
-        // "Keep your steel" has to be told apart from a click of "Take them" somehow.
-        [Header("Reading the player's pick (the NPC words the options himself)")]
-        [SerializeField, Tooltip("Fallback recognition only: if the NPC never called CheckMyGear in this exchange, the question must mention one of these for the pick to count as a gear offer.")]
-        private string[] offerKeywords = { "sword", "shield", "blade", "weapon", "weapons", "arms", "steel", "gear" };
-        [SerializeField, Tooltip("Checked FIRST — any of these in the picked option means refused.")]
-        private string[] refuseKeywords = { "no", "nay", "not", "never", "keep", "keep them", "refuse", "decline", "leave", "nothing" };
-        [SerializeField, Tooltip("Only then: any of these in the picked option means accepted.")]
-        private string[] acceptKeywords = { "yes", "aye", "take", "take them", "accept", "i will", "gladly", "please", "thank you", "give" };
-
         NPCChatBase npc;
         bool gaveMine;
-        // Set when the model actually looked at his belt through CheckMyGear. That is a REAL signal
-        // from the engine — this provider served the call — so when the pipeline runs as intended
-        // (check, then offer) the hand-over no longer depends on how he happened to word the question.
-        bool checkedGearRecently;
 
         void Awake() => npc = GetComponent<NPCChatBase>();
 
         void OnEnable()
         {
-            if (npc != null) npc.ToolQuestionAnswered += OnToolQuestionAnswered;
+            if (npc == null) return;
+            // The gate is a single slot, not an event — one component per NPC answers "can they take
+            // this?", and on this NPC that is the component that owns the transaction.
+            npc.ToolGiveAcceptGate = CanAcceptOffer;
+            npc.ToolGiveAccepted += OnOfferAccepted;
         }
 
         void OnDisable()
         {
-            if (npc != null) npc.ToolQuestionAnswered -= OnToolQuestionAnswered;
+            if (npc == null) return;
+            if (npc.ToolGiveAcceptGate == (Func<ToolGiveOffer, bool>)CanAcceptOffer)
+                npc.ToolGiveAcceptGate = null;
+            npc.ToolGiveAccepted -= OnOfferAccepted;
         }
 
         // ------------------------------------------------------------------ INPCToolProvider
@@ -68,7 +63,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         // is the sentence the model narrates before calling it, and the previous player-centric name
         // (GetPlayerGear) never read as a reason to look at his own belt (user 2026-07-25: "it forgot to
         // check if itself has the sword to give"). Deliberately terse otherwise: it is spliced into the
-        // prompt of an NPC on a 1200-token context, and the persona is where the WHEN lives.
+        // prompt of an NPC on a small context, and the persona is where the WHEN lives.
         const string CheckMyGearSchema =
             "{\"type\": \"function\", \"function\": {\"name\": \"CheckMyGear\", \"description\": " +
             "\"Look at what weapons and armour you are carrying and could hand over, and whether the player " +
@@ -84,7 +79,6 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         public string TryHandleTool(string toolName, string argumentsJson)
         {
             if (!"CheckMyGear".Equals(toolName, StringComparison.OrdinalIgnoreCase)) return null;
-            checkedGearRecently = true;
             bool playerArmed = playerGear != null && (playerGear.HasSword || playerGear.HasShield);
             // his own gear is gone the moment he hands it over — the objects are deactivated then
             bool mine = !gaveMine;
@@ -98,25 +92,26 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 
         // ------------------------------------------------------------------ the gated action
 
-        void OnToolQuestionAnswered(string question, string picked)
+        /// <summary>The accept-gate: souls in hand must cover the price he named. A priceless offer (a
+        /// gift) and a scene without a purse are both free. Public so the headless probe exercises the
+        /// SAME gate the dialogue installs.</summary>
+        public bool CanAcceptOffer(ToolGiveOffer offer)
         {
-            if (playerGear == null || gaveMine) return;
-            if (playerGear.HasSword && playerGear.HasShield) return;
-            // Is this pick OURS? First choice: he looked at his own belt through CheckMyGear during this
-            // exchange, which is a fact the engine handed us, not a guess about wording. Only if he
-            // skipped the check do we fall back to reading the question — and since the question is
-            // impersonal by convention ("Take Velmire's sword and shield?"), it still names the gear.
-            if (!checkedGearRecently && !Mentions(question, offerKeywords)) return;
-            if (Mentions(picked, refuseKeywords))
+            if (!offer.price.HasValue || playerSouls == null) return true;
+            return playerSouls.CanAfford(offer.price.Value);
+        }
+
+        /// <summary>The hand-over: take the souls, then give the gear. Only ever reached from the
+        /// player's own Accept press, and only after the gate above said yes — but the payment is
+        /// re-checked here anyway, because THIS is the transaction and the gate was only the button
+        /// state. Public for the same reason as the gate.</summary>
+        public void OnOfferAccepted(ToolGiveOffer offer)
+        {
+            if (offer.price.HasValue && playerSouls != null
+                && !playerSouls.TrySpend(offer.price.Value))
             {
-                ConsoleMessage.Info($"[Gear] {name}: offer declined (\"{picked}\") — gear stays with him.");
-                checkedGearRecently = false;
-                return;
-            }
-            if (!Mentions(picked, acceptKeywords))
-            {
-                ConsoleMessage.Warning($"[Gear] {name}: could not read \"{picked}\" as accept or refuse — " +
-                                       "nothing handed over. Add the wording to acceptKeywords/refuseKeywords.");
+                ConsoleMessage.Warning($"[Gear] {name}: accepted at {offer.price.Value} but the purse only " +
+                                       $"holds {playerSouls.Souls} — nothing handed over.");
                 return;
             }
             Grant();
@@ -124,41 +119,21 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 
         void Grant()
         {
-            checkedGearRecently = false;
+            if (playerGear == null)
+            {
+                ConsoleMessage.Warning($"[Gear] {name}: no PlayerGear wired — nothing to hand over.");
+                return;
+            }
+            if (gaveMine) return;
             playerGear.GrantSwordAndShield();
             if (npcSword != null) npcSword.gameObject.SetActive(false);
             if (npcShield != null) npcShield.gameObject.SetActive(false);
             gaveMine = true;
             ConsoleMessage.Info($"[Gear] {name}: sword and shield handed to the player — " +
-                                "GetPlayerGear now reports you_already_gave_yours.");
-        }
-
-        /// <summary>Whole-word / whole-phrase match on a lowercased, punctuation-stripped copy, so
-        /// "Yes, deal." matches "yes" while "nothing" does not match "no".</summary>
-        static bool Mentions(string text, string[] keywords)
-        {
-            if (string.IsNullOrWhiteSpace(text) || keywords == null) return false;
-            var sb = new StringBuilder(text.Length + 2).Append(' ');
-            foreach (char c in text)
-            {
-                if (char.IsLetterOrDigit(c)) sb.Append(char.ToLowerInvariant(c));
-                else if (sb[sb.Length - 1] != ' ') sb.Append(' ');   // collapse runs so multi-word keys still match
-            }
-            if (sb[sb.Length - 1] != ' ') sb.Append(' ');
-            string haystack = sb.ToString();
-            foreach (string k in keywords)
-            {
-                if (string.IsNullOrWhiteSpace(k)) continue;
-                if (haystack.Contains(" " + k.Trim().ToLowerInvariant() + " ")) return true;
-            }
-            return false;
+                                "CheckMyGear now reports already_given_away.");
         }
 
         [ContextMenu("Debug/Hand the gear over now")]
-        void DebugGrant()
-        {
-            if (playerGear == null) { ConsoleMessage.Warning($"[Gear] {name}: no PlayerGear wired."); return; }
-            Grant();
-        }
+        void DebugGrant() => Grant();
     }
 }
