@@ -251,7 +251,7 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             ambience.spatialBlend = 0f;
 
             // …and, as in the 3D demo, quiet is not enough on its own: everything outside a
-            // conversation eases down to the talking villager's worldAudioWhileTalking over ~3 s
+            // conversation eases down to the talking villager's worldAudioWhileInteracting over ~3 s
             // (exponential, so it reads as an even fade) and back up on close. The ducker finds the
             // sources itself — this Ambience, the FarmingSystem sfx, the UI clicks — and excludes the
             // NPCs and the dialogue window by COMPONENT, so the chat's own ticks stay full volume even
@@ -762,7 +762,7 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             // Marla REASONS in <think> first (never shown/voiced; the window pulses
             // 'Thinking…' until her actual answer starts). LLMRegistry id string.
             SetString(npc, "model", model);
-            SetBool(npc, "allowThinking", think);
+            SetBool(npc, "enableThinking", think);
             SetEnum(npc, "historyMode", (int)history);
             // per-NPC context window + reply cap (user 2026-07-22)
             SetInt(npc, "maxContextLength", maxContext);
@@ -775,7 +775,7 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             // the farm drops to HALF while a villager talks and eases back on close, so the reply sits
             // on top of the ambience instead of next to it — same figure as the 3D demo's Velmire.
             // Inert without the ConversationAudioDucker on Ambience (see BuildEverything).
-            SetFloat(npc, "worldAudioWhileTalking", 0.5f);
+            SetFloat(npc, "worldAudioWhileInteracting", 0.5f);
             // latent loading on by default: walking into the green circle slow-prefetches the
             // LLM + Kokoro weights; wandering off while Idle unloads both (7 tiles clears the
             // 2-tile talk trigger with a comfortable walk-up)
@@ -809,9 +809,9 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
 
             // LAST, once every field is in place: bake the # Tools block INTO Description And Rules
             // (user 2026-07-25). Nothing is injected at runtime any more, so whatever is NOT in this
-            // field is not in the prompt — and both villagers inherit enableAskUserQuestion = true, so
-            // until now the engine was parsing and dispatching AskUserQuestion calls from a prompt that
-            // never told them the tool existed. Read-then-write rather than composing off `systemPrompt`,
+            // field is not in the prompt — the tools each villager advertises are stated right here,
+            // at the call (the per-NPC toggles died 2026-08-03; the engine handles both tools on every
+            // NPC regardless). Read-then-write rather than composing off `systemPrompt`,
             // because WithToolsBlock replaces a stale block instead of stacking a second one, which is
             // what makes a rebuild idempotent. toolsFirst stays default TRUE: that is Qwen3.5's own
             // template order and the order all 300 finetuning samples are written in.
@@ -822,7 +822,7 @@ namespace DeepUnity.Tutorials.ChatDemo2D.EditorTools
             // and press "See Effective System Prompt" in the inspector for the exact count per NPC.
             var npcSO = new SerializedObject(npc);
             var darProp = npcSO.FindProperty("descriptionAndRules");
-            darProp.stringValue = npc.WithToolsBlock(darProp.stringValue);
+            darProp.stringValue = npc.WithToolsBlock(darProp.stringValue, askUserQuestion: true, giveItem: false);
             npcSO.ApplyModifiedPropertiesWithoutUndo();
 
             return npc;

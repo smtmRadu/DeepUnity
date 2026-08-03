@@ -266,28 +266,26 @@ namespace DeepUnity
             yield return true;
         }
 
-        // One autoregressive decode step (single token). Two modes:
-        //  - FAST (default): issue the forward + sampler SYNCHRONOUSLY and block once on the token
-        //    readback. Now that a token is only ~a few ms of GPU work (the #31 coalesced kernels),
-        //    this runs decode at COMPUTE speed. The old async-readback path spread every token over
-        //    ~3-4 frames (ForwardYielding's frame + AsyncGPUReadback's ~2 + the loop's trailing
-        //    yield), which capped play-mode decode at ~framerate/4 tok/s no matter how fast the GPU
-        //    was — the "high FPS but slow text" symptom. The caller still yields once per token, so
-        //    the app stays responsive (renders ~1 frame per token during a reply).
-        //  - CEDING: while a speaking TTS voice is starving (3D concurrent talk), fall back to the
-        //    async yielding path so the voice keeps its frames — audio continuity outranks tok/s
-        //    there, and the #29 reverse arbiter already holds the burst anyway.
+        // One autoregressive decode step (single token). Two modes, selected by
+        // BackendTradeoffTable.UseSyncDecode — a const whose history of pointing BOTH ways lives on
+        // that field and its class docs:
+        //  - SLICED (shipped since 2026-08-02, the smoothness mandate): ForwardYielding issues the
+        //    forward in InferencePerf.LlmDecodeSliceLayers-layer slices (its seqLen==1 path), the
+        //    lm_head in its own frame, then SampleYielding waits on an AsyncGPUReadback for the
+        //    token — no frame carries the token's whole ~30-55 ms GPU burst, the readback gates the
+        //    next token, and tok/s falls to ~framerate/frames-per-token (~5-8 on the 1650). Priced
+        //    in deliberately: speech at ~3 words/s is the pacing bottleneck, not text.
+        //  - SYNC (2026-07-26 → 2026-08-02, kept compilable for A/B archaeology): issue everything
+        //    in one burst and block once on the token readback — decode at COMPUTE speed (~12 tok/s
+        //    on the 1650), the whole burst in one frame. Those are the 33 ms mean / 55 ms p95 GEN
+        //    frames the path was retired for.
+        // A starving voice forces the yielding path in EITHER mode — audio continuity outranked
+        // tok/s even while tok/s was still a criterion (#29).
         IEnumerator DecodeStep(Tensor input, int[] result, float temperature, int top_k, float top_p,
                                float min_p, float presence_penalty, float repetition_penalty)
         {
-            // Decode is always synchronous now (BackendTradeoffTable.UseSyncDecode, a const): the dial's
-            // low rows buy smoothness with small fetch/prefill budgets and one token per frame
-            // instead, because async on a weak GPU dribbles ~fps/3.5 tok/s and a fixed table cannot
-            // measure its way to that call — see BackendTradeoff.cs, 2026-07-26. The async path survives
-            // for the ONE case that is not a taste question: a starving voice, where audio
-            // continuity outranks tok/s.
-            bool cede = FramePacing.TtsStarving || !BackendTradeoffTable.UseSyncDecode;
-            if (cede)
+            bool yielding = FramePacing.TtsStarving || !BackendTradeoffTable.UseSyncDecode;
+            if (yielding)
             {
                 var e = model.ForwardYielding(input, useCache: Qwen3_5Modeling.Qwen3_5Config.USE_KV_CACHE, lastPosOnly: true);
                 while (e.MoveNext()) yield return e.Current;

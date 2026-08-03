@@ -6,42 +6,51 @@ using UnityEngine;
 
 namespace DeepUnity
 {
-    // #29 — talk-time frame-pacing diagnostic in the REAL ChatDemo3D scene. The user sees dips
-    // to ~45 FPS while an NPC speaks (pocket-tts streaming + Qwen decode concurrently); this
-    // probe walks up to Velmire, holds a MULTI-TURN conversation, and records EVERY frame's
-    // duration tagged with what the pipeline was doing that frame:
+    // #29 — talk-time frame-pacing diagnostic in the REAL ChatDemo3D scene. Records EVERY frame
+    // from scene settle to the end of the conversation, split into named PHASES, each frame
+    // tagged with what the pipeline was doing:
     //   GEN    LLM reply in flight (state == TalkingInInteraction)
     //   SPK    pocket-tts synthesis in flight (pkVoice.IsSpeaking)
     //   AUD    speech audible (pkVoice.IsAudioPlaying)
     //   FLUSH  a Mimi chunk landed in the ring THIS frame (BufferedSamples jumped up)
-    // The report buckets frames by flag combo (mean/p95/max/spike counts per combo) and lists
-    // the worst frames — pinpointing whether the dips ride on chunk flushes, generation frames,
-    // both pumps colliding, etc. vsync is DISABLED during the run (raw frame cost; a 22 ms
-    // frame = the 45 FPS dip the user sees). Diagnostic — writes report + done marker, self-exits.
+    // Protocol (2026-08-02, matches how the author actually plays — the old one waited for
+    // LlmReady at the zone edge, so the BOOSTED-loading window the user reports dips in was
+    // never exercised, let alone captured): enter the zone, give the slow prefetch only ~3.5 s,
+    // then open the dialogue with the weights still streaming — StartInteraction is the boost
+    // edge — and record straight through the open. Then a multi-turn conversation as before.
+    // The report buckets frames by flag combo per phase, attributes >22.2 ms frames to the TTS
+    // stage + pump state that ran them, and lists the worst frames with the LLM phase attached.
+    // vsync is DISABLED during the run (raw frame cost; a 22 ms frame = the 45 FPS dip the user
+    // sees). Diagnostic — writes report + done marker, self-exits.
     public class NpcTalkPerfProbe : MonoBehaviour
     {
         const string ReportPath = "ProbeLogs/npc_talkperf.md";
         const string MarkerPath = "ProbeLogs/npc_talkperf.done";
 
+        // ONE reply (2026-08-03, author's call): every open problem lives in the load-up window
+        // — settle / walk-up / boosted open / first clause — and turns 2-4 only re-measured a
+        // conversation that has been clean for days while tripling the cycle time. One multi-
+        // clause reply still exercises clause starts, streaming and cruise; ProbeLogs history
+        // holds the 4-question runs if a full-conversation measurement is ever needed again.
         static readonly string[] QUESTIONS =
         {
-            "Greet me in one short sentence.",
             "Tell me the story of this castle in three or four sentences.",
-            "What do you think about the witch across the courtyard? Two sentences.",
-            "Describe tonight's weather and what it means for travelers, in several sentences.",
         };
 
         // tag = PocketTTS.LastHeavyTick read-and-cleared each frame (#29 iteration 2): which TTS
         // pipeline stage worked in the measured window. ±1 frame skew possible (Update order vs
         // the voice's pump is undefined) — fine for attributing spike RUNS to a stage.
-        struct Frame { public float ms; public byte flags; public int ringDelta; public string tag; }
+        struct Frame
+        {
+            public float ms; public byte flags; public int ringDelta;
+            public string tag; public string pump; public float ringS; public string llm;
+        }
         const byte GEN = 1, SPK = 2, AUD = 4, FLUSH = 8;
 
         readonly StringBuilder sb = new StringBuilder();
         readonly List<string> errors = new List<string>();
-        readonly List<Frame> turnFrames = new List<Frame>(32768);
-        readonly List<List<Frame>> turns = new List<List<Frame>>();
-        bool recording;
+        readonly List<(string name, List<Frame> frames)> phases = new List<(string, List<Frame>)>();
+        List<Frame> current;    // the phase being recorded, null = not recording
         int lastBuffered;
 
         Transform player;
@@ -51,8 +60,25 @@ namespace DeepUnity
         PocketTTSModeling.PocketTTSVoice pk;
         int prevVsync; int prevTarget;
 
+        // Exactly ONE probe may drive the protocol (2026-08-03): the scene can carry an armed
+        // copy AND NpcTalkPerfRunner spawns its own — two probes both teleport the player and
+        // both AskNPC, each question cutting the other's reply (the "turn 1: 2.1 s" runs).
+        // First Awake wins; later instances self-destruct loudly. The static survives
+        // domain-reload-off replays, but a destroyed Unity object compares == null, so the
+        // guard self-heals each session.
+        static NpcTalkPerfProbe s_driver;
+
         void Awake()
         {
+            if (s_driver != null && s_driver != this)
+            {
+                Debug.LogWarning("[NpcTalkPerfProbe] duplicate probe detected — self-destructing. " +
+                                 "One copy drives the protocol; remove the scene-armed one or don't, " +
+                                 "this guard handles it either way.");
+                Destroy(gameObject);
+                return;
+            }
+            s_driver = this;
             Application.logMessageReceived += OnLog;
             Application.runInBackground = true;
             prevVsync = QualitySettings.vSyncCount;
@@ -63,6 +89,10 @@ namespace DeepUnity
 
         void OnDestroy()
         {
+            if (s_driver != this) return;   // a self-destructed duplicate armed nothing —
+                                            // restoring here would write its default-0 fields
+                                            // over the driver's real vsync/targetFrameRate
+            s_driver = null;
             Application.logMessageReceived -= OnLog;
             QualitySettings.vSyncCount = prevVsync;
             Application.targetFrameRate = prevTarget;
@@ -74,9 +104,16 @@ namespace DeepUnity
                 if (errors.Count < 40) errors.Add($"{type}: {msg.Substring(0, Mathf.Min(160, msg.Length))}");
         }
 
+        void StartPhase(string name)
+        {
+            current = new List<Frame>(16384);
+            phases.Add((name, current));
+            lastBuffered = pk != null ? pk.BufferedSamples : 0;
+        }
+
         void Update()
         {
-            if (!recording) return;
+            if (current == null) return;
             if (pk == null && velmire != null) pk = velmire.GetComponent<PocketTTSModeling.PocketTTSVoice>();
 
             byte flags = 0;
@@ -91,9 +128,22 @@ namespace DeepUnity
                 if (ringDelta > 0) flags |= FLUSH;   // a Mimi chunk was pushed this frame
                 lastBuffered = buffered;
             }
-            string tag = PocketTTSModeling.PocketTTS.LastHeavyTick;
-            PocketTTSModeling.PocketTTS.LastHeavyTick = null;
-            turnFrames.Add(new Frame { ms = Time.unscaledDeltaTime * 1000f, flags = flags, ringDelta = ringDelta, tag = tag });
+            // NON-clearing frame-stamped read (2026-08-03): this used to read-and-clear, which
+            // races every other consumer — with a second probe in the scene the tags were split
+            // between the two CSVs and an entire attribution run was garbage. Same discipline as
+            // FrameSpikeProbe: a tag is only evidence about the frame it was written in.
+            int tickAge = Time.frameCount - PocketTTSModeling.PocketTTS.LastHeavyTickFrame;
+            string tag = tickAge <= 1 ? PocketTTSModeling.PocketTTS.LastHeavyTick : null;
+            // pump snapshot (2026-08-02): what the voice pump says it did this frame — state
+            // (speaking/cruise/low-ring/prefill/cede-llm) and the ring level it decided on.
+            bool pumpFresh = Time.frameCount - PocketTTSModeling.PocketTTSVoice.PumpFrame <= 1;
+            current.Add(new Frame
+            {
+                ms = Time.unscaledDeltaTime * 1000f, flags = flags, ringDelta = ringDelta, tag = tag,
+                pump = pumpFresh ? PocketTTSModeling.PocketTTSVoice.PumpState : null,
+                ringS = pumpFresh ? PocketTTSModeling.PocketTTSVoice.PumpRingSeconds : -1f,
+                llm = LLM.CurrentPhase,
+            });
         }
 
         IEnumerator Start()
@@ -115,27 +165,35 @@ namespace DeepUnity
                 Finish(); yield break;
             }
 
-            // settle (scene prewarm) then walk up — models land during the approach
+            // scene prewarm tail — the GC-burst window the fps timeline attributes to asset load
+            StartPhase("settle");
             yield return WaitFor(6f, null);
-            Teleport(ZonePoint(velmire.transform, 7.5f));
-            yield return WaitFor(60f, () => velmire.LlmReady);
-            sb.AppendLine($"- Velmire LLM ready: {velmire.LlmReady}");
 
+            // walk-up: zone entry arms slow prefetch + kernel prewarm + voice prepare, and gets
+            // only ~3.5 s of it — the author does not stand at the zone edge waiting for a bar.
+            StartPhase("walk-up (slow prefetch)");
+            Teleport(ZonePoint(velmire.transform, 7.5f));
+            yield return WaitFor(3.5f, null);
             Teleport(ZonePoint(velmire.transform, 1.6f));
-            yield return new WaitForSecondsRealtime(1.5f);
+            yield return WaitFor(1.0f, null);
+
+            // the boost edge: dialogue opens with the weights still streaming. Everything the
+            // user calls "boosted model loading" happens inside this phase — full-budget upload,
+            // LLM boot + warmup, voice prepare, system-prompt prefill, camera + UI open.
+            StartPhase("boosted open");
+            bool llmWasReady = velmire.LlmReady;
             velmire.StartInteraction();
-            yield return WaitFor(60f, () => velmire.State == NPCChatBase.NPCState.WaitingInInteraction);
-            sb.AppendLine($"- dialogue open: {velmire.State}");
+            yield return WaitFor(150f, () => velmire.State == NPCChatBase.NPCState.WaitingInInteraction);
+            sb.AppendLine($"- dialogue open: {velmire.State} (LlmReady at open: {llmWasReady}, " +
+                          $"open phase {current.Count} frames)");
 
             // ---- the monitored multi-turn conversation ----
             for (int t = 0; t < QUESTIONS.Length; t++)
             {
                 window.InputField.text = QUESTIONS[t];
                 pk = velmire.GetComponent<PocketTTSModeling.PocketTTSVoice>();
-                lastBuffered = pk != null ? pk.BufferedSamples : 0;
                 long defer0 = FramePacing.TtsDeferrals;
-                turnFrames.Clear();
-                recording = true;
+                StartPhase($"turn {t + 1}");
                 velmire.AskNPC();
                 float start = Time.unscaledTime;
                 // record until the reply is fully generated AND fully spoken (audible tail included)
@@ -146,12 +204,11 @@ namespace DeepUnity
                     if (done && Time.unscaledTime - start > 2f) break;
                     yield return null;
                 }
-                recording = false;
-                turns.Add(new List<Frame>(turnFrames));
-                sb.AppendLine($"- turn {t + 1} recorded: {turnFrames.Count} frames over {Time.unscaledTime - start:0.0} s " +
+                sb.AppendLine($"- turn {t + 1} recorded: {current.Count} frames over {Time.unscaledTime - start:0.0} s " +
                               $"(tts pump ceded {FramePacing.TtsDeferrals - defer0} LLM frames)");
                 yield return new WaitForSecondsRealtime(0.75f);
             }
+            current = null;
 
             velmire.CloseInteraction();
             Analyze();
@@ -174,22 +231,25 @@ namespace DeepUnity
         void Analyze()
         {
             var all = new List<Frame>();
-            foreach (var t in turns) all.AddRange(t);
-            sb.AppendLine($"\n## Aggregate ({all.Count} frames across {turns.Count} turns)");
+            foreach (var (_, f) in phases) all.AddRange(f);
+            sb.AppendLine($"\n## Aggregate ({all.Count} frames across {phases.Count} phases — includes load-up, not only turns)");
             Buckets(all);
 
-            for (int t = 0; t < turns.Count; t++)
+            foreach (var (name, f) in phases)
             {
-                sb.AppendLine($"\n## Turn {t + 1} — \"{QUESTIONS[t]}\"");
-                Buckets(turns[t]);
+                sb.AppendLine($"\n## Phase: {name} ({f.Count} frames)");
+                Buckets(f);
             }
 
-            // spike attribution: which TTS pipeline stage the >22.2 ms frames rode on (#29 it.2)
+            // spike attribution: which TTS pipeline stage + pump state the >22.2 ms frames rode on,
+            // with the LLM boot/prefill/decode phases separated (the load-up window lives there).
             var byTag = new Dictionary<string, List<float>>();
             foreach (var f in all)
             {
                 if (f.ms <= 22.2f) continue;
-                string key = f.tag ?? (((f.flags & GEN) != 0) ? "(no tts tick; GEN)" : "(no tts tick)");
+                string key = f.tag ?? "(no tts tick)";
+                if (f.pump != null) key += " @" + f.pump;
+                if (!string.IsNullOrEmpty(f.llm) && f.llm != "idle") key += " [" + f.llm + "]";
                 if (!byTag.TryGetValue(key, out var l)) byTag[key] = l = new List<float>();
                 l.Add(f.ms);
             }
@@ -205,11 +265,12 @@ namespace DeepUnity
 
             // worst frames with context
             all.Sort((a, b) => b.ms.CompareTo(a.ms));
-            sb.AppendLine("\n## Worst 15 frames (aggregate)");
-            sb.AppendLine("| ms | flags | ring delta (samples) | tag |");
-            sb.AppendLine("|---|---|---|---|");
-            for (int i = 0; i < Mathf.Min(15, all.Count); i++)
-                sb.AppendLine($"| {all[i].ms:0.0} | {FlagName(all[i].flags)} | {all[i].ringDelta} | {all[i].tag ?? "-"} |");
+            sb.AppendLine("\n## Worst 20 frames (aggregate)");
+            sb.AppendLine("| ms | flags | llm | ring delta | tag | pump | ring s |");
+            sb.AppendLine("|---|---|---|---|---|---|---|");
+            for (int i = 0; i < Mathf.Min(20, all.Count); i++)
+                sb.AppendLine($"| {all[i].ms:0.0} | {FlagName(all[i].flags)} | {all[i].llm} | {all[i].ringDelta} | {all[i].tag ?? "-"} " +
+                              $"| {all[i].pump ?? "-"} | {(all[i].ringS < 0f ? "-" : all[i].ringS.ToString("0.00"))} |");
 
             if (errors.Count > 0)
             {
@@ -220,6 +281,7 @@ namespace DeepUnity
 
         void Buckets(List<Frame> frames)
         {
+            if (frames.Count == 0) { sb.AppendLine("- (no frames)"); return; }
             var byFlag = new Dictionary<byte, List<float>>();
             int over17 = 0, over22 = 0, over33 = 0;
             foreach (var f in frames)

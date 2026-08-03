@@ -57,14 +57,17 @@ namespace DeepUnity
     }
 
     /// <summary>
-    /// What a <b>GiveTool</b> call offers the player: an item, optionally a price, optionally a
+    /// What a <b>GiveItem</b> call offers the player: an item, optionally a price, optionally a
     /// quantity. The two optional fields are NULLABLE and not defaulted, because "no price named"
     /// (a gift) and "priced at 0" are different offers and the panel renders them differently — the
     /// schema makes both parameters optional for exactly that reason.
-    /// <para>Carried verbatim into <see cref="NPCChatBase.ToolGiveAcceptGate"/> and
-    /// <see cref="NPCChatBase.ToolGiveAccepted"/>, so a host game reads the model's own numbers.</para>
+    /// <para>Carried verbatim into <see cref="NPCChatBase.GiveItemAcceptGate"/>,
+    /// <see cref="NPCChatBase.GiveItemAccepted"/> and the <see cref="NPCDecisionResult"/> a binding
+    /// receives, so a host game reads the model's own numbers.</para>
+    /// <para>The <c>item</c> is also the SUBJECT the decision-binding table matches on — see
+    /// <see cref="NPCDecision"/> — which is why the NPC's persona should name what it sells plainly.</para>
     /// </summary>
-    public struct ToolGiveOffer
+    public struct GiveItemOffer
     {
         /// <summary>What is being handed over, in the NPC's own words. Never null/empty — a call
         /// without it is refused before an offer is ever built (the schema requires it).</summary>
@@ -76,26 +79,26 @@ namespace DeepUnity
     }
 
     /// <summary>
-    /// Chat-window capability: the item+Accept/Decline panel behind the NPC's <b>GiveTool</b> tool —
+    /// Chat-window capability: the item+Accept/Decline panel behind the NPC's <b>GiveItem</b> tool —
     /// the SECOND and last interactive tool the dialogue window handles (the other is
     /// AskUserQuestion). It replaces the typing chrome exactly like the choice panel does, shows the
     /// item (with its quantity and price when the NPC named them) and returns the player's decision
     /// as a bool. <see cref="NPCDialogueWindow"/> implements it for every environment, so deriving a
     /// window from that class is all any new environment needs; NPCChatBase feature-detects it
-    /// (<c>Window as INPCToolGiveWindow</c>) and drops the call with a console warning on a window
-    /// that somehow lacks it. Restyle through the base class's ToolQuestion* / ToolGive* hooks rather
+    /// (<c>Window as INPCGiveItemWindow</c>) and drops the call with a console warning on a window
+    /// that somehow lacks it. Restyle through the base class's ToolQuestion* / GiveItem* hooks rather
     /// than implementing this yourself.
     /// </summary>
-    public interface INPCToolGiveWindow
+    public interface INPCGiveItemWindow
     {
         /// <summary>Show the offer panel (item line + Accept | Decline) in place of the typing chrome.
         /// <paramref name="onDecide"/> fires ONCE with true (accept) or false (decline); the panel tears
         /// itself down on the click and restores what it hid. <paramref name="canAccept"/> false renders
         /// Accept DISABLED — the host game's accept-gate said no (no money, no room) — while Decline
         /// always works, so the exchange can never dead-end.</summary>
-        void ShowToolGive(string npcName, ToolGiveOffer offer, bool canAccept, System.Action<bool> onDecide);
+        void ShowGiveItem(string npcName, GiveItemOffer offer, bool canAccept, System.Action<bool> onDecide);
         /// <summary>Tear the panel down without a decision (dialogue closed underneath it).</summary>
-        void HideToolGive();
+        void HideGiveItem();
     }
 
     /// <summary>
@@ -253,7 +256,7 @@ namespace DeepUnity
         [SerializeField] protected RevealGranularity syncedTextReveal = RevealGranularity.CharByChar;
         [Tooltip("ResetEveryTime = the chat starts from the bare system prompt EVERY opening (only the system-prompt KV is cached). ResumeFromCompact = the history is permanent — it survives closing the dialogue AND quitting the app, with every reply — until it fills Max Context Length, at which point the model compacts the whole conversation into one text that is APPENDED TO THE SYSTEM PROMPT (the Compact Summary field below) and the replies are dropped. See the dropdown's own tooltips for the full lifecycle.")]
         [SerializeField] protected HistoryMode historyMode = HistoryMode.ResetEveryTime;
-        [Tooltip("Runaway guard, NOT a feature limit. One exchange may legitimately run text → call → text → call → text: decoding stops at each call, the result lands in the context, and the NPC carries on from there, so a single player line can produce several calls and several spoken stretches. This caps only the INTERNAL reads (an un-finetuned small model handed a read will happily read the same thing forever); the two INTERACTIVE tools (AskUserQuestion, GiveTool) are not counted, because neither can loop — both wait for a human. Past the cap the read is REFUSED to the model as {\"error\": \"read_limit_reached\"}, which is what makes it stop and speak. 0 = no internal reads at all (every one is refused).")]
+        [Tooltip("Runaway guard, NOT a feature limit. One exchange may legitimately run text → call → text → call → text: decoding stops at each call, the result lands in the context, and the NPC carries on from there, so a single player line can produce several calls and several spoken stretches. This caps only the INTERNAL reads (an un-finetuned small model handed a read will happily read the same thing forever); the two INTERACTIVE tools (AskUserQuestion, GiveItem) are not counted, because neither can loop — both wait for a human. Past the cap the read is REFUSED to the model as {\"error\": \"read_limit_reached\"}, which is what makes it stop and speak. 0 = no internal reads at all (every one is refused).")]
         [Min(0)] [SerializeField] protected int maxToolReadsPerTurn = 6;
         [Tooltip("Persist this NPC's KV cache to disk (persistentDataPath/DeepUnity): the system-prompt state in EVERY mode, plus — in ResumeFromCompact — the WHOLE conversation on a clean close (KV + sampler state + transcript + compact), so reopening after the model was released, the scene reloaded or the app restarted restores the chat from disk instead of re-prefilling. This is what makes ResumeFromCompact survive an app restart, so leave it ON for that mode. Qwen3.5 only for now; Gemma3 NPCs fall back to the re-prefill path.")]
         [SerializeField] protected bool cacheKVCache = true;
@@ -265,11 +268,17 @@ namespace DeepUnity
         [Tooltip("Context window (tokens) — the conversation size the history mode acts on. ResumeFromCompact auto-compacts here (and allocates the KV +8192 above it for the compact pass). Sizes the KV cache (pre-allocated → more = more VRAM). 8192 default. Instances are pooled per (model, quant, KV, this length + headroom), so NPCs sharing a model should share this value.")]
         [Min(256)] [SerializeField] protected int maxContextLength = 8192;
         [Tooltip("Let a thinking-capable model (Qwen3.5) reason in <think> before answering. The reasoning is NEVER voiced and never shown as reply text (the window's ShowThinkingTokens debug toggle can render it dimmed); while the model thinks, the dialog pulses an animated 'Thinking…' placeholder until the final answer starts. Non-thinking models ignore this.")]
-        [SerializeField] protected bool allowThinking = false;
-        [Tooltip("The NPC's built-in interactive tool, ON by default. A # Tools block rides in the system prompt; a <tool_call> in the reply pulses 'Tool calling…' and then replaces the input row with the question + its clickable options (the JSON itself is never rendered, but the QUESTION is spoken like any other line), and the player's pick returns to the model as the <tool_response> result — the model then reacts to the choice in a fresh streamed turn. Every window deriving from NPCDialogueWindow renders it. Costs ~300 tokens of system prompt (Qwen3.5's own tools preamble — a shorter paraphrase measurably stops the model from ever calling): turn it off for an NPC with a very small Max Context Length, or one that should never offer choices.")]
-        [SerializeField] protected bool enableAskUserQuestion = true;
-        [Tooltip("The NPC's second interactive tool — handing the player an ITEM: a gift, promised gear, or a sale at a price the NPC names. A <tool_call> replaces the input row with the item (its quantity and price too, when he named them) and exactly two buttons, Accept and Decline, and the player's decision returns to the model as {\"accepted\": true} or {\"accepted\": false}. The game decides whether Accept is even offered (accept-gate: not enough money -> Accept is disabled, Decline always works) and performs the transfer itself when it lands, so the model can offer but never give. OFF by default: it costs ~130 tokens of system prompt and only an NPC that actually hands things over needs it. Every window deriving from NPCDialogueWindow renders it. These two are the ONLY interactive tools; anything else an NPC does is an internal read on an INPCToolProvider.")]
-        [SerializeField] protected bool enableGiveTool = false;
+        // Renamed from allowThinking (user 2026-08-03) — same switch, the verb the rest of the
+        // inspector already uses. FormerlySerializedAs keeps every scene's saved value.
+        [UnityEngine.Serialization.FormerlySerializedAs("allowThinking")]
+        [SerializeField] protected bool enableThinking = false;
+        // The two interactive-tool toggles (enableAskUserQuestion / enableGiveItem) were DELETED
+        // 2026-08-03 (user): the script now supports BOTH tools unconditionally — the streaming
+        // <tool_call> filter and the dispatch tail are always armed — and whether an NPC's model
+        // ever CALLS them is decided the same place everything else about the prompt is decided:
+        // the author writes (or doesn't write) the # Tools block into descriptionAndRules. The
+        // scene builders still generate canonical blocks via WithToolsBlock's explicit parameters;
+        // nothing is injected at runtime behind the author's back, same as always.
 
         [Header("Sampling (-1 = model preset)")]
         [Min(0f)] [SerializeField] protected float temperature = 0.8f;
@@ -290,16 +299,17 @@ namespace DeepUnity
         [SerializeField] protected TtsModel ttsModel = TtsModel.PocketTTS;
         [Tooltip("TTS weight format. PocketTTS: int8 = 116 MB vs 209 MB fp16, same speed, mel-gated parity (also picks which voice-clone cache dir is used). Chatterbox: int8 = T3 matmuls int8 (~300 MB less, parity-validated); s3gen stays fp16 either way. Kokoro/CosyVoice ignore this (their voice component's weightsPath decides).")]
         [SerializeField] protected LLMQuant ttsQuantization = LLMQuant.INT8;
-        [Tooltip("Playback pitch for this NPC. 1 = natural (the voice's own timbre); <1 = deeper/slower.")]
-        [SerializeField] protected float voicePitch = 1.0f;
-        [Tooltip("Loudness of this NPC's voice. AudioSource.volume tops out at 1, so this multiplies the samples themselves — >1 = louder (peaks clamp at full scale).")]
-        [Min(0f)] [SerializeField] protected float voiceVolume = 1.4f;
-        [Tooltip("How loud the rest of the game stays while THIS NPC's dialogue is open — music, ambience, footsteps, everything outside the conversation. 1 = untouched, 0.5 = half, 0 = silence. Needs a ConversationAudioDucker in the scene, which eases there over ~3 s and back on close.")]
-        [Range(0f, 1f)] [SerializeField] protected float worldAudioWhileTalking = 1f;
+        // Field order below IS the inspector order (the custom editor draws by declaration).
+        // Voice identity right under the engine choice, sliders after, the world-audio duck LAST
+        // in the TTS group (user 2026-08-03) — pick what speaks, then how it sounds.
         [Tooltip("BAKED voice shipped inside the selected TTS engine's weights export (voices/<name> dirs for PocketTTS/CosyVoice3, voices/<name>.bin voicepacks for Kokoro) — the inspector dropdown lists what's on disk. Pick 'Clone (reference clip)' on PocketTTS to clone from an AudioClip instead; a non-null clip always overrides this name.")]
         [SerializeField] protected string ttsVoice = "jean";
         [Tooltip("PocketTTS only: reference clip to VOICE-CLONE for this NPC (overrides the baked ttsVoice). First runtime use encodes it once through the Mimi encoder and caches by content hash; press 'Precompute voice-clone cache' below to bake the embedding into the shared Resources/Cache so runtime (editor AND builds) is a pure load — no recompute, ever.")]
         [SerializeField] protected AudioClip clonedVoiceClip;
+        [Tooltip("Playback pitch for this NPC. 1 = natural (the voice's own timbre); <1 = deeper/slower.")]
+        [SerializeField] protected float voicePitch = 1.0f;
+        [Tooltip("Loudness of this NPC's voice. AudioSource.volume tops out at 1, so this multiplies the samples themselves — >1 = louder (peaks clamp at full scale).")]
+        [Min(0f)] [SerializeField] protected float voiceVolume = 1.4f;
         [Tooltip("Sentences per spoken chunk. Smaller = faster response, lower quality (prosody resets each sentence); larger = higher quality (intonation flows across sentences), slower response.")]
         // 2, not 1 (user 2026-07-26): one sentence per chunk restarts prosody at every full stop and
         // pays a TTS round-trip per sentence, which on this 4 GB card is the shakier trade. This value
@@ -314,6 +324,12 @@ namespace DeepUnity
         protected float clausePauseSeconds = 0.36f;
         [Tooltip("PocketTTS pacing: extra model-generated tail on the reply's last chunk, in seconds — lets the final word decay naturally instead of cutting ~0.16 s after it.")]
         [Min(0f)] [SerializeField] protected float replyTailSeconds = 0.32f;
+        [Tooltip("How loud the rest of the game stays while THIS NPC's interaction is open — music, ambience, footsteps, everything outside the conversation. 1 = untouched, 0.5 = half, 0 = silence. Needs a ConversationAudioDucker in the scene, which eases there over ~3 s and back on close.")]
+        // Renamed from worldAudioWhileTalking (user 2026-08-03): the duck holds for the WHOLE
+        // interaction — from open to close — not just while the NPC is speaking, and the label
+        // should say what the slider actually does. FormerlySerializedAs keeps every scene value.
+        [UnityEngine.Serialization.FormerlySerializedAs("worldAudioWhileTalking")]
+        [Range(0f, 1f)] [SerializeField] protected float worldAudioWhileInteracting = 1f;
 
         [Tooltip("ON: the big sphere (3D) / circle (2D — auto-detected) around the NPC is the model-RESIDENCY zone: entering slow-prefetches the LLM + TTS in the background, both stay on the GPU while the player is inside (closing the chat releases nothing), and leaving unloads both. OFF: the small talk trigger plays that role instead — load on contact, unload when the player walks off it.")]
         [SerializeField] protected bool usePrefetchZone = false;
@@ -342,6 +358,21 @@ namespace DeepUnity
         // not something tuned while iterating, so it does not belong up among the dialogue settings.
         [Tooltip("The walk-up prompt (\"[I] Speak\" / \"Talk — [ E ]\") shown while the player is in the talk trigger. Its OWN component on its OWN GameObject (fade/bob/text knobs live there) — the NPC only calls Show/Hide on it.")]
         [SerializeField] protected NPCInteractPrompt interactPrompt;
+
+        // ---- the decision-binding table ---------------------------------------------------------
+        // WHY IT EXISTS: both interactive tools hand the host game a PLAYER DECISION, and until this
+        // table there was no stable key to bind behaviour to. AskUserQuestion reported (question,
+        // pickedOption) as free text and the give hooks were one gate + one event per NPC with no key
+        // at all, so an NPC with two offers or three questions forced the game to string-match text the
+        // model rewords every run — the very keyword matching GiveItem was introduced to delete. A
+        // binding gives the designer an id they author once ("sell_sword") and the aliases the NPC
+        // might actually say; the engine resolves the decision's SUBJECT to one of them.
+        // LAST in the component, under the scene references it belongs with (it is wiring an author
+        // does once, not a knob tuned while iterating) and outside every braced group — it is neither
+        // an LLM setting nor a voice one. Resolution lives in NPCDecisionTable; see NPC/ARCHITECTURE.md
+        // R6b for the whole contract.
+        [Tooltip("Bind the player's DECISIONS — an AskUserQuestion pick or a GiveItem offer — to ids you author, so the game reacts to a stable key instead of matching text the model rewords every run. Each row: an id (\"sell_sword\"), the aliases the NPC might use for it (matched against the QUESTION text for a question, the ITEM for an offer), the event that fires when it resolves, and an optional per-binding accept-gate (a Component implementing INPCDecisionGate) that decides whether Accept is even clickable for THAT offer. Resolution: exact id, then exact alias, then either string contained in the other; the first row declared wins. An unresolved decision is NOT an error — the global hooks still fire and a console warning names the subject and lists the ids. Additive: ToolQuestionAnswered / GiveItemAcceptGate / GiveItemAccepted keep firing for every decision, bound or not.")]
+        [SerializeField] protected List<NPCDecision> decisions = new List<NPCDecision>();
 
         // ---------------------------------------------------------------- runtime state
         protected LLM llm;
@@ -571,7 +602,55 @@ namespace DeepUnity
                 LLM.CurrentPhase = "kernel-prewarm";
                 DrainNow(PocketTTSModeling.PocketTTS.PrewarmKernels());
                 LLM.CurrentPhase = "idle";
+                // #36.4: run the whole SESSION voice-warm cycle NOW — stream the TTS weights at
+                // full rate and let the real-path warmup (and the driver's atomic ~140 ms
+                // pipeline-JIT charge, which no amount of flushing or splitting would divide)
+                // land in the first seconds after scene load, while the player is still
+                // orienting, instead of mid-walk-up at the first zone entry. Zone policy is
+                // untouched: `warmed` is a once-per-session static, so zone exit still defetches
+                // and re-entry re-streams WITHOUT re-paying the JIT. One voice suffices — the
+                // engine, its kernels and the driver's pipelines are shared. Via EnsureVoice, not
+                // FindObjectsOfType: the voice COMPONENT is built lazily, so at Awake there is
+                // none to find (the first attempt kicked nothing and the stream still started at
+                // zone entry — measured 17:40, `fully streamed` landing mid-walk-up).
+                foreach (var npc in FindObjectsOfType<NPCChatBase>(true))
+                {
+                    if (npc.EffectiveTtsModel != TtsModel.PocketTTS) continue;
+                    // Active objects only (2026-08-03 review): the `(true)` above is inherited from
+                    // the model-prewarm loop, where covering INACTIVE NPCs is the point — but this
+                    // loop's PrewarmKernels is a StartCoroutine, which Unity refuses on an inactive
+                    // GameObject (error log, no warmup), and `break` would then have spent the one
+                    // warm slot on a voice that cannot run it. Any active PocketTTS voice warms the
+                    // SHARED engine, so skipping inactive ones loses nothing.
+                    if (!npc.gameObject.activeInHierarchy) continue;
+                    npc.EnsureVoice();
+                    npc.pkVoice.PrefetchNow();
+                    npc.pkVoice.PrewarmKernels();
+                    // ...and RELEASE when the warm cycle completes (user 2026-08-03: "load-ul
+                    // trebuia să se întâmple odată ce intru în zona de prefetch, la fel ca
+                    // LLM-ul"). The scene-start claim exists to pay the session's unrepayable
+                    // one-shots (driver pipeline JIT, kernel warmth) in the orientation window —
+                    // not to suspend load-on-approach. Stream, warm, unload; the zone re-streams
+                    // on approach exactly like the LLM, and none of the one-shots come back.
+                    npc.StartCoroutine(npc.ReleaseVoiceAfterSceneWarm());
+                    break;
+                }
             }
+        }
+
+        /// <summary>See the scene-start warm block above: waits for the voice's once-per-session
+        /// warm cycle, then drops the residency claim it took — unless the player has meanwhile
+        /// entered this NPC's prefetch zone (or is already talking), in which case the zone/close
+        /// logic owns the release like it always did. Bounded: a warm that never completes
+        /// (missing weights folder) stops burning the frame after two minutes.</summary>
+        IEnumerator ReleaseVoiceAfterSceneWarm()
+        {
+            float deadline = Time.realtimeSinceStartup + 120f;
+            while (pkVoice != null && !pkVoice.SessionWarmCycleDone
+                   && Time.realtimeSinceStartup < deadline)
+                yield return null;
+            if (pkVoice == null || !pkVoice.SessionWarmCycleDone) yield break;
+            if (!inPrefetchZone && state == NPCState.Idle) pkVoice.DefetchNow();
         }
 
         static void PrewarmModel(string id)
@@ -660,6 +739,10 @@ namespace DeepUnity
                     cvVoice?.SlowPrefetchNow(slowPrefetchSeconds);
                     pkVoice?.SlowPrefetchNow(slowPrefetchSeconds);
                     pkVoice?.PrewarmKernels();
+                    // clone bind + voice-prompt KV prefill hide in the walk-up too (2026-08-02):
+                    // left to the first clause, they were a 311-365 ms frame plus ~1 s of boosted
+                    // prefill right as the dialogue opened.
+                    pkVoice?.PrepareVoiceNow();
                     BeginLlmSlowPrefetch();      // the LLM stream shares the walk-up window
                 }
                 else if (!inside && inPrefetchZone && state == NPCState.Idle)
@@ -878,7 +961,7 @@ namespace DeepUnity
         public static bool AnyConversationOpen => conversing.Count > 0;
 
         /// <summary>Where world audio should sit right now: the QUIETEST
-        /// <c>worldAudioWhileTalking</c> among the NPCs currently in conversation, or 1 (untouched)
+        /// <c>worldAudioWhileInteracting</c> among the NPCs currently in conversation, or 1 (untouched)
         /// when nobody is talking. The minimum — not the last one to open — so overlapping dialogues
         /// cannot let a permissive NPC undo a strict one's ducking.</summary>
         public static float WorldAudioTarget
@@ -887,7 +970,7 @@ namespace DeepUnity
             {
                 float t = 1f;
                 foreach (var npc in conversing)
-                    if (npc != null && npc.worldAudioWhileTalking < t) t = npc.worldAudioWhileTalking;
+                    if (npc != null && npc.worldAudioWhileInteracting < t) t = npc.worldAudioWhileInteracting;
                 return t;
             }
         }
@@ -909,6 +992,9 @@ namespace DeepUnity
             kkVoice?.BoostPrefetchNow();
             cvVoice?.BoostPrefetchNow();
             pkVoice?.BoostPrefetchNow();
+            // If the walk-up didn't finish the voice prepare (or there was no zone), the open
+            // animation + the first reply's LLM latency (~2.5 s measured) cover it instead.
+            pkVoice?.PrepareVoiceNow();
             if (interactPrompt != null) interactPrompt.Hide();
             OnInteractionStarted();
             dialogueCoroutine = StartCoroutine(OpenConversation());
@@ -1275,7 +1361,7 @@ namespace DeepUnity
             // with thinking enabled the model REALLY reasons behind these dots (until the final
             // </think>), so say so; plain models just get the typing pulse. A caller can name what
             // is actually happening instead — "Tool calling" while a <tool_call> streams.
-            string label = labelOverride ?? (allowThinking ? "Thinking" : "");
+            string label = labelOverride ?? (enableThinking ? "Thinking" : "");
             int i = 0;
             // self-terminates when the reply ends or the dialogue closes
             while (state == NPCState.TalkingInInteraction)
@@ -1372,10 +1458,10 @@ namespace DeepUnity
             think = thk.ToString();
         }
 
-        // ---- Tools (enableAskUserQuestion + enableGiveTool + INPCToolProvider components) --------
+        // ---- Tools (enableAskUserQuestion + enableGiveItem + INPCToolProvider components) --------
         // TWO generic interactive tools cover every window interaction, and there are deliberately no
         // more: the model emits AskUserQuestion(question, options[]) — "decide something" — or
-        // GiveTool(item, price?, quantity?) — "take this" — inside <tool_call> tags → the window shows
+        // GiveItem(item, price?, quantity?) — "take this" — inside <tool_call> tags → the window shows
         // that tool's panel in place of the input row → the click returns as the <tool_response> result
         // → the model reacts in a fresh streamed turn. The JSON never reaches the screen or the TTS
         // (same channel-split treatment as <think>). An NPC's belt may grant either, both or neither.
@@ -1434,8 +1520,8 @@ namespace DeepUnity
 
         // The SECOND (and last) interactive tool. Same pinning discipline as the schema above and for
         // the same reason: these bytes are what the model reads at inference, so they must be the bytes
-        // the finetune was trained on. Mirrors dataset_creation/wire_format.py's GIVE_TOOL_SCHEMA
-        // EXACTLY — that constant is the pin and this is the copy; NpcGiveToolProbe compares them
+        // the finetune was trained on. Mirrors dataset_creation/wire_format.py's GIVE_ITEM_SCHEMA
+        // EXACTLY — that constant is the pin and this is the copy; NpcGiveItemProbe compares them
         // byte for byte and fails the build on a divergence, because a wrong prompt produces perfectly
         // plausible output and nothing else in Unity notices.
         // The 2026-07-31 corpus normalization folded the old catalog tools give_item (free handout,
@@ -1444,8 +1530,22 @@ namespace DeepUnity
         // the player's own button press — exactly {"accepted": true} or {"accepted": false}.
         // Same one-line `tool | tojson` shape as AskUserQuestionSchema (", " and ": " separators):
         // re-indenting it would still be valid JSON and still be a divergence from the dataset.
-        public const string GiveToolSchema =
-            "{\"type\": \"function\", \"function\": {\"name\": \"GiveTool\", \"description\": " +
+        //
+        // THE CORPUS CALLS THIS TOOL SOMETHING ELSE, ON PURPOSE — DO NOT "FIX" IT (author, 2026-08-01).
+        // wire_format.py also defines GIVE_TOOL_SCHEMA: the SAME bytes under the name `GiveTool`, which
+        // is what v1.12's 30 samples ship and what later batches keep varying. Reasoning: a model that
+        // meets one interactive give-tool under ONE name in every single sample memorizes the name
+        // instead of reading the schema its prompt declares. So the corpus teaches name variance and
+        // the engine ships `GiveItem`; trained on `GiveTool`, served `GiveItem` is a live generalization
+        // check, not a drift. NpcGiveItemProbe therefore pins this const to GIVE_ITEM_SCHEMA ONLY.
+        // AskUserQuestion is the exception — one name everywhere — because it is the engine's own and
+        // predates the reasoning.
+        //
+        // The name carries no "Tool" suffix, and that is the convention for any future interactive
+        // tool: everything inside <tools> IS a tool, so the suffix says nothing, and AskUserQuestion set
+        // the shape first — PascalCase, verb + object. `GiveItemTool` would imply `AskUserQuestionTool`.
+        public const string GiveItemSchema =
+            "{\"type\": \"function\", \"function\": {\"name\": \"GiveItem\", \"description\": " +
             "\"Hand the player an item - a gift, promised gear, or a sale at the price you name. " +
             "Shows the item (with the price, when there is one) with Accept and Decline buttons and " +
             "returns their decision. Call it to hand something over, or to table a final " +
@@ -1501,10 +1601,14 @@ namespace DeepUnity
             }
         }
 
-        /// <summary>True when this NPC has ANY tool in its prompt. The streaming &lt;tool_call&gt;
-        /// filter and the dispatch tail hang off THIS, not off <c>enableAskUserQuestion</c> alone —
-        /// an NPC with only provider tools still emits calls that must not reach the screen.</summary>
-        protected bool ToolsEnabled => enableAskUserQuestion || enableGiveTool || ToolProviders.Length > 0;
+        /// <summary>ALWAYS true since 2026-08-03 (user): the streaming &lt;tool_call&gt; filter and
+        /// the dispatch tail are unconditional — the script supports both interactive tools on
+        /// every NPC, and whether the model ever calls them is decided by what the author wrote
+        /// (or didn't) into <c>descriptionAndRules</c>. Kept as a property because the call sites
+        /// read better against a NAME than against a bare <c>true</c>, and because a future
+        /// hard-off escape hatch would go here. The filter's cost on tool-less NPCs is a marker
+        /// scan over streamed text — noise.</summary>
+        protected bool ToolsEnabled => true;
 
         /// <summary>The # Tools block this NPC's granted tools imply: Qwen3.5's canonical block for
         /// the schemas this NPC actually grants — asked for by name, not retyped here — with
@@ -1513,18 +1617,23 @@ namespace DeepUnity
         /// tool is granted, since an NPC with nothing but provider reads must not be ordered to call
         /// a tool that is missing from its own &lt;tools&gt;). Empty when the NPC has no tools.
         /// <para>This is a GENERATOR, not what runs: the text belongs in
-        /// <c>descriptionAndRules</c>, written there once by the inspector button or the scene builder,
+        /// <c>descriptionAndRules</c>, written there by the scene builders,
         /// so that everything the model reads is visible and editable in one field (user 2026-07-25).
-        /// Nothing is appended behind the author's back at runtime.</para></summary>
-        public string ComposeToolsBlock()
+        /// Nothing is appended behind the author's back at runtime.</para>
+        /// <para>The interactive tools became explicit PARAMETERS on 2026-08-03 (user), when their
+        /// per-NPC toggle fields were deleted: the runtime supports both tools unconditionally, so
+        /// which ones get ADVERTISED is purely an authoring decision — the builders state it at
+        /// the call site, and a hand-authored prompt states it by simply containing (or not
+        /// containing) the block. The inspector's write/refresh button died with the toggles.</para></summary>
+        public string ComposeToolsBlock(bool askUserQuestion, bool giveItem)
         {
             var schemas = new List<string>();
-            // Interactive tools first, AskUserQuestion before GiveTool. That order is load-bearing the
+            // Interactive tools first, AskUserQuestion before GiveItem. That order is load-bearing the
             // same way the rule order below is: every one of the 279 corpus samples that declares BOTH
             // writes them in exactly this sequence, so it is not a free choice. A belt may carry
             // either, both or neither.
-            if (enableAskUserQuestion) schemas.Add(AskUserQuestionSchema);
-            if (enableGiveTool) schemas.Add(GiveToolSchema);
+            if (askUserQuestion) schemas.Add(AskUserQuestionSchema);
+            if (giveItem) schemas.Add(GiveItemSchema);
             foreach (var p in ToolProviders)
             {
                 if (p.ToolSchemas == null) continue;
@@ -1536,7 +1645,7 @@ namespace DeepUnity
             // Order is load-bearing: the error rule then the AskUserQuestion rule, both AFTER
             // Qwen's four bullets and before its </IMPORTANT>. That is the order all 300 finetuning
             // samples carry, so it is not a free choice.
-            string ourRules = enableAskUserQuestion ? ErrorResultRule + AskUserQuestionRules : ErrorResultRule;
+            string ourRules = askUserQuestion ? ErrorResultRule + AskUserQuestionRules : ErrorResultRule;
             return Qwen3_5Modeling.Qwen3_5ChatTemplate.RenderToolsBlock(schemas, ourRules);
         }
 
@@ -1559,8 +1668,8 @@ namespace DeepUnity
                    .TrimStart('\n', '\r', ' ');
         }
 
-        /// <summary>The authored text with THIS NPC's current # Tools block joined to it, replacing any
-        /// block already there. What the inspector button and the scene builders write into
+        /// <summary>The authored text with the STATED # Tools block joined to it, replacing any
+        /// block already there. What the scene builders write into
         /// <c>descriptionAndRules</c> — the tools live in the field, visible, not injected at runtime.
         /// <para><paramref name="toolsFirst"/> defaults to TRUE because that is the CANONICAL order:
         /// Qwen3_5ChatTemplate's tools branch opens the system message, writes the block, and only
@@ -1570,10 +1679,10 @@ namespace DeepUnity
         /// more readable for a long persona. It is nonetheless a deliberate divergence from the
         /// canonical order and from the training data, not an alternative spelling of it, so flip the
         /// dataset too if it ever becomes the house style.</para></summary>
-        public string WithToolsBlock(string authored, bool toolsFirst = true)
+        public string WithToolsBlock(string authored, bool askUserQuestion, bool giveItem, bool toolsFirst = true)
         {
             string persona = StripToolsBlock(authored).Trim('\n', '\r', ' ');
-            string block = ComposeToolsBlock();
+            string block = ComposeToolsBlock(askUserQuestion, giveItem);
             if (block.Length == 0) return persona;
             // The blank line between them is the template's own (L57: '\n\n' + content), in both
             // orders — swapping which side is on top must not also change the separator.
@@ -1642,7 +1751,7 @@ namespace DeepUnity
         [System.Serializable] class StringArrayWrap { public string[] items; }
 
         /// <summary>A &lt;tool_call&gt; body parsed out of EITHER wire shape (see below), normalized:
-        /// a name, a JSON arguments string for providers, the AskUserQuestion fields and the GiveTool
+        /// a name, a JSON arguments string for providers, the AskUserQuestion fields and the GiveItem
         /// ones.</summary>
         class ParsedToolCall
         {
@@ -1650,7 +1759,7 @@ namespace DeepUnity
             public string argsJson = "{}";
             public string question;
             public readonly List<string> options = new List<string>();
-            // GiveTool. Read out of argsJson AFTER either branch built it, so both wire shapes are
+            // GiveItem. Read out of argsJson AFTER either branch built it, so both wire shapes are
             // served by one piece of code — the XML template renders every scalar as bare text inside
             // <parameter=…> while the JSON shape writes a real number, and neither is special-cased.
             public string item;
@@ -1693,7 +1802,7 @@ namespace DeepUnity
             return WithGiveArgs(call);
         }
 
-        /// <summary>GiveTool's three arguments, read off the normalized <c>argsJson</c> both wire
+        /// <summary>GiveItem's three arguments, read off the normalized <c>argsJson</c> both wire
         /// shapes already produced. Done here rather than in either branch precisely so there is ONE
         /// reading of them: JsonUtility cannot tell an absent integer from a zero, and price 0 (a free
         /// handout the NPC still called a price) is a different offer from no price at all.</summary>
@@ -1749,7 +1858,7 @@ namespace DeepUnity
         }
 
         /// <summary>One JSON scalar starting at <paramref name="at"/> (after the colon), unquoted and
-        /// unescaped. Objects/arrays are not scalars and come back as their raw text — GiveTool has
+        /// unescaped. Objects/arrays are not scalars and come back as their raw text — GiveItem has
         /// none, and a model that writes one gets it rejected by the int parse below.</summary>
         static string ReadScalar(string s, int at)
         {
@@ -1957,10 +2066,159 @@ namespace DeepUnity
         /// <summary>Fires when the player picks an option, BEFORE the pick goes back to the model:
         /// <c>(question, pickedOption)</c>. This is where gated ACTIONS live — handing gear over,
         /// taking payment — so the value transfer is engine code reacting to a player choice, never
-        /// something the model can do by itself. Subscribers must not block.</summary>
+        /// something the model can do by itself. Subscribers must not block.
+        /// <para>Still fires for EVERY pick, bound or not: the binding table
+        /// (<see cref="Decisions"/>) is additive to this, never a replacement. Prefer a binding when
+        /// the NPC has more than one question — this hook hands you text the model rewords.</para></summary>
         public event System.Action<string, string> ToolQuestionAnswered;
 
-        // ---- GiveTool's two extension hooks ----------------------------------------------------
+        // ---- the decision-binding table ---------------------------------------------------------
+        // ONE concept over BOTH interactive tools: a question's pick and an offer's Accept are both a
+        // PLAYER DECISION, and both resolve through the same table by the same rules
+        // (NPCDecisionTable.Resolve). Everything below is ADDITIVE — ToolQuestionAnswered,
+        // GiveItemAcceptGate and GiveItemAccepted keep firing exactly as before for every decision,
+        // bound or unbound — so nothing that already works has to be rewritten to keep working.
+
+        /// <summary>This NPC's decision bindings, as authored in the inspector. Mutable, so a host game
+        /// can add or remove rows at runtime (a quest that only becomes offerable later); the list is
+        /// read fresh on every decision, and its ORDER is the tie-break, so inserting a row in front of
+        /// another changes which one wins an ambiguous subject.</summary>
+        public List<NPCDecision> Decisions => decisions;
+
+        /// <summary>Resolve a decision's subject against <see cref="Decisions"/>, reporting what
+        /// happened: an ambiguity is a warning naming the losers, and NO match is a warning naming the
+        /// subject and listing every declared id — which is the only way a designer sees why their
+        /// event did not fire. Unmatched is NOT an error: the caller carries on with the global hooks.</summary>
+        protected NPCDecision ResolveDecision(string subject, NPCDecisionKind kind)
+        {
+            NPCDecision hit = NPCDecisionTable.Resolve(decisions, subject, out string ambiguity);
+            if (ambiguity != null)
+                Debug.LogWarning($"[NPC] {NpcName}: ambiguous {kind} decision — {ambiguity}");
+            if (hit == null)
+                Debug.LogWarning($"[NPC] {NpcName}: {kind} decision \"{subject}\" matched no binding — " +
+                                 $"declared ids: {NPCDecisionTable.DeclaredIds(decisions)}. The global " +
+                                 "hooks still fired; add an id or an alias to bind it.");
+            return hit;
+        }
+
+        /// <summary>Invoke a binding's event, BEFORE the decision goes back to the model (so the world
+        /// is updated by the time the reply streams). A throwing subscriber is reported and does not
+        /// take the dialogue down with it, exactly like the global hooks.</summary>
+        void InvokeBinding(NPCDecision binding, NPCDecisionResult result)
+        {
+            if (binding?.onResolved == null) return;
+            try { binding.onResolved.Invoke(result); }
+            catch (System.Exception e)
+            {
+                ConsoleMessage.Warning($"[NPC] {NpcName}: decision \"{binding.id}\" handler threw: {e.Message}");
+            }
+        }
+
+        /// <summary>Everything a give offer needs settled BEFORE its panel opens: which binding it
+        /// resolved to, the pending decision payload a gate judges, and whether Accept may be pressed
+        /// at all. THE seam <see cref="GiveItemRoutine"/> and the headless probe share.
+        /// <para>Gate precedence: the resolved binding's own <see cref="NPCDecision.gate"/> if it has
+        /// one, else this NPC's global <see cref="GiveItemAcceptGate"/>, else true. A gate that throws
+        /// is reported and read as "yes" — it is a button state, not the transaction.</para></summary>
+        /// <returns>Whether the panel's Accept button should be live.</returns>
+        public bool PrepareGiveItemDecision(GiveItemOffer offer, out NPCDecisionResult pending,
+                                            out NPCDecision binding)
+        {
+            binding = ResolveDecision(offer.item, NPCDecisionKind.GiveItem);
+            pending = new NPCDecisionResult
+            {
+                decisionId = binding?.id,
+                kind = NPCDecisionKind.GiveItem,
+                subject = offer.item,
+                picked = null,
+                accepted = false,           // nothing has been pressed yet — this IS the question
+                price = offer.price,
+                quantity = offer.quantity,
+            };
+
+            INPCDecisionGate bound = binding != null ? binding.gate as INPCDecisionGate : null;
+            if (binding != null && binding.gate != null && bound == null)
+                ConsoleMessage.Warning($"[NPC] {NpcName}: decision \"{binding.id}\" has a gate " +
+                                       $"({binding.gate.GetType().Name}) that does not implement " +
+                                       "INPCDecisionGate — ignored, falling back to the global gate.");
+            if (bound != null)
+            {
+                try { return bound.CanAccept(pending); }
+                catch (System.Exception e)
+                {
+                    ConsoleMessage.Warning($"[NPC] {NpcName}: decision \"{binding.id}\" gate threw: " +
+                                           $"{e.Message} — Accept left enabled.");
+                    return true;
+                }
+            }
+            if (GiveItemAcceptGate != null)
+            {
+                // A throwing gate is a bug in the host game, not a reason to refuse the player: it is
+                // reported and read as "yes", because the transaction itself lives in the accepted
+                // handler and can still decline there. See GiveItemAcceptGate.
+                try { return GiveItemAcceptGate(offer); }
+                catch (System.Exception e)
+                {
+                    ConsoleMessage.Warning($"[NPC] {NpcName}: GiveItem accept-gate threw: {e.Message} — " +
+                                           "Accept left enabled.");
+                    return true;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>Publish a settled give decision: the GLOBAL hook first (unchanged behaviour), then
+        /// the binding's own event — both only on Accept, because declining transfers nothing and the
+        /// model simply reads the "no". Runs BEFORE the result goes back to the model.
+        /// <para>The seam the routine and the probe share, so "accepted fires it once, declined fires
+        /// nothing" is asserted on the same code the dialogue runs.</para></summary>
+        public void SettleGiveItemDecision(GiveItemOffer offer, bool accepted, NPCDecision binding)
+        {
+            if (!accepted) return;
+            try { GiveItemAccepted?.Invoke(offer); }
+            catch (System.Exception e)
+            {
+                ConsoleMessage.Warning($"[NPC] {NpcName}: GiveItem accepted handler threw: {e.Message}");
+            }
+            InvokeBinding(binding, new NPCDecisionResult
+            {
+                decisionId = binding?.id,
+                kind = NPCDecisionKind.GiveItem,
+                subject = offer.item,
+                picked = null,
+                accepted = true,
+                price = offer.price,
+                quantity = offer.quantity,
+            });
+        }
+
+        /// <summary>Publish a settled QUESTION decision: the global
+        /// <see cref="ToolQuestionAnswered"/> first (unchanged), then the binding matched on the
+        /// QUESTION text, carrying the picked option in <see cref="NPCDecisionResult.picked"/> — the
+        /// game branches on the option inside its own handler. Runs BEFORE the pick goes back to the
+        /// model. Returns the binding it resolved to, or null when unmatched.</summary>
+        public NPCDecision SettleQuestionDecision(string question, string picked)
+        {
+            try { ToolQuestionAnswered?.Invoke(question, picked); }
+            catch (System.Exception e)
+            {
+                ConsoleMessage.Warning($"[NPC] {NpcName}: tool-pick handler threw: {e.Message}");
+            }
+            NPCDecision binding = ResolveDecision(question, NPCDecisionKind.Question);
+            InvokeBinding(binding, new NPCDecisionResult
+            {
+                decisionId = binding?.id,
+                kind = NPCDecisionKind.Question,
+                subject = question,
+                picked = picked,
+                accepted = true,            // an option WAS picked; which one is `picked`
+                price = null,
+                quantity = null,
+            });
+            return binding;
+        }
+
+        // ---- GiveItem's two extension hooks ----------------------------------------------------
         // GENERAL, not any one demo's: the base class owns the panel and the wire format, the host
         // game owns money and inventory. Same division of labour as ToolQuestionAnswered above — the
         // model proposes, the player disposes, and the ENGINE performs.
@@ -1970,33 +2228,33 @@ namespace DeepUnity
         /// place to put "no room in the pack" or "already have one" too. Decline is never gated, so a
         /// refused offer still ends the exchange cleanly. Null (the default) = always acceptable.
         /// <para>Evaluated ONCE, when the panel opens. It is a PRESENTATION hint, not the transaction:
-        /// the authoritative check belongs in the <see cref="ToolGiveAccepted"/> handler, which is
+        /// the authoritative check belongs in the <see cref="GiveItemAccepted"/> handler, which is
         /// where value actually changes hands — a gate that throws is reported and treated as "yes"
         /// for that reason.</para></summary>
-        public System.Func<ToolGiveOffer, bool> ToolGiveAcceptGate { get; set; }
+        public System.Func<GiveItemOffer, bool> GiveItemAcceptGate { get; set; }
 
         /// <summary>Fires when the player ACCEPTS an offer, BEFORE the decision goes back to the model:
         /// take the payment, grant the item, update the HUD here. Declining fires nothing — the model
         /// simply reads {"accepted": false} and answers in character. Subscribers must not block.</summary>
-        public event System.Action<ToolGiveOffer> ToolGiveAccepted;
+        public event System.Action<GiveItemOffer> GiveItemAccepted;
 
-        // The ONLY two results a GiveTool call can return, byte for byte what the corpus teaches
-        // (dataset_creation validate.py: 'GiveTool result must be exactly {"accepted": true} or
+        // The ONLY two results a GiveItem call can return, byte for byte what the corpus teaches
+        // (dataset_creation validate.py: 'GiveItem result must be exactly {"accepted": true} or
         // {"accepted": false}'). Literals, not JsonUtility.ToJson — which writes {"accepted":true},
         // without the separator space every sample in the corpus has.
-        const string ToolGiveAcceptedResult = "{\"accepted\": true}";
-        const string ToolGiveDeclinedResult = "{\"accepted\": false}";
+        const string GiveItemAcceptedResult = "{\"accepted\": true}";
+        const string GiveItemDeclinedResult = "{\"accepted\": false}";
 
         /// <summary>The tool result a give decision sends back to the model. THE mapping — the window's
         /// Accept/Decline click goes nowhere else, and the headless probe asserts these bytes.</summary>
-        public static string ToolGiveResult(bool accepted)
-            => accepted ? ToolGiveAcceptedResult : ToolGiveDeclinedResult;
+        public static string GiveItemResult(bool accepted)
+            => accepted ? GiveItemAcceptedResult : GiveItemDeclinedResult;
 
-        /// <summary>Read a &lt;tool_call&gt; body as a GiveTool offer: true when it parses AND names an
+        /// <summary>Read a &lt;tool_call&gt; body as a GiveItem offer: true when it parses AND names an
         /// item (the schema's one required parameter), false when the model wrote something the panel
-        /// cannot show. The seam <see cref="DispatchGiveTool"/> and the headless probe share, so what
+        /// cannot show. The seam <see cref="DispatchGiveItem"/> and the headless probe share, so what
         /// the probe exercises IS what the dialogue runs.</summary>
-        public static bool TryReadGiveToolCall(string toolCallBody, out ToolGiveOffer offer)
+        public static bool TryReadGiveItemCall(string toolCallBody, out GiveItemOffer offer)
         {
             offer = default;
             ParsedToolCall call = ParseToolCall(toolCallBody);
@@ -2006,8 +2264,8 @@ namespace DeepUnity
         }
 
         /// <summary>The offer a parsed call describes. ONE construction, shared by the dispatch and by
-        /// <see cref="TryReadGiveToolCall"/>, so the probe cannot drift from the dialogue.</summary>
-        static ToolGiveOffer OfferOf(ParsedToolCall call) => new ToolGiveOffer
+        /// <see cref="TryReadGiveItemCall"/>, so the probe cannot drift from the dialogue.</summary>
+        static GiveItemOffer OfferOf(ParsedToolCall call) => new GiveItemOffer
         {
             item = call.item?.Trim(),
             price = call.price,
@@ -2052,7 +2310,7 @@ namespace DeepUnity
 
         /// <summary>Parse + validate a completed &lt;tool_call&gt; body and either answer it in-engine
         /// (internal provider tool → result straight back to the model) or open an interactive panel:
-        /// the choice popup (AskUserQuestion) or the offer popup (GiveTool). Malformed calls, unknown
+        /// the choice popup (AskUserQuestion) or the offer popup (GiveItem). Malformed calls, unknown
         /// tool names and windows without the panel capability degrade to a console warning — the
         /// dialogue continues as if no call happened.</summary>
         void TryDispatchToolCall(string toolJson, int epoch)
@@ -2070,13 +2328,13 @@ namespace DeepUnity
             }
 
             // The dialogue window handles EXACTLY TWO interactive tools — AskUserQuestion (a choice)
-            // and GiveTool (an item). Everything else is an internal provider read.
+            // and GiveItem (an item). Everything else is an internal provider read.
             bool isAsk = "AskUserQuestion".Equals(call.name, System.StringComparison.OrdinalIgnoreCase);
-            bool isGive = "GiveTool".Equals(call.name, System.StringComparison.OrdinalIgnoreCase);
+            bool isGive = "GiveItem".Equals(call.name, System.StringComparison.OrdinalIgnoreCase);
 
             if (isGive)
             {
-                DispatchGiveTool(call, toolJson, epoch);
+                DispatchGiveItem(call, toolJson, epoch);
                 return;
             }
 
@@ -2114,14 +2372,10 @@ namespace DeepUnity
                 return;
             }
 
-            // The tool is not available at all — a retry cannot succeed, so send it to words.
-            if (!enableAskUserQuestion)
-            {
-                RefuseToolCall(call.name, "{\"error\": \"tool_unavailable\", \"detail\": \"AskUserQuestion is not " +
-                               "one of your tools here - answer the player in words instead\"}",
-                               $"[NPC] {NpcName}: AskUserQuestion called but it is disabled on this NPC.");
-                return;
-            }
+            // No availability gate since 2026-08-03 (user): the script HANDLES AskUserQuestion on
+            // every NPC — a model that calls it without the block in its prompt simply gets the
+            // real panel, which beats bouncing an error at a model that clearly wants to offer a
+            // choice. Advertising is the author's business; handling is ours.
             // SHAPE errors below are RETRYABLE (user 2026-07-28). They used to say "ask the player in
             // words instead", which tells the model to give up on a call it was right to want — the
             // player saw the offer vanish into prose. Tell it what was wrong and to call again instead.
@@ -2210,9 +2464,9 @@ namespace DeepUnity
             // GATED ACTION: engine logic reacts to the pick FIRST (gear changes hands, payment is
             // taken), so the world is already updated when the model's reaction streams — and so a
             // value transfer is never something the model can do on its own, only something the
-            // player's own choice triggers.
-            try { ToolQuestionAnswered?.Invoke(question, picked); }
-            catch (System.Exception e) { ConsoleMessage.Warning($"[NPC] {NpcName}: tool-pick handler threw: {e.Message}"); }
+            // player's own choice triggers. Both halves fire here, in this order: the global hook,
+            // then whichever binding the QUESTION resolves to (unmatched simply logs and moves on).
+            SettleQuestionDecision(question, picked);
 
             // the pick goes back as the tool result; the model reads it and reacts in a fresh turn
             PrepareForNextReply(w);
@@ -2221,49 +2475,45 @@ namespace DeepUnity
                                                     asToolResult: true));
         }
 
-        // ---- GiveTool: the same shape as AskUserQuestion, one step shorter ----------------------
+        // ---- GiveItem: the same shape as AskUserQuestion, one step shorter ----------------------
         // The model names an item (and may name a price and a quantity), the window shows it with
         // Accept and Decline, and the player's button press IS the result. There is no wording to
         // interpret and nothing to guess: the old gear beat had to read the NPC's own option text to
         // tell "Take them" from "Keep your steel", and that guesswork is exactly what this tool
         // removes from the engine.
 
-        /// <summary>Validate a GiveTool call and open the offer panel. Same three failure modes as the
+        /// <summary>Validate a GiveItem call and open the offer panel. Same three failure modes as the
         /// choice path: the tool is not on this NPC's belt (fatal — send it to words), the call names no
         /// item (retryable — the schema requires one), or the window cannot show the panel (dropped with
         /// a warning).</summary>
-        void DispatchGiveTool(ParsedToolCall call, string toolJson, int epoch)
+        void DispatchGiveItem(ParsedToolCall call, string toolJson, int epoch)
         {
-            if (!enableGiveTool)
-            {
-                RefuseToolCall(call.name, "{\"error\": \"tool_unavailable\", \"detail\": \"GiveTool is not one " +
-                               "of your tools here - answer the player in words instead\"}",
-                               $"[NPC] {NpcName}: GiveTool called but it is disabled on this NPC.");
-                return;
-            }
+            // No availability gate since 2026-08-03 — same reasoning as DispatchAskUserQuestion
+            // above: handling is unconditional, advertising is the author's prompt to write. The
+            // game-side accept-gate below is still the real authority on what a Give can DO.
             if (string.IsNullOrWhiteSpace(call.item))
             {
                 // RETRYABLE, like AskUserQuestion's shape errors: it wanted to hand something over and
                 // was right to, so tell it what was missing instead of sending the offer to prose.
-                RefuseToolCall(call.name, "{\"error\": \"malformed_call\", \"detail\": \"GiveTool was called " +
+                RefuseToolCall(call.name, "{\"error\": \"malformed_call\", \"detail\": \"GiveItem was called " +
                                "with no item - call it again and name the item you are handing over\"}",
-                               $"[NPC] {NpcName}: GiveTool called with no item: {toolJson.Trim()}");
+                               $"[NPC] {NpcName}: GiveItem called with no item: {toolJson.Trim()}");
                 return;
             }
-            if (!(Window is INPCToolGiveWindow gw))
+            if (!(Window is INPCGiveItemWindow gw))
             {
-                ConsoleMessage.Warning($"[NPC] {NpcName}: GiveTool fired but this chat window cannot show the " +
+                ConsoleMessage.Warning($"[NPC] {NpcName}: GiveItem fired but this chat window cannot show the " +
                                        "offer panel — call dropped. Derive the window from NPCDialogueWindow " +
-                                       "(it implements INPCToolGiveWindow for every environment).");
+                                       "(it implements INPCGiveItemWindow for every environment).");
                 return;
             }
-            ToolGiveOffer offer = OfferOf(call);
+            GiveItemOffer offer = OfferOf(call);
             StopThinkingDots();                        // the "Tool calling" pulse has served its purpose
             ShowToolCalledLine(Window, call.name);     // and this stays under the spoken line for good
-            StartCoroutine(GiveToolRoutine(gw, offer, epoch));
+            StartCoroutine(GiveItemRoutine(gw, offer, epoch));
         }
 
-        IEnumerator GiveToolRoutine(INPCToolGiveWindow gw, ToolGiveOffer offer, int epoch)
+        IEnumerator GiveItemRoutine(INPCGiveItemWindow gw, GiveItemOffer offer, int epoch)
         {
             var w = Window;
             // the SAME flag the choice panel raises: it means "a panel owns the turn", so a typed send
@@ -2277,26 +2527,18 @@ namespace DeepUnity
             StopRevealJob();
             revealActive = false;
 
-            bool canAccept = true;
-            if (ToolGiveAcceptGate != null)
-            {
-                // A throwing gate is a bug in the host game, not a reason to refuse the player: it is
-                // reported and read as "yes", because the transaction itself lives in the accepted
-                // handler and can still decline there. See ToolGiveAcceptGate.
-                try { canAccept = ToolGiveAcceptGate(offer); }
-                catch (System.Exception e)
-                {
-                    ConsoleMessage.Warning($"[NPC] {NpcName}: GiveTool accept-gate threw: {e.Message} — " +
-                                           "Accept left enabled.");
-                    canAccept = true;
-                }
-            }
-            ConsoleMessage.Info($"[Tool] {NpcName}: GiveTool → {offer.item}"
+            // Binding + gate in one step: the item resolves to a decision id (or to nothing, which is
+            // logged, not fatal) and THAT binding's gate — or the NPC-wide one, or neither — decides
+            // whether Accept is even clickable.
+            bool canAccept = PrepareGiveItemDecision(offer, out _, out NPCDecision binding);
+
+            ConsoleMessage.Info($"[Tool] {NpcName}: GiveItem → {offer.item}"
                               + (offer.quantity.HasValue ? $" x{offer.quantity.Value}" : "")
                               + (offer.price.HasValue ? $" @ {offer.price.Value}" : " (no price)")
+                              + (binding != null ? $" [{binding.id}]" : " [unbound]")
                               + (canAccept ? "" : " — Accept gated off"));
 
-            gw.ShowToolGive(NpcName, offer, canAccept, ok => accepted = ok);
+            gw.ShowGiveItem(NpcName, offer, canAccept, ok => accepted = ok);
             while (accepted == null && epoch == dialogueEpoch && state == NPCState.WaitingInInteraction)
                 yield return null;
             toolQuestionOpen = false;
@@ -2304,33 +2546,26 @@ namespace DeepUnity
                 || dialogueCoroutine != null || compactRoutine != null)
             {
                 // dialogue closed / a new session took over under the panel — tear down, no result
-                gw.HideToolGive();
+                gw.HideGiveItem();
                 if (epoch == dialogueEpoch && w.SendButton != null) w.SendButton.interactable = true;
                 yield break;
             }
             // GATED ACTION, exactly as above: the world is updated BEFORE the model's reaction streams,
             // and only ever by the player's own click. Declining does nothing at all — the model just
-            // reads the "no" and answers in character.
-            if (accepted == true)
-            {
-                try { ToolGiveAccepted?.Invoke(offer); }
-                catch (System.Exception e)
-                {
-                    ConsoleMessage.Warning($"[NPC] {NpcName}: GiveTool accepted handler threw: {e.Message}");
-                }
-            }
+            // reads the "no" and answers in character. The global hook fires first, then the binding's.
+            SettleGiveItemDecision(offer, accepted == true, binding);
 
             PrepareForNextReply(w);
             if (w.SendButton != null) w.SendButton.interactable = true;
-            dialogueCoroutine = StartCoroutine(Talk(ToolGiveResult(accepted == true), asToolResult: true));
+            dialogueCoroutine = StartCoroutine(Talk(GiveItemResult(accepted == true), asToolResult: true));
         }
 
-        /// <summary>DEBUG: fire a synthetic GiveTool as if the model had emitted it — the XML wire shape
+        /// <summary>DEBUG: fire a synthetic GiveItem as if the model had emitted it — the XML wire shape
         /// its own chat template declares — so the offer panel, the accept-gate, the hand-over and the
         /// &lt;tool_response&gt; resume can be verified without waiting for the model to call it.
         /// Right-click the component in play mode, with the dialogue open.</summary>
-        [ContextMenu("Debug/Fire a test GiveTool")]
-        public void DebugFireTestGiveTool()
+        [ContextMenu("Debug/Fire a test GiveItem")]
+        public void DebugFireTestGiveItem()
         {
             if (!Application.isPlaying || state != NPCState.WaitingInInteraction || dialogueCoroutine != null)
             {
@@ -2338,7 +2573,7 @@ namespace DeepUnity
                                        "(enter play mode, talk to the NPC, then fire it).");
                 return;
             }
-            TryDispatchToolCall("<function=GiveTool>\n<parameter=item>\nlongsword\n</parameter>\n" +
+            TryDispatchToolCall("<function=GiveItem>\n<parameter=item>\nlongsword\n</parameter>\n" +
                                 "<parameter=price>\n80\n</parameter>\n</function>", dialogueEpoch);
         }
 
@@ -2660,7 +2895,7 @@ namespace DeepUnity
                     min_p: minP >= 0f ? minP : llm.Config.DefaultMinP,
                     presence_penalty: presencePenalty >= 0f ? presencePenalty : llm.Config.DefaultPresencePenalty,
                     repetition_penalty: repetitionPenalty >= 0f ? repetitionPenalty : llm.Config.DefaultRepetitionPenalty,
-                    enable_thinking: allowThinking,
+                    enable_thinking: enableThinking,
                     onTokenGenerated: onTok)
                 : llm.Chat(question, max_new_tokens: maxNewTokens, temperature: temperature,
                     top_k: topK >= 0 ? topK : llm.Config.DefaultTopK,
@@ -2668,7 +2903,7 @@ namespace DeepUnity
                     min_p: minP >= 0f ? minP : llm.Config.DefaultMinP,
                     presence_penalty: presencePenalty >= 0f ? presencePenalty : llm.Config.DefaultPresencePenalty,
                     repetition_penalty: repetitionPenalty >= 0f ? repetitionPenalty : llm.Config.DefaultRepetitionPenalty,
-                    enable_thinking: allowThinking,
+                    enable_thinking: enableThinking,
                     onTokenGenerated: onTok);
             if (speakReplies && !replyCanceled)
             {
@@ -2748,7 +2983,7 @@ namespace DeepUnity
             // before it (user spec: text, spoken to the end, then the question) — DispatchAfterSpeaking
             // owns that wait. An internal provider read then answers itself and re-enters Talk with the
             // result; an INTERACTIVE tool opens its panel — the choice popup (AskUserQuestion) or the
-            // offer popup (GiveTool) — whose click comes back as the <tool_response>. All of them
+            // offer popup (GiveItem) — whose click comes back as the <tool_response>. All of them
             // continue THIS exchange: dialogueCoroutine was cleared just above, so the new turn owns
             // the handle.
             if (!replyCanceled && ToolsEnabled && !string.IsNullOrWhiteSpace(toolCallFull))
@@ -3310,7 +3545,7 @@ namespace DeepUnity
                 toolQuestionOpen = false;
                 awaitingToolDispatch = false;
                 (Window as INPCToolQuestionWindow)?.HideToolQuestion();
-                (Window as INPCToolGiveWindow)?.HideToolGive();
+                (Window as INPCGiveItemWindow)?.HideGiveItem();
 
                 // 6. everything outside the model.
                 ForgetConversation();
@@ -3537,11 +3772,10 @@ namespace DeepUnity
             int prefix = ContextTokensNow();
             if (prefix * 4 < maxContextLength * 3) return;   // under 75% — plenty of room to talk
             int suggested = prefix * 4 / 3 + 64;
-            string fix = enableAskUserQuestion || enableGiveTool
-                ? $"raise Max Context Length to >= {suggested}, shorten the description, or turn an " +
-                  "interactive tool off (AskUserQuestion's schema plus the shared call-format block is " +
-                  "~520 tokens, measured; GiveTool's own schema is ~130 on top of that block)"
-                : $"raise Max Context Length to >= {suggested} or shorten the system prompt";
+            string fix = $"raise Max Context Length to >= {suggested}, shorten the description, or " +
+                         "drop the # Tools block from it (AskUserQuestion's schema plus the shared " +
+                         "call-format block is ~520 tokens, measured; GiveItem's own schema is ~130 " +
+                         "on top of that block)";
             string msg = $"[NPC] {NpcName}: the system prompt alone is ~{prefix} tokens of a " +
                          $"{maxContextLength}-token budget — {fix}.";
             if (prefix >= maxContextLength)

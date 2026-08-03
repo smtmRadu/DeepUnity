@@ -196,6 +196,28 @@ namespace DeepUnity
                 }
             }
 
+            /// <summary>#36.6: residency-cycle counter for the touch-pass latch in
+            /// PocketTTS.PrewarmAllocationsYielding. `_epoch` increments exactly when a Defetch
+            /// actually STARTS (the only path that releases uploaded buffers while the store is
+            /// alive — Dispose kills the whole engine and every consumer with it), so the pair
+            /// (IsReady, LoadEpoch) names one residency cycle: same epoch + still ready means no
+            /// tensor has left the GPU since the caller last looked, a different epoch means the
+            /// weights were re-streamed and every buffer is a fresh, never-referenced resource
+            /// again. Zone-exit turnarounds are covered for free: DefetchNow → PrefetchNow while
+            /// the defetch pump drains takes the `_reloadAfterDefetch` path, which re-loads under
+            /// the already-bumped epoch — one bump per real unload, never zero.</summary>
+            public int LoadEpoch => _epoch;
+
+            /// <summary>#36.2: every uploaded tensor buffer, for the residency warm pass — see
+            /// PocketTTS.PrewarmAllocationsYielding. SetData only STAGES a resource; the driver
+            /// makes it GPU-resident at its first dispatch REFERENCE, so the first real prefill
+            /// (which binds dozens of tensors at once) used to pay one bulk MakeResident.</summary>
+            public IEnumerable<ComputeBuffer> ResidentBuffers()
+            {
+                foreach (var e in _entries.Values)
+                    if (e.slot != null && e.slot[0] != null) yield return e.slot[0];
+            }
+
             /// <summary>GPU buffer of an exported tensor (manifest name). Null until upload done.</summary>
             public ComputeBuffer Get(string name)
             {

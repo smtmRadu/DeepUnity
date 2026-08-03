@@ -145,6 +145,15 @@ void SliceCols(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
 }
 
 [numthreads(256,1,1)]
+// #36: chunk-capable so a first-touch pass can commit a HUGE buffer in frame-sized slices —
+// via the SAME #29/#30 sliced-dispatch convention every other LinearId kernel here uses:
+// elem_offset = chunk start (LinearId already folds it in), buffer_size = chunk END bound,
+// dispatch = chunk length. The first #36 draft wrote `buf_a[i + elem_offset]` with
+// buffer_size = chunk LENGTH — elem_offset applied TWICE, and the `i < buffer_size` guard
+// then failed for EVERY thread of every chunk past the first, so the chunked touch silently
+// zeroed only chunk 0 (invisible in the 36.1 measurements only because WDDM residency is
+// per-resource and the first chunk's dispatch references the whole buffer). Plain
+// whole-buffer zeroing (elem_offset 0, buffer_size = count) is unchanged either way.
 void ZeroBuffer(uint3 gid : SV_GroupID, uint3 tid : SV_GroupThreadID)
 { uint i = LinearId(gid, tid); if (i < buffer_size) buf_a[i] = 0.0; }
 

@@ -15,7 +15,7 @@ namespace DeepUnity
         {
             readonly ComputeShader cs;
             readonly PocketTTSWeights w;
-            int kCopy, kSliceCols, kAdd, kAct, kLinear, kLinearQ8, kLN, kRope, kAttn, kAttnKV, kAppendKV, kMod, kGate, kRms;
+            int kCopy, kSliceCols, kAdd, kAct, kLinear, kLinearQ8, kLN, kRope, kAttn, kAttnKV, kAppendKV, kMod, kGate, kRms, kZeroBuf;
             int kLinearCoal, kLinearQ8Coal, kLinearGemm, kLinearQ8Gemm;          // #31-P coalesced
             int kFlowRB, kFlowRBQ8, kFlowFinal, kFlowFinalQ8;                    // #31-P fused flow head
             int kGemv16, kGemvQ8, kGemvLN16, kGemvLNQ8;                          // #31-R2 mode/LN GEMVs
@@ -89,6 +89,7 @@ namespace DeepUnity
                 w = weights;
                 cs = DeepUnityMeta.PocketTTSCS;
                 kCopy = cs.FindKernel("CopyBuffer");
+                kZeroBuf = cs.FindKernel("ZeroBuffer");   // #36: first-touch commits (see ZeroTouch)
                 kSliceCols = cs.FindKernel("SliceCols");
                 kAdd = cs.FindKernel("AddResidual");
                 kAct = cs.FindKernel("Activate");
@@ -294,6 +295,23 @@ namespace DeepUnity
             // full-forward loop in the AR generation path. RunTransformer stays untouched (P2 gate).
 
             static void GrowKV(ref ComputeBuffer b, int n) { if (b != null && b.count >= n) return; b?.Release(); b = new ComputeBuffer(Math.Max(n, 1), 4, ComputeBufferType.Structured); }
+            static bool s_firstPrefillProfiled;   // #36.3 one-shot profile latch (see PrefillKVYielding)
+
+            // #36: same contract as PocketTTSMimi.ZeroTouch — a create only RESERVES; the driver's
+            // physical commit (and WDDM residency work on a full card) waits for the first dispatch
+            // that writes the buffer, which used to be the first real prefill: the once-per-session
+            // 160 ms walk-up frame. Content is irrelevant everywhere this is called (KV rows past
+            // kvLen and scratch are garbage-permitted by contract).
+            void ZeroTouch(ComputeBuffer b)
+            {
+                if (b == null) return;
+                cs.SetInt("buffer_size", b.count);
+                cs.SetInt("elem_offset", 0);   // stale-proof: ZeroBuffer honors it since #36
+                cs.SetBuffer(kZeroBuf, "buf_a", b);
+                int g = Div256(b.count);
+                if (g <= 65535) Disp(kZeroBuf, Math.Max(g, 1), 1, 1);
+                else Disp(kZeroBuf, 65535, (g + 65534) / 65535, 1);
+            }
 
             /// <summary>Pre-allocate every clause-lifetime buffer at the caller's worst-case sizes,
             /// ONE actual driver allocation per MoveNext — so neither the warmup synthesis nor the
@@ -336,18 +354,25 @@ namespace DeepUnity
                     {
                         bool grewK = kCache[li] == null || kCache[li].count < maxTotal * dim;
                         GrowKV(ref kCache[li], maxTotal * dim);
-                        if (grewK) yield return null;            // one ~3 MB create per frame
+                        // #36: zero-touch each fresh create — one ~3 MB create+commit per frame.
+                        // A create alone leaves the driver's physical commit to the first real
+                        // prefill; touching here moves it into these walk-up frames.
+                        if (grewK) { ZeroTouch(kCache[li]); yield return null; }
                         bool grewV = vCache[li] == null || vCache[li].count < maxTotal * dim;
                         GrowKV(ref vCache[li], maxTotal * dim);
-                        if (grewV) yield return null;
+                        if (grewV) { ZeroTouch(vCache[li]); yield return null; }
                     }
                     kvCap = maxTotal;        // published last — rule (1) above
                 }
-                // single-row scratch: ~40 KB all told, one frame is plenty
+                // single-row scratch: ~40 KB all told, one frame is plenty (touched in one batch —
+                // ten dispatches over 40 KB is noise next to one 3 MB commit)
                 GrowKV(ref d1In, dim); GrowKV(ref d1Norm, dim); GrowKV(ref d1Qkv, 3 * dim);
                 GrowKV(ref d1Q, dim); GrowKV(ref d1K, dim); GrowKV(ref d1V, dim);
                 GrowKV(ref d1Attn, dim); GrowKV(ref d1Ff, Cfg.TF_FFN); GrowKV(ref d1Tmp, dim);
                 GrowKV(ref d1Out, dim);
+                ZeroTouch(d1In); ZeroTouch(d1Norm); ZeroTouch(d1Qkv); ZeroTouch(d1Q); ZeroTouch(d1K);
+                ZeroTouch(d1V); ZeroTouch(d1Attn); ZeroTouch(d1Ff); ZeroTouch(d1Tmp); ZeroTouch(d1Out);
+                yield return null;
                 // the block-prefill scratch, sized by prompt rows — without this the first clause
                 // LONGER than the warmup's regrows every one of these mid-conversation. One
                 // create per frame, skipping frames for buffers already covered.
@@ -367,7 +392,8 @@ namespace DeepUnity
                 {
                     var before = get();   // Grow releases-and-news on real growth -> reference moves
                     grow();
-                    if (!ReferenceEquals(before, get())) yield return null;   // it actually allocated
+                    if (!ReferenceEquals(before, get()))
+                    { ZeroTouch(get()); yield return null; }   // it actually allocated: commit it too (#36)
                 }
                 EnsureAr(Mathf.Clamp(PocketTTS.StreamArBatchFrames, 1, 8));
             }
@@ -431,6 +457,10 @@ namespace DeepUnity
             public System.Collections.IEnumerator PrefillKVYielding(float[] promptSeq, int Lp, int maxTotal)
             {
                 int dim = Cfg.DIM, heads = Cfg.TF_HEADS, hd = Cfg.HEAD_DIM;
+                // #36.3 one-shot sub-profile: the session's FIRST prefill MoveNext measured
+                // ~196 ms of pure CPU and this names its pieces (setup/SetData vs the first
+                // dispatch batch — a sync driver cost inside Dispatch would land in the latter).
+                var pfSw = s_firstPrefillProfiled ? null : System.Diagnostics.Stopwatch.StartNew();
                 InvalidatePromptKV();   // #32: this rewrites rows from 0 — whatever was retained is stale
                 EnsureKV(maxTotal);
                 // Inline the exact P2 full-forward over the prompt, additionally snapshotting each
@@ -438,7 +468,9 @@ namespace DeepUnity
                 Grow(ref tfIn, Lp * dim); Grow(ref tfNorm, Lp * dim); Grow(ref qkv, Lp * 3 * dim);
                 Grow(ref q, Lp * dim); Grow(ref k, Lp * dim); Grow(ref v, Lp * dim);
                 Grow(ref attn, Lp * dim); Grow(ref ff, Lp * Cfg.TF_FFN); Grow(ref tmp, Lp * dim);
+                double tEnsure = pfSw?.Elapsed.TotalMilliseconds ?? 0;
                 tfIn.SetData(promptSeq, 0, 0, Lp * dim);
+                double tSetData = pfSw?.Elapsed.TotalMilliseconds ?? 0;
                 float attScale = 1f / Mathf.Sqrt(hd);
                 // #29 it.3: 4 ticks per layer (QKV | attention | linear1 | linear2), each ≲800 MMAC —
                 // the old half-layer ticks (in_proj+attn ~0.8 G, linear1+linear2 ~1.5 G at Lp≈180)
@@ -449,14 +481,46 @@ namespace DeepUnity
                     string lp = $"flow_lm/transformer/layers/{li}";
                     LayerNorm(w.Get(lp + "/norm1.weight"), w.Get(lp + "/norm1.bias"), tfIn, tfNorm, Lp, dim, 1e-5f);
                     var lr = LinearRows(lp + "/self_attn/in_proj", tfNorm, qkv, Lp, dim, 3 * dim, bias: false);
-                    while (lr.MoveNext()) yield return null;
+                    if (pfSw != null && li == 0)
+                    {
+                        double tNorm = pfSw.Elapsed.TotalMilliseconds;
+                        bool more = lr.MoveNext();
+                        s_firstPrefillProfiled = true;
+                        UnityEngine.Debug.Log($"[PocketTTSFlowLM] first-prefill MoveNext profile (ms): " +
+                            $"ensure+grow {tEnsure:0.0} | setdata {tSetData - tEnsure:0.0} | " +
+                            $"norm1 {tNorm - tSetData:0.0} | first LinearRows batch {pfSw.Elapsed.TotalMilliseconds - tNorm:0.0}");
+                        pfSw = null;
+                        // `more == false` is the NORMAL case here, not the exhausted-iterator edge it
+                        // reads as: LinearRows only yields BETWEEN batches (`if (r0 + rows < T)`), and
+                        // the ~126-row voice-prompt in_proj is ~396 MMAC — one batch at the 900 MMAC
+                        // low-tier tick, so the single MoveNext above dispatched the whole matmul and
+                        // finished. The 2026-08-03 code said `if (!more) continue;`, which skipped the
+                        // REST OF LAYER 0 — slice/RoPE/KV-copy/attention/FFN — on every session's
+                        // first prefill, i.e. the warmup synth prefilled garbage into the layer-0
+                        // prompt KV that #32 retention then handed to every real clause. Fall through
+                        // to Slice instead; when a tick WAS consumed mid-iterator, yield once for it
+                        // (same cadence as the unprofiled while-loop below).
+                        if (more) { PocketTTS.LastHeavyTick = $"pf:L{li}.qkv"; yield return null; }
+                    }
+                    // #36.3: fine section tags (pf:L<layer>.<section>) so the warmup's max-cpu-tick
+                    // report NAMES the ~125 ms CPU MoveNext instead of pointing at "prefill".
+                    // SynthesizeStreaming's wrapper preserves any tag starting with "pf".
+                    while (lr.MoveNext()) { PocketTTS.LastHeavyTick = $"pf:L{li}.qkv"; yield return null; }
                     Slice(qkv, q, Lp, 3 * dim, dim, 0);
                     Slice(qkv, k, Lp, 3 * dim, dim, dim);
                     Slice(qkv, v, Lp, 3 * dim, dim, 2 * dim);
                     RoPE(q, Lp, heads, hd); RoPE(k, Lp, heads, hd);          // positions 0..Lp-1
+                    // #36.3: the kv tick below was THE last standing ~110-183 ms CPU tick of the
+                    // session (stable at L1 once the fine tags landed). Split it — same dispatches
+                    // in the same order, one extra frame break — so whatever the driver charges
+                    // the cache-snapshot Copies lands on its own frame instead of on top of the
+                    // slice/RoPE batch.
+                    PocketTTS.LastHeavyTick = $"pf:L{li}.rope";
+                    yield return null;
                     // store this layer's K/V rows [0..Lp-1] into the caches (CopyBuffer whole block)
                     Copy(kCache[li], k, Lp * dim);
                     Copy(vCache[li], v, Lp * dim);
+                    PocketTTS.LastHeavyTick = $"pf:L{li}.kv";
                     yield return null;   // QKV tick | attention tick
                     cs.SetInt("seq_len", Lp); cs.SetInt("num_heads", heads); cs.SetInt("head_dim", hd);
                     cs.SetInt("rope_on", 1); cs.SetFloat("scale", attScale); cs.SetInt("attn_context", 0);
@@ -465,14 +529,17 @@ namespace DeepUnity
                     Disp(kAttn, Lp, heads, 1);
                     Linear(lp + "/self_attn/out_proj", attn, tmp, Lp, dim, dim, bias: false);
                     AddR(tfIn, tmp, Lp * dim);
+                    PocketTTS.LastHeavyTick = $"pf:L{li}.attn";
                     yield return null;   // attention tick | ffn ticks
                     LayerNorm(w.Get(lp + "/norm2.weight"), w.Get(lp + "/norm2.bias"), tfIn, tfNorm, Lp, dim, 1e-5f);
                     lr = LinearRows(lp + "/linear1", tfNorm, ff, Lp, dim, Cfg.TF_FFN, bias: false, act: 2);
-                    while (lr.MoveNext()) yield return null;
+                    while (lr.MoveNext()) { PocketTTS.LastHeavyTick = $"pf:L{li}.ffn1"; yield return null; }
+                    PocketTTS.LastHeavyTick = $"pf:L{li}.ffn1e";
                     yield return null;   // linear1 tick | linear2 tick
                     lr = LinearRows(lp + "/linear2", ff, tmp, Lp, Cfg.TF_FFN, dim, bias: false);
-                    while (lr.MoveNext()) yield return null;
+                    while (lr.MoveNext()) { PocketTTS.LastHeavyTick = $"pf:L{li}.ffn2"; yield return null; }
                     AddR(tfIn, tmp, Lp * dim);
+                    PocketTTS.LastHeavyTick = $"pf:L{li}.end";
                     yield return null;   // layer done
                 }
                 kvLen = Lp;
@@ -670,7 +737,12 @@ namespace DeepUnity
                 const int ROWS_HARD_CAP = 24;
                 long macsPerRow = Cfg.TF_LAYERS * ((long)dim * 3 * dim + (long)dim * dim
                                                    + 2L * dim * Cfg.TF_FFN);
-                int perTick = (int)Math.Max(1, PocketTTS.GpuMacsPerTick / Math.Max(macsPerRow, 1));
+                // 2026-08-02: bill each row at least its DISPATCH-latency equivalent — ~40 tiny
+                // GEMVs make a row 2-4 ms of real GPU on a latency-bound card, not the ~1 ms its
+                // MACs claim, and the MAC-only bill let one frame stack 90-170 ms of clause-start
+                // GPU (see InferencePerf.TtsTextRowDispatchEquivMacs for the measurements).
+                long billedPerRow = Math.Max(macsPerRow, InferencePerf.TtsTextRowDispatchEquivMacs);
+                int perTick = (int)Math.Max(1, PocketTTS.GpuMacsPerTick / billedPerRow);
                 perTick = Math.Min(perTick, ROWS_HARD_CAP);
                 var row = new float[dim];
                 for (int i = 0; i < count; i++)

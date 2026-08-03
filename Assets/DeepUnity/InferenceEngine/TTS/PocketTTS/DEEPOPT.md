@@ -619,3 +619,318 @@ landed. Deferred with eyes open: Mimi's decode scratch re-creates (~47-110 MB ac
 clause's flushes) are unproven as a visible spike against the decode-contention plateau; ~55 MB
 of prealloc VRAM is held from first zone entry for the session. All five parity probes PASS
 after the change (PromptCache fp16/int8, K-Block fp16/int8, Async-Path).
+
+## 34 (#34) — the CRUISE band: the renderer's seat at the #29 table (2026-08-02)
+
+Two findings from the armed FrameSpikeProbe on a real Velmire session, after fixing the probe's
+own attribution bug (`LastHeavyTick` read WITHOUT clearing — after a reply's final flush the tag
+said "flush_push" for the rest of the session, which is what the "163 s flush_push storm" in the
+first CSV actually was; the field now stamps `LastHeavyTickFrame` and readers ignore stale tags):
+
+1. **Speaking cost ran unthrottled on a fat ring.** With the LLM idle and the ring holding
+   3.7-7.3 s of banked audio, the pump still issued the tier's full speaking column (Smooth: 4
+   ticks ≈ 16-24 ms GPU on the 1650) every frame — the reported 60-70→25-35 fps dips WHILE an
+   NPC speaks. The #29 arbiter only ever ceded frames to the LLM; nothing ever ceded to the
+   RENDERER. Fix: above `ttsCedeHeadroomSeconds` (+`InferencePerf.TtsCruiseEnterExtraSeconds`
+   to enter, headroom itself to leave — hysteresis, or the integrator parks at the boundary),
+   the tick cap drops to speaking / `InferencePerf.TtsCruiseTickDivisor` (Smooth: 2). Floor,
+   panic and hurry-flush below the band untouched.
+2. **The prefill boost fired with 7.3 s banked.** The 2026-07-26 "never cede through a dead
+   window" reasoning dates from floor-hover, where a ~1 s bank in 1.28 s lumps genuinely could
+   not cover a ~0.5 s dead window; in cruise the bank covers it by construction, so
+   `clausePrefilling` no longer counts toward pushHard while cruising.
+
+Measured (NpcTalkPerfProbe, 4 turns, vsync off, same protocol): the dominant SPK+AUD band —
+5825 of 6779 frames — runs 17.25 ms mean / 22.9 p95 (was 24-40 ms sustained pre-fix), audio
+still clean: `in-reply silence 0.00s` on three replies, one 0.04 s dry burst on the longest.
+What remains and is NOT this fix's business: the GEN+SPK+AUD collision band (~283 frames at
+~67 ms mean — sync LLM decode + TTS at reply start, the 33.4 note above still applies) and the
+one-time cold-clause prefill singletons (up to ~310 ms). Pump telemetry for all of this is now
+first-class: `PocketTTSVoice.Pump*` statics + `ProbeLogs/fps_timeline.csv` (one row/second) —
+what the pump did, was allowed, and held banked, on every frame a probe cares about.
+
+## 34.1 Addendum (#34b) — voice-prepare: the dialogue-open hitch (2026-08-02)
+
+With the storm gone, the user's own session isolated the OTHER dip: dialogue open ran ~1 s at
+17-25 fps with one 311-365 ms frame, tagged `pump=prefill`. Root cause, in ONE pump frame at the
+first real clause: `BindVoice` → `CloneVoice(clip)` — `ClipToMono`'s blocking decompress-wait on
+the reference MP3 (a `Thread.Sleep` loop!), resample 44.1→24 kHz, SHA-256 over ~1 MB, the
+Resources cache load — then `InvalidatePromptKV` forcing the full ~125-row voice-prompt prefill
+at the silent-refill boost. The session prewarm never touched any of it: its "Hi." synth runs on
+whatever voice the engine happens to hold, not this NPC's clone.
+
+Fix: `PocketTTSVoice.PrepareVoiceNow()` — kicks `LoadAudioData` async immediately, then (weights
+resident, engine free) runs `BindVoice` + one tiny DISCARDED synth with the real voice, so #32
+retention holds the voice-prompt KV and the first real clause prefills only its text rows.
+Called from NPCChatBase at zone enter (hides in the walk-up) and at StartInteraction (covered by
+the open animation + ~2 s first-token LLM latency). The pump gates on `prepareJob` exactly like
+`prewarmJob`; the prepare aborts the moment real speech is queued; a static
+`s_engineSideJobBusy` (+ per-voice `sideJobHeld`, released in OnDisable — the mute-latch failure
+class) keeps prewarm/prepare synths from ever interleaving on the shared engine's single KV.
+
+Verified (talk-perf, same protocol): turn-1 worst frame 91.8 ms (was 311.8), no frame over
+~162 ms anywhere (was 250-312), first-reply `synth→first-audio` 392 ms (was 534-701), all four
+replies `in-reply silence 0.00s`, zero starves. Remaining, unchanged and known: the
+GEN+SPK+AUD low-ring collision (~100 ms frames while the LLM decodes INTO a clause start) — the
+sync-decode plateau of 33.4, the next hunt if anyone reopens it.
+
+## 34.2 Addendum (#34c) — shared-frame split + the boosted-open protocol (2026-08-02)
+
+The GEN+TTS collision (97-162 ms frames): on frames the LLM issued GPU work, EVERY pump band now
+divides its tick cap by `InferencePerf.TtsSharedFrameTickDivisor` (2) — via the new
+`FramePacing.LlmIssuedRecently` (the raw mark; `LlmBusy` = mark + cede ration, and the ration is
+the cede sites' business only). First split run measured the cost of splitting blindly: three
+0.08 s dry bursts, clause dead windows losing the refill race by exactly the halved ticks. So the
+CRITICAL band is exempt — audible with the ring under 2× `TtsPanicFloorSeconds` keeps the full
+boost (under the floor itself the LLM is held outright; the exemption widens the sprint zone from
+"hole open" to "hole one chunk away"). Verified: zero starve warnings, `0.00s dry` on every turn;
+collision band mean 70→62 ms, worst in-conversation frame 311.8→~122 ms across the three rounds.
+
+The probe now tests what the author actually does (his call — the old protocol waited for
+LlmReady at the zone edge, so the "boosted model loading" dips were never exercised): phases
+settle → walk-up (3.5 s of slow prefetch only) → BOOSTED OPEN (StartInteraction with weights
+still streaming) → turns, recording continuously. First measurement of the open: ~4.7 s at
+~50 fps mean (20.1 ms, p95 30.8) with singleton hitches (one 235 ms in boot+warmup) — the
+sustained-collapse era is over; what remains there is one-shot load noise.
+
+Two ledger notes. (1) A once-per-turn-boundary `0.80s re-gated` in the drain line with zero
+starves and zero dry is Unity's stream-clip reader prefetching zero-fill into a PAUSED clip while
+the next reply's text is already feeding — counted, never heard. The pause-keeps-clip comment in
+StopSpeaking documents the buffering; treat the number as gate-time only when a starve warning
+brackets it. (2) Multi-second `idle` frames with no GC flag, no tick, no pump snapshot
+(2.9 s / 0.6 s mid-conversation on 2026-08-02) are machine-level stalls — the box was
+simultaneously running a dataset upload; nothing in the engine was on the frame.
+
+## 35 (#35) — sliced decode: the GEN burst finally splits (2026-08-02)
+
+The sync-decode plateau 33.4 and 34.1 kept deferring to — "the next hunt if anyone reopens it" —
+got reopened by the author the same day, with the criteria list rewritten first: latency no
+longer counts ("nu mai conteaza delayul, doar sa fie smooth — niciun frame peste 50 ms, ideal
+nici peste 33"). That matters more than the fix, because the 2026-07-26 always-sync verdict
+(BackendTradeoff.cs) was never wrong on its own terms: async's right answer depended on the
+hardware (the fps/3.5 dribble on weak GPUs, the old `MinUsableTokS = 12` floor), and a fixed
+table cannot measure. Strike tok/s from the criteria and the dependence goes with it — the knob
+becomes const-shaped again, just pointing the other way.
+
+**Cause.** Sync decode issues a token's ENTIRE forward in one frame and blocks on the readback:
+~1.06 GB of weights read per token on the 1650 (0.55 GB of INT8 layers + 0.5 GB of fp16 lm_head)
+= 30-55 ms of GPU in ONE frame's queue. No readback strategy softens a lump already in the
+queue, which is why #20's burst_async never killed the display hitch either — it only cleaned
+the CPU-side numbers. Measured baseline (talk-perf, 2026-08-02 10:56): GEN 32.68 ms mean /
+55.02 p95 / 57.3 max; GEN+SPK+AUD 57.32 mean / 86.24 p95 / 122.3 max; decode 12.0 tok/s.
+
+**Fix.** Decode ISSUE is sliced across frames; the result never was splittable and still is not.
+`Qwen3_5Model.ForwardYielding`'s seqLen==1 path now yields every
+`InferencePerf.LlmDecodeSliceLayers` (6) layers — 24 layers = 4 slices of ~6-9 ms — with the
+lm_head alone in a fifth frame (~11-15 ms; one GEMV, indivisible without a kernel change, the
+true frame-cost floor of the scheme). The caller's async `SampleYielding` readback gates the
+next token, bounding the in-flight backlog to ONE token — which is precisely why #20's
+CPU-out-issues-GPU queue backup does not return at this width. `BackendTradeoffTable.UseSyncDecode`
+flipped true→false (still a const, still not a dial — the right answer now depends on nothing);
+`DecodeStep`'s sync branch survives for A/B archaeology. Dispatch order is untouched, so parity
+is exact by construction and gated as such: `QwenDecodeProfileProbe.RunSlicedDecodeParity`
+(burst vs sliced, 32 greedy tokens) — PASS, tokens identical, final logits bit-exact
+(maxAbs 0.0E+0); the #31 GEMV tolerance gate re-run — PASS.
+
+**Measured after** (same talk-perf protocol, clean run 11:27; an earlier run hit a cluster of
+`idle+GC` machine stalls — 0.8-7.9 s frames on the no-pagefile box — that belong to ledger note
+34.2(2), not to any bucket's physics):
+
+| bucket | before (10:56) | after (11:27) |
+|---|---|---|
+| GEN | 32.68 mean / 55.02 p95 / 57.3 max | **14.55 / 17.13 / 33.6** |
+| GEN+SPK+AUD | 57.32 mean / 86.24 p95 / 122.3 max | **17.64 / 23.65 / 82.8** |
+| decode | 12.0 tok/s | 5.4-8.7 tok/s (per-turn 6.1/8.7/6.4/6.2) |
+
+Audio through the slower decode: all four turns `in-reply silence 0.00s (0.00s dry + 0.00s
+re-gated) in 0 bursts`, zero starve warnings, pump ceded 24-88 LLM frames/turn (the #29 arbiter
+working, not fighting). The GEN+SPK+AUD max above ~60 is three cruise-band singletons
+(70-83 ms, `ar_frame @cruise` with 6-7 s of ring banked — far exceeding any slice's possible
+cost, i.e. more machine noise, not burst physics); the 95-123 ms `ar_frame @prefill ring 0.00`
+frames in GEN+SPK are the known cold-clause-prefill singletons of 34.1, untouched here. The
+tok/s halving is the accepted price: speech at ~3 words/s paces the conversation, and ~6 tok/s
+≈ 4.5 words/s still feeds it with slack.
+
+Ported the same frame (same gate, same constant, comments point back at Qwen): Gemma3Model and
+MiniCPM5Model ForwardYielding — both only ever had the pre-#20 per-layer spread, so for them
+slicing is ALSO a decode speedup (~numLayers+2 frames/token → ~numLayers/6 + 2). Compile-clean;
+their GEMV parity probes need `weights_gemma3_270M_*` / `weights_minicpm5_1B_*`, which the
+Pavilion does not hold — by-construction argument only until a weights-bearing machine re-runs
+`GemmaCpmGemvParityProbe`.
+
+## 36. The 2026-08-02 afternoon sweep — the last conversation-time spike classes (#36)
+
+Three distinct killers fell in one afternoon, each unmasked by the previous one's fix, all found
+by cross-reading npc_talkperf.md worst-20 against the scene probe's frame_spikes.csv (the tag
+columns RACE — both probes read-and-clear LastHeavyTick, so trust ticks/GC/llm_phase, not tag,
+when both run):
+
+**(a) Voice-prepare racing the session warmup / LLM boot** (329-374 ms at zone entry, the
+"second visit is always smooth" report). PrepareVoiceRoutine gated only on the TTS side; it now
+also waits for `LLM.CurrentPhase == "idle"`, runs PrewarmAllocationsYielding itself (idempotent —
+first visit can outrun the session warmup, and the mini-synth then paid the KV/scratch driver
+allocations: the same 174+286 ms pair the 2026-07-30 hunt measured), and paces at ONE heavy
+tick/GpuWait per frame (two ticks was half the 110→70 fps walk-up dip).
+
+**(b) Canvas.ForceUpdateCanvases per reveal step** (82-163 ms, zero-tick frames, growing with
+transcript length — NOT an engine cost at all). The audio-synced typing effect pops+re-adds the
+bubble near every frame, and each AddMessage forced a synchronous rebuild of the whole
+transcript. SoulsChatWindow now defers streaming-mutation scroll pinning one frame and never
+forces; genuinely new lines keep the same-frame settle. >22.2 ms frames: 306 → 111 on the spot.
+
+**(c) Text rows billed at MACs in the #32 clause start** (96-169 ms `ar_frame @prefill ring 0`,
+the last standing family). A retained-prompt text row is ~76 MMAC but ~40 tiny GEMV dispatches —
+2-4 ms of real GPU on a latency-bound card. Smooth's 900 MMAC tick bought 11 rows, the pump's
+4-tick clause-start allowance stacked 44 ≈ 90-170 ms in one frame. AppendRowsKVYielding now
+bills rows at max(realMacs, `InferencePerf.TtsTextRowDispatchEquivMacs` = 400 M): a cost-model
+shape, tier dial untouched.
+
+**Verified (12:18 run, focused, vsync off):** worst conversation-time frame 50.1 ms (from 169);
+aggregate >33.4 ms: 42 over 15,176 frames, every one in the load window; audio `0.00s dry +
+0.00s re-gated, 0 bursts` on all four turns — not even the paused-clip phantom.
+
+**Still open (once per SESSION, mid-walk-up, GC-clean):** 135 ms (first voice-prompt prefill) +
+215 ms (first mimi decode) inside the voice-prepare — driver-side one-shots that survive the
+frame-0 zeroed-uniform PrewarmKernels, i.e. whatever the driver defers until the first REAL-sized
+dispatch. Next lever: make PocketTTSVoice.PrewarmKernels' real "Hi." pass (or the prepare itself)
+the designated payer and slice it finer, or prove the cost is driver heap growth and pre-size it.
+Plus the scene-load GC cluster (4.0 s + 0.6 s at t≈4, editor asset load) — not engine's to fix.
+
+## 36.1 The walk-up pair: four rounds, verdict — platform residency, not engine scheduling
+
+Target: the two once-per-session ~150-290 ms frames at t≈13-15 s (zone entry, TTS just turned
+ready, voice-prepare running). Four controlled rounds on fresh editor boots:
+
+1. **Whole-buffer zero-touch in the walk-up prealloc** (commit the pages before the first real
+   prefill/flush): the stalls LEFT the synth path (tags gone) but kept their magnitude — the
+   touch frames inherited them. Cost tracks BYTES per RESOURCE, not dispatch count.
+2. **Chunked touch** (`TtsFirstTouchElemsPerFrame`, 4 MB/frame, ZeroBuffer made
+   elem_offset-aware): no change — WDDM residency is per-resource; the first chunk's dispatch
+   references the whole buffer.
+3. **Frame-0 static create pool** (SEANet scratches made in the scene-load blackout, adopted by
+   Grow): no change — residency happens at first dispatch REFERENCE, not create. Rolled back.
+4. **Frame-0 create + touch** (reference each in the blackout, card empty): no change
+   (247+218 ms) — the ~1 GB Qwen upload between frame 0 and the walk-up evicts idle scratches;
+   first real use re-pays the migration. Rolled back with round 3.
+
+What stays from this hunt: the prealloc coverage + chunked ZeroTouch (rounds 1-2 — they moved
+the cost OFF the synth path and shaved ~20%), the elem_offset-aware ZeroBuffer, and the
+constant. The residual pair is the OS paying VRAM eviction on a saturated 4 GB card that holds
+an editor + a 0.8B LLM + a TTS at once; one of the two frames often carries a gen2 GC on top
+(BindVoice's ~1 MB managed churn — a slice-BindVoice follow-up could shave that half). On any
+card with headroom the phenomenon should not exist; it is NOT reachable by engine scheduling.
+Conversation-time remains clean through all rounds (worst ≤ ~97 ms singleton at a clause start,
+typically ≤ 50; audio 0.00 s dry on every turn of every controlled run).
+
+Editor-measurement caveat, learned the hard way at 14:01: play-session N>2 on one editor boot
+drifts noisier (VRAM/heap residue) — 159/120 ms cruise "regressions" vanished on a fresh boot.
+Compare runs ONLY across fresh boots.
+
+## 36.2 The weights-residency pass + the pair's true residue (2026-08-03)
+
+Round 5, prompted by the author pinning the stall to "immediately after pocket-tts finishes
+streaming": SetData only STAGES a tensor — residency is paid at first dispatch REFERENCE, and the
+warmup synth's first prefill tick binds dozens of flow-LM tensors at once. So
+PrewarmAllocationsYielding now runs a WEIGHTS residency pass first: CopyBuffer reads one element
+of every uploaded tensor into the 1-elem sync scratch, a few MB of resource per frame
+(`ResidentBuffers()` on the weights registry). The pass itself measures INVISIBLE (no `w_touch`
+frame above 40 ms) — correct and kept — but the pair survived it too, now cleanly attributed by
+the tag columns: **~177 ms tagged `prefill`** (the warmup's 126-row block prefill, one layer per
+tick) and **~242 ms untagged, prime suspect BindVoice's synchronous managed churn** (tagged
+`bind` for the next run to confirm). Theories falsified so far: synth scheduling (34.2), scratch
+commit timing (36.1 ×4), weights residency (this). Remaining levers, both real: slice BindVoice
+into the prepare coroutine; batch the warmup's block prefill finer than one layer per tick.
+
+Probe hygiene, hard-won: NpcTalkPerfProbe now SELF-DEDUPES (static driver guard in Awake — a
+scene-armed copy plus the runner's spawn each drove the protocol, the doubled AskNPC cutting
+every other reply: the "turn 1: 2.1 s" runs) and reads LastHeavyTick NON-clearing with the frame
+stamp, same as FrameSpikeProbe — read-and-clear raced every other consumer and one duplicated
+probe turned a whole attribution run to garbage.
+
+## 36.3 The first-interaction pair — eight attacks, the honest state (2026-08-03 evening)
+
+Landed and KEPT (each individually correct, none regressed; conversation clean and audio
+0.00s-dry through every run): sliced CloneVoiceYielding (mono/resample/SHA one frame each) used
+by the prepare, async Resources.LoadAsync warm of the tier-1 baked cache, off-thread
+PreloadBakedVoiceAsync for SetVoice's cold ReadFloats, yield-wait on the reference clip's
+decompress (ClipToMono's sleep-wait no longer blocks a frame), the real-mini second PrewarmKernels
+pass, the weights-residency touch pass, prompt-cache dictionary in SetVoice, and the one-reply
+probe protocol.
+
+NOT fixed: the zone-entry pair (`prefill` + `bind` tags) measured 128+201, 129+195, 138+210,
+224+249 across four IDENTICAL fresh-boot runs the same afternoon — run-to-run variance (±80%)
+now exceeds any fix's plausible effect size, and every targeted theory (synth pacing, scratch
+commit, resource creation, weights residency, driver finalize, cold asset IO, clip decompress
+wait) has been individually falsified by a controlled run. Blind fixing is over.
+
+**Armed next step — instrument, don't guess:** wrap the voice-prepare/warmup stages and the
+first prefill tick in per-stage Stopwatch logs (ms per stage, printed once per session). One run
+then NAMES the cost instead of tagging the frame it lands on. Only after that, fix.
+
+## 36.4 Instrumentation names everything — the first-interaction pair, solved and residual (2026-08-03)
+
+The #36.3 per-stage instrumentation (cpu-vs-frame per clone stage; max-tick cpu+tag per pump; a
+one-shot first-prefill sub-profile; fine pf:L<i>.<sec> tags) turned five days of guessing into
+three named costs in two runs:
+
+**KILLED — the `bind` frame (~200-250 ms):** `AudioClip.GetData` on the MP3 reference DECODES on
+the CPU at call time (~190 ms) — load type and loadInBackground change nothing about it. The
+yielding clone now reads CHUNKED (48000 samples per frame, buffer sized EXACTLY per chunk —
+GetData wraps past the clip end): measured 9.8 ms total. Every other stage was already cheap
+once named (prep 4.4, sha 15, resload async 11, tail 3.4). Both reference clips also got
+loadInBackground=1 (the zone-entry LoadAudioData kick used to decompress ON the main thread —
+a separate ~430 ms frame at t≈12, also gone).
+
+**HALVED — the warmup-prefill tick (~183-224 → ~120-140 ms):** ~120 ms of pure CPU inside ONE
+arbitrary API call, position-stable (~16th tick, L1), operation-independent (follows the tag
+around when ticks are split), first MoveNext measured at 1.5 ms total. GL.Flush() per warmup
+tick (submit early, many small flushes) took it from 183 to ~110-120. Splitting the tick and
+double-spacing the early ticks (driver wall-time) did NOT move the rest — a driver-internal
+one-shot (deferred pipeline specialization) charged to whichever call outruns it. RESIDUAL: one
+~130 ms frame per session, mid-walk-up, down from the original 2×~300 ms. Levers exhausted at
+reasonable risk; on a healthier driver/GPU it should not exist.
+
+The instrumentation STAYS (one log line per session each) — it is how any future regression
+names itself on the first run. Removing it would re-buy five days of tag archaeology.
+
+## 36.5 Coda — the JIT frame moved into the orientation window (2026-08-03)
+
+The atomic ~130 ms driver-JIT tick would not shrink, so it moved: NPCChatBase.Awake now runs the
+whole session voice-warm cycle at scene start (EnsureVoice → PrefetchNow full-rate →
+PrewarmKernels — via EnsureVoice because the voice component is built lazily and there is
+nothing to Find at Awake). SlowPrefetch gained an in-flight guard (never slows a faster stream),
+and SlowPrefetchDivisor went 8 → 16 for the walk-up's remaining Qwen stream. Verified 17:42: TTS
+resident at t≈5, JIT paid before t≈9, and the playable session's worst frame is a 92 ms editor
+GC — nothing else above 74 ms anywhere. `warmed` being a session static means zone defetch/
+refetch cycles never re-pay any of it.
+
+## 36.6 The zone-entry freeze — the touch pass learns residency cycles (2026-08-03)
+
+The one residual the author still FELT after ##36.5: a small freeze at prefetch-zone ENTRY.
+His 18:33 session's frame_spikes.csv named it — `w_touch` frames of 51/40 ms at t≈11 and
+another 21/21/31 ms walk at t≈16.5: the #36.2 weights-residency pass re-running IN FULL on
+every zone entry AND again at StartInteraction (PrepareVoiceRoutine → PrewarmAllocationsYielding
+walks the whole registry each call), on weights resident since the Awake warm cycle at t≈5.
+A repeat walk is at best ~30 wasted walk-up frames and at worst a REAL re-migration bill —
+the saturated card evicts under the concurrent Qwen stream, and ##36.1 round 4 already proved
+a touch cannot PIN what the OS evicts afterward; first real use re-pays regardless, so the
+repeat bought nothing the prepare's own layer-paced mini-synth doesn't.
+
+Fix: once per RESIDENCY CYCLE, not once per caller. PocketTTSWeights exposes `LoadEpoch`
+(bumps exactly when a Defetch actually starts — the only path that releases uploaded buffers
+while the store lives), and the touch pass latches on it: skip while (still ready, same
+epoch); re-run in full after any defetch→re-stream, where SetData has only STAGED the fresh
+buffers and the pass is doing its designed #36.2 job again. The latch burns only on a pass
+that COMPLETED under an unchanged epoch — a mid-pass defetch aborts unlatched and the next
+cycle re-touches everything. The scratch preallocations below it stay unlatched (covered
+buffers are same-frame no-ops; their idempotence IS the guarantee). No dials moved: no tier
+row, no InferencePerf constant — the rare fix that is structural on every card.
+
+Measured (fresh boots: 19:03 on a freshly rebooted quiet box, 18:44 on a loaded one, both
+agreeing): `w_touch` now appears exactly ONCE per session — the boot warm cycle's legitimate
+first pass at t≈7, all slices ≤ 23 ms — and NEVER at zone entry. The zone-entry window's
+worst frame is the known #36.3 residual cluster (37-50 ms, bind/GC neighborhood, tags
+shuffling per the stale-tag caveat), no new spike class; conversation clean (worst 35.5 ms);
+`in-reply silence 0.00s (0.00s dry + 0.00s re-gated) in 0 bursts`. Ledger note: the 18:44
+run's 0.68 s dry belonged to the BOX, not the fix — the no-pagefile machine was minutes from
+RAM-exhaustion restart (the 34.2(2) class, again) and the clean-box re-run shows 0 bursts.

@@ -121,10 +121,14 @@ namespace DeepUnity
     /// on screen to disturb, which is why the top row spends frames freely.</para>
     ///
     /// <para><b>decode tokens/frame</b> — tokens generated before the frame is handed back to rendering.
-    /// Decode is autoregressive, so a token cannot be split across frames the way prefill can; the only
-    /// lever is how many whole tokens one frame swallows. Each costs its full stall (~36 ms on a GTX
-    /// 1650), so 2 means a ~72 ms frame — deliberately reserved for the top rows. Text also appears in
-    /// bursts of N, which is a visible change, not just a performance one.</para>
+    /// Decode is autoregressive, so a token's RESULT cannot be split across frames the way prefill can;
+    /// through the sync-decode era (2026-07-26 → 2026-08-02) that made this the only decode lever, each
+    /// token costing its full stall (~36 ms on a GTX 1650) in one frame, so 2 meant a ~72 ms frame —
+    /// deliberately reserved for the top rows, with text appearing in visible bursts of N. Under sliced
+    /// decode (2026-08-02 — see the sync-vs-sliced paragraph at the end) a token's ISSUE spans several
+    /// frames by construction, so rows above 1 no longer pack whole tokens into one frame; the column
+    /// survives as the decode loops' trailing-yield cadence and as the record of what the top rows
+    /// meant.</para>
     ///
     /// <para><b>THE TTS ROWS RUN THE OTHER WAY ROUND, AND THAT IS THE POINT</b> (2026-07-27). Read the
     /// four LLM rows left→right and the budgets grow: a weak machine spends less, a strong one more. Read
@@ -192,15 +196,29 @@ namespace DeepUnity
     /// per clause prefill — the calibrator's shrink branch fed straight into the starvation it existed to
     /// prevent.</para>
     ///
-    /// <para><b>Not in the table: sync vs async decode.</b> The old code chose between reading a token
+    /// <para><b>Not in the table: sync vs sliced decode.</b> The old code chose between reading a token
     /// back inside the same frame (sync — the frame stalls for the token, tok/s ≈ fps) and picking it up
     /// a few frames later via AsyncGPUReadback (async — clean frames, but ~3.5 frames per token, i.e.
-    /// tok/s ≈ fps/3.5). It is now always sync, and the whole decode auto-tuner went with it. The reason
-    /// is that async is the one knob whose right answer depends on the hardware rather than on taste: the
-    /// old code carried a <c>MinUsableTokS = 12</c> floor precisely because on a weak GPU async produces
-    /// a dribble (38 fps ÷ 3.5 ≈ 11 tok/s — below its own floor), and a fixed table cannot measure its
-    /// way to that decision. Smoothness on the low rows comes from small fetch and prefill budgets and
-    /// one token per frame instead.</para>
+    /// tok/s ≈ fps/3.5). From 2026-07-26 it was always sync, and the whole decode auto-tuner went with
+    /// it. The reason was that async is the one knob whose right answer depends on the hardware rather
+    /// than on taste: the old code carried a <c>MinUsableTokS = 12</c> floor precisely because on a weak
+    /// GPU async produces a dribble (38 fps ÷ 3.5 ≈ 11 tok/s — below its own floor), and a fixed table
+    /// cannot measure its way to that decision.</para>
+    /// <para><b>Reversed 2026-08-02</b> — not because that reasoning was wrong, but because its premise
+    /// was withdrawn. The author's smoothness mandate ("nu mai conteaza delayul, doar sa fie smooth —
+    /// niciun frame peste 50 ms, ideal nici peste 33") strikes tok/s from the criteria list entirely,
+    /// and with it the whole hardware-dependence argument: a knob whose right answer no longer depends
+    /// on anything is exactly what a const can state. What sync decode could never fix is that the
+    /// token's ENTIRE burst — ~30-55 ms of GPU on the reference 1650, because decode reads every weight
+    /// once per token — lands in ONE frame, measured as the 33 ms mean / 55 ms p95 / 57-80 ms max GEN
+    /// rows of every talk-perf report; no readback strategy softens a lump already in the queue. So
+    /// decode is now ISSUED in slices (<c>InferencePerf.LlmDecodeSliceLayers</c> layers per frame, the
+    /// lm_head alone in its own frame — it is ~half the per-token bytes) and the token is read back
+    /// asynchronously. The dribble the 2026-07-26 decision guarded against is the price, paid knowingly:
+    /// speech at ~3 words/s is the real pacing bottleneck, and the ~5-8 tok/s this lands at still clears
+    /// it. The slice width is deliberately NOT a tier column — a ceiling on what one frame may be asked
+    /// to carry is the mandate itself, identical on every machine, not a machine preference; the
+    /// constant's own docs carry the arithmetic.</para>
     /// </summary>
     public static class BackendTradeoffTable
     {
@@ -236,9 +254,13 @@ namespace DeepUnity
             public readonly int prefillStepsPerFrame;
 
             /// <summary><b>Whole tokens generated before the frame is handed back to rendering.</b>
-            /// Decode is autoregressive, so unlike prefill a single token CANNOT be split across frames;
-            /// this is the only lever, and its unit is whole tokens.
-            /// <para>Read by <c>Qwen3_5.Generate</c>/<c>ChatCore</c>'s decode loop.</para>
+            /// Decode is autoregressive, so unlike prefill a single token's RESULT cannot be split
+            /// across frames; through the sync-decode era this was the only decode lever, its unit
+            /// whole tokens.
+            /// <para>Read by <c>Qwen3_5.Generate</c>/<c>ChatCore</c>'s decode loop. Since 2026-08-02
+            /// (sliced decode — the class docs' last paragraph) each token's ISSUE already spans
+            /// several frames, so this only sets the loops' trailing-yield cadence; the sync-era
+            /// meanings below are kept for the day the const flips back.</para>
             /// <para>RAISE → text arrives faster, each frame swallows N token stalls (~36 ms each on a
             /// GTX 1650, so 2 ≈ a 72 ms frame). LOWER → smoothest frames while the NPC talks.</para>
             /// <para><b>Too high:</b> the game feels frozen while a reply streams, AND the text appears
@@ -381,11 +403,22 @@ namespace DeepUnity
 
         /// <summary>How much slower a walk-up prefetch is than the level's full budget. The player is
         /// still approaching, nothing is waiting on the model, so the stream hides under the walk
-        /// instead of competing with the frame that renders it.</summary>
-        public const int SlowPrefetchDivisor = 8;
+        /// instead of competing with the frame that renders it.
+        /// <para>8 → 16 (2026-08-03, the last smoothness item): at ÷8 the walk-up itself ran a
+        /// measured 110 → 59 fps for the whole prefetch window — the upload slice plus its driver
+        /// residency work costs ~8 ms on the reference card, which is the FRAME budget, not a
+        /// hide-under-the-walk budget. ÷16 halves the slice; the prefetch stretches to ~2× wall
+        /// time, and whatever is still streaming when the dialogue opens is finished by
+        /// BoostPrefetch, which has owned exactly that job since 2026-07-30.</para></summary>
+        public const int SlowPrefetchDivisor = 16;
 
-        /// <summary>Decode is always synchronous — see the class docs for why this is not a dial.</summary>
-        public const bool UseSyncDecode = true;
+        /// <summary>False since 2026-08-02: decode issue is sliced across frames and the token read
+        /// back asynchronously — see the class docs' sync-vs-sliced paragraph for the full history
+        /// (always-sync was itself the 2026-07-26 verdict, retired when the smoothness mandate struck
+        /// tok/s from the criteria). Still a const and still not a dial, for the same reason in
+        /// mirror image: the right answer now depends on nothing. Flipping it back restores the
+        /// one-burst + blocking-readback decode wholesale — A/B archaeology only.</summary>
+        public const bool UseSyncDecode = false;
 
         // Indexed by (int)BackendTradeoffLevel. THE ONLY PLACE THESE NUMBERS EXIST. If a value shows up
         // anywhere else in the engine, that is the bug this table was written to prevent.
@@ -393,14 +426,24 @@ namespace DeepUnity
         // frame"), and ABOVE that tier's worst `synth→first-audio` — the clause dead window playback
         // has to coast through. 2026-07-28: the floor was a global 0.5 s while the reference machine
         // measured 404-448 ms, i.e. 50 ms of margin; six starves in one session.
+        // 2026-08-02, the smoothness mandate (author: "nu vreau frame drops mari... nici macar
+        // 50ms" — no single frame may carry a burst; latency is explicitly NOT a criterion any
+        // more): the silent-refill columns used to run ABOVE the speaking ones on the reasoning
+        // that "frame smoothness buys nothing while nothing is audible". That reasoning was
+        // wrong on its face — the player is watching the text stream during exactly those
+        // windows — and the 6-tick sprints were the 24-36 ms half of every 100 ms collision
+        // frame. Silent now equals speaking on every row (the sprint is gone, not rebalanced),
+        // and the prebuffer is deeper to buy the same starve-safety with TIME instead of with
+        // per-frame GPU: the dead windows a sprint used to outrun are now simply covered by a
+        // bank that playback cannot outrun. TTFA pays for it; that is the accepted trade.
         //                          label       fetchMB  prefill  decode  ttsSpk  ttsSil  ttsPre  ttsChunk  ttsFloor  ttsCede  ttsMACs
         static readonly Row[] Rows =
         {
-            new Row("Very Smooth",         4,       1,      1,      4,      6,   1.5f,      16,    1.25f,    2.0f,   900_000_000),
-            new Row("Smooth",              8,       3,      1,      4,      6,   1.0f,      16,    1.0f,     2.0f,   900_000_000),
-            new Row("Balanced",           16,       6,      1,      3,      4,   0.75f,      8,    0.75f,    2.0f, 1_500_000_000),
-            new Row("Fast",               24,      12,      2,      2,      3,   0.5f,       8,    0.6f,     1.5f, 2_500_000_000),
-            new Row("Very Fast",          32,      25,      3,      1,      2,   0.5f,       8,    0.5f,     1.0f, 4_000_000_000),
+            new Row("Very Smooth",         4,       1,      1,      4,      4,   2.0f,      16,    1.25f,    2.0f,   900_000_000),
+            new Row("Smooth",              8,       3,      1,      4,      4,   1.5f,      16,    1.0f,     2.0f,   900_000_000),
+            new Row("Balanced",           16,       6,      1,      3,      3,   1.0f,       8,    0.75f,    2.0f, 1_500_000_000),
+            new Row("Fast",               24,      12,      2,      2,      2,   0.75f,      8,    0.6f,     1.5f, 2_500_000_000),
+            new Row("Very Fast",          32,      25,      3,      1,      1,   0.5f,       8,    0.5f,     1.0f, 4_000_000_000),
         };
 
         /// <summary>The level in force. Set from the NPC inspector's Backend Tradeoff dial; engine-wide,
@@ -465,7 +508,9 @@ namespace DeepUnity
         public static string Summary =>
             $"Backend Tradeoff: {Label} — fetch {FetchBytesPerFrame / 1e6:0.0} MB/frame " +
             $"(walk-up {SlowFetchBytesPerFrame / 1e6:0.0}), prefill {PrefillStepsPerFrame} steps/frame, " +
-            $"decode {DecodeTokensPerFrame} tok/frame, sync decode; tts {TtsSpeakingTicksPerFrame}/" +
+            $"decode {DecodeTokensPerFrame} tok/frame, " +
+            (UseSyncDecode ? "sync decode; " : $"sliced decode ({InferencePerf.LlmDecodeSliceLayers} layers/frame); ") +
+            $"tts {TtsSpeakingTicksPerFrame}/" +
             $"{TtsSilentTicksPerFrame} ticks/frame (speaking/silent), floor {TtsRefillFloorSeconds:0.##}s, " +
             $"prebuffer {TtsPrebufferSeconds:0.##}s, " +
             $"chunk {TtsStreamChunkFrames}f, cede above {TtsCedeHeadroomSeconds:0.#}s";
@@ -496,9 +541,12 @@ namespace DeepUnity
         //  long wait after Send, before any text             prefillStepsPerFrame "system prompt computed
         //                                                      (raise)            (N tokens, NNNN ms)"
         //  text appears in bursts of N words                 decodeTokensPerFrame none — that IS N
-        //                                                      (lower)
-        //  whole game hitches while a reply streams          decodeTokensPerFrame "Qwen3.5 decode: N tok
-        //                                                      (lower)            in N.Ns (held N frames)"
+        //    (sync-decode era only; sliced decode              (lower)
+        //    streams token by token by construction)
+        //  whole game hitches while a reply streams          InferencePerf.       "Qwen3.5 decode: N tok
+        //    (2026-08-02: the burst is sliced now, so a        LlmDecodeSliceLayers  in N.Ns (held N frames)"
+        //    GEN-frame hitch means the slice is too fat —      (lower)             + talk-perf GEN rows
+        //    the decode column no longer packs whole tokens)
         //  text generation crawls while the NPC talks        ttsCedeHeadroom      "TtsDeferrals"
         //                                                      (lower)
         //  everything is slightly behind on a new machine    the whole dial        "Backend Tradeoff: …"

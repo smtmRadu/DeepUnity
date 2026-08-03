@@ -12,20 +12,33 @@ namespace DeepUnity.Tutorials.ChatDemo3D
     /// prompt tells it to look before it offers. Because the answer comes from the world and not from
     /// the transcript, he still knows the sword is gone after a context compaction has wiped the
     /// conversation that mentioned it.</item>
-    /// <item>the GATED ACTION, now through <b>GiveTool</b>: the accept-gate
-    /// (<see cref="NPCChatBase.ToolGiveAcceptGate"/>) says whether the player can afford the price he
-    /// named, and the hand-over (<see cref="NPCChatBase.ToolGiveAccepted"/>) takes the souls and gives
-    /// the gear only once the PLAYER has pressed Accept. The model can offer; it cannot give, and it
-    /// cannot set the player's purse.</item>
+    /// <item>the GATED ACTION, through <b>GiveItem</b> and a DECISION BINDING: the NPC declares a
+    /// decision with the id <c>sell_sword</c> (see <see cref="NPCDecision"/>, wired by
+    /// ChatDemo3DBuilder and visible on the NPC in the inspector). This component is that binding's
+    /// <see cref="INPCDecisionGate"/> — it says whether the player can afford the price the model
+    /// named — and its <see cref="OnDecisionResolved"/> is the binding's event: it takes the souls and
+    /// gives the gear, only once the PLAYER has pressed Accept. The model can offer; it cannot give,
+    /// and it cannot set the player's purse.</item>
     /// </list>
     /// <para>Nothing here reads the NPC's words any more. The old beat ran on AskUserQuestion, so it had
-    /// to tell a click of "Take them" from a click of "Keep your steel" with keyword lists — GiveTool
+    /// to tell a click of "Take them" from a click of "Keep your steel" with keyword lists — GiveItem
     /// returns a BOOL, which is the whole reason it exists: <c>{"accepted": true}</c> or
     /// <c>{"accepted": false}</c>, no wording to interpret and nothing to get wrong.</para>
+    /// <para>It hangs off the BINDING rather than the NPC-wide
+    /// <see cref="NPCChatBase.GiveItemAcceptGate"/> / <see cref="NPCChatBase.GiveItemAccepted"/> hooks
+    /// (which still exist and still fire) for the reason the table exists at all: those are one gate
+    /// and one event per NPC with no key, so the day Velmire also sells a shield they cannot tell the
+    /// two offers apart. The binding matches the ITEM the model named against the aliases the designer
+    /// authored, and hands this component a decision that already carries the id.</para>
     /// </summary>
     [DisallowMultipleComponent]
-    public class NPCGearOffer : MonoBehaviour, INPCToolProvider
+    public class NPCGearOffer : MonoBehaviour, INPCToolProvider, INPCDecisionGate
     {
+        /// <summary>The binding id this component serves — the string ChatDemo3DBuilder authors on
+        /// Velmire's decision table. Public so the builder and the headless probe agree on it by
+        /// reference instead of by two copies of a literal.</summary>
+        public const string SellSwordDecisionId = "sell_sword";
+
         [SerializeField, Tooltip("The player's gear ownership — read by the tool, written on accept.")]
         private PlayerGear playerGear;
         [SerializeField, Tooltip("The player's purse — the accept-gate reads it, the hand-over spends it. Null = the offer is free (no gate, no deduction).")]
@@ -35,26 +48,31 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         [SerializeField] private Transform npcSword;
         [SerializeField] private Transform npcShield;
 
-        NPCChatBase npc;
         bool gaveMine;
 
-        void Awake() => npc = GetComponent<NPCChatBase>();
-
+        // A designer aid, not machinery: this component does nothing unless the NPC's decision table
+        // actually points at it, and "nothing happened and nothing was logged" is the failure this
+        // whole refactor exists to end. Checked once, on enable.
         void OnEnable()
         {
-            if (npc == null) return;
-            // The gate is a single slot, not an event — one component per NPC answers "can they take
-            // this?", and on this NPC that is the component that owns the transaction.
-            npc.ToolGiveAcceptGate = CanAcceptOffer;
-            npc.ToolGiveAccepted += OnOfferAccepted;
+            var npc = GetComponent<NPCChatBase>();
+            if (npc == null || BoundOnAnyDecision(npc)) return;
+            ConsoleMessage.Warning($"[Gear] {name}: no decision on this NPC names this component as its " +
+                                   "gate or its onResolved target — the sale cannot land. Wire a binding " +
+                                   $"(id \"{SellSwordDecisionId}\") in the inspector, or rebuild the scene.");
         }
 
-        void OnDisable()
+        bool BoundOnAnyDecision(NPCChatBase npc)
         {
-            if (npc == null) return;
-            if (npc.ToolGiveAcceptGate == (Func<ToolGiveOffer, bool>)CanAcceptOffer)
-                npc.ToolGiveAcceptGate = null;
-            npc.ToolGiveAccepted -= OnOfferAccepted;
+            foreach (var d in npc.Decisions)
+            {
+                if (d == null) continue;
+                if (ReferenceEquals(d.gate, this)) return true;
+                if (d.onResolved == null) continue;
+                for (int i = 0; i < d.onResolved.GetPersistentEventCount(); i++)
+                    if (ReferenceEquals(d.onResolved.GetPersistentTarget(i), this)) return true;
+            }
+            return false;
         }
 
         // ------------------------------------------------------------------ INPCToolProvider
@@ -92,29 +110,36 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 
         // ------------------------------------------------------------------ the gated action
 
-        /// <summary>The accept-gate: souls in hand must cover the price he named. A priceless offer (a
-        /// gift) and a scene without a purse are both free. Public so the headless probe exercises the
-        /// SAME gate the dialogue installs.</summary>
-        public bool CanAcceptOffer(ToolGiveOffer offer)
-        {
-            if (!offer.price.HasValue || playerSouls == null) return true;
-            return playerSouls.CanAfford(offer.price.Value);
-        }
+        /// <summary><see cref="INPCDecisionGate"/>: souls in hand must cover the price he named. A
+        /// priceless offer (a gift) and a scene without a purse are both free. This is what the
+        /// <c>sell_sword</c> binding's gate slot points at, so the headless probe exercises the SAME
+        /// gate the dialogue asks.</summary>
+        public bool CanAccept(NPCDecisionResult pending) => CanAfford(pending.price);
 
-        /// <summary>The hand-over: take the souls, then give the gear. Only ever reached from the
-        /// player's own Accept press, and only after the gate above said yes — but the payment is
-        /// re-checked here anyway, because THIS is the transaction and the gate was only the button
-        /// state. Public for the same reason as the gate.</summary>
-        public void OnOfferAccepted(ToolGiveOffer offer)
+        /// <summary>The hand-over, as the binding's <c>onResolved</c> target: take the souls, then give
+        /// the gear. Only ever reached from the player's own Accept press, and only after the gate
+        /// above said yes — but the payment is re-checked here anyway, because THIS is the transaction
+        /// and the gate was only the button state.
+        /// <para>Public and single-argument on purpose: that is the signature
+        /// <c>UnityEventTools.AddPersistentListener</c> can bind, which is what makes the wiring show
+        /// up (and stay editable) in the inspector instead of hiding in a runtime <c>+=</c>.</para></summary>
+        public void OnDecisionResolved(NPCDecisionResult decision)
         {
-            if (offer.price.HasValue && playerSouls != null
-                && !playerSouls.TrySpend(offer.price.Value))
+            if (!decision.accepted) return;   // declines never reach here, but the contract is the flag
+            if (decision.price.HasValue && playerSouls != null
+                && !playerSouls.TrySpend(decision.price.Value))
             {
-                ConsoleMessage.Warning($"[Gear] {name}: accepted at {offer.price.Value} but the purse only " +
+                ConsoleMessage.Warning($"[Gear] {name}: accepted at {decision.price.Value} but the purse only " +
                                        $"holds {playerSouls.Souls} — nothing handed over.");
                 return;
             }
             Grant();
+        }
+
+        bool CanAfford(int? price)
+        {
+            if (!price.HasValue || playerSouls == null) return true;
+            return playerSouls.CanAfford(price.Value);
         }
 
         void Grant()

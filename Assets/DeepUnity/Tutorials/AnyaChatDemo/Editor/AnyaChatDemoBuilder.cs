@@ -515,9 +515,9 @@ namespace DeepUnity.Tutorials.AnyaChatDemo
 
             // LAST, once every field is in place: bake the # Tools block INTO Description And Rules
             // (user 2026-07-25). The block is no longer injected at runtime, so what is not in this
-            // field is not in the prompt — and Anya inherits enableAskUserQuestion = true, meaning the
-            // engine was already parsing and dispatching her AskUserQuestion calls off a prompt that
-            // declared no tools. Read-then-write instead of composing off PERSONA, because
+            // field is not in the prompt — the tools Anya advertises are stated right here, at the
+            // call (the per-NPC toggles died 2026-08-03; the engine handles both tools on every NPC
+            // regardless). Read-then-write instead of composing off PERSONA, because
             // WithToolsBlock REPLACES a stale block rather than stacking a second one — that is what
             // keeps a rebuild idempotent. toolsFirst stays default TRUE (Qwen3.5's own template order,
             // and the order the finetuning samples are written in). ~640 tokens of her 4096, which she
@@ -525,7 +525,7 @@ namespace DeepUnity.Tutorials.AnyaChatDemo
             var darProp = Prop(npc, "descriptionAndRules", out var darSO);
             if (darProp != null)
             {
-                darProp.stringValue = npc.WithToolsBlock(darProp.stringValue);
+                darProp.stringValue = npc.WithToolsBlock(darProp.stringValue, askUserQuestion: true, giveItem: false);
                 darSO.ApplyModifiedPropertiesWithoutUndo();
             }
 

@@ -640,12 +640,25 @@ namespace DeepUnity
                 BindScales(kEmbedLookup, "embed_scales", weights.embedScales);
                 cs.SetBuffer(kEmbedLookup, "embed_output", hiddenBuf);
                 cs.Dispatch(kEmbedLookup, Div256(seqLen * hiddenSize), 1, 1);
-                yield return null;
+                // DECODE (seqLen==1) slices its issue per the 2026-08-02 smoothness mandate — same
+                // gate, same constant and same shape as Qwen3_5Model.ForwardYielding, where the full
+                // history lives (per-layer spread vs one-burst vs sliced). This family only ever had
+                // the per-layer spread, so for it the mandate is ALSO a decode speedup: ~numLayers+2
+                // frames per token collapse to ~numLayers/slice + 2, each frame still bounded to one
+                // slice of GPU. The embed rides with the first slice; the lm_head stays alone after
+                // the last one (it is ~half the per-token bytes at this vocab). Prefill keeps its
+                // one-layer yield — that granularity is the unit BackendTradeoffTable.PrefillStepsPerFrame
+                // counts and must not change. Same kernels, same order → bit-identical; only the
+                // frame boundaries move.
+                bool sliceDecode = seqLen == 1 && !BackendTradeoffTable.UseSyncDecode;
+                int sliceLayers = Mathf.Max(1, InferencePerf.LlmDecodeSliceLayers);
+                if (!sliceDecode) yield return null;
 
                 for (int i = 0; i < numLayers; i++)
                 {
                     DispatchLayer(i, seqLen, totalKvLen, useCache);
-                    yield return null;
+                    if (!sliceDecode) yield return null;
+                    else if ((i + 1) % sliceLayers == 0) yield return null;
                 }
 
                 if (useCache) cache.CachedTokenCount += seqLen;

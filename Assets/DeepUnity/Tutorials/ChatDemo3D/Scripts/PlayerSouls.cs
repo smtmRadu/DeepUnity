@@ -9,11 +9,11 @@ namespace DeepUnity.Tutorials.ChatDemo3D
     /// demo needs somewhere for the number to live and somewhere for it to be seen. This is both —
     /// it owns the count AND writes itself into its HUD label, the same way <see cref="PlayerGear"/>
     /// owns the two quick-slot icons rather than having the HUD reach in for them.
-    /// <para>It is the single source of truth behind the NPC's GiveTool accept-gate (can the player
+    /// <para>It is the single source of truth behind the NPC's GiveItem accept-gate (can the player
     /// afford this offer?) and behind the deduction when they accept — see
-    /// <see cref="NPCGearOffer"/>, which reads it through <see cref="NPCChatBase.ToolGiveAcceptGate"/>
-    /// and spends it in <see cref="NPCChatBase.ToolGiveAccepted"/>. The model never touches it: it can
-    /// name a price, and that is all.</para>
+    /// <see cref="NPCGearOffer"/>, which reads it as the <c>sell_sword</c> decision's
+    /// <see cref="INPCDecisionGate"/> and spends it in that binding's <c>onResolved</c>. The model
+    /// never touches it: it can name a price, and that is all.</para>
     /// </summary>
     public class PlayerSouls : MonoBehaviour
     {
@@ -32,7 +32,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         void Awake() => Render();
 
         /// <summary>Can this price be paid right now? A price of zero or less is free, which is what a
-        /// GiveTool call with no price at all comes through as.</summary>
+        /// GiveItem call with no price at all comes through as.</summary>
         public bool CanAfford(int price) => price <= souls;
 
         /// <summary>Pay, and report whether it went through. Refuses rather than going negative — the

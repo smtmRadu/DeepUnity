@@ -31,9 +31,9 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         private static readonly Color SoulsGold = new Color(0.77f, 0.66f, 0.42f);
         protected override Color CaretColor => SoulsGold;
 
-        // what a GiveTool price is quoted in here, so the offer panel reads "Longsword  -  80 souls"
+        // what a GiveItem price is quoted in here, so the offer panel reads "Longsword  -  80 souls"
         // instead of a bare number (the base class has no currency of its own, by design)
-        protected override string ToolGiveCurrency => "souls";
+        protected override string GiveItemCurrency => "souls";
 
         protected override void Awake()
         {
@@ -87,6 +87,15 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         // stack reclaims it as a pure text mutation on the SAME GameObject. A parked message never
         // reclaimed (a genuine pop) is destroyed in LateUpdate.
         private GameObject recycledMsg;
+        // 2026-08-02 smoothness hunt: pin-to-bottom for STREAMING mutations, deferred one frame.
+        // The reveal path calls AddMessage nearly every frame, and the Canvas.ForceUpdateCanvases
+        // it used to pay per call is a synchronous rebuild of the WHOLE transcript (every TMP's
+        // preferred height, the layout group, all canvases) — the 82-163 ms zero-tick frames in
+        // every talk-perf worst-20, growing with conversation length because the transcript does.
+        // The natural end-of-frame canvas pass lays the same text out ONCE anyway; the only thing
+        // lost is same-frame scroll pinning, so pin on the NEXT frame's valid layout instead —
+        // during continuous typing the view trails the bottom by at most one line for one frame.
+        private bool scrollPinPending;
 
         private void LateUpdate()
         {
@@ -98,6 +107,12 @@ namespace DeepUnity.Tutorials.ChatDemo3D
                 if (scrollRect != null)
                     scrollRect.verticalNormalizedPosition = 0f;
             }
+            else if (scrollPinPending)
+            {
+                scrollPinPending = false;
+                if (scrollRect != null)
+                    scrollRect.verticalNormalizedPosition = 0f;   // last frame's layout: exact pin
+            }
         }
 
         public override void AddMessage(string username, string message)
@@ -105,7 +120,8 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             if (messageTemplate == null || messageContainer == null) return;
 
             GameObject newMsg;
-            if (recycledMsg != null)
+            bool streamingMutation = recycledMsg != null;
+            if (streamingMutation)
             {
                 newMsg = recycledMsg;          // streaming mutation: same object, longer text
                 recycledMsg = null;
@@ -128,9 +144,16 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             }
 
             messages.Add(newMsg);
-            Canvas.ForceUpdateCanvases();
-            if (scrollRect != null)
-                scrollRect.verticalNormalizedPosition = 0f;   // pin to bottom
+            if (streamingMutation)
+            {
+                scrollPinPending = true;       // no forced rebuild — see the field's note
+            }
+            else
+            {
+                Canvas.ForceUpdateCanvases();  // genuinely new line (rare): settle + pin same-frame
+                if (scrollRect != null)
+                    scrollRect.verticalNormalizedPosition = 0f;
+            }
         }
 
         public override void PopLastMessage()

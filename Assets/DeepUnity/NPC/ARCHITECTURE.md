@@ -23,6 +23,8 @@ stable how-it-works + how-to-change-it reference.
                          ttsModel {PocketTTS(default), Kokoro, CosyVoice3, Chatterbox} · ttsVoice ·
                          voicePitch · ttsQuantization · clonedVoiceClip (PocketTTS clone)
                          usePrefetchZone · prefetchRadius · slowPrefetchSeconds
+                         enableAskUserQuestion · enableGiveItem (the TWO interactive tools)
+                         decisions (List<NPCDecision> — the decision-binding table, see R6b)
 
    LLM side                                        TTS side
    ─────────                                       ────────
@@ -197,6 +199,65 @@ calibrator, the refill-rate EMA — went 2026-07-27 (BackendTradeoff.cs document
   coins]`.
 - `protected virtual OnReplyFinished()` — fires when a reply completes (never on interrupt);
   the 2D demo pays the coins here. Subclass hook — no base changes needed for new events.
+- For anything the PLAYER decides, use the decision-binding table below rather than either of
+  the above.
+
+### R6b — Decision bindings (how the game reacts to what the player chose)
+
+The NPC has exactly two INTERACTIVE tools — `AskUserQuestion` (a choice) and `GiveItem` (an
+offer with Accept/Decline) — and both produce the same thing: a **player decision**. A decision
+is bound to game behaviour through the `Decisions` list on `NPCChatBase` (`NPC/NPCDecision.cs`),
+which is a serialized `List<NPCDecision>` drawn in the inspector.
+
+One binding row:
+
+| field | meaning |
+|---|---|
+| `id` | stable, designer-authored key (`"sell_sword"`). What the game branches on. |
+| `aliases` | how the NPC might WORD this decision's subject. |
+| `onResolved` | `UnityEvent<NPCDecisionResult>` — runs when the binding resolves. |
+| `gate` | optional `Component` implementing `INPCDecisionGate`; offers only. |
+
+**The subject** is what gets matched: the **question text** for a question, the **item** for an
+offer. Both go through one resolver, `NPCDecisionTable.Resolve`:
+
+1. normalize both sides — trim, lowercase, collapse whitespace, strip surrounding punctuation,
+   drop a leading `a`/`an`/`the`;
+2. exact match on the binding's own `id`; then
+3. exact match on an alias; then
+4. an alias contained in the subject, or the subject contained in an alias
+   (`"this old blade of mine"` → alias `"blade"`).
+
+The first tier that hits anything decides, and within a tier the **first declared row wins** —
+so resolution is deterministic and depends on table order and nothing else. When more than one
+row could have hit, a warning names the ones that lost.
+
+**Unmatched is not an error.** The global hooks (`ToolQuestionAnswered`, `GiveItemAcceptGate`,
+`GiveItemAccepted`) fire for every decision, bound or not — the table is **additive**, it
+replaced nothing — and the engine logs one `Debug.LogWarning` naming the unresolved subject and
+listing every declared id, so a designer can see why their event did not fire.
+
+**Gating** (offers only): the resolved binding's `gate` decides `canAccept` if it has one, else
+the NPC-wide `GiveItemAcceptGate`, else true. False draws Accept disabled; Decline is never
+gated. A gate that throws is reported and read as "yes" — it is a button state, not the
+transaction.
+
+**Ordering:** `onResolved` fires BEFORE the decision goes back to the model, in the same place
+the old gated action ran, so the world is already updated when the reply streams. Subscribers
+must not block.
+
+Wire a binding in the scene BUILDER (builders are the source of truth) with
+`UnityEditor.Events.UnityEventTools.AddPersistentListener`, so the hookup is visible and
+editable in the inspector — see `ChatDemo3DBuilder.BindVelmireSwordSale`, which gives Velmire
+one row (`sell_sword`, gate + event both on `NPCGearOffer`). Because the aliases are matched
+against the model's own words, the NPC's persona should NAME the item plainly; Velmire's asks
+for the bare word `sword`, and the aliases are the safety net for the runs where a 0.8B
+embroiders.
+
+Guarded headless by `NpcGiveItemProbe` (menu `DeepUnity/NPC/GiveItem Guard`), which asserts the
+schema pins, the `{"accepted": …}` result bytes, every resolution tier, two bindings on one NPC
+routing to different ids, the gate precedence, and the once-on-accept / never-on-decline
+contract.
 
 ### R7 — New chat window / new demo
 

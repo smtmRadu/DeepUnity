@@ -17,17 +17,23 @@ namespace DeepUnity
         /// <summary>LLM dispatch sites (prefill + decode) call this on every frame they issue GPU work.</summary>
         public static void NoteLlmIssue() => llmIssueFrame = Time.frameCount;
 
-        /// <summary>True if the LLM issued GPU work this frame or the previous one AND the cede-rate
-        /// bound below still allows this frame to be ceded. The 1-frame
-        /// grace covers Update-vs-coroutine ordering: a voice's Update may run before the LLM
-        /// coroutine resumes within the same frame, and while decoding the LLM issues (nearly)
-        /// every frame — last frame's mark predicts this frame's burst.
-        /// The sentinel guard matters: frameCount − int.MinValue OVERFLOWS negative, which read
-        /// as "busy/starving since forever" at every session start — the un-guarded TtsStarving
-        /// version held the LLM for the WHOLE first reply of each session (the "first message
-        /// takes 5 s to speak" bug, 3166 held frames measured).</summary>
-        public static bool LlmBusy => llmIssueFrame != int.MinValue && Time.frameCount - llmIssueFrame <= 1
-                                      && CedeAllowedThisFrame;
+        /// <summary>True if the LLM issued GPU work this frame or the previous one — the raw mark,
+        /// with no cede-rate gating. The 1-frame grace covers Update-vs-coroutine ordering: a
+        /// voice's Update may run before the LLM coroutine resumes within the same frame, and
+        /// while decoding the LLM issues (nearly) every frame — last frame's mark predicts this
+        /// frame's burst. The sentinel guard matters: frameCount − int.MinValue OVERFLOWS
+        /// negative, which read as "busy/starving since forever" at every session start — the
+        /// un-guarded TtsStarving version held the LLM for the WHOLE first reply of each session
+        /// (the "first message takes 5 s to speak" bug, 3166 held frames measured).
+        /// Read directly (not via LlmBusy) by the pump's shared-frame tick split: whether the LLM
+        /// is IN this frame is a fact about the frame, not about whether ceding is currently
+        /// rationed.</summary>
+        public static bool LlmIssuedRecently =>
+            llmIssueFrame != int.MinValue && Time.frameCount - llmIssueFrame <= 1;
+
+        /// <summary>LlmIssuedRecently AND the cede-rate bound below still allows this frame to be
+        /// ceded — the gate the pump's cede sites test.</summary>
+        public static bool LlmBusy => LlmIssuedRecently && CedeAllowedThisFrame;
 
         // ---- cede RATE bound (2026-07-26) -----------------------------------------------------
         // The pump's test is a LEVEL test ("ring ≥ the tier's cede headroom → cede", a

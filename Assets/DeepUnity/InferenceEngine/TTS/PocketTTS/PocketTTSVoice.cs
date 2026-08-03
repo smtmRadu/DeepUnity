@@ -224,6 +224,13 @@ namespace DeepUnity
                 s_engineBoundClip = null;
                 holders.Clear();
                 warmed = false;
+                // Same domain-reload-off hygiene as `warmed` (2026-08-03 review): the side-job flag
+                // is normally released by the holder's OnDisable, but a coroutine killed by an
+                // exception leaves it latched, and with domain reload off a latched flag would walk
+                // into the NEXT play session and mute every voice from frame 0 — the exact failure
+                // class the sideJobHeld bookkeeping exists to prevent. Cleared here so a session
+                // always starts with a free engine.
+                s_engineSideJobBusy = false;
             }
 #endif
             void Start() { if (loadOnStart) EnsureTts(); }
@@ -243,6 +250,12 @@ namespace DeepUnity
             // no-op). Falls back to the baked voiceName otherwise.
             void BindVoice()
             {
+                // #36.2 attribution: the last untagged ~240 ms walk-up frame is suspected to be
+                // this call's synchronous managed churn (decompress-read + resample + SHA over
+                // ~1 MB of reference samples, plus the prompt upload). Tagged so the next probe
+                // run names it directly; if confirmed, the fix is slicing this into the prepare
+                // coroutine (it already runs off the hot path — only its FRAME is monolithic).
+                PocketTTSModeling.PocketTTS.LastHeavyTick = "bind";
                 if (clonedVoiceClip != null)
                 {
                     if (s_engineBoundClip == clonedVoiceClip) return;   // engine already carries this clip
@@ -297,11 +310,27 @@ namespace DeepUnity
                 if (!warmed && prewarmJob == null) prewarmJob = StartCoroutine(PrewarmRoutine());
             }
             static bool warmed;
+
+            /// <summary>#36.4 second round: true once the session's real-path warm cycle has fully
+            /// run on THIS voice (the once-per-session latch is burned and no warm job is in
+            /// flight). NPCChatBase's scene-start warm waits on this to RELEASE the residency it
+            /// claimed — stream, warm, unload — so load-on-approach stays the policy and only the
+            /// unrepayable session state (driver JIT, kernel warmth, the latch itself) persists.</summary>
+            public bool SessionWarmCycleDone => warmed && prewarmJob == null;
             Coroutine prewarmJob;
+
+            // ONE side-job synthesis at a time on the shared engine (2026-08-02): the prewarm and
+            // any voice-prepare drive tts.SynthesizeStreaming outside the pump, and two iterators
+            // interleaving on the single KV would corrupt both. Cooperative-coroutine safe: the
+            // check-and-set below never interleaves within a frame. Held flags are released in
+            // OnDisable via sideJobHeld — a killed coroutine must not latch the engine shut.
+            static bool s_engineSideJobBusy;
+            bool sideJobHeld;
 
             IEnumerator PrewarmRoutine()
             {
                 EnsureTts();
+                tts.PreloadBakedVoiceAsync(voiceName);   // #36.2: SetVoice's cold read, off-thread
                 while (!tts.IsReady) yield return null;
                 // Pre-size every clause-lifetime buffer BEFORE the warmup synth (2026-07-30 spike
                 // hunt): the synth's own EnsureKV was the session's cold allocation — a 174 ms
@@ -320,6 +349,17 @@ namespace DeepUnity
                 if (!tts.IsReady) { prewarmJob = null; yield break; }
                 if (!warmed)
                 {
+                    while (s_engineSideJobBusy) yield return null;
+                    // Re-check after the wait (2026-08-03 review): the busy-wait above opened a
+                    // window the plain `if (!warmed)` used to be too atomic to have — two voices'
+                    // prewarms racing while a side job held the engine would BOTH pass the check,
+                    // queue behind the flag, and run the warmup synth twice. Serialized by the flag,
+                    // so never corrupting — but the second synth is pure waste on the exact frames
+                    // this routine tries to keep light. Checked here, not before the wait, for the
+                    // verifier-finding-E reason: only a routine that actually RUNS the warmup may
+                    // burn the once-per-session latch.
+                    if (warmed) { prewarmJob = null; yield break; }
+                    s_engineSideJobBusy = sideJobHeld = true;
                     warmed = true;
                     var wallSw = System.Diagnostics.Stopwatch.StartNew();
                     // a tiny real utterance: exercises tokenizer + prefill + KV decode + flow + Mimi
@@ -332,19 +372,168 @@ namespace DeepUnity
                     // "first message takes 5 s to speak" report). Pump a few ms + 2 heavy ticks
                     // per frame instead — done in well under a second, still off the hot path.
                     var frameSw = System.Diagnostics.Stopwatch.StartNew();
-                    int heavy = 0;
-                    while (e.MoveNext())
-                        if ((ReferenceEquals(e.Current, PocketTTS.FrameBreak) && ++heavy >= 2)
+                    // #36.3 instrumentation: which tick a slow frame BELONGS to, and whether its
+                    // cost is the tick's own CPU or the GPU drain behind it (frame ≫ cpu).
+                    var tickSw = new System.Diagnostics.Stopwatch();
+                    double maxCpu = 0; string maxCpuTag = null;
+                    float maxFrame = 0; string maxFrameTag = null; double maxFrameCpu = 0; int ticks = 0;
+                    while (true)
+                    {
+                        tickSw.Restart();
+                        if (!e.MoveNext()) break;
+                        // #36.3/36.4: submit after EVERY step, not only at frame ends. The
+                        // driver's deferred work (segment submit + background pipeline JIT)
+                        // otherwise accumulates across the prefill's hundreds of small dispatches
+                        // and blocks ONE arbitrary API call for the lot — 183 ms before any
+                        // flushing, ~120-140 ms with per-frame flushes. Per-step submission is
+                        // the finest granularity we can hand it; this path runs once per session,
+                        // so the flush overhead (µs on a shallow queue) is irrelevant.
+                        GL.Flush();
+                        double cpuMs = tickSw.Elapsed.TotalMilliseconds; ticks++;
+                        string tag = PocketTTSModeling.PocketTTS.LastHeavyTick;
+                        if (cpuMs > maxCpu) { maxCpu = cpuMs; maxCpuTag = tag; }
+                        // ONE heavy tick (or GPU wait) per frame, same pacing as the
+                        // voice-prepare below — two ticks a frame was half of the measured
+                        // 110→70 fps walk-up dip, and neither job is urgent.
+                        if (ReferenceEquals(e.Current, PocketTTS.FrameBreak)
+                            || ReferenceEquals(e.Current, PocketTTS.GpuWait)
                             || frameSw.Elapsed.TotalMilliseconds > 3.0)
                         {
-                            heavy = 0;
                             yield return null;
                             frameSw.Restart();
+                            float dt = Time.unscaledDeltaTime * 1000f;
+                            if (dt > maxFrame) { maxFrame = dt; maxFrameTag = tag; maxFrameCpu = cpuMs; }
                         }
-                    Debug.Log($"[PocketTTSVoice] voice warmup done in {wallSw.ElapsedMilliseconds} ms " +
-                              "(real-path warm; kernels already compiled at frame 0 — see PocketTTS.PrewarmKernels).");
+                    }
+                    Debug.Log($"[PocketTTSVoice] voice warmup done in {wallSw.ElapsedMilliseconds} ms — " +
+                              $"{ticks} ticks, max cpu {maxCpu:0.0} ms @{maxCpuTag ?? "-"}, " +
+                              $"worst frame {maxFrame:0.0} ms (its tick cpu {maxFrameCpu:0.0}) @{maxFrameTag ?? "-"}.");
+                    s_engineSideJobBusy = sideJobHeld = false;
                 }
                 prewarmJob = null;
+            }
+
+            // ---- voice-prepare: pay the clone bind + voice-prompt prefill OFF the first clause ----
+            // What the first real clause used to pay in ONE pump frame at dialogue open (both
+            // 2026-08-02 hunts, 311-365 ms): ClipToMono's blocking decompress-wait on the reference
+            // MP3, the resample + SHA-256 of ~1 MB of samples, the Resources cache load — and then,
+            // with the prompt KV invalidated by the fresh bind, the full ~125-row voice-prompt
+            // prefill at the silent-refill boost (the ~1 s of 17-25 fps right as the dialogue
+            // opens). This routine spends all of it in the walk-up / dialogue-open window instead:
+            // bind the voice, then one tiny DISCARDED synthesis so #32 retention holds the
+            // voice-prompt KV and the first real clause prefills only its own text rows. Aborts the
+            // moment real speech shows up (mid-synth abandonment is exactly what StopSpeaking does
+            // to streamJob); the pump waits on prepareJob like prewarmJob, so at most one frame of
+            // real work is deferred per abort check.
+            Coroutine prepareJob;
+
+            /// <summary>Bind this NPC's voice and pre-prefill its voice-prompt KV while nobody is
+            /// listening (zone walk-up / dialogue open). Idempotent per in-flight job; safe to call
+            /// every zone entry — a bound voice makes BindVoice a no-op and the KV warm cheap.</summary>
+            public void PrepareVoiceNow()
+            {
+                if (prepareJob == null && isActiveAndEnabled) prepareJob = StartCoroutine(PrepareVoiceRoutine());
+            }
+
+            bool OtherVoiceBusy()
+            {
+                foreach (var h in holders)
+                    if (h != null && h != this && h.HasPendingSpeech) return true;
+                return false;
+            }
+
+            IEnumerator PrepareVoiceRoutine()
+            {
+                EnsureTts();
+                // Kick the reference clip's decompress NOW, async — by the time the weights are
+                // resident it is loaded and ClipToMono's sleep-wait never runs.
+                if (clonedVoiceClip != null && clonedVoiceClip.loadState == AudioDataLoadState.Unloaded)
+                    clonedVoiceClip.LoadAudioData();
+                // ...and the baked voice's prompt decode too (#36.2): the warmup's SetVoice was
+                // the surviving ~200 ms `bind` frame — a cold ReadFloats paid off-thread here.
+                tts.PreloadBakedVoiceAsync(voiceName);
+                // ...and wait for the LLM too (2026-08-02, the two-visit report: first visit
+                // dropped 329-374 ms frames, second was spotless). This routine used to gate on
+                // the TTS side only, so it ran DURING the LLM's weight boot — where any sync
+                // readback pays for the whole queued upload burst ahead of it (the 329 ms
+                // flush_push) and the bind's decompress allocations hand the boot-churned heap a
+                // GC on an already-heavy frame (the 374 ms). Post-boot the same work rides quiet
+                // frames — visit two proved there is nothing left to pay once nothing competes.
+                // No deadlock risk: if the phase never idles because a reply already started, the
+                // abort check below fires first, same as before. That promise has to be IN the loop
+                // condition, though — an early draft waited on the phase alone, and a reply arriving
+                // WHILE we waited (boosted open, player outruns the walk-up: deltas feed this voice
+                // while the LLM decodes, so the phase stays non-idle for the whole reply) left the
+                // pump gated on prepareJob until decode ended — the reply's audio held silent for
+                // seconds, precisely the class of stall this routine exists to remove. Pending speech
+                // on THIS voice breaks the wait; the abort below then cleans up and the pump's own
+                // sync BindVoice fallback takes the clause.
+                while ((!tts.IsReady || prewarmJob != null || s_engineSideJobBusy || OtherVoiceBusy()
+                        || LLM.CurrentPhase != "idle")
+                       && streamJob == null && clauseQueue.Count == 0 && !feedingText)
+                    yield return null;
+                // Too late — a reply is already here (the player outran the walk-up): the pump's
+                // own BindVoice handles it, and this job must not fight over the shared engine.
+                if (streamJob != null || clauseQueue.Count > 0 || feedingText) { prepareJob = null; yield break; }
+                s_engineSideJobBusy = sideJobHeld = true;
+                // Cover the flow-LM's clause-lifetime buffers FIRST (2026-08-02 second hunt): a
+                // first visit that outruns the session warmup — TTS weights only turn ready
+                // mid-walk-up, and nothing sequences the two jobs — left the mini-synth paying
+                // the KV/scratch driver allocations inside single MoveNexts: 159 + 285 ms frames,
+                // the user's "imens" zone-entry drop, and the same pair the 2026-07-30 hunt
+                // measured as 174 + 286 ms before it built this very routine. Idempotent — when
+                // the session warmup did win the race, covered buffers yield nothing.
+                var pa = tts.PrewarmAllocationsYielding();
+                while (clauseQueue.Count == 0 && !feedingText && tts.IsReady && pa.MoveNext())
+                    yield return null;
+                // #36.2: the SLICED bind — the sync BindVoice's decompress+resample+SHA landed as
+                // one ~219 ms `bind` frame (confirmed by tag, 16:38 run); the yielding form pays
+                // one stage per frame. The pump's sync BindVoice stays the fallback for a player
+                // who outruns this whole routine, and for baked/default voices (cheap either way).
+                if (clonedVoiceClip != null && s_engineBoundClip != clonedVoiceClip)
+                {
+                    bool bound = false;
+                    var bv = tts.CloneVoiceYielding(clonedVoiceClip, null, ok => bound = ok);
+                    while (bv.MoveNext()) yield return bv.Current;
+                    if (bound) s_engineBoundClip = clonedVoiceClip;
+                    else { s_engineBoundClip = null; tts.SetVoice(voiceName); }
+                }
+                else BindVoice();
+                yield return null;
+                var e = tts.SynthesizeStreaming(tts.Tokenize("Hi."), _ => { }, maxFrames: 2);
+                var frameSw = System.Diagnostics.Stopwatch.StartNew();
+                // #36.3 instrumentation — same discriminator as the warmup pump above.
+                var tickSw = new System.Diagnostics.Stopwatch();
+                double maxCpu = 0; string maxCpuTag = null;
+                float maxFrame = 0; string maxFrameTag = null; double maxFrameCpu = 0; int ticks = 0;
+                while (clauseQueue.Count == 0 && !feedingText && tts.IsReady)
+                {
+                    // stay off frames the LLM is on (prefill can restart under us at dialogue
+                    // open) — same shared-frame doctrine as the pump, absolute here because
+                    // NOTHING about this warmup is urgent.
+                    if (FramePacing.LlmIssuedRecently) { yield return null; frameSw.Restart(); continue; }
+                    tickSw.Restart();
+                    if (!e.MoveNext()) break;
+                    double cpuMs = tickSw.Elapsed.TotalMilliseconds; ticks++;
+                    string tag = PocketTTSModeling.PocketTTS.LastHeavyTick;
+                    if (cpuMs > maxCpu) { maxCpu = cpuMs; maxCpuTag = tag; }
+                    // ONE heavy tick (or GPU wait) per frame — the walk-up has seconds to spare,
+                    // and two ~5 ms ticks a frame is exactly the 110→70 fps zone-entry dip.
+                    if (ReferenceEquals(e.Current, PocketTTS.FrameBreak)
+                        || ReferenceEquals(e.Current, PocketTTS.GpuWait)
+                        || frameSw.Elapsed.TotalMilliseconds > 3.0)
+                    {
+                        GL.Flush();   // #36.3: same early-submit as the warmup pump — see there
+                        yield return null;
+                        frameSw.Restart();
+                        float dt = Time.unscaledDeltaTime * 1000f;
+                        if (dt > maxFrame) { maxFrame = dt; maxFrameTag = tag; maxFrameCpu = cpuMs; }
+                    }
+                }
+                Debug.Log($"[PocketTTSVoice] voice-prepare synth: {ticks} ticks, max cpu {maxCpu:0.0} ms " +
+                          $"@{maxCpuTag ?? "-"}, worst frame {maxFrame:0.0} ms (its tick cpu {maxFrameCpu:0.0}) @{maxFrameTag ?? "-"}.");
+                s_engineSideJobBusy = sideJobHeld = false;
+                prepareJob = null;
             }
 
             // ---------------- streamed-text interface (LLM token deltas) ------------------------
@@ -511,6 +700,7 @@ namespace DeepUnity
                     stampQueue.Clear();         // stale marks must not receive a next-reply stamp
                 }
                 streamStarted = false;
+                cruising = false;
                 ttfaArmed = false;
                 // A hard cut ends the reply, so the mid-reply resume threshold must not survive it:
                 // left set, the NEXT reply — which had nothing wrong with it — opened its gate on
@@ -534,10 +724,38 @@ namespace DeepUnity
                 if (streamClip != null) { Destroy(streamClip); streamClip = null; }
             }
 
+            // ---- pump telemetry (probe-facing, one synthesis in flight engine-wide) -------------
+            // Written every frame the pump does (or deliberately declines) work; a probe checks
+            // PumpFrame against Time.frameCount to know the snapshot is this frame's (±1 for
+            // Update-order skew) and not a stale one from the last reply. Diagnostics only —
+            // nothing behavioural reads these.
+            public static int PumpFrame { get; private set; } = -1;
+            public static string PumpState { get; private set; } = "";
+            public static int PumpTicks { get; private set; }        // heavy ticks actually issued
+            public static int PumpTickCap { get; private set; }      // the frame's allowance
+            public static float PumpMs { get; private set; }         // CPU issue time (GPU cost is ~15x)
+            public static float PumpRingSeconds { get; private set; }
+
+            static void NotePump(string state, int ticks, int cap, float ms, float ringSeconds)
+            {
+                PumpFrame = Time.frameCount;
+                PumpState = state;
+                PumpTicks = ticks;
+                PumpTickCap = cap;
+                PumpMs = ms;
+                PumpRingSeconds = ringSeconds;
+            }
+
+            // CRUISE hysteresis state — see the band computation inside PumpPipeline. Per-voice,
+            // self-correcting (any pump with the ring back under the headroom clears it), reset
+            // explicitly on a hard cut only so an interrupted fat-ring reply cannot start its
+            // successor's first clause at cruise rate.
+            bool cruising;
+
             // ---- budget pump: advance the in-flight clause every frame within gpuBudgetMs -------
             void PumpPipeline()
             {
-                if (tts == null || !tts.IsReady || prewarmJob != null) return;
+                if (tts == null || !tts.IsReady || prewarmJob != null || prepareJob != null) return;
                 bool anyWork = streamJob != null || clauseQueue.Count > 0;
                 if (!anyWork)
                 {
@@ -588,7 +806,7 @@ namespace DeepUnity
                 {
                     int headroom = RingCount();
                     if (headroom >= (int)(BackendTradeoffTable.TtsCedeHeadroomSeconds * Cfg.SAMPLE_RATE))
-                    { FramePacing.TtsDeferrals++; return; }
+                    { FramePacing.TtsDeferrals++; NotePump("cede-llm", 0, 0, 0f, headroom / (float)Cfg.SAMPLE_RATE); return; }
                     // Middle band (floor..headroom): cede on odd frames only, which is HALF as often
                     // as the band above — and the rate bound in FramePacing.LlmBusy (at most one cede
                     // in TtsCedeFrameStride frames) has already applied by the time we get here, so
@@ -597,7 +815,7 @@ namespace DeepUnity
                     // twice and makes ceding both rarer and irregular (caught 2026-07-28).
                     if (headroom >= (int)(BackendTradeoffTable.TtsRefillFloorSeconds * Cfg.SAMPLE_RATE) &&
                         (Time.frameCount & 1) == 1)
-                    { FramePacing.TtsDeferrals++; return; }
+                    { FramePacing.TtsDeferrals++; NotePump("cede-llm", 0, 0, 0f, headroom / (float)Cfg.SAMPLE_RATE); return; }
                 }
 
                 pumpWatch.Restart();
@@ -609,7 +827,8 @@ namespace DeepUnity
                 // otherwise a short spin. (it.3 lesson: a fixed 2 ms spin everywhere starved the ring
                 // on long replies and the resulting always-low-ring emergency bursts were WORSE spikes
                 // than the waste it saved.)
-                bool lowRing = RingCount() < (int)(BackendTradeoffTable.TtsRefillFloorSeconds * Cfg.SAMPLE_RATE);
+                int ringNow = RingCount();
+                bool lowRing = ringNow < (int)(BackendTradeoffTable.TtsRefillFloorSeconds * Cfg.SAMPLE_RATE);
                 // silent refill (prebuffer / underrun re-gate): nothing is audible, so frame
                 // smoothness buys nothing — push harder to end the gap sooner. HOW much harder is the
                 // tier's silent column, which is always above its speaking one; the refill-rate EMA
@@ -640,11 +859,50 @@ namespace DeepUnity
                 // highest TTS ticks (tied with Very Smooth), the warning's own advice — drop a tier —
                 // could not have helped: there was no lower rung to take.
                 // pushHard is that one test now, and it picks the tick cap as well as the budget.
-                bool pushHard = (lowRing && streamStarted) || clausePrefilling || silentRefill;
+                // CRUISE band (2026-08-02): the ring holds more than the tier's cede headroom, so
+                // the banked audio already covers every dead window the boosts here exist for —
+                // full-rate synthesis above the band only finishes the reply's audio sooner, and
+                // the frame probe showed what it did instead: 4 ticks ≈ 16-24 ms of GPU on the
+                // 1650 dropped into every frame with the ring at 3-7 s and the LLM idle, i.e. the
+                // 60-70→25-35 fps dips reported while an NPC speaks. Above the band, throttle to
+                // the cruise tick count and hand the frame back to the RENDERER (the one tenant
+                // the #29 arbiter never dealt in); the floor/panic/hurry machinery below the band
+                // is untouched. Hysteresis (enter above headroom + margin, leave at the headroom)
+                // or the integrator parks at the boundary flipping tick counts frame by frame —
+                // the exact trap the cede-headroom docs warn about.
+                int cedeSamples = (int)(BackendTradeoffTable.TtsCedeHeadroomSeconds * Cfg.SAMPLE_RATE);
+                cruising = streamStarted && ringNow >= (cruising
+                    ? cedeSamples
+                    : cedeSamples + (int)(InferencePerf.TtsCruiseEnterExtraSeconds * Cfg.SAMPLE_RATE));
+                // ...and a clause prefill inside the cruise band does NOT boost: the 2026-07-26
+                // "never cede through a dead window" reasoning dates from floor-hover, where the
+                // bank (~1 s, delivered in 1.28 s lumps) genuinely could not cover a ~0.5 s dead
+                // window. In cruise the bank is 2.5 s+ by construction — the probe caught a
+                // 6-tick prefill boost running with 7.3 s banked, pure spike for nothing.
+                bool pushHard = (lowRing && streamStarted) || (clausePrefilling && !cruising) || silentRefill;
                 int maxHeavyTicks = pushHard
                     ? Math.Max(BackendTradeoffTable.TtsSpeakingTicksPerFrame,
                                BackendTradeoffTable.TtsSilentTicksPerFrame)
-                    : BackendTradeoffTable.TtsSpeakingTicksPerFrame;
+                    : cruising
+                        ? Math.Max(1, BackendTradeoffTable.TtsSpeakingTicksPerFrame
+                                       / Mathf.Max(1, InferencePerf.TtsCruiseTickDivisor))
+                        : BackendTradeoffTable.TtsSpeakingTicksPerFrame;
+                // Shared-frame split (2026-08-02): on a frame the LLM also issued GPU work,
+                // WHATEVER band we are in halves its ticks instead of stacking a full TTS burst
+                // onto the token burst — see InferencePerf.TtsSharedFrameTickDivisor for the
+                // measured 97-162 ms frames this replaces and why a frame-bound prefill loses
+                // almost no wall time. The RAW mark, not LlmBusy: whether the LLM is in this
+                // frame is a fact about the frame; the cede-rate ration only governs the cede
+                // sites above (which have already had their chance to take the frame whole).
+                // EXEMPT the critical band — audible with the ring under 2x the panic floor.
+                // The first split run measured why: three 0.08 s dry bursts, each a clause dead
+                // window whose refill at 3 ticks lost the race to playback by exactly that much.
+                // Under the panic floor itself the LLM is held outright (NoteTtsStarving above),
+                // so this exemption only widens the sprint zone from "hole is open" to "hole is
+                // one chunk away"; the 0.5-1.0 s stretch of the low band keeps the split.
+                if (FramePacing.LlmIssuedRecently &&
+                    !(streamStarted && ringNow < (int)(2f * InferencePerf.TtsPanicFloorSeconds * Cfg.SAMPLE_RATE)))
+                    maxHeavyTicks = Math.Max(1, maxHeavyTicks / Mathf.Max(1, InferencePerf.TtsSharedFrameTickDivisor));
                 maxTicksLastFrame = maxHeavyTicks;
                 double frameBudgetMs = (clausePrefilling || silentRefill)
                     ? gpuBudgetMs * InferencePerf.TtsSilentRefillBudgetScale : gpuBudgetMs;
@@ -716,6 +974,10 @@ namespace DeepUnity
                     else if (ReferenceEquals(streamJob.Current, PocketTTS.GpuWait) &&
                              pumpWatch.Elapsed.TotalMilliseconds > waitSpinMs) break;
                 }
+                NotePump(!pushHard ? (cruising ? "cruise" : "speaking")
+                         : clausePrefilling ? "prefill" : silentRefill ? "silent-refill" : "low-ring",
+                         heavyTicks, maxHeavyTicks, (float)pumpWatch.Elapsed.TotalMilliseconds,
+                         RingCount() / (float)Cfg.SAMPLE_RATE);
             }
 
             // ---------------- streaming ring buffer ----------------------------------------------
@@ -1108,6 +1370,11 @@ namespace DeepUnity
                     if (source != null) source.volume = fadePrevVolume;
                 }
                 if (prewarmJob != null) { StopCoroutine(prewarmJob); prewarmJob = null; }
+                // prepareJob gates the pump the same way prewarmJob does, and sideJobHeld is this
+                // voice's claim on the shared-engine side-job flag — a killed coroutine releases
+                // neither, and either latch left set mutes the voice (or every voice) for good.
+                if (prepareJob != null) { StopCoroutine(prepareJob); prepareJob = null; }
+                if (sideJobHeld) { s_engineSideJobBusy = sideJobHeld = false; }
             }
 
             void OnDestroy()

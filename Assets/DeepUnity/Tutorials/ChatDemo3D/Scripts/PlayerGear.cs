@@ -6,7 +6,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
     /// <summary>
     /// The player's gear ownership for the ChatDemo3D sale beat: the warrior starts EMPTY-HANDED and
     /// only ever gets a sword and shield because Velmire sells his own and the player presses Accept
-    /// on his GiveTool offer (<see cref="NPCGearOffer"/>). Sword and shield are still built, posed and
+    /// on his GiveItem offer (<see cref="NPCGearOffer"/>). Sword and shield are still built, posed and
     /// referenced by the scene builder exactly as before — they simply start deactivated, so the
     /// hand-tuned held poses and the <see cref="WeaponStower"/> wiring survive untouched.
     /// <para>This component is also the single source of truth the NPC's internal CheckMyGear tool

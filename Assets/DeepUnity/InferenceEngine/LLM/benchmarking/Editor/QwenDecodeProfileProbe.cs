@@ -83,6 +83,77 @@ namespace DeepUnity
                 }
             }
 
+            // 2026-08-02 sliced-decode parity gate: the burst issue path (Forward — the sync era's
+            // single-frame dispatch stream) vs the sliced path (ForwardYielding pumped to completion;
+            // edit mode has no frames, so pumping it flat replays the EXACT dispatch stream play mode
+            // spreads across frames). Slicing is allowed to move frame boundaries and nothing else,
+            // so the gate here is stricter than the GEMV probe's tolerance gate: the greedy token
+            // chain must be identical AND the final step's logits bit-exact. Any drift means a
+            // dispatch was reordered — the one thing the smoothness mandate does not license.
+            [MenuItem("DeepUnity/Qwen3.5/Sliced Decode Parity (burst vs sliced)")]
+            public static void RunSlicedDecodeParity()
+            {
+                Qwen3_5Model model = null;
+                try
+                {
+                    EditorUtility.DisplayProgressBar("Qwen3.5 sliced decode parity", "Loading weights (blocking)…", 0.1f);
+                    model = new Qwen3_5Model(WEIGHTS, 2048, LLMQuant.INT8, KVQuant.FP16);
+                    model.LoadBlockingForProbe();
+
+                    var ids = new float[48];
+                    for (int i = 0; i < 48; i++) ids[i] = 3000 + i * 5;
+                    const int DECODE = 32;
+
+                    (int[] toks, float[] logits) Chain(bool sliced)
+                    {
+                        model.ResetCache();
+                        model.Forward(Tensor.Constant(ids), useCache: true, lastPosOnly: true); // prefill: identical both arms
+                        int tok = model.SampleGreedy();
+                        var outToks = new int[DECODE];
+                        for (int t = 0; t < DECODE; t++)
+                        {
+                            if (sliced)
+                            {
+                                var e = model.ForwardYielding(Tensor.Constant((float)tok), useCache: true, lastPosOnly: true);
+                                while (e.MoveNext()) { }   // no readbacks inside → safe to pump flat
+                            }
+                            else
+                            {
+                                model.Forward(Tensor.Constant((float)tok), useCache: true, lastPosOnly: true);
+                            }
+                            tok = model.SampleGreedy();
+                            outToks[t] = tok;
+                        }
+                        return (outToks, model.ReadLogits(1).ToArray());
+                    }
+
+                    EditorUtility.DisplayProgressBar("Qwen3.5 sliced decode parity", "Burst chain…", 0.3f);
+                    (int[] ta, float[] la) = Chain(false);
+                    EditorUtility.DisplayProgressBar("Qwen3.5 sliced decode parity", "Sliced chain…", 0.6f);
+                    (int[] tb, float[] lb) = Chain(true);
+
+                    int firstDiff = -1;
+                    for (int i = 0; i < DECODE; i++) if (ta[i] != tb[i]) { firstDiff = i; break; }
+                    double maxAbs = 0;
+                    for (int i = 0; i < la.Length; i++)
+                    {
+                        double d = System.Math.Abs(la[i] - (double)lb[i]);
+                        if (d > maxAbs) maxAbs = d;
+                    }
+                    bool pass = firstDiff < 0 && maxAbs == 0.0;
+                    Debug.Log($"[QwenSlicedParity] burst vs sliced ({DECODE} greedy tokens, slice " +
+                              $"{InferencePerf.LlmDecodeSliceLayers} layers): " + (pass ? "PASS" : "FAIL") +
+                              $" | tokens {(firstDiff < 0 ? "identical" : $"DIVERGE at step {firstDiff}")}" +
+                              $" | final-logits maxAbs {maxAbs:E2} (gate: bit-exact)");
+                    if (!pass) Debug.LogError("[QwenSlicedParity] sliced decode parity FAILED — a dispatch moved, not just a frame boundary.");
+                }
+                finally
+                {
+                    model?.Dispose();
+                    EditorUtility.ClearProgressBar();
+                }
+            }
+
             // #31 parity gate: logits of ONE decode step, coalesced vs legacy GEMV kernels, from an
             // IDENTICAL model state (reset + same prefill, whose kernels are unchanged). Lane-parallel
             // reduction reorders float sums, so the gate is tolerance + argmax agreement, not bit-exact.

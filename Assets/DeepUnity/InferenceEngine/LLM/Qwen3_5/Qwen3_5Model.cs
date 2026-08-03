@@ -821,8 +821,9 @@ namespace DeepUnity
             }
 
             // #20 A/B diagnostic: force the pre-fix yield-per-layer DECODE spreading so the
-            // frame-pacing probe can measure the old spiky behavior against the shipped
-            // one-burst path. Benchmarking only — never set in production code.
+            // frame-pacing probe can measure the old spiky behavior against the shipped path
+            // (one-burst through the sync era, LlmDecodeSliceLayers slices since 2026-08-02).
+            // Benchmarking only — never set in production code.
             public static bool DebugSpreadDecode = false;
 
             // ===================== #31 decode stage profiler =====================
@@ -890,24 +891,38 @@ namespace DeepUnity
                 cs.Dispatch(kEmbed, Div256(seqLen * hiddenSize), 1, 1);
 
                 // Prefill (seqLen>1) is heavy per layer, so spread it one-layer-per-frame to avoid a
-                // single fat frame. DECODE (seqLen==1) layers are tiny — spreading them makes one
-                // token span ~30 frames AND lets the CPU issue faster than the GPU drains, so the
-                // command queue backs up and Present() periodically stalls (the 33-98 ms decode
-                // spikes, task #20). Issue the whole single-token forward in ONE frame instead; the
-                // caller's async SampleYielding readback then paces the CPU to the GPU (the game
-                // renders smoothly across the readback wait). Same kernels/order → bit-identical.
-                bool spread = seqLen > 1 || DebugSpreadDecode;
+                // single fat frame. DECODE (seqLen==1) has now walked every point of this spectrum:
+                //   - per-layer spread (pre-#20): one token spanned ~30 frames AND the CPU out-issued
+                //     the GPU in the uncapped probe scene, so the command queue backed up and
+                //     Present() periodically stalled (the 33-98 ms decode spikes, task #20);
+                //   - one-burst issue (#20 → 2026-08-02): clean CPU-side frames, but the token's
+                //     WHOLE burst (~30-55 ms of GPU on the reference 1650 — decode reads every weight
+                //     once per token) still landed in ONE frame's GPU queue, so the display hitched
+                //     once per token no matter how the readback was done — the 33 ms mean / 55 ms p95
+                //     GEN rows of every talk-perf report.
+                // Since 2026-08-02 (the smoothness mandate: no single frame may carry a whole token's
+                // burst; latency is explicitly no longer a criterion — see BackendTradeoffTable.UseSyncDecode)
+                // decode SLICES the issue: InferencePerf.LlmDecodeSliceLayers layers per frame, the
+                // lm_head alone in the frame after the last slice (it is ~half the per-token bytes),
+                // and the caller's async SampleYielding readback gates the next token. That gate is
+                // what keeps the #20 backup from returning: at most ONE token's dispatches are ever
+                // in flight. Same kernels, same order → bit-identical; only frame boundaries moved.
+                bool spreadPerLayer = seqLen > 1 || DebugSpreadDecode;
+                bool sliceDecode = seqLen == 1 && !BackendTradeoffTable.UseSyncDecode && !DebugSpreadDecode;
+                int sliceLayers = Mathf.Max(1, InferencePerf.LlmDecodeSliceLayers);
                 // Prefill yields ONE LAYER AT A TIME, unconditionally. That granularity is the UNIT
                 // the Backend Tradeoff dial counts (BackendTradeoffTable.PrefillStepsPerFrame = how many of
                 // these yields the CALLER swallows per Unity frame), so it must not change; what went
                 // away 2026-07-26 is only the layers-per-frame knob that used to be applied here.
                 // Packing belongs to the caller anyway — this coroutine cannot see how many frames
-                // the prefill is allowed to take. Decode (seqLen==1) issues in one shot and is paced
-                // by the caller's per-token loop.
+                // the prefill is allowed to take. Decode is the opposite: its callers' per-token
+                // loops treat every yield as a frame and never pack, so the slice width is applied
+                // HERE — the one site that knows the layer count.
                 for (int i = 0; i < numLayers; i++)
                 {
                     DispatchLayer(i, seqLen, totalKvLen, useCache);
-                    if (spread) yield return null;
+                    if (spreadPerLayer) yield return null;
+                    else if (sliceDecode && (i + 1) % sliceLayers == 0) yield return null;
                 }
 
                 if (useCache) cache.CachedTokenCount += seqLen;

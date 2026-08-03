@@ -426,7 +426,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             ambience.spatialBlend = 0f;
 
             // …and the reason it still competed: everything outside a conversation now eases down to
-            // the talking NPC's worldAudioWhileTalking over ~3 s (exponential, so it reads as an even
+            // the talking NPC's worldAudioWhileInteracting over ~3 s (exponential, so it reads as an even
             // fade) and back up on close. The ducker finds the sources itself and leaves the NPCs and
             // the dialogue window alone; it lives on Ambience because that object is always active.
             ambience.gameObject.AddComponent<ConversationAudioDucker>();
@@ -1356,7 +1356,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // The gear beat (user 2026-07-25): the warrior starts EMPTY-HANDED. These two objects
             // stay built, sized, posed and stower-wired exactly as above — they are only
             // DEACTIVATED, so nothing about the held poses has to be re-tuned when they turn up. He
-            // gets them if Velmire offers his sword and the player presses Accept on the GiveTool
+            // gets them if Velmire offers his sword and the player presses Accept on the GiveItem
             // panel (PlayerGear + NPCGearOffer); BuildHud hides the two quick-slot icons to match.
             var gear = root.AddComponent<PlayerGear>();
             if (sword != null) { SetRef(gear, "sword", sword.transform); sword.SetActive(false); }
@@ -1824,17 +1824,22 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 "You carry a sword you no longer need, and you sell it: you ask 80 souls, and you will haggle " +
                 "down to 60 but never lower. Below 60 you refuse, in your own words - 'Sixty souls, wanderer. " +
                 "I said my price, and I do not say it twice.' - and no sad story, no flattery and no asking " +
+                // NAME THE ITEM PLAINLY. The engine binds his offer to the `sell_sword` decision by
+                // matching the ITEM STRING he writes against that binding's aliases, so the prompt
+                // asking for the bare word "sword" is what makes the match near-exact rather than a
+                // substring rescue. The aliases below still cover the ways he rewords it anyway.
                 "again moves you. Look before you offer: call CheckMyGear first. When the wanderer agrees a " +
-                "price, call GiveTool with the sword and that price in the same reply.");
-            // His belt is GiveTool ONLY (2026-07-31): the beat is now "hand over an item at a price",
+                "price, call GiveItem in the same reply, with item exactly 'sword' and that price.");
+            // His belt is GiveItem ONLY (2026-07-31): the beat is now "hand over an item at a price",
             // which is exactly that tool, and a 0.8B handed both interactive tools picked the wrong one.
             // AskUserQuestion is OFF, so its schema and its <IMPORTANT> bullet both leave his prompt —
-            // that plus the (smaller) GiveTool schema makes the prefix SHORTER than the old pair, so
+            // that plus the (smaller) GiveItem schema makes the prefix SHORTER than the old pair, so
             // the context budget below is if anything more generous than before.
             // The internal CheckMyGear read stays, contributed by NPCGearOffer further down: it is not
             // an interactive tool, and it is what keeps him honest about the sword after a compaction.
-            SetBool(npc, "enableAskUserQuestion", false);
-            SetBool(npc, "enableGiveTool", true);
+            // The per-NPC toggle fields died 2026-08-03 (runtime handles both tools on every
+            // NPC); which tools Velmire ADVERTISES is stated at the WithToolsBlock call below:
+            // GiveItem only, no AskUserQuestion — his beat is handing the sword over, not menus.
             // Velmire is the ResumeFromCompact demo (user 2026-07-15): paired with the small
             // context below, the model auto-compacts its history after a few replies and keeps
             // talking on the short compacted prefix.
@@ -1876,7 +1881,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             SetFloat(npc, "voiceVolume", 5f);   // user 2026-07-15
             // the world drops to HALF while Velmire talks and eases back on close, so the voice sits
             // on top of the ambience instead of next to it (user 2026-07-25)
-            SetFloat(npc, "worldAudioWhileTalking", 0.5f);
+            SetFloat(npc, "worldAudioWhileInteracting", 0.5f);
             // Qwen3.5-IT's own recommended sampling, verbatim (user 2026-07-25). presence_penalty 2.0
             // is the high end of Qwen's 0-2 range: it is what keeps a 0.8B from looping a phrase, and
             // it costs some willingness to repeat a NAME — if the NPC starts avoiding "Velmire" or
@@ -1897,10 +1902,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             SetFloat(npc, "prefetchRadius", 10f);
 
             // The sale's engine half: contributes the internal CheckMyGear read to his prompt, answers
-            // GiveTool's accept-gate (souls in hand >= the price he named) and performs the hand-over —
-            // souls out, sword in — when the player presses Accept. It is a plain INPCToolProvider
-            // component, which is the whole point of that interface — WHICH tools an NPC has is
-            // authored in the scene, so Morwenna across the courtyard gets none of this.
+            // the sell_sword decision's accept-gate (souls in hand >= the price he named) and performs
+            // the hand-over — souls out, sword in — when the player presses Accept. It is a plain
+            // INPCToolProvider component, which is the whole point of that interface — WHICH tools an
+            // NPC has is authored in the scene, so Morwenna across the courtyard gets none of this.
             var offer = root.AddComponent<NPCGearOffer>();
             var playerGear = playerGO != null ? playerGO.GetComponent<PlayerGear>() : null;
             if (playerGear != null) SetRef(offer, "playerGear", playerGear);
@@ -1910,6 +1915,19 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             else Debug.LogWarning("[ChatDemo3DBuilder] no PlayerSouls on the player — Velmire's price cannot be paid.");
             if (velmireSword != null) SetRef(offer, "npcSword", velmireSword.transform);
             if (velmireShield != null) SetRef(offer, "npcShield", velmireShield.transform);
+
+            // THE DECISION BINDING. Velmire's offer used to reach NPCGearOffer through the NPC-wide
+            // give hooks, which have no key: one gate, one event, and no way to tell a sword from a
+            // shield the day he sells both. It now goes through a row of his decision table instead —
+            // id "sell_sword", the aliases he might actually write, this component as the gate, and
+            // this component's OnDecisionResolved as the event.
+            //
+            // AddPersistentListener, NOT a runtime `+=`: a persistent listener is SERIALIZED into the
+            // scene, so the wiring is visible and editable in the inspector like any other UnityEvent —
+            // which is the entire point of moving to a table a designer can read. (The generic overload
+            // registers it in EventDefined mode, so the NPCDecisionResult argument is the one the
+            // engine passes at invoke time, not a serialized constant.)
+            BindVelmireSwordSale(root.GetComponent<NPCInteractor3D>(), offer);
 
             // LAST, once every tool this NPC has actually exists on the object: bake the # Tools block
             // INTO Description And Rules (user 2026-07-25). Nothing is injected at runtime any more, so
@@ -1922,9 +1940,44 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             {
                 var f = typeof(NPCChatBase).GetField("descriptionAndRules",
                     System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-                f.SetValue(chat, chat.WithToolsBlock((string)f.GetValue(chat), toolsFirst: false));
+                f.SetValue(chat, chat.WithToolsBlock((string)f.GetValue(chat), askUserQuestion: false, giveItem: true, toolsFirst: false));
             }
             return root;
+        }
+
+        /// <summary>
+        /// Velmire's one decision binding, authored here because the builder is the source of truth for
+        /// this scene. The ALIASES are the whole design: the engine matches them against the ITEM
+        /// STRING the model wrote, normalized (case, whitespace, surrounding punctuation and a leading
+        /// article all ignored) and then exactly, then by containment — so "sword" catches "Velmire's
+        /// sword", "my old sword" and "the sword", while "blade" catches "this old blade of mine".
+        /// His persona asks him for the bare word, so the common path is the near-exact one and these
+        /// are the safety net for the runs where a 0.8B embroiders.
+        /// </summary>
+        static void BindVelmireSwordSale(NPCInteractor3D chat, NPCGearOffer offer)
+        {
+            if (chat == null || offer == null)
+            {
+                Debug.LogWarning("[ChatDemo3DBuilder] Velmire's sell_sword binding could not be wired " +
+                                 "(missing NPCInteractor3D or NPCGearOffer) — his sale will not land.");
+                return;
+            }
+            var binding = new NPCDecision
+            {
+                id = NPCGearOffer.SellSwordDecisionId,
+                aliases = new[]
+                {
+                    "sword", "arming sword", "longsword", "blade", "steel",
+                    "my sword", "his sword", "velmire's sword", "the sword i carry",
+                },
+                gate = offer,
+                onResolved = new NPCDecisionEvent(),
+            };
+            UnityEventTools.AddPersistentListener(binding.onResolved,
+                                                  new UnityAction<NPCDecisionResult>(offer.OnDecisionResolved));
+            chat.Decisions.Clear();
+            chat.Decisions.Add(binding);
+            EditorUtility.SetDirty(chat);
         }
 
         // Secondary dialogue NPC: a witch across the courtyard from Velmire. Same NPCInteractor3D
@@ -2029,10 +2082,9 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 // Voiced, like Velmire — same reason, her own words. See his persona for the why.
                 "Word an AskUserQuestion as a label on the screen rather than speech, naming yourself: " +
                 "'Take Morwenna's charm?', never 'Do you want mine?'.");
-            // AskUserQuestion is ON by default on NPCChatBase; the witch keeps it — barters-in-
-            // riddles is exactly the persona that puts deals to the player. Her context is the
-            // 8192 default, so the tools block costs her nothing in headroom.
-            SetBool(npc, "enableAskUserQuestion", true);
+            // The witch advertises AskUserQuestion (stated at the WithToolsBlock call below) —
+            // barters-in-riddles is exactly the persona that puts deals to the player. Her
+            // context is the 8192 default, so the tools block costs her nothing in headroom.
             // history-mode A/B spread: the witch forgets you the moment you leave (fresh
             // InitializeChat every opening — the pre-history-modes behavior)
             SetEnum(npc, "historyMode", (int)NPCInteractor3D.HistoryMode.ResetEveryTime);
@@ -2058,7 +2110,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             {
                 var f = typeof(NPCChatBase).GetField("descriptionAndRules",
                     System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-                f.SetValue(chat, chat.WithToolsBlock((string)f.GetValue(chat)));
+                f.SetValue(chat, chat.WithToolsBlock((string)f.GetValue(chat), askUserQuestion: true, giveItem: false));
             }
             return root;
         }
@@ -2865,20 +2917,20 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 Directory.CreateDirectory(outDir);
                 Shoot(cam, Path.Combine(outDir, "ui_probe.png"), 1920, 1080);
 
-                // GiveTool's offer panel. It is built at RUNTIME (no prefab, nothing in the scene to
+                // GiveItem's offer panel. It is built at RUNTIME (no prefab, nothing in the scene to
                 // inspect), so a screenshot is the only honest check that the strip it puts in place of
                 // the input row actually lays out — twice: once takeable, once with the accept-gate off,
                 // which is what 50 souls against an 80-soul price looks like.
-                var offer = new ToolGiveOffer { item = "Velmire's sword", price = 80 };
-                win.ShowToolGive("Velmire, the Pale Herald", offer, canAccept: true, _ => { });
+                var offer = new GiveItemOffer { item = "Velmire's sword", price = 80 };
+                win.ShowGiveItem("Velmire, the Pale Herald", offer, canAccept: true, _ => { });
                 Canvas.ForceUpdateCanvases();
-                Shoot(cam, Path.Combine(outDir, "ui_probe_givetool.png"), 1920, 1080);
-                win.HideToolGive();
+                Shoot(cam, Path.Combine(outDir, "ui_probe_giveitem.png"), 1920, 1080);
+                win.HideGiveItem();
 
-                win.ShowToolGive("Velmire, the Pale Herald", offer, canAccept: false, _ => { });
+                win.ShowGiveItem("Velmire, the Pale Herald", offer, canAccept: false, _ => { });
                 Canvas.ForceUpdateCanvases();
-                Shoot(cam, Path.Combine(outDir, "ui_probe_givetool_gated.png"), 1920, 1080);
-                win.HideToolGive();
+                Shoot(cam, Path.Combine(outDir, "ui_probe_giveitem_gated.png"), 1920, 1080);
+                win.HideGiveItem();
 
                 Debug.Log("[ChatDemo3DBuilder] ui probe done");
                 EditorApplication.Exit(0);

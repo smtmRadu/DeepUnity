@@ -128,11 +128,42 @@ namespace DeepUnity
         /// everything else maxed. Never remove: an unbounded hold serialized whole replies.</summary>
         public static int LlmHoldMaxFrames = 180;
 
+        /// <summary>Transformer layers of ONE decode token issued per frame — the slice width of
+        /// sliced decode (2026-08-02, the smoothness mandate: no single frame may carry a whole
+        /// token's GPU burst; latency is explicitly no longer a criterion). Read by every family's
+        /// <c>ForwardYielding</c> on its seqLen==1 path (Qwen3.5; Gemma3/MiniCPM5 ported to the same
+        /// constant); prefill is untouched — its unit stays one layer, counted by the tradeoff
+        /// table's prefill column.
+        /// <para>Why this lives HERE and not as a BackendTradeoffTable column, when it plainly prices
+        /// LLM work per frame: the table's rows answer "how capable is this machine", and this number
+        /// answers nothing of the sort. It is the mandate's CEILING on what one frame may be asked to
+        /// carry — identical on every machine, like the divisor shapes above it. A fast GPU pays
+        /// nothing for slicing (its slices are sub-millisecond and tok/s ≈ fps / frames-per-token, so
+        /// it scales with the framerate it already has); a slow GPU is the machine the ceiling exists
+        /// FOR.</para>
+        /// <para>The arithmetic behind 6, on the reference 1650 at Smooth: a Qwen3.5-0.8B token reads
+        /// ~0.55 GB of INT8 layer weights plus ~0.5 GB of fp16 lm_head (~30-55 ms of GPU issued as
+        /// one burst — the 33/55 ms GEN rows sliced decode retires). 24 layers ÷ 6 = 4 slices of
+        /// ~6-9 ms each, the lm_head alone in a fifth frame (~11-15 ms — one GEMV, indivisible
+        /// without a kernel change, and therefore the true frame-cost floor of this scheme). With the
+        /// async token readback that is ~6-7 frames per token, i.e. ~5-8 tok/s at talk-time
+        /// framerates — down from the sync path's ~12, accepted because speech at ~3 words/s is the
+        /// real pacing bottleneck and ~5 tok/s ≈ 3.7 words/s still clears it.</para>
+        /// <para>RAISE toward the layer count for fewer, fatter decode frames (numLayers = one-burst
+        /// issue with only the head split off); LOWER toward 1 for the pre-#20 per-layer spread,
+        /// whose failure mode is on record (task #20: ~30 frames per token, and in uncapped scenes
+        /// the CPU out-issues the GPU until Present() stalls). The async readback bounds the backlog
+        /// to ONE token in flight, which is why the #20 backup does not return at sane widths.</para></summary>
+        public static int LlmDecodeSliceLayers = 6;
+
         // The LLM's side of that tradeoff (prefill steps and decode tokens per frame) moved to
         // BackendTradeoffTable on 2026-07-26 — see the class docs above. What stays here is only the
         // arbitration: the #29 knobs decide WHOSE frame it is, the table decides how much the LLM
         // packs into the frames it gets, and TTS starvation still overrides the table's decode
         // packing to one-token-per-frame at the call site (audio continuity wins there).
+        // LlmDecodeSliceLayers (2026-08-02) is not that tradeoff coming back: the table states what a
+        // machine may SPEND per frame, the slice width states what any frame may be ASKED TO CARRY —
+        // a shape of the mandate, not a budget of the machine.
 
         // ================= pocket-tts streaming voice ==========================================
 
@@ -150,6 +181,67 @@ namespace DeepUnity
         /// of TTS throughput; LOWER for CPU thrift. When the ring is low the spin window is the
         /// whole frame budget regardless.</summary>
         public static double TtsGpuWaitSpinMs = 2.0;
+
+        /// <summary>Divisor on the tier's speaking tick count while the voice CRUISES — the ring
+        /// holds more than the tier's cede headroom, so every dead window the pump's boosts exist
+        /// for is already covered by banked audio. Full-rate synthesis there buys nothing but
+        /// finishing the reply's audio sooner, and what it measurably cost (GTX 1650, frame probe
+        /// 2026-08-02) was 4 ticks ≈ 16-24 ms of GPU dropped into every frame with the ring at
+        /// 3-7 s and the LLM idle — the reported 60-70→25-35 fps dips while an NPC speaks. The
+        /// #29 arbiter only ever ceded frames to the LLM; cruise is the RENDERER's seat at that
+        /// table. This is a shape of the arbitration (how much gentler cruising is than speaking),
+        /// so it lives here; the magnitudes it divides stay tier columns. RAISE for smoother
+        /// frames and slower ring growth; 1 disables cruising entirely.</summary>
+        public static int TtsCruiseTickDivisor = 2;
+
+        /// <summary>Ring seconds ABOVE the tier's cede headroom needed to ENTER cruise; leaving
+        /// happens at the headroom itself. The band exists because the ring is an integrator: a
+        /// single-threshold test parks at its own boundary and flips tick counts frame by frame —
+        /// the exact trap documented on <c>ttsCedeHeadroomSeconds</c>. Half a second ≈ seconds of
+        /// steady state per crossing at cruise-rate drain.</summary>
+        public static float TtsCruiseEnterExtraSeconds = 0.5f;
+
+        /// <summary>Divisor on the pump's BOOST tick count (the pushHard band: low ring while
+        /// audible, uncovered clause prefill, silent refill) on frames the LLM ALSO issued GPU
+        /// work. Unsplit, the two engines stack: the tier's boost ticks (≈24-36 ms of GPU at
+        /// Smooth's 6) land in the same frame as an LLM token burst (≈15-25 ms) — the 97-162 ms
+        /// GEN+SPK frames in every talk-perf report, ~10-15 fps for the seconds a reply is both
+        /// generated and spoken. Splitting is nearly free where it looks most dangerous: a clause
+        /// prefill is FRAME-bound (~24 FrameBreak ticks), so at half the ticks on half-length
+        /// frames its WALL time barely moves, and the panic floor below still holds the LLM
+        /// outright when a hole is imminent (that negotiation — TTS sprints on held frames,
+        /// LLM resumes above the floor — is the intended steady state on weak GPUs). A shape of
+        /// the arbitration, applied to tier magnitudes: general across GPUs by construction.
+        /// RAISE for smoother collision frames and slower refills under decode; 1 disables.</summary>
+        public static int TtsSharedFrameTickDivisor = 2;
+
+        /// <summary>What one retained-prompt TEXT ROW (AppendRowsKVYielding, the #32 clause
+        /// start) is BILLED at when the MAC dial sizes its per-tick batches, whenever its real
+        /// MAC count is smaller. A text row is ~76 MMAC but ~40 tiny GEMV dispatches, and on a
+        /// latency-bound GPU those dispatches are the cost: measured 2-4 ms of GPU per row on
+        /// the GTX 1650 against the ~1 ms its MACs suggest. Billed at face value, Smooth's
+        /// 900 MMAC tick bought 11 rows and the pump's 4-tick clause-start allowance stacked 44
+        /// rows ≈ 90-170 ms of GPU into ONE frame — the `ar_frame @prefill ring 0.00` family in
+        /// every worst-20 (96-169 ms), the last conversation-time spike class standing after the
+        /// 2026-08-02 hunts. 400 M ≈ the dispatch-latency-equivalent of a row on the reference
+        /// box: Smooth then packs 2 rows/tick (~4-8 ms GPU), scaling up the tiers exactly like
+        /// the block prefill's LinearRows batches always did. A shape of the COST MODEL, not a
+        /// tier magnitude — the tier dial stays <c>ttsMacsPerHeavyTick</c>. LOWER only if clause
+        /// dead windows measurably starve the ring on a strong GPU; RAISE if clause starts still
+        /// spike on a weaker-than-1650 card.</summary>
+        public static long TtsTextRowDispatchEquivMacs = 400_000_000;
+
+        /// <summary>#36: elements (floats) of a freshly created ComputeBuffer that one frame may
+        /// FIRST-TOUCH (zero-fill) during the walk-up preallocation pass. Creating a buffer only
+        /// reserves it — the driver's physical commit, and on a full card the WDDM residency
+        /// migration, wait for the first dispatch that writes it. Untouched, that first write was
+        /// the first real prefill/flush (the once-per-session 160+290 ms walk-up frames); touched
+        /// whole-buffer, the commit just moved into the touch (measured 262+283 ms on the ~24 MB
+        /// mimi SEANet scratches — migration cost tracks BYTES, not dispatches). 1M elements =
+        /// 4 MB/frame ≈ a few ms of commit each, ~30 extra walk-up frames total on the Smooth
+        /// window sizes. RAISE on cards with VRAM headroom (fewer prealloc frames); LOWER if the
+        /// prealloc frames themselves ever show up in a spike report.</summary>
+        public static int TtsFirstTouchElemsPerFrame = 1_000_000;
 
         // The slice size of one heavy TTS tick is BackendTradeoffTable.TtsMacsPerTick, read by
         // PocketTTS.GpuMacsPerTick. Deleted with the calibrator that used to walk it (2026-07-27):

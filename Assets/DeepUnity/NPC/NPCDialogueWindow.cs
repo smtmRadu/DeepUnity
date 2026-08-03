@@ -13,8 +13,8 @@ namespace DeepUnity
     /// surface that does NOT depend on how a given window looks — the send-button loading pulse,
     /// the input caret and typing sounds, title/info text, the context-fill bar — plus BOTH built-in
     /// interactive panels: the <b>AskUserQuestion</b> choice popup
-    /// (<see cref="INPCToolQuestionWindow"/>) and the <b>GiveTool</b> offer popup
-    /// (<see cref="INPCToolGiveWindow"/>), so every derived window supports the NPC's interactive
+    /// (<see cref="INPCToolQuestionWindow"/>) and the <b>GiveItem</b> offer popup
+    /// (<see cref="INPCGiveItemWindow"/>), so every derived window supports the NPC's interactive
     /// tools for free. Those two are the whole set — an NPC's belt may carry either, both or neither,
     /// and anything else it does is an internal read that never reaches the screen.
     ///
@@ -22,7 +22,7 @@ namespace DeepUnity
     /// (<see cref="OnOpen"/> / <see cref="OnClose"/>) and how it renders the transcript
     /// (<see cref="AddMessage"/> / <see cref="PopLastMessage"/> / <see cref="Clear"/>). Restyle the
     /// popups by overriding the ToolQuestion* theme properties (shared by both) and
-    /// <see cref="ToolGiveCurrency"/> / <see cref="FormatToolGive"/> — never by re-implementing them.
+    /// <see cref="GiveItemCurrency"/> / <see cref="FormatGiveItem"/> — never by re-implementing them.
     ///
     /// Streaming contract every subclass must honor: the NPC pops + re-adds the newest line many
     /// times a second during the token stream, so <see cref="PopLastMessage"/> should PARK the
@@ -30,7 +30,7 @@ namespace DeepUnity
     /// it as a pure text mutation — destroying and re-instantiating it flickers.
     /// </summary>
     public abstract class NPCDialogueWindow : MonoBehaviour, INPCChatWindow, INPCToolQuestionWindow,
-                                              INPCToolGiveWindow
+                                              INPCGiveItemWindow
     {
         [Header("Reasoning models")]
         [Tooltip("Render <think> reasoning content in the window (dimmed italic). It is never spoken by the TTS either way.")]
@@ -73,22 +73,22 @@ namespace DeepUnity
         /// <summary>Option button fill of the choice popup.</summary>
         protected virtual Color ToolQuestionOptionFill => new Color(0.15f, 0.13f, 0.105f, 0.97f);
 
-        /// <summary>What a GiveTool price is quoted IN, in this environment — "souls" in the 3D castle,
+        /// <summary>What a GiveItem price is quoted IN, in this environment — "souls" in the 3D castle,
         /// "coins" on the farm. Empty (the default) prints the bare number, because the base class has
         /// no business inventing a currency for a game it knows nothing about.</summary>
-        protected virtual string ToolGiveCurrency => "";
+        protected virtual string GiveItemCurrency => "";
 
         /// <summary>The one line the offer panel shows above Accept | Decline: the item, its quantity
         /// when the NPC named one, and its price when there is one. Override to reword or restyle it;
         /// the two buttons are fixed, because the tool's result is a yes/no and nothing else.</summary>
-        protected virtual string FormatToolGive(ToolGiveOffer offer)
+        protected virtual string FormatGiveItem(GiveItemOffer offer)
         {
             var s = new System.Text.StringBuilder(offer.item ?? "");
             if (offer.quantity.HasValue) s.Append(" x").Append(offer.quantity.Value);
             if (offer.price.HasValue)
             {
                 s.Append("  -  ").Append(offer.price.Value);
-                string cur = ToolGiveCurrency;
+                string cur = GiveItemCurrency;
                 if (!string.IsNullOrEmpty(cur)) s.Append(' ').Append(cur);
             }
             return s.ToString();
@@ -265,7 +265,7 @@ namespace DeepUnity
         }
 
         // ---------------------------------------------------------------- interactive tool panels
-        // The NPC's TWO interactive tools — AskUserQuestion (a choice) and GiveTool (an item offer) —
+        // The NPC's TWO interactive tools — AskUserQuestion (a choice) and GiveItem (an item offer) —
         // implemented ONCE for every environment and sharing one panel builder, because they are the
         // same affordance with different labels: a line of text above a row of buttons whose click is
         // the tool's result. The panel TAKES THE PLACE OF THE INPUT ROW (user spec 2026-07-25): the
@@ -317,13 +317,13 @@ namespace DeepUnity
         }
 
         /// <inheritdoc/>
-        public virtual void ShowToolGive(string npcName, ToolGiveOffer offer, bool canAccept,
+        public virtual void ShowGiveItem(string npcName, GiveItemOffer offer, bool canAccept,
                                          System.Action<bool> onDecide)
         {
             // EXACTLY two buttons, always in this order. Accept can be gated off (no money); Decline
             // never is, so an offer the player cannot afford still ends the exchange with a real answer
             // instead of a dead panel.
-            ShowToolPanel(FormatToolGive(offer),
+            ShowToolPanel(FormatGiveItem(offer),
                           new List<string> { AcceptLabel, DeclineLabel },
                           new List<bool> { canAccept, true },
                           i => onDecide?.Invoke(i == 0));
@@ -444,7 +444,7 @@ namespace DeepUnity
         public virtual void HideToolQuestion() => HideToolPanel();
 
         /// <inheritdoc/>
-        public virtual void HideToolGive() => HideToolPanel();
+        public virtual void HideGiveItem() => HideToolPanel();
 
         /// <summary>Tear down whichever interactive panel is up and give the typing chrome back.
         /// Idempotent, and a no-op when no panel was ever built.</summary>
@@ -480,7 +480,7 @@ namespace DeepUnity
             Debug.LogWarning("[NPCDialogueWindow] no EventSystem in the scene — created one so the " +
                              "interactive tool panel's buttons are clickable.");
             // Play mode ONLY: DontDestroyOnLoad THROWS from an editor script, and an edit-mode probe
-            // that renders this panel in an empty scene hits exactly that (NpcGiveToolProbe did). The
+            // that renders this panel in an empty scene hits exactly that (NpcGiveItemProbe did). The
             // object is created either way — it simply has nothing to survive outside play mode.
             if (Application.isPlaying) DontDestroyOnLoad(go);
         }

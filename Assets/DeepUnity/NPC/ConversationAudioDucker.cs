@@ -6,7 +6,7 @@ namespace DeepUnity
     /// <summary>
     /// Pulls the whole game's audio down while an NPC is talking, so the voice sits on top of it:
     /// music, ambience, footsteps, combat, UI clicks — everything EXCEPT the conversation itself.
-    /// How far down is the NPC's call (<c>worldAudioWhileTalking</c> on <see cref="NPCChatBase"/>,
+    /// How far down is the NPC's call (<c>worldAudioWhileInteracting</c> on <see cref="NPCChatBase"/>,
     /// 1 = untouched, 0.5 = half); this component only decides how the move is made.
     /// <para>One per scene, on any always-active object. Zero wiring: it finds the audio itself and
     /// works out what to leave alone.</para>

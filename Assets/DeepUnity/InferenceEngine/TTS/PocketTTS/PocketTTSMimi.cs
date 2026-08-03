@@ -136,6 +136,88 @@ namespace DeepUnity
                 Grow(ref qkvBuf, frames * 1536);
             }
 
+            /// <summary>#36: dispatch a zero-fill over the whole buffer — content is irrelevant,
+            /// the WRITE is the point. Creating a ComputeBuffer reserves it; on this driver the
+            /// physical commit (and any WDDM residency shuffling on a full 4 GB card) is deferred
+            /// to the first dispatch that touches it, which used to be the first REAL decode: the
+            /// once-per-session 290 ms walk-up frame that survived both zeroed-uniform kernel
+            /// prewarms. Public so PocketTTS can touch buffers it owns (wavAccum) with the same
+            /// kernel.</summary>
+            public void ZeroTouch(ComputeBuffer buf)
+            {
+                if (buf == null) return;
+                cs.SetInt("buffer_size", buf.count);
+                cs.SetInt("elem_offset", 0);   // stale-proof: ZeroBuffer honors it since #36
+                cs.SetBuffer(kZero, "buf_a", buf);
+                Dispatch1D(kZero, buf.count);
+            }
+
+            /// <summary>#36 second round: the commit cost tracks BYTES — whole-buffer touching a
+            /// ~24 MB SEANet scratch just moved the 290 ms stall into the touch frame (measured
+            /// 262+283 ms). Chunked form: one InferencePerf.TtsFirstTouchElemsPerFrame slice per
+            /// MoveNext, so a caller pumping one step per frame commits ~4 MB a frame.</summary>
+            public System.Collections.IEnumerator ZeroTouchYielding(ComputeBuffer buf)
+            {
+                if (buf == null) yield break;
+                int chunk = Math.Max(65536, InferencePerf.TtsFirstTouchElemsPerFrame);
+                for (int off = 0; off < buf.count; off += chunk)
+                {
+                    int n = Math.Min(chunk, buf.count - off);
+                    // #29/#30 sliced-dispatch convention, same as Copy/Act above: elem_offset is the
+                    // chunk START (LinearId folds it into the thread index), buffer_size the chunk's
+                    // END bound, dispatch count the chunk LENGTH. The first #36 draft passed the
+                    // length as buffer_size, which — against LinearId's offset-inclusive index —
+                    // failed the bound for every thread of every chunk past the first: the "chunked"
+                    // touch was really a first-chunk touch (masked in 36.1 because residency is
+                    // per-resource, but the code must do what it says).
+                    cs.SetInt("buffer_size", off + n);
+                    cs.SetInt("elem_offset", off);
+                    cs.SetBuffer(kZero, "buf_a", buf);
+                    Dispatch1D(kZero, n);
+                    cs.SetInt("elem_offset", 0);
+                    yield return null;
+                }
+            }
+
+            /// <summary>#36: Ensure(T)'s walk-up twin — pre-create AND first-touch every decode
+            /// scratch buffer for windows up to T latents, ONE allocation+zero per MoveNext, so
+            /// the driver's deferred commit is paid in walk-up-sized slices instead of inside the
+            /// first flush. curCap is published LAST (same rule as the flow-LM's prealloc): a
+            /// decode racing this coroutine sees "not covered" and Ensure()s what it needs —
+            /// wasteful, never wrong. Covered buffers yield nothing; re-running is a no-op.</summary>
+            public System.Collections.IEnumerator PreallocateYielding(int T)
+            {
+                int frames = T * Cfg.MIMI_STEPS_PER_LATENT;
+                int wav = T * Cfg.SAMPLES_PER_LATENT;
+                int peak = Math.Max(frames * 512, wav * 64);
+                if (peak <= curCap) yield break;
+                var plan = new (System.Func<ComputeBuffer> get, System.Action grow)[]
+                {
+                    (() => a,           () => Grow(ref a, peak)),
+                    (() => b,           () => Grow(ref b, peak)),
+                    (() => c,           () => Grow(ref c, peak)),
+                    (() => d,           () => Grow(ref d, peak)),
+                    (() => resid,       () => Grow(ref resid, frames * 512)),
+                    (() => attnScratch, () => Grow(ref attnScratch, frames * 512)),
+                    (() => qBuf,        () => Grow(ref qBuf, frames * 512)),
+                    (() => kBuf,        () => Grow(ref kBuf, frames * 512)),
+                    (() => vBuf,        () => Grow(ref vBuf, frames * 512)),
+                    (() => qkvBuf,      () => Grow(ref qkvBuf, frames * 1536)),
+                };
+                foreach (var (get, grow) in plan)
+                {
+                    var before = get();
+                    grow();
+                    var now = get();
+                    if (!ReferenceEquals(before, now))
+                    {
+                        var zt = ZeroTouchYielding(now);   // chunked: ~4 MB of commit per frame
+                        while (zt.MoveNext()) yield return null;
+                    }
+                }
+                curCap = peak;
+            }
+
             // ---- op helpers ----
             // fromElem (#30 tail-restricted decode): first element to process — elements below it
             // keep their previous buffer contents (only ever garbage-permitted rows). 0 = whole op,

@@ -104,6 +104,13 @@ namespace DeepUnity
             /// text rows and every voice swap under-covered).</summary>
             static readonly int PREALLOC_VOICE_ROWS = Mathf.CeilToInt(MAX_REF_SECONDS * Cfg.FRAME_RATE);
 
+            /// <summary>#36.6: the weights residency cycle (PocketTTSWeights.LoadEpoch) the
+            /// w_touch pass last COMPLETED under; -1 = never. See the latch comment inside
+            /// PrewarmAllocationsYielding — the scratch preallocations below it stay unlatched
+            /// because covered buffers are same-frame no-ops anyway (their idempotence IS the
+            /// guarantee), while the weights re-walk was the one repeat with a real bill.</summary>
+            int wTouchedEpoch = -1;
+
             /// <summary>Pre-allocate the flow-LM's clause-lifetime buffers at the in-game worst
             /// case (clone-cap voice prompt + PREALLOC_TEXT_ROWS text rows + DefaultMaxFrames),
             /// one real driver allocation per MoveNext — call from a prewarm coroutine while the
@@ -118,10 +125,79 @@ namespace DeepUnity
                     LoadCpuTensors();   // ~258 KB disk + 128k half-float decodes: give it its own
                     yield return null;  // frame instead of sharing one with the first KV create
                 }
+                // #36.2 — THE WEIGHTS FIRST. Four rounds of scratch-buffer experiments (##36.1)
+                // never moved the walk-up pair because the pair was never the scratch: SetData
+                // only STAGES a tensor, and the driver makes it resident at its first dispatch
+                // REFERENCE — the warmup synth's first prefill tick binds dozens of flow-LM
+                // tensors at once (one bulk MakeResident, the ~126-160 ms frame) and its first
+                // Mimi flush binds every SEANet tensor (the ~215-290 ms one). Touch each tensor
+                // with a 1-element read instead — CopyBuffer into the 1-elem sync scratch, a few
+                // MB of resource per frame — and the migration is paid in walk-up-sized slices
+                // BEFORE the synth ever runs. Read-only by construction: weights are never
+                // written by any warm pass.
+                //
+                // #36.6 — and ONCE PER RESIDENCY CYCLE, not once per caller. This routine runs
+                // from BOTH the session warm cycle (NPCChatBase.Awake → PrewarmRoutine, ##36.5)
+                // and every zone entry's PrepareVoiceRoutine, and the touch pass used to re-walk
+                // the full registry each time: with the weights never defetched in between, that
+                // re-walk is at best a few dozen wasted walk-up frames and at worst a REAL
+                // re-migration bill — the 18:33 frame_spikes.csv showed three 40-55 ms `w_touch`
+                // frames at t=11-16 (zone entry, weights resident since t≈5): on a saturated
+                // 4 GB card the concurrent ~1 GB Qwen stream evicts, and ##36.1 round 4 already
+                // proved a touch cannot PIN what the OS evicts afterward — first real use
+                // re-pays regardless, so the re-walk buys nothing the prepare's own layer-paced
+                // mini-synth dispatches don't. Latch on the weights' residency cycle instead:
+                // skip while (still ready, same LoadEpoch) — no tensor has left the GPU since
+                // the pass last completed — and re-run in full after any defetch→re-stream,
+                // where SetData has only STAGED the fresh buffers and the pass is doing its
+                // designed #36.2 job again. The latch burns ONLY on a pass that completed under
+                // an unchanged epoch: a mid-pass defetch aborts through the IsReady check below
+                // and the next residency cycle re-touches everything. GPU-agnostic on purpose —
+                // cards with VRAM headroom never needed the re-walk (nothing evicts, the touch
+                // was already invisible there), and cards without it cannot be helped by one
+                // (this hunt's own evidence) — so skipping is the rare fix with no tier dial.
+                if (wTouchedEpoch != weights.LoadEpoch)
+                {
+                    int cycle = weights.LoadEpoch;
+                    var shd = DeepUnityMeta.PocketTTSCS;
+                    int kCopy1 = shd.FindKernel("CopyBuffer");
+                    if (syncBuf == null) syncBuf = new ComputeBuffer(1, 4, ComputeBufferType.Structured);
+                    long touchedBytes = 0, touchBudget = (long)InferencePerf.TtsFirstTouchElemsPerFrame * 4;
+                    foreach (var wb in weights.ResidentBuffers())
+                    {
+                        shd.SetInt("buffer_size", 1);
+                        shd.SetBuffer(kCopy1, "buf_a", syncBuf);
+                        shd.SetBuffer(kCopy1, "buf_b", wb);
+                        shd.Dispatch(kCopy1, 1, 1, 1);
+                        LastHeavyTick = "w_touch";   // probe attribution — which phase owns the frame
+                        touchedBytes += (long)wb.count * 4;
+                        if (touchedBytes >= touchBudget)
+                        {
+                            touchedBytes = 0;
+                            yield return null;
+                            if (!IsReady) yield break;
+                        }
+                    }
+                    if (IsReady && weights.LoadEpoch == cycle) wTouchedEpoch = cycle;
+                    yield return null;
+                }
+                // #36: the mimi scratch side. WDDM residency migrates PER RESOURCE, so the ~24 MB
+                // SEANet scratches are committed here, one per frame, chunk-zeroed (#36.1 keeps
+                // the measured-modest win of paying this off the synth path). Cover the widest
+                // LIVE window: chunk cadence + decode context — hurry flushes and the
+                // first-chunk boundary are only ever SMALLER.
+                int warmT = Math.Max(StreamChunkFrames, 16) + Cfg.MIMI_DECODE_CTX;
+                var me = mimi.PreallocateYielding(warmT);
+                while (IsReady && me.MoveNext()) { LastHeavyTick = "mimi_pre"; yield return null; }
+                // ...and the wav-assembly accumulator the flushes harvest into (#31-R3), sized at
+                // the clause cap like everything above, committed the same way.
+                GrowWav(DefaultMaxFrames * Cfg.SAMPLES_PER_LATENT);
+                mimi.ZeroTouch(wavAccum);
+                yield return null;
                 int voiceFrames = Math.Max((voicePrompt?.Length ?? 0) / Cfg.DIM, PREALLOC_VOICE_ROWS);
                 int maxLp = 1 + voiceFrames + PREALLOC_TEXT_ROWS;
                 var e = flm.PreallocateYielding(maxLp, maxLp + DefaultMaxFrames);
-                while (IsReady && e.MoveNext()) yield return null;
+                while (IsReady && e.MoveNext()) { LastHeavyTick = "flm_pre"; yield return null; }
             }
 
             /// <summary>Emergency-flush hook (2026-07-30), set by PocketTTSVoice while it owns the
@@ -264,7 +340,20 @@ namespace DeepUnity
             /// "readback_hardwait"). Written by SynthesizeStreaming's yield sites; diagnostics
             /// probes read-and-clear it per frame to attribute slow frames to a stage. Inert
             /// otherwise (one static string assign per tick).</summary>
-            public static string LastHeavyTick;
+            /// <remarks>Readers that do NOT clear it must check <see cref="LastHeavyTickFrame"/>:
+            /// after a reply's final flush the field keeps its last value for the rest of the
+            /// session, and the 2026-08-02 spike hunt spent a day chasing a "flush_push storm"
+            /// that was mostly this staleness, not flushes.</remarks>
+            public static string LastHeavyTick
+            {
+                get => lastHeavyTick;
+                set { lastHeavyTick = value; LastHeavyTickFrame = Time.frameCount; }
+            }
+            static string lastHeavyTick;
+
+            /// <summary>Time.frameCount at the last write of <see cref="LastHeavyTick"/> — a tag is
+            /// only evidence about a frame it was written in (±1 for Update-order skew).</summary>
+            public static int LastHeavyTickFrame { get; private set; } = -1;
 
             public bool IsReady => weights.IsReady;
             public long WeightBytes => weights.BytesTotal;   // resident weight footprint (fp16 vs int8 delta)
@@ -320,11 +409,19 @@ namespace DeepUnity
                 if (weights.IsReady && embMean == null) LoadCpuTensors();
             }
 
-            /// <summary>Load-on-approach spread over ~targetSeconds (tiny per-frame upload slices).</summary>
+            /// <summary>Load-on-approach spread over ~targetSeconds (tiny per-frame upload slices).
+            /// Never SLOWS a faster stream already in flight (#36.4): the scene-start warm cycle
+            /// streams at full rate from frame 0, and the zone's slow call used to overwrite that
+            /// budget mid-upload — throttling the exact stream it was trying to guarantee.</summary>
             public void SlowPrefetch(float targetSeconds)
             {
                 if (targetSeconds > 0.01f && weights.BytesTotal > 0)
-                    weights.BudgetBytesPerFrame = Math.Max(1, (long)(weights.BytesTotal / (targetSeconds * 60f)));
+                {
+                    long slow = Math.Max(1, (long)(weights.BytesTotal / (targetSeconds * 60f)));
+                    bool inFlight = !weights.IsReady && weights.BytesUploaded > 0;
+                    if (!(inFlight && weights.BudgetBytesPerFrame > slow))
+                        weights.BudgetBytesPerFrame = slow;
+                }
                 BeginLoad();
             }
 
@@ -404,6 +501,22 @@ namespace DeepUnity
             /// <summary>Rebind the baked voice (cheap CPU read of voices/&lt;name&gt;/audio_prompt — no
             /// GPU reload). Unknown names fall back to the currently-loaded voice with a warning
             /// (only baked voices in the export are available; bake more with import_params.py pocket-tts --voice).</summary>
+            // #36.2: SetVoice's ReadFloats is a cold disk read + 128k half decodes (~200 ms, the
+            // `bind` frame the session warmup pays binding the DEFAULT voice — the clone path was
+            // sliced separately and this was what the tag kept naming). Prepare/warmup kick this
+            // on zone entry; ReadFloats is pure CPU over a read-only manifest, thread-safe.
+            readonly System.Collections.Concurrent.ConcurrentDictionary<string, float[]> bakedPromptCache
+                = new System.Collections.Concurrent.ConcurrentDictionary<string, float[]>();
+
+            public void PreloadBakedVoiceAsync(string name)
+            {
+                if (string.IsNullOrEmpty(name) || bakedPromptCache.ContainsKey(name)) return;
+                string tensor = $"voices/{name}/audio_prompt";
+                if (!weights.Has(tensor)) return;
+                System.Threading.Tasks.Task.Run(() =>
+                { try { bakedPromptCache[name] = weights.ReadFloats(tensor); } catch { /* falls back to the sync read */ } });
+            }
+
             public void SetVoice(string name)
             {
                 if (string.IsNullOrEmpty(name) || name == CurrentVoice) return;
@@ -413,7 +526,9 @@ namespace DeepUnity
                                            $"(only exported voices are available) — keeping '{CurrentVoice}'.");
                     return;
                 }
-                voicePrompt = weights.ReadFloats($"voices/{name}/audio_prompt");
+                if (!bakedPromptCache.TryGetValue(name, out float[] vp))
+                    bakedPromptCache[name] = vp = weights.ReadFloats($"voices/{name}/audio_prompt");
+                voicePrompt = vp;
                 flm?.InvalidatePromptKV();   // see BindRawVoicePrompt: invalidate at the assignment
                 CurrentVoice = name;
             }
@@ -537,6 +652,89 @@ namespace DeepUnity
                     return false;
                 }
                 return CloneVoice(mono, clip.frequency, label ?? clip.name);
+            }
+
+            /// <summary>#36.2: CloneVoice(clip) spread across frames — the sync form's three
+            /// CPU-heavy stages (decompress-read + mono mix, resample, SHA-256; ~1 MB of managed
+            /// churn EACH) were together the ~219 ms `bind` frame at zone entry. One stage per
+            /// frame; the cache/bind tail is a cache-hit-cheap single frame. Same fallback
+            /// contract as CloneVoice: reports false and the caller keeps/sets the baked voice.</summary>
+            public IEnumerator CloneVoiceYielding(AudioClip clip, string label, Action<bool> done)
+            {
+                if (!IsReady || clip == null) { done?.Invoke(false); yield break; }
+                // #36.3 instrumentation: after eight structural fixes the ~200-250 ms `bind`
+                // frame still would not NAME itself — every stage below now reports its own CPU
+                // ms AND the duration of the frame it ended (frame ≫ cpu = the cost is GPU/driver
+                // drain at present, not the stage). One session log line; remove when solved.
+                var stageSw = new System.Diagnostics.Stopwatch();
+                var report = new System.Text.StringBuilder("[PocketTTS] clone stages cpu/frame ms: ");
+                // ClipToMono WAITS on a still-decompressing clip with a blocking sleep loop (#36.2
+                // round 3) — wait HERE, one frame at a time; ClipToMono's own wait then no-ops.
+                if (clip.loadState == AudioDataLoadState.Unloaded) clip.LoadAudioData();
+                while (clip.loadState == AudioDataLoadState.Loading) yield return null;
+                LastHeavyTick = "bind";
+                // #36.3 round 2: GetData on this MP3 DECODES on the spot (~190 ms of CPU in one
+                // call, measured — load type and background loading change nothing about it).
+                // Chunked reads pay the same decode ~1 s of audio per frame. Each chunk's buffer
+                // is sized EXACTLY (GetData wraps around the clip when the buffer outruns it —
+                // a same-size tail buffer would silently mix in samples from the clip's start).
+                float[] mono; double cpu = 0;
+                {
+                    int samples = clip.samples, ch = clip.channels;
+                    if (samples == 0) { done?.Invoke(false); yield break; }
+                    mono = new float[samples];
+                    const int CHUNK = 48000;
+                    float[] buf = null;
+                    bool fail = false;
+                    for (int off = 0; off < samples && !fail; off += CHUNK)
+                    {
+                        LastHeavyTick = "bind";
+                        stageSw.Restart();
+                        int n = Math.Min(CHUNK, samples - off);
+                        if (buf == null || buf.Length != n * ch) buf = new float[n * ch];
+                        if (!clip.GetData(buf, off)) { fail = true; break; }
+                        if (ch == 1) Array.Copy(buf, 0, mono, off, n);
+                        else
+                            for (int i = 0; i < n; i++)
+                            {
+                                float acc = 0f; int b = i * ch;
+                                for (int c = 0; c < ch; c++) acc += buf[b + c];
+                                mono[off + i] = acc / ch;
+                            }
+                        cpu += stageSw.Elapsed.TotalMilliseconds;
+                        yield return null;
+                    }
+                    if (fail)
+                    {
+                        ConsoleMessage.Warning($"pocket-tts CloneVoice: clip '{clip.name}' has no readable " +
+                                               "sample data — set its import Load Type to 'Decompress On Load'. Keeping the current voice.");
+                        done?.Invoke(false); yield break;
+                    }
+                }
+                report.Append($"mono(chunked) {cpu:0.0}/{Time.unscaledDeltaTime * 1000f:0.0} | ");
+                LastHeavyTick = "bind";
+                stageSw.Restart();
+                float[] wav = PrepRef(mono, clip.frequency, out CropInfo crop);
+                cpu = stageSw.Elapsed.TotalMilliseconds; yield return null;
+                report.Append($"prep {cpu:0.0}/{Time.unscaledDeltaTime * 1000f:0.0} | ");
+                LastHeavyTick = "bind";
+                stageSw.Restart();
+                string key = KeyFor(wav);
+                cpu = stageSw.Elapsed.TotalMilliseconds; yield return null;
+                report.Append($"sha {cpu:0.0}/{Time.unscaledDeltaTime * 1000f:0.0} | ");
+                // async warm of the tier-1 baked cache (#36.2 round 2); the sync Load in the tail
+                // then hits Unity's loaded-asset cache.
+                stageSw.Restart();
+                var rq = Resources.LoadAsync<TextAsset>(RES_VOICE_DIR + "/" + key);
+                while (rq != null && !rq.isDone) yield return null;
+                cpu = stageSw.Elapsed.TotalMilliseconds; yield return null;
+                report.Append($"resload(async) {cpu:0.0}/{Time.unscaledDeltaTime * 1000f:0.0} | ");
+                LastHeavyTick = "bind";
+                stageSw.Restart();
+                bool ok = IsReady && CloneVoicePrepared(wav, key, crop, label ?? clip.name);
+                report.Append($"tail {stageSw.Elapsed.TotalMilliseconds:0.0}");
+                Debug.Log(report.ToString());
+                done?.Invoke(ok);
             }
 
             /// <summary>Max reference length for cloning. HARD TECHNICAL CEILING — do NOT raise.
@@ -720,7 +918,7 @@ namespace DeepUnity
 
                 var dummies = new ComputeBuffer[bufs.Length];
                 for (int i = 0; i < dummies.Length; i++)
-                    dummies[i] = new ComputeBuffer(256, 4, ComputeBufferType.Structured);
+                    dummies[i] = new ComputeBuffer(16384, 4, ComputeBufferType.Structured);   // 64 KB: covers every real-mini index below
                 foreach (string u in zeroUniforms) shader.SetInt(u, 0);
 
                 foreach (string name in kernels)
@@ -730,6 +928,33 @@ namespace DeepUnity
                     shader.Dispatch(k, 1, 1, 1);   // one compile per frame when pumped as a coroutine
                     yield return null;
                 }
+
+                // #36.2 second pass — REAL-mini sizes. The zeroed pass above compiles the blob,
+                // but this driver defers part of the work (finalize/regalloc) until a dispatch
+                // whose threads actually EXECUTE — measured as the first real prefill tick
+                // costing ~146-177 ms at zone entry no matter what else was prewarmed (weights
+                // touched, scratch committed, kernels "compiled"). Two rows at dim 64 keeps every
+                // index formula far inside the 16 K-element dummies (W: 64x64 = 4 K; KCache:
+                // kv_len*heads*hd = 128; conv out ≲ 700), executes real loads/stores of garbage,
+                // and discards into the same dummies. Values are irrelevant, execution is not.
+                (string u, int v)[] realMini =
+                {
+                    ("seq_len", 2), ("in_len", 8), ("in_dim", 64), ("out_dim", 64),
+                    ("conv_kernel", 3), ("conv_stride", 1), ("conv_dilation", 1), ("pad_left", 1),
+                    ("norm_dim", 64), ("num_heads", 2), ("head_dim", 32), ("buffer_size", 128),
+                    ("copy_src_offset", 0), ("copy_dst_offset", 0), ("n_groups", 2),
+                    ("pos_offset", 0), ("kv_len", 2), ("elem_offset", 0), ("attn_context", 0),
+                    ("mod_shift_off", 0), ("mod_scale_off", 0), ("mod_gate_off", 0), ("gemv_mode", 0),
+                };
+                foreach (var (u, v) in realMini) shader.SetInt(u, v);
+                foreach (string name in kernels)
+                {
+                    int k = shader.FindKernel(name);
+                    for (int i = 0; i < bufs.Length; i++) shader.SetBuffer(k, bufs[i], dummies[i]);
+                    shader.Dispatch(k, 2, 1, 1);
+                    yield return null;
+                }
+                foreach (string u in zeroUniforms) shader.SetInt(u, 0);   // leave no real-mini residue
 
                 foreach (var d in dummies) d.Release();
             }
@@ -744,6 +969,15 @@ namespace DeepUnity
 
                 float[] wav = PrepRef(samples, sampleRate, out CropInfo crop);   // resample to 24k + cap at MAX_REF_SECONDS
                 string key = KeyFor(wav);   // content-addressed (label only names the voice, never the key)
+                return CloneVoicePrepared(wav, key, crop, label);
+            }
+
+            /// <summary>#36.2: the tail of CloneVoice after the CPU-heavy prep — cache tiers +
+            /// bind. Split out so <see cref="CloneVoiceYielding"/> can pay ClipToMono / PrepRef /
+            /// KeyFor one frame each (together they were the measured ~219 ms `bind` walk-up
+            /// frame) and land here for the (cache-hit-cheap) tail.</summary>
+            bool CloneVoicePrepared(float[] wav, string key, CropInfo crop, string label)
+            {
                 string path = System.IO.Path.Combine(CacheDir, key + ".bin");
 
                 // Tier order (every tier VALIDATED — see PromptIsValid):
@@ -1211,7 +1445,14 @@ namespace DeepUnity
                     // bug C + #29: prefill yields per layer AND each tick ends the frame (FrameBreak) —
                     // the pump's CPU-time budget would otherwise re-enter all 6 ticks in one frame.
                     var pf = flm.PrefillKVYielding(prefix, Lp, Lp + maxFrames);
-                    while (IsReady && pf.MoveNext()) { prefillTicks++; LastHeavyTick = "prefill"; yield return FrameBreak; }
+                    while (IsReady && pf.MoveNext())
+                    {
+                        prefillTicks++;
+                        // #36.3: keep the fine pf:L<i>.<sec> tag the prefill just set — the
+                        // blanket overwrite was hiding WHICH section owned a slow tick.
+                        if (LastHeavyTick == null || !LastHeavyTick.StartsWith("pf:")) LastHeavyTick = "prefill";
+                        yield return FrameBreak;
+                    }
                     if (!IsReady) { onSamples?.Invoke(null); yield break; }
                     // The prefix STARTS with the prompt, so rows [0,Lv) of the caches are already the
                     // prompt's K/V — retaining them is bookkeeping only, no extra compute. Keyed on

@@ -13,7 +13,7 @@ namespace DeepUnity
                                                   "clausesPerChunk", "clausePauseSeconds", "replyTailSeconds" };
 
         // first field of each inspector category — a thin separator line is drawn above it
-        static readonly string[] SECTION_STARTS = { "model", "temperature", "ttsModel", "interactPrompt", "usePrefetchZone" };
+        static readonly string[] SECTION_STARTS = { "model", "temperature", "ttsModel", "interactPrompt", "usePrefetchZone", "decisions" };
 
         // Braced groups: (first field, last field, the label that reads down the brace). The three
         // system-prompt fields are the third, drawn by DrawSystemPromptGroup because they are pulled
@@ -25,9 +25,28 @@ namespace DeepUnity
             // backendTradeoff used to end this group; it moved into CONVERSATION 2026-07-27 (it is
             // not an LLM setting — it paces the TTS too), so the last sampling field ends it now.
             ("model", "repetitionPenalty", "LLM"),
-            ("ttsModel", "replyTailSeconds", "TTS"),
+            // worldAudioWhileInteracting moved to the END of the TTS block 2026-08-03 (user) —
+            // field declaration order IS inspector order, so the group's last name moved with it.
+            ("ttsModel", "worldAudioWhileInteracting", "TTS"),
             ("usePrefetchZone", "slowPrefetchSeconds", "PREFETCH"),
         };
+
+        // Several small numeric fields on ONE control row (user 2026-08-03), each with a short
+        // inline label carrying the field's real tooltip. Horizontal layout splits the row evenly;
+        // labelWidth is per-row because "Repetition" needs more room than "Top K".
+        void DrawInlineRow(float labelWidth, params (string prop, string label)[] items)
+        {
+            EditorGUILayout.BeginHorizontal();
+            float oldLw = EditorGUIUtility.labelWidth;
+            EditorGUIUtility.labelWidth = labelWidth;
+            foreach (var (name, label) in items)
+            {
+                var p = serializedObject.FindProperty(name);
+                if (p != null) EditorGUILayout.PropertyField(p, new GUIContent(label, p.tooltip));
+            }
+            EditorGUIUtility.labelWidth = oldLw;
+            EditorGUILayout.EndHorizontal();
+        }
 
         static void SectionDivider()
         {
@@ -63,10 +82,21 @@ namespace DeepUnity
                 foreach (var g in BRACE_GROUPS)
                     if (it.propertyPath == g.first) { OpenBraceGroup(g.label); break; }
 
+                // Sampling knobs share rows (user 2026-08-03 — compress the inspector's height):
+                // Top K | Top P | Min P on one line, Presence | Repetition on another. Each row is
+                // DRAWN at its LAST member so the brace-group close below (keyed on
+                // repetitionPenalty, the LLM group's last field) still fires on a drawn iteration.
+                if (it.propertyPath == "topK" || it.propertyPath == "topP"
+                    || it.propertyPath == "presencePenalty") continue;
+
                 if (it.propertyPath == "model") DrawModelPopup(it);
                 else if (it.propertyPath == "backendTradeoff") DrawBackendTradeoff(it);
                 else if (it.propertyPath == "ttsVoice") DrawVoicePopup(it);
                 else if (it.propertyPath == "clonedVoiceClip") DrawCloneClip(it);
+                else if (it.propertyPath == "minP")
+                    DrawInlineRow(42f, ("topK", "Top K"), ("topP", "Top P"), ("minP", "Min P"));
+                else if (it.propertyPath == "repetitionPenalty")
+                    DrawInlineRow(70f, ("presencePenalty", "Presence"), ("repetitionPenalty", "Repetition"));
                 else EditorGUILayout.PropertyField(it, true);
 
                 if (_groupOpen && it.propertyPath == _groupLast)
@@ -181,7 +211,6 @@ namespace DeepUnity
                 if (GUILayout.Button("See Effective System Prompt"))
                     EffectivePromptWindow.Open(npcForPrompt);
             CloseBraceGroup();
-            DrawToolsBlockButton();
         }
 
         // A '{' built from rects: the spine sits against the fields with a tick at each end reaching
@@ -210,31 +239,12 @@ namespace DeepUnity
             GUI.matrix = m;
         }
 
-        // Tools live IN Description And Rules (user 2026-07-25) so that the field is the whole truth
-        // rather than a third of it. They still have to GET there: this writes the block the NPC's
-        // granted tools imply, replacing a stale one rather than stacking a second.
-        void DrawToolsBlockButton()
-        {
-            if (serializedObject.isEditingMultipleObjects) return;
-            var npc = target as NPCChatBase;
-            var prop = serializedObject.FindProperty("descriptionAndRules");
-            if (npc == null || prop == null) return;
-            string want = npc.WithToolsBlock(prop.stringValue);
-            if (want == prop.stringValue) return;          // already exactly right — no button, no noise
-
-            bool has = prop.stringValue.Contains(Qwen3_5Modeling.Qwen3_5ChatTemplate.ToolsHeading);
-            string block = npc.ComposeToolsBlock();
-            string verb = block.Length == 0 ? "Remove the # Tools block (this NPC has no tools)"
-                        : has ? "Refresh the # Tools block in Description And Rules"
-                              : "Write the # Tools block into Description And Rules";
-            EditorGUILayout.Space(2f);
-            if (GUILayout.Button(verb))
-            {
-                prop.stringValue = want;
-                serializedObject.ApplyModifiedProperties();
-                GUI.FocusControl(null);
-            }
-        }
+        // The write/refresh-# Tools button lived here until 2026-08-03 (user): it existed to keep
+        // descriptionAndRules in sync with the per-NPC tool TOGGLES, and it died with them. The
+        // runtime handles both interactive tools unconditionally now; whether an NPC's prompt
+        // advertises them is authored by hand (or by the scene builders, which state it at their
+        // WithToolsBlock calls). Tools still live IN the field (user 2026-07-25) — there is just
+        // no inspector machinery deciding what belongs there any more.
 
 
         // ---- TTS voice dropdown -----------------------------------------------------------
@@ -322,6 +332,7 @@ namespace DeepUnity
         // the button runs the Mimi encoder in edit mode and writes Resources/Cache/<key>.bytes
         // (ships in builds) so runtime never re-encodes.
         AudioClip _keyClip; string _cloneKey; PocketTTSModeling.PocketTTS.CropInfo _crop;
+        double _nextKeyRetry;   // failed-read rehash cooldown — see the loadState gate in DrawCloneClip
 
         void DrawCloneClip(SerializedProperty prop)
         {
@@ -335,13 +346,29 @@ namespace DeepUnity
             var clip = prop.objectReferenceValue as AudioClip;
             if (clip == null || serializedObject.isEditingMultipleObjects) { _keyClip = null; _cloneKey = null; return; }
 
-            // content hash once per clip change, not per repaint — but NEVER cache a failure or a
-            // zero-length read (clip data still loading when first drawn): retry until it heals,
-            // otherwise a just-imported clip shows "0.0s" forever.
+            // Content hash once per clip change, not per repaint — and NEVER inside a blocking
+            // wait (2026-08-03, the "Hold on … OnInspectorGUI" dialog on every play-stop): leaving
+            // play mode unloads the clip's audio data, and CloneKey's ClipToMono used to sit in
+            // its up-to-3 s sleep-wait right here in IMGUI while it reloaded. Gate on loadState
+            // instead — kick the async load, show a quiet placeholder, poll via Repaint — and only
+            // hash when the data is actually there. A failed read (bad import) retries on a 2 s
+            // cooldown rather than per repaint (the hash is ~200 ms of resample+SHA every time):
+            // still self-healing after a reimport, never a per-frame bill.
             if (_keyClip != clip || _cloneKey == null || _crop.totalSeconds <= 0f)
             {
-                _keyClip = clip;
-                _cloneKey = PocketTTSModeling.PocketTTS.CloneKey(clip, out _crop);
+                if (clip.loadState != AudioDataLoadState.Loaded)
+                {
+                    clip.LoadAudioData();
+                    EditorGUILayout.HelpBox("Reading clip sample data…", MessageType.None);
+                    Repaint();
+                    return;
+                }
+                if (_keyClip != clip || EditorApplication.timeSinceStartup >= _nextKeyRetry)
+                {
+                    _keyClip = clip;
+                    _cloneKey = PocketTTSModeling.PocketTTS.CloneKey(clip, out _crop);
+                    _nextKeyRetry = EditorApplication.timeSinceStartup + 2.0;
+                }
             }
             if (_cloneKey == null || _crop.totalSeconds <= 0f)
             {
@@ -382,17 +409,21 @@ namespace DeepUnity
         static void DrawBackendTradeoff(SerializedProperty prop)
         {
             EditorGUILayout.Space(4f);
-            EditorGUILayout.PropertyField(prop, new GUIContent("Backend Tradeoff", prop.tooltip));
-            if (prop.hasMultipleDifferentValues) return;   // mixed multi-selection: no single row to describe
-            var row = BackendTradeoffTable.At((BackendTradeoffLevel)prop.enumValueIndex);
-            EditorGUILayout.LabelField(
-                $"fetch {row.fetchBytesPerFrame / 1e6:0.0} MB/frame, prefill {row.prefillStepsPerFrame} steps/frame, " +
-                $"decode {row.decodeTokensPerFrame} tok/frame, sync decode", EditorStyles.miniLabel);
-            EditorGUILayout.LabelField(
-                $"tts {row.ttsSpeakingTicksPerFrame} ticks/frame speaking, {row.ttsSilentTicksPerFrame} refilling, " +
-                $"prebuffer {row.ttsPrebufferSeconds:0.##}s, chunk {row.ttsStreamChunkFrames}f " +
-                $"({row.ttsStreamChunkFrames * 0.08f:0.00}s), cede above {row.ttsCedeHeadroomSeconds:0.#}s",
-                EditorStyles.miniLabel);
+            // The two mini-lines of per-tier numbers that used to print under the dropdown moved
+            // into the TOOLTIP (user 2026-08-03: the exact values are reference material, not
+            // something to spend two inspector rows on). Selection-specific, so hovering the row
+            // answers exactly what the choice means; BackendTradeoffTable stays the one source.
+            string tip = prop.tooltip;
+            if (!prop.hasMultipleDifferentValues)
+            {
+                var row = BackendTradeoffTable.At((BackendTradeoffLevel)prop.enumValueIndex);
+                tip += $"\n\nThis tier: fetch {row.fetchBytesPerFrame / 1e6:0.0} MB/frame, " +
+                       $"prefill {row.prefillStepsPerFrame} steps/frame, decode {row.decodeTokensPerFrame} tok/frame; " +
+                       $"tts {row.ttsSpeakingTicksPerFrame} ticks/frame speaking, {row.ttsSilentTicksPerFrame} refilling, " +
+                       $"prebuffer {row.ttsPrebufferSeconds:0.##}s, chunk {row.ttsStreamChunkFrames}f " +
+                       $"({row.ttsStreamChunkFrames * 0.08f:0.00}s), cede above {row.ttsCedeHeadroomSeconds:0.#}s.";
+            }
+            EditorGUILayout.PropertyField(prop, new GUIContent("Backend Tradeoff", tip));
         }
 
         // The LLM is a string id backed by LLMRegistry (auto-discovered [LLMEntry] methods) —
