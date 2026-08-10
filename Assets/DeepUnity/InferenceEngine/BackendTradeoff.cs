@@ -231,7 +231,9 @@ namespace DeepUnity
             /// frame's transfer, never a whole-model load: weights always stream across many frames.
             /// <para>Becomes <c>LLM.UploadBudgetBytes</c>, which every model's <c>*Weights</c> upload
             /// pump re-reads each frame — so it applies to the LLM, both STT models and all four TTS
-            /// voices at once. Walk-up prefetch uses <see cref="SlowFetchBytesPerFrame"/> = this ÷ 8.</para>
+            /// voices at once. Walk-up prefetch uses <see cref="SlowFetchBytesPerFrame"/> = this ÷
+            /// <see cref="BackendTradeoffTable.SlowPrefetchDivisor"/>. Cite the constant, never the
+            /// number: this comment said ÷ 8 for three days after the divisor became 16.</para>
             /// <para>RAISE → the model is ready sooner, each loading frame carries a fatter slice.
             /// LOWER → clean frames while loading, longer wait before the NPC can talk.</para>
             /// <para><b>Too high:</b> a visible fps dip while models stream in — measured, 24 MB/frame

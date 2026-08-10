@@ -132,8 +132,10 @@ namespace DeepUnity
 
         static void LaunchDecodeDecay(ProbeModelKind kind, LLMQuant quant, KVQuant kv = KVQuant.FP16)
         {
-            // Gemma3 KV capacity is 2048; keep maxTokens safely under it. Qwen3.5 is 8192.
-            int maxTokens = kind == ProbeModelKind.Gemma3_270M ? 2000 : 4096;
+            // Gemma3 KV capacity is 2048; keep maxTokens safely under it. Qwen3.5 is 8192 —
+            // 8064 (capacity minus one bucket) since 2026-08-04 (user): the decay curve should
+            // reach the full playable context, and 4096 only told half the story the plot wants.
+            int maxTokens = kind == ProbeModelKind.Gemma3_270M ? 2000 : 8064;
             Launch($"decodedecay_{LMProbeCommon.ModelLabel(kind)}_{quant}_kv{kv}", dir =>
             {
                 var go = new GameObject("LMDecodeDecayProbe");

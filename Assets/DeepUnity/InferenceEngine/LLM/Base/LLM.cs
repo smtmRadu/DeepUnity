@@ -500,7 +500,7 @@ namespace DeepUnity
         /// <summary>
         /// Compacts the running conversation to reclaim context: the model answers a bare
         /// "Compact the conversation." user prompt with a single-shot compact of the ENTIRE
-        /// history (greedy, capped at <paramref name="max_summary_tokens"/>), then the chat is
+        /// history (capped at <paramref name="max_summary_tokens"/>), then the chat is
         /// re-initialized as [<paramref name="system_prompt"/> + "## MEMORY" + compact] — the
         /// recompute leaves the KV cache a short prefix while the NPC "remembers" everything
         /// through the HISTORY block.
@@ -509,22 +509,40 @@ namespace DeepUnity
         /// Pass the SAME system_prompt used in <see cref="InitializeChat"/> (the base class cannot see
         /// the concrete model's template state). Models can override <see cref="CompactCore"/> with
         /// token-level history splicing (keep-last-K-turns) or a dedicated compaction model.
+        /// <para><b>Sampling</b> — leave both at -1 for the model's own preset. This used to be
+        /// hardcoded GREEDY (t=0, no penalties), which is the single most repetition-prone decode
+        /// there is: a model that reproduces the template's assistant-turn primer re-emits it, the
+        /// emission recreates its own trigger context, and with no noise and no penalty nothing
+        /// breaks the cycle — the compact then runs to the token cap as one repeated fragment
+        /// (observed on the Qwen3.5 NPC finetune, 2026-08-07). A summary is not a place that needs
+        /// determinism badly enough to pay for that.</para>
         /// [Roadmap: finetune a small background compactor model — see InferenceEngine/CLAUDE.md.]
         /// </summary>
         public IEnumerator Compact(string system_prompt = "", Action<string> onSummary = null,
-                                   int max_summary_tokens = 256)
-            => Guarded("Compact", CompactCore(system_prompt, onSummary, max_summary_tokens));
+                                   int max_summary_tokens = 256,
+                                   float temperature = -1f, float repetition_penalty = -1f)
+            => Guarded("Compact", CompactCore(system_prompt, onSummary, max_summary_tokens,
+                                              temperature, repetition_penalty));
 
         /// <summary>Model-side implementation of <see cref="Compact"/>. Runs inside the Busy
         /// guard, so it drives the model through the Core entries, never the public wrappers.</summary>
         protected virtual IEnumerator CompactCore(string system_prompt = "", Action<string> onSummary = null,
-                                                  int max_summary_tokens = 256)
+                                                  int max_summary_tokens = 256,
+                                                  float temperature = -1f, float repetition_penalty = -1f)
         {
             CurrentPhase = "compact";
             var sb = new System.Text.StringBuilder();
-            // 1. compact request — continues the model's tracked conversation (greedy, one shot)
+            // 1. compact request — continues the model's tracked conversation (one shot, the
+            //    model's own sampling preset unless the caller pinned it)
+            float temp = temperature        >= 0f ? temperature        : Config.DefaultTemperature;
+            float rep  = repetition_penalty >= 0f ? repetition_penalty : Config.DefaultRepetitionPenalty;
             var chat = ChatCore(COMPACT_PROMPT, t => sb.Append(t),
-                                max_new_tokens: max_summary_tokens, temperature: 0f);
+                                max_new_tokens: max_summary_tokens,
+                                temperature: temp,
+                                top_k: Config.DefaultTopK, top_p: Config.DefaultTopP,
+                                min_p: Config.DefaultMinP,
+                                presence_penalty: Config.DefaultPresencePenalty,
+                                repetition_penalty: rep);
             while (chat.MoveNext()) yield return chat.Current;
 
             // 2. recompute: fresh history/KV = system prompt + the compact as a HISTORY block

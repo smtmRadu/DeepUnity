@@ -3837,7 +3837,15 @@ namespace DeepUnity
             string summary = null;
             try
             {
-                var compact = llm.Compact(EffectiveSystemPrompt, s => summary = s);
+                // Compact with THIS NPC's sampler, not the engine default. It used to run greedy
+                // with no repetition penalty, which let a finetune that reproduces the template's
+                // assistant primer loop it to the token cap and hand back a garbage memory block
+                // (Qwen3.5 NPC finetune, 2026-08-07). The NPC's own inspector values are the right
+                // source: whatever keeps its replies coherent keeps its summary coherent.
+                var compact = llm.Compact(EffectiveSystemPrompt, s => summary = s,
+                    temperature: temperature,
+                    repetition_penalty: repetitionPenalty >= 0f
+                        ? repetitionPenalty : llm.Config.DefaultRepetitionPenalty);
                 while (compact.MoveNext()) yield return compact.Current;
             }
             finally

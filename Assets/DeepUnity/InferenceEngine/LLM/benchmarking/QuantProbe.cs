@@ -43,7 +43,40 @@ namespace DeepUnity
         readonly KVQuant kvForQuant = KVQuant.INT8;
 
         const int PREFILL_TOKENS = 500;
-        const int COMPARE_STEPS = 8;
+        // 8 → 96 (2026-08-04): the probe grew an Unsloth-style accuracy section — mean KL
+        // divergence of the quantized distribution against FP16 over teacher-forced positions —
+        // and 8 positions is anecdote, not a statistic. 96 keeps the run in editor-friendly
+        // minutes (one full-vocab readback + one forward per position).
+        const int COMPARE_STEPS = 96;
+
+        // Real English text for the compared positions (2026-08-04). Unsloth's own methodology
+        // note is the reason this is not SyntheticIds: perplexity/KLD measured on data resembling
+        // the calibration set overfits — and measured on NOISE it means nothing at all. We don't
+        // calibrate, but the distribution gap between quant and FP16 is only meaningful where the
+        // model is actually in-distribution. Fixed constant → reproducible across runs/quants.
+        const string KLD_TEXT =
+            "The harbour town woke slowly in the grey light before dawn. Fishermen checked their " +
+            "nets along the quay while the baker's chimney sent up its first thread of smoke, and " +
+            "the narrow streets still held the cold of the night between their stone walls. By the " +
+            "time the sun cleared the headland, carts were already rolling toward the market square, " +
+            "loaded with crates of silver fish, bundles of herbs, and rounds of pale cheese wrapped " +
+            "in cloth. An old clockmaker opened his shutters and set each of his instruments to the " +
+            "chime of the church bell, as he had done every morning for forty years. Children ran " +
+            "errands between the stalls, trading gossip for sweets, and the innkeeper swept yesterday's " +
+            "sawdust into the gutter while arguing amiably with a carpenter about the price of oak. " +
+            "Out beyond the breakwater, the last of the night boats turned for home, their lanterns " +
+            "pale against the brightening water. The town had seen storms, sieges, and two fires that " +
+            "each took a third of its roofs, yet the shape of its mornings had barely changed in a " +
+            "century: bread, fish, bells, and the tide. A young cartographer who had arrived that " +
+            "spring kept a journal of such details, convinced that the true map of a place was not " +
+            "its coastline but the order in which it woke. She noted the baker before the fishmonger, " +
+            "the bell before the gulls, the schoolmaster always last, hurrying with ink-stained " +
+            "fingers past the fountain. On market days the square filled until the stalls touched, " +
+            "and sailors from three kingdoms haggled in a patchwork of languages that everyone half " +
+            "understood. When the fog rolled in, the lighthouse keeper wound the great lamp and the " +
+            "town listened for the horn of the mail packet, which carried letters, newspapers, and " +
+            "once a year the almanac that told the farmers when to plant. It was, the cartographer " +
+            "wrote, a town that measured itself in small repetitions, and was the richer for it.";
         const int BENCH_TOKENS = 64;
         const int SAMPLE_TOKENS = 48;
         const int CHUNK = 8;
@@ -210,17 +243,29 @@ namespace DeepUnity
         IEnumerator Run()
         {
             int V = Qwen3_5Modeling.Qwen3_5Config.VOCAB_SIZE;
-            float[] prompt = SyntheticIds(PREFILL_TOKENS);
 
             report.AppendLine($"# {quant} vs FP16 probe ({ModelTag})");
             report.AppendLine();
-            report.AppendLine($"- prefill {PREFILL_TOKENS} synthetic tokens, identical greedy token feed (FP16's choices)");
+            report.AppendLine($"- real-text prefill (KLD_TEXT, cap {PREFILL_TOKENS} tok), identical greedy token feed (FP16's choices), {COMPARE_STEPS} compared positions");
             report.AppendLine($"- GPU: {SystemInfo.graphicsDeviceName} | {SystemInfo.graphicsDeviceType}");
             report.AppendLine();
 
             // ---------------- FP16 reference ----------------
             Status("constructing FP16 Qwen3.5");
             var fp16 = new Qwen3_5ForCausalLM(size, LLMQuant.FP16, kv_quant: KVQuant.FP16);
+            // Tokenize the real-text prompt with the reference model's tokenizer (identical for
+            // every quant of a size — the export never touches the tokenizer). WAIT for readiness
+            // first: the tokenizer streams in with the weights, and encoding straight off the
+            // constructor lost the race on the 2026-08-04 qwen2b_int4 run (three sibling runs won
+            // it by luck — cached files load faster on repeat).
+            while (!fp16.IsReady) yield return null;
+            (Tensor pTok, Tensor _) = fp16.tokenizer.Encode(KLD_TEXT, add_special_tokens: false,
+                                                            truncation: true, max_length: PREFILL_TOKENS);
+            int pn = pTok.Size(-1);
+            float[] prompt = new float[pn];
+            for (int i = 0; i < pn; i++) prompt[i] = pTok[i];
+            report.AppendLine($"- prompt tokens actually used: {pn}");
+            report.AppendLine();
             var refLogits = new float[COMPARE_STEPS][];
             var refTok = new int[COMPARE_STEPS];
             var fp16Ms = new double[1];
@@ -248,23 +293,56 @@ namespace DeepUnity
             int matches = 0;
             float worst = 0f;
             double meanDiffSum = 0;
+            // #KLD (2026-08-04, Unsloth's metric): KL(P_fp16 || P_quant) per compared position,
+            // full vocab, numerically via log-softmax with max-subtraction. Lower = the quant's
+            // distribution mirrors FP16 more closely; Unsloth argues (and we agree) this beats
+            // perplexity for quant quality because it also penalizes confident DISAGREEMENT.
+            var kld = new double[COMPARE_STEPS];
             for (int k = 0; k < COMPARE_STEPS; k++)
             {
                 float maxd = 0f; double sumd = 0;
+                float mr = float.NegativeInfinity, mq = float.NegativeInfinity;
                 for (int i = 0; i < V; i++)
                 {
                     float d = Math.Abs(qLogits[k][i] - refLogits[k][i]);
                     if (d > maxd) maxd = d;
                     sumd += d;
+                    if (refLogits[k][i] > mr) mr = refLogits[k][i];
+                    if (qLogits[k][i] > mq) mq = qLogits[k][i];
                 }
+                double zr = 0, zq = 0;
+                for (int i = 0; i < V; i++)
+                {
+                    zr += Math.Exp(refLogits[k][i] - mr);
+                    zq += Math.Exp(qLogits[k][i] - mq);
+                }
+                double lnZr = Math.Log(zr), lnZq = Math.Log(zq), acc = 0;
+                for (int i = 0; i < V; i++)
+                {
+                    double lpr = refLogits[k][i] - mr - lnZr;
+                    double lpq = qLogits[k][i] - mq - lnZq;
+                    acc += Math.Exp(lpr) * (lpr - lpq);
+                }
+                kld[k] = acc;
                 meanDiffSum += sumd / V;
                 bool match = qTok[k] == refTok[k];
                 if (match) matches++;
                 if (maxd > worst) worst = maxd;
-                report.AppendLine($"| {k} | {PREFILL_TOKENS + k} | {maxd:0.0000} | {sumd / V:0.000000} | {(match ? "yes" : $"NO ({qTok[k]} vs {refTok[k]})")} |");
+                if (k < 8 || !match)   // the table stays readable at 96 steps: first 8 + every flip
+                    report.AppendLine($"| {k} | {PREFILL_TOKENS + k} | {maxd:0.0000} | {sumd / V:0.000000} | {(match ? "yes" : $"NO ({qTok[k]} vs {refTok[k]})")} |");
             }
+            var kSorted = kld.OrderBy(x => x).ToArray();
+            double kMean = kld.Average(), kMedian = kSorted[COMPARE_STEPS / 2], kMax = kSorted[COMPARE_STEPS - 1];
+            report.AppendLine();
+            report.AppendLine("## KL divergence vs FP16 (Unsloth-style, teacher-forced real text)");
+            report.AppendLine($"- mean KLD: **{kMean:0.000000}** nats | median: {kMedian:0.000000} | max: {kMax:0.000000}");
+            report.AppendLine($"- top-1 agreement: {matches}/{COMPARE_STEPS} ({100.0 * matches / COMPARE_STEPS:0.0}%)");
             // int8 is REAL quantization error, not fp reordering — argmax agreement is the gate.
-            if (matches < COMPARE_STEPS - 1) pass = false;
+            // Percentage gates since the step count grew to 96 (2026-08-04): all-but-one was a
+            // gate for 8 steps; at 96, int8 should hold ≥90% and int4's flips are the finding
+            // itself, so its bar is lower and mostly informational.
+            double agreeGate = quant == LLMQuant.INT4 ? 0.70 : 0.90;
+            if (matches < COMPARE_STEPS * agreeGate) pass = false;
 
             report.AppendLine();
             report.AppendLine("## Sync decode (greedy, cache 120, median ms/token)");

@@ -324,6 +324,16 @@ namespace DeepUnity
             // readbacks + uploads at their exact sites, so the parity probe can print per-frame
             // dispatch counts and sync attribution BEFORE/AFTER the R2 path (item 1 of the brief).
             public static bool PerfCounting = false;
+
+            // Probe-only: take the legacy ONE-FRAME-AT-A-TIME AR loop instead of the shipped
+            // GPU-resident K-frame batches. Same math and same KV path (the legacy branch still
+            // calls DecodeStepKV) — but it is the only branch that separates the backbone step from
+            // the flow head, because the batched branch issues K frames back-to-back with no sync in
+            // between and there is nothing to attribute. Pair it with OverlapMimi = false, or Mimi's
+            // cost hides inside the AR loop's readback waits and DecodeMs under-reports it.
+            // Its TOTAL is therefore NOT the shipped total: use the shares, scale them onto a clean
+            // production-settings run. Never set outside a probe.
+            public static bool ForceLegacyArLoop = false;
             public static long StatDispatches, StatBlockingReads, StatAsyncReads, StatUploads;
             public static double StatReadWaitMs;                       // ms spent inside blocking GetData
             public static double StatTokenCpuMs, StatDecodeCallMs, StatFlowCallMs;   // legacy-loop split
@@ -1186,7 +1196,7 @@ namespace DeepUnity
                 var swLoop = System.Diagnostics.Stopwatch.StartNew();
                 bool overlapActive = false;   // #31-R3: mimi windows interleaved with the AR blocks
                 int mimiIssued = 0;           // latents already routed into an issued mimi window
-                if (useKvCache && flm.CanRunGpuFrames())
+                if (useKvCache && flm.CanRunGpuFrames() && !ForceLegacyArLoop)
                 {
                     // ===== #31-R2: GPU-resident K-frame batches — ZERO per-frame syncs =====
                     // K frames issue back-to-back (feedback stays on-GPU), then ONE blocking

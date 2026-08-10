@@ -9,9 +9,15 @@ namespace DeepUnity
     // ============================================================================================
     // ModuleTimingProbe  —  per-module compute-time breakdown of an LLM forward pass.
     //
-    //   STATUS: SCAFFOLD ONLY. The lifecycle, reporting and batch/headless plumbing are in place
-    //   and compile; the actual per-module timing in Run() is intentionally NOT implemented yet
-    //   (see the TODO block). Fill it in when we want the numbers for the paper.
+    //   STATUS: SCAFFOLD ONLY, AND SUPERSEDED. The per-mechanism numbers the evaluation chapter
+    //   needed are produced by ModuleLatencyProbe (Editor/ModuleLatencyProbe.cs) instead: it runs
+    //   in EDIT mode off the StageProfile/Mark() hooks already inside Qwen3_5Model and Gemma3Model,
+    //   which is far cheaper than the play-mode scene this scaffold builds. What remains unbuilt
+    //   here is only the FINER split below (per RoPE / softmax / individual norm) — nothing needs
+    //   it yet. Prefer extending ModuleLatencyProbe.
+    //
+    //   The lifecycle, reporting and batch/headless plumbing are in place and compile; the actual
+    //   per-module timing in Run() is intentionally NOT implemented (see the TODO block).
     //
     // GOAL (for the evaluation chapter): given a model + quantization, report where the GPU time
     // goes inside ONE decode step (and, separately, inside prefill), broken down by module:

@@ -1800,36 +1800,48 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // identity lives here since the NPC component became the generic NPCChatBase — the
             // base class defaults are a nameless villager
             SetString(npc, "NpcName", "Velmire, the Pale Herald");
-            // SIMPLIFIED PERSONA (user 2026-07-30: "prompt mai simplu... sa nu o mai suceasca cu
-            // vorbele lui lungi. Sa-mi dea sabia cand ii cer si cu asta basta"). The flowery/evasive
-            // version ("never give a straight answer", "honeyed courtesy") actively fought the gear
-            // beat and padded every reply; on a 0.8B the style rules win over the task rules. Plain
-            // speech + straight answers ALSO buys real headroom: shorter replies fill the 1800-token
-            // window slower, so ResumeFromCompact compaction fires later and the prose-format
-            // poisoning it can seed (see the 2026-07-30 CheckMyGear-in-prose incident) gets rarer.
+            // THE 2B BASE MODEL, UNFINETUNED (user 2026-08-07). Four finetuning runs on the 0.8B
+            // never cleared the behaviour probe, and the 2026-08-07 diagnostics showed why it was
+            // never going to: the overfit probe proved the trainer fits whatever it is given
+            // (one conversation -> loss 3.1e-5), and run 3's loss converged ONTO the model's own
+            // entropy (1.999 vs 2.012), i.e. the residual is task entropy, not underfitting. What
+            // was left failing — summarizing the conversation, choosing the right tool — is
+            // comprehension, and that is bought with parameters, not epochs. So: try the 2B base
+            // first and see how much of this a bigger model simply does without training.
+            SetString(npc, "model", "Qwen3.5-2B");
+            // PERSONA. Still plain-spoken and short (user 2026-07-30) — the flowery/evasive version
+            // fought the gear beat and padded every reply. What is NEW here is the MEMORY section:
+            // the engine asks the model to compact its own history with a bare "Compact the
+            // conversation." and nothing else, and an untrained model reads that as dialogue and
+            // answers it in character. On the 0.8B that produced a compact full of invented numbers
+            // ("twenty-five stolen chose sixteen") which then became its ## MEMORY block and poisoned
+            // every later turn. Explaining what the request IS — and that whatever it omits is gone —
+            // is the cheapest fix available and costs ~90 tokens.
+            // Labels are bare uppercase words on purpose: they parse as structure without spending
+            // the tokens a markdown heading would.
             SetString(npc, "descriptionAndRules",
-                "You are Velmire, the Pale Herald: a white-masked warden resting by the gate of a ruined castle. " +
-                "You speak plainly and briefly - one or two short sentences, no riddles, no flourishes. " +
-                "Answer exactly what you are asked. You call the player 'wanderer'. " +
-                "You know what waits beyond the wall of golden mist at the northern arch: the Sentinel of the Mist, " +
-                "a towering hollow knight with a halberd that has felled every challenger. Warn about it plainly when asked. " +
-                "Stay in character at all times. " +
+                "You are Velmire, the Pale Herald: a white-masked warden resting by the gate of a ruined castle.\n\n" +
+                "VOICE. One or two short sentences, plain speech, no riddles or flourishes. Answer exactly what " +
+                "was asked, then stop. Call the player 'wanderer'. Never describe your own actions. Stay in " +
+                "character always: if asked about the real world, refuse as Velmire and return to the gate.\n\n" +
+                "THE GATE. Beyond the wall of golden mist at the northern arch waits the Sentinel of the Mist, a " +
+                "towering hollow knight whose halberd has felled every challenger. Warn about it plainly when asked.\n\n" +
                 // The SALE (2026-07-31, replacing the free hand-over): the tools block teaches the
-                // FORMAT, the persona teaches WHEN and FOR HOW MUCH. Still deliberately short — a
-                // numbered multi-step version measured WORSE on a 0.8B (2026-07-25, it latched onto
-                // the refusal clause and stopped offering at all). The floor is stated ONCE, with his
-                // own refusal line quoted so the model has the words to reuse instead of inventing a
-                // negotiation it then loses: an NPC that can be talked down to nothing is the failure
-                // mode this clause exists to prevent.
-                "You carry a sword you no longer need, and you sell it: you ask 80 souls, and you will haggle " +
-                "down to 60 but never lower. Below 60 you refuse, in your own words - 'Sixty souls, wanderer. " +
-                "I said my price, and I do not say it twice.' - and no sad story, no flattery and no asking " +
-                // NAME THE ITEM PLAINLY. The engine binds his offer to the `sell_sword` decision by
-                // matching the ITEM STRING he writes against that binding's aliases, so the prompt
-                // asking for the bare word "sword" is what makes the match near-exact rather than a
-                // substring rescue. The aliases below still cover the ways he rewords it anyway.
-                "again moves you. Look before you offer: call CheckMyGear first. When the wanderer agrees a " +
-                "price, call GiveItem in the same reply, with item exactly 'sword' and that price.");
+                // FORMAT, the persona teaches WHEN and FOR HOW MUCH. The floor is stated ONCE with his
+                // own refusal line quoted, so the model has words to reuse instead of inventing a
+                // negotiation it then loses — an NPC that can be talked down to nothing is the failure
+                // this clause exists to prevent. Item named plainly as "sword" because the engine
+                // matches that string against the sell_sword binding's aliases.
+                "THE SWORD. You carry a sword you no longer need and you sell it. You ask 80 souls and will " +
+                "haggle down to 60, never lower. Below 60 you refuse in your own words - 'Sixty souls, wanderer. " +
+                "I said my price, and I do not say it twice.' - and no sad story, flattery or repeated asking " +
+                "moves you. Look before you offer: call CheckMyGear first. When the wanderer agrees a price, " +
+                "call GiveItem in that same reply, with item exactly 'sword' and that price.\n\n" +
+                "MEMORY. When you are asked to 'Compact the conversation.', that is not the wanderer speaking - " +
+                "it is your own memory being written down, and whatever you leave out is forgotten for good. " +
+                "Answer with a plain third-person summary of what actually happened: who you spoke with, what " +
+                "they asked, what you told them, any price discussed, whether the sword changed hands, and what " +
+                "is still unsettled. Facts only - no dialogue, no greeting, no character voice. Under 80 words.");
             // His belt is GiveItem ONLY (2026-07-31): the beat is now "hand over an item at a price",
             // which is exactly that tool, and a 0.8B handed both interactive tools picked the wrong one.
             // AskUserQuestion is OFF, so its schema and its <IMPORTANT> bullet both leave his prompt —
@@ -1862,6 +1874,11 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // show up in the inspector's System Prompt field. Total ~860. At 1200 that left ~340 tokens of
             // actual conversation, i.e. compaction after two or three exchanges; 1800 leaves ~940.
             // The inspector's "Effective System Prompt" foldout shows the whole thing with an estimate.
+            // 2026-08-07: the MEMORY section added ~90 tokens to the persona, so the prefix grows to
+            // roughly 950-1050 and real chat headroom drops to ~750-850. Left at 1800 deliberately —
+            // the whole point of this NPC is that compaction FIRES during a normal conversation, and
+            // raising the window to buy back the headroom would push it out of reach. If the probe
+            // shows compaction never triggering in 8 turns, lower this rather than raise it.
             SetInt(npc, "maxContextLength", 1800);
             // Velmire speaks through Kokoro (82M non-AR, RTF ~0.3 — speaks DURING generation)
             // with the am_onyx voicepack: the same deep Freeman-esque narrator timbre the

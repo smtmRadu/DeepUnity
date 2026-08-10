@@ -266,9 +266,19 @@ namespace DeepUnity
                 DeepUnityDispatcher.Run(UploadRopeWhenReady(sw));
             }
 
+            // TWO callers can drive this, and on the probe path BOTH do: the constructor always
+            // dispatches it (PrecomputeRoPEAsync), and LoadBlockingForProbe pumps its own copy to
+            // completion because the dispatcher never ticks outside play mode. Whichever finishes
+            // first releases the managed tables, so the loser used to reach SetData(null) and throw
+            // ArgumentNullException("data") — logged from the dispatcher coroutine, where nothing
+            // fails, so every blocking-load probe (this one, Qwen3_5ResetProbe) has been quietly
+            // printing a console error while the upload itself was perfectly fine. The upload is
+            // idempotent-by-exit: the winner sets ropeReady with no yield between nulling the
+            // tables and setting it, so a null table means the work is already fully done.
             System.Collections.IEnumerator UploadRopeWhenReady(System.Diagnostics.Stopwatch sw)
             {
                 while (!_ropeComputed) yield return null;   // wait for the background compute (overlaps upload)
+                if (_ropeCosData == null) yield break;      // the other caller already uploaded it
                 ropeCos.SetData(_ropeCosData);
                 ropeSin.SetData(_ropeSinData);
                 _ropeCosData = null; _ropeSinData = null;
@@ -800,6 +810,12 @@ namespace DeepUnity
 
                 EnsureScratch(seqLen, totalKvLen);
                 UploadTokens(input_ids, seqLen);
+                // Profiling only (no-op when StageProfile is null): drain and restart the clock HERE so
+                // the Mark below times the EMBEDDING, not everything since the previous step's last mark
+                // -- sampler readback, scratch realloc, the C# loop. Without it "embed" swallowed the
+                // whole inter-step gap and reported 173 ms/token, 76% of the profile, which starved
+                // every real mechanism and made the split unusable.
+                ProfSync(hiddenBuf);
 
                 cs.SetInt("seq_len", seqLen);
                 cs.SetInt("hidden_size", hiddenSize);

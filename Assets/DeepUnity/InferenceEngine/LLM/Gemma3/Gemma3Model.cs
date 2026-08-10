@@ -337,6 +337,7 @@ namespace DeepUnity
                 cs.SetBuffer(kRmsNormHidden, "norm_output", normOutBuf);
                 cs.SetBuffer(kRmsNormHidden, "norm_gamma", weights.inputLnGamma[li]);
                 cs.Dispatch(kRmsNormHidden, Div256(seqLen), 1, 1);
+                Mark("glue(copy/norm/res)", normOutBuf);
 
                 // 3. QKV proj (FP16 weights) — #31 coalesced decode GEMV / prefill GEMM
                 bool coalQ = seqLen == 1 && !ForceLegacyGemv;
@@ -506,6 +507,10 @@ namespace DeepUnity
                 if (coalO)      cs.Dispatch(kOP, (hiddenSize + GVC_ROWS - 1) / GVC_ROWS, 1, 1);
                 else if (gemmO) cs.Dispatch(kOP, (hiddenSize + GVC_ROWS - 1) / GVC_ROWS, (seqLen + GMM_TOK - 1) / GMM_TOK, 1);
                 else            cs.Dispatch(kOP, 1, (seqLen + 3) / 4, (hiddenSize + 31) / 32);
+                // ONE mark for the whole attention block (QKV + head norms + RoPE + cache write +
+                // scores/flash + attn·V + o-proj), tagged by the layer's mechanism. The figure draws
+                // one glyph per mechanism, so a finer split would only add sync overhead to distort.
+                Mark(isSW ? "swa:attn" : "fa:attn", attnOutBuf);
 
                 // 16. post-attn layernorm
                 cs.SetInt("seq_len", seqLen);
@@ -533,6 +538,7 @@ namespace DeepUnity
                 cs.SetBuffer(kRmsNormHidden, "norm_output", hiddenBuf);
                 cs.SetBuffer(kRmsNormHidden, "norm_gamma", weights.preFfnLnGamma[li]);
                 cs.Dispatch(kRmsNormHidden, Div256(seqLen), 1, 1);
+                Mark("glue(copy/norm/res)", hiddenBuf);
 
                 // 20-21. MLP (FP16 weights) — #31 coalesced decode GEMVs / prefill GEMMs
                 bool vec1 = seqLen == 1;
@@ -555,6 +561,7 @@ namespace DeepUnity
                 else if (gemmMlp) cs.Dispatch(kGU, (intermediateSize + GVC_ROWS - 1) / GVC_ROWS, mlpTokTiles, 1);
                 else if (vec1)    cs.Dispatch(kGU, (intermediateSize + 255) / 256, 1, 1);
                 else              cs.Dispatch(kGU, (intermediateSize + 63) / 64, (seqLen + 3) / 4, 1);
+                Mark("mlp:gate+up", mlpInterBuf);
 
                 cs.SetBuffer(kDN, "input", hiddenBuf);
                 cs.SetBuffer(kDN, "mlp_weights", weights.mlpWeights[li]);
@@ -581,6 +588,38 @@ namespace DeepUnity
                 cs.SetBuffer(kCopyBuffer, "buf_a", hiddenBuf);
                 cs.SetBuffer(kCopyBuffer, "buf_b", normOutBuf);
                 cs.Dispatch(kCopyBuffer, Div256(hidTotal), 1, 1);
+                Mark("mlp:down", hiddenBuf);
+            }
+
+            // ===================== decode stage profiler (mirrors Qwen3_5Model) =====================
+            // Non-null => Mark() drains the GPU queue (1-float sync readback of the stage's output
+            // buffer) after each dispatch group and ACCUMULATES the split per category. Serializing
+            // inflates the total — read the splits as SHARES, then scale them onto an UNPROFILED
+            // ms/token measured separately. Probe-only (ModuleLatencyProbe); always null in production.
+            //
+            // The category names are the contract with tools/fill_latency_figure.py in the thesis
+            // repo: "swa:*" and "fa:*" must stay distinct, because the whole point of the Gemma panel
+            // is that its 18 layers are 15 sliding-window + 3 full attention and those cost
+            // different amounts. Everything else matches Qwen's names so one parser handles both.
+            public static System.Collections.Generic.Dictionary<string, float> StageProfile;
+            static readonly float[] profTmp = new float[1];
+            readonly System.Diagnostics.Stopwatch profSw = new System.Diagnostics.Stopwatch();
+            void Mark(string cat, ComputeBuffer written)
+            {
+                if (StageProfile == null) return;
+                written.GetData(profTmp, 0, 0, 1);
+                StageProfile.TryGetValue(cat, out float v);
+                StageProfile[cat] = v + (float)profSw.Elapsed.TotalMilliseconds;
+                profSw.Restart();
+            }
+            /// <summary>Drain the queue and restart the clock WITHOUT recording, so the time between
+            /// two steps (sampler readback, scratch realloc, the C# loop) is not billed to whichever
+            /// mark happens to come first in the next forward pass.</summary>
+            void ProfSync(ComputeBuffer written)
+            {
+                if (StageProfile == null) return;
+                written.GetData(profTmp, 0, 0, 1);
+                profSw.Restart();
             }
 
 #if UNITY_EDITOR
@@ -604,6 +643,7 @@ namespace DeepUnity
 
                 EnsureScratch(seqLen, totalKvLen);
                 UploadTokens(input_ids, seqLen);
+                ProfSync(hiddenBuf);   // see Qwen3_5Model.Forward: keeps the inter-step gap out of "embed"
 
                 cs.SetInt("seq_len", seqLen);
                 cs.SetInt("hidden_size", hiddenSize);
@@ -613,6 +653,7 @@ namespace DeepUnity
                 BindScales(kEmbedLookup, "embed_scales", weights.embedScales);
                 cs.SetBuffer(kEmbedLookup, "embed_output", hiddenBuf);
                 cs.Dispatch(kEmbedLookup, Div256(seqLen * hiddenSize), 1, 1);
+                Mark("embed", hiddenBuf);
 
                 for (int i = 0; i < numLayers; i++)
                     DispatchLayer(i, seqLen, totalKvLen, useCache);
@@ -621,6 +662,7 @@ namespace DeepUnity
 
                 if (lastPosOnly) DispatchFinalLast(seqLen);
                 else DispatchFinalAll(seqLen);
+                Mark("final+lmhead", logitsBuf);
             }
 
             public IEnumerator ForwardYielding(Tensor input_ids, bool useCache, bool lastPosOnly)

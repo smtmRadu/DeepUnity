@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71c1514a6bd24e1e882cebbe1904ce04, type: 3}
   m_Name: Cinzel SDF
   m_EditorClassIdentifier: 
-  hashCode: 0
+  hashCode: -2057445370
   material: {fileID: 7216940896871180266}
-  materialHashCode: -2006316128
+  materialHashCode: -1022929946
   m_Version: 1.1.0
   m_SourceFontFileGUID: 4c19504ff0ca8a048823171db685e24c
   m_SourceFontFile_EditorRef: {fileID: 12800000, guid: 4c19504ff0ca8a048823171db685e24c, type: 3}
@@ -221,9 +221,9 @@ Material:
     - _OutlineSoftness: 0
     - _OutlineWidth: 0
     - _PerspectiveFilter: 0.875
-    - _ScaleRatioA: 1
+    - _ScaleRatioA: 0.85714287
     - _ScaleRatioB: 1
-    - _ScaleRatioC: 1
+    - _ScaleRatioC: 0.6964286
     - _ScaleX: 1
     - _ScaleY: 1
     - _ShaderFlags: 0
