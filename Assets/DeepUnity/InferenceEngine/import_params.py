@@ -902,7 +902,19 @@ def export_pockettts(args):
         HERE, "..", "..", "Resources", "Weights", f"weights_pockettts_english_{args.quant}"))
     os.makedirs(out, exist_ok=True)
     ex = TTSExporter(out, args.quant)
-    model_path = hf_hub_download(POCKETTTS_REPO, "languages/english/model.safetensors")
+    # kyutai/pocket-tts is GATED; the open mirror ships the same checkpoint MINUS mimi.encoder/
+    # downsample — exactly what the default export skips, so it is byte-identical output. Only
+    # --include-encoder (runtime voice cloning) truly needs the gated repo.
+    repo = POCKETTTS_REPO
+    try:
+        model_path = hf_hub_download(repo, "languages/english/model.safetensors")
+    except Exception:
+        if args.include_encoder:
+            sys.exit(f"ERROR: --include-encoder needs the gated {POCKETTTS_REPO} "
+                     "(hf auth login + accept its gate) — the open mirror ships no mimi encoder.")
+        repo = POCKETTTS_REPO_OPEN
+        print(f"[source] {POCKETTTS_REPO} gated/unreachable -> open mirror {repo}")
+        model_path = hf_hub_download(repo, "languages/english/model.safetensors")
     print(f"[source] {model_path}")
     print(f"[out]    {out}  (quant={args.quant}, include_encoder={args.include_encoder})")
 
@@ -928,7 +940,7 @@ def export_pockettts(args):
 
     # voice embedding (audio_prompt [1,125,1024]) — bake the requested prebuilt voice into the dir
     try:
-        vp = hf_hub_download(POCKETTTS_REPO, f"embeddings/{args.voice}.safetensors")
+        vp = hf_hub_download(repo, f"embeddings/{args.voice}.safetensors")
         with safe_open(vp, "pt") as vf:
             for vk in vf.keys():
                 varr = vf.get_tensor(vk).float().cpu().numpy()

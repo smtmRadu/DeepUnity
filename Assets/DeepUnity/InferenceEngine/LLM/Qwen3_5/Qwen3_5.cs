@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using UnityEngine;
@@ -162,6 +163,64 @@ namespace DeepUnity
             create = (q, kv, maxLen) => new Qwen3_5ForCausalLM(Qwen3_5Size.B2, quantization: q, kv_quant: kv, maxModelLength: maxLen),
             prewarm = () => Prewarm(),
         };
+
+        // Finetune variants discovered FROM DISK: any weights export named
+        // weights_qwen3.5_<size>_<variant>_<quant> (written by import_params.py --out, e.g.
+        // weights_qwen3.5_0.8B_roleplay_int8) registers as "Qwen3.5-<size>-<variant>", so the
+        // NPC inspector dropdown lists every finetune that is actually on disk with zero code.
+        // The scan walks the same roots ResolveParamsDir checks — editor and player builds alike
+        // (StreamingAssets is a real folder on desktop). One entry per (size, variant); the
+        // weight quant stays the inspector's separate Quantization field, resolved at create
+        // time. Scan results are cached by LLMRegistry per domain load, so an export made while
+        // the editor is open appears after the next script reload / play-mode enter.
+        static readonly string[] QUANT_TAGS = { "fp16", "int8", "int4" };
+        [LLMEntry(2)]
+        static IEnumerable<LLMRegistry.Entry> RegistryEntriesFinetunes()
+        {
+            var seen = new HashSet<string>();
+            foreach (string root in new[] { "Assets/Resources/Weights",
+                                            "Assets/Resources/DeepUnity/LLM/Qwen3_5",
+                                            "Assets/DeepUnity/InferenceEngine/LLM/Qwen3_5" })
+            {
+                string dir = DeepUnityMeta.ResolvePath(root);
+                if (!System.IO.Directory.Exists(dir)) continue;
+                foreach (string d in System.IO.Directory.GetDirectories(dir, "weights_qwen3.5_*"))
+                {
+                    // weights_qwen3.5_<size>_<variant>_<quant> — no <variant> segment = the stock
+                    // export, already covered by the static entries above.
+                    string rest = System.IO.Path.GetFileName(d).Substring("weights_qwen3.5_".Length);
+                    Qwen3_5Size size;
+                    if (rest.StartsWith("0.8B_")) { size = Qwen3_5Size.B0_8; rest = rest.Substring(5); }
+                    else if (rest.StartsWith("2B_")) { size = Qwen3_5Size.B2; rest = rest.Substring(3); }
+                    else continue;
+                    string variant = null;
+                    foreach (string q in QUANT_TAGS)
+                        if (rest.EndsWith("_" + q)) { variant = rest.Substring(0, rest.Length - q.Length - 1); break; }
+                    if (string.IsNullOrEmpty(variant) || !seen.Add($"{SizeLabel(size)}|{variant}"))
+                        continue;
+                    var s = size; var v = variant;   // capture per-entry copies, not the loop slots
+                    yield return new LLMRegistry.Entry
+                    {
+                        id = $"Qwen3.5-{SizeLabel(s)}-{v}",
+                        create = (q, kv, maxLen) => new Qwen3_5ForCausalLM(s, quantization: q,
+                            params_path: ResolveVariantPath(s, v, q), kv_quant: kv, maxModelLength: maxLen),
+                        prewarm = () => Prewarm(),
+                    };
+                }
+            }
+        }
+
+        static string ResolveVariantPath(Qwen3_5Size size, string variant, LLMQuant quant)
+        {
+            string q = quant == LLMQuant.INT8 ? "int8" : quant == LLMQuant.INT4 ? "int4" : "fp16";
+            string path = ResolveParamsDir("Qwen3_5", $"weights_qwen3.5_{SizeLabel(size)}_{variant}_{q}");
+            if (!System.IO.Directory.Exists(path))
+                // No silent quant swap: the loader reads per-quant file layouts, so pointing a
+                // FP16 build at an int8 export would fail anyway — fail HERE, with the fix named.
+                ConsoleMessage.Warning($"Qwen3.5 finetune '{variant}' ({SizeLabel(size)}) has no {q} export on disk — " +
+                                       $"export it (import_params.py --quant {q}) or set the NPC's Quantization to a format that exists.");
+            return path;
+        }
 
         /// <summary>
         /// One-call scene-start prewarm — run this as a coroutine while the player is doing

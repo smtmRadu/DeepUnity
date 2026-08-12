@@ -6,10 +6,12 @@ using System.Reflection;
 namespace DeepUnity
 {
     /// <summary>
-    /// Marks a STATIC, parameterless method returning <see cref="LLMRegistry.Entry"/> as a
-    /// self-registering LLM catalog entry. Put one next to each concrete model class — the
-    /// registry discovers it by reflection, so a freshly ported LLM shows up in every
-    /// model-picker (NPC inspector, tools) automatically, with no central enum to extend.
+    /// Marks a STATIC, parameterless method returning <see cref="LLMRegistry.Entry"/> — or an
+    /// <see cref="IEnumerable{T}"/> of them, for entries only known at scan time (e.g. finetune
+    /// weight exports discovered on disk) — as a self-registering LLM catalog entry. Put one
+    /// next to each concrete model class — the registry discovers it by reflection, so a freshly
+    /// ported LLM shows up in every model-picker (NPC inspector, tools) automatically, with no
+    /// central enum to extend.
     /// </summary>
     [AttributeUsage(AttributeTargets.Method)]
     public sealed class LLMEntryAttribute : Attribute
@@ -85,17 +87,24 @@ namespace DeepUnity
                     if (attr == null) continue;
                     try
                     {
-                        if (m.Invoke(null, null) is Entry e && !string.IsNullOrEmpty(e.id) && e.create != null)
-                        {
-                            e.order = attr.Order;
-                            entries.Add(e);
-                        }
+                        object got = m.Invoke(null, null);
+                        if (got is Entry e)
+                            Register(e, attr.Order);
+                        else if (got is IEnumerable<Entry> many)
+                            foreach (var one in many)
+                                Register(one, attr.Order);
                     }
                     catch (Exception ex)
                     {
                         ConsoleMessage.Warning($"LLMRegistry: entry {type.Name}.{m.Name} threw during scan: {ex.Message}");
                     }
                 }
+            }
+            void Register(Entry e, int order)
+            {
+                if (e == null || string.IsNullOrEmpty(e.id) || e.create == null) return;
+                e.order = order;
+                entries.Add(e);
             }
             entries.Sort((a, b) => a.order != b.order
                 ? a.order.CompareTo(b.order)

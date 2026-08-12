@@ -109,13 +109,11 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             })
                 ConfigureHumanoid(p, rotateClips180: p.Contains("/Animations/"));
 
-            // Nov-2020 RPG pack characters (Rogue beggar) + Ultimate-Modular-Women Witch: their
-            // feet are IK targets OUTSIDE the leg chain, so humanoid retarget is impossible —
-            // import them GENERIC and play their OWN embedded clips instead of UAL. Witch.fbx
-            // (Quaternius Apr-2022 women pack, CC0) is the REAL female model for Morwenna; its
-            // materials are flat palette colors baked in the FBX (no texture to apply).
-            foreach (string p in new[] { ART + "/Characters/Wizard.fbx", ART + "/Characters/Rogue.fbx",
-                                         ART + "/Characters/Witch.fbx" })
+            // Nov-2020 RPG pack characters (Wizard chronicler, Rogue beggar): their feet are IK
+            // targets OUTSIDE the leg chain, so humanoid retarget is impossible — import them
+            // GENERIC and play their OWN embedded clips instead of UAL. (Witch.fbx was deleted
+            // 2026-08-12: the model read as costume fantasy; Corvus wears the Wizard instead.)
+            foreach (string p in new[] { ART + "/Characters/Wizard.fbx", ART + "/Characters/Rogue.fbx" })
                 ConfigureGenericAnimated(p);
 
             // static art (weapons + every ruins piece)
@@ -402,10 +400,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             GameObject player = BuildPlayer(playerCtrl);
             GameObject cameraRig = BuildCamera(player);
             GameObject npc = BuildNpc(npcCtrl, player);   // he carries the gear he offers the player
-            GameObject witch = BuildWitchNpc(npcCtrl);
+            GameObject scribe = BuildChroniclerNpc(npcCtrl, player);
             GameObject boss = BuildBoss(bossCtrl, bossSwings);
 
-            BuildUI(cinzel, vignette, npc, witch, player);
+            BuildUI(cinzel, vignette, npc, scribe, player);
 
             // ambient exploration music, quiet and looping; streamed. ambient_theme.mp3 is a
             // royalty-free souls-like track shipped IN the repo (unlike the gitignored, copyrighted
@@ -880,7 +878,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
 
             (string, Vector3, float)[] clutter =
             {
-                ("Cart",            new Vector3(hx - L * 1.3f, -0.17f, -hz + L * 1.2f), 250f),   // user 2026-07-15: sunk into the ground
+                // -0.17 dated from the rotation-inflated bounds era (its "sunk" was really "less
+                // airborne"); with the vertex-exact snap the wheels ground at 0 — keep a whisper
+                // of sink so they read as settled into the dirt, not balanced on it.
+                ("Cart",            new Vector3(hx - L * 1.3f, -0.05f, -hz + L * 1.2f), 250f),
                 ("Barrel",          new Vector3(hx - L * 1.05f, 0, -hz + L * 0.8f), 10f),
                 ("Crate",           new Vector3(hx - L * 1.5f, 0, -hz + L * 0.75f), 35f),
                 ("Chest",           new Vector3(-hx + L * 0.6f, 0, hz - L * 0.6f), 140f),
@@ -953,11 +954,15 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             go.transform.rotation = Quaternion.Euler(0f, yRot, 0f) * go.transform.localRotation;
             go.transform.position = pos;
 
-            Bounds b = RenderererSafeBounds(go);
+            // renderer.bounds is the axis-aligned box of the piece's ROTATED local box, so for a
+            // long piece at a diagonal yaw its bottom face can sit a metre below the lowest real
+            // vertex — snapping to it left the Cart (250° yaw, 3.7 m long) hovering mid-air
+            // (user 2026-08-12). Snap to the true vertex extremes instead: exact at any rotation.
+            var (minY, maxY) = VertexYExtents(go);
             if (groundTopAtZero)
-                go.transform.position += Vector3.up * (pos.y - b.max.y);    // top flush with pos.y
+                go.transform.position += Vector3.up * (pos.y - maxY);    // top flush with pos.y
             else
-                go.transform.position += Vector3.up * (pos.y - b.min.y);    // base sits at pos.y
+                go.transform.position += Vector3.up * (pos.y - minY);    // base sits at pos.y
 
             if (collider)
                 foreach (var mf in go.GetComponentsInChildren<MeshFilter>())
@@ -1155,6 +1160,35 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             Bounds b = rs[0].bounds;
             foreach (var r in rs.Skip(1)) b.Encapsulate(r.bounds);
             return b;
+        }
+
+        // True world-space vertex Y extremes — what the ground snap needs. RenderererSafeBounds
+        // is the AABB of the rotated local AABB (conservative, rotation-inflated); vertices are
+        // exact. One-time editor rebuild cost only, cached per shared mesh.
+        static readonly Dictionary<Mesh, Vector3[]> vertexCache = new Dictionary<Mesh, Vector3[]>();
+        static (float minY, float maxY) VertexYExtents(GameObject go)
+        {
+            float min = float.PositiveInfinity, max = float.NegativeInfinity;
+            foreach (var mf in go.GetComponentsInChildren<MeshFilter>())
+            {
+                var mesh = mf.sharedMesh;
+                // no isReadable guard: these FBX imports report isReadable=false (Read/Write
+                // unchecked) yet the EDITOR can always read vertices — and this is editor-only
+                // build code. Guarding on it silently skipped every mesh and fell back to the
+                // inflated renderer bounds, which is exactly the bug this method exists to fix.
+                if (mesh == null) continue;
+                if (!vertexCache.TryGetValue(mesh, out var verts))
+                    vertexCache[mesh] = verts = mesh.vertices;
+                Matrix4x4 m = mf.transform.localToWorldMatrix;
+                foreach (var v in verts)
+                {
+                    float y = m.MultiplyPoint3x4(v).y;
+                    if (y < min) min = y;
+                    if (y > max) max = y;
+                }
+            }
+            if (min > max) { Bounds b = RenderererSafeBounds(go); return (b.min.y, b.max.y); }   // no readable mesh anywhere
+            return (min, max);
         }
 
         static void SetStaticRecursive(GameObject go)
@@ -1362,6 +1396,21 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             if (sword != null) { SetRef(gear, "sword", sword.transform); sword.SetActive(false); }
             if (shield != null) { SetRef(gear, "shield", shield.transform); shield.SetActive(false); }
 
+            // Corvus' ash staff (20 souls, user 2026-08-12) — same Weapon.R mount as the sword,
+            // same held quat; GlintstoneStaff hides it while the sword is owned (one mount, no
+            // clipping) and lobs the glintstone bolt from its crystal. Ships deactivated like the
+            // rest of the gear; NPCStaffOffer.Grant is what turns it on.
+            GameObject staffProp = BuildStaffProp();
+            Transform staffMount = weaponMount != null ? weaponMount : anim.GetBoneTransform(HumanBodyBones.RightHand);
+            staffProp.transform.SetParent(staffMount, false);
+            NormalizeWorldSize(staffProp, 1.05f);
+            staffProp.transform.localRotation = new Quaternion(-0.52869385f, 0.52449185f, -0.47811946f, 0.46561024f);
+            var caster = root.AddComponent<GlintstoneStaff>();
+            SetRef(caster, "staff", staffProp.transform);
+            SetRef(caster, "gear", gear);
+            SetRef(gear, "staff", staffProp.transform);
+            staffProp.SetActive(false);
+
             // The purse the sale is paid out of (2026-07-31). 100 souls against Velmire's 80-soul asking
             // price: affordable once, so the deal is real, and not affordable twice, so haggling him
             // toward his 60 floor is worth doing. BuildHud wires its top-left counter.
@@ -1533,6 +1582,26 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             p.transform.localEulerAngles = euler;
             p.GetComponent<MeshRenderer>().sharedMaterial = m;
             return p;
+        }
+
+        // Corvus' ash staff, the player-side copy (no pack asset has a loose staff): dark shaft
+        // built along +Y with the grip at the local origin — same convention as the pack sword,
+        // so the weapon mount and the sword's held quat both apply unchanged — and a glowing
+        // glintstone crystal at the head (GlintstoneStaff casts from local +0.72).
+        static GameObject BuildStaffProp()
+        {
+            var wood = MatAsset("StaffWood.mat", new Color(0.20f, 0.15f, 0.11f), 0f, 0.15f);
+            var glint = MatAsset("StaffGlint.mat", new Color(0.55f, 0.78f, 1f), 0.1f, 0.85f);
+            glint.EnableKeyword("_EMISSION");
+            glint.SetColor("_EmissionColor", new Color(0.30f, 0.55f, 1.15f));
+            var root = new GameObject("Staff");
+            PrimPart(root.transform, PrimitiveType.Cylinder, "Shaft",
+                     new Vector3(0, 0.18f, 0), new Vector3(0.035f, 0.50f, 0.035f), Vector3.zero, wood);
+            PrimPart(root.transform, PrimitiveType.Sphere, "Crystal",
+                     new Vector3(0, 0.72f, 0), Vector3.one * 0.10f, Vector3.zero, glint);
+            PrimPart(root.transform, PrimitiveType.Sphere, "Ferrule",
+                     new Vector3(0, -0.30f, 0), Vector3.one * 0.05f, Vector3.zero, wood);
+            return root;
         }
 
         // procedural halberd (no pack asset has one): dark ash pole, steel axe head, back spike
@@ -1800,48 +1869,34 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // identity lives here since the NPC component became the generic NPCChatBase — the
             // base class defaults are a nameless villager
             SetString(npc, "NpcName", "Velmire, the Pale Herald");
-            // THE 2B BASE MODEL, UNFINETUNED (user 2026-08-07). Four finetuning runs on the 0.8B
-            // never cleared the behaviour probe, and the 2026-08-07 diagnostics showed why it was
-            // never going to: the overfit probe proved the trainer fits whatever it is given
-            // (one conversation -> loss 3.1e-5), and run 3's loss converged ONTO the model's own
-            // entropy (1.999 vs 2.012), i.e. the residual is task entropy, not underfitting. What
-            // was left failing — summarizing the conversation, choosing the right tool — is
-            // comprehension, and that is bought with parameters, not epochs. So: try the 2B base
-            // first and see how much of this a bigger model simply does without training.
-            SetString(npc, "model", "Qwen3.5-2B");
-            // PERSONA. Still plain-spoken and short (user 2026-07-30) — the flowery/evasive version
-            // fought the gear beat and padded every reply. What is NEW here is the MEMORY section:
-            // the engine asks the model to compact its own history with a bare "Compact the
-            // conversation." and nothing else, and an untrained model reads that as dialogue and
-            // answers it in character. On the 0.8B that produced a compact full of invented numbers
-            // ("twenty-five stolen chose sixteen") which then became its ## MEMORY block and poisoned
-            // every later turn. Explaining what the request IS — and that whatever it omits is gone —
-            // is the cheapest fix available and costs ~90 tokens.
-            // Labels are bare uppercase words on purpose: they parse as structure without spending
-            // the tokens a markdown heading would.
+            // THE ROLEPLAY FINETUNE (user 2026-08-12). Supersedes the 2026-08-07 "try the 2B base"
+            // decision: run4 (0.8B on the compaction-augmented corpus) now folds to a clean
+            // "[HISTORY] " third-person synopsis, resumes normally after a compaction, and closes
+            // the haggle with a correct GiveItem(price) — the exact beats this NPC demos. The
+            // weights are discovered from disk (weights_qwen3.5_0.8B_roleplay_int8) via the
+            // registry's finetune scan.
+            SetString(npc, "model", "Qwen3.5-0.8B-roleplay");
+            // PERSONA, dataset-style (user 2026-08-12): written exactly the way the corpus defines
+            // its NPCs — one flowing second-person sheet of persona, knowledge and boundaries, no
+            // section labels, no scripted refusal quote, and NO compaction/memory teaching: the
+            // finetune already knows what "Compact the conversation." means (that was the whole
+            // point of training it), so the ~90-token MEMORY crutch the base model needed is gone.
+            // The sale facts stay because the engine binds them: 'sword' matches the sell_sword
+            // binding's aliases, CheckMyGear/GiveItem are the belt this NPC advertises below.
             SetString(npc, "descriptionAndRules",
-                "You are Velmire, the Pale Herald: a white-masked warden resting by the gate of a ruined castle.\n\n" +
-                "VOICE. One or two short sentences, plain speech, no riddles or flourishes. Answer exactly what " +
-                "was asked, then stop. Call the player 'wanderer'. Never describe your own actions. Stay in " +
-                "character always: if asked about the real world, refuse as Velmire and return to the gate.\n\n" +
-                "THE GATE. Beyond the wall of golden mist at the northern arch waits the Sentinel of the Mist, a " +
-                "towering hollow knight whose halberd has felled every challenger. Warn about it plainly when asked.\n\n" +
-                // The SALE (2026-07-31, replacing the free hand-over): the tools block teaches the
-                // FORMAT, the persona teaches WHEN and FOR HOW MUCH. The floor is stated ONCE with his
-                // own refusal line quoted, so the model has words to reuse instead of inventing a
-                // negotiation it then loses — an NPC that can be talked down to nothing is the failure
-                // this clause exists to prevent. Item named plainly as "sword" because the engine
-                // matches that string against the sell_sword binding's aliases.
-                "THE SWORD. You carry a sword you no longer need and you sell it. You ask 80 souls and will " +
-                "haggle down to 60, never lower. Below 60 you refuse in your own words - 'Sixty souls, wanderer. " +
-                "I said my price, and I do not say it twice.' - and no sad story, flattery or repeated asking " +
-                "moves you. Look before you offer: call CheckMyGear first. When the wanderer agrees a price, " +
-                "call GiveItem in that same reply, with item exactly 'sword' and that price.\n\n" +
-                "MEMORY. When you are asked to 'Compact the conversation.', that is not the wanderer speaking - " +
-                "it is your own memory being written down, and whatever you leave out is forgotten for good. " +
-                "Answer with a plain third-person summary of what actually happened: who you spoke with, what " +
-                "they asked, what you told them, any price discussed, whether the sword changed hands, and what " +
-                "is still unsettled. Facts only - no dialogue, no greeting, no character voice. Under 80 words.");
+                "You are Velmire, the Pale Herald: a white-masked warden resting by the gate of a ruined castle. " +
+                "You speak plainly and briefly - one or two short sentences, no riddles or flourishes. You call " +
+                "the player 'wanderer'. You never describe your own actions and you never leave character: asked " +
+                "about the real world, you refuse as Velmire and return to the gate.\n\n" +
+                "Beyond the wall of golden mist at the northern arch waits the Sentinel of the Mist, a towering " +
+                "hollow knight whose halberd has felled every challenger; warn about it plainly when asked.\n\n" +
+                "You carry a sword you no longer need and you sell it: you ask 80 souls and haggle down to 60, " +
+                "never lower - below 60 you refuse and do not move, whatever story or flattery comes with the " +
+                "offer.");
+            // No call instructions in the persona (user 2026-08-12): WHEN to read gear or hand an
+            // item over is trained behaviour now, and the belt's own tool descriptions (in the
+            // # Tools block WithToolsBlock appends) carry the per-tool "call when…" line — the
+            // same place the corpus puts it. The persona keeps only the world facts.
             // His belt is GiveItem ONLY (2026-07-31): the beat is now "hand over an item at a price",
             // which is exactly that tool, and a 0.8B handed both interactive tools picked the wrong one.
             // AskUserQuestion is OFF, so its schema and its <IMPORTANT> bullet both leave his prompt —
@@ -1879,6 +1934,8 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // the whole point of this NPC is that compaction FIRES during a normal conversation, and
             // raising the window to buy back the headroom would push it out of reach. If the probe
             // shows compaction never triggering in 8 turns, lower this rather than raise it.
+            // 2026-08-12: those ~90 MEMORY tokens are gone again (dataset-style persona for the
+            // finetune), so headroom is back near the 2026-07-25 numbers. 1800 still right.
             SetInt(npc, "maxContextLength", 1800);
             // Velmire speaks through Kokoro (82M non-AR, RTF ~0.3 — speaks DURING generation)
             // with the am_onyx voicepack: the same deep Freeman-esque narrator timbre the
@@ -1922,7 +1979,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // the sell_sword decision's accept-gate (souls in hand >= the price he named) and performs
             // the hand-over — souls out, sword in — when the player presses Accept. It is a plain
             // INPCToolProvider component, which is the whole point of that interface — WHICH tools an
-            // NPC has is authored in the scene, so Morwenna across the courtyard gets none of this.
+            // NPC has is authored in the scene, so Corvus across the courtyard gets none of this.
             var offer = root.AddComponent<NPCGearOffer>();
             var playerGear = playerGO != null ? playerGO.GetComponent<PlayerGear>() : null;
             if (playerGear != null) SetRef(offer, "playerGear", playerGear);
@@ -1971,6 +2028,35 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
         /// His persona asks him for the bare word, so the common path is the near-exact one and these
         /// are the safety net for the runs where a 0.8B embroiders.
         /// </summary>
+        // Corvus' staff sale — same table pattern as Velmire's sword below: the model names an
+        // item in its GiveItem call, the aliases match it to the sell_staff decision, the offer
+        // component gates on the purse and performs the hand-over on the player's Accept.
+        static void BindCorvusStaffSale(NPCInteractor3D chat, NPCStaffOffer offer)
+        {
+            if (chat == null || offer == null)
+            {
+                Debug.LogWarning("[ChatDemo3DBuilder] Corvus' sell_staff binding could not be wired " +
+                                 "(missing NPCInteractor3D or NPCStaffOffer) — his sale will not land.");
+                return;
+            }
+            var binding = new NPCDecision
+            {
+                id = NPCStaffOffer.SellStaffDecisionId,
+                aliases = new[]
+                {
+                    "staff", "ash staff", "ash-wood staff", "walking staff", "stave", "rod",
+                    "my staff", "his staff", "corvus' staff", "the staff i carry", "glintstone staff",
+                },
+                gate = offer,
+                onResolved = new NPCDecisionEvent(),
+            };
+            UnityEventTools.AddPersistentListener(binding.onResolved,
+                                                  new UnityAction<NPCDecisionResult>(offer.OnDecisionResolved));
+            chat.Decisions.Clear();
+            chat.Decisions.Add(binding);
+            EditorUtility.SetDirty(chat);
+        }
+
         static void BindVelmireSwordSale(NPCInteractor3D chat, NPCGearOffer offer)
         {
             if (chat == null || offer == null)
@@ -1997,12 +2083,14 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             EditorUtility.SetDirty(chat);
         }
 
-        // Secondary dialogue NPC: a witch across the courtyard from Velmire. Same NPCInteractor3D
-        // component and the same Qwen3.5-0.8B (int8) — only the serialized personality differs.
-        // Model: the actual female "Witch" from Quaternius' Ultimate Modular Women pack (CC0).
-        static GameObject BuildWitchNpc(RuntimeAnimatorController ctrl)
+        // Secondary dialogue NPC: an old chronicler across the courtyard from Velmire. Same
+        // NPCInteractor3D component and the same roleplay finetune — only the personality differs.
+        // Model: the robed Wizard from the same RPG pack as the TradingVillage strollers (user
+        // 2026-08-12: the Witch model read as costume fantasy and was deleted; the Wizard's
+        // soot-grey robe and pointed hat fit the ruin).
+        static GameObject BuildChroniclerNpc(RuntimeAnimatorController ctrl, GameObject player)
         {
-            var root = new GameObject("NPC_Morwenna");
+            var root = new GameObject("NPC_Corvus");
             root.layer = 2;
             Vector3 npcPos = new Vector3(-7.0f, 0f, 6.0f);
             root.transform.position = npcPos;
@@ -2020,42 +2108,42 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             trigger.radius = 2.2f;
             trigger.center = new Vector3(0, 1f, 0);
 
-            // the REAL witch model: Quaternius "Witch" from the Ultimate Modular Women pack
-            // (Apr-2022, CC0 — an actually FEMALE character: dress, hat, hair). Materials are
-            // the FBX's own flat palette colors (purple outfit out of the box) — no texture pass.
-            var model = (GameObject)PrefabUtility.InstantiatePrefab(LoadModel("Characters/Witch.fbx"));
-            model.name = "WitchModel";
+            // the robed Wizard from the Nov-2020 RPG pack (generic rig, own embedded clips —
+            // its feet are IK targets outside the leg chain, so humanoid retarget is impossible).
+            var model = (GameObject)PrefabUtility.InstantiatePrefab(LoadModel("Characters/Wizard.fbx"));
+            model.name = "ChroniclerModel";
             model.transform.SetParent(root.transform, false);
             SetLayerRecursive(model, 2);
+            // the pack's own texture, tinted ashen — a soot-grey scribe, not the village peddler's warm parchment
+            ApplyCharacterTexture(model, "Wizard_Texture.png", "NpcChronicler", new Color(0.72f, 0.70f, 0.68f));
+            // the model ships with a whole armoury baked in — keep ONLY the staff he sells
+            // (the sale hides it via NPCStaffOffer), drop the sword/knife/misc weapon nodes
+            foreach (var t in model.GetComponentsInChildren<Transform>(true))
+                if (t.name.IndexOf("Sword", StringComparison.OrdinalIgnoreCase) >= 0
+                    || t.name.IndexOf("Knife", StringComparison.OrdinalIgnoreCase) >= 0
+                    || (t.name.IndexOf("Weapon", StringComparison.OrdinalIgnoreCase) >= 0
+                        && t.name.IndexOf("Staff", StringComparison.OrdinalIgnoreCase) < 0))
+                    t.gameObject.SetActive(false);
             Bounds b = RenderererSafeBounds(model);
-            // slightly shorter and hunched-looking than Velmire
+            // slightly shorter and stooped-looking next to Velmire
             float scale = b.size.y > 0.01f ? 1.7f / b.size.y : 1f;
             model.transform.localScale *= scale;
             GroundModel(model, root.transform.position.y);
 
-            // generic rig -> her OWN clips: calm Idle_Neutral, and the Interact
-            // lean-in gesticulation while she talks (both loop)
+            // generic rig -> his OWN clips: Idle_Weapon (the staff-in-hand idle) at rest, and
+            // Spell1's arm-waving cast as the TALKING gesticulation (user 2026-08-12: "he has no
+            // talking animation" — the pack has no dedicated gesture clip, but a chronicler
+            // lecturing with his casting arm reads exactly right).
             var anim = model.GetComponent<Animator>();
             if (anim == null) anim = model.AddComponent<Animator>();
-            anim.runtimeAnimatorController = CreateOwnClipAnimator("WitchAnimator",
-                "Characters/Witch.fbx", "Idle_Neutral", "Interact");
+            anim.runtimeAnimatorController = CreateOwnClipAnimator("ChroniclerAnimator",
+                "Characters/Wizard.fbx", "Idle_Weapon", "Spell1");
             anim.applyRootMotion = false;
             anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;   // see Velmire, same reason
 
-            // the Wizard model brings its own pointed hat + staff-in-hand; just plant a spare
-            // crooked staff by her corner for set dressing
-            var staffMat = MatAsset("WitchStaff.mat", new Color(0.23f, 0.16f, 0.10f), 0f, 0.1f);
-            var staff = new GameObject("WitchStaff");
-            staff.transform.SetParent(envRoot, false);
-            staff.transform.position = npcPos + root.transform.right * 0.55f - root.transform.forward * 0.15f;
-            staff.transform.rotation = Quaternion.Euler(0f, 0f, 7f);
-            PrimPart(staff.transform, PrimitiveType.Cylinder, "Shaft",
-                     new Vector3(0, 0.75f, 0), new Vector3(0.045f, 0.75f, 0.045f), Vector3.zero, staffMat);
-            PrimPart(staff.transform, PrimitiveType.Sphere, "Knot",
-                     new Vector3(0, 1.52f, 0), Vector3.one * 0.11f, Vector3.zero, staffMat);
-
-            // her corner: a ring of candles, bones and a dead tree (parented to the environment —
-            // the NPC root rotates toward the player at runtime and must not drag props with it)
+            // his corner: candles to write by, skulls (his subjects) and a dead tree (parented to
+            // the environment — the NPC root rotates toward the player at runtime and must not
+            // drag props with it). The model carries its own staff; no spare prop needed.
             var candleA = PlacePiece("Candles_1", npcPos + root.transform.right * 0.8f + root.transform.forward * 0.3f, Range(0, 360), envRoot, collider: false);
             var candleB = PlacePiece("Candles_1", npcPos - root.transform.right * 0.7f + root.transform.forward * 0.5f, Range(0, 360), envRoot, collider: false);
             PlacePiece("Skull", npcPos + root.transform.right * 0.4f - root.transform.forward * 0.4f, Range(0, 360), envRoot, collider: false);
@@ -2066,7 +2154,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // broader fill so her whole corner reads at night instead of sitting in the dark
             AddCandleGlow(candleA, 0.35f, 2.4f, 4.5f);
             AddCandleGlow(candleB, 0.35f, 2.4f, 4.5f);
-            var fill = new GameObject("WitchCornerFill").AddComponent<Light>();
+            var fill = new GameObject("ChroniclerCornerFill").AddComponent<Light>();
             fill.transform.SetParent(envRoot, false);
             fill.transform.position = npcPos + Vector3.up * 2.1f + root.transform.forward * 0.4f;
             fill.type = LightType.Point;
@@ -2075,7 +2163,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             fill.range = 7f;
             fill.shadows = LightShadows.None;
 
-            // dialogue camera: over the player's shoulder, framing the witch
+            // dialogue camera: over the player's shoulder, framing the chronicler
             var camPoint = new GameObject("DialogueCameraPoint").transform;
             camPoint.SetParent(root.transform, false);
             Vector3 worldCamPos = npcPos + root.transform.forward * 2.4f + root.transform.right * 1.0f + Vector3.up * 1.65f;
@@ -2085,50 +2173,75 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             root.AddComponent<BreathingIdle>();
             var npc = root.AddComponent<NPCInteractor3D>();
             SetRef(npc, "dialogueCameraPoint", camPoint);
-            SetString(npc, "NpcName", "Morwenna, the Hollow Witch");
+            SetString(npc, "NpcName", "Corvus, the Ash Chronicler");
+            // Runs the roleplay finetune like Velmire (user 2026-08-12) — and like his, the persona
+            // is written dataset-style: one flowing second-person sheet of persona, knowledge and
+            // boundaries, and NO tool coaching (when to put a question to the player is trained;
+            // the belt's own schema descriptions carry the per-tool guidance).
+            SetString(npc, "model", "Qwen3.5-0.8B-roleplay");
             SetString(npc, "descriptionAndRules",
-                "You are Morwenna, the Hollow Witch: a crooked, sharp-tongued crone crouched among candles and bones in a " +
-                "corner of the ruined courtyard. You mutter over your brews, barter in riddles, and treat every question as a " +
-                "foolish waste of your time — yet you cannot resist showing off how much you know. You call the player " +
-                "'little morsel' or 'wet-eared pup', and you speak in short, cackling, earthy sentences full of herbs, bones " +
-                "and bad omens. You despise Velmire, the Pale Herald who lingers by the gate, and warn the player never to " +
-                "trust his honeyed tongue. You too know what waits beyond the wall of golden mist at the northern arch: the " +
-                "Sentinel of the Mist, a towering hollow knight with a halberd — you claim you cursed it yourself long ago, " +
-                "and cackle that the player's bones will make a fine addition to your collection when it fells them. " +
-                "Stay in character at all times. Keep your replies to one to three short sentences. " +
-                // Voiced, like Velmire — same reason, her own words. See his persona for the why.
-                "Word an AskUserQuestion as a label on the screen rather than speech, naming yourself: " +
-                "'Take Morwenna's charm?', never 'Do you want mine?'.");
-            // The witch advertises AskUserQuestion (stated at the WithToolsBlock call below) —
-            // barters-in-riddles is exactly the persona that puts deals to the player. Her
-            // context is the 8192 default, so the tools block costs her nothing in headroom.
-            // history-mode A/B spread: the witch forgets you the moment you leave (fresh
+                "You are Corvus, the Ash Chronicler: a stooped old scribe in soot-grey robes, keeping " +
+                "his ledger in a corner of the ruined courtyard. You record the name of every challenger the Sentinel of " +
+                "the Mist has felled - four hundred and nine so far, written in ash on slate - and you speak of death the " +
+                "way a clerk speaks of paperwork: dry, precise, faintly amused. You call the player 'petitioner' and you " +
+                "answer in one or two short sentences, plain words, no riddles. You know the castle fell the night its " +
+                "lord walked into the golden mist and did not come back; you know the Sentinel waits at the northern arch " +
+                "and has never been beaten; you know Velmire by the gate sells the gear of the fallen, which you call " +
+                "grave-robbery with manners. You offer one service: writing a petitioner's name into the ledger in " +
+                "advance, which you insist saves everyone time afterwards. You also carry an ash-wood staff that still " +
+                "holds a whisper of glintstone magic; you will part with it for twenty souls, fixed - you do not haggle " +
+                "over instruments. You never describe your own actions and you never leave character: asked about the " +
+                "real world, you wave it off and return to your ledger.");
+            // The chronicler advertises AskUserQuestion (the ledger-signup beat) AND GiveItem (the
+            // 20-soul staff, user 2026-08-12) — both stated at the WithToolsBlock call below.
+            // history-mode A/B spread: the chronicler forgets you the moment you leave (fresh
             // InitializeChat every opening — the pre-history-modes behavior)
             SetEnum(npc, "historyMode", (int)NPCInteractor3D.HistoryMode.ResetEveryTime);
+            // 1024-token window (user 2026-08-12) — deliberately snug: with the persona + both
+            // interactive schemas the prefix leaves only a handful of exchanges, and in
+            // ResetEveryTime there is no compaction valve. If he goes mute mid-chat, this is why.
+            SetInt(npc, "maxContextLength", 1024);
+            // world duck like Velmire's (user 2026-08-12): ambience/music at half while his
+            // interaction is open, so the old man's dry voice is not fighting the wind
+            SetFloat(npc, "worldAudioWhileInteracting", 0.5f);
             // latent loading for her too: contact loading (the old A/B "B" arm) slammed the full
             // 8 MB/frame stream the instant the talk trigger was touched — a visible hitch. Her
             // Qwen now streams during the walk-up like Velmire's (and the POOL means whichever
             // of the two loads first serves both). The small sphere trigger stays interaction-only.
             SetBool(npc, "usePrefetchZone", true);
             SetFloat(npc, "prefetchRadius", 10f);
-            // The crone speaks pocket-tts too (both NPCs on the default engine — ONE weight set
-            // on the GPU serves both). The two voices stay distinct through CLONING: her voice is
-            // cloned from the Finger Reader Enia reference clip (precomputed into Resources/Cache;
-            // runtime = pure load), vs Velmire's Ansbach clone. "jean" is the baked fallback.
+            // The chronicler speaks pocket-tts too (both NPCs on the default engine — ONE weight
+            // set on the GPU serves both). The two voices stay distinct through CLONING: his is
+            // cloned from the Gowry reference clip (a dry old scholar — precomputed into
+            // Resources/Cache on first use), vs Velmire's Ansbach clone. "jean" is the baked fallback.
             SetEnum(npc, "conversationMode", (int)NPCInteractor3D.ConversationMode.LlmPlusTts);
             SetEnum(npc, "ttsModel", (int)NPCInteractor3D.TtsModel.PocketTTS);
             SetString(npc, "ttsVoice", "jean");
             SetObject(npc, "clonedVoiceClip", AssetDatabase.LoadAssetAtPath<AudioClip>(
-                "Assets/DeepUnity/Tutorials/ChatDemo3D/Voices/FingerReaderEnia_0-15s.mp3"));
+                "Assets/DeepUnity/Tutorials/ChatDemo3D/Voices/Gowry_1-11s.wav"));
             SetFloat(npc, "voiceVolume", 5f);   // user 2026-07-15 (both castle NPCs at 5)
-            // her tools go into the field too — AskUserQuestion only, no provider (see Velmire)
+            // The staff sale (user 2026-08-12): NPCStaffOffer contributes the CheckMyGear read and
+            // is the sell_staff binding's gate + hand-over — the exact NPCGearOffer loop, staff-
+            // flavoured. Wired BEFORE WithToolsBlock so its schema lands in the # Tools block.
+            var offer = root.AddComponent<NPCStaffOffer>();
+            if (player != null)
+            {
+                SetRef(offer, "playerGear", player.GetComponent<PlayerGear>());
+                SetRef(offer, "playerSouls", player.GetComponent<PlayerSouls>());
+            }
+            Transform hisStaff = FindDeep(model.transform, "Staff");
+            if (hisStaff != null) SetRef(offer, "npcStaff", hisStaff);
+
+            // his tools go into the field too — AskUserQuestion (the ledger beat) + GiveItem (the
+            // staff), plus the provider read above
             var chat = root.GetComponent<NPCInteractor3D>();
             if (chat != null)
             {
                 var f = typeof(NPCChatBase).GetField("descriptionAndRules",
                     System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-                f.SetValue(chat, chat.WithToolsBlock((string)f.GetValue(chat), askUserQuestion: true, giveItem: false));
+                f.SetValue(chat, chat.WithToolsBlock((string)f.GetValue(chat), askUserQuestion: true, giveItem: true));
             }
+            BindCorvusStaffSale(chat, offer);
             return root;
         }
 
@@ -2140,7 +2253,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
         static CanvasGroup s_bossBarGroup;
         static DeathScreen s_deathScreen;
 
-        static void BuildUI(TMP_FontAsset cinzel, Sprite vignette, GameObject npcGO, GameObject witchGO, GameObject playerGO)
+        static void BuildUI(TMP_FontAsset cinzel, Sprite vignette, GameObject npcGO, GameObject scribeGO, GameObject playerGO)
         {
             var canvasGO = new GameObject("UI", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             var canvas = canvasGO.GetComponent<Canvas>();
@@ -2344,8 +2457,8 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // reacts: AskNPC guards on WaitingInInteraction and CloseInteraction is a no-op
             // for an NPC that is already Idle (its coroutine/llm/player are all null).
             var npc = npcGO.GetComponent<NPCInteractor3D>();
-            var witch = witchGO.GetComponent<NPCInteractor3D>();
-            foreach (var it in new[] { npc, witch })
+            var scribe = scribeGO.GetComponent<NPCInteractor3D>();
+            foreach (var it in new[] { npc, scribe })
             {
                 SetRef(it, "chatWindow", win);
                 SetRef(it, "interactPrompt", promptGO.GetComponent<NPCInteractPrompt>());

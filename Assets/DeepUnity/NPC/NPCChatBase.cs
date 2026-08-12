@@ -104,7 +104,7 @@ namespace DeepUnity
     /// <summary>
     /// A component that gives its NPC EXTRA tools on top of the built-in AskUserQuestion popup.
     /// A provider is a MonoBehaviour on the same GameObject as the <see cref="NPCChatBase"/>, so
-    /// which tools an NPC has is authored in the SCENE (Velmire can hand his gear over; Morwenna
+    /// which tools an NPC has is authored in the SCENE (Velmire can hand his gear over; Corvus
     /// cannot) instead of being hard-coded in the base class.
     /// <para>Providers own <b>internal</b> tools: world-state reads the player never sees. The
     /// returned JSON goes straight back to the model as the &lt;tool_response&gt; and generation
@@ -162,7 +162,7 @@ namespace DeepUnity
         public enum ConversationMode { LlmOnly, LlmPlusTts }
 
         /// <summary>Granularity of the audio-synced text reveal (see syncedTextReveal).</summary>
-        public enum RevealGranularity { CharByChar, WordByWord }
+        public enum RevealGranularity { CharByChar, WordByWord, TokenByToken }
 
         /// <summary>
         /// What happens to the conversation HISTORY between two openings of the dialogue.
@@ -252,7 +252,7 @@ namespace DeepUnity
         [Tooltip("LlmOnly = text-only replies (talk animation follows the writing; voice fields hidden below). LlmPlusTts = replies are spoken: the talk animation follows the AUDIO, and the next sentence synthesizes while the current one plays.")]
         [SerializeField] protected ConversationMode conversationMode = ConversationMode.LlmOnly;
         protected bool speakReplies => conversationMode == ConversationMode.LlmPlusTts;
-        [Tooltip("How the audio-synced reply types itself into the window while the NPC speaks (LlmPlusTts only). CharByChar = typewriter, letters land in step with the voice. WordByWord = whole words pop in on their spoken beat. Text-only replies stream per LLM token and ignore this.")]
+        [Tooltip("How the audio-synced reply types itself into the window while the NPC speaks (LlmPlusTts only). CharByChar = typewriter, letters land in step with the voice. WordByWord = whole words pop in on their spoken beat. TokenByToken = the model's own generation chunks land whole on their spoken beat, like watching the raw stream. Text-only replies stream per LLM token and ignore this.")]
         [SerializeField] protected RevealGranularity syncedTextReveal = RevealGranularity.CharByChar;
         [Tooltip("ResetEveryTime = the chat starts from the bare system prompt EVERY opening (only the system-prompt KV is cached). ResumeFromCompact = the history is permanent — it survives closing the dialogue AND quitting the app, with every reply — until it fills Max Context Length, at which point the model compacts the whole conversation into one text that is APPENDED TO THE SYSTEM PROMPT (the Compact Summary field below) and the replies are dropped. See the dropdown's own tooltips for the full lifecycle.")]
         [SerializeField] protected HistoryMode historyMode = HistoryMode.ResetEveryTime;
@@ -261,7 +261,7 @@ namespace DeepUnity
         [Tooltip("Persist this NPC's KV cache to disk (persistentDataPath/DeepUnity): the system-prompt state in EVERY mode, plus — in ResumeFromCompact — the WHOLE conversation on a clean close (KV + sampler state + transcript + compact), so reopening after the model was released, the scene reloaded or the app restarted restores the chat from disk instead of re-prefilling. This is what makes ResumeFromCompact survive an app restart, so leave it ON for that mode. Qwen3.5 only for now; Gemma3 NPCs fall back to the re-prefill path.")]
         [SerializeField] protected bool cacheKVCache = true;
 
-        [Tooltip("Which local LLM voices this NPC — the dropdown lists every model registered in LLMRegistry, so a freshly ported LLM appears here automatically. Sampling fields at -1 fall back to this model's Config presets.")]
+        [Tooltip("Which local LLM voices this NPC — the dropdown lists every model registered in LLMRegistry, so a freshly ported LLM appears here automatically, and every finetune weight export found on disk (weights_qwen3.5_<size>_<variant>_<quant> under Resources/Weights, e.g. the roleplay finetune) appears as its own '<model>-<variant>' row. Sampling fields at -1 fall back to this model's Config presets.")]
         [SerializeField] protected string model = "Qwen3.5-0.8B";
         [Tooltip("Weight format. INT8 is ~lossless at half the VRAM — the recommended default. INT4 is lossy on models this small (Gemma int4 collapses outright).")]
         [SerializeField] protected LLMQuant quantization = LLMQuant.INT8;
@@ -2028,8 +2028,24 @@ namespace DeepUnity
         void ShowToolCalledLine(INPCChatWindow w, string toolName, bool refused = false)
         {
             if (w == null) return;
-            exchangePrefix = Bubble(refused ? CanceledStyled($"Tool Call Canceled ({toolName})")
-                                            : StatusStyled($"Tool Called ({toolName})"));
+            // Commit the segment's SPOKEN line into the prefix FIRST. The pop below replaces the
+            // bubble (prefix + spoken line) with the prefix alone, and nothing else preserved that
+            // line — on text → call → text → call replies every intermediate line vanished and only
+            // the last survived (user bug 2026-08-12; became visible once the finetune started
+            // speaking before its calls). bubbleLive is exactly the live, non-prefix part as last
+            // drawn: PrepareForNextReply settles it to the full text on the voice-paced path, the
+            // raw token stream keeps it current on the text-only path.
+            if (!string.IsNullOrEmpty(bubbleLive)) { exchangePrefix = Bubble(bubbleLive.TrimEnd()); bubbleLive = null; }
+            // The marker sits CENTERED between the paragraphs it separates: one blank line above
+            // (the extra "\n" here, on top of Bubble's joining newline) and one below (the marker's
+            // own trailing "\n" plus the join the next segment's text arrives with). Committed text
+            // is TrimEnd()ed above so a trailing newline in the decoded reply can't double the gap
+            // (user 2026-08-12: the line hugged the paragraph under it). A call with no spoken line
+            // before it skips the leading blank — the bubble must not open on empty space.
+            string marker = refused ? CanceledStyled($"Tool Call Canceled ({toolName})")
+                                    : StatusStyled($"Tool Called ({toolName})");
+            exchangePrefix = string.IsNullOrEmpty(exchangePrefix) ? marker + "\n"
+                                                                  : Bubble("\n" + marker + "\n");
             pendingFullReply = null;   // committed into the prefix; a later settle must not re-add it
             w.PopLastMessage();
             w.AddMessage(NpcName, exchangePrefix);
@@ -2589,6 +2605,10 @@ namespace DeepUnity
         // clauses with. See the alignment note in RevealWordsJob.
         readonly System.Text.StringBuilder revealSource = new System.Text.StringBuilder();
         int revealSrcPos;   // chars of revealSource already consumed by revealed clauses
+        // End position in revealSource of every chunk fed to the voices — one entry per generated
+        // token (FeedVoiceText is the per-token fan-out), so these ARE the model's token edges,
+        // recorded for free. TokenByToken snaps the reveal to them the way WordByWord snaps to spaces.
+        readonly List<int> revealTokenEdges = new List<int>();
 
         void OnClauseSpokenHandler(string clause, float duration)
         {
@@ -2622,6 +2642,7 @@ namespace DeepUnity
                 string basis = spokenShown ?? "";
                 string src = revealSource.ToString();
                 int start = revealSrcPos;
+                int clauseStart = -1;   // clause's offset in revealSource when aligned — maps token edges into clause space
                 while (start < src.Length && char.IsWhiteSpace(src[start])) start++;
                 if (start + clause.Length <= src.Length &&
                     string.CompareOrdinal(src, start, clause, 0, clause.Length) == 0)
@@ -2629,6 +2650,7 @@ namespace DeepUnity
                     // the real separator — where any "\n\n" lives. Dropped before the reply's
                     // FIRST clause, where it would render as a leading blank line.
                     if (basis.Length > 0) basis += src.Substring(revealSrcPos, start - revealSrcPos);
+                    clauseStart = start;
                     revealSrcPos = start + clause.Length;
                 }
                 else if (basis.Length > 0 && !char.IsWhiteSpace(basis[basis.Length - 1])
@@ -2653,6 +2675,22 @@ namespace DeepUnity
                         int e = shown;
                         while (e < target)
                         { int sp = clause.IndexOf(' ', e); e = sp < 0 ? clause.Length : sp + 1; }
+                        target = e;
+                    }
+                    else if (syncedTextReveal == RevealGranularity.TokenByToken && target > shown && clauseStart >= 0)
+                    {
+                        // tokens land whole: extend to the end of every LLM token the clock has
+                        // entered — edges recorded in FeedVoiceText, mapped via clauseStart. A
+                        // clause that failed to align has no trustworthy edges (clauseStart -1)
+                        // and stays on the plain char pacing.
+                        int e = shown;
+                        while (e < target)
+                        {
+                            int idx = revealTokenEdges.BinarySearch(clauseStart + e + 1);
+                            if (idx < 0) idx = ~idx;
+                            e = idx >= revealTokenEdges.Count ? clause.Length
+                                : Mathf.Min(revealTokenEdges[idx] - clauseStart, clause.Length);
+                        }
                         target = e;
                     }
                     if (target > shown)
@@ -2779,7 +2817,7 @@ namespace DeepUnity
             if (synced)
             {
                 spokenShown = null; pendingFullReply = null; revealActive = true; StopRevealJob();
-                revealSource.Clear(); revealSrcPos = 0;   // fresh reply, fresh alignment source
+                revealSource.Clear(); revealSrcPos = 0; revealTokenEdges.Clear();   // fresh reply, fresh alignment source
             }
             // unconditional (both paths draw into the bubble): a stale value here would mark the NEXT
             // reply's opening bubble with the previous reply's interruption. drainTurn goes with it —
@@ -2793,6 +2831,8 @@ namespace DeepUnity
             bool toolPulseShown = false;// the dots were relabelled "Tool calling" for this reply
             bool toolCallClosed = false;// </tool_call> seen — decoding was stopped there
             bool toolSendLocked = false;// Speak was taken away because a call is mid-flight
+            bool foldChecked = false;   // enough visible text seen to decide fold-or-dialogue
+            bool foldReply = false;     // the reply opened with "[HISTORY]" — a spontaneous fold
 
             // thinking placeholder: ". / .. / ..." pulses until the first real content lands
             if (asToolResult) w.PopLastMessage();   // keep writing in THIS exchange's bubble
@@ -2857,6 +2897,22 @@ namespace DeepUnity
                             llm.CancelChat();
                         }
                     }
+                    // A reply that OPENS with the compaction marker is the model folding its memory
+                    // unprompted (the corpus fold prior bleeding into dialogue). The fold is a
+                    // machine artefact: it must never be typed into the bubble and never voiced —
+                    // the pulse names the phase instead, exactly like "Thinking…"/"Tool calling"
+                    // (user 2026-08-12). Decided ONCE, as soon as enough visible text exists;
+                    // until then neither the voice nor the bubble is fed (a tick or two of delay,
+                    // invisible next to the decode cadence).
+                    if (!foldChecked && visibleFull.Length > 0)
+                    {
+                        string lead = visibleFull.TrimStart();
+                        if (lead.Length < 9 && !toolCallClosed) return;
+                        foldChecked = true;
+                        foldReply = lead.StartsWith("[HISTORY]", System.StringComparison.Ordinal);
+                        if (foldReply) StartThinkingDots(w, "Compacting");
+                    }
+                    if (foldReply) return;   // the pulse owns the bubble; the fold is recorded, not rendered
                     // reasoning NEVER reaches the TTS — only newly-VISIBLE text is fed
                     if (speakReplies && !replyCanceled && visibleFull.Length > voicedLen)
                     {
@@ -2905,7 +2961,7 @@ namespace DeepUnity
                     repetition_penalty: repetitionPenalty >= 0f ? repetitionPenalty : llm.Config.DefaultRepetitionPenalty,
                     enable_thinking: enableThinking,
                     onTokenGenerated: onTok);
-            if (speakReplies && !replyCanceled)
+            if (speakReplies && !replyCanceled && !foldReply)   // a fold is never voiced
             {
                 if (visibleFull.Length > voicedLen) FeedVoiceText(visibleFull.Substring(voicedLen));
                 FlushVoiceText();   // speak the trailing clause
@@ -2919,7 +2975,18 @@ namespace DeepUnity
             // transcripts/window always carry the VISIBLE text (raw kept only if nothing parsed)
             string finalVisible = visibleFull.Length > 0 ? visibleFull
                                 : thinkFull.Length > 0 ? "" : response.ToString();
-            if (synced && stillOpen)   // after a close this state is junk — never carry it over
+            if (foldReply && stillOpen)
+            {
+                // The fold was never rendered (the "Compacting…" pulse stood in for it) — settle
+                // the bubble on a permanent status line, the same register as "Tool Called (…)".
+                // The fold text itself still lands in the transcript/sidecar below: it is data.
+                w.PopLastMessage();
+                w.AddMessage(NpcName, Bubble(StatusStyled("Compacted the conversation")));
+                bubbleLive = null;
+                contentShown = true;
+                revealActive = false;   // synced path: there is nothing to reveal
+            }
+            else if (synced && stillOpen)   // after a close this state is junk — never carry it over
             {
                 pendingFullReply = finalVisible;
                 StartCoroutine(FinishSyncedReveal(pendingFullReply));
@@ -2935,6 +3002,15 @@ namespace DeepUnity
             }
 
             if (turn != null) turn.npc = finalVisible;
+            // Debug sidecar, EVERY history mode (the transcript list itself only exists in the
+            // continue modes): the raw exchange as the model lived it — tool_response turns, the
+            // <tool_call> body decoding stopped at, and unrendered folds included.
+            AppendTranscriptSidecar(asToolResult ? "tool_response" : "player", question);
+            string sidecarReply = finalVisible;
+            if (!string.IsNullOrWhiteSpace(toolCallFull)) sidecarReply += $"  <tool_call: {toolCallFull.Trim()}>";
+            if (foldReply) sidecarReply = "(spontaneous fold) " + sidecarReply;
+            if (replyCanceled) sidecarReply += "  (canceled mid-reply)";
+            AppendTranscriptSidecar(NpcName, sidecarReply);
             drainTurn = turn;      // still being spoken — keep it markable, see the field's note
             activeTurn = null;
             activeResponse = null;
@@ -3230,7 +3306,7 @@ namespace DeepUnity
         {
             // verbatim copy of the feed — the reveal aligns clauses against it (the clause
             // cutter destroys inter-clause whitespace, see RevealWordsJob)
-            if (revealActive) revealSource.Append(token);
+            if (revealActive) { revealSource.Append(token); revealTokenEdges.Add(revealSource.Length); }
             voice?.FeedText(token);
             cvVoice?.FeedText(token);
             kkVoice?.FeedText(token);
@@ -3705,6 +3781,30 @@ namespace DeepUnity
             => System.IO.Path.Combine(Application.persistentDataPath, "DeepUnity",
                                       $"npc_compact_{ConversationKvKey()}.txt");
 
+        // ---------------------------------------------------------------- transcript sidecar
+        // Append-only PLAIN-TEXT log of every completed exchange, written next to the KV caches
+        // (user 2026-08-12: "save the conversation in text form beside the kv cache so we can
+        // debug it"). The conversation KV only persists on a clean in-game close and is binary;
+        // this file is appended the moment each turn finishes, so it survives crashes, Escape,
+        // play-mode stops and interrupts — including replies the window never showed raw (folds,
+        // tool-call bodies). One file per NPC, across sessions; delete it to start fresh.
+        private string TranscriptSidecarPath()
+            => System.IO.Path.Combine(Application.persistentDataPath, "DeepUnity",
+                                      $"npc_transcript_{ConversationKvKey()}.log");
+
+        private void AppendTranscriptSidecar(string speaker, string text)
+        {
+            try
+            {
+                string path = TranscriptSidecarPath();
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
+                System.IO.File.AppendAllText(path,
+                    $"[{System.DateTime.Now:yyyy-MM-dd HH:mm:ss}] {speaker}: {text}\n");
+            }
+            catch (System.Exception e)
+            { ConsoleMessage.Warning($"[Transcript] {NpcName}: sidecar write failed: {e.Message}"); }
+        }
+
         private void SaveCompactSidecar()
         {
             try
@@ -3865,6 +3965,7 @@ namespace DeepUnity
 
             compactSummary = summary;
             SaveCompactSidecar();   // so the inspector still shows it after play mode ends
+            AppendTranscriptSidecar("== COMPACTED ==", summary);   // the fold, in the debug log's timeline
             transcript.Clear();   // the HISTORY block stands in for every turn so far
             LLMPool.ClaimConversation(llm, this);   // the compacted prefix carries OUR conversation
             ConsoleMessage.Info($"[Compact] {NpcName}: compaction done — history → " +

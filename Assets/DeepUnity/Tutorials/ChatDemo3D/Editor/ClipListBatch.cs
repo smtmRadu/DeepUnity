@@ -19,7 +19,6 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
                 "Assets/DeepUnity/Tutorials/ChatDemo3D/Art/Characters/Monk.fbx",
                 "Assets/DeepUnity/Tutorials/ChatDemo3D/Art/Characters/Rogue.fbx",
                 "Assets/DeepUnity/Tutorials/ChatDemo3D/Art/Characters/Wizard.fbx",
-                "Assets/DeepUnity/Tutorials/ChatDemo3D/Art/Characters/Witch.fbx",
                 "Assets/DeepUnity/Tutorials/ChatDemo3D/Art/Animations/UAL1.fbx",
                 "Assets/DeepUnity/Tutorials/ChatDemo3D/Art/Animations/UAL2.fbx",
             })

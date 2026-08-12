@@ -94,9 +94,14 @@ Assets/DeepUnity/ReinforcementLearning/Base/debug-*.log.meta
 
 # Model weights (LLM + TTS + STT) — large binaries regenerated via the param-export scripts
 # (import_params.py / import_kokoro.py / import_qwen3asr.py / import_parakeet.py). All exports
-# land flat under Assets/Resources/Weights/; intentionally NOT tracked (too large for git).
-Assets/Resources/Weights/
-Assets/Resources/Weights.meta
+# land flat under Assets/Resources/Weights/; intentionally NOT tracked (too large for git),
+# EXCEPT the dissertation roleplay finetune (not regenerable from HF — merged from our run4
+# adapter; every shard < 100 MB so plain git holds it). `/*` not `/` on the dir rule: git
+# never descends into a fully-ignored directory, so the negations would be dead otherwise.
+Assets/Resources/Weights/*
+!Assets/Resources/Weights/weights_qwen3.5_0.8B_roleplay_int8
+!Assets/Resources/Weights/weights_qwen3.5_0.8B_roleplay_int8/**
+!Assets/Resources/Weights/weights_qwen3.5_0.8B_roleplay_int8.meta
 Assets/Resources/DeepUnity/
 Assets/Resources/DeepUnity.meta
 Assets/DeepUnity/InferenceEngine/LLM/**/weights_*/

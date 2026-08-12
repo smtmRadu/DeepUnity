@@ -57,7 +57,7 @@ namespace DeepUnity
             foreach (var npc in FindObjectsOfType<NPCChatBase>(true))
             {
                 if (npc.gameObject.name.Contains("Velmire")) velmire = npc;
-                if (npc.gameObject.name.Contains("Morwenna")) witch = npc;
+                if (npc.gameObject.name.Contains("Corvus")) witch = npc;
             }
             var winGO = FindObjectOfType<Tutorials.ChatDemo3D.SoulsChatWindow>(true);
             window = winGO;

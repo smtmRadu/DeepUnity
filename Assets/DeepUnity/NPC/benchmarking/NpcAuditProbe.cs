@@ -9,7 +9,7 @@ namespace DeepUnity
 {
     // Post-audit hardening — MECHANICAL end-to-end probe in the real ChatDemo3D scene.
     // Covers the four audit fixes the older probes don't reach (two NPCs share the window):
-    //   A1  idle-sibling Leave (audit #1): CloseInteraction() on the IDLE Morwenna while
+    //   A1  idle-sibling Leave (audit #1): CloseInteraction() on the IDLE Corvus while
     //       Velmire's dialogue is open must be a pure no-op — her state stays Idle, Velmire's
     //       state/window/input untouched, no conversation-KV save latched for her, her voice
     //       volume untouched
@@ -131,7 +131,7 @@ namespace DeepUnity
             foreach (var n in FindObjectsOfType<NPCChatBase>(true))
             {
                 if (n.gameObject.name.Contains("Velmire")) velmire = n;
-                if (n.gameObject.name.Contains("Morwenna")) morwenna = n;
+                if (n.gameObject.name.Contains("Corvus")) morwenna = n;
             }
             window = FindObjectOfType<Tutorials.ChatDemo3D.SoulsChatWindow>(true);
             player = playerGO != null ? playerGO.transform : null;
@@ -147,7 +147,7 @@ namespace DeepUnity
             // mode so the transcript/chatLive asserts are meaningful
             fHistoryMode.SetValue(velmire, NPCChatBase.HistoryMode.ResumeFromCompact);
             fMaxTokens.SetValue(velmire, 1000000);
-            // Morwenna is staged like an NPC with a PAST conversation (chatLive + one turn):
+            // Corvus is staged like an NPC with a PAST conversation (chatLive + one turn):
             // exactly the state in which the pre-fix idle-sibling close corrupted things
             fHistoryMode.SetValue(morwenna, NPCChatBase.HistoryMode.ResumeFromCompact);
             fChatLive.SetValue(morwenna, true);
@@ -180,14 +180,14 @@ namespace DeepUnity
                 if (SaveOwnedBy(morwenna)) morwennaSaveSeen = true;
                 yield return null;
             }
-            Check(morwenna.State == NPCChatBase.NPCState.Idle, "A1 Morwenna stays Idle after her CloseInteraction");
+            Check(morwenna.State == NPCChatBase.NPCState.Idle, "A1 Corvus stays Idle after her CloseInteraction");
             Check(velmire.State == NPCChatBase.NPCState.WaitingInInteraction, "A1 Velmire's dialogue state untouched");
             Check(window.IsOpen, "A1 shared window still open");
             Check(window.InputField.text == "sentinel question", "A1 typed input preserved");
-            Check(!morwennaSaveSeen, "A1 no conversation-KV save latched for Morwenna");
+            Check(!morwennaSaveSeen, "A1 no conversation-KV save latched for Corvus");
             float morwennaVolAfter = morwenna.GetComponent<AudioSource>() != null
                 ? morwenna.GetComponent<AudioSource>().volume : -1f;
-            Check(Mathf.Approximately(morwennaVol, morwennaVolAfter), "A1 Morwenna's voice volume untouched (no fade)");
+            Check(Mathf.Approximately(morwennaVol, morwennaVolAfter), "A1 Corvus's voice volume untouched (no fade)");
 
             // ---------- A2 + A3: silent-ask gates and the Busy flag across one long reply ----------
             window.InputField.text = "Describe this castle and its keepers in great detail, at least six long sentences.";

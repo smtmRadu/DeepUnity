@@ -19,6 +19,8 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         private Transform sword;
         [SerializeField, Tooltip("The held shield — deactivated until the player owns it.")]
         private Transform shield;
+        [SerializeField, Tooltip("Corvus' ash staff — deactivated until the player buys it (GlintstoneStaff casts from it and owns its mount-sharing rule).")]
+        private Transform staff;
 
         [Header("HUD quick slots (icons hide, the empty frames stay)")]
         [SerializeField] private GameObject swordSlotIcon;
@@ -32,6 +34,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D
 
         public bool HasSword { get; private set; }
         public bool HasShield { get; private set; }
+        public bool HasStaff { get; private set; }
 
         /// <summary>Fired after ownership changes, so the animation set can swap the moment the gear
         /// lands instead of polling for it every frame (<see cref="SoulsPlayerController"/> listens).
@@ -48,15 +51,18 @@ namespace DeepUnity.Tutorials.ChatDemo3D
                 // animation set (which now keys off HasSword/HasShield) around gear nobody can see.
                 HasSword = sword != null;
                 HasShield = shield != null;
+                HasStaff = staff != null;
                 if (sword != null) sword.gameObject.SetActive(true);
                 if (shield != null) shield.gameObject.SetActive(true);
+                if (staff != null) staff.gameObject.SetActive(true);   // GlintstoneStaff's mount rule corrects it
                 if (swordSlotIcon != null) swordSlotIcon.SetActive(HasSword);
                 if (shieldSlotIcon != null) shieldSlotIcon.SetActive(HasShield);
                 return;
             }
-            HasSword = HasShield = false;
+            HasSword = HasShield = HasStaff = false;
             if (sword != null) sword.gameObject.SetActive(false);
             if (shield != null) shield.gameObject.SetActive(false);
+            if (staff != null) staff.gameObject.SetActive(false);
             if (swordSlotIcon != null) swordSlotIcon.SetActive(false);
             if (shieldSlotIcon != null) shieldSlotIcon.SetActive(false);
         }
@@ -76,7 +82,21 @@ namespace DeepUnity.Tutorials.ChatDemo3D
             GearChanged?.Invoke();
         }
 
+        /// <summary>Hands the player Corvus' staff. No quick-slot icon (the HUD ships two) and no
+        /// stow tween — GlintstoneStaff owns where the staff renders (it shares the sword's mount
+        /// and yields to it). Idempotent.</summary>
+        public void GrantStaff()
+        {
+            if (HasStaff) return;
+            if (staff != null) staff.gameObject.SetActive(true);
+            HasStaff = true;
+            GearChanged?.Invoke();
+        }
+
         [ContextMenu("Debug/Grant sword and shield")]
         void DebugGrant() => GrantSwordAndShield(stowed: false);
+
+        [ContextMenu("Debug/Grant staff")]
+        void DebugGrantStaff() => GrantStaff();
     }
 }

@@ -9,7 +9,7 @@ namespace DeepUnity
 {
     // Manual-play repro probe: runs Velmire EXACTLY as serialized in the scene (no historyMode /
     // maxContextLength overrides — currently ResumeFromCompact @ 400 tokens, pooled Qwen shared
-    // with Morwenna) and sends messages through the REAL UI event path (InputField.onSubmit
+    // with Corvus) and sends messages through the REAL UI event path (InputField.onSubmit
     // Invoke — the same persistent listeners the keyboard fires), not npc.AskNPC() directly.
     // Chases the user report: "sending a message in the middle while he is talking not working".
     //   R1  send mid-GENERATION via UI → the reply cancels and the new turn lands
