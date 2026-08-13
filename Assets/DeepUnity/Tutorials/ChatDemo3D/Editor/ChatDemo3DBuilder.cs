@@ -1869,13 +1869,13 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // identity lives here since the NPC component became the generic NPCChatBase — the
             // base class defaults are a nameless villager
             SetString(npc, "NpcName", "Velmire, the Pale Herald");
-            // THE ROLEPLAY FINETUNE (user 2026-08-12). Supersedes the 2026-08-07 "try the 2B base"
-            // decision: run4 (0.8B on the compaction-augmented corpus) now folds to a clean
-            // "[HISTORY] " third-person synopsis, resumes normally after a compaction, and closes
-            // the haggle with a correct GiveItem(price) — the exact beats this NPC demos. The
-            // weights are discovered from disk (weights_qwen3.5_0.8B_roleplay_int8) via the
-            // registry's finetune scan.
-            SetString(npc, "model", "Qwen3.5-0.8B-roleplay");
+            // THE ROLEPLAY FINETUNE (user 2026-08-13). Supersedes the 2026-08-07 "try the 2B base"
+            // decision: run5 (0.8B on the v1.18+v1.19 corpus, trained 2026-08-13) now folds to a
+            // clean "[HISTORY] " third-person synopsis, resumes normally after a compaction, and
+            // closes the haggle with a correct GiveItem(price) — the exact beats this NPC demos.
+            // The weights are discovered from disk (weights_qwen3.5_0.8B_roleplay_1308_int8) via
+            // the registry's finetune scan (1308 = trained 13.08).
+            SetString(npc, "model", "Qwen3.5-0.8B-roleplay_1308");
             // PERSONA, dataset-style (user 2026-08-12): written exactly the way the corpus defines
             // its NPCs — one flowing second-person sheet of persona, knowledge and boundaries, no
             // section labels, no scripted refusal quote, and NO compaction/memory teaching: the
@@ -1960,7 +1960,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             // is the high end of Qwen's 0-2 range: it is what keeps a 0.8B from looping a phrase, and
             // it costs some willingness to repeat a NAME — if the NPC starts avoiding "Velmire" or
             // "the Sentinel", that is the knob to walk back, not the temperature.
-            SetFloat(npc, "temperature", 1.0f);
+            // temperature: the Qwen3.5 card preset (1.0) is tuned for the stock instruct model, not
+            // for the roleplay LoRA — the NpcFinetuneBehaviourProbe grades green at 0.7 and the
+            // sale turn is exactly where 1.0's extra variance loses the GiveItem call (2026-08-13).
+            SetFloat(npc, "temperature", 0.7f);
             SetFloat(npc, "topP", 1.0f);
             SetInt(npc, "topK", 20);
             SetFloat(npc, "minP", 0.0f);
@@ -2174,11 +2177,11 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             var npc = root.AddComponent<NPCInteractor3D>();
             SetRef(npc, "dialogueCameraPoint", camPoint);
             SetString(npc, "NpcName", "Corvus, the Ash Chronicler");
-            // Runs the roleplay finetune like Velmire (user 2026-08-12) — and like his, the persona
-            // is written dataset-style: one flowing second-person sheet of persona, knowledge and
-            // boundaries, and NO tool coaching (when to put a question to the player is trained;
-            // the belt's own schema descriptions carry the per-tool guidance).
-            SetString(npc, "model", "Qwen3.5-0.8B-roleplay");
+            // Runs the roleplay finetune like Velmire (user 2026-08-13; weights dated 1308) — and
+            // like his, the persona is written dataset-style: one flowing second-person sheet of
+            // persona, knowledge and boundaries, and NO tool coaching (when to put a question to the
+            // player is trained; the belt's own schema descriptions carry the per-tool guidance).
+            SetString(npc, "model", "Qwen3.5-0.8B-roleplay_1308");
             SetString(npc, "descriptionAndRules",
                 "You are Corvus, the Ash Chronicler: a stooped old scribe in soot-grey robes, keeping " +
                 "his ledger in a corner of the ruined courtyard. You record the name of every challenger the Sentinel of " +

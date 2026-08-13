@@ -18,6 +18,11 @@ namespace DeepUnity
         /// BEHAVIOURAL probe for the roleplay-finetuned Qwen3.5-0.8B — does the model that came back
         /// from the LoRA run actually play the NPC, on the engine that will ship it?
         ///
+        /// THE WEIGHTS ARE THE SCENE'S. The ChatDemo3D Velmire object selects "Qwen3.5-0.8B-roleplay_1308"
+        /// (an LLMRegistry finetune row, discovered from weights_qwen3.5_&lt;size&gt;_&lt;variant&gt;_&lt;quant&gt;
+        /// on disk), and this probe loads that SAME variant via params_path — never the stock export, or
+        /// the report would grade the base model. The variant folder is asserted to exist up front.
+        ///
         /// WHY IT EXISTS AND WHY IT LIVES IN UNITY. Every other check on this adapter is mechanical:
         /// the merge applied 186/186 modules, the int8 export reconstructs to 2.3e-3, the wire probes
         /// pass. None of that says the model stays in character, and none of it can be run under HF
@@ -59,6 +64,9 @@ namespace DeepUnity
                                          : "ProbeLogs/npc_finetune_behaviour_preset.done";
             const string SCENE = "Assets/DeepUnity/Tutorials/ChatDemo3D/ChatDemo3D.unity";
             const string NPC_NAME = "Velmire";
+            // The finetune variant the scene NPC selects — must match the export folder on disk.
+            const string FINETUNE_ID = "Qwen3.5-0.8B-roleplay_1308";
+            const string FINETUNE_FOLDER = "weights_qwen3.5_0.8B_roleplay_1308_int8";
 
             const int CACHE_CAPACITY = 4096;   // Velmire's prompt is ~1.2k tokens; leave room for the chat
             const int REPLY_TOKENS = 160;
@@ -338,9 +346,18 @@ namespace DeepUnity
                 // ---- 2. the model, exactly as NPCChatBase.EnsureLlm builds it -------------------
                 // int8 weights + INT8 KV (NPCChatBase pairs them that way for anything but FP16).
                 Qwen3_5ForCausalLM.SystemPromptDiskCache = false;   // see the class docs
+                string variantDir = Path.Combine(DeepUnityMeta.ResolvePath("Assets/Resources/Weights"), FINETUNE_FOLDER);
+                if (!Directory.Exists(variantDir))
+                {
+                    Fail($"finetune weights missing: `{variantDir}` — export them with " +
+                         "import_params.py (--quant int8 --out Assets/Resources/Weights/" + FINETUNE_FOLDER + ") " +
+                         "so the probe can grade the variant the scene NPC selects (" + FINETUNE_ID + ").");
+                    yield break;
+                }
                 try
                 {
                     llm = new Qwen3_5ForCausalLM(Qwen3_5Size.B0_8, LLMQuant.INT8,
+                                                 params_path: variantDir,
                                                  maxModelLength: CACHE_CAPACITY, kv_quant: KVQuant.INT8);
                     llm.DiskKVCache = false;
                     llm.CacheOwnerKey = "__NpcFinetuneBehaviourProbe";
@@ -353,7 +370,7 @@ namespace DeepUnity
                 }
                 while (!llm.tokenizer.IsReady) yield return null;
                 while (!llm.IsReady) yield return null;
-                Log($"weights       : `{llm.WeightsLabel}` int8 / KV INT8 / capacity {CACHE_CAPACITY}");
+                Log($"weights       : `{llm.WeightsLabel}` (variant {FINETUNE_ID}, {variantDir}) int8 / KV INT8 / capacity {CACHE_CAPACITY}");
 
                 var swInit = System.Diagnostics.Stopwatch.StartNew();
                 yield return llm.InitializeChat(sys);
@@ -402,7 +419,15 @@ namespace DeepUnity
                       "register: it calls the player 'wanderer' on the greeting");
                 Check(loreLow.Contains("sentinel") || loreLow.Contains("halberd") || loreLow.Contains("knight"),
                       "grounding: the mist answer names the Sentinel / halberd / hollow knight");
-                Check(!offLow.Contains("macron") && !offLow.Contains("president of france"),
+                // The reply must not ANSWER with world knowledge. A plain substring test on
+                // "president of france" false-fails in-character refusals that quote the term
+                // ("I do not know a president of France..."), so an answer is only an answer when
+                // it names an office-holder or states the term WITHOUT a refusal marker.
+                bool offAnswers = offLow.Contains("macron")
+                    || (offLow.Contains("president of france")
+                        && !(offLow.Contains("do not know") || offLow.Contains("know no")
+                             || offLow.Contains("no such") || offLow.Contains("never heard")));
+                Check(!offAnswers,
                       "deflection: it does NOT answer the French-politics question with world knowledge");
                 Check(offLow.Length > 0 && (offLow.Contains("wanderer") || offLow.Contains("know")
                       || offLow.Contains("gate") || offLow.Contains("mist") || offLow.Contains("not")),
