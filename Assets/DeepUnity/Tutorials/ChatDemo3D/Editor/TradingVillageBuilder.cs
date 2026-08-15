@@ -1880,8 +1880,8 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
 
         // All three villagers run the SAME (model, quant, KV-cap) tuple on purpose: LLMPool keys
         // instances on it, so one Qwen3.5-0.8B int8 on the GPU serves the whole village. That
-        // means one shared maxContextLength too — and since all three ResumeFromCompact, the pool
-        // cap (ctx + compact headroom) matches across them.
+        // means one shared maxContextLength too — and with all three on ResetEveryTime the pool
+        // cap (ctx, no compact headroom) matches across them.
         const string VILLAGE_MODEL = "Qwen3.5-0.8B";
         const int VILLAGE_CONTEXT = 3000;
 
@@ -1891,7 +1891,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             SetString(npc, "NpcName", npcName);
             SetString(npc, "descriptionAndRules", persona);
             SetString(npc, "model", VILLAGE_MODEL);
-            SetEnum(npc, "historyMode", (int)NPCChatBase.HistoryMode.ResumeFromCompact);
+            SetEnum(npc, "historyMode", (int)NPCChatBase.HistoryMode.ResetEveryTime);
             SetInt(npc, "maxContextLength", VILLAGE_CONTEXT);
             SetEnum(npc, "conversationMode", (int)NPCChatBase.ConversationMode.LlmPlusTts);
             SetEnum(npc, "ttsModel", (int)NPCChatBase.TtsModel.PocketTTS);
