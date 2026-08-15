@@ -155,7 +155,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             }
 
             // Odo's clone reference must be READABLE for the Mimi encoder (clone-from-clip)
-            var vImp = AssetImporter.GetAtPath(ROOT + "/Voices/Gowry_1-11s.wav") as AudioImporter;
+            var vImp = AssetImporter.GetAtPath(ROOT + "/Voices/Moore.mp3") as AudioImporter;
             if (vImp != null)
             {
                 var ss = vImp.defaultSampleSettings;
@@ -505,9 +505,10 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             var cinzel = CreateCinzelFont();
             var playerCtrl = CreatePlayerAnimator();
             var monkCtrl = CreateMonkNpcAnimator();
-            // the Wizard pack has no gesture clip, so Odo's Talking is his Idle and the voice
-            // carries the performance; Fenn (humanoid Monk) gets the real UAL talking loop
-            var odoCtrl = CreateVillagerAnimator("VillageOdoAnimator", "Characters/Wizard.fbx", "Idle", "Walk", "Idle");
+            // the Wizard pack has no true talking clip, so Odo's Talking borrows his loopable
+            // Spell1 arm-gesture (reads as animated gesturing while he talks to the player);
+            // Fenn (humanoid Monk) gets the real UAL talking loop
+            var odoCtrl = CreateVillagerAnimator("VillageOdoAnimator", "Characters/Wizard.fbx", "Idle", "Walk", "Spell1");
             var fennCtrl = CreateMonkStrollerAnimator();
             var extraCtrl = CreateExtraAnimator("VillageExtraAnimator", "Characters/Rogue.fbx", "Idle");
 
@@ -533,7 +534,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             GameObject odo = BuildStroller("NPC_Odo", "Odo, the Peddler", OdoPersona(),
                 "Characters/Wizard.fbx", odoCtrl, 1.78f, "VillageOdo", new Color(0.80f, 0.74f, 0.62f),
                 new[] { "Staff", "Weapon", "Sword", "Knife" },
-                ROOT + "/Voices/Gowry_1-11s.wav", 0.98f, new Vector3(2.6f, 0f, 8.0f));
+                ROOT + "/Voices/Moore.mp3", 0.98f, new Vector3(2.6f, 0f, 8.0f));
             GameObject fenn = BuildStroller("NPC_Fenn", "Fenn, the Herbalist", FennPersona(),
                 "Characters/Monk.fbx", fennCtrl, 1.76f, "VillageFenn", new Color(0.84f, 0.80f, 0.70f),
                 new string[0],
@@ -1706,8 +1707,9 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             return ctrl;
         }
 
-        // strolling HUMANOID NPC (Fenn on the Monk rig): the same three states retargeted from
-        // the UAL library, so he also gets the real talking gesture and the head-nod
+        // strolling NPC (Fenn on the Monk rig): Idle/Walk retargeted from UAL, but Talking uses
+        // the same Wizard Spell1 gesture as Odo (shared CharacterArmature skeleton) for a visible
+        // talking animation; the humanoid rig also keeps the procedural head-nod
         static RuntimeAnimatorController CreateMonkStrollerAnimator()
         {
             string path = GEN + "/VillageFennAnimator.controller";
@@ -1719,7 +1721,7 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             var walk = sm.AddState("Walk"); walk.motion = walkClip;
             float natural = walkClip.averageSpeed.magnitude;
             walk.speed = natural < 0.5f ? 0.72f : Mathf.Clamp(0.85f / natural, 0.4f, 1.2f);   // stroll pace
-            var talk = sm.AddState("Talking"); talk.motion = Clip("Animations/UAL1.fbx", "Idle_Talking_Loop");
+            var talk = sm.AddState("Talking"); talk.motion = Clip("Characters/Wizard.fbx", "Spell1");
             sm.defaultState = idle;
             return ctrl;
         }
@@ -1945,7 +1947,8 @@ namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
             root.AddComponent<BreathingIdle>();
             var npc = root.AddComponent<VillageInteractor>();
             SetRef(npc, "dialogueCameraPoint", camPoint);
-            ConfigureVillagerChat(npc, "Bram, the Fishmonger", BramPersona(), "jean", null, 0.93f);
+            ConfigureVillagerChat(npc, "Bram, the Fishmonger", BramPersona(), "jean",
+                AssetDatabase.LoadAssetAtPath<AudioClip>(ROOT + "/Voices/Moore.mp3"), 0.93f);
             SetFloat(npc, "prefetchRadius", 12f);
 
             // his beat is handing a fish over at a price — that is GiveItem, and only GiveItem

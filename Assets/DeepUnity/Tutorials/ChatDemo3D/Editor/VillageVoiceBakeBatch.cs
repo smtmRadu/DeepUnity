@@ -5,7 +5,7 @@ using UnityEngine;
 namespace DeepUnity.Tutorials.ChatDemo3D.EditorTools
 {
     // Batch wrapper for the pocket-tts clone bake: the TradingVillage strollers clone from
-    // Gowry_1-11s.wav (Odo) and FingerReaderEnia_0-15s.mp3 (Hilde), and the bake turns the
+    // Moore.mp3 (Odo and Bram) and Ansbach_4-15s.mp3 (Fenn), and the bake turns the
     // first ambient line's one-time Mimi encode into a pure cache load. BakeAllVoicesClips
     // covers every clip under Tutorials/*/Voices/, so the souls-scene clones just refresh.
     public static class VillageVoiceBakeBatch

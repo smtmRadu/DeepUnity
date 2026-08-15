@@ -35,7 +35,8 @@ namespace DeepUnity.Tutorials.ChatDemo3D
         public void SpeakAmbient(string line)
         {
             if (state != NPCState.Idle || pkVoice == null) return;
-            pkVoice.Say(line);
+            pkVoice.FeedText(line);
+            pkVoice.FlushText();
         }
 
         /// <summary>Cut whatever ambient line is still sounding (dialogue is about to start).</summary>
