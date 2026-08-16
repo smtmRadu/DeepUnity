@@ -149,3 +149,7 @@ Assets/DeepUnity/Tutorials/AnyaChatDemo/Art/Female_Adult_01/Textures/f001_*
 # local-only: NVIDIA Audio2Face port staging (model weights, ~300 MB) + ad-hoc bench scripts
 /A2FPort/
 /run_bench_*.sh
+
+# Dissertation working docs (paper drafts, LaTeX/PDF) - kept out of the repo
+/Docs/dissertation/
+/Docs/dissertation.meta
