@@ -1767,25 +1767,39 @@ namespace DeepUnity
             public int? quantity;
         }
 
-        // TWO shapes are accepted, because the model and the finetune do not agree on one:
+        // THREE shapes are accepted, because the model and the finetune do not agree on one:
         //  (1) XML — what Qwen3.5's OWN chat template declares, and therefore what an un-finetuned
         //      Qwen3.5-0.8B actually emits (measured against Qwen/Qwen3.5-0.8B on 2026-07-25):
         //        <tool_call><function=NAME><parameter=KEY>\nvalue\n</parameter>…</function></tool_call>
         //      Array/object parameter values are rendered as JSON by that template.
         //  (2) JSON — the Qwen2.5/3-era Hermes style the SFT dataset (dataset_creation v1.3) uses:
         //        <tool_call>{"name": NAME, "arguments": {…}}</tool_call>
-        // Accepting both means the demo works BEFORE the finetune lands and keeps working after,
-        // whichever shape the trained model settles on — and a model that drifts between them mid
-        // conversation never silently drops the player's choice.
+        //  (3) BARE — what the roleplay finetune (Qwen3.5-0.8B-roleplay_1808, observed 2026-09-04
+        //      on Velmire) emits when it forgets the `=` attribute syntax and falls back to
+        //      generic HTML-style tags:
+        //        <tool_call><function>NAME</function><parameter>KEY</parameter>\nvalue\n</parameter>…</tool_call>
+        //      Note the params sit AFTER the early </function>, not inside it — so both param
+        //      scans run over the whole body, never just the function block.
+        // Accepting all three means the demo works BEFORE the finetune lands and keeps working
+        // after, whichever shape the trained model settles on — and a model that drifts between
+        // them mid conversation never silently drops the player's choice.
         static readonly Regex FunctionTagRe = new Regex(@"<function\s*=\s*([^>\s]+)\s*>", RegexOptions.Compiled);
         static readonly Regex ParameterRe = new Regex(@"<parameter\s*=\s*([^>\s]+)\s*>(.*?)</parameter>",
                                                       RegexOptions.Compiled | RegexOptions.Singleline);
+        static readonly Regex BareFunctionRe = new Regex(@"<function\s*>\s*([^<>\s]+?)\s*</function>",
+                                                         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        // key rides as element CONTENT, value as the text before the next close:
+        //   <parameter>item</parameter>\nsword\n</parameter>
+        static readonly Regex BareParameterRe = new Regex(@"<parameter\s*>\s*([^<>]+?)\s*</parameter>\s*([^<>]*?)\s*</parameter>",
+                                                          RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
         static ParsedToolCall ParseToolCall(string body)
         {
             if (string.IsNullOrWhiteSpace(body)) return null;
             Match fn = FunctionTagRe.Match(body);
             if (fn.Success) return WithGiveArgs(ParseXmlToolCall(body, fn));
+            Match bare = BareFunctionRe.Match(body);
+            if (bare.Success) return WithGiveArgs(ParseBareToolCall(body, bare));
 
             string json = FirstJsonObject(body);
             if (json == null) return null;
@@ -1929,6 +1943,45 @@ namespace DeepUnity
             call.argsJson = args.Append('}').ToString();
             return call;
         }
+
+        /// <summary>The BARE shape's call (see shape (3) above): function name from
+        /// <c>&lt;function&gt;NAME&lt;/function&gt;</c>, params from the bare
+        /// <c>&lt;parameter&gt;KEY&lt;/parameter&gt;value&lt;/parameter&gt;</c> pairs — plus the
+        /// <c>=</c> pairs too, so a reply that mixes the two (right name shape, wrong param
+        /// shape or vice versa) still lands. First mention of a key wins.</summary>
+        static ParsedToolCall ParseBareToolCall(string body, Match fn)
+        {
+            var call = new ParsedToolCall { name = CleanBareName(fn.Groups[1].Value) };
+            var args = new StringBuilder("{");
+            bool first = true;
+            var seen = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            void AddArg(string key, string val)
+            {
+                key = key?.Trim().Trim('"', '\'', '.', ',', ';', ':', '!', '?');
+                val = (val ?? "").Trim().Trim('"', '\'');
+                if (string.IsNullOrEmpty(key) || !seen.Add(key)) return;
+                if (!first) args.Append(", ");
+                first = false;
+                args.Append('"').Append(JsonEscape(key)).Append("\": ");
+                if (val.StartsWith("[") || val.StartsWith("{")) args.Append(val);
+                else args.Append('"').Append(JsonEscape(val)).Append('"');
+
+                if (key.Equals("question", System.StringComparison.OrdinalIgnoreCase)) call.question = val;
+                else if (key.Equals("options", System.StringComparison.OrdinalIgnoreCase))
+                    AppendOptions(call.options, val);
+            }
+            foreach (Match p in ParameterRe.Matches(body))
+                AddArg(p.Groups[1].Value, p.Groups[2].Value);
+            foreach (Match p in BareParameterRe.Matches(body))
+                AddArg(p.Groups[1].Value, p.Groups[2].Value);
+            call.argsJson = args.Append('}').ToString();
+            return call;
+        }
+
+        /// <summary>Bare function names arrive with sentence punctuation attached
+        /// (<c>CheckMyGear.</c>) — strip it so the provider match sees the tool.</summary>
+        static string CleanBareName(string s)
+            => s?.Trim().Trim('.', ',', ';', ':', '!', '?', '"', '\'', ' ', '\t', '\r', '\n');
 
         /// <summary>Options as the model wrote them: the template's own JSON array, or — when it
         /// free-hands the parameter — one per line, or comma-separated.</summary>

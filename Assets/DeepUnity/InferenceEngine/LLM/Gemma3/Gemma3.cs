@@ -8,7 +8,9 @@ namespace DeepUnity
 {
     // Default Gemma3 implementation in DeepUnity. FP16 weights, full-GPU inference
     // (every kernel reads/writes ComputeBuffers — no per-step CPU<->GPU bounces).
-    // System-prompt KV cache is persisted as packed FP16 .bin under Assets/Resources/Cache/.
+    // System-prompt KV cache is persisted as packed FP16 .bin under
+    // persistentDataPath/DeepUnity/Cache (never under Assets/: runtime writes there trigger
+    // AssetDatabase reimports mid-play and wedge ExitPlayMode behind pending imports).
     // Supersedes the earlier hybrid GPU/CPU `Gemma3OriginalForCausalLM`.
     public class Gemma3ForCausalLM : LLM
     {
@@ -266,13 +268,32 @@ namespace DeepUnity
                 byte[] h = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(system_prompt ?? string.Empty));
                 var sb = new System.Text.StringBuilder(64);
                 for (int i = 0; i < h.Length; i++) sb.Append(h[i].ToString("x2"));
-                // editor: the bake-able project cache; player: Assets/ is unwritable, so the KV
-                // lands in persistentDataPath (computed once per install, restored afterwards).
-                string root = Application.isEditor
-                    ? "Assets/Resources/Cache"
-                    : System.IO.Path.Combine(Application.persistentDataPath, "DeepUnity", "Cache");
-                return System.IO.Path.Combine(root, sb.ToString());
+                // Always outside the project: an earlier revision wrote the editor cache into
+                // Assets/Resources/Cache, so every miss created dozens of .bin files inside the
+                // AssetDatabase's watch area — import storm mid-play (~70 fps instead of ~300)
+                // and pending imports wedging ExitPlayMode for minutes. Computed once per
+                // install, restored afterwards (same discipline as Qwen3_5.CacheDir).
+                string root = System.IO.Path.Combine(Application.persistentDataPath, "DeepUnity", "Cache");
+                string folder = System.IO.Path.Combine(root, sb.ToString());
+                // Regression guard: if this ever resolves inside Assets/ again, say so loudly
+                // instead of manifesting as mystery fps loss + a hung exit.
+                if (IsUnderAssets(folder))
+                    ConsoleMessage.Warning($"[Gemma3] system-prompt KV folder resolves inside the project ({folder}) — " +
+                        "runtime writes there trigger AssetDatabase reimports. Move it under persistentDataPath.");
+                return folder;
             }
+        }
+
+        static bool IsUnderAssets(string folder)
+        {
+            try
+            {
+                string full = System.IO.Path.GetFullPath(folder);
+                string assets = System.IO.Path.GetFullPath(Application.dataPath);
+                return full.StartsWith(assets + System.IO.Path.DirectorySeparatorChar,
+                                       System.StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
         }
 
         // presence_penalty / repetition_penalty / enable_thinking are accepted for API parity with other LLMs
