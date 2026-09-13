@@ -133,8 +133,7 @@ Material:
   m_Shader: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _EMISSION
+  m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -270,7 +269,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4285762744
   m_fontColor: {r: 0.72, g: 0.55, b: 0.45, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -283,7 +282,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -5860,7 +5859,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: af42da207e68cb74bb73637b2072b6dc, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -4.396534
+      value: -15.73
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: af42da207e68cb74bb73637b2072b6dc, type: 3}
       propertyPath: m_LocalPosition.y
@@ -9049,8 +9048,7 @@ Material:
   m_Shader: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _EMISSION
+  m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -15018,7 +15016,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4288923606
   m_fontColor: {r: 0.84, g: 0.78, b: 0.64, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -15031,7 +15029,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -24132,7 +24130,7 @@ RectTransform:
   m_Father: {fileID: 1568340734}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 1, y: 1}
+  m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -24165,7 +24163,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4290959070
   m_fontColor: {r: 0.87, g: 0.84, b: 0.76, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -24178,7 +24176,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -25616,8 +25614,7 @@ Material:
   m_Shader: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _EMISSION
+  m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -27090,15 +27087,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: dff2c34590044a14f909738c80df7f78, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0.7993698
+      value: -0.71
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: dff2c34590044a14f909738c80df7f78, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.013180744
+      value: 0.013
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: dff2c34590044a14f909738c80df7f78, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 10.59165
+      value: 11.259
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: dff2c34590044a14f909738c80df7f78, type: 3}
       propertyPath: m_LocalRotation.w
@@ -28519,35 +28516,35 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 3babe12a1236ba949b52f419636a001f, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -2.2
+      value: -2.0830526
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 3babe12a1236ba949b52f419636a001f, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.00000014595595
+      value: 0.00000023841858
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 3babe12a1236ba949b52f419636a001f, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -9.390547
+      value: -9.419531
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 3babe12a1236ba949b52f419636a001f, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.27059805
+      value: -0.5043948
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 3babe12a1236ba949b52f419636a001f, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0.27059808
+      value: 0.5043948
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 3babe12a1236ba949b52f419636a001f, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0.65328145
+      value: 0.4955662
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 3babe12a1236ba949b52f419636a001f, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0.65328157
+      value: 0.49556622
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 3babe12a1236ba949b52f419636a001f, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
+      value: -90
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 3babe12a1236ba949b52f419636a001f, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
@@ -28555,7 +28552,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 3babe12a1236ba949b52f419636a001f, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
+      value: 271.012
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 3babe12a1236ba949b52f419636a001f, type: 3}
       propertyPath: m_Name
@@ -30495,7 +30492,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4288923606
   m_fontColor: {r: 0.84, g: 0.78, b: 0.64, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -30508,7 +30505,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -31807,16 +31804,16 @@ MonoBehaviour:
   historyMode: 1
   maxToolReadsPerTurn: 6
   cacheKVCache: 1
-  model: Qwen3.5-0.8B-roleplay_1308
+  model: Qwen3.5-0.8B-roleplay_1808
   quantization: 1
   maxContextLength: 1800
   enableThinking: 0
   temperature: 0.7
   maxNewTokens: 1024
   topK: 20
-  topP: 1
+  topP: 0.8
   minP: 0
-  presencePenalty: 2
+  presencePenalty: 1.5
   repetitionPenalty: 1
   ttsModel: 3
   ttsQuantization: 1
@@ -31827,7 +31824,7 @@ MonoBehaviour:
   clausesPerChunk: 2
   clausePauseSeconds: 0.36
   replyTailSeconds: 0.32
-  worldAudioWhileInteracting: 0.5
+  worldAudioWhileInteracting: 0.15
   usePrefetchZone: 1
   prefetchRadius: 10
   slowPrefetchSeconds: 3
@@ -33727,8 +33724,7 @@ Material:
   m_Shader: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _EMISSION
+  m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -35196,10 +35192,10 @@ RectTransform:
   - {fileID: 580587}
   m_Father: {fileID: 1479424266}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1001 &956444818
 PrefabInstance:
@@ -37915,7 +37911,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1020940431
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -38050,7 +38046,7 @@ MonoBehaviour:
   historyMode: 0
   maxToolReadsPerTurn: 6
   cacheKVCache: 1
-  model: Qwen3.5-0.8B-roleplay_1308
+  model: Qwen3.5-0.8B-roleplay_1608
   quantization: 1
   maxContextLength: 1024
   enableThinking: 0
@@ -40710,7 +40706,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 3215181782
   m_fontColor: {r: 0.84, g: 0.78, b: 0.64, a: 0.75}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -40723,7 +40719,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -41413,7 +41409,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -42087,7 +42083,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4288923606
   m_fontColor: {r: 0.84, g: 0.78, b: 0.64, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -42100,7 +42096,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -42560,35 +42556,35 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 0e3854a64d6a7f448b94a7e3bdfa4947, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0
+      value: -14.4272585
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 0e3854a64d6a7f448b94a7e3bdfa4947, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.10807132
+      value: 0.06
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 0e3854a64d6a7f448b94a7e3bdfa4947, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -13.988972
+      value: 5.753725
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 0e3854a64d6a7f448b94a7e3bdfa4947, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.7071067
+      value: 0.5390294
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 0e3854a64d6a7f448b94a7e3bdfa4947, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0.7071068
+      value: -0.5390295
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 0e3854a64d6a7f448b94a7e3bdfa4947, type: 3}
       propertyPath: m_LocalRotation.y
-      value: -0
+      value: -0.4576541
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 0e3854a64d6a7f448b94a7e3bdfa4947, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0
+      value: -0.45765406
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 0e3854a64d6a7f448b94a7e3bdfa4947, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
+      value: -90
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 0e3854a64d6a7f448b94a7e3bdfa4947, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
@@ -42596,7 +42592,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 0e3854a64d6a7f448b94a7e3bdfa4947, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
+      value: -80.665
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 0e3854a64d6a7f448b94a7e3bdfa4947, type: 3}
       propertyPath: m_Name
@@ -44837,10 +44833,10 @@ RectTransform:
   - {fileID: 1308121942}
   m_Father: {fileID: 1479424266}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1165240686
 MonoBehaviour:
@@ -45700,7 +45696,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4292142056
   m_fontColor: {r: 0.91, g: 0.89, b: 0.83, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -45713,7 +45709,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -50551,7 +50547,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4284575347
   m_fontColor: {r: 0.45, g: 0.43, b: 0.38, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -50564,7 +50560,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -52687,7 +52683,7 @@ Canvas:
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
   m_VertexColorAlwaysGammaSpace: 0
-  m_AdditionalShaderChannelsFlag: 0
+  m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
   m_SortingOrder: 0
@@ -54913,15 +54909,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 341de713715e0364092c868ee22571c4, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 3.996849
+      value: 6.319
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 341de713715e0364092c868ee22571c4, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.0017421436
+      value: 0.002
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 341de713715e0364092c868ee22571c4, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 10.092044
+      value: 11.502
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 341de713715e0364092c868ee22571c4, type: 3}
       propertyPath: m_LocalRotation.w
@@ -60065,10 +60061,10 @@ RectTransform:
   - {fileID: 667867324}
   m_Father: {fileID: 1597779394}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1001 &1575623203
 PrefabInstance:
@@ -61388,7 +61384,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4291289323
   m_fontColor: {r: 0.92, g: 0.88, b: 0.78, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -61401,7 +61397,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -63419,7 +63415,7 @@ RectTransform:
   m_Father: {fileID: 1568340734}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 1, y: 1}
+  m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -63452,7 +63448,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4285245636
   m_fontColor: {r: 0.77, g: 0.66, b: 0.42, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -63465,7 +63461,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -65872,8 +65868,7 @@ Material:
   m_Shader: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _EMISSION
+  m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -74236,35 +74231,35 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: a3d93a54055f2674c8f1f6dfce19b8a8, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 2.2
+      value: 3.708508
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: a3d93a54055f2674c8f1f6dfce19b8a8, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.00000014595595
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: a3d93a54055f2674c8f1f6dfce19b8a8, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -9.390547
+      value: -9.377823
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: a3d93a54055f2674c8f1f6dfce19b8a8, type: 3}
       propertyPath: m_LocalRotation.w
-      value: -0.270598
+      value: -0.7071032
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: a3d93a54055f2674c8f1f6dfce19b8a8, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0.27059805
+      value: 0.70710325
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: a3d93a54055f2674c8f1f6dfce19b8a8, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0.65328145
+      value: 0.0022470923
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: a3d93a54055f2674c8f1f6dfce19b8a8, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0.65328157
+      value: 0.0022471824
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: a3d93a54055f2674c8f1f6dfce19b8a8, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
+      value: -90
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: a3d93a54055f2674c8f1f6dfce19b8a8, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
@@ -74272,7 +74267,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: a3d93a54055f2674c8f1f6dfce19b8a8, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
+      value: -0.364
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: a3d93a54055f2674c8f1f6dfce19b8a8, type: 3}
       propertyPath: m_Name
@@ -74414,15 +74409,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 92fc69d56eebb00478b1d870a9082012, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 11.990547
+      value: 12.15
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 92fc69d56eebb00478b1d870a9082012, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.3435648
+      value: 0.34
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 92fc69d56eebb00478b1d870a9082012, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 10.791492
+      value: 12.74
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 92fc69d56eebb00478b1d870a9082012, type: 3}
       propertyPath: m_LocalRotation.w
@@ -74831,10 +74826,10 @@ RectTransform:
   - {fileID: 821577400}
   m_Father: {fileID: 1479424266}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1975494507
 MonoBehaviour:
@@ -78187,8 +78182,7 @@ Material:
   m_Shader: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _EMISSION
+  m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -80647,7 +80641,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4288923606
   m_fontColor: {r: 0.84, g: 0.78, b: 0.64, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -80660,7 +80654,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2

@@ -1,0 +1,95 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DeepUnity LLM + NPC — Code Overview</title>
+<style>body{font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:860px;margin:24px auto;padding:0 16px;line-height:1.45;color:#111}h1{font-size:22px}h2{font-size:16px;margin:22px 0 6px;border-bottom:1px solid #ddd;padding-bottom:4px}code{background:#f4f4f4;padding:1px 5px;border-radius:4px;font-size:12.5px}pre{background:#f6f6f6;padding:10px;border-radius:6px;overflow:auto;font-size:12.5px}ul{margin:6px 0}li{margin:3px 0}.p{color:#555;font-size:13px}</style></head><body>
+<h1>DeepUnity LLM / GPU Engine + NPC — Overview</h1>
+<p class="p">Scope: only post-2024 <code>Assets/DeepUnity/InferenceEngine/LLM/*</code> + <code>Assets/DeepUnity/NPC/*</code> + demos. Old <code>ML/RL</code> library excluded.</p>
+
+<h2>1. LLM inference — how it works</h2>
+<ul>
+<li>Full-GPU causal LLMs on Unity ComputeShaders. Per-frame coroutine pacing (no blocking): chunked prompt prefill + 1-token decode steps + async sampler readback. Framerate dial: <code>InferenceEngine/BackendTradeoff.cs</code> (<code>BackendTradeoffTable</code>: fetch bytes/frame, prefill steps/frame, decode tokens/frame) + <code>FramePacing.cs / InferencePerf.cs</code>.</li>
+<li>Models: <b>Qwen3.5-0.8B/2B</b> (hybrid: 18× Gated-DeltaNet + 6× full GQA attention), <b>Gemma3-270M</b>, <b>MiniCPM5-1B</b>. Same pattern each.</li>
+<li>Kernels: <code>Assets/Resources/ComputeShaders/</code> — <code>Qwen3_5CS / Gemma3CS / MatMulFP16CS / GQAInferenceCS / GLUInferenceCS / LmHeadInferenceCS / KVCache.hlsl</code> (+ shared <code>KV_READ/KV_WRITE</code>, <code>KV_FP16/KV_INT8</code> keywords).</li>
+<li>Exporter: <code>InferenceEngine/import_params.py --quant fp16|int8|int4</code> → <code>Assets/Resources/Weights/weights_&lt;model&gt;_&lt;size&gt;_&lt;quant&gt;/</code>.</li>
+</ul>
+
+<h2>2. Abstract class structure</h2>
+<ul>
+<li><code>LLM/Base/LLM.cs</code>: <code>abstract class LLM</code> — every model implements: <code>Config, IsReady, Warmup(), Predict(), Generate(), InitializeChatCore(), ChatCore(), CompactCore(), Save/RestoreConversationKVCore(), Release()/ReleaseSlow()</code>. Shared: <code>TokensPerSecond, Current/MaxContextTokens, Busy</code> guard (refuses concurrent forwards), <code>CancelChat()</code> (stop at token boundary), <code>COMPACT_PROMPT/HISTORY_HEADING("## MEMORY")</code>, budgets <code>UploadBudgetBytes (=BackendTradeoffTable.FetchBytesPerFrame), UploadFrameBudgetMs, UploadChunkFloats</code>, <code>DiskKVCache, CacheOwnerKey</code>, main-thread release via <code>DeepUnityDispatcher</code>.</li>
+<li><code>LLM/Base/LLMConfig.cs</code>: arch descriptor (<code>HiddenSize/VocabSize/NumLayers/HeadDim/Eos/Bos/Pad</code>) + sampling presets <code>DefaultTemperature/TopK/TopP/MinP/Presence/RepetitionPenalty</code>. Each model forwards to its static <code>*Config</code>.</li>
+<li><code>LLM/Base/LLMRegistry.cs</code>: <code>[LLMEntry]</code> self-registration by reflection; game code uses string id (<code>"Qwen3.5-0.8B"</code>, finetunes auto-found as <code>weights_qwen3.5_&lt;size&gt;_&lt;variant&gt;_&lt;quant&gt;</code>). <code>Create(id,quant,kvQuant,maxLen)</code>.</li>
+<li><code>LLM/Base/LLMPool.cs</code>: refcounted share per <code>(id,quant,kvQuant,maxLen)</code> — one VRAM copy; tracks <code>Claim/OwnsConversation</code>. <code>Release()</code> → trickled <code>ReleaseSlow()</code>.</li>
+<li><code>LLM/DeepUnityDispatcher.cs</code>: hidden MonoBehaviour pumping coroutines + main-thread queue (GPU calls are main-thread only).</li>
+<li>Concrete per model (example Qwen3.5): <code>LLM/Qwen3_5/Qwen3_5.cs</code> (facade <code>Qwen3_5ForCausalLM : LLM</code>) + <code>Qwen3_5Modeling/{Qwen3_5Config, Qwen3_5Model, Qwen3_5Weights, Qwen3_5Cache, Qwen3_5ChatTemplate, Qwen3_5TokenizerFast}</code>. Gemma3/MiniCPM5 mirror it.</li>
+</ul>
+
+<h2>3. LLM abstract class — functions</h2>
+<p class="p"><code>Assets/DeepUnity/InferenceEngine/LLM/Base/LLM.cs</code> — one line per member:</p>
+<ul>
+<li><code>LLM()</code> — ctor: ensures dispatcher, registers live model, hooks quit/play-mode teardown.</li>
+<li><code>~LLM()</code> — finalizer: marshals <code>Release()</code> to main thread (GPU calls are main-thread only).</li>
+<li><code>ReleaseAllOnQuit()</code> — releases all live models before GfxDevice teardown.</li>
+<li><code>HookAssemblyReloadTeardown()</code> — releases all on script recompile (else orphaned buffers).</li>
+<li><code>OnPlayModeChanged()</code> — releases model on exiting play mode (editor).</li>
+<li><code>Config</code> — arch + sampling-default descriptor.</li>
+<li><code>IsReady</code> — true when weights uploaded + tokenizer parsed.</li>
+<li><code>TokenizerReady</code> — async tokenizer parse done (splits boot timing).</li>
+<li><code>TotalWeightBytes / UploadedWeightBytes</code> — manifest size vs resident bytes (paces walk-up prefetch).</li>
+<li><code>WeightsLabel</code> — id used in <code>[GPU]</code> residency log lines.</li>
+<li><code>CurrentContextTokens / MaxContextTokens</code> — live KV occupancy vs capacity (drives halt/compact logic).</li>
+<li><code>ReleaseSlow()</code> — trickle-frees buffers over frames (avoids 250–550 ms stall); default = sync <code>Release()</code>.</li>
+<li><code>Warmup()</code> — compiles kernels + throwaway forwards; idempotent; auto-run by <code>InitializeChat</code>.</li>
+<li><code>GetOrCreateTokenizer()</code> — one parse per tokenizer file per session (~1 s + big GC, so cached).</li>
+<li><code>Predict()</code> — single forward over ids → logits tensor.</li>
+<li><code>Generate()</code> — free-form streaming generation from raw ids.</li>
+<li><code>Guarded()</code> — Busy guard: 2nd concurrent op refused with warning instead of corrupting KV.</li>
+<li><code>AbandonGuardedOperation()</code> — force-clears <code>Busy</code> after a <code>StopCoroutine</code>-killed op.</li>
+<li><code>InitializeChat() → InitializeChatCore()</code> — warmup + prefill (or disk-KV restore) the system prompt.</li>
+<li><code>Chat() → ChatCore()</code> — one templated user turn + streaming reply.</li>
+<li><code>ChatToolResult() → ChatToolResultCore()</code> — feeds tool JSON back as <code>&lt;tool_response&gt;</code> turn.</li>
+<li><code>CancelChat()</code> — cooperative stop at next token boundary; KV stays consistent.</li>
+<li><code>Compact() → CompactCore()</code> — summarizes chat, re-seeds KV as <code>[system + ## MEMORY + summary]</code>.</li>
+<li><code>SaveConversationKV() → SaveConversationKVCore()</code> — persists full KV/SSM + sampler + transcript blob.</li>
+<li><code>DeleteConversationKV()</code> — deletes snapshots so next open starts fresh.</li>
+<li><code>TryRestoreConversationKV() → ...Core()</code> — restores snapshot after hash validation; false = re-prefill.</li>
+<li><code>Release()</code> — frees all GPU buffers; idempotent.</li>
+<li><code>OnReleased()</code> — unhooks editor event, idles phase, suppresses finalizer.</li>
+<li><code>WarnIfNotInResources()</code> — warns when weights/tokenizer path won't ship in builds.</li>
+<li><code>ResolveParamsDir()</code> — resolves weights folder (flat → organized → legacy).</li>
+</ul>
+
+<h2>4. Developer interface</h2>
+<pre>LLM llm = LLMPool.Acquire("Qwen3.5-0.8B", LLMQuant.INT8, KVQuant.FP16, 8192);
+yield return llm.Warmup();                 // kernel compile, idempotent
+yield return llm.InitializeChat(sysPrompt); // chunked prefill or KV restore
+yield return llm.Chat(playerText, s =&gt; ui.Append(s), max_new_tokens:1024,
+  temperature:0.8f, top_k:20, top_p:1f, presence_penalty:2f);
+llm.CancelChat();                           // safe interrupt
+yield return llm.Compact(sysPrompt);        // summarize→re-seed "## MEMORY"
+yield return llm.SaveConversationKV(npcId, transcriptJson);
+yield return llm.TryRestoreConversationKV(npcId, ok=&gt;{...}, sysPrompt);
+LLMPool.Release(llm);                       // or llm.Release()/ReleaseSlow()</pre>
+<p class="p">Low-level: <code>Predict(ids)</code> single forward → logits; <code>Generate(ids, …)</code> raw-id streaming. Sampling defaults on signatures are neutral — pass <code>llm.Config.Default*</code> for the model preset.</p>
+
+<h2>5. Weights — load/store</h2>
+<ul>
+<li>Files: <code>.bin</code> (fp16, 2 halves/uint) | <code>.int8.bin + .scales.bin</code> (weight-only symmetric int8, 4/uint, 1 fp16 scale/output row) | <code>.int4.bin + .scales.bin</code> (Q4_0-style, 8 nibbles/uint, 1 scale/32 weights). Embedding + norms stay fp16. <code>LLMQuant</code> in <code>Base/LLM.cs</code>.</li>
+<li>Loader e.g. <code>Qwen3_5Weights.cs</code>: ctor builds only a <b>manifest</b>; thread-pool <code>FileStream</code> reads (≤4 in flight, pooled byte[]) → queue → main-thread <code>UploadPump()</code> coroutine creates <code>ComputeBuffer&lt;uint&gt;</code> lazily and <code>SetData</code>-slices under <code>LLM.UploadBudgetBytes</code>/frame. <code>IsReady</code> after drain; <code>ResidencyLog</code> logs Loading/Resident/Released. <code>Dispose/DisposeSlow</code> frees ~64 MB/frame.</li>
+<li>Where: <code>LLM/*/ *Weights.cs</code>, resolved by <code>LLM.ResolveParamsDir()</code> (flat <code>Resources/Weights/</code> → organized → legacy).</li>
+</ul>
+
+<h2>6. KV cache — load/store</h2>
+<ul>
+<li>Buffers e.g. <code>Qwen3_5Cache.cs</code>: full-attention layers <code>kCaches/vCaches</code> (token-major, preallocated to <code>maxModelLength</code>); DeltaNet layers <code>convStates/recurrentStates</code> (<b>always FP32</b>). All stride-4 <code>uint</code>; count shrinks by <code>KVQuantUtil</code> (FP32:1, FP16:2, INT8:4 elems/uint). INT8 KV = asymmetric per-(token,head) scale+zp (+ <code>kScaleZp/vScaleZp</code>).</li>
+<li>Disk: <code>SaveYielding/LoadYielding</code> — <code>AsyncGPUReadback</code> (≤<code>SaveReadbacksInFlight</code>) + worker-thread file IO to <code>.tmp</code>→atomic move; header <code>magic Q5KV, v2, contextHash(weights path+capacity+kvQuant+prompt), kvQuant, tokens, extraState</code>. Any mismatch = miss → recompute. Upload chunked under <code>UploadFrameBudgetMs/UploadChunkFloats</code>.</li>
+<li>Files in <code>Application.persistentDataPath/DeepUnity/</code>: system prompt <code>qwen35_prompt_&lt;owner|hash&gt;.kv</code> (FNV-1a over ids+path+capacity+kv), conversation <code>qwen35_conv_&lt;owner&gt;.kv</code> (+ extra blob: <code>tokenSeen, isFreshlyInitialized, userState=transcript</code>). Toggled per instance by <code>DiskKVCache/CacheOwnerKey/SystemPromptDiskCache</code>.</li>
+</ul>
+
+<h2>7. NPC script</h2>
+<ul>
+<li>Location: <code>Assets/DeepUnity/NPC/NPCChatBase.cs</code> (abstract) + <code>NPCDialogueWindow.cs</code> (window base, <code>INPCChatWindow/INPCToolQuestionWindow/INPCGiveItemWindow</code>), <code>NPCInteractPrompt.cs, NPCDecision.cs, FaceSync.cs, ConversationAudioDucker.cs</code>.</li>
+<li>Subclasses (presentation only): <code>Tutorials/ChatDemo3D/Scripts/NPCInteractor3D.cs</code>, <code>Tutorials/ChatDemo2D/Scripts/NPCInteractor2D.cs (+ChatWindow2D)</code>, <code>Tutorials/AnyaChatDemo/Scripts/NPCInteractorAnya.cs</code>. Scene builders: <code>Tutorials/*/Editor/*Builder.cs</code>.</li>
+<li>What it owns: inspector (<code>model, quantization, maxContextLength, sampling(-1=preset), historyMode, cacheKVCache, ttsModel/ttsVoice, usePrefetchZone/prefetchRadius</code>); <code>EnsureLlm()</code> via <code>LLMPool.Acquire + Warmup + InitializeChat(EffectiveSystemPrompt)</code>; prefetch/residency zone (slow stream on entry, resident inside, unload on exit); dialogue state machine (open/ask/stream/close, Escape = <code>CancelChat</code>); transcript + <code>HistoryMode.ResetEveryTime / ResumeFromCompact</code> (live-KV → disk <code>Save/RestoreConversationKV</code> → re-prefill <code>system+## MEMORY+turns</code>; auto-<code>Compact()</code> at limit); tools (<code>AskUserQuestion/GiveItem</code> panels + <code>INPCToolProvider</code> reads, <code>ChatToolResult</code> loop); per-token TTS fan-out + talk animation + context-fill bar (<code>Current/MaxContextTokens</code>).</li>
+<li>Effective system prompt = <code>[# Tools block] + descriptionAndRules + ## MEMORY/compactSummary</code> (see <code>Editor/EffectivePromptWindow.cs</code>).</li>
+</ul>
+<p class="p">Entry demos: <code>Assets/DeepUnity/Tutorials/ChatDemo3D|ChatDemo2D|AnyaChatDemo/</code>. Probes/benchmarks: <code>LLM/benchmarking/*</code>, <code>NPC/benchmarking/*</code>.</p>
+</body></html>
